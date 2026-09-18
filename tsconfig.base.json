@@ -2,6 +2,12 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
+
+    // Вся TypeScript-сторона на ESM, и это не стилистика: пакеты @mastra/* публикуются как
+    // ES-модули, их типы описаны только в ESM-виде, и из CommonJS под NodeNext они не
+    // импортируются. Практическое следствие для всех, кто пишет код: относительные импорты
+    // указываются с расширением .js, даже если файл называется .ts — `import x from './foo.js'`.
+    // Исключение — apps/web, там свой tsconfig с moduleResolution: Bundler.
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "declaration": true,
