@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "service": {
+      "description": "Name of the component that answered.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "status": {
+      "description": "Current state of the component.",
+      "enum": [
+        "ok",
+        "degraded",
+        "down"
+      ],
+      "type": "string"
+    },
+    "uptimeSeconds": {
+      "description": "Seconds since the component started.",
+      "minimum": 0,
+      "type": "number"
+    },
+    "version": {
+      "description": "Semantic version of the component.",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "service",
+    "version",
+    "uptimeSeconds"
+  ],
+  "title": "HealthCheck",
+  "type": "object"
+}

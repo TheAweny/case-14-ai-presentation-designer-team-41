@@ -1,0 +1,228 @@
+{
+  "$defs": {
+    "AgentConfig": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "What the agent is responsible for.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "generation": {
+          "additionalProperties": false,
+          "properties": {
+            "maxOutputTokens": {
+              "description": "Upper bound on generated tokens.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "temperature": {
+              "description": "Sampling temperature.",
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            "topP": {
+              "description": "Nucleus sampling cutoff.",
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "temperature",
+            "topP",
+            "maxOutputTokens"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "description": "Directory name of the agent inside registry/agents.",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        "instructionsFile": {
+          "description": "Prompt file next to agent.yaml.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "modelId": {
+          "description": "Identifier from configs/models.yaml.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "outputSchema": {
+          "description": "Name of the output schema exported by @lct/contracts.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "description": "Semver version; bump it whenever the instruction changes meaning.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "description",
+        "modelId",
+        "generation",
+        "outputSchema",
+        "instructionsFile"
+      ],
+      "title": "AgentConfig",
+      "type": "object"
+    },
+    "HealthCheck": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "description": "Name of the component that answered.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "description": "Current state of the component.",
+          "enum": [
+            "ok",
+            "degraded",
+            "down"
+          ],
+          "type": "string"
+        },
+        "uptimeSeconds": {
+          "description": "Seconds since the component started.",
+          "minimum": 0,
+          "type": "number"
+        },
+        "version": {
+          "description": "Semantic version of the component.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "service",
+        "version",
+        "uptimeSeconds"
+      ],
+      "title": "HealthCheck",
+      "type": "object"
+    },
+    "RunConfig": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auditProfile": {
+          "description": "Name of the audit profile from configs/audit.yaml.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "contentPath": {
+          "description": "Path to the content pack for the deck.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "layoutVariants": {
+          "description": "Layout variants built from the single deck plan.",
+          "items": {
+            "enum": [
+              "dense",
+              "balanced",
+              "airy"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "models": {
+          "description": "Models bound to pipeline roles.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "modelId": {
+                "description": "Identifier from configs/models.yaml.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "description": "Role in the pipeline.",
+                "enum": [
+                  "planner",
+                  "writer",
+                  "critic",
+                  "vision",
+                  "image"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "modelId"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "outputDir": {
+          "description": "Directory that receives run artifacts.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "seed": {
+          "description": "Seed that makes a run reproducible.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slideCount": {
+          "description": "Number of slides to produce.",
+          "maximum": 15,
+          "minimum": 10,
+          "type": "integer"
+        },
+        "templatePath": {
+          "description": "Path to the .pptx used as the style source.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "templatePath",
+        "contentPath",
+        "slideCount",
+        "layoutVariants",
+        "auditProfile",
+        "models",
+        "seed",
+        "outputDir"
+      ],
+      "title": "RunConfig",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "All contracts shared between the TypeScript side and the Python engine.",
+  "properties": {
+    "AgentConfig": {
+      "$ref": "#/$defs/AgentConfig"
+    },
+    "HealthCheck": {
+      "$ref": "#/$defs/HealthCheck"
+    },
+    "RunConfig": {
+      "$ref": "#/$defs/RunConfig"
+    }
+  },
+  "title": "ContractsBundle",
+  "type": "object"
+}

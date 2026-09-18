@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens of the product shell. They are deliberately neutral: anything that belongs to
+ * a user's template comes from the template profile at runtime, never from this stylesheet.
+ */
+@theme {
+  --color-surface: oklch(99% 0 0);
+  --color-surface-muted: oklch(96.5% 0.004 260);
+  --color-ink: oklch(21% 0.012 260);
+  --color-ink-muted: oklch(52% 0.012 260);
+  --color-accent: oklch(58% 0.17 260);
+  --color-border: oklch(90% 0.006 260);
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-surface: oklch(17% 0.01 260);
+    --color-surface-muted: oklch(22% 0.012 260);
+    --color-ink: oklch(96% 0.004 260);
+    --color-ink-muted: oklch(72% 0.01 260);
+    --color-accent: oklch(72% 0.14 260);
+    --color-border: oklch(30% 0.012 260);
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+}

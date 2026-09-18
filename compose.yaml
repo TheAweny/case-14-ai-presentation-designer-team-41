@@ -1,0 +1,54 @@
+# Local stack: web, api and engine. The engine is reachable only from the api — it is never
+# published to the host.
+name: lct26
+
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: infra/docker/engine.Dockerfile
+    environment:
+      ENGINE_LOG_LEVEL: ${ENGINE_LOG_LEVEL:-info}
+    volumes:
+      - ./data:/app/data
+      - ./runs:/app/runs
+    expose:
+      - '8000'
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    depends_on:
+      engine:
+        condition: service_healthy
+    environment:
+      API_PORT: '3001'
+      ENGINE_URL: http://engine:8000
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      MASTRA_STORAGE_URL: ${MASTRA_STORAGE_URL:-file:/app/runs/mastra.db}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      VLM_BASE_URL: ${VLM_BASE_URL:-}
+      IMAGE_BASE_URL: ${IMAGE_BASE_URL:-}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./runs:/app/runs
+    ports:
+      - '3001:3001'
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    depends_on:
+      - api
+    environment:
+      PORT: '3000'
+    ports:
+      - '3000:3000'
+    restart: unless-stopped

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "auditProfile": {
+      "description": "Name of the audit profile from configs/audit.yaml.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "contentPath": {
+      "description": "Path to the content pack for the deck.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "layoutVariants": {
+      "description": "Layout variants built from the single deck plan.",
+      "items": {
+        "enum": [
+          "dense",
+          "balanced",
+          "airy"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "models": {
+      "description": "Models bound to pipeline roles.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "modelId": {
+            "description": "Identifier from configs/models.yaml.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "description": "Role in the pipeline.",
+            "enum": [
+              "planner",
+              "writer",
+              "critic",
+              "vision",
+              "image"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "modelId"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "outputDir": {
+      "description": "Directory that receives run artifacts.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "seed": {
+      "description": "Seed that makes a run reproducible.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "slideCount": {
+      "description": "Number of slides to produce.",
+      "maximum": 15,
+      "minimum": 10,
+      "type": "integer"
+    },
+    "templatePath": {
+      "description": "Path to the .pptx used as the style source.",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "templatePath",
+    "contentPath",
+    "slideCount",
+    "layoutVariants",
+    "auditProfile",
+    "models",
+    "seed",
+    "outputDir"
+  ],
+  "title": "RunConfig",
+  "type": "object"
+}

@@ -1,0 +1,54 @@
+# node
+node_modules/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+yarn-error.log
+
+# build artifacts
+dist/
+build/
+out/
+.next/
+coverage/
+*.tsbuildinfo
+
+# nx
+.nx/cache
+.nx/workspace-data
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+.mypy_cache/
+*.egg-info/
+
+# runtime state: the directories stay, their contents never get committed
+data/*
+!data/.gitkeep
+runs/*
+!runs/.gitkeep
+*.db
+*.db-journal
+*.sqlite
+mastra.db*
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# os / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

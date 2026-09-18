@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "description": "What the agent is responsible for.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "generation": {
+      "additionalProperties": false,
+      "properties": {
+        "maxOutputTokens": {
+          "description": "Upper bound on generated tokens.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "temperature": {
+          "description": "Sampling temperature.",
+          "maximum": 2,
+          "minimum": 0,
+          "type": "number"
+        },
+        "topP": {
+          "description": "Nucleus sampling cutoff.",
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "temperature",
+        "topP",
+        "maxOutputTokens"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "description": "Directory name of the agent inside registry/agents.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "type": "string"
+    },
+    "instructionsFile": {
+      "description": "Prompt file next to agent.yaml.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "modelId": {
+      "description": "Identifier from configs/models.yaml.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "outputSchema": {
+      "description": "Name of the output schema exported by @lct/contracts.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "version": {
+      "description": "Semver version; bump it whenever the instruction changes meaning.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "description",
+    "modelId",
+    "generation",
+    "outputSchema",
+    "instructionsFile"
+  ],
+  "title": "AgentConfig",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+node_modules
+.import_linter_cache
+dist
+.next
+coverage
+.nx
+packages/contracts/schema
+docs/AUDIT.md
+docs/LICENSES.md
+engine/src/engine/contracts/_generated.py
+.venv
+uv.lock
+yarn.lock
+apps/web/next-env.d.ts

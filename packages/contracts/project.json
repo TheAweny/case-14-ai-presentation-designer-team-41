@@ -1,0 +1,56 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "contracts",
+  "projectType": "library",
+  "sourceRoot": "packages/contracts/src",
+  "tags": ["scope:shared", "type:lib"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p tsconfig.lib.json",
+        "cwd": "packages/contracts"
+      },
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p tsconfig.json",
+        "cwd": "packages/contracts"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint packages/contracts --max-warnings 0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --passWithNoTests",
+        "cwd": "packages/contracts"
+      }
+    },
+    "schema": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx scripts/build-schema.ts",
+        "cwd": "packages/contracts"
+      },
+      "outputs": ["{projectRoot}/schema"],
+      "cache": true
+    },
+    "codegen": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["schema"],
+      "options": {
+        "command": "uv run datamodel-codegen --input packages/contracts/schema/contracts.schema.json --input-file-type jsonschema --output engine/src/engine/contracts/_generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --disable-timestamp --use-double-quotes --use-standard-collections --use-union-operator --use-schema-description --custom-file-header-path scripts/codegen-header.txt --class-name ContractsBundle --formatters black isort",
+        "cwd": "{workspaceRoot}"
+      },
+      "outputs": ["{workspaceRoot}/engine/src/engine/contracts/_generated.py"],
+      "cache": true
+    }
+  }
+}

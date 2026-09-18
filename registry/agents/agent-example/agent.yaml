@@ -1,0 +1,18 @@
+# Example agent definition. It shows the format the loader validates; it is not a pipeline agent.
+# Real agents are added as separate directories next to this one.
+
+id: agent-example
+version: 1.0.0
+description: Reference definition that keeps the registry loader and its schema honest.
+modelId: planner-default
+
+generation:
+  temperature: 0.2
+  topP: 0.9
+  maxOutputTokens: 1024
+
+# Name of the schema exported by @lct/contracts that the agent output is validated against.
+outputSchema: HealthCheck
+
+# Prompt file next to this config. Instruction text never lives in code.
+instructionsFile: instructions.md

@@ -1,0 +1,17 @@
+{
+  "name": "@lct/registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@lct/contracts": "workspace:^",
+    "yaml": "^2.8.0",
+    "zod": "^4.6.0"
+  }
+}

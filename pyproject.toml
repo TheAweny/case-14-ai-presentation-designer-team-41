@@ -1,0 +1,58 @@
+# uv workspace root. It is not a package itself: it only ties the members together and holds
+# the shared tool configuration.
+[project]
+name = "lct26"
+version = "0.1.0"
+description = "Workspace root for the deck generation service."
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["engine", "tools"]
+
+[tool.uv.sources]
+engine = { workspace = true }
+lct-tools = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "engine",
+    "lct-tools",
+    "ruff>=0.16.8",
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "import-linter>=2.15",
+    "httpx>=0.28.1",
+    "datamodel-code-generator>=0.82.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["engine/src/engine/contracts/_generated.py", ".venv", "node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "ARG", "SIM", "RUF"]
+# Documentation and generated reports are written in Russian, so Cyrillic inside string
+# literals is expected rather than a typo.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"engine/tests/**" = ["ARG"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["engine/src", "engine/tests", "tools/src"]
+exclude = ["**/node_modules", "**/.venv", "**/__pycache__"]
+ignore = ["engine/src/engine/contracts/_generated.py"]
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["engine/tests", "tools/tests"]
+addopts = "-q"

@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+.venv
+.nx
+.git
+coverage
+data
+runs
+.env
+*.log

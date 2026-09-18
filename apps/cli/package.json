@@ -1,0 +1,16 @@
+{
+  "name": "cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "bin": {
+    "lct": "dist/main.js"
+  },
+  "dependencies": {
+    "@lct/contracts": "workspace:^",
+    "@lct/registry": "workspace:^",
+    "yaml": "^2.8.0"
+  }
+}

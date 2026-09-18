@@ -1,0 +1,48 @@
+{
+  "name": "lct26",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "yarn@4.18.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "graph": "nx graph",
+    "lint": "nx run-many -t lint",
+    "lint:py": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "nx run-many -t typecheck",
+    "typecheck:py": "uv run pyright",
+    "test": "nx run-many -t test",
+    "test:py": "uv run pytest",
+    "build": "nx run-many -t build",
+    "boundaries:py": "uv run lint-imports --config engine/pyproject.toml",
+    "contracts:schema": "nx run contracts:schema",
+    "contracts:codegen": "nx run contracts:codegen",
+    "codegen": "nx run contracts:codegen",
+    "docs:audit": "uv run generate-audit-docs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "lefthook install || true",
+    "licenses": "uv run generate-license-report"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@nx/eslint-plugin": "23.2.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.0",
+    "lefthook": "^2.1.0",
+    "nx": "23.2.1",
+    "prettier": "^3.9.0",
+    "tsx": "^4.23.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vite": "^7.0.0",
+    "vitest": "^5.0.0"
+  }
+}

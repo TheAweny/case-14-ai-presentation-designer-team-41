@@ -1,0 +1,32 @@
+# Scenario: a template the team has never seen, to prove the result comes from the template
+# profile rather than from anything hardcoded. Point templatePath at a fresh .pptx before running.
+scenario: unknown-template
+description: Full run on a template that was not used while developing the parser.
+
+run:
+  templatePath: data/templates/unknown.pptx
+  contentPath: data/content/example.md
+  slideCount: 12
+  layoutVariants:
+    - dense
+    - balanced
+    - airy
+  auditProfile: strict
+  models:
+    - role: planner
+      modelId: planner-default
+    - role: writer
+      modelId: writer-default
+    - role: critic
+      modelId: critic-default
+    - role: vision
+      modelId: vision-default
+  seed: 20260918
+  outputDir: runs/eval-unknown-template
+
+expect:
+  maxDurationSeconds: 300
+  deterministicFindings:
+    textOverflow: 0
+    placeholderText: 0
+  minVariants: 3

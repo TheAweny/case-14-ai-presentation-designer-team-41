@@ -1,0 +1,58 @@
+# Model catalogue. A run references these entries by id; the manifest records the resolved
+# revision so a deck can be traced back to the exact weights that produced it.
+#
+# Fields:
+#   id           - identifier used in run configs and agent configs
+#   repo         - Hugging Face repository
+#   revision     - pinned commit or tag; never "main", so runs stay reproducible
+#   license      - license of the weights
+#   sizeB        - parameter count in billions, for capacity planning
+#   type         - llm | vlm | text-to-image
+#   provider     - runtime that serves the model
+#   baseUrlEnv   - environment variable holding the base URL of that runtime
+
+models:
+  - id: planner-default
+    repo: example-org/example-planner
+    revision: 0000000000000000000000000000000000000000
+    license: Apache-2.0
+    sizeB: 7
+    type: llm
+    provider: openai-compatible
+    baseUrlEnv: LLM_BASE_URL
+
+  - id: writer-default
+    repo: example-org/example-writer
+    revision: 0000000000000000000000000000000000000000
+    license: Apache-2.0
+    sizeB: 7
+    type: llm
+    provider: openai-compatible
+    baseUrlEnv: LLM_BASE_URL
+
+  - id: critic-default
+    repo: example-org/example-critic
+    revision: 0000000000000000000000000000000000000000
+    license: Apache-2.0
+    sizeB: 7
+    type: llm
+    provider: openai-compatible
+    baseUrlEnv: LLM_BASE_URL
+
+  - id: vision-default
+    repo: example-org/example-vision
+    revision: 0000000000000000000000000000000000000000
+    license: Apache-2.0
+    sizeB: 8
+    type: vlm
+    provider: openai-compatible
+    baseUrlEnv: VLM_BASE_URL
+
+  - id: illustrator-default
+    repo: example-org/example-illustrator
+    revision: 0000000000000000000000000000000000000000
+    license: Apache-2.0
+    sizeB: 2
+    type: text-to-image
+    provider: openai-compatible
+    baseUrlEnv: IMAGE_BASE_URL

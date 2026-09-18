@@ -1,0 +1,26 @@
+# Pre-commit hooks: lint only what changed, nothing heavier. The full matrix runs in CI.
+# Binaries are called straight out of node_modules and the uv environment, so the hooks do not
+# depend on which yarn happens to be first in PATH.
+pre-commit:
+  parallel: true
+  commands:
+    prettier:
+      glob: '*.{ts,tsx,js,mjs,cjs,json,md,yaml,yml,css}'
+      run: node_modules/.bin/prettier --write --ignore-unknown {staged_files} && git add {staged_files}
+    eslint:
+      glob: '*.{ts,tsx}'
+      run: node_modules/.bin/eslint --fix --no-warn-ignored {staged_files} && git add {staged_files}
+    ruff-format:
+      glob: '*.py'
+      # --force-exclude keeps generated files out even when they are named explicitly.
+      run: uv run ruff format --force-exclude {staged_files} && git add {staged_files}
+    ruff-check:
+      glob: '*.py'
+      run: uv run ruff check --fix --force-exclude {staged_files} && git add {staged_files}
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: >-
+        grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+' {1}
+        || (echo 'Commit message must follow conventional commits.' && exit 1)

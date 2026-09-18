@@ -1,0 +1,20 @@
+{
+  "name": "@lct/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@lct/contracts": "workspace:^",
+    "@lct/engine-client": "workspace:^",
+    "@lct/registry": "workspace:^",
+    "@mastra/core": "1.66.0",
+    "@mastra/libsql": "1.22.5",
+    "zod": "^4.6.0"
+  }
+}

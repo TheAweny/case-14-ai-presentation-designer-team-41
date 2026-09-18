@@ -1,0 +1,54 @@
+# Audit profiles. A profile switches checks on and sets their thresholds.
+# Deterministic checks run in the Python engine, contextual ones on the TypeScript side.
+# docs/AUDIT.md is generated from the check registry, not written by hand.
+
+profiles:
+  default:
+    description: Balanced profile used by every run unless a config overrides it.
+
+    deterministic:
+      text-overflow:
+        enabled: true
+      bullet-count:
+        enabled: true
+        maxBulletsPerSlide: 6
+        maxLinesPerBullet: 2
+      table-size:
+        enabled: true
+        maxRows: 8
+        maxColumns: 6
+      contrast:
+        enabled: true
+        minContrastRatio: 4.5
+      safe-margins:
+        enabled: true
+        minMarginPt: 18
+      font-usage:
+        enabled: true
+        maxDistinctFonts: 3
+      placeholder-text:
+        enabled: true
+        forbiddenPatterns:
+          - 'lorem ipsum'
+          - 'вставьте текст'
+
+    contextual:
+      slide-title-matches-body:
+        enabled: true
+      claim-supported-by-content-pack:
+        enabled: true
+      duplicate-message:
+        enabled: true
+      narrative-order:
+        enabled: true
+
+  strict:
+    description: Tighter thresholds used when checking the result on an unfamiliar template.
+    inherits: default
+    deterministic:
+      bullet-count:
+        maxBulletsPerSlide: 5
+      contrast:
+        minContrastRatio: 7
+      font-usage:
+        maxDistinctFonts: 2

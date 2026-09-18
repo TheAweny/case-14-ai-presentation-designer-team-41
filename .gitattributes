@@ -1,0 +1,19 @@
+# One line ending across the team, whatever the OS.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.pptx binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Generated files: keep them out of diff noise in reviews.
+packages/contracts/schema/** linguist-generated=true
+engine/src/engine/contracts/_generated.py linguist-generated=true
+docs/AUDIT.md linguist-generated=true
+docs/LICENSES.md linguist-generated=true
+yarn.lock linguist-generated=true
+uv.lock linguist-generated=true

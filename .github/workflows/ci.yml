@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  verify:
+    name: Lint, types, boundaries, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # 1. Dependencies — yarn and uv, both cached.
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Node dependencies
+        run: yarn install --immutable
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python dependencies
+        run: uv sync --frozen
+
+      - uses: nrwl/nx-set-shas@v4
+
+      # 2. Lint.
+      - name: Lint TypeScript
+        run: yarn nx affected -t lint
+
+      - name: Lint Python
+        run: uv run ruff check . && uv run ruff format --check .
+
+      # 3. Types.
+      - name: Typecheck TypeScript
+        run: yarn nx affected -t typecheck
+
+      - name: Typecheck Python
+        run: uv run pyright
+
+      # 4. Layer boundaries. The TypeScript rules run inside ESLint above; this is the engine.
+      - name: Check engine import boundaries
+        run: uv run lint-imports --config engine/pyproject.toml
+
+      # 5. Generated contracts must match the schemas that are committed.
+      - name: Check codegen is up to date
+        run: |
+          yarn codegen
+          git diff --exit-code -- packages/contracts/schema engine/src/engine/contracts/_generated.py
+
+      # 6. Tests.
+      - name: Test TypeScript
+        run: yarn nx affected -t test
+
+      - name: Test Python
+        run: uv run pytest
+
+      # 7. Build.
+      - name: Build
+        run: yarn nx affected -t build
+
+  licenses:
+    name: Dependency license policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install Node dependencies
+        run: yarn install --immutable
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python dependencies
+        run: uv sync --frozen
+
+      # The product is open source: GPL and AGPL in the dependency tree fail the build.
+      - name: Check dependency licenses
+        run: yarn licenses
