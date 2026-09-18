@@ -1,0 +1,117 @@
+# CI for SourceCraft. Runs on every push to main and on every pull request into main.
+#
+# Design notes:
+# - One image for everything: the Node image plus uv, because uv brings its own Python 3.12 and
+#   pyright needs Node anyway. That keeps every task on the same base and avoids a second image.
+# - Cubes inside one task share the worker, and the repository directory (/sourcecraft/workspace)
+#   survives between them, so node_modules and .venv are installed once per task. Tools that live
+#   outside the repository go to /sourcecraft, which also persists but stays out of the git tree.
+# - Tasks run on separate workers and in parallel, so each one installs its own toolchain.
+# - We use `nx run-many`, not `nx affected`: the workspace is small, a full run takes seconds, and
+#   it removes a whole class of "which base commit" flakiness.
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+  NEXT_TELEMETRY_DISABLED: '1'
+  UV_LINK_MODE: copy
+
+on:
+  push:
+    - workflows: [ci]
+      filter:
+        branches: ['main']
+  pull_request:
+    - workflows: [ci]
+      filter:
+        target_branches: ['main']
+
+workflows:
+  ci:
+    checkout:
+      enabled: true
+
+    tasks:
+      # ---------------------------------------------------------------- TypeScript
+      - name: typescript
+        cubes:
+          - name: install
+            image: docker.io/library/node:22-bookworm
+            script:
+              - corepack yarn install --immutable
+
+          - name: lint
+            image: docker.io/library/node:22-bookworm
+            script:
+              - corepack yarn nx run-many -t lint
+
+          - name: typecheck
+            image: docker.io/library/node:22-bookworm
+            script:
+              - corepack yarn nx run-many -t typecheck
+
+          - name: test
+            image: docker.io/library/node:22-bookworm
+            script:
+              - corepack yarn nx run-many -t test
+
+          - name: build
+            image: docker.io/library/node:22-bookworm
+            script:
+              - corepack yarn nx run-many -t build
+
+      # -------------------------------------------------------------------- Python
+      - name: python
+        cubes:
+          - name: install
+            image: docker.io/library/node:22-bookworm
+            script:
+              # uv lands outside the repository so `git diff` stays clean, and in /sourcecraft so
+              # the next cubes still see it.
+              - curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/sourcecraft/bin sh
+              - echo "PATH=/sourcecraft/bin:$PATH" >> $SOURCECRAFT_ENV
+              - /sourcecraft/bin/uv sync --frozen
+
+          - name: lint
+            image: docker.io/library/node:22-bookworm
+            script:
+              - uv run ruff check .
+              - uv run ruff format --check .
+
+          - name: typecheck
+            image: docker.io/library/node:22-bookworm
+            script:
+              - uv run pyright
+
+          - name: boundaries
+            image: docker.io/library/node:22-bookworm
+            script:
+              - uv run lint-imports --config engine/pyproject.toml
+
+          - name: test
+            image: docker.io/library/node:22-bookworm
+            script:
+              - uv run pytest
+
+      # ------------------------------------------------- Contracts and license policy
+      - name: contracts-and-licenses
+        cubes:
+          - name: install
+            image: docker.io/library/node:22-bookworm
+            script:
+              - curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/sourcecraft/bin sh
+              - echo "PATH=/sourcecraft/bin:$PATH" >> $SOURCECRAFT_ENV
+              - corepack yarn install --immutable
+              - /sourcecraft/bin/uv sync --frozen
+
+          - name: codegen-is-current
+            image: docker.io/library/node:22-bookworm
+            script:
+              # Regenerating the contracts must not change anything that is committed.
+              - corepack yarn codegen
+              - git diff --exit-code -- packages/contracts/schema engine/src/engine/contracts/_generated.py
+
+          - name: dependency-licenses
+            image: docker.io/library/node:22-bookworm
+            script:
+              # The product is open source: GPL and AGPL in the dependency tree fail the build.
+              - corepack yarn licenses
