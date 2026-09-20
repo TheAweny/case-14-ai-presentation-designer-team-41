@@ -1,15 +1,14 @@
-"""Every layer exposes its public entry point with the signature of the future contract."""
+"""Every layer still to be written exposes its entry point with the signature of the contract.
+
+The parser has since been implemented, so it left this file: its behaviour is pinned by
+``test_parser.py`` instead.
+"""
 
 from pathlib import Path
 
 import pytest
 
-from engine import checks, export, layout, parser, render, visuals
-
-
-def test_parser_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        parser.parse_template(Path("data/templates/example.pptx"))
+from engine import checks, export, layout, render, visuals
 
 
 def test_layout_entry_point_is_declared() -> None:
