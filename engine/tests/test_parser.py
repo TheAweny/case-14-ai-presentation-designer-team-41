@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from engine.parser import (
+    TEMPLATE_IR_SCHEMA_VERSION,
     MalformedPresentationError,
     NotAPackageError,
     NotAPresentationError,
@@ -183,4 +184,5 @@ def test_public_entry_point_returns_a_profile_with_a_hash(shapes_fixture: Path) 
     profile = parse_template(shapes_fixture)
     assert profile["hash"] == ir_hash(parse_template_ir(shapes_fixture))
     assert profile["aspect"]
-    assert profile["slide_cx"] > 0
+    assert profile["slideCx"] > 0
+    assert profile["schemaVersion"] == TEMPLATE_IR_SCHEMA_VERSION

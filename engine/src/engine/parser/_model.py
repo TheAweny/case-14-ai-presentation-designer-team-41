@@ -15,6 +15,10 @@ from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Any
 
+#: Version of the shared TemplateIR contract this module produces. Raised by any incompatible
+#: change, and kept in step with packages/contracts/src/template-ir.ts.
+TEMPLATE_IR_SCHEMA_VERSION = 1
+
 #: English Metric Units per point and per inch, the units OOXML stores geometry in.
 EMU_PER_PT = 12700
 EMU_PER_INCH = 914400
@@ -177,5 +181,32 @@ class TemplateIR:
         return f"{self.slide_cx // divisor}:{self.slide_cy // divisor}"
 
     def to_dict(self) -> dict[str, Any]:
-        """Flatten to the plain dictionary the layer boundary declares."""
-        return asdict(self) | {"aspect": self.aspect}
+        """Flatten to the shape the shared ``TemplateIR`` contract declares.
+
+        Keys come out in camel case because the contract is generated from Zod, where that is the
+        house style. Converting here rather than renaming the dataclass fields keeps the Python
+        side readable and puts the single translation at the one place that crosses the boundary.
+        """
+        payload = _camelize(asdict(self))
+        payload["aspect"] = self.aspect
+        payload["schemaVersion"] = TEMPLATE_IR_SCHEMA_VERSION
+        return payload
+
+
+def _camelize(value: Any) -> Any:
+    """Recursively rewrite ``snake_case`` mapping keys as ``camelCase``.
+
+    Tuples become lists on the way out. ``asdict`` keeps the tuples the dataclasses use, and JSON
+    has no such type, so leaving them would produce a payload that changes shape the moment it
+    crosses the boundary it was built for.
+    """
+    if isinstance(value, dict):
+        return {_camel_key(key): _camelize(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_camelize(item) for item in value]
+    return value
+
+
+def _camel_key(key: str) -> str:
+    head, *rest = key.split("_")
+    return head + "".join(word.capitalize() for word in rest)

@@ -34,6 +34,7 @@ from engine.parser._errors import (
 from engine.parser._model import (
     EMU_PER_INCH,
     EMU_PER_PT,
+    TEMPLATE_IR_SCHEMA_VERSION,
     MediaItem,
     ParseWarning,
     SlideLike,
@@ -46,6 +47,7 @@ from engine.parser._theme import read_themes
 __all__ = [
     "EMU_PER_INCH",
     "EMU_PER_PT",
+    "TEMPLATE_IR_SCHEMA_VERSION",
     "MalformedPresentationError",
     "NotAPackageError",
     "NotAPresentationError",
@@ -262,7 +264,7 @@ def ir_hash(ir: TemplateIR) -> str:
     the same template.
     """
     payload = ir.to_dict()
-    payload.pop("source_name", None)
+    payload.pop("sourceName", None)
     canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
