@@ -1,0 +1,147 @@
+{
+  "contract": "AuditFinding",
+  "valid": [
+    {
+      "name": "a measurement with a patch",
+      "payload": {
+        "schemaVersion": 1,
+        "findingId": "finding-1",
+        "checkId": "text-overflow",
+        "origin": "deterministic",
+        "severity": "major",
+        "confidence": 1,
+        "title": "Заголовок выходит за пределы блока",
+        "detail": "Текст длиннее блока на одну строку.",
+        "target": {
+          "slideId": "s2",
+          "variant": "dense",
+          "elementId": "s2-title",
+          "box": {
+            "x": 838200,
+            "y": 365125,
+            "cx": 10515600,
+            "cy": 1325563
+          }
+        },
+        "evidence": {
+          "measured": "1 строка сверх блока",
+          "expected": "0 строк",
+          "quote": "",
+          "sources": [],
+          "screenshot": "audit/s2-title.png"
+        },
+        "fixability": "auto",
+        "proposedPatch": {
+          "patchId": "patch-1",
+          "findingId": "finding-1",
+          "slideId": "s2",
+          "variant": "dense",
+          "ops": [
+            {
+              "op": "set-font-size",
+              "elementId": "s2-title",
+              "sizePt": 36
+            }
+          ],
+          "rationale": "Заголовок не помещается в одну строку: на шаг меньше по шкале шаблона.",
+          "touchesCopy": false
+        }
+      }
+    },
+    {
+      "name": "a judgement without one",
+      "payload": {
+        "schemaVersion": 1,
+        "findingId": "finding-2",
+        "checkId": "headline-supported",
+        "origin": "contextual",
+        "severity": "blocker",
+        "confidence": 0.72,
+        "title": "Заголовок не подтверждён контент-паком",
+        "detail": "Цифра в заголовке не встречается в исходных материалах.",
+        "target": {
+          "slideId": "s3",
+          "variant": "airy",
+          "elementId": null,
+          "box": null
+        },
+        "evidence": {
+          "measured": "",
+          "expected": "Каждое число подтверждено источником",
+          "quote": "Выручка выросла вдвое",
+          "sources": [
+            {
+              "itemId": "item-metrics",
+              "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+            }
+          ],
+          "screenshot": ""
+        },
+        "fixability": "manual",
+        "proposedPatch": null
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "confidence above one",
+      "why": "Confidence is a probability; the interface sorts findings by it.",
+      "path": ["confidence"],
+      "payload": {
+        "schemaVersion": 1,
+        "findingId": "f",
+        "checkId": "c",
+        "origin": "contextual",
+        "severity": "minor",
+        "confidence": 1.4,
+        "title": "t",
+        "detail": "d",
+        "target": {
+          "slideId": "s1",
+          "variant": "dense",
+          "elementId": null,
+          "box": null
+        },
+        "evidence": {
+          "measured": "",
+          "expected": "",
+          "quote": "",
+          "sources": [],
+          "screenshot": ""
+        },
+        "fixability": "manual",
+        "proposedPatch": null
+      }
+    },
+    {
+      "name": "no detail",
+      "why": "A finding the user cannot act on trains the user to ignore the panel.",
+      "path": ["detail"],
+      "payload": {
+        "schemaVersion": 1,
+        "findingId": "f",
+        "checkId": "c",
+        "origin": "deterministic",
+        "severity": "minor",
+        "confidence": 1,
+        "title": "t",
+        "detail": "",
+        "target": {
+          "slideId": "s1",
+          "variant": "dense",
+          "elementId": null,
+          "box": null
+        },
+        "evidence": {
+          "measured": "",
+          "expected": "",
+          "quote": "",
+          "sources": [],
+          "screenshot": ""
+        },
+        "fixability": "manual",
+        "proposedPatch": null
+      }
+    }
+  ]
+}

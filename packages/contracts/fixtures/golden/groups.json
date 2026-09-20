@@ -1,0 +1,2863 @@
+{
+  "aspect": "4:3",
+  "hash": "8fb5394dc2c9bc4a2327c77a94367a8c5b4f568aef5dd757b96a4d660f30ee68",
+  "layouts": [
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Title Slide",
+      "part": "/ppt/slideLayouts/slideLayout1.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 7772400,
+            "cy": 1470025,
+            "x": 685800,
+            "y": 2130425
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "center-title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 6400800,
+            "cy": 1752600,
+            "x": 1371600,
+            "y": 3886200
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Subtitle 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master subtitle style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "subtitle"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Title and Content",
+      "part": "/ppt/slideLayouts/slideLayout2.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 1143000,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 4525963,
+            "x": 457200,
+            "y": 1600200
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Content Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "object"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Section Header",
+      "part": "/ppt/slideLayouts/slideLayout3.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 7772400,
+            "cy": 1362075,
+            "x": 722313,
+            "y": 4406900
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 7772400,
+            "cy": 1500187,
+            "x": 722313,
+            "y": 2906713
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Text Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Two Content",
+      "part": "/ppt/slideLayouts/slideLayout4.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 1143000,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 4038600,
+            "cy": 4525963,
+            "x": 457200,
+            "y": 1600200
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Content Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "object"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 4038600,
+            "cy": 4525963,
+            "x": 4648200,
+            "y": 1600200
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Content Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 2,
+            "type": "object"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 6",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 7,
+          "tableSize": null,
+          "z": 5
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Comparison",
+      "part": "/ppt/slideLayouts/slideLayout5.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 1143000,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 4040188,
+            "cy": 639762,
+            "x": 457200,
+            "y": 1535113
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Text Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 4040188,
+            "cy": 3951288,
+            "x": 457200,
+            "y": 2174875
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Content Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 2,
+            "type": "object"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 4041775,
+            "cy": 639762,
+            "x": 4645025,
+            "y": 1535113
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Text Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 3,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 4041775,
+            "cy": 3951288,
+            "x": 4645025,
+            "y": 2174875
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Content Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 4,
+            "type": "object"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 6",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 7,
+          "tableSize": null,
+          "z": 5
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 7",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 8,
+          "tableSize": null,
+          "z": 6
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 8",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 9,
+          "tableSize": null,
+          "z": 7
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Title Only",
+      "part": "/ppt/slideLayouts/slideLayout6.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 1143000,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Blank",
+      "part": "/ppt/slideLayouts/slideLayout7.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Content with Caption",
+      "part": "/ppt/slideLayouts/slideLayout8.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 3008313,
+            "cy": 1162050,
+            "x": 457200,
+            "y": 273050
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 5111750,
+            "cy": 5853113,
+            "x": 3575050,
+            "y": 273050
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Content Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "object"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 3008313,
+            "cy": 4691063,
+            "x": 457200,
+            "y": 1435100
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Text Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 2,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 6",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 7,
+          "tableSize": null,
+          "z": 5
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Picture with Caption",
+      "part": "/ppt/slideLayouts/slideLayout9.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 5486400,
+            "cy": 566738,
+            "x": 1792288,
+            "y": 4800600
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 5486400,
+            "cy": 4114800,
+            "x": 1792288,
+            "y": 612775
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Picture Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "picture"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 5486400,
+            "cy": 804862,
+            "x": 1792288,
+            "y": 5367338
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Text Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 2,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 6",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 7,
+          "tableSize": null,
+          "z": 5
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Title and Vertical Text",
+      "part": "/ppt/slideLayouts/slideLayout10.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 1143000,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 4525963,
+            "x": 457200,
+            "y": 1600200
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Vertical Text Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        }
+      ]
+    },
+    {
+      "follows": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Vertical Title and Text",
+      "part": "/ppt/slideLayouts/slideLayout11.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 2057400,
+            "cy": 5851525,
+            "x": 6629400,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Vertical Title 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 6019800,
+            "cy": 5851525,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Vertical Text Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 10,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 11,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 12,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        }
+      ]
+    }
+  ],
+  "masters": [
+    {
+      "follows": "",
+      "name": "",
+      "part": "/ppt/slideMasters/slideMaster1.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 1143000,
+            "x": 457200,
+            "y": 274638
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Title Placeholder 1",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master title style"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 0,
+            "type": "title"
+          },
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 8229600,
+            "cy": 4525963,
+            "x": 457200,
+            "y": 1600200
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Text Placeholder 2",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Click to edit Master text styles"
+                }
+              ]
+            },
+            {
+              "level": 1,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Second level"
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Third level"
+                }
+              ]
+            },
+            {
+              "level": 3,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fourth level"
+                }
+              ]
+            },
+            {
+              "level": 4,
+              "runs": [
+                {
+                  "bold": null,
+                  "color": "",
+                  "font": "",
+                  "italic": null,
+                  "sizePt": null,
+                  "text": "Fifth level"
+                }
+              ]
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 1,
+            "type": "body"
+          },
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 1
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 457200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Date Placeholder 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 2,
+            "type": "date"
+          },
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 2
+        },
+        {
+          "box": {
+            "cx": 2895600,
+            "cy": 365125,
+            "x": 3124200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Footer Placeholder 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 3,
+            "type": "footer"
+          },
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 3
+        },
+        {
+          "box": {
+            "cx": 2133600,
+            "cy": 365125,
+            "x": 6553200,
+            "y": 6356350
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "placeholder",
+          "mediaPart": "",
+          "name": "Slide Number Placeholder 5",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [],
+          "placeholder": {
+            "idx": 4,
+            "type": "slide-number"
+          },
+          "rotation": 0.0,
+          "shapeId": 6,
+          "tableSize": null,
+          "z": 4
+        }
+      ]
+    }
+  ],
+  "media": [],
+  "schemaVersion": 1,
+  "slideCx": 9144000,
+  "slideCy": 6858000,
+  "slides": [
+    {
+      "follows": "/ppt/slideLayouts/slideLayout7.xml",
+      "name": "slide1",
+      "part": "/ppt/slides/slide1.xml",
+      "shapes": [
+        {
+          "box": {
+            "cx": 2743200,
+            "cy": 914400,
+            "x": 914400,
+            "y": 914400
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "group",
+          "mediaPart": "",
+          "name": "Group 1",
+          "paragraphs": [],
+          "path": [],
+          "placeholder": null,
+          "rotation": 0.0,
+          "shapeId": 2,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 914400,
+            "cy": 914400,
+            "x": 914400,
+            "y": 914400
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "group",
+          "mediaPart": "",
+          "name": "Group 2",
+          "paragraphs": [],
+          "path": [
+            2
+          ],
+          "placeholder": null,
+          "rotation": 0.0,
+          "shapeId": 3,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 914400,
+            "cy": 914400,
+            "x": 914400,
+            "y": 914400
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "auto-shape",
+          "mediaPart": "",
+          "name": "Rounded Rectangle 3",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [
+            2,
+            3
+          ],
+          "placeholder": null,
+          "rotation": 0.0,
+          "shapeId": 4,
+          "tableSize": null,
+          "z": 0
+        },
+        {
+          "box": {
+            "cx": 914400,
+            "cy": 914400,
+            "x": 2743200,
+            "y": 914400
+          },
+          "chartPart": "",
+          "chartType": "",
+          "flipH": false,
+          "flipV": false,
+          "kind": "auto-shape",
+          "mediaPart": "",
+          "name": "Oval 4",
+          "paragraphs": [
+            {
+              "level": 0,
+              "runs": []
+            }
+          ],
+          "path": [
+            2
+          ],
+          "placeholder": null,
+          "rotation": 0.0,
+          "shapeId": 5,
+          "tableSize": null,
+          "z": 1
+        }
+      ]
+    }
+  ],
+  "sourceName": "groups.pptx",
+  "themeColors": [
+    {
+      "name": "Office",
+      "slots": [
+        [
+          "dk1",
+          "000000"
+        ],
+        [
+          "lt1",
+          "FFFFFF"
+        ],
+        [
+          "dk2",
+          "1F497D"
+        ],
+        [
+          "lt2",
+          "EEECE1"
+        ],
+        [
+          "accent1",
+          "4F81BD"
+        ],
+        [
+          "accent2",
+          "C0504D"
+        ],
+        [
+          "accent3",
+          "9BBB59"
+        ],
+        [
+          "accent4",
+          "8064A2"
+        ],
+        [
+          "accent5",
+          "4BACC6"
+        ],
+        [
+          "accent6",
+          "F79646"
+        ],
+        [
+          "hlink",
+          "0000FF"
+        ],
+        [
+          "folHlink",
+          "800080"
+        ]
+      ]
+    }
+  ],
+  "themeFonts": {
+    "majorLatin": "Calibri",
+    "minorLatin": "Calibri"
+  },
+  "warnings": []
+}

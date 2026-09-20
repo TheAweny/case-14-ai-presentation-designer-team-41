@@ -1,0 +1,230 @@
+{
+  "contract": "TemplateIR",
+  "valid": [
+    {
+      "name": "one master, one layout, one slide",
+      "payload": {
+        "schemaVersion": 1,
+        "sourceName": "example.pptx",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "aspect": "16:9",
+        "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "themeColors": [
+          {
+            "name": "Office",
+            "slots": [
+              ["dk1", "000000"],
+              ["lt1", "FFFFFF"],
+              ["accent1", "4472C4"]
+            ]
+          }
+        ],
+        "themeFonts": {
+          "majorLatin": "Arial",
+          "minorLatin": "Arial"
+        },
+        "masters": [
+          {
+            "part": "ppt/slideMasters/slideMaster1.xml",
+            "name": "Office Theme",
+            "follows": "",
+            "shapes": []
+          }
+        ],
+        "layouts": [
+          {
+            "part": "ppt/slideLayouts/slideLayout1.xml",
+            "name": "Title Slide",
+            "follows": "ppt/slideMasters/slideMaster1.xml",
+            "shapes": []
+          }
+        ],
+        "slides": [
+          {
+            "part": "ppt/slides/slide1.xml",
+            "name": "slide1",
+            "follows": "ppt/slideLayouts/slideLayout1.xml",
+            "shapes": [
+              {
+                "shapeId": 2,
+                "name": "Title 1",
+                "kind": "auto-shape",
+                "box": {
+                  "x": 838200,
+                  "y": 365125,
+                  "cx": 10515600,
+                  "cy": 1325563
+                },
+                "rotation": 0.0,
+                "flipH": false,
+                "flipV": false,
+                "z": 0,
+                "path": [],
+                "placeholder": {
+                  "type": "center-title",
+                  "idx": null
+                },
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "Quarterly review",
+                        "font": "Play",
+                        "sizePt": 40.0,
+                        "bold": true,
+                        "italic": null,
+                        "color": "1F1F1F"
+                      }
+                    ]
+                  }
+                ],
+                "mediaPart": "",
+                "tableSize": null,
+                "chartPart": "",
+                "chartType": ""
+              }
+            ]
+          }
+        ],
+        "media": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "recovered from a missing theme",
+      "payload": {
+        "schemaVersion": 1,
+        "sourceName": "no-theme.pptx",
+        "slideCx": 9144000,
+        "slideCy": 6858000,
+        "aspect": "4:3",
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "themeColors": [],
+        "themeFonts": {
+          "majorLatin": "",
+          "minorLatin": ""
+        },
+        "masters": [],
+        "layouts": [],
+        "slides": [],
+        "media": [],
+        "warnings": [
+          {
+            "code": "missing-theme",
+            "message": "The package declares no theme part.",
+            "location": "ppt/presentation.xml"
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "hash of the wrong length",
+      "why": "The digest identifies a template across a run; a short one is a silent collision.",
+      "path": ["hash"],
+      "payload": {
+        "schemaVersion": 1,
+        "sourceName": "example.pptx",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "aspect": "16:9",
+        "hash": "abc",
+        "themeColors": [],
+        "themeFonts": {
+          "majorLatin": "",
+          "minorLatin": ""
+        },
+        "masters": [],
+        "layouts": [],
+        "slides": [],
+        "media": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "unknown warning code",
+      "why": "Warning codes are a closed set: the interface has a sentence for each one.",
+      "path": ["warnings", 0, "code"],
+      "payload": {
+        "schemaVersion": 1,
+        "sourceName": "example.pptx",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "aspect": "16:9",
+        "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "themeColors": [],
+        "themeFonts": {
+          "majorLatin": "",
+          "minorLatin": ""
+        },
+        "masters": [],
+        "layouts": [],
+        "slides": [],
+        "media": [],
+        "warnings": [
+          {
+            "code": "something-went-wrong",
+            "message": "x",
+            "location": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "geometry in points",
+      "why": "Boxes are integer EMU. A float here means a unit conversion happened too early.",
+      "path": ["slides", 0, "shapes", 0, "box", "x"],
+      "payload": {
+        "schemaVersion": 1,
+        "sourceName": "example.pptx",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "aspect": "16:9",
+        "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "themeColors": [],
+        "themeFonts": {
+          "majorLatin": "",
+          "minorLatin": ""
+        },
+        "masters": [],
+        "layouts": [],
+        "slides": [
+          {
+            "part": "ppt/slides/slide1.xml",
+            "name": "slide1",
+            "follows": "",
+            "shapes": [
+              {
+                "shapeId": 2,
+                "name": "Title 1",
+                "kind": "auto-shape",
+                "box": {
+                  "x": 66.5,
+                  "y": 28.75,
+                  "cx": 828.5,
+                  "cy": 104.375
+                },
+                "rotation": 0.0,
+                "flipH": false,
+                "flipV": false,
+                "z": 0,
+                "path": [],
+                "placeholder": null,
+                "paragraphs": [],
+                "mediaPart": "",
+                "tableSize": null,
+                "chartPart": "",
+                "chartType": ""
+              }
+            ]
+          }
+        ],
+        "media": [],
+        "warnings": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,231 @@
+{
+  "contract": "DesignSystem",
+  "valid": [
+    {
+      "name": "observed beats declared",
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "aspect": "16:9",
+        "palette": [
+          {
+            "role": "background",
+            "hex": "FFFFFF",
+            "source": "observed",
+            "coverage": 0.82
+          },
+          {
+            "role": "text",
+            "hex": "1F1F1F",
+            "source": "observed",
+            "coverage": 0.61
+          },
+          {
+            "role": "accent",
+            "hex": "4472C4",
+            "source": "theme",
+            "coverage": 0.12
+          }
+        ],
+        "typeScale": [
+          {
+            "role": "title",
+            "font": "Play",
+            "sizePt": 40,
+            "bold": true,
+            "italic": false,
+            "lineSpacing": 1.0,
+            "colorRole": "text",
+            "source": "observed"
+          },
+          {
+            "role": "body",
+            "font": "Play",
+            "sizePt": 18,
+            "bold": false,
+            "italic": false,
+            "lineSpacing": 1.15,
+            "colorRole": "text",
+            "source": "observed"
+          }
+        ],
+        "grid": {
+          "slideCx": 12192000,
+          "slideCy": 6858000,
+          "marginLeft": 838200,
+          "marginRight": 838200,
+          "marginTop": 365125,
+          "marginBottom": 365125,
+          "columns": 12,
+          "gutter": 152400,
+          "baseline": 91440
+        },
+        "assets": [
+          {
+            "mediaPart": "ppt/media/image1.png",
+            "role": "logo",
+            "widthPx": 320,
+            "heightPx": 96
+          }
+        ],
+        "notes": ["Тема объявляет Arial, слайды набраны Play: взят наблюдаемый шрифт."]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "colour with a leading hash",
+      "why": "Hex values are stored bare, the way OOXML writes them.",
+      "path": ["palette", 0, "hex"],
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "aspect": "16:9",
+        "palette": [
+          {
+            "role": "background",
+            "hex": "#FFFFFF",
+            "source": "theme",
+            "coverage": 1
+          }
+        ],
+        "typeScale": [
+          {
+            "role": "title",
+            "font": "Play",
+            "sizePt": 40,
+            "bold": true,
+            "italic": false,
+            "lineSpacing": 1.0,
+            "colorRole": "text",
+            "source": "observed"
+          },
+          {
+            "role": "body",
+            "font": "Play",
+            "sizePt": 18,
+            "bold": false,
+            "italic": false,
+            "lineSpacing": 1.15,
+            "colorRole": "text",
+            "source": "observed"
+          }
+        ],
+        "grid": {
+          "slideCx": 12192000,
+          "slideCy": 6858000,
+          "marginLeft": 838200,
+          "marginRight": 838200,
+          "marginTop": 365125,
+          "marginBottom": 365125,
+          "columns": 12,
+          "gutter": 152400,
+          "baseline": 91440
+        },
+        "assets": [],
+        "notes": []
+      }
+    },
+    {
+      "name": "empty palette",
+      "why": "A template always yields at least a background and a text colour.",
+      "path": ["palette"],
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "aspect": "16:9",
+        "palette": [],
+        "typeScale": [
+          {
+            "role": "title",
+            "font": "Play",
+            "sizePt": 40,
+            "bold": true,
+            "italic": false,
+            "lineSpacing": 1.0,
+            "colorRole": "text",
+            "source": "observed"
+          },
+          {
+            "role": "body",
+            "font": "Play",
+            "sizePt": 18,
+            "bold": false,
+            "italic": false,
+            "lineSpacing": 1.15,
+            "colorRole": "text",
+            "source": "observed"
+          }
+        ],
+        "grid": {
+          "slideCx": 12192000,
+          "slideCy": 6858000,
+          "marginLeft": 838200,
+          "marginRight": 838200,
+          "marginTop": 365125,
+          "marginBottom": 365125,
+          "columns": 12,
+          "gutter": 152400,
+          "baseline": 91440
+        },
+        "assets": [],
+        "notes": []
+      }
+    },
+    {
+      "name": "type style at zero points",
+      "why": "Text that cannot be seen is not a style.",
+      "path": ["typeScale", 0, "sizePt"],
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "aspect": "16:9",
+        "palette": [
+          {
+            "role": "background",
+            "hex": "FFFFFF",
+            "source": "observed",
+            "coverage": 0.82
+          },
+          {
+            "role": "text",
+            "hex": "1F1F1F",
+            "source": "observed",
+            "coverage": 0.61
+          },
+          {
+            "role": "accent",
+            "hex": "4472C4",
+            "source": "theme",
+            "coverage": 0.12
+          }
+        ],
+        "typeScale": [
+          {
+            "role": "title",
+            "font": "Play",
+            "sizePt": 0,
+            "bold": true,
+            "italic": false,
+            "lineSpacing": 1.0,
+            "colorRole": "text",
+            "source": "observed"
+          }
+        ],
+        "grid": {
+          "slideCx": 12192000,
+          "slideCy": 6858000,
+          "marginLeft": 838200,
+          "marginRight": 838200,
+          "marginTop": 365125,
+          "marginBottom": 365125,
+          "columns": 12,
+          "gutter": 152400,
+          "baseline": 91440
+        },
+        "assets": [],
+        "notes": []
+      }
+    }
+  ]
+}

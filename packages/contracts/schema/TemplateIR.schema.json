@@ -1,0 +1,1051 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "aspect": {
+      "description": "Aspect ratio in lowest terms, such as 16:9.",
+      "type": "string"
+    },
+    "hash": {
+      "description": "Digest over the canonical IR. Two runs over one file agree; the name is excluded.",
+      "maxLength": 64,
+      "minLength": 64,
+      "type": "string"
+    },
+    "layouts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "follows": {
+            "description": "Part this one inherits from: a layout for a slide, a master for a layout.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name from the file, or a generated one for slides.",
+            "type": "string"
+          },
+          "part": {
+            "description": "Package part name, which identifies it.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "shapes": {
+            "description": "Shapes in paint order, groups flattened.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "box": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null when the shape inherits its position from a layout."
+                },
+                "chartPart": {
+                  "description": "Part name of the chart, for charts.",
+                  "type": "string"
+                },
+                "chartType": {
+                  "description": "Chart type, lower-cased and hyphenated.",
+                  "type": "string"
+                },
+                "flipH": {
+                  "description": "Mirrored horizontally.",
+                  "type": "boolean"
+                },
+                "flipV": {
+                  "description": "Mirrored vertically.",
+                  "type": "boolean"
+                },
+                "kind": {
+                  "description": "Shape kind: auto-shape, text-box, picture, table, chart, group.",
+                  "type": "string"
+                },
+                "mediaPart": {
+                  "description": "Part name of the image this shape draws, for pictures.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name the authoring tool gave the shape.",
+                  "type": "string"
+                },
+                "paragraphs": {
+                  "description": "Text of the shape, empty when it carries none.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "level": {
+                        "description": "Indent level, zero at the top.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "runs": {
+                        "description": "Runs in reading order.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "bold": {
+                              "description": "Null when inherited.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "color": {
+                              "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                              "type": "string"
+                            },
+                            "font": {
+                              "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                              "type": "string"
+                            },
+                            "italic": {
+                              "description": "Null when inherited.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "sizePt": {
+                              "description": "Size in points, or null when inherited.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "text": {
+                              "description": "Literal text of the run.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "font",
+                            "sizePt",
+                            "bold",
+                            "italic",
+                            "color"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "runs"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "path": {
+                  "description": "Ids of the groups this shape sits in, outermost first. Empty at the top level.",
+                  "items": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "placeholder": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "idx": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Placeholder index within the layout."
+                        },
+                        "type": {
+                          "description": "Placeholder type, lower-cased and hyphenated.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "idx"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rotation": {
+                  "description": "Rotation in degrees, clockwise.",
+                  "type": "number"
+                },
+                "shapeId": {
+                  "description": "OOXML shape id, unique within its part.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "tableSize": {
+                  "anyOf": [
+                    {
+                      "items": false,
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "prefixItems": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Rows and columns, for tables."
+                },
+                "z": {
+                  "description": "Paint order within the parent, lowest first.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "shapeId",
+                "name",
+                "kind",
+                "box",
+                "rotation",
+                "flipH",
+                "flipV",
+                "z",
+                "path",
+                "placeholder",
+                "paragraphs",
+                "mediaPart",
+                "tableSize",
+                "chartPart",
+                "chartType"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "part",
+          "name",
+          "follows",
+          "shapes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "masters": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "follows": {
+            "description": "Part this one inherits from: a layout for a slide, a master for a layout.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name from the file, or a generated one for slides.",
+            "type": "string"
+          },
+          "part": {
+            "description": "Package part name, which identifies it.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "shapes": {
+            "description": "Shapes in paint order, groups flattened.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "box": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null when the shape inherits its position from a layout."
+                },
+                "chartPart": {
+                  "description": "Part name of the chart, for charts.",
+                  "type": "string"
+                },
+                "chartType": {
+                  "description": "Chart type, lower-cased and hyphenated.",
+                  "type": "string"
+                },
+                "flipH": {
+                  "description": "Mirrored horizontally.",
+                  "type": "boolean"
+                },
+                "flipV": {
+                  "description": "Mirrored vertically.",
+                  "type": "boolean"
+                },
+                "kind": {
+                  "description": "Shape kind: auto-shape, text-box, picture, table, chart, group.",
+                  "type": "string"
+                },
+                "mediaPart": {
+                  "description": "Part name of the image this shape draws, for pictures.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name the authoring tool gave the shape.",
+                  "type": "string"
+                },
+                "paragraphs": {
+                  "description": "Text of the shape, empty when it carries none.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "level": {
+                        "description": "Indent level, zero at the top.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "runs": {
+                        "description": "Runs in reading order.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "bold": {
+                              "description": "Null when inherited.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "color": {
+                              "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                              "type": "string"
+                            },
+                            "font": {
+                              "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                              "type": "string"
+                            },
+                            "italic": {
+                              "description": "Null when inherited.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "sizePt": {
+                              "description": "Size in points, or null when inherited.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "text": {
+                              "description": "Literal text of the run.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "font",
+                            "sizePt",
+                            "bold",
+                            "italic",
+                            "color"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "runs"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "path": {
+                  "description": "Ids of the groups this shape sits in, outermost first. Empty at the top level.",
+                  "items": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "placeholder": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "idx": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Placeholder index within the layout."
+                        },
+                        "type": {
+                          "description": "Placeholder type, lower-cased and hyphenated.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "idx"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rotation": {
+                  "description": "Rotation in degrees, clockwise.",
+                  "type": "number"
+                },
+                "shapeId": {
+                  "description": "OOXML shape id, unique within its part.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "tableSize": {
+                  "anyOf": [
+                    {
+                      "items": false,
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "prefixItems": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Rows and columns, for tables."
+                },
+                "z": {
+                  "description": "Paint order within the parent, lowest first.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "shapeId",
+                "name",
+                "kind",
+                "box",
+                "rotation",
+                "flipH",
+                "flipV",
+                "z",
+                "path",
+                "placeholder",
+                "paragraphs",
+                "mediaPart",
+                "tableSize",
+                "chartPart",
+                "chartType"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "part",
+          "name",
+          "follows",
+          "shapes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "media": {
+      "description": "Inventory of ppt/media, ordered by part name.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "description": "Size of the part.",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "contentType": {
+            "description": "File extension, lower-cased.",
+            "type": "string"
+          },
+          "heightPx": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pixel height, null for non-raster parts."
+          },
+          "part": {
+            "description": "Package part name.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "widthPx": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pixel width, null for non-raster parts."
+          }
+        },
+        "required": [
+          "part",
+          "contentType",
+          "bytes",
+          "widthPx",
+          "heightPx"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Incremented by any incompatible change.",
+      "type": "number"
+    },
+    "slideCx": {
+      "description": "Slide width in EMU.",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "slideCy": {
+      "description": "Slide height in EMU.",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "slides": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "follows": {
+            "description": "Part this one inherits from: a layout for a slide, a master for a layout.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name from the file, or a generated one for slides.",
+            "type": "string"
+          },
+          "part": {
+            "description": "Package part name, which identifies it.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "shapes": {
+            "description": "Shapes in paint order, groups flattened.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "box": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null when the shape inherits its position from a layout."
+                },
+                "chartPart": {
+                  "description": "Part name of the chart, for charts.",
+                  "type": "string"
+                },
+                "chartType": {
+                  "description": "Chart type, lower-cased and hyphenated.",
+                  "type": "string"
+                },
+                "flipH": {
+                  "description": "Mirrored horizontally.",
+                  "type": "boolean"
+                },
+                "flipV": {
+                  "description": "Mirrored vertically.",
+                  "type": "boolean"
+                },
+                "kind": {
+                  "description": "Shape kind: auto-shape, text-box, picture, table, chart, group.",
+                  "type": "string"
+                },
+                "mediaPart": {
+                  "description": "Part name of the image this shape draws, for pictures.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name the authoring tool gave the shape.",
+                  "type": "string"
+                },
+                "paragraphs": {
+                  "description": "Text of the shape, empty when it carries none.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "level": {
+                        "description": "Indent level, zero at the top.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "runs": {
+                        "description": "Runs in reading order.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "bold": {
+                              "description": "Null when inherited.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "color": {
+                              "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                              "type": "string"
+                            },
+                            "font": {
+                              "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                              "type": "string"
+                            },
+                            "italic": {
+                              "description": "Null when inherited.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "sizePt": {
+                              "description": "Size in points, or null when inherited.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "text": {
+                              "description": "Literal text of the run.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "font",
+                            "sizePt",
+                            "bold",
+                            "italic",
+                            "color"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "runs"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "path": {
+                  "description": "Ids of the groups this shape sits in, outermost first. Empty at the top level.",
+                  "items": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "placeholder": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "idx": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Placeholder index within the layout."
+                        },
+                        "type": {
+                          "description": "Placeholder type, lower-cased and hyphenated.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "idx"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rotation": {
+                  "description": "Rotation in degrees, clockwise.",
+                  "type": "number"
+                },
+                "shapeId": {
+                  "description": "OOXML shape id, unique within its part.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "tableSize": {
+                  "anyOf": [
+                    {
+                      "items": false,
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "prefixItems": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Rows and columns, for tables."
+                },
+                "z": {
+                  "description": "Paint order within the parent, lowest first.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "shapeId",
+                "name",
+                "kind",
+                "box",
+                "rotation",
+                "flipH",
+                "flipV",
+                "z",
+                "path",
+                "placeholder",
+                "paragraphs",
+                "mediaPart",
+                "tableSize",
+                "chartPart",
+                "chartType"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "part",
+          "name",
+          "follows",
+          "shapes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sourceName": {
+      "description": "File name of the upload, kept out of the hash.",
+      "type": "string"
+    },
+    "themeColors": {
+      "description": "One entry per theme part.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "Name the theme gives its colour scheme.",
+            "type": "string"
+          },
+          "slots": {
+            "description": "Slot name and hex value. An empty value means the slot is indirect.",
+            "items": {
+              "items": false,
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "slots"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "themeFonts": {
+      "additionalProperties": false,
+      "properties": {
+        "majorLatin": {
+          "description": "Latin typeface for headings, as declared.",
+          "type": "string"
+        },
+        "minorLatin": {
+          "description": "Latin typeface for body text, as declared.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "majorLatin",
+        "minorLatin"
+      ],
+      "type": "object"
+    },
+    "warnings": {
+      "description": "Empty when nothing was lost.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "unsupported-shape",
+              "unresolved-color",
+              "missing-font-scheme",
+              "missing-theme",
+              "embedded-font-ignored",
+              "unreadable-media",
+              "no-slide-layout"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "description": "Part name, or a part and shape id.",
+            "type": "string"
+          },
+          "message": {
+            "description": "What happened, in a sentence.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "location"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "sourceName",
+    "slideCx",
+    "slideCy",
+    "aspect",
+    "hash",
+    "themeColors",
+    "themeFonts",
+    "masters",
+    "layouts",
+    "slides",
+    "media",
+    "warnings"
+  ],
+  "title": "TemplateIR",
+  "type": "object"
+}

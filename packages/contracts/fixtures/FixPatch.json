@@ -1,0 +1,95 @@
+{
+  "contract": "FixPatch",
+  "valid": [
+    {
+      "name": "step the title down the type scale",
+      "payload": {
+        "schemaVersion": 1,
+        "patchId": "patch-1",
+        "findingId": "finding-1",
+        "slideId": "s2",
+        "variant": "dense",
+        "ops": [
+          {
+            "op": "set-font-size",
+            "elementId": "s2-title",
+            "sizePt": 36
+          }
+        ],
+        "rationale": "Заголовок не помещается в одну строку: на шаг меньше по шкале шаблона.",
+        "touchesCopy": false
+      }
+    },
+    {
+      "name": "replace copy an agent rewrote",
+      "payload": {
+        "schemaVersion": 1,
+        "patchId": "patch-2",
+        "findingId": "finding-3",
+        "slideId": "s4",
+        "variant": "balanced",
+        "ops": [
+          {
+            "op": "set-text",
+            "elementId": "s4-body",
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Короче на две строки.",
+                    "font": "",
+                    "sizePt": null,
+                    "bold": null,
+                    "italic": null,
+                    "color": ""
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "rationale": "Текст сокращён до высоты блока.",
+        "touchesCopy": true
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "patch that does nothing",
+      "why": "An empty patch would show a button that changes nothing.",
+      "path": ["ops"],
+      "payload": {
+        "schemaVersion": 1,
+        "patchId": "p",
+        "findingId": null,
+        "slideId": "s1",
+        "variant": "dense",
+        "ops": [],
+        "rationale": "r",
+        "touchesCopy": false
+      }
+    },
+    {
+      "name": "colour given literally",
+      "why": "A literal colour is how a fix quietly stops following the template.",
+      "path": ["ops", 0, "colorRole"],
+      "payload": {
+        "schemaVersion": 1,
+        "patchId": "p",
+        "findingId": null,
+        "slideId": "s1",
+        "variant": "dense",
+        "ops": [
+          {
+            "op": "set-color",
+            "elementId": "e1",
+            "colorRole": "FF0000"
+          }
+        ],
+        "rationale": "r",
+        "touchesCopy": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "contract": "JobEvent",
+  "valid": [
+    {
+      "name": "stage started",
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": 0,
+        "at": "2026-09-21T10:00:00Z",
+        "type": "stage-started",
+        "stage": "parsing-template"
+      }
+    },
+    {
+      "name": "progress through the slides",
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": 7,
+        "at": "2026-09-21T10:01:12Z",
+        "type": "stage-progress",
+        "stage": "laying-out",
+        "done": 4,
+        "total": 12,
+        "note": "balanced"
+      }
+    },
+    {
+      "name": "failed on an unreadable template",
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": 2,
+        "at": "2026-09-21T10:00:04Z",
+        "type": "failed",
+        "stage": "parsing-template",
+        "code": "template-unreadable",
+        "message": "Файл не открывается как презентацию: повреждён или это не .pptx.",
+        "retryable": false
+      }
+    },
+    {
+      "name": "done",
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": 41,
+        "at": "2026-09-21T10:04:30Z",
+        "type": "done",
+        "totalMs": 270000,
+        "manifestPath": "manifest.json"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown event type",
+      "why": "The client switches on type; an unknown one would be dropped in silence.",
+      "path": ["type"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": 1,
+        "at": "2026-09-21T10:00:00Z",
+        "type": "heartbeat"
+      }
+    },
+    {
+      "name": "failure with an unknown code",
+      "why": "The code decides whether the interface offers a retry.",
+      "path": ["code"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": 2,
+        "at": "2026-09-21T10:00:04Z",
+        "type": "failed",
+        "stage": "planning",
+        "code": "oops",
+        "message": "m",
+        "retryable": true
+      }
+    },
+    {
+      "name": "negative sequence number",
+      "why": "A reconnecting client asks for everything after the last seq it saw.",
+      "path": ["seq"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "seq": -1,
+        "at": "2026-09-21T10:00:00Z",
+        "type": "stage-started",
+        "stage": "planning"
+      }
+    }
+  ]
+}

@@ -70,7 +70,13 @@ jobs:
           yarn codegen
           git diff --exit-code -- packages/contracts/schema engine/src/engine/contracts/_generated.py
 
-      # 6. Tests.
+      # 5a. Golden fixtures are real parser output. A change in what the engine emits has to be
+      # reviewed as a diff, not discovered by the team consuming it.
+      - name: Check golden fixtures match the parser
+        run: uv run write-golden-ir --check
+
+      # 6. Tests. The contract suites run the shared fixtures through both Zod and Pydantic, so
+      # an incompatible schema change fails here even when codegen itself succeeds.
       - name: Test TypeScript
         run: yarn nx affected -t test
 

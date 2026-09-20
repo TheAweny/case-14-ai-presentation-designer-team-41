@@ -6,11 +6,15 @@ requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
 dependencies = [
     "pyyaml>=6.0.2",
+    # Fixtures are written with python-pptx and the golden files are produced by running the
+    # parser over them, so the tools depend on the engine rather than merely sharing its venv.
+    "engine",
 ]
 
 [project.scripts]
 generate-audit-docs = "lct_tools.audit_docs:main"
 generate-license-report = "lct_tools.license_report:main"
+write-golden-ir = "lct_tools.golden:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "briefId": {
+      "description": "The brief this plan was built from.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "language": {
+      "description": "BCP 47 tag. One deck, one language.",
+      "minLength": 2,
+      "type": "string"
+    },
+    "planId": {
+      "description": "Identifies this plan across the three layout variants.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Incremented by any incompatible change.",
+      "type": "number"
+    },
+    "slides": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "description": "Body of the slide, in reading order.",
+            "items": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "description": "One line each, in order.",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "kind": {
+                      "const": "bullets",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "items"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "paragraph",
+                      "type": "string"
+                    },
+                    "text": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "attribution": {
+                      "description": "Who said it. Empty when the source is the deck itself.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "quote",
+                      "type": "string"
+                    },
+                    "text": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "text",
+                    "attribution"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "headers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "kind": {
+                      "const": "table",
+                      "type": "string"
+                    },
+                    "rows": {
+                      "description": "Every row as wide as the header.",
+                      "items": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "sources": {
+                      "description": "Where the figures come from.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "itemId": {
+                            "description": "Identifier of the content pack item this came from.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "quote": {
+                            "description": "The passage the claim rests on, copied verbatim so it can be checked.",
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "itemId",
+                          "quote"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "headers",
+                    "rows",
+                    "sources"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "categories": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "chartType": {
+                      "enum": [
+                        "bar",
+                        "column",
+                        "line",
+                        "pie",
+                        "area"
+                      ],
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "chart",
+                      "type": "string"
+                    },
+                    "series": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "values": {
+                            "description": "As long as the category list.",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 1,
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "values"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "sources": {
+                      "description": "Where the figures come from.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "itemId": {
+                            "description": "Identifier of the content pack item this came from.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "quote": {
+                            "description": "The passage the claim rests on, copied verbatim so it can be checked.",
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "itemId",
+                          "quote"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "xTitle": {
+                      "description": "Axis label. Empty only when the categories speak for themselves.",
+                      "type": "string"
+                    },
+                    "yTitle": {
+                      "description": "Axis label, including the unit.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "chartType",
+                    "categories",
+                    "series",
+                    "xTitle",
+                    "yTitle",
+                    "sources"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "caption": {
+                            "description": "What the figure measures.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "sources": {
+                            "description": "Where the figure comes from.",
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "itemId": {
+                                  "description": "Identifier of the content pack item this came from.",
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "quote": {
+                                  "description": "The passage the claim rests on, copied verbatim so it can be checked.",
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "itemId",
+                                "quote"
+                              ],
+                              "type": "object"
+                            },
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "value": {
+                            "description": "The figure as it should read, including its unit.",
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "caption",
+                          "sources"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 4,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "kind": {
+                      "const": "kpi",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "items"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "image",
+                      "type": "string"
+                    },
+                    "query": {
+                      "description": "What the picture should show, in words.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "role": {
+                      "enum": [
+                        "photo",
+                        "icon",
+                        "mockup",
+                        "decor"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "role",
+                    "query"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "headline": {
+            "description": "States a conclusion rather than naming a topic.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "intent": {
+            "enum": [
+              "title",
+              "agenda",
+              "section",
+              "statement",
+              "bullets",
+              "two-column",
+              "kpi",
+              "table",
+              "chart",
+              "quote",
+              "image",
+              "closing"
+            ],
+            "type": "string"
+          },
+          "slideId": {
+            "description": "Stable across layout variants, so three renderings of a slide can be compared.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "sources": {
+            "description": "What the slide as a whole rests on, beyond any block-level references.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "itemId": {
+                  "description": "Identifier of the content pack item this came from.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "quote": {
+                  "description": "The passage the claim rests on, copied verbatim so it can be checked.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "itemId",
+                "quote"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "speakerNotes": {
+            "description": "Not rendered on the slide.",
+            "type": "string"
+          },
+          "subhead": {
+            "description": "Empty when the headline stands alone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slideId",
+          "intent",
+          "headline",
+          "subhead",
+          "blocks",
+          "speakerNotes",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "planId",
+    "briefId",
+    "title",
+    "language",
+    "slides"
+  ],
+  "title": "DeckPlan",
+  "type": "object"
+}

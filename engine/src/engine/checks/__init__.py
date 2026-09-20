@@ -5,7 +5,8 @@ Judgements that need to read meaning are contextual checks and run on the TypeSc
 """
 
 from engine.checks.registry import DETERMINISTIC_CHECKS, CheckDefinition, check_by_id
-from engine.contracts.provisional import AuditFinding, SlideIR, TemplateProfile
+from engine.contracts import AuditFinding, SlideIR
+from engine.contracts.provisional import TemplateProfile
 
 __all__ = [
     "DETERMINISTIC_CHECKS",

@@ -40,6 +40,41 @@ export {
   type ParseWarningCode,
 } from './template-ir.js';
 export {
+  contentPackSchema,
+  contentItemSchema,
+  contentItemKindSchema,
+  type ContentPack,
+  type ContentItem,
+  type ContentItemKind,
+} from './content-pack.js';
+export {
+  designSystemSchema,
+  paletteEntrySchema,
+  typeStyleSchema,
+  gridSchema,
+  brandAssetSchema,
+  colorRoleSchema,
+  typeRoleSchema,
+  styleSourceSchema,
+  hexColorSchema,
+  type DesignSystem,
+  type PaletteEntry,
+  type TypeStyle,
+  type Grid,
+  type BrandAsset,
+  type ColorRole,
+  type TypeRole,
+  type StyleSource,
+} from './design-system.js';
+export {
+  patternCatalogSchema,
+  patternSchema,
+  patternSlotSchema,
+  type PatternCatalog,
+  type Pattern,
+  type PatternSlot,
+} from './pattern-catalog.js';
+export {
   deckPlanSchema,
   plannedSlideSchema,
   planBlockSchema,
@@ -61,4 +96,46 @@ export {
   type ElementRole,
   type LayoutVariantName,
 } from './slide-ir.js';
+export {
+  auditFindingSchema,
+  findingTargetSchema,
+  findingEvidenceSchema,
+  severitySchema,
+  findingOriginSchema,
+  fixabilitySchema,
+  type AuditFinding,
+  type FindingTarget,
+  type FindingEvidence,
+  type Severity,
+  type FindingOrigin,
+  type Fixability,
+} from './audit-finding.js';
+export {
+  fixPatchSchema,
+  fixPatchBodySchema,
+  patchOpSchema,
+  type FixPatch,
+  type FixPatchBody,
+  type PatchOp,
+} from './fix-patch.js';
+export {
+  jobEventSchema,
+  jobStageSchema,
+  jobErrorCodeSchema,
+  type JobEvent,
+  type JobStage,
+  type JobErrorCode,
+} from './job-event.js';
+export {
+  artifactManifestSchema,
+  componentRevisionSchema,
+  runArtifactSchema,
+  stageTimingSchema,
+  modelCallSummarySchema,
+  type ArtifactManifest,
+  type ComponentRevision,
+  type RunArtifact,
+  type StageTiming,
+  type ModelCallSummary,
+} from './artifact-manifest.js';
 export { contractRegistry, type ContractName } from './registry.js';

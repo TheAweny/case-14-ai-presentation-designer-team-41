@@ -87,9 +87,7 @@ export const chartElementSchema = z.object({
   sourceShapeId: z.number().int().nullable(),
   chartType: z.enum(['bar', 'column', 'line', 'pie', 'area']),
   categories: z.array(z.string()).min(1),
-  series: z
-    .array(z.object({ name: z.string().min(1), values: z.array(z.number()).min(1) }))
-    .min(1),
+  series: z.array(z.object({ name: z.string().min(1), values: z.array(z.number()).min(1) })).min(1),
   xTitle: z.string(),
   yTitle: z.string(),
 });

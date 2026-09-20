@@ -5,7 +5,8 @@ when a block does not fit it reports an overflow signal, and the agent on the Ty
 decides how to shorten the copy.
 """
 
-from engine.contracts.provisional import DeckPlan, SlideIR, TemplateProfile
+from engine.contracts import DeckPlan, SlideIR
+from engine.contracts.provisional import TemplateProfile
 
 __all__ = ["build_slide_ir"]
 
