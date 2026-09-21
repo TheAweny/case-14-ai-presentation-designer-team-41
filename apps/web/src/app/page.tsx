@@ -1,17 +1,22 @@
-import { apiBaseUrl } from '@/lib/api';
+import { Suspense } from 'react';
+import { EditorShell } from '@/components/editor/editor-shell';
+import { mediaUrls } from '@/lib/deck-source';
+import { DEMO_DECK_ID } from '@/mocks/demo-deck';
+import { createDemoDeckSource } from '@/mocks/demo-deck-source';
 
-export default function HomePage() {
+/**
+ * Пока API нет, колоду отдаёт демо-источник. Дальше страница знает только `DeckSource`, а
+ * редактор — только `Deck`: замена источника их не затронет.
+ */
+const deckSource = createDemoDeckSource();
+
+export default async function HomePage() {
+  const deck = await deckSource.getDeck(DEMO_DECK_ID);
+
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Deck generator</h1>
-      <p className="text-ink-muted leading-relaxed">
-        Upload a .pptx template, add a content pack, get a deck in the style of that template. The
-        screens for upload, progress, variants, audit and export are built on top of this shell.
-      </p>
-      <dl className="border-border bg-surface-muted grid gap-1 rounded-lg border p-4 text-sm">
-        <dt className="text-ink-muted">API endpoint</dt>
-        <dd className="font-mono">{apiBaseUrl}</dd>
-      </dl>
-    </main>
+    // Открытый слайд редактор читает из адреса через `useSearchParams`, а тому нужна граница.
+    <Suspense>
+      <EditorShell deck={deck} media={mediaUrls(deckSource, deck)} />
+    </Suspense>
   );
 }

@@ -1,0 +1,51 @@
+{
+  "metadata": {
+    "title": "Цифровой дизайнер презентаций",
+    "description": "Собирает презентацию в стиле загруженного шаблона."
+  },
+  "localeSwitcher": {
+    "label": "Язык интерфейса"
+  },
+  "editor": {
+    "slides": "Слайды",
+    "slideLabel": "Слайд {number} из {total}",
+    "slideLabelTitled": "Слайд {number} из {total}: {title}",
+    "counter": "{number} / {total}",
+    "assistant": "Ассистент"
+  },
+  "toolRail": {
+    "label": "Инструменты",
+    "grip": "Переместить панель",
+    "gripHint": "Перетащите панель или выберите край стрелками",
+    "groups": {
+      "canvas": "Холст",
+      "panels": "Панели"
+    },
+    "tools": {
+      "pointer": "Указатель",
+      "text": "Текст",
+      "image": "Изображение",
+      "shape": "Фигуры",
+      "data": "Данные",
+      "layout": "Вёрстка",
+      "audit": "Аудит",
+      "ai": "Ассистент"
+    },
+    "variants": {
+      "select": "Выбор",
+      "hand": "Рука",
+      "text": "Текст",
+      "image": "Изображение",
+      "rectangle": "Прямоугольник",
+      "ellipse": "Эллипс",
+      "line": "Линия",
+      "arrow": "Стрелка",
+      "chart": "График",
+      "table": "Таблица",
+      "diagram": "Схема",
+      "layout": "Вёрстка",
+      "audit": "Аудит",
+      "ai": "Ассистент"
+    }
+  }
+}

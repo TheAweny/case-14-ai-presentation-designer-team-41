@@ -1,0 +1,51 @@
+{
+  "metadata": {
+    "title": "Digital Presentation Designer",
+    "description": "Builds a deck in the style of an uploaded template."
+  },
+  "localeSwitcher": {
+    "label": "Interface language"
+  },
+  "editor": {
+    "slides": "Slides",
+    "slideLabel": "Slide {number} of {total}",
+    "slideLabelTitled": "Slide {number} of {total}: {title}",
+    "counter": "{number} / {total}",
+    "assistant": "Assistant"
+  },
+  "toolRail": {
+    "label": "Tools",
+    "grip": "Move panel",
+    "gripHint": "Drag the panel or pick an edge with the arrow keys",
+    "groups": {
+      "canvas": "Canvas",
+      "panels": "Panels"
+    },
+    "tools": {
+      "pointer": "Pointer",
+      "text": "Text",
+      "image": "Image",
+      "shape": "Shapes",
+      "data": "Data",
+      "layout": "Layout",
+      "audit": "Audit",
+      "ai": "Assistant"
+    },
+    "variants": {
+      "select": "Select",
+      "hand": "Hand",
+      "text": "Text",
+      "image": "Image",
+      "rectangle": "Rectangle",
+      "ellipse": "Ellipse",
+      "line": "Line",
+      "arrow": "Arrow",
+      "chart": "Chart",
+      "table": "Table",
+      "diagram": "Diagram",
+      "layout": "Layout",
+      "audit": "Audit",
+      "ai": "Assistant"
+    }
+  }
+}

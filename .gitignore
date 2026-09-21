@@ -52,3 +52,16 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# AI trash
+.claude/*
+.cursor/*
+.deepseek/*
+.gemini/*
+.grok/*
+.openai/*
+.perplexity/*
+.poe/*
+.sage/*
+.think/*
+.vllm/*
