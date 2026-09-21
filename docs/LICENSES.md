@@ -6,13 +6,13 @@
 копилефт-лицензиями: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, CC-BY-4.0, CC0-1.0, ISC, MIT, MIT-0, MIT-CMU, MPL-2.0, PSF-2.0, Python-2.0, Unlicense.
 GPL и AGPL не подходят: заказчик берёт решение в пилот и внедрение.
 
-Всего зависимостей: 1072 (npm: 1015, python: 57).
+Всего зависимостей: 1092 (npm: 1035, python: 57).
 
 ## Сводка по лицензиям
 
 | Лицензия | Пакетов | Статус |
 | --- | --- | --- |
-| MIT | 893 | разрешена |
+| MIT | 913 | разрешена |
 | ISC | 58 | разрешена |
 | Apache-2.0 | 46 | разрешена |
 | BSD-3-Clause | 29 | разрешена |
@@ -155,11 +155,17 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @borewit/text-codec | 0.2.2 | MIT |
 | npm | @cacheable/memory | 2.2.0 | MIT |
 | npm | @cacheable/utils | 2.5.0 | MIT |
+| npm | @cfcs/core | 0.0.6 | MIT |
 | npm | @clack/core | 1.4.3 | MIT |
 | npm | @clack/prompts | 1.7.0 | MIT |
 | npm | @colors/colors | 1.5.0 | MIT |
+| npm | @daybrush/utils | 1.13.0 | MIT |
 | npm | @dotenvx/dotenvx | 1.75.1 | BSD-3-Clause |
 | npm | @dotenvx/primitives | 0.8.0 | BSD-3-Clause |
+| npm | @egjs/agent | 2.4.4 | MIT |
+| npm | @egjs/children-differ | 1.0.1 | MIT |
+| npm | @egjs/component | 3.0.5 | MIT |
+| npm | @egjs/list-differ | 1.0.1 | MIT |
 | npm | @eloqnt/config | 0.1.0 | MIT |
 | npm | @eloqnt/format-json | 0.1.0 | MIT |
 | npm | @eloqnt/format-po | 0.1.0 | MIT |
@@ -323,6 +329,9 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @radix-ui/rect | 1.1.3 | MIT |
 | npm | @rollup/rollup-win32-x64-gnu | 4.63.3 | MIT |
 | npm | @rollup/rollup-win32-x64-msvc | 4.63.3 | MIT |
+| npm | @scena/dragscroll | 1.4.0 | MIT |
+| npm | @scena/event-emitter | 1.0.5 | MIT |
+| npm | @scena/matrix | 1.1.1 | MIT |
 | npm | @schummar/icu-type-parser | 1.21.5 | MIT |
 | npm | @sec-ant/readable-stream | 0.4.1 | MIT |
 | npm | @sindresorhus/is | 4.6.0 | MIT |
@@ -498,6 +507,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | cosmiconfig | 9.0.2 | MIT |
 | npm | croner | 10.0.1 | MIT |
 | npm | cross-spawn | 7.0.6 | MIT |
+| npm | css-styled | 1.0.8 | MIT |
+| npm | css-to-mat | 1.1.1 | MIT |
 | npm | cssesc | 3.0.0 | MIT |
 | npm | csstype | 3.2.3 | MIT |
 | npm | d3-array | 3.2.1 | ISC |
@@ -617,6 +628,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | form-data | 4.0.6 | MIT |
 | npm | forwarded | 0.2.0 | MIT |
 | npm | framer-motion | 13.4.0 | MIT |
+| npm | framework-utils | 1.1.0 | MIT |
 | npm | fresh | 2.0.0 | MIT |
 | npm | fs-constants | 1.0.0 | MIT |
 | npm | fs-extra | 11.4.0 | MIT |
@@ -624,6 +636,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | fuzzysort | 3.1.0 | MIT |
 | npm | generator-function | 2.0.1 | MIT |
 | npm | gensync | 1.0.0-beta.2 | MIT |
+| npm | gesto | 1.19.4 | MIT |
 | npm | get-caller-file | 2.0.5 | ISC |
 | npm | get-east-asian-width | 1.7.0 | MIT |
 | npm | get-intrinsic | 1.3.0 | MIT |
@@ -716,6 +729,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | jsonc-eslint-parser | 2.4.2 | MIT |
 | npm | jsonc-parser | 3.3.1 | MIT |
 | npm | jsonfile | 6.2.1 | MIT |
+| npm | keycode | 2.2.1 | MIT |
+| npm | keycon | 1.4.0 | MIT |
 | npm | keyv | 5.6.0 | MIT |
 | npm | kind-of | 6.0.3 | MIT |
 | npm | kleur | 3.0.3 | MIT |
@@ -835,6 +850,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | ora | 5.4.1 | MIT |
 | npm | ora | 8.2.0 | MIT |
 | npm | ora | 9.4.1 | MIT |
+| npm | overlap-area | 1.1.0 | MIT |
 | npm | p-limit | 2.3.0 | MIT |
 | npm | p-limit | 3.1.0 | MIT |
 | npm | p-locate | 3.0.0 | MIT |
@@ -885,10 +901,13 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | range-parser | 1.3.0 | MIT |
 | npm | raw-body | 3.0.2 | MIT |
 | npm | react | 19.3.0 | MIT |
+| npm | react-css-styled | 1.1.9 | MIT |
 | npm | react-dom | 19.3.0 | MIT |
+| npm | react-moveable | 0.56.0 | MIT |
 | npm | react-remove-scroll | 2.7.2 | MIT |
 | npm | react-remove-scroll-bar | 2.3.8 | MIT |
 | npm | react-resizable-panels | 4.12.4 | MIT |
+| npm | react-selecto | 1.26.3 | MIT |
 | npm | react-style-singleton | 2.2.3 | MIT |
 | npm | readable-stream | 3.6.2 | MIT |
 | npm | readdirp | 5.1.1 | MIT |
@@ -922,6 +941,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | safer-buffer | 2.1.2 | MIT |
 | npm | scheduler | 0.28.0 | MIT |
 | npm | section-matter | 1.0.0 | MIT |
+| npm | selecto | 1.26.3 | MIT |
 | npm | semver | 6.3.1 | ISC |
 | npm | semver | 7.8.4 | ISC |
 | npm | semver | 7.8.5 | ISC |

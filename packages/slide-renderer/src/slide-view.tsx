@@ -19,17 +19,26 @@ export interface SlideViewProps {
    * does not invent a picture.
    */
   readonly resolveMedia?: (mediaPart: string) => string | null;
+  /** Host chrome on the frame, such as the canvas corner radius. */
+  readonly className?: string;
 }
 
 /**
  * One slide of the IR, drawn with the template profile. Text stays as written: an overflow is a
  * mark, not a cut. Charts are visx shapes coloured by palette roles, in palette order.
  */
-export function SlideView({ slide, profile, label, resolveMedia }: SlideViewProps): JSX.Element {
+export function SlideView({
+  slide,
+  profile,
+  label,
+  resolveMedia,
+  className,
+}: SlideViewProps): JSX.Element {
   const size = slideSizeOf(slide);
   return (
     <SlideFrame
       size={size}
+      className={className}
       data-slide-root="true"
       aria-label={label}
       style={{

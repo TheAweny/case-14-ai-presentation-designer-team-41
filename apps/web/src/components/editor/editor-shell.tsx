@@ -10,8 +10,10 @@ import { NARROW_SCREEN } from '@/lib/use-media-query';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { SlideCanvas } from '@/components/editor/slide-canvas';
 import { SlideList } from '@/components/editor/slide-list';
-import { slideTitle } from '@/components/editor/slide-navigation';
+import { arrowDirection, gridForSlide, nudgeByBaseline } from '@/components/editor/slide-geometry';
+import { isTypingTarget, slideTitle } from '@/components/editor/slide-navigation';
 import { ToolRailDock } from '@/components/editor/tool-rail-dock';
+import { useDeckHistory, type ElementMove } from '@/components/editor/use-deck-history';
 import { useSlideSelection } from '@/components/editor/use-slide-selection';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 
@@ -32,9 +34,54 @@ export function EditorShell({
   const aiPanelRef = usePanelRef();
   const aiElementRef = useRef<HTMLDivElement>(null);
   const [aiOpen, setAiOpen] = useState(false);
-  const { slides, designSystem } = deck;
+  const { slides, move, undo, redo } = useDeckHistory(deck.slides);
+  const { designSystem } = deck;
   const { index, select } = useSlideSelection(slides);
   const slide = slides[index];
+  const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
+  const slideId = slide?.slideId;
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [slideId]);
+
+  const commit = useCallback(
+    (moves: readonly ElementMove[]) => {
+      if (!slideId) return;
+      move(slideId, moves);
+    },
+    [move, slideId],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || isTypingTarget(event.target)) return;
+      const command = event.metaKey || event.ctrlKey;
+      if (command && event.code === 'KeyZ' && !event.altKey) {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (command || event.altKey || event.shiftKey || event.defaultPrevented) return;
+      const direction = arrowDirection(event.code);
+      if (!direction || selectedIds.length === 0 || !slide) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('[role="listbox"]')) return;
+      event.preventDefault();
+      const grid = gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy);
+      move(
+        slide.slideId,
+        selectedIds.flatMap((elementId) => {
+          const element = slide.elements.find((item) => item.elementId === elementId);
+          if (!element) return [];
+          return [{ elementId, box: nudgeByBaseline(element.box, direction, grid) }];
+        }),
+      );
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [designSystem.grid, move, redo, selectedIds, slide, undo]);
 
   /** Подпись слайда для чтения с экрана: место в колоде и, если есть, заголовок. */
   const labels = useMemo(
@@ -134,6 +181,9 @@ export function EditorShell({
                   designSystem={designSystem}
                   label={labels[index] ?? ''}
                   resolveMedia={resolveMedia}
+                  selectedIds={selectedIds}
+                  onSelect={setSelectedIds}
+                  onCommit={commit}
                   className="md:p-14"
                 />
               ) : null}

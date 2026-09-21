@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Box, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import {
   commitMove,
+  commitMoves,
   commitMoveGesture,
   commitSetText,
   commitSetTextGesture,
@@ -124,6 +125,43 @@ describe('move', () => {
     expect(
       undoDeck(recordChange(createDeckHistory(slides), commit)).slides[0]?.elements[0],
     ).toMatchObject({ box: ORIGIN });
+  });
+});
+
+describe('group move', () => {
+  it('records every element of one gesture in a single journal entry', () => {
+    const slides = deck();
+    const commit = commitMoves(slides, {
+      slideId: 'opening',
+      moves: [
+        { elementId: 'title', box: { x: 10, y: 20, cx: 30, cy: 40 } },
+        { elementId: 'missing', box: { x: 1, y: 2, cx: 3, cy: 4 } },
+        { elementId: 'title', box: { x: 11, y: 21, cx: 31, cy: 41 } },
+      ],
+    });
+    const second = slide('opening', 0, [
+      textElement('title', 'Opening', ORIGIN),
+      textElement('note', 'Note', ORIGIN),
+    ]);
+    const group = commitMoves([second, ...slides.slice(1)], {
+      slideId: 'opening',
+      moves: [
+        { elementId: 'title', box: { x: 5, y: 6, cx: 7, cy: 8 } },
+        { elementId: 'note', box: { x: 9, y: 10, cx: 11, cy: 12 } },
+      ],
+    });
+
+    expect(commit.change?.ops).toEqual([
+      { op: 'move', elementId: 'title', box: { x: 11, y: 21, cx: 31, cy: 41 } },
+    ]);
+    expect(group.change?.ops).toHaveLength(2);
+    const history = recordChange(createDeckHistory([second, ...slides.slice(1)]), group);
+    expect(history.undo).toHaveLength(1);
+    expect(undoDeck(history).slides[0]?.elements.map((element) => element.box)).toEqual([
+      ORIGIN,
+      ORIGIN,
+    ]);
+    expect(Object.isFrozen(slides)).toBe(false);
   });
 });
 

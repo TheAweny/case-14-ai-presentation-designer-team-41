@@ -110,25 +110,52 @@ function sameParagraphs(left: readonly Paragraph[], right: readonly Paragraph[])
 }
 
 /**
- * Write the final box of a drag. Call this once, when the pointer is released: the samples
- * along the way are not changes.
+ * Write the final boxes of one drag or resize. Several elements share one journal entry.
+ * Pointer samples along the way are not changes.
  */
+export function commitMoves(
+  slides: readonly SlideIr[],
+  change: {
+    readonly slideId: string;
+    readonly moves: readonly { readonly elementId: string; readonly box: Box }[];
+  },
+): DeckCommit {
+  const boxes = new Map<string, Box>();
+  for (const move of change.moves) {
+    const box = integralBox(move.box);
+    const element = elementOf(slides, change.slideId, move.elementId);
+    if (!element || sameBox(element.box, box)) continue;
+    boxes.set(move.elementId, box);
+  }
+  if (boxes.size === 0) return unchanged(slides);
+  const produced = produceSlides(slides, (draft) => {
+    for (const [elementId, box] of boxes) {
+      const target = elementOf(draft, change.slideId, elementId);
+      if (!target) continue;
+      target.box = { ...box };
+    }
+  });
+  return commitProduced(
+    slides,
+    produced,
+    change.slideId,
+    [...boxes].map(([elementId, box]) => ({
+      op: 'move' as const,
+      elementId,
+      box: { ...box },
+    })),
+  );
+}
+
+/** One element of a drag. The same as `commitMoves` with a single box. */
 export function commitMove(
   slides: readonly SlideIr[],
   change: { readonly slideId: string; readonly elementId: string; readonly box: Box },
 ): DeckCommit {
-  const box = integralBox(change.box);
-  const element = elementOf(slides, change.slideId, change.elementId);
-  // A miss must not run produce: an empty recipe freezes the deck it was given.
-  if (!element || sameBox(element.box, box)) return unchanged(slides);
-  const produced = produceSlides(slides, (draft) => {
-    const target = elementOf(draft, change.slideId, change.elementId);
-    if (!target) return;
-    target.box = { ...box };
+  return commitMoves(slides, {
+    slideId: change.slideId,
+    moves: [{ elementId: change.elementId, box: change.box }],
   });
-  return commitProduced(slides, produced, change.slideId, [
-    { op: 'move', elementId: change.elementId, box: { ...box } },
-  ]);
 }
 
 /**

@@ -1,5 +1,6 @@
 export {
   commitMove,
+  commitMoves,
   commitMoveGesture,
   commitSetText,
   commitSetTextGesture,
