@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import zipfile
+from collections.abc import Iterable
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,9 @@ from pptx import Presentation
 from pptx.exc import PackageNotFoundError
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
+from engine.contracts import DesignSystem
 from engine.contracts.provisional import TemplateProfileDraft
+from engine.parser._design import build_design_system
 from engine.parser._errors import (
     MalformedPresentationError,
     NotAPackageError,
@@ -55,6 +58,7 @@ __all__ = [
     "NotAPresentationError",
     "TemplateIR",
     "TemplateParseError",
+    "design_system_of",
     "parse_template",
     "parse_template_ir",
 ]
@@ -302,3 +306,26 @@ def parse_template(template_path: Path) -> TemplateProfileDraft:
     """
     ir = parse_template_ir(Path(template_path))
     return ir.to_dict() | {"hash": ir_hash(ir)}
+
+
+def design_system_of(
+    template_path: Path, available_fonts: Iterable[str] | None = None
+) -> dict[str, Any]:
+    """Read a template and derive the design system a layout should follow.
+
+    The payload is validated against the generated ``DesignSystem`` model before it is returned,
+    so a drift between this code and the shared contract fails here rather than in whoever reads
+    the result.
+
+    Args:
+        template_path: Path to the template uploaded by the user.
+        available_fonts: Fonts the renderer can draw. When given, fonts outside it are replaced
+            and the substitution is reported in ``warnings``.
+
+    Returns:
+        A payload matching the shared ``DesignSystem`` contract.
+    """
+    ir = parse_template_ir(Path(template_path))
+    payload = build_design_system(ir, ir_hash(ir), available_fonts)
+    DesignSystem.model_validate(payload)
+    return payload

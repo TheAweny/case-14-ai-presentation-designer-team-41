@@ -15,6 +15,7 @@ dependencies = [
 generate-audit-docs = "lct_tools.audit_docs:main"
 generate-license-report = "lct_tools.license_report:main"
 write-golden-ir = "lct_tools.golden:main"
+style-report = "lct_tools.style_report:main"
 
 [build-system]
 requires = ["hatchling"]
