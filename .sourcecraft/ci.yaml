@@ -110,6 +110,13 @@ workflows:
               - corepack yarn codegen
               - git diff --exit-code -- packages/contracts/schema engine/src/engine/contracts/_generated.py
 
+          - name: golden-fixtures-are-current
+            image: docker.io/library/node:22-bookworm
+            script:
+              # Golden files are real parser output. A change in what the engine emits has to arrive
+              # as a reviewed diff, not be discovered by whoever reads that output.
+              - uv run write-golden-ir --check
+
           - name: dependency-licenses
             image: docker.io/library/node:22-bookworm
             script:
