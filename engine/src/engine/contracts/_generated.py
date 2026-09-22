@@ -256,6 +256,9 @@ class Paragraph(BaseModel):
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
+    )
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
@@ -863,6 +866,9 @@ class Paragraph1(BaseModel):
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
+    )
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
@@ -1421,6 +1427,9 @@ class Paragraph2(BaseModel):
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
+    )
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
@@ -1567,6 +1576,71 @@ class SlideIR(BaseModel):
     variant: Variant5
 
 
+class Transform(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]):
+    root: conint(ge=-9007199254740991, le=9007199254740991)
+
+
+class Color(BaseModel):
+    """
+    Set for a solid fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Kind4(StrEnum):
+    solid = "solid"
+    gradient = "gradient"
+    image = "image"
+    pattern = "pattern"
+    none = "none"
+
+
+class Stop(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Background(BaseModel):
+    """
+    Null when the part inherits its background.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color | None = Field(..., description="Set for a solid fill.")
+    kind: Kind4
+    stops: list[Stop] = Field(
+        ..., description="Gradient stops in order, for a gradient fill."
+    )
+
+
 class Box9(BaseModel):
     """
     Null when the shape inherits its position from a layout.
@@ -1589,12 +1663,68 @@ class Box9(BaseModel):
     )
 
 
+class Color1(BaseModel):
+    """
+    Set for a solid fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stop1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Fill(BaseModel):
+    """
+    Null when the shape inherits its fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color1 | None = Field(..., description="Set for a solid fill.")
+    kind: Kind4
+    stops: list[Stop1] = Field(
+        ..., description="Gradient stops in order, for a gradient fill."
+    )
+
+
 class Paragraph3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
+    )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
     )
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
@@ -1607,6 +1737,38 @@ class Placeholder(BaseModel):
         ..., description="Placeholder index within the layout."
     )
     type: str = Field(..., description="Placeholder type, lower-cased and hyphenated.")
+
+
+class Color2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stroke(BaseModel):
+    """
+    Null when the shape inherits its outline.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color2 | None
+    visible: bool = Field(
+        ..., description="False when the outline is explicitly switched off."
+    )
+    widthEmu: conint(ge=0, le=9007199254740991) | None
 
 
 class TableSizeItem(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]):
@@ -1622,8 +1784,19 @@ class Shape(BaseModel):
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
     chartType: str = Field(..., description="Chart type, lower-cased and hyphenated.")
+    cornerRadiusEmu: conint(ge=0, le=9007199254740991) | None = Field(
+        ...,
+        description="Corner radius of a rounded rectangle, from its adjust value and size.",
+    )
+    fill: Fill | None = Field(..., description="Null when the shape inherits its fill.")
     flipH: bool = Field(..., description="Mirrored horizontally.")
     flipV: bool = Field(..., description="Mirrored vertically.")
+    geometry: str = Field(
+        ..., description="Preset geometry such as rect or roundRect, empty otherwise."
+    )
+    hasShadow: bool = Field(
+        ..., description="Whether the shape states an outer shadow of its own."
+    )
     kind: str = Field(
         ...,
         description="Shape kind: auto-shape, text-box, picture, table, chart, group.",
@@ -1644,6 +1817,9 @@ class Shape(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
+    stroke: Stroke | None = Field(
+        ..., description="Null when the shape inherits its outline."
+    )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
         ..., description="Rows and columns, for tables."
     )
@@ -1655,6 +1831,13 @@ class Shape(BaseModel):
 class Layout(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
+    )
+    background: Background | None = Field(
+        ..., description="Null when the part inherits its background."
+    )
+    colorMap: list[tuple[str, str]] = Field(
+        ...,
+        description="Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it.",
     )
     follows: str = Field(
         ...,
@@ -1669,6 +1852,115 @@ class Layout(BaseModel):
     shapes: list[Shape] = Field(
         ..., description="Shapes in paint order, groups flattened."
     )
+    theme: str = Field(
+        ..., description="For a master, the theme part it uses. Empty below the master."
+    )
+
+
+class Color3(BaseModel):
+    """
+    Set for a solid fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stop2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Background1(BaseModel):
+    """
+    Null when the part inherits its background.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color3 | None = Field(..., description="Set for a solid fill.")
+    kind: Kind4
+    stops: list[Stop2] = Field(
+        ..., description="Gradient stops in order, for a gradient fill."
+    )
+
+
+class Color4(BaseModel):
+    """
+    Set for a solid fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stop3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Fill1(BaseModel):
+    """
+    Null when the shape inherits its fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color4 | None = Field(..., description="Set for a solid fill.")
+    kind: Kind4
+    stops: list[Stop3] = Field(
+        ..., description="Gradient stops in order, for a gradient fill."
+    )
 
 
 class Paragraph4(BaseModel):
@@ -1678,7 +1970,42 @@ class Paragraph4(BaseModel):
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
+    )
     runs: list[Run] = Field(..., description="Runs in reading order.")
+
+
+class Color5(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stroke1(BaseModel):
+    """
+    Null when the shape inherits its outline.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color5 | None
+    visible: bool = Field(
+        ..., description="False when the outline is explicitly switched off."
+    )
+    widthEmu: conint(ge=0, le=9007199254740991) | None
 
 
 class Shape1(BaseModel):
@@ -1690,8 +2017,21 @@ class Shape1(BaseModel):
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
     chartType: str = Field(..., description="Chart type, lower-cased and hyphenated.")
+    cornerRadiusEmu: conint(ge=0, le=9007199254740991) | None = Field(
+        ...,
+        description="Corner radius of a rounded rectangle, from its adjust value and size.",
+    )
+    fill: Fill1 | None = Field(
+        ..., description="Null when the shape inherits its fill."
+    )
     flipH: bool = Field(..., description="Mirrored horizontally.")
     flipV: bool = Field(..., description="Mirrored vertically.")
+    geometry: str = Field(
+        ..., description="Preset geometry such as rect or roundRect, empty otherwise."
+    )
+    hasShadow: bool = Field(
+        ..., description="Whether the shape states an outer shadow of its own."
+    )
     kind: str = Field(
         ...,
         description="Shape kind: auto-shape, text-box, picture, table, chart, group.",
@@ -1712,6 +2052,9 @@ class Shape1(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
+    stroke: Stroke1 | None = Field(
+        ..., description="Null when the shape inherits its outline."
+    )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
         ..., description="Rows and columns, for tables."
     )
@@ -1723,6 +2066,13 @@ class Shape1(BaseModel):
 class Master(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
+    )
+    background: Background1 | None = Field(
+        ..., description="Null when the part inherits its background."
+    )
+    colorMap: list[tuple[str, str]] = Field(
+        ...,
+        description="Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it.",
     )
     follows: str = Field(
         ...,
@@ -1736,6 +2086,9 @@ class Master(BaseModel):
     )
     shapes: list[Shape1] = Field(
         ..., description="Shapes in paint order, groups flattened."
+    )
+    theme: str = Field(
+        ..., description="For a master, the theme part it uses. Empty below the master."
     )
 
 
@@ -1756,6 +2109,112 @@ class MediaItem(BaseModel):
     )
 
 
+class Color6(BaseModel):
+    """
+    Set for a solid fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stop4(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Background2(BaseModel):
+    """
+    Null when the part inherits its background.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color6 | None = Field(..., description="Set for a solid fill.")
+    kind: Kind4
+    stops: list[Stop4] = Field(
+        ..., description="Gradient stops in order, for a gradient fill."
+    )
+
+
+class Color7(BaseModel):
+    """
+    Set for a solid fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stop5(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Fill2(BaseModel):
+    """
+    Null when the shape inherits its fill.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color7 | None = Field(..., description="Set for a solid fill.")
+    kind: Kind4
+    stops: list[Stop5] = Field(
+        ..., description="Gradient stops in order, for a gradient fill."
+    )
+
+
 class Paragraph5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1763,7 +2222,42 @@ class Paragraph5(BaseModel):
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
+    )
     runs: list[Run] = Field(..., description="Runs in reading order.")
+
+
+class Color8(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: str = Field(
+        ..., description="Six hex digits when stated outright, otherwise empty."
+    )
+    scheme: str = Field(
+        ...,
+        description="Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+    )
+    transforms: list[tuple[str, Transform]] = Field(
+        ...,
+        description="lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+    )
+
+
+class Stroke2(BaseModel):
+    """
+    Null when the shape inherits its outline.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color8 | None
+    visible: bool = Field(
+        ..., description="False when the outline is explicitly switched off."
+    )
+    widthEmu: conint(ge=0, le=9007199254740991) | None
 
 
 class Shape2(BaseModel):
@@ -1775,8 +2269,21 @@ class Shape2(BaseModel):
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
     chartType: str = Field(..., description="Chart type, lower-cased and hyphenated.")
+    cornerRadiusEmu: conint(ge=0, le=9007199254740991) | None = Field(
+        ...,
+        description="Corner radius of a rounded rectangle, from its adjust value and size.",
+    )
+    fill: Fill2 | None = Field(
+        ..., description="Null when the shape inherits its fill."
+    )
     flipH: bool = Field(..., description="Mirrored horizontally.")
     flipV: bool = Field(..., description="Mirrored vertically.")
+    geometry: str = Field(
+        ..., description="Preset geometry such as rect or roundRect, empty otherwise."
+    )
+    hasShadow: bool = Field(
+        ..., description="Whether the shape states an outer shadow of its own."
+    )
     kind: str = Field(
         ...,
         description="Shape kind: auto-shape, text-box, picture, table, chart, group.",
@@ -1797,6 +2304,9 @@ class Shape2(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
+    stroke: Stroke2 | None = Field(
+        ..., description="Null when the shape inherits its outline."
+    )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
         ..., description="Rows and columns, for tables."
     )
@@ -1808,6 +2318,13 @@ class Shape2(BaseModel):
 class Slide1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
+    )
+    background: Background2 | None = Field(
+        ..., description="Null when the part inherits its background."
+    )
+    colorMap: list[tuple[str, str]] = Field(
+        ...,
+        description="Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it.",
     )
     follows: str = Field(
         ...,
@@ -1822,6 +2339,9 @@ class Slide1(BaseModel):
     shapes: list[Shape2] = Field(
         ..., description="Shapes in paint order, groups flattened."
     )
+    theme: str = Field(
+        ..., description="For a master, the theme part it uses. Empty below the master."
+    )
 
 
 class ThemeColor(BaseModel):
@@ -1829,6 +2349,9 @@ class ThemeColor(BaseModel):
         extra="forbid",
     )
     name: str = Field(..., description="Name the theme gives its colour scheme.")
+    part: str = Field(
+        ..., description="Theme part this scheme lives in, as a master names it."
+    )
     slots: list[tuple[str, str]] = Field(
         ...,
         description="Slot name and hex value. An empty value means the slot is indirect.",

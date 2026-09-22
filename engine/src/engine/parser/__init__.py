@@ -23,6 +23,7 @@ from typing import Any
 from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
 from pptx.exc import PackageNotFoundError
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
 from engine.contracts.provisional import TemplateProfileDraft
 from engine.parser._errors import (
@@ -42,6 +43,7 @@ from engine.parser._model import (
     WarningCode,
 )
 from engine.parser._shapes import collect_shapes
+from engine.parser._style import background_of, color_map_of
 from engine.parser._theme import read_themes
 
 __all__ = [
@@ -173,6 +175,9 @@ def _slide_likes(
                 part=master_part,
                 name=str(getattr(master, "name", "") or ""),
                 shapes=collect_shapes(master.shapes, master_part, warnings, by_digest),
+                background=background_of(master._element),
+                theme=_theme_part_of(master),
+                color_map=color_map_of(master._element),
             )
         )
         for layout in master.slide_layouts:
@@ -183,6 +188,8 @@ def _slide_likes(
                     name=str(getattr(layout, "name", "") or ""),
                     follows=master_part,
                     shapes=collect_shapes(layout.shapes, layout_part, warnings, by_digest),
+                    background=background_of(layout._element),
+                    color_map=color_map_of(layout._element),
                 )
             )
 
@@ -205,10 +212,25 @@ def _slide_likes(
                 name=f"slide{index + 1}",
                 follows=follows,
                 shapes=collect_shapes(slide.shapes, slide_part, warnings, by_digest),
+                background=background_of(slide._element),
+                color_map=color_map_of(slide._element),
             )
         )
 
     return tuple(masters), tuple(layouts), tuple(slides)
+
+
+def _theme_part_of(master: Any) -> str:
+    """Name of the theme part a master draws its colours and fonts from.
+
+    A package with two masters can carry two themes, and a scheme reference like accent1 means a
+    different colour under each. Recording the link is what lets the design-system layer resolve
+    every reference against the theme it was written for.
+    """
+    try:
+        return str(master.part.part_related_by(RT.THEME).partname)
+    except (KeyError, AttributeError):
+        return ""
 
 
 def parse_template_ir(template_path: Path) -> TemplateIR:

@@ -15,6 +15,9 @@ export {
 } from './agent-config.js';
 export {
   templateIrSchema,
+  colorRefSchema,
+  fillSchema,
+  strokeSchema,
   boxSchema,
   textRunSchema,
   paragraphSchema,
@@ -27,6 +30,9 @@ export {
   parseWarningSchema,
   parseWarningCodeSchema,
   type TemplateIr,
+  type ColorRef,
+  type Fill,
+  type Stroke,
   type Box,
   type TextRun,
   type Paragraph,

@@ -57,6 +57,46 @@ class Box:
 
 
 @dataclass(frozen=True, slots=True)
+class ColorRef:
+    """A colour as the file states it: an explicit value or a theme slot, never resolved here.
+
+    Resolving a theme reference needs the master's colour map and theme, and substituting the
+    result at parse time would erase the difference between a brand colour the template inherits
+    and a one-off override. The design-system layer does the resolving.
+    """
+
+    #: Six hex digits when the colour is stated outright, otherwise empty.
+    hex: str = ""
+    #: Theme slot or alias (accent1, tx1, bg2 ...) when the colour refers to the theme.
+    scheme: str = ""
+    #: Transforms applied on top of the base colour, in document order, each with its value as
+    #: OOXML stores it: thousandths of a percent, so 65000 is 65 %.
+    transforms: tuple[tuple[str, int], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Fill:
+    """How an area is painted."""
+
+    #: solid, gradient, image, pattern or none.
+    kind: str
+    #: Set for a solid fill.
+    color: ColorRef | None = None
+    #: Gradient stops in order, for a gradient fill.
+    stops: tuple[ColorRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Stroke:
+    """The outline a shape states for itself."""
+
+    #: False when the outline is explicitly switched off.
+    visible: bool
+    color: ColorRef | None = None
+    width_emu: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Run:
     """One text run with the formatting that actually applies to it."""
 
@@ -76,6 +116,8 @@ class Paragraph:
 
     level: int
     runs: tuple[Run, ...] = ()
+    #: Line spacing as a multiple of single spacing, when stated as a percentage.
+    line_spacing: float | None = None
 
     @property
     def text(self) -> str:
@@ -117,6 +159,14 @@ class Shape:
     #: Set for charts: the chart part and its type.
     chart_part: str = ""
     chart_type: str = ""
+    #: Fill and outline the shape states for itself. Absent means it inherits them.
+    fill: Fill | None = None
+    stroke: Stroke | None = None
+    #: Preset geometry, such as rect or roundRect. Empty for custom geometry and pictures.
+    geometry: str = ""
+    #: Corner radius of a rounded rectangle in EMU, from its adjust value and its size.
+    corner_radius_emu: int | None = None
+    has_shadow: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +178,13 @@ class SlideLike:
     #: For a slide, the layout it follows; for a layout, its master. Empty at the top.
     follows: str = ""
     shapes: tuple[Shape, ...] = ()
+    #: Background the part states for itself. Absent means it inherits one.
+    background: Fill | None = None
+    #: For a master, the theme part its colours and fonts come from. Empty below the master.
+    theme: str = ""
+    #: For a master, how the aliases map to theme slots (bg1 to lt1 and so on). Below the
+    #: master only an explicit override is recorded, and empty means the master's map applies.
+    color_map: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +193,8 @@ class ThemeColors:
 
     name: str
     slots: tuple[tuple[str, str], ...] = ()
+    #: Theme part this scheme lives in, spelled the way a master refers to it.
+    part: str = ""
 
 
 @dataclass(frozen=True, slots=True)

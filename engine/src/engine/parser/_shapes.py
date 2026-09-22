@@ -21,6 +21,9 @@ from engine.parser._model import (
     Shape,
     WarningCode,
 )
+from engine.parser._style import fill_of, geometry_of, has_shadow, stroke_of
+
+_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 
 #: Shape kinds we describe explicitly. Anything else is recorded under its own enum name and
 #: raises a warning, so an unsupported object is visible rather than silently dropped.
@@ -130,8 +133,25 @@ def _paragraphs_of(shape: Any) -> tuple[Paragraph, ...]:
                     color=_color_of(run),
                 )
             )
-        paragraphs.append(Paragraph(level=para.level or 0, runs=tuple(runs)))
+        paragraphs.append(
+            Paragraph(level=para.level or 0, runs=tuple(runs), line_spacing=_line_spacing(para))
+        )
     return tuple(paragraphs)
+
+
+def _line_spacing(paragraph: Any) -> float | None:
+    """Line spacing as a multiple, when the paragraph states it as a percentage.
+
+    python-pptx returns a float for a percentage and a length for exact spacing. Exact spacing is
+    tied to one font size and says nothing about the rhythm of the template, so it is left out.
+    """
+    try:
+        spacing = paragraph.line_spacing
+    except (AttributeError, ValueError):
+        return None
+    if isinstance(spacing, float):
+        return round(spacing, 3)
+    return None
 
 
 def _table_size_of(shape: Any) -> tuple[int, int] | None:
@@ -201,12 +221,16 @@ def collect_shapes(
             digest = _media_sha1(shape, warnings, where)
             media_part = sha_to_part.get(digest, "")
 
+        box = _box_of(shape)
+        props = shape._element.find(f"{_P}spPr")
+        geometry, radius = geometry_of(props, box.cx if box else None, box.cy if box else None)
+
         collected.append(
             Shape(
                 shape_id=shape_id,
                 name=str(getattr(shape, "name", "") or ""),
                 kind=kind,
-                box=_box_of(shape),
+                box=box,
                 rotation=float(getattr(shape, "rotation", 0.0) or 0.0),
                 flip_h=flip_h,
                 flip_v=flip_v,
@@ -218,6 +242,11 @@ def collect_shapes(
                 table_size=_table_size_of(shape),
                 chart_part=chart_part,
                 chart_type=chart_type,
+                fill=fill_of(props),
+                stroke=stroke_of(props),
+                geometry=geometry,
+                corner_radius_emu=radius,
+                has_shadow=has_shadow(props),
             )
         )
 

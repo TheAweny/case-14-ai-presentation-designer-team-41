@@ -52,9 +52,14 @@ _SHAPE_KEYS = {
     "tableSize",
     "chartPart",
     "chartType",
+    "fill",
+    "stroke",
+    "geometry",
+    "cornerRadiusEmu",
+    "hasShadow",
 }
 
-_SLIDE_LIKE_KEYS = {"part", "name", "follows", "shapes"}
+_SLIDE_LIKE_KEYS = {"part", "name", "follows", "shapes", "background", "theme", "colorMap"}
 _BOX_KEYS = {"x", "y", "cx", "cy"}
 _RUN_KEYS = {"text", "font", "sizePt", "bold", "italic", "color"}
 _MEDIA_KEYS = {"part", "contentType", "bytes", "widthPx", "heightPx"}

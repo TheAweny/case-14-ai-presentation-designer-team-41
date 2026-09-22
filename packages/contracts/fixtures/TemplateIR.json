@@ -17,7 +17,8 @@
               ["dk1", "000000"],
               ["lt1", "FFFFFF"],
               ["accent1", "4472C4"]
-            ]
+            ],
+            "part": ""
           }
         ],
         "themeFonts": {
@@ -29,7 +30,10 @@
             "part": "ppt/slideMasters/slideMaster1.xml",
             "name": "Office Theme",
             "follows": "",
-            "shapes": []
+            "shapes": [],
+            "background": null,
+            "theme": "",
+            "colorMap": []
           }
         ],
         "layouts": [
@@ -37,7 +41,10 @@
             "part": "ppt/slideLayouts/slideLayout1.xml",
             "name": "Title Slide",
             "follows": "ppt/slideMasters/slideMaster1.xml",
-            "shapes": []
+            "shapes": [],
+            "background": null,
+            "theme": "",
+            "colorMap": []
           }
         ],
         "slides": [
@@ -77,15 +84,24 @@
                         "italic": null,
                         "color": "1F1F1F"
                       }
-                    ]
+                    ],
+                    "lineSpacing": null
                   }
                 ],
                 "mediaPart": "",
                 "tableSize": null,
                 "chartPart": "",
-                "chartType": ""
+                "chartType": "",
+                "fill": null,
+                "stroke": null,
+                "geometry": "",
+                "cornerRadiusEmu": null,
+                "hasShadow": false
               }
-            ]
+            ],
+            "background": null,
+            "theme": "",
+            "colorMap": []
           }
         ],
         "media": [],
@@ -217,9 +233,17 @@
                 "mediaPart": "",
                 "tableSize": null,
                 "chartPart": "",
-                "chartType": ""
+                "chartType": "",
+                "fill": null,
+                "stroke": null,
+                "geometry": "",
+                "cornerRadiusEmu": null,
+                "hasShadow": false
               }
-            ]
+            ],
+            "background": null,
+            "theme": "",
+            "colorMap": []
           }
         ],
         "media": [],
