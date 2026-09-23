@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0.0",
+  "templateId": "fixture-template",
+  "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "slideSize": { "widthPt": 960, "heightPt": 540 },
+  "palette": ["#112233", "#FFFFFF"],
+  "typography": [],
+  "protectedElements": []
+}

@@ -1,34 +1,32 @@
 """Contracts shared with the TypeScript side.
 
-`_generated.py` is produced from the Zod schemas in `packages/contracts` by `yarn codegen` and is
-committed as is. Aliases for contracts whose Zod schema has not landed yet live in
-`provisional.py` and are replaced by generated models one by one.
+`_generated.py` is produced from the Zod registry in `packages/contracts` by `yarn codegen`.
+The local run protocol uses the generated contracts for template profiles, plans, slide IR,
+audit findings, manifests and lifecycle events.
 """
 
 from engine.contracts._generated import (
     AgentConfig,
+    ArtifactManifest,
+    AuditFinding,
     ContractsBundle,
+    DeckPlan,
     Generation,
     HealthCheck,
     LayoutVariant,
     Model,
     Role,
     RunConfig,
-    Status,
-)
-from engine.contracts.provisional import (
-    AuditFinding,
-    ChartSpec,
-    DeckPlan,
-    ShapeTree,
+    RunEvent,
     SlideIR,
-    TableSpec,
+    Status,
     TemplateProfile,
-    TemplateProfileDraft,
 )
+from engine.contracts.provisional import ChartSpec, ShapeTree, TableSpec, TemplateProfileDraft
 
 __all__ = [
     "AgentConfig",
+    "ArtifactManifest",
     "AuditFinding",
     "ChartSpec",
     "ContractsBundle",
@@ -39,6 +37,7 @@ __all__ = [
     "Model",
     "Role",
     "RunConfig",
+    "RunEvent",
     "ShapeTree",
     "SlideIR",
     "Status",

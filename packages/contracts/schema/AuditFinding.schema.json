@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bbox": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "x": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "y": {
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "findingId": {
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "type": "string"
+    },
+    "objectId": {
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "type": "string"
+    },
+    "ruleId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ],
+      "type": "string"
+    },
+    "slideId": {
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "findingId",
+    "ruleId",
+    "severity",
+    "slideId",
+    "evidence"
+  ],
+  "title": "AuditFinding",
+  "type": "object"
+}

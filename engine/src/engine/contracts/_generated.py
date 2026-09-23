@@ -4,8 +4,19 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, confloat, conint, constr
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveFloat,
+    RootModel,
+    confloat,
+    conint,
+    constr,
+)
 
 
 class Generation(BaseModel):
@@ -45,6 +56,103 @@ class AgentConfig(BaseModel):
         ...,
         description="Semver version; bump it whenever the instruction changes meaning.",
     )
+
+
+class InputHashes(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    content: constr(pattern=r"^[a-f0-9]{64}$")
+    template: constr(pattern=r"^[a-f0-9]{64}$")
+
+
+class Strategy(StrEnum):
+    concise = "concise"
+    visual = "visual"
+    analytical = "analytical"
+
+
+class Variant(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    pptxPath: constr(min_length=1)
+    sha256: constr(pattern=r"^[a-f0-9]{64}$")
+    strategy: Strategy
+    variantId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+
+
+class ArtifactManifest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    gitSha: constr(pattern=r"^[a-f0-9]{40}$")
+    inputHashes: InputHashes
+    runId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    schemaVersion: Literal["1.0.0"]
+    seed: conint(ge=0, le=9007199254740991)
+    variants: list[Variant] = Field(..., max_length=3, min_length=3)
+
+
+class Bbox(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: PositiveFloat
+    width: PositiveFloat
+    x: confloat(ge=0.0)
+    y: confloat(ge=0.0)
+
+
+class Severity(StrEnum):
+    info = "info"
+    warning = "warning"
+    error = "error"
+
+
+class AuditFinding(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bbox: Bbox | None = None
+    evidence: constr(min_length=1)
+    findingId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    objectId: constr(pattern=r"^[a-z][a-z0-9-]*$") | None = None
+    ruleId: constr(min_length=1)
+    schemaVersion: Literal["1.0.0"]
+    severity: Severity
+    slideId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+
+
+class SourceRef(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    location: constr(min_length=1) = Field(
+        ..., description="Location within the input content item."
+    )
+    sourceId: constr(pattern=r"^[a-z][a-z0-9-]*$") = Field(
+        ..., description="Stable identifier of an input content item."
+    )
+
+
+class Slide(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    intent: constr(min_length=1)
+    slideId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    sourceRefs: list[SourceRef] = Field(..., min_length=1)
+    title: constr(min_length=1)
+
+
+class DeckPlan(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    runId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    schemaVersion: Literal["1.0.0"]
+    slides: list[Slide] = Field(..., max_length=15, min_length=1)
 
 
 class Status(StrEnum):
@@ -133,6 +241,111 @@ class RunConfig(BaseModel):
     )
 
 
+class Stage(StrEnum):
+    validating = "validating"
+    parsing = "parsing"
+    planning = "planning"
+    generating_variants = "generating-variants"
+    auditing = "auditing"
+    exporting = "exporting"
+
+
+class Status1(StrEnum):
+    started = "started"
+    completed = "completed"
+    failed = "failed"
+
+
+class RunEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    message: constr(min_length=1) | None = None
+    occurredAt: AwareDatetime
+    runId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    schemaVersion: Literal["1.0.0"]
+    sequence: conint(ge=0, le=9007199254740991)
+    stage: Stage
+    status: Status1
+
+
+class Kind(StrEnum):
+    text = "text"
+    shape = "shape"
+    image = "image"
+    table = "table"
+    chart = "chart"
+    diagram = "diagram"
+
+
+class Object(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bbox: Bbox
+    kind: Kind
+    objectId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+
+
+class SlideIR(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    objects: list[Object]
+    schemaVersion: Literal["1.0.0"]
+    slideId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+
+
+class PaletteItem(RootModel[constr(pattern=r"^#[A-Fa-f0-9]{6}$")]):
+    root: constr(pattern=r"^#[A-Fa-f0-9]{6}$")
+
+
+class Kind1(StrEnum):
+    logo = "logo"
+    footer = "footer"
+    page_number = "page-number"
+    background = "background"
+
+
+class ProtectedElement(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bbox: Bbox
+    kind: Kind1
+    objectId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+
+
+class SlideSize(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    heightPt: PositiveFloat
+    widthPt: PositiveFloat
+
+
+class TypographyItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    family: constr(min_length=1)
+    sizePt: PositiveFloat
+    weight: conint(ge=100, le=900)
+
+
+class TemplateProfile(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    palette: list[PaletteItem] = Field(..., max_length=32)
+    protectedElements: list[ProtectedElement]
+    schemaVersion: Literal["1.0.0"]
+    slideSize: SlideSize
+    sourceSha256: constr(pattern=r"^[a-f0-9]{64}$")
+    templateId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    typography: list[TypographyItem] = Field(..., max_length=32)
+
+
 class ContractsBundle(BaseModel):
     """
     All contracts shared between the TypeScript side and the Python engine.
@@ -142,5 +355,11 @@ class ContractsBundle(BaseModel):
         extra="forbid",
     )
     AgentConfig_1: AgentConfig | None = Field(None, alias="AgentConfig")
+    ArtifactManifest_1: ArtifactManifest | None = Field(None, alias="ArtifactManifest")
+    AuditFinding_1: AuditFinding | None = Field(None, alias="AuditFinding")
+    DeckPlan_1: DeckPlan | None = Field(None, alias="DeckPlan")
     HealthCheck_1: HealthCheck | None = Field(None, alias="HealthCheck")
     RunConfig_1: RunConfig | None = Field(None, alias="RunConfig")
+    RunEvent_1: RunEvent | None = Field(None, alias="RunEvent")
+    SlideIR_1: SlideIR | None = Field(None, alias="SlideIR")
+    TemplateProfile_1: TemplateProfile | None = Field(None, alias="TemplateProfile")

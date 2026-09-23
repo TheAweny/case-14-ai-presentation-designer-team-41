@@ -76,6 +76,244 @@
       "title": "AgentConfig",
       "type": "object"
     },
+    "ArtifactManifest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "gitSha": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "inputHashes": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "template": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "template",
+            "content"
+          ],
+          "type": "object"
+        },
+        "runId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "variants": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "pptxPath": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "strategy": {
+                "enum": [
+                  "concise",
+                  "visual",
+                  "analytical"
+                ],
+                "type": "string"
+              },
+              "variantId": {
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "variantId",
+              "strategy",
+              "pptxPath",
+              "sha256"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "inputHashes",
+        "gitSha",
+        "seed",
+        "variants"
+      ],
+      "title": "ArtifactManifest",
+      "type": "object"
+    },
+    "AuditFinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "bbox": {
+          "additionalProperties": false,
+          "properties": {
+            "height": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            "width": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            "x": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "y": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "type": "object"
+        },
+        "evidence": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "findingId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "objectId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "ruleId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "type": "string"
+        },
+        "slideId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "findingId",
+        "ruleId",
+        "severity",
+        "slideId",
+        "evidence"
+      ],
+      "title": "AuditFinding",
+      "type": "object"
+    },
+    "DeckPlan": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "runId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "slides": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "intent": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "slideId": {
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string"
+              },
+              "sourceRefs": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "location": {
+                      "description": "Location within the input content item.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "sourceId": {
+                      "description": "Stable identifier of an input content item.",
+                      "pattern": "^[a-z][a-z0-9-]*$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "sourceId",
+                    "location"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "slideId",
+              "title",
+              "intent",
+              "sourceRefs"
+            ],
+            "type": "object"
+          },
+          "maxItems": 15,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "slides"
+      ],
+      "title": "DeckPlan",
+      "type": "object"
+    },
     "HealthCheck": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -207,6 +445,279 @@
       ],
       "title": "RunConfig",
       "type": "object"
+    },
+    "RunEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "occurredAt": {
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "type": "string"
+        },
+        "runId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "validating",
+            "parsing",
+            "planning",
+            "generating-variants",
+            "auditing",
+            "exporting"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "started",
+            "completed",
+            "failed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "sequence",
+        "stage",
+        "status",
+        "occurredAt"
+      ],
+      "title": "RunEvent",
+      "type": "object"
+    },
+    "SlideIR": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "objects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "bbox": {
+                "additionalProperties": false,
+                "properties": {
+                  "height": {
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  },
+                  "width": {
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  },
+                  "x": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "y": {
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "enum": [
+                  "text",
+                  "shape",
+                  "image",
+                  "table",
+                  "chart",
+                  "diagram"
+                ],
+                "type": "string"
+              },
+              "objectId": {
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "objectId",
+              "kind",
+              "bbox"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "slideId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "slideId",
+        "objects"
+      ],
+      "title": "SlideIR",
+      "type": "object"
+    },
+    "TemplateProfile": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "palette": {
+          "items": {
+            "pattern": "^#[A-Fa-f0-9]{6}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array"
+        },
+        "protectedElements": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "bbox": {
+                "additionalProperties": false,
+                "properties": {
+                  "height": {
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  },
+                  "width": {
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  },
+                  "x": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "y": {
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "enum": [
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "background"
+                ],
+                "type": "string"
+              },
+              "objectId": {
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "objectId",
+              "kind",
+              "bbox"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "type": "string"
+        },
+        "slideSize": {
+          "additionalProperties": false,
+          "properties": {
+            "heightPt": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            "widthPt": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "widthPt",
+            "heightPt"
+          ],
+          "type": "object"
+        },
+        "sourceSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "templateId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "typography": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "family": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "sizePt": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "weight": {
+                "maximum": 900,
+                "minimum": 100,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "family",
+              "sizePt",
+              "weight"
+            ],
+            "type": "object"
+          },
+          "maxItems": 32,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "templateId",
+        "sourceSha256",
+        "slideSize",
+        "palette",
+        "typography",
+        "protectedElements"
+      ],
+      "title": "TemplateProfile",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -216,11 +727,29 @@
     "AgentConfig": {
       "$ref": "#/$defs/AgentConfig"
     },
+    "ArtifactManifest": {
+      "$ref": "#/$defs/ArtifactManifest"
+    },
+    "AuditFinding": {
+      "$ref": "#/$defs/AuditFinding"
+    },
+    "DeckPlan": {
+      "$ref": "#/$defs/DeckPlan"
+    },
     "HealthCheck": {
       "$ref": "#/$defs/HealthCheck"
     },
     "RunConfig": {
       "$ref": "#/$defs/RunConfig"
+    },
+    "RunEvent": {
+      "$ref": "#/$defs/RunEvent"
+    },
+    "SlideIR": {
+      "$ref": "#/$defs/SlideIR"
+    },
+    "TemplateProfile": {
+      "$ref": "#/$defs/TemplateProfile"
     }
   },
   "title": "ContractsBundle",

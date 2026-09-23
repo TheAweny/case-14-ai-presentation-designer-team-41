@@ -10,8 +10,14 @@ describe('contract registry', () => {
   it('exposes every schema that is exported to the engine', () => {
     expect(Object.keys(contractRegistry).sort()).toEqual([
       'AgentConfig',
+      'ArtifactManifest',
+      'AuditFinding',
+      'DeckPlan',
       'HealthCheck',
       'RunConfig',
+      'RunEvent',
+      'SlideIR',
+      'TemplateProfile',
     ]);
   });
 

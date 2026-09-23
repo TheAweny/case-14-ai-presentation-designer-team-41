@@ -14,3 +14,20 @@ export {
   type AgentGeneration,
 } from './agent-config.js';
 export { contractRegistry, type ContractName } from './registry.js';
+export {
+  CONTRACT_SCHEMA_VERSION,
+  artifactManifestSchema,
+  auditFindingSchema,
+  boundingBoxSchema,
+  deckPlanSchema,
+  runEventSchema,
+  slideIrSchema,
+  templateProfileSchema,
+  type ArtifactManifest,
+  type AuditFinding,
+  type BoundingBox,
+  type DeckPlan,
+  type RunEvent,
+  type SlideIR,
+  type TemplateProfile,
+} from './deck-contracts.js';

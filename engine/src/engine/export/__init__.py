@@ -6,7 +6,7 @@ from the template itself rather than from anything bundled with the service.
 
 from pathlib import Path
 
-from engine.contracts.provisional import SlideIR, TemplateProfile
+from engine.contracts import SlideIR, TemplateProfile
 
 __all__ = ["export_pdf", "export_pptx"]
 

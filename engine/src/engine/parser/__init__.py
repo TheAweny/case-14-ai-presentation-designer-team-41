@@ -7,7 +7,7 @@ here may branch on a specific template: every value comes out of the file.
 
 from pathlib import Path
 
-from engine.contracts.provisional import TemplateProfileDraft
+from engine.contracts import TemplateProfileDraft
 
 __all__ = ["parse_template"]
 

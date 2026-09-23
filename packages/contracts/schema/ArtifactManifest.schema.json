@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "gitSha": {
+      "pattern": "^[a-f0-9]{40}$",
+      "type": "string"
+    },
+    "inputHashes": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "template": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "template",
+        "content"
+      ],
+      "type": "object"
+    },
+    "runId": {
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "seed": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "variants": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "pptxPath": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "strategy": {
+            "enum": [
+              "concise",
+              "visual",
+              "analytical"
+            ],
+            "type": "string"
+          },
+          "variantId": {
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variantId",
+          "strategy",
+          "pptxPath",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "runId",
+    "inputHashes",
+    "gitSha",
+    "seed",
+    "variants"
+  ],
+  "title": "ArtifactManifest",
+  "type": "object"
+}
