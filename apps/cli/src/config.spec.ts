@@ -17,24 +17,13 @@ describe('readRunConfig', () => {
   });
 });
 
-describe('local run initialization', () => {
-  it('creates an isolated queued run under the configured output directory', async () => {
-    const { mkdtemp, rm } = await import('node:fs/promises');
-    const { tmpdir } = await import('node:os');
-    const root = await mkdtemp(resolve(tmpdir(), 'lct-cli-run-'));
-    const configPath = resolve(root, 'run.yaml');
-    const { writeFile } = await import('node:fs/promises');
-    await writeFile(
-      configPath,
-      `templatePath: template.pptx\ncontentPath: content.md\nslideCount: 10\nlayoutVariants: [balanced]\nauditProfile: default\nmodels: [{ role: planner, modelId: planner-default }]\nseed: 1\noutputDir: ${root}/runs\n`,
+describe('database configuration', () => {
+  it('fails clearly when PostgreSQL is not configured', async () => {
+    const { initializeRun } = await import('./main.js');
+    const configPath = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../configs/run.example.yaml',
     );
-
-    try {
-      const { initializeRun } = await import('./main.js');
-      const run = await initializeRun(configPath, () => 'run-cli');
-      expect(run).toMatchObject({ runId: 'run-cli', state: 'queued' });
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
+    await expect(initializeRun(configPath, '')).rejects.toThrow('DATABASE_URL is required');
   });
 });

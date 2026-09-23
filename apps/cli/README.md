@@ -1,14 +1,15 @@
 # cli
 
-Initialises a local generation run from a validated config, with no web UI involved. It is the
-reproducible entry point used by `eval/` scenarios and CI.
+Initialises a generation run in PostgreSQL from a validated config, with no web UI involved. It is
+the reproducible entry point used by `eval/` scenarios and CI.
 
 ```bash
 yarn nx run cli:run-config
 ```
 
-The command creates `runs/<run-id>/` with `inputs`, `profile`, `plan`, `variants`, `audit`,
-`previews` and `run.json`. The later pipeline stages populate those directories.
+The command requires `DATABASE_URL`, applies pending versioned migrations and creates a queued run.
+Later pipeline stages place binary inputs and outputs under `runs/<run-id>/` and register their
+metadata in PostgreSQL; files themselves are not stored in the database.
 
 - Can import: `@lct/contracts`, `@lct/registry`, `@lct/run-store`, `@lct/pipeline`, Node built-ins.
 - Must not import: `apps/web`, `apps/api`, `.pptx` libraries.
