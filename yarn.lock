@@ -2409,6 +2409,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@lct/run-store@workspace:^, @lct/run-store@workspace:packages/run-store":
+  version: 0.0.0-use.local
+  resolution: "@lct/run-store@workspace:packages/run-store"
+  languageName: unknown
+  linkType: soft
+
 "@lct/slide-renderer@workspace:^, @lct/slide-renderer@workspace:packages/slide-renderer":
   version: 0.0.0-use.local
   resolution: "@lct/slide-renderer@workspace:packages/slide-renderer"
@@ -3963,6 +3969,7 @@ __metadata:
     "@lct/engine-client": "workspace:^"
     "@lct/pipeline": "workspace:^"
     "@lct/registry": "workspace:^"
+    "@lct/run-store": "workspace:^"
     "@nestjs/cli": "npm:^12.0.0"
     "@nestjs/common": "npm:^12.0.0"
     "@nestjs/core": "npm:^12.0.0"
@@ -4472,6 +4479,7 @@ __metadata:
   dependencies:
     "@lct/contracts": "workspace:^"
     "@lct/registry": "workspace:^"
+    "@lct/run-store": "workspace:^"
     yaml: "npm:^2.8.0"
   bin:
     lct: dist/main.js

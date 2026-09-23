@@ -1,7 +1,16 @@
 #!/usr/bin/env node
+import { RunRepository, type LocalRun } from '@lct/run-store';
 import { readRunConfig } from './config.js';
 
-function main(argv: readonly string[]): number {
+export async function initializeRun(
+  configPath: string,
+  createId?: () => string,
+): Promise<LocalRun> {
+  const config = readRunConfig(configPath);
+  return new RunRepository(config.outputDir, createId).create();
+}
+
+async function main(argv: readonly string[]): Promise<number> {
   const configPath = argv[2];
   if (configPath === undefined) {
     process.stderr.write('Usage: lct <path-to-run-config.yaml>\n');
@@ -9,8 +18,8 @@ function main(argv: readonly string[]): number {
   }
 
   try {
-    const config = readRunConfig(configPath);
-    process.stdout.write(`${JSON.stringify(config, null, 2)}\n`);
+    const run = await initializeRun(configPath);
+    process.stdout.write(`${JSON.stringify(run, null, 2)}\n`);
     return 0;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -18,4 +27,8 @@ function main(argv: readonly string[]): number {
   }
 }
 
-process.exitCode = main(process.argv);
+if (import.meta.url === `file://${process.argv[1]}`) {
+  void main(process.argv).then((code) => {
+    process.exitCode = code;
+  });
+}

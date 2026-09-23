@@ -1,8 +1,14 @@
 # cli
 
-Runs a deck generation from a config file, with no web UI involved — the reproducible entry point
-used by `eval/` scenarios and by CI.
+Initialises a local generation run from a validated config, with no web UI involved. It is the
+reproducible entry point used by `eval/` scenarios and CI.
 
-- Can import: `@lct/contracts`, `@lct/registry`, `@lct/pipeline`, Node built-ins.
+```bash
+yarn nx run cli:run-config
+```
+
+The command creates `runs/<run-id>/` with `inputs`, `profile`, `plan`, `variants`, `audit`,
+`previews` and `run.json`. The later pipeline stages populate those directories.
+
+- Can import: `@lct/contracts`, `@lct/registry`, `@lct/run-store`, `@lct/pipeline`, Node built-ins.
 - Must not import: `apps/web`, `apps/api`, `.pptx` libraries.
-- Today it validates `configs/run.example.yaml` against the contract and prints the parsed config.
