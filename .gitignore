@@ -52,3 +52,5 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.codeassistant
+.git_hidden_message
