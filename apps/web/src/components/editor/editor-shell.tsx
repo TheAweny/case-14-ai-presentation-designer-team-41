@@ -4,13 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
 import type { ColorValue, SlideElement } from '@lct/contracts';
-import type {
-  ArrangeTarget,
-  DeckChangeKind,
-  DeckSelection,
-  ElementProps,
-  TableCell,
-} from '@lct/deck-ops';
+import type { ArrangeTarget, DeckChangeKind, DeckSelection, ElementProps } from '@lct/deck-ops';
 import type { Deck } from '@/lib/deck-source';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -28,6 +22,8 @@ import {
 import { InspectorPanel, type InspectorTab } from '@/components/editor/inspector/inspector-panel';
 import { InspectorToggle } from '@/components/editor/inspector/inspector-toggle';
 import type { TableAction } from '@/components/editor/inspector/design-panel';
+import { useTableOps } from '@/components/editor/use-table-ops';
+import { toggledFlag, wholeTable } from '@/components/editor/table-grid';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
 import {
   editorCommand,
@@ -209,7 +205,6 @@ export function EditorShell({
     duplicateSlide,
     removeSlide,
     setSlideBackground,
-    setTableCell,
     insertTableRow,
     removeTableRow,
     insertTableColumn,
@@ -220,6 +215,7 @@ export function EditorShell({
     redo,
     undoKind,
     redoKind,
+    run,
   } = useDeckHistory(startSlides);
   const history = useMemo(
     () => ({ undo: undoKind, redo: redoKind, onUndo: undo, onRedo: redo }),
@@ -345,12 +341,8 @@ export function EditorShell({
     [setSlideBackground, slideId],
   );
 
-  const setTableCellOf = useCallback(
-    (elementId: string, cell: TableCell, text: string) => {
-      if (slideId) setTableCell(slideId, elementId, cell, text);
-    },
-    [setTableCell, slideId],
-  );
+  // Таблицы: холст правит ячейки, границы и строки, панель — вид выделенных ячеек.
+  const tableOps = useTableOps(run, endPreview, slideId);
 
   /** Строки и столбцы из панели: добавляются в конец, удаляются последние. */
   const editTableOf = useCallback(
@@ -487,6 +479,8 @@ export function EditorShell({
       const ids = selected.map((element) => element.elementId);
       const texts = selected.filter((element) => element.kind === 'text');
       const textIds = texts.map((element) => element.elementId);
+      // Одна выделенная таблица: Ctrl+B/I/U и выравнивание — всем её ячейкам.
+      const table = selected.length === 1 && selected[0]?.kind === 'table' ? selected[0] : null;
       switch (command.kind) {
         case 'edit':
           if (selected.length === 1 && selected[0]) {
@@ -518,10 +512,18 @@ export function EditorShell({
         case 'text-flag':
           if (texts.length > 0) {
             setProps(slide.slideId, textIds, flagProps(texts, command.flag, designSystem));
+          } else if (table) {
+            const all = wholeTable(table);
+            tableOps.style(table.elementId, all, {
+              style: { [command.flag]: toggledFlag(table, all, command.flag) },
+            });
           }
           return;
         case 'text-align':
           if (texts.length > 0) setProps(slide.slideId, textIds, { align: command.align });
+          else if (table) {
+            tableOps.style(table.elementId, wholeTable(table), { style: { align: command.align } });
+          }
           return;
         case 'text-size':
           if (texts.length > 0) {
@@ -532,7 +534,7 @@ export function EditorShell({
           return;
       }
     },
-    [designSystem, setFontSizes, setProps, setPropsEach, slide],
+    [designSystem, setFontSizes, setProps, setPropsEach, slide, tableOps],
   );
 
   /** Одна точка входа для клавиатуры и контекстного меню холста. */
@@ -875,7 +877,7 @@ export function EditorShell({
                       onCommand={runCommand}
                       canPaste={canPaste}
                       hasLocked={slide.elements.some((element) => element.locked === true)}
-                      onTableCell={setTableCellOf}
+                      tableOps={tableOps}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
                       controlRef={canvasControl}
                       className={CANVAS_PADDING}
@@ -950,6 +952,7 @@ export function EditorShell({
                 onReplaceImage: replaceImageOf,
                 onSlideBackground: setBackgroundOf,
                 onTable: editTableOf,
+                tableOps,
                 onChartData: setChartDataOf,
                 onChartAxes: setChartAxesOf,
               }}
