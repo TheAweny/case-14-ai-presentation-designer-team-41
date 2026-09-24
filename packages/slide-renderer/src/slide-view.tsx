@@ -3,7 +3,7 @@ import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { slideSizeOf } from './geometry.js';
 import { SlideFrame } from './slide-frame.js';
 import { ChartMark } from './view/chart.js';
-import { paint } from './view/color.js';
+import { paint, resolveColor } from './view/color.js';
 import { DecorMark, ImageMark, TableMark } from './view/marks.js';
 import { TextMark } from './view/text.js';
 
@@ -51,7 +51,7 @@ export function SlideView({
       className={className}
       {...hooks}
       style={{
-        background: paint(
+        background: resolveColor(
           profile.palette,
           slide.background ?? 'background',
           'background',

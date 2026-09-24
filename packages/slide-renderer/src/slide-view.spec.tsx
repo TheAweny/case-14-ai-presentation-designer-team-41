@@ -1,9 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DesignSystem, SlideElement, SlideIr } from '@lct/contracts';
+import type { DesignSystem, SlideElement, SlideIr, TextRun } from '@lct/contracts';
 import { SlideView } from './slide-view.js';
 import { CONTENT, COVER, WIDE, box, measured, paragraph, text } from './testing/deck.js';
-import { fontFamily, genericFamily, seriesPaint, seriesRoles } from './view/color.js';
+import {
+  fontFamily,
+  genericFamily,
+  isHexColor,
+  resolveColor,
+  seriesPaint,
+  seriesRoles,
+} from './view/color.js';
 
 const PROFILE = {
   schemaVersion: 1,
@@ -304,6 +311,32 @@ describe('shapes', () => {
     }
   });
 
+  it('paints a hex a user chose in the fill and the outline, next to roles', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('own', card, {
+          shape: 'rect',
+          fill: '12ab9F',
+          stroke: { ...STROKE, color: '0A0B0C' },
+        }),
+        shape('mixed', card, {
+          shape: 'ellipse',
+          fill: 'accent',
+          stroke: { ...STROKE, color: 'FF8800' },
+        }),
+        shape('wire', card, { shape: 'line', fill: null, stroke: { ...STROKE, color: 'abcdef' } }),
+      ),
+    );
+    const own = markup(html, 'own');
+    expect(own).toContain('fill="#12ab9F"');
+    expect(own).toContain('stroke="#0A0B0C"');
+    const mixed = markup(html, 'mixed');
+    expect(mixed).toContain('fill="#3355E0"');
+    expect(mixed).toContain('stroke="#FF8800"');
+    expect(markup(html, 'wire')).toMatch(/<line [^>]*stroke="#abcdef"/);
+  });
+
   it('flips a triangle upside down about its box', () => {
     const html = render(
       only(COVER, shape('down', card, { shape: 'triangle', fill: 'accent', flipV: true })),
@@ -382,6 +415,9 @@ describe('look shared by every kind', () => {
     );
     expect(root.exec(render({ ...COVER, background: null }))?.[0]).toContain('background:#FFFFFF');
     expect(root.exec(render(COVER))?.[0]).toContain('background:#FFFFFF');
+    expect(root.exec(render({ ...COVER, background: '1E2A3B' }))?.[0]).toContain(
+      'background:#1E2A3B',
+    );
   });
 });
 
@@ -416,6 +452,75 @@ describe('text look', () => {
     expect(html).toContain('text-align:justify');
     expect(html.match(/text-align:/g)).toHaveLength(2);
     expect(html.match(/text-decoration:underline/g)).toHaveLength(1);
+  });
+});
+
+describe('text spacing and face', () => {
+  function run(text: string, look: Partial<TextRun>): TextRun {
+    return { text, font: '', sizePt: 16, bold: null, italic: null, color: '', ...look };
+  }
+
+  it('sets a stated line spacing over the type role and inherits it otherwise', () => {
+    const element = text('spaced', 'body', box(48, 40, 400, 200), [
+      { ...paragraph('Разреженно'), lineSpacing: 2 },
+      paragraph('Как у роли'),
+    ]);
+    const html = render(only(COVER, element));
+    expect(html.match(/line-height:2[;"]/g)).toHaveLength(1);
+    expect(html.match(/line-height:1.3[;"]/g)).toHaveLength(1);
+  });
+
+  it('tracks a run in cqw of the slide width, as its size, and leaves the rest alone', () => {
+    const element = text('tracked', 'body', box(48, 40, 400, 200), [
+      {
+        level: 0,
+        lineSpacing: null,
+        runs: [
+          run('Вразрядку', { letterSpacingPt: 9.6 }),
+          run('Плотно', { letterSpacingPt: -4.8 }),
+          run('Обычно', { letterSpacingPt: null }),
+          run('Ноль', { letterSpacingPt: 0 }),
+        ],
+      },
+    ]);
+    const html = render(only(COVER, element));
+    // 9.6 pt of a 960 pt slide is 1 % of its width.
+    expect(html).toContain('letter-spacing:1cqw');
+    expect(html).toContain('letter-spacing:-0.5cqw');
+    expect(html.match(/letter-spacing:/g)).toHaveLength(2);
+  });
+
+  it('draws a run in the face it names and the type role face otherwise', () => {
+    const element = text('faces', 'body', box(48, 40, 400, 200), [
+      {
+        level: 0,
+        lineSpacing: null,
+        runs: [run('Своим', { font: 'PT Serif' }), run('Шаблонным', { font: '' })],
+      },
+    ]);
+    const html = render(only(COVER, element));
+    expect(html).toContain('font-family:&quot;PT Serif&quot;, serif');
+    expect(html).toContain('font-family:&quot;Deck Face&quot;, sans-serif');
+  });
+});
+
+describe('resolveColor', () => {
+  it('passes a hex through and looks a role up in the palette', () => {
+    expect(resolveColor(PROFILE.palette, '0a0B0c')).toBe('#0a0B0c');
+    expect(resolveColor(PROFILE.palette, 'accent')).toBe('#3355E0');
+    // A role the palette lacks takes the fallback, then the first entry.
+    expect(resolveColor(PROFILE.palette, 'positive', 'negative')).toBe('#CC3333');
+    expect(resolveColor(PROFILE.palette, 'accent-alt')).toBe('#FFFFFF');
+  });
+
+  it('tells a hex from a role and from anything else', () => {
+    expect(isHexColor('A1b2C3')).toBe(true);
+    expect(isHexColor('accent')).toBe(false);
+    expect(isHexColor('#A1B2C3')).toBe(false);
+    expect(isHexColor('ABC')).toBe(false);
+    expect(isHexColor('A1B2C3D4')).toBe(false);
+    expect(isHexColor(null)).toBe(false);
+    expect(isHexColor(0xa1b2c3)).toBe(false);
   });
 });
 

@@ -99,6 +99,46 @@ describe('layoutText', () => {
     expect(second.y - first.y).toBeCloseTo(20 * EMU_PER_PT * 1.5, 6);
   });
 
+  it('takes the line spacing a paragraph states over the one of its type role', () => {
+    const frame = box(0, 0, 200, 4000);
+    const resolver = createTypeResolver(TYPE_SCALE, WIDE.cy);
+    const stated = { ...paragraph(LONG, { sizePt: null }), lineSpacing: 3 };
+    const layout = layoutText(text('spaced', 'body', frame, [stated]), resolver);
+    const [first, second] = [nth(layout.bars, 0), nth(layout.bars, 1)];
+    expect(second.y - first.y).toBeCloseTo(20 * EMU_PER_PT * 3, 6);
+  });
+
+  it('lets a wider line spacing push lines out of the box', () => {
+    const frame = box(0, 0, 200, 120);
+    const plain = layoutText(text('p', 'body', frame, [paragraph(LONG)]), type);
+    const spaced = layoutText(
+      text('s', 'body', frame, [{ ...paragraph(LONG), lineSpacing: 2.5 }]),
+      type,
+    );
+    expect(spaced.estimatedLines).toBe(plain.estimatedLines);
+    expect(spaced.bars.length).toBeLessThan(plain.bars.length);
+  });
+
+  it('wraps tracked-out text to more lines and tight text to fewer', () => {
+    const frame = box(0, 0, 240, 4000);
+    const tracked = (letterSpacingPt: number | null) => {
+      const base = paragraph(LONG);
+      const runs = base.runs.map((run) => ({ ...run, letterSpacingPt }));
+      return layoutText(text('t', 'body', frame, [{ ...base, runs }]), type).estimatedLines;
+    };
+    expect(tracked(null)).toBe(tracked(0));
+    expect(tracked(4)).toBeGreaterThan(tracked(0));
+    expect(tracked(-2)).toBeLessThan(tracked(0));
+  });
+
+  it('never measures a glyph narrower than nothing, however tight the tracking', () => {
+    const base = paragraph('Коротко');
+    const runs = base.runs.map((run) => ({ ...run, letterSpacingPt: -500 }));
+    const layout = layoutText(text('t', 'body', box(0, 0, 400, 200), [{ ...base, runs }]), type);
+    expect(layout.estimatedLines).toBe(1);
+    for (const bar of layout.bars) expect(bar.width).toBeGreaterThanOrEqual(0);
+  });
+
   it('is deterministic', () => {
     const element = text('same', 'body', box(0, 0, 300, 300), [paragraph(LONG)]);
     expect(layoutText(element, type)).toEqual(layoutText(element, type));

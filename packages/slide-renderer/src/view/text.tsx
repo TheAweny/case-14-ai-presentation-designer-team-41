@@ -144,7 +144,8 @@ function ParagraphView({
         margin: 0,
         marginTop: first ? 0 : '0.35em',
         paddingLeft: `${paragraph.level * 1.5}em`,
-        lineHeight,
+        // A paragraph that states its own spacing wins over the one its type role gives.
+        lineHeight: paragraph.lineSpacing ?? lineHeight,
         fontSize: cqw(ptToCqw(leadSize, size)),
       }}
     >
@@ -202,6 +203,8 @@ function runStyle(
     fontWeight: (run.bold ?? styleBold) ? 700 : 400,
     fontStyle: (run.italic ?? styleItalic) ? 'italic' : 'normal',
     ...(run.underline ? { textDecoration: 'underline' } : null),
+    // Points, like the size, so the tracking scales with the slide exactly as the glyphs do.
+    ...(run.letterSpacingPt ? { letterSpacing: cqw(ptToCqw(run.letterSpacingPt, size)) } : null),
     color: runColor(run.color, inherited),
     whiteSpace: 'pre-wrap',
     overflowWrap: 'break-word',

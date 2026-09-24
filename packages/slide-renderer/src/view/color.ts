@@ -1,4 +1,11 @@
-import type { ColorRole, PaletteEntry } from '@lct/contracts';
+import type { ColorRole, ColorValue, PaletteEntry } from '@lct/contracts';
+
+const HEX = /^[0-9a-fA-F]{6}$/;
+
+/** Whether a colour value is six hex digits a user chose rather than a palette role. */
+export function isHexColor(value: unknown): value is string {
+  return typeof value === 'string' && HEX.test(value);
+}
 
 export function paint(palette: readonly PaletteEntry[], ...roles: readonly ColorRole[]): string {
   for (const role of roles) {
@@ -7,6 +14,19 @@ export function paint(palette: readonly PaletteEntry[], ...roles: readonly Color
   }
   const first = palette[0];
   return first ? `#${first.hex}` : 'transparent';
+}
+
+/**
+ * A colour value as CSS `#rrggbb`: the hex a user chose as written, a role through the palette.
+ * A role the palette lacks falls back to `fallback` in order, then to the first palette entry.
+ */
+export function resolveColor(
+  palette: readonly PaletteEntry[],
+  value: ColorValue,
+  ...fallback: readonly ColorRole[]
+): string {
+  if (isHexColor(value)) return `#${value}`;
+  return paint(palette, value as ColorRole, ...fallback);
 }
 
 /** Roles a series reaches for first: the colours a template means to draw attention with. */

@@ -1,7 +1,7 @@
 import type { JSX, SVGProps } from 'react';
 import type { Box, DesignSystem, SlideElement, ElementStroke, StrokeDash } from '@lct/contracts';
 import { EMU_PER_PT, cqw, emuToCqw, round, type SlideSize } from '../geometry.js';
-import { paint } from './color.js';
+import { paint, resolveColor } from './color.js';
 import { markHooks, markStyle } from './mark.js';
 
 type DecorElement = Extract<SlideElement, { kind: 'decor' }>;
@@ -281,7 +281,9 @@ export function DecorMark({
       head: 'none',
       tail: 'none',
     };
-    const color = element.stroke ? paint(profile.palette, element.stroke.color, 'line') : guessed;
+    const color = element.stroke
+      ? resolveColor(profile.palette, element.stroke.color, 'line')
+      : guessed;
     drawing = (
       <LineShape
         element={element}
@@ -297,7 +299,7 @@ export function DecorMark({
         ? guessed
         : element.fill === null
           ? 'none'
-          : paint(profile.palette, element.fill, 'surface');
+          : resolveColor(profile.palette, element.fill, 'surface');
     const stroke = element.stroke ?? null;
     drawing = (
       <ClosedShape
@@ -305,7 +307,7 @@ export function DecorMark({
         frame={frame}
         fill={fill}
         stroke={stroke}
-        strokeColor={stroke ? paint(profile.palette, stroke.color, 'line') : 'none'}
+        strokeColor={stroke ? resolveColor(profile.palette, stroke.color, 'line') : 'none'}
       />
     );
   }

@@ -130,7 +130,17 @@ export function textWidthEmu(text: string, sizeEmu: number, bold = false): numbe
 
 type Token = { readonly kind: 'word'; readonly gap: number; readonly width: number } | 'break';
 
-/** Words with the width of the space before each, across runs of different size and weight. */
+/** Extra advance after every character of a run, in EMU: its letter spacing, zero when unset. */
+function trackingEmu(run: Paragraph['runs'][number]): number {
+  const pt = run.letterSpacingPt;
+  return pt !== null && pt !== undefined && Number.isFinite(pt) ? pt * EMU_PER_PT : 0;
+}
+
+/**
+ * Words with the width of the space before each, across runs of different size, weight and
+ * letter spacing. Tracking goes after every character, spaces included, as CSS and PowerPoint
+ * both apply it.
+ */
 function tokenize(
   paragraph: Paragraph,
   sizeOf: (sizePt: number | null) => number,
@@ -149,15 +159,17 @@ function tokenize(
   for (const run of paragraph.runs) {
     const size = sizeOf(run.sizePt);
     const factor = boldOf(run.bold) ? BOLD_WIDTH : 1;
+    const tracking = trackingEmu(run);
     for (const char of run.text) {
       if (BREAK.has(char)) {
         flush();
         tokens.push('break');
       } else if (SPACE.test(char)) {
         if (inWord) flush();
-        gap += advanceEm(' ') * size;
+        gap += Math.max(advanceEm(' ') * size + tracking, 0);
       } else {
-        width += advanceEm(char) * size * factor;
+        // Tight tracking narrows a glyph, but never below nothing.
+        width += Math.max(advanceEm(char) * size * factor + tracking, 0);
         inWord = true;
       }
     }
@@ -286,7 +298,8 @@ export function layoutText(element: TextElement, type: TypeResolver): TextLayout
     );
     const bold = majority(paragraph, (run) => boldOf(run.bold));
     const italic = majority(paragraph, (run) => run.italic ?? type.italic(role));
-    const pitch = size * type.lineSpacing(role);
+    // A paragraph that states its own spacing wins over the one its type role gives.
+    const pitch = size * (paragraph.lineSpacing ?? type.lineSpacing(role));
     const thickness = size * (setInCaps(paragraph) ? BAR_CAPS : bold ? BAR_BOLD : BAR);
     const indent = paragraph.level * INDENT_PER_LEVEL * size;
     const textX = indent + (bulleted ? BULLET_HANG * size : 0);
