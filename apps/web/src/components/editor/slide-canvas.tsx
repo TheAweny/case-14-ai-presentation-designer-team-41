@@ -63,7 +63,7 @@ import { carriesFiles, imageFilesOf, pickImageFiles, registerImage } from '@/lib
 
 /** Здесь стрелки — свои клавиши виджета, а не сдвиг объекта. */
 const ARROW_OWNERS =
-  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="grid"]';
+  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="grid"], [role="tree"]';
 /** Отсюда протяжка вставки не начинается: это интерфейс поверх холста, а не поле. */
 const INSERT_SKIPS =
   '[data-text-editor], [data-selection-bar], [data-text-format], [data-dock-obstacle], button, [role="menu"]';
@@ -127,6 +127,13 @@ export function SlideCanvas({
   onRotate,
   controlRef,
   className,
+  onPick,
+  onEnterGroup,
+  hoverUnit,
+  highlightIds,
+  canGroup,
+  canUngroup,
+  groupFrame,
 }: {
   slide: SlideIr;
   designSystem: DesignSystem;
@@ -167,6 +174,21 @@ export function SlideCanvas({
   /** Сюда холст кладёт то, что умеет по просьбе клавиатуры: см. `CanvasControl`. */
   controlRef?: { current: CanvasControl | null };
   className?: string;
+  /**
+   * Выбор щелчком, рамкой или правой кнопкой: редактор разворачивает объект в его группу.
+   * Без него выбор идёт прямо в `onSelect`.
+   */
+  onPick?: (ids: readonly string[], pick?: { readonly additive: boolean }) => void;
+  /** Двойной щелчок по объекту группы: `true` — редактор вошёл в группу, набор не нужен. */
+  onEnterGroup?: (elementId: string) => boolean;
+  /** Что выберет щелчок по объекту: его и подсвечивает наведение. */
+  hoverUnit?: (elementId: string) => readonly string[];
+  /** Подсветка объектов извне: строка панели слоёв под курсором. */
+  highlightIds?: readonly string[];
+  canGroup?: boolean;
+  canUngroup?: boolean;
+  /** Выделена одна группа: рамка вокруг неё, без рамок её объектов. */
+  groupFrame?: boolean;
 }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const rememberHost = useCallback((node: HTMLDivElement | null) => setHost(node), []);
@@ -619,6 +641,36 @@ export function SlideCanvas({
     return () => host.removeEventListener('dblclick', onDoubleClick);
   }, [host, onSelect, replaceImage, slide, tool]);
 
+  // Как в Figma: двойной щелчок по группе сначала входит в неё, и только внутри — правит
+  // объект. У выделенной группы сверху лежит область Moveable, поэтому объект под курсором
+  // ищется по точке, а слушатель стоит на погружении: вход в группу — вместо набора, а не
+  // вместе с ним.
+  useEffect(() => {
+    if (!area || !slideRoot || !onEnterGroup) return;
+    const onDoubleClick = (event: MouseEvent) => {
+      if (event.button !== 0 || tool === 'hand' || isInsertTool(tool)) return;
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest('[data-text-editor]')) return;
+      const onHandles = target.closest('.lct-moveable') !== null;
+      if (!onHandles && !slideRoot.contains(target)) return;
+      const member = document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .map((node) => node.closest<HTMLElement>('[data-element-id]'))
+        .find(
+          (node): node is HTMLElement =>
+            node !== null && slideRoot.contains(node) && node.dataset.locked !== 'true',
+        );
+      const id = member?.dataset.elementId;
+      if ((id && onEnterGroup(id)) || onHandles) {
+        // Двойной щелчок по рамке выделения — не щелчок по полю: слайд не вписывается заново.
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    area.addEventListener('dblclick', onDoubleClick, true);
+    return () => area.removeEventListener('dblclick', onDoubleClick, true);
+  }, [area, onEnterGroup, slideRoot, tool]);
+
   // Второй щелчок по выделенной таблице — каретка в ячейку под курсором.
   useTableClickEntry({
     host,
@@ -693,6 +745,9 @@ export function SlideCanvas({
     const target = event.target;
     // В правке таблицы меню своё, у ячеек: выделение объекта оно не трогает.
     if (target instanceof Element && target.closest('[data-table-editor]')) return;
+    // Рамка нескольких объектов или группы лежит поверх них: правый щелчок по ней — по
+    // выделенному, меню открывается для него, а не снимает выделение.
+    if (target instanceof Element && target.closest('.lct-moveable')) return;
     if (!(target instanceof Element) || !slideRoot?.contains(target)) {
       if (target instanceof Element && target.closest('[data-selection-bar]')) return;
       onSelect([]);
@@ -704,7 +759,7 @@ export function SlideCanvas({
       onSelect([]);
       return;
     }
-    if (!selectedIds.includes(id)) onSelect([id]);
+    if (!selectedIds.includes(id)) (onPick ?? onSelect)([id]);
   };
 
   return (
@@ -813,10 +868,13 @@ export function SlideCanvas({
                       selectedIds={selectedIds}
                       editingId={editingId ?? editingTable?.elementId ?? null}
                       suspended={handTool || inserting || editingTable !== undefined}
-                      onSelect={onSelect}
+                      onSelect={onPick ?? onSelect}
                       onCommit={onCommit}
                       onRotate={onRotate}
                       onGestureChange={setGesture}
+                      hoverUnit={hoverUnit}
+                      highlightIds={highlightIds}
+                      groupFrame={groupFrame}
                     />
                   ) : null}
                   {overlay && slideRoot ? (
@@ -905,6 +963,8 @@ export function SlideCanvas({
         hasSelection={selectedIds.length > 0}
         canPaste={canPaste}
         hasLocked={hasLocked}
+        canGroup={canGroup}
+        canUngroup={canUngroup}
         onCommand={onCommand}
       />
     </ContextMenu>

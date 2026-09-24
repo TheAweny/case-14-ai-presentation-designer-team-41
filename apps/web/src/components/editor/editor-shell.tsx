@@ -5,6 +5,14 @@ import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
 import type { ColorValue, SlideElement } from '@lct/contracts';
 import type { ArrangeTarget, DeckChangeKind, DeckSelection, ElementProps } from '@lct/deck-ops';
+import {
+  commitDuplicateSlides,
+  commitGroup,
+  commitMoveLayer,
+  commitMoveSlides,
+  commitRemoveSlides,
+  commitUngroup,
+} from '@lct/deck-ops';
 import type { Deck } from '@/lib/deck-source';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -46,18 +54,20 @@ import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
+import { gridForSlide, nudgeBox, type Alignment } from '@/components/editor/slide-geometry';
+import { isTypingTarget, slideTitle, stepSlide } from '@/components/editor/slide-navigation';
 import {
-  alignBoxes,
-  gridForSlide,
-  nudgeBox,
-  type Alignment,
-} from '@/components/editor/slide-geometry';
-import {
-  isTypingTarget,
-  slideTitle,
-  stepSelection,
-  stepSlide,
-} from '@/components/editor/slide-navigation';
+  alignUnits,
+  canGroup,
+  canUngroup,
+  enterGroup,
+  exitGroup,
+  isWholeGroup,
+  resolvePick,
+  selectionScope,
+  stepUnits,
+  unitOf,
+} from '@/components/editor/group-selection';
 import { ToolRailDock } from '@/components/editor/tool-rail-dock';
 import type { VariantId } from '@/components/editor/tool-rail';
 import {
@@ -186,7 +196,6 @@ export function EditorShell({
     move,
     setText,
     remove,
-    reorder,
     insert,
     setFontSize,
     setColor,
@@ -203,7 +212,6 @@ export function EditorShell({
     restored,
     insertSlide,
     duplicateSlide,
-    removeSlide,
     setSlideBackground,
     insertTableRow,
     removeTableRow,
@@ -301,13 +309,64 @@ export function EditorShell({
     setSelectedIds([]);
   }, [remove, selectedIds, slideId]);
 
+  // Группа выравнивается как один объект: её состав едет целиком.
   const alignSelected = useCallback(
     (alignment: Alignment) => {
       if (!slide) return;
-      const items = slide.elements.filter((element) => selectedIds.includes(element.elementId));
-      move(slide.slideId, alignBoxes(items, alignment));
+      move(slide.slideId, alignUnits(slide.elements, selectedIds, alignment, slide));
     },
     [move, selectedIds, slide],
+  );
+
+  /*
+   * Группы на холсте. Щелчок и рамка выбирают группу целиком, двойной щелчок входит в неё,
+   * наведение подсвечивает то, что выберет щелчок. Уровень, на котором выбирают, следует из
+   * самого выделения — см. `group-selection.ts`.
+   */
+  const pickOnCanvas = useCallback(
+    (ids: readonly string[], pick?: { readonly additive: boolean }) => {
+      if (!slide) return;
+      setSelectedIds((previous) =>
+        resolvePick(slide.elements, previous, ids, pick?.additive === true),
+      );
+    },
+    [slide],
+  );
+  const enterGroupAt = useCallback(
+    (elementId: string) => {
+      if (!slide) return false;
+      const next = enterGroup(slide.elements, selectedIds, elementId);
+      if (!next) return false;
+      setSelectedIds(next);
+      return true;
+    },
+    [selectedIds, slide],
+  );
+  const hoverUnit = useCallback(
+    (elementId: string) =>
+      slide
+        ? unitOf(slide.elements, elementId, selectionScope(slide.elements, selectedIds))
+        : [elementId],
+    [selectedIds, slide],
+  );
+  const grouping = useMemo(
+    () => ({
+      canGroup: slide ? canGroup(slide.elements, selectedIds) : false,
+      canUngroup: slide ? canUngroup(slide.elements, selectedIds) : false,
+      wholeGroup: slide ? isWholeGroup(slide.elements, selectedIds) : false,
+    }),
+    [selectedIds, slide],
+  );
+  /** Строка панели слоёв под курсором: её объекты подсвечены на холсте. */
+  const [layerHover, setLayerHover] = useState<readonly string[] | null>(null);
+  useEffect(() => {
+    setLayerHover(null);
+  }, [slideId]);
+  const moveLayer = useCallback(
+    (layerId: string, overId: string) => {
+      if (slideId) run([(current) => commitMoveLayer(current, { slideId, layerId, overId })]);
+    },
+    [run, slideId],
   );
 
   const setFontSizeOf = useCallback(
@@ -414,12 +473,27 @@ export function EditorShell({
     },
     [duplicateSlide, slides],
   );
-  const removeSlideAt = useCallback(
-    (at: number) => {
-      const target = slides[at];
-      if (target && slides.length > 1) removeSlide(target.slideId);
+
+  // Несколько слайдов из списка: перенос, копии и удаление — одной записью журнала.
+  const moveSlides = useCallback(
+    (slideIds: readonly string[], at: number) => {
+      run([(current) => commitMoveSlides(current, { slideIds, index: at })]);
     },
-    [removeSlide, slides],
+    [run],
+  );
+  const duplicateSlides = useCallback(
+    (slideIds: readonly string[]) => {
+      const copies = slideIds.map(() => crypto.randomUUID());
+      run([(current) => commitDuplicateSlides(current, { slideIds, newSlideIds: copies })]);
+      return copies;
+    },
+    [run],
+  );
+  const removeSlides = useCallback(
+    (slideIds: readonly string[]) => {
+      run([(current) => commitRemoveSlides(current, { slideIds })]);
+    },
+    [run],
   );
 
   /**
@@ -550,7 +624,7 @@ export function EditorShell({
       const selected = slide.elements.filter((element) => selectedIds.includes(element.elementId));
       if (runDeckCommand(command)) return;
       if (command.kind === 'select-step') {
-        setSelectedIds(stepSelection(slide.elements, selectedIds, command.step));
+        setSelectedIds(stepUnits(slide.elements, selectedIds, command.step));
         return;
       }
       if (command.kind === 'select-all') {
@@ -571,9 +645,17 @@ export function EditorShell({
         return;
       }
       if (selected.length === 0) return;
+      const ids = selected.map((element) => element.elementId);
       switch (command.kind) {
         case 'deselect':
-          setSelectedIds([]);
+          // Внутри группы Esc поднимается на уровень вверх, как в Figma.
+          setSelectedIds(exitGroup(slide.elements, selectedIds) ?? []);
+          return;
+        case 'group':
+          run([(current) => commitGroup(current, { slideId: slide.slideId, elementIds: ids })]);
+          return;
+        case 'ungroup':
+          run([(current) => commitUngroup(current, { slideId: slide.slideId, elementIds: ids })]);
           return;
         case 'remove':
           removeSelected();
@@ -616,6 +698,7 @@ export function EditorShell({
       redo,
       rememberCopy,
       removeSelected,
+      run,
       runDeckCommand,
       runObjectCommand,
       selectedIds,
@@ -803,10 +886,10 @@ export function EditorShell({
                 current={index}
                 resolveMedia={resolveMedia}
                 onSelect={select}
-                onReorder={reorder}
+                onMove={moveSlides}
                 onAdd={addSlide}
-                onDuplicate={duplicateSlideAt}
-                onRemove={removeSlideAt}
+                onDuplicate={duplicateSlides}
+                onRemove={removeSlides}
                 className="min-h-0 min-w-0 flex-1"
               />
               {/*
@@ -881,6 +964,13 @@ export function EditorShell({
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
                       controlRef={canvasControl}
                       className={CANVAS_PADDING}
+                      onPick={pickOnCanvas}
+                      onEnterGroup={enterGroupAt}
+                      hoverUnit={hoverUnit}
+                      highlightIds={layerHover ?? undefined}
+                      canGroup={grouping.canGroup}
+                      canUngroup={grouping.canUngroup}
+                      groupFrame={grouping.wholeGroup}
                     />
                   </ZoomBasis>
                 ) : null}
@@ -955,6 +1045,14 @@ export function EditorShell({
                 tableOps,
                 onChartData: setChartDataOf,
                 onChartAxes: setChartAxesOf,
+              }}
+              layers={{
+                slide,
+                selectedIds,
+                onSelect: setSelectedIds,
+                onHover: setLayerHover,
+                onLock: (ids, locked) => setPropsOf(ids, { locked }),
+                onMove: moveLayer,
               }}
             />
           )}

@@ -19,6 +19,8 @@ type MenuId =
   | 'forward'
   | 'backward'
   | 'back'
+  | 'group'
+  | 'ungroup'
   | 'selectAll'
   | 'unlockAll'
   | 'remove';
@@ -70,6 +72,15 @@ const GROUPS: readonly (readonly Entry[])[] = [
     },
   ],
   [
+    { id: 'group', command: { kind: 'group' }, keys: shortcutKeys('group'), needsSelection: true },
+    {
+      id: 'ungroup',
+      command: { kind: 'ungroup' },
+      keys: shortcutKeys('ungroup'),
+      needsSelection: true,
+    },
+  ],
+  [
     { id: 'selectAll', command: { kind: 'select-all' }, keys: shortcutKeys('select-all') },
     { id: 'unlockAll', command: { kind: 'unlock-all' }, keys: [] },
   ],
@@ -89,7 +100,7 @@ function isMac(): boolean {
 }
 
 /**
- * Меню правой кнопки на холсте, как в Figma: буфер обмена, слои, выделить всё, удалить.
+ * Меню правой кнопки на холсте, как в Figma: буфер обмена, слои, группы, выделить всё, удалить.
  * Пункты, которым нужно выделение, без него неактивны, а не спрятаны: место каждого пункта
  * в меню постоянно.
  */
@@ -97,11 +108,17 @@ export function CanvasMenuContent({
   hasSelection,
   canPaste,
   hasLocked,
+  canGroup = false,
+  canUngroup = false,
   onCommand,
 }: {
   hasSelection: boolean;
   canPaste: boolean;
   hasLocked: boolean;
+  /** Выбрано два узла и больше: объекты или группы целиком. */
+  canGroup?: boolean;
+  /** Среди выбранного есть группа целиком. */
+  canUngroup?: boolean;
   onCommand: (command: CanvasCommand) => void;
 }) {
   const t = useTranslations('canvasMenu');
@@ -119,7 +136,9 @@ export function CanvasMenuContent({
               disabled={
                 (entry.needsSelection === true && !hasSelection) ||
                 (entry.command.kind === 'paste' && !canPaste) ||
-                (entry.command.kind === 'unlock-all' && !hasLocked)
+                (entry.command.kind === 'unlock-all' && !hasLocked) ||
+                (entry.command.kind === 'group' && !canGroup) ||
+                (entry.command.kind === 'ungroup' && !canUngroup)
               }
               onSelect={() => onCommand(entry.command)}
             >

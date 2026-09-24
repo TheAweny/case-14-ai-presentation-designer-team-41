@@ -30,6 +30,8 @@ export type EditorCommand =
   | { readonly kind: 'select-step'; readonly step: -1 | 1 }
   | { readonly kind: 'edit' }
   | { readonly kind: 'lock' }
+  | { readonly kind: 'group' }
+  | { readonly kind: 'ungroup' }
   | { readonly kind: 'flip'; readonly axis: 'horizontal' | 'vertical' }
   // Текст: в наборе — фрагмент, без набора — выделенные тексты целиком.
   | { readonly kind: 'text-flag'; readonly flag: TextFlag }
@@ -110,6 +112,10 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
       return { kind: 'arrange', to: 'back' };
     case 'lock':
       return { kind: 'lock' };
+    case 'group':
+      return { kind: 'group' };
+    case 'ungroup':
+      return { kind: 'ungroup' };
     case 'flip-horizontal':
       return { kind: 'flip', axis: 'horizontal' };
     case 'flip-vertical':

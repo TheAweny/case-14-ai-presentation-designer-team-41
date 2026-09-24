@@ -55,6 +55,8 @@ export type ShortcutId =
   | 'bring-front'
   | 'send-back'
   | 'lock'
+  | 'group'
+  | 'ungroup'
   | 'flip-horizontal'
   | 'flip-vertical'
   | 'bold'
@@ -251,6 +253,14 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
     group: 'objects',
     scope: 'canvas',
     chords: [{ code: 'KeyL', alt: true, shift: true }],
+  },
+  // Группы — как в Figma, Google Slides и PowerPoint.
+  { id: 'group', group: 'objects', scope: 'canvas', chords: [{ code: 'KeyG', mod: true }] },
+  {
+    id: 'ungroup',
+    group: 'objects',
+    scope: 'canvas',
+    chords: [{ code: 'KeyG', mod: true, shift: true }],
   },
   {
     id: 'flip-horizontal',

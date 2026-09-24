@@ -8,29 +8,36 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
 import { DesignPanel, type DesignPanelProps } from '@/components/editor/inspector/design-panel';
+import { LayersPanel, type LayersPanelProps } from '@/components/editor/inspector/layers-panel';
 
-export type InspectorTab = 'design' | 'assistant';
+export type InspectorTab = 'design' | 'layers' | 'assistant';
 
-export const INSPECTOR_TABS = ['design', 'assistant'] as const satisfies readonly InspectorTab[];
+export const INSPECTOR_TABS = [
+  'design',
+  'layers',
+  'assistant',
+] as const satisfies readonly InspectorTab[];
 
 function isTab(value: string): value is InspectorTab {
   return (INSPECTOR_TABS as readonly string[]).includes(value);
 }
 
 /**
- * Правая панель редактора: свойства выделения и ассистент. Вкладки, а не две панели, —
- * место справа одно, и человек сам решает, что там сейчас нужнее.
+ * Правая панель редактора: свойства выделения, слои слайда и ассистент. Вкладки, а не
+ * несколько панелей, — место справа одно, и человек сам решает, что там сейчас нужнее.
  */
 export function InspectorPanel({
   tab,
   onTabChange,
   onCollapse,
   design,
+  layers,
 }: {
   tab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   onCollapse: () => void;
   design: DesignPanelProps;
+  layers?: LayersPanelProps;
 }) {
   const t = useTranslations('editor');
 
@@ -47,6 +54,7 @@ export function InspectorPanel({
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2">
             <TabsList>
               <TabsTrigger value="design">{t('tabs.design')}</TabsTrigger>
+              {layers ? <TabsTrigger value="layers">{t('tabs.layers')}</TabsTrigger> : null}
               <TabsTrigger value="assistant">{t('tabs.assistant')}</TabsTrigger>
             </TabsList>
             <Tooltip>
@@ -77,6 +85,11 @@ export function InspectorPanel({
           <TabsContent value="design" className="min-h-0 overflow-y-auto">
             <DesignPanel {...design} />
           </TabsContent>
+          {layers ? (
+            <TabsContent value="layers" className="min-h-0 overflow-y-auto">
+              <LayersPanel {...layers} />
+            </TabsContent>
+          ) : null}
           <TabsContent
             value="assistant"
             className="grid min-h-0 place-items-center overflow-y-auto p-6"
