@@ -4,6 +4,7 @@ import { slideIrSchema, type Paragraph, type SlideElement, type SlideIr } from '
 import type { DeckCommit } from './core.js';
 import { createDeckHistory, recordChange, redoDeck, undoDeck } from './journal.js';
 import { commitImageCrop, commitShapeText, commitSlideNotes, normalCrop } from './content-ops.js';
+import { commitElementProps } from './element-ops.js';
 
 function words(text: string): Paragraph[] {
   return [
@@ -174,6 +175,21 @@ describe('commitImageCrop', () => {
     expect(commitImageCrop(before, { slideId: 'one', elementId: 'photo', crop: null }).change).toBe(
       null,
     );
+  });
+
+  it('drops the crop when a fit is chosen, even the fit the picture already has', () => {
+    const cropped = commitImageCrop(deck(), {
+      slideId: 'one',
+      elementId: 'photo',
+      crop: { l: 0.1, t: 0, r: 0, b: 0 },
+    }).slides;
+    const refit = commitElementProps(cropped, {
+      slideId: 'one',
+      elementIds: ['photo'],
+      props: { fit: 'cover' },
+    });
+    expectReversible(cropped, refit);
+    expect(element(refit.slides, 'photo')).toEqual(photo);
   });
 
   it('rounds a crop to what srcRect says and clamps a negative side', () => {
