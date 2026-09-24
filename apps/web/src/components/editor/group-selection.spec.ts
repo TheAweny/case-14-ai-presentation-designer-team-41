@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Box, SlideElement } from '@lct/contracts';
 import {
   alignUnits,
+  distributeUnits,
+  unitCount,
   canGroup,
   canUngroup,
   enterGroup,
@@ -117,6 +119,20 @@ describe('выравнивание групп', () => {
       { elementId: 'a', box: { x: 100, y: 50, cx: 100, cy: 100 } },
       { elementId: 'b', box: { x: 300, y: 150, cx: 100, cy: 100 } },
     ]);
+  });
+
+  it('распределяет группы как один объект', () => {
+    const row = [
+      shape('a', ['g'], { x: 0, cx: 100 }),
+      shape('b', ['g'], { x: 100, cx: 100 }),
+      shape('c', undefined, { x: 250, cx: 50 }),
+      shape('d', undefined, { x: 500, cx: 100 }),
+    ];
+    // Группа — рамка 0…200, промежутки поровну: (600 − 200 − 50 − 100) / 2 = 125.
+    expect(distributeUnits(row, ['a', 'b', 'c', 'd'], 'horizontal')).toEqual([
+      { elementId: 'c', box: { x: 325, y: 0, cx: 50, cy: 100 } },
+    ]);
+    expect(unitCount(row, ['a', 'b', 'c', 'd'])).toBe(3);
   });
 
   it('одну группу выравнивает по слайду', () => {

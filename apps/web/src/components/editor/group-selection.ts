@@ -9,7 +9,13 @@ import {
   pickedLayers,
   type LayerNode,
 } from '@lct/deck-ops';
-import { alignBoxes, unionBox, type Alignment } from './slide-geometry';
+import {
+  alignBoxes,
+  distributeBoxes,
+  unionBox,
+  type Alignment,
+  type DistributeAxis,
+} from './slide-geometry';
 import type { ElementMove } from './use-deck-history';
 
 /*
@@ -173,15 +179,52 @@ export function alignUnits(
   alignment: Alignment,
   slide: { readonly slideCx: number; readonly slideCy: number },
 ): ElementMove[] {
-  const units = pickedNodes(elements, selectedIds).flatMap((node, index) => {
-    const members = layerElements([node]);
-    const box = unionBox(members.map((element) => element.box));
-    return box ? [{ elementId: String(index), box, members }] : [];
-  });
+  const units = unitsOf(elements, selectedIds);
   const targets =
     units.length === 1 && units[0]
       ? [{ elementId: '0', box: toSlide(units[0].box, alignment, slide) }]
       : alignBoxes(units, alignment);
+  return shiftUnits(units, targets);
+}
+
+/** Сколько узлов выбрано: группа целиком считается за один объект, как в подписи Figma. */
+export function unitCount(elements: readonly SlideElement[], selectedIds: readonly string[]) {
+  return pickedNodes(elements, selectedIds).length;
+}
+
+/**
+ * «Распределить» с группами: промежутки поровну между узлами — группа занимает место своей
+ * общей рамкой и едет целиком.
+ */
+export function distributeUnits(
+  elements: readonly SlideElement[],
+  selectedIds: readonly string[],
+  axis: DistributeAxis,
+): ElementMove[] {
+  const units = unitsOf(elements, selectedIds);
+  return shiftUnits(units, distributeBoxes(units, axis));
+}
+
+interface Unit {
+  readonly elementId: string;
+  readonly box: Box;
+  readonly members: readonly SlideElement[];
+}
+
+/** Выбранные узлы с их общими рамками; `elementId` — номер узла, для геометрии. */
+function unitsOf(elements: readonly SlideElement[], selectedIds: readonly string[]): Unit[] {
+  return pickedNodes(elements, selectedIds).flatMap((node, index) => {
+    const members = layerElements([node]);
+    const box = unionBox(members.map((element) => element.box));
+    return box ? [{ elementId: String(index), box, members }] : [];
+  });
+}
+
+/** Сдвиги рамок узлов — сдвиги каждого их объекта. */
+function shiftUnits(
+  units: readonly Unit[],
+  targets: readonly { readonly elementId: string; readonly box: Box }[],
+): ElementMove[] {
   return targets.flatMap(({ elementId, box }) => {
     const unit = units[Number(elementId)];
     if (!unit) return [];
