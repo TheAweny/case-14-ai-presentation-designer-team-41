@@ -15,9 +15,15 @@ import {
   setRangeColor,
   setRangeFont,
   setRangeSize,
-  setRunFlag,
 } from '@/components/editor/active-text-editor';
 import { rangeLook, type TextElement } from '@/components/editor/inspector/text-model';
+import {
+  rangeFlagOn,
+  sizeLadder,
+  stepRangeSize,
+  toggleRangeFlag,
+  type InheritedText,
+} from '@/components/editor/text-shortcuts';
 
 /*
  * BubbleMenu пересылает плагину свои опции транзакцией всякий раз, когда меняется ссылка на
@@ -28,39 +34,54 @@ const ALWAYS_SHOW = () => true;
 const APPEND_TO_BODY = () => document.body;
 const MENU_OPTIONS = { placement: 'top', offset: 8 } as const;
 
-/** Метки под кареткой: перерисовка — когда меняется то, что показывает полоса. */
-function selectMarks({ editor }: EditorStateSnapshot<Editor>) {
-  return rangeMarks(editor);
-}
-
 /** Во время набора правки идут сразу в набор: живой вид и его конец не нужны. */
 const NO_PREVIEW = () => undefined;
 
 /**
  * Полоса формата в открытом наборе — те же контролы, что у полосы над выделенным блоком, но
- * правят выделенные слова и абзацы под кареткой, как в Google Slides. В журнал колоды всё
- * уйдёт одним `set-text`, когда набор закроется. Кнопки не забирают фокус у набора, а поля
- * (кегль, HEX, поиск шрифта) — забирают: набор это переживает, фокус там для него «свой».
+ * правят выделенные слова и абзацы под кареткой, как в Google Slides. Кнопки делают ровно то
+ * же, что Ctrl+B/I/U и Ctrl+Shift+>/< в наборе. В журнал колоды всё уйдёт одним `set-text`,
+ * когда набор закроется. Кнопки не забирают фокус у набора, а поля (кегль, HEX, поиск
+ * шрифта) — забирают: набор это переживает, фокус там для него «свой».
  */
 export function TextFormatBar({
   editor,
   element,
   profile,
+  inherited,
 }: {
   editor: Editor;
   element: TextElement;
   profile: DesignSystem;
+  /** Начертание роли: жирный заголовок нажат, пока его не сняли. */
+  inherited: InheritedText;
 }) {
   const t = useTranslations('formatBar');
-  const marks = useEditorState({ editor, selector: selectMarks });
   const roving = useRovingToolbar();
+  // Только то, что рисует полоса: перерисовка — когда это меняется, а не на каждую
+  // транзакцию. Флаги — с учётом роли, как у Ctrl+B/I/U.
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: current }: EditorStateSnapshot<Editor>) => ({
+      marks: rangeMarks(current),
+      bold: rangeFlagOn(current, 'bold', inherited),
+      italic: rangeFlagOn(current, 'italic', inherited),
+      underline: rangeFlagOn(current, 'underline', inherited),
+    }),
+  });
 
   const actions: TextBarActions = {
-    look: rangeLook(marks, element, profile),
+    look: {
+      ...rangeLook(state.marks, element, profile),
+      bold: state.bold,
+      italic: state.italic,
+      underline: state.underline,
+    },
     live: false,
     setFont: (family) => setRangeFont(editor, family),
     setSize: (sizePt) => setRangeSize(editor, sizePt),
-    setFlag: (flag, on) => setRunFlag(editor, flag, on),
+    stepSize: (step) => stepRangeSize(editor, inherited, sizeLadder(profile), step),
+    toggleFlag: (flag) => toggleRangeFlag(editor, flag, inherited),
     setColor: (_color, hex) => setRangeColor(editor, hex),
     setAlign: (align) => setParagraphAlign(editor, align),
     onPreviewEnd: NO_PREVIEW,

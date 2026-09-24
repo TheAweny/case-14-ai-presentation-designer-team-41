@@ -78,16 +78,27 @@ export function nearestScroll(view: Span, item: Span, margin: number): number {
   return view.start;
 }
 
-/** Шаг по колоде с клавиш, которые листают её из любого места редактора. */
-export function pageKeyStep(key: string): -1 | 1 | null {
-  if (key === 'PageUp') return -1;
-  if (key === 'PageDown') return 1;
-  return null;
+/**
+ * Tab и Shift+Tab на холсте, как в Figma и PowerPoint: следующий или предыдущий объект слайда
+ * в порядке слоёв, по кругу. Шаг идёт от последнего выделенного; заблокированные пропускаются.
+ * Выделения нет — Tab берёт первый объект, Shift+Tab последний.
+ */
+export function stepSelection(
+  elements: readonly Pick<SlideIr['elements'][number], 'elementId' | 'locked'>[],
+  selectedIds: readonly string[],
+  step: -1 | 1,
+): string[] {
+  const free = elements.filter((element) => element.locked !== true);
+  if (free.length === 0) return [];
+  const at = free.findIndex((element) => element.elementId === selectedIds.at(-1));
+  const start = at < 0 ? (step > 0 ? -1 : 0) : at;
+  const next = free[(start + step + free.length) % free.length];
+  return next ? [next.elementId] : [];
 }
 
 /**
- * Фокус в поле ввода или редактируемом элементе: там PageUp/PageDown двигают курсор, и
- * отбирать их у текста нельзя. Проверка по форме объекта, чтобы не зависеть от DOM.
+ * Фокус в поле ввода или редактируемом элементе: там PageUp/PageDown и прочие клавиши
+ * двигают курсор, и отбирать их у текста нельзя. Проверка по форме объекта, чтобы не зависеть от DOM.
  */
 export function isTypingTarget(target: unknown): boolean {
   if (typeof target !== 'object' || target === null) return false;

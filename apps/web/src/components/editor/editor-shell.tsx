@@ -29,7 +29,13 @@ import { InspectorPanel, type InspectorTab } from '@/components/editor/inspector
 import { InspectorToggle } from '@/components/editor/inspector/inspector-toggle';
 import type { TableAction } from '@/components/editor/inspector/design-panel';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
-import { editorCommand, type CanvasCommand } from '@/components/editor/editor-keymap';
+import {
+  editorCommand,
+  type CanvasCommand,
+  type EditorCommand,
+} from '@/components/editor/editor-keymap';
+import { ShortcutsDialog } from '@/components/editor/shortcuts-dialog';
+import { flagProps, sizeEntries } from '@/components/editor/text-shortcuts';
 import {
   ELEMENTS_MIME,
   paragraphsOf,
@@ -39,7 +45,7 @@ import {
   serializeElements,
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
-import { SlideCanvas } from '@/components/editor/slide-canvas';
+import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canvas';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
@@ -51,7 +57,12 @@ import {
   nudgeBox,
   type Alignment,
 } from '@/components/editor/slide-geometry';
-import { isTypingTarget, slideTitle } from '@/components/editor/slide-navigation';
+import {
+  isTypingTarget,
+  slideTitle,
+  stepSelection,
+  stepSlide,
+} from '@/components/editor/slide-navigation';
 import { ToolRailDock } from '@/components/editor/tool-rail-dock';
 import type { VariantId } from '@/components/editor/tool-rail';
 import {
@@ -86,6 +97,59 @@ const CANVAS_PADDING = cn(
  * решает CSS. `open` и `closed` — человек уже сказал своё, и ширина окна тут не указ.
  */
 type InspectorState = 'auto' | 'open' | 'closed';
+
+/** Команды, которые работают и без выделения: история, слайды, шпаргалка. */
+const WITHOUT_SELECTION: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['kind']>([
+  'undo',
+  'redo',
+  'select-all',
+  'go-to-slide',
+  'step-slide',
+  'new-slide',
+  'duplicate-slide',
+  'shortcuts',
+]);
+
+/** Команды колоды: работают и из списка слайдов, если список не забрал клавишу себе. */
+const DECK_COMMANDS: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['kind']>([
+  'undo',
+  'redo',
+  'go-to-slide',
+  'step-slide',
+  'new-slide',
+  'duplicate-slide',
+  'shortcuts',
+]);
+
+/** Переходы между слайдами: после них клавиатура у холста. */
+const SLIDE_MOVES: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['kind']>([
+  'go-to-slide',
+  'step-slide',
+  'new-slide',
+  'duplicate-slide',
+]);
+
+/** Здесь клавиши без модификатора (Enter, Tab, Home, End) не отбираем: у виджета они свои. */
+const KEY_OWNERS =
+  'button, a[href], [role="menu"], [role="menubar"], [role="listbox"], [role="slider"], [role="tablist"], [role="toolbar"], [role="radiogroup"], [role="dialog"]';
+
+/** Фокус на холсте или нигде: Enter, Tab и Home/End здесь принадлежат редактору. */
+function onCanvas(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  if (target === document.body || target === document.documentElement) return true;
+  return target.closest('[data-canvas-area]') !== null && target.closest(KEY_OWNERS) === null;
+}
+
+/**
+ * Enter, Tab, Home и End без модификаторов: у кнопок, меню и списков они свои, поэтому
+ * редактор берёт их, только когда фокус на холсте. Delete и стрелки работают как раньше.
+ */
+function widgetKey(event: KeyboardEvent, command: EditorCommand): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return (
+    command.kind === 'edit' || command.kind === 'select-step' || command.kind === 'go-to-slide'
+  );
+}
 
 /** Правки, после которых редактор показывает их результат: новый объект или слайд. */
 const FOLLOWS_SELECTION: ReadonlySet<DeckChangeKind> = new Set<DeckChangeKind>([
@@ -165,6 +229,8 @@ export function EditorShell({
   const slide = slides[index];
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const activeText = useActiveTextEditor();
+  const canvasControl = useRef<CanvasControl | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const slideId = slide?.slideId;
   // Выделение, которое надо поставить, когда откроется другой слайд: после отмены правки на
   // соседнем слайде редактор переходит туда и выделяет то, что было выделено.
@@ -370,13 +436,104 @@ export function EditorShell({
     [designSystem.grid, paste, slide],
   );
 
+  /**
+   * Слайды с клавиатуры: Ctrl+1…9, PageUp/PageDown, Home/End, новый слайд и копия. Выделение
+   * снимает сама смена слайда. `true` — команда была про слайды.
+   */
+  const runDeckCommand = useCallback(
+    (command: CanvasCommand): boolean => {
+      const count = slides.length;
+      switch (command.kind) {
+        case 'go-to-slide':
+          select(command.index === 'last' ? count - 1 : Math.min(command.index, count - 1));
+          return true;
+        case 'step-slide':
+          select(stepSlide(index, command.step, count));
+          return true;
+        case 'new-slide':
+          addSlide(index);
+          return true;
+        case 'duplicate-slide':
+          duplicateSlideAt(index);
+          return true;
+        default:
+          return false;
+      }
+    },
+    [addSlide, duplicateSlideAt, index, select, slides.length],
+  );
+
+  /** Клавиши над выделенными объектами, которых нет в контекстном меню. */
+  const runObjectCommand = useCallback(
+    (command: CanvasCommand, selected: readonly SlideElement[]) => {
+      if (!slide) return;
+      const ids = selected.map((element) => element.elementId);
+      const texts = selected.filter((element) => element.kind === 'text');
+      const textIds = texts.map((element) => element.elementId);
+      switch (command.kind) {
+        case 'edit':
+          if (selected.length === 1 && selected[0]) {
+            canvasControl.current?.startEditing(selected[0].elementId);
+          }
+          return;
+        case 'lock': {
+          // Повторное нажатие снимает блокировку. Заблокированный объект не выделяется и не
+          // двигается, поэтому после блокировки выделение снимаем.
+          const locked = selected.every((element) => element.locked === true);
+          setProps(slide.slideId, ids, { locked: !locked });
+          if (!locked) setSelectedIds([]);
+          return;
+        }
+        case 'flip': {
+          // Каждой фигуре — от её собственного отражения, одной записью журнала.
+          const key = command.axis === 'horizontal' ? 'flipH' : 'flipV';
+          const shapes = selected.filter((element) => element.kind === 'decor');
+          if (shapes.length === 0) return;
+          setPropsEach(
+            slide.slideId,
+            shapes.map((shape) => ({
+              elementIds: [shape.elementId],
+              props: { [key]: shape[key] !== true },
+            })),
+          );
+          return;
+        }
+        case 'text-flag':
+          if (texts.length > 0) {
+            setProps(slide.slideId, textIds, flagProps(texts, command.flag, designSystem));
+          }
+          return;
+        case 'text-align':
+          if (texts.length > 0) setProps(slide.slideId, textIds, { align: command.align });
+          return;
+        case 'text-size':
+          if (texts.length > 0) {
+            setFontSizes(slide.slideId, sizeEntries(texts, designSystem, command.step));
+          }
+          return;
+        default:
+          return;
+      }
+    },
+    [designSystem, setFontSizes, setProps, setPropsEach, slide],
+  );
+
   /** Одна точка входа для клавиатуры и контекстного меню холста. */
   const runCommand = useCallback(
     (command: CanvasCommand) => {
       if (command.kind === 'undo') return undo();
       if (command.kind === 'redo') return redo();
+      if (command.kind === 'shortcuts') {
+        setShortcutsOpen(true);
+        return;
+      }
       if (!slide) return;
       const selected = slide.elements.filter((element) => selectedIds.includes(element.elementId));
+      if (runDeckCommand(command)) return;
+      if (command.kind === 'select-step') {
+        setSelectedIds(stepSelection(slide.elements, selectedIds, command.step));
+        return;
+      }
       if (command.kind === 'select-all') {
         setSelectedIds(
           slide.elements.filter((element) => !element.locked).map((element) => element.elementId),
@@ -427,6 +584,8 @@ export function EditorShell({
           );
           return;
         }
+        default:
+          runObjectCommand(command, selected);
       }
     },
     [
@@ -438,6 +597,8 @@ export function EditorShell({
       redo,
       rememberCopy,
       removeSelected,
+      runDeckCommand,
+      runObjectCommand,
       selectedIds,
       setProps,
       slide,
@@ -447,17 +608,30 @@ export function EditorShell({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || event.defaultPrevented || isTypingTarget(event.target)) return;
-      const command = editorCommand(event);
+      if (event.isComposing || event.defaultPrevented) return;
+      // В поле и в наборе текста клавиши — их; отсюда только шпаргалка. Ctrl+B и прочее
+      // набор выполняет сам (см. `TextEditor`).
+      const typing = isTypingTarget(event.target);
+      const command = editorCommand(event, typing ? 'text' : 'canvas');
       if (!command) return;
-      const history = command.kind === 'undo' || command.kind === 'redo';
+      if (typing && command.kind !== 'shortcuts') return;
       const target = event.target;
+      // Открытое окно (та же шпаргалка) держит клавиатуру у себя.
+      if (target instanceof Element && target.closest('[role="dialog"]')) return;
+      const inList = target instanceof Element && target.closest('[role="listbox"]') !== null;
       // В списке слайдов стрелки, удаление и выделение — его собственные клавиши.
-      if (!history && target instanceof Element && target.closest('[role="listbox"]')) return;
-      // Без выделения стрелки и Delete ничего не делают и не должны глушить браузер.
-      if (!history && command.kind !== 'select-all' && selectedIds.length === 0) return;
+      if (inList && !DECK_COMMANDS.has(command.kind)) return;
+      // Enter, Tab, Home, End — клавиши кнопок и меню, пока фокус на них. PageUp/PageDown
+      // листают колоду отовсюду, кроме полей.
+      if (widgetKey(event, command) && !onCanvas(target)) return;
+      // Без выделения стрелки, Delete и Tab ничего не делают и не должны глушить браузер:
+      // Tab без выделения уводит фокус как обычно, и с холста можно уйти с клавиатуры.
+      if (!WITHOUT_SELECTION.has(command.kind) && selectedIds.length === 0) return;
       event.preventDefault();
       runCommand(command);
+      // После перехода клавиатура у холста. Из списка фокус не уводим: там свой перебор
+      // стрелками, и фокус идёт за открытым слайдом.
+      if (SLIDE_MOVES.has(command.kind) && !inList) canvasControl.current?.focus();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -689,7 +863,10 @@ export function EditorShell({
                 onDockChange={(dock) => remember({ dock })}
                 tool={tool}
                 onToolChange={setTool}
-                onAction={() => openInspector('assistant')}
+                onAction={(id) => {
+                  if (id === 'shortcuts') setShortcutsOpen(true);
+                  else openInspector('assistant');
+                }}
                 history={history}
               >
                 {slide ? (
@@ -719,6 +896,7 @@ export function EditorShell({
                       hasLocked={slide.elements.some((element) => element.locked === true)}
                       onTableCell={setTableCellOf}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
+                      controlRef={canvasControl}
                       selectionActions={selectionActions}
                       className={CANVAS_PADDING}
                     />
@@ -799,6 +977,7 @@ export function EditorShell({
           )}
         </ResizablePanel>
       </ResizablePanelGroup>
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }

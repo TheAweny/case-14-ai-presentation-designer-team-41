@@ -67,3 +67,7 @@ Thumbs.db
 .sage/*
 .think/*
 .vllm/*
+
+# next dev writes agent notes into the app on start
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

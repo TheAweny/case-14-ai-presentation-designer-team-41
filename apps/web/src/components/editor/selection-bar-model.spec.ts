@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SlideElement } from '@lct/contracts';
-import { FONT_SIZE_PT } from '@lct/deck-ops';
-import { barArea, barContext, leavesField, rovingIndex, stepFontSize } from './selection-bar-model';
+import { barArea, barContext, leavesField, rovingIndex } from './selection-bar-model';
 
 const box = { x: 0, y: 0, cx: 100, cy: 100 };
 
@@ -51,23 +50,6 @@ describe('selection bar context', () => {
     expect(barContext([element('text'), element('text')])).toBe('multi');
     expect(barContext([element('text'), element('image')])).toBe('multi');
     expect(barContext([])).toBeNull();
-  });
-});
-
-describe('font size steps', () => {
-  it('goes a whole point up or down', () => {
-    expect(stepFontSize(12, 1)).toBe(13);
-    expect(stepFontSize(12, -1)).toBe(11);
-  });
-
-  it('lands a fractional size on the next whole point', () => {
-    expect(stepFontSize(10.5, 1)).toBe(11);
-    expect(stepFontSize(10.5, -1)).toBe(10);
-  });
-
-  it('stays within what the journal accepts', () => {
-    expect(stepFontSize(FONT_SIZE_PT.min, -1)).toBe(FONT_SIZE_PT.min);
-    expect(stepFontSize(FONT_SIZE_PT.max, 1)).toBe(FONT_SIZE_PT.max);
   });
 });
 

@@ -45,7 +45,6 @@
   "selectionBar": {
     "label": "Selection properties",
     "count": "{count, plural, one {# object} other {# objects}}",
-    "remove": "Delete",
     "align": {
       "left": "Align left",
       "center": "Align centre",
@@ -70,8 +69,6 @@
       "page-number": "Slide number",
       "decoration": "Decoration"
     },
-    "size": "Size",
-    "color": "Colour",
     "type": {
       "title": "Title",
       "subtitle": "Subtitle",
@@ -116,10 +113,7 @@
     "openData": "Open data in design panel"
   },
   "formatBar": {
-    "label": "Text format",
-    "bold": "Bold",
-    "italic": "Italic",
-    "font": "Font"
+    "label": "Text format"
   },
   "toolRail": {
     "label": "Tools",
@@ -161,7 +155,8 @@
       "image": "Image",
       "shape": "Shapes",
       "data": "Data",
-      "ai": "Assistant"
+      "ai": "Assistant",
+      "shortcuts": "Keyboard shortcuts"
     },
     "variants": {
       "select": "Select",
@@ -329,6 +324,69 @@
       "italic": "Italic",
       "bold": "Bold",
       "boldItalic": "Bold Italic"
+    }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "description": "Ctrl and Cmd work alike. Shortcuts work in any keyboard layout.",
+    "search": "Find a command or key",
+    "empty": "Nothing found",
+    "close": "Close",
+    "or": "or",
+    "groups": {
+      "general": "General",
+      "slides": "Slides",
+      "objects": "Objects",
+      "text": "Text",
+      "view": "View",
+      "tools": "Tools"
+    },
+    "items": {
+      "shortcuts": "Keyboard shortcuts",
+      "undo": "Undo",
+      "redo": "Redo",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "slide-go": "Go to slide by number",
+      "slide-previous": "Previous slide",
+      "slide-next": "Next slide",
+      "slide-first": "First slide",
+      "slide-last": "Last slide",
+      "slide-new": "New slide",
+      "slide-duplicate": "Duplicate slide",
+      "select-all": "Select all",
+      "deselect": "Deselect",
+      "select-next": "Next object",
+      "select-previous": "Previous object",
+      "edit": "Edit text or table",
+      "duplicate": "Duplicate",
+      "remove": "Delete",
+      "nudge": "Nudge",
+      "nudge-large": "Nudge by a large step",
+      "bring-forward": "Bring forward",
+      "send-backward": "Send backward",
+      "bring-front": "Bring to front",
+      "send-back": "Send to back",
+      "lock": "Lock or unlock",
+      "flip-horizontal": "Flip horizontally",
+      "flip-vertical": "Flip vertically",
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "align-left": "Align left",
+      "align-center": "Align center",
+      "align-right": "Align right",
+      "align-justify": "Justify",
+      "size-up": "Larger font size",
+      "size-down": "Smaller font size",
+      "text-exit": "Stop editing text",
+      "zoom-in": "Zoom in",
+      "zoom-out": "Zoom out",
+      "zoom-actual": "Zoom to 100%",
+      "zoom-fit": "Fit slide",
+      "zoom-selection": "Zoom to selection",
+      "pan": "Pan the canvas (hold)"
     }
   }
 }

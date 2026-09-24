@@ -68,20 +68,15 @@ import { keepFocusOnPress, stopCanvasMenu } from '@/components/editor/chrome-foc
 import type { CanvasCommand } from '@/components/editor/editor-keymap';
 import { ColorField, NumberCombobox } from '@/components/editor/inspector/controls';
 import type { DesignPanelProps } from '@/components/editor/inspector/design-panel';
+import type { ShortcutId } from '@/components/editor/editor-shortcuts';
 import {
   alignToSlide,
   defaultStrokeColor,
-  flipEntries,
   lineEndEntries,
   strokeColorEntries,
 } from '@/components/editor/inspector/selection-model';
-import { leadSizePt, textLook, type TextElement } from '@/components/editor/inspector/text-model';
-import {
-  BAR_SHORTCUTS,
-  barArea,
-  barContext,
-  stepFontSize,
-} from '@/components/editor/selection-bar-model';
+import { textLook, type TextElement } from '@/components/editor/inspector/text-model';
+import { barArea, barContext } from '@/components/editor/selection-bar-model';
 import {
   distributeBoxes,
   placeSelectionBar,
@@ -105,11 +100,11 @@ const ALIGNMENTS: readonly { id: Alignment; icon: IconSvgElement }[] = [
   { id: 'bottom', icon: AlignBottomIcon },
 ];
 
-const LAYERS: readonly { id: ArrangeTarget; icon: IconSvgElement }[] = [
-  { id: 'front', icon: LayerBringToFrontIcon },
-  { id: 'forward', icon: LayerBringForwardIcon },
-  { id: 'backward', icon: LayerSendBackwardIcon },
-  { id: 'back', icon: LayerSendToBackIcon },
+const LAYERS: readonly { id: ArrangeTarget; icon: IconSvgElement; shortcut: ShortcutId }[] = [
+  { id: 'front', icon: LayerBringToFrontIcon, shortcut: 'bring-front' },
+  { id: 'forward', icon: LayerBringForwardIcon, shortcut: 'bring-forward' },
+  { id: 'backward', icon: LayerSendBackwardIcon, shortcut: 'send-backward' },
+  { id: 'back', icon: LayerSendToBackIcon, shortcut: 'send-back' },
 ];
 
 const FITS: readonly { id: ImageFit; icon: IconSvgElement }[] = [
@@ -138,6 +133,7 @@ function paddingOf(node: HTMLElement | null) {
 function dockSideOf(node: HTMLElement): string | null {
   return node.closest('[data-dock-side]')?.getAttribute('data-dock-side') ?? null;
 }
+
 type Decor = Extract<SlideElement, { kind: 'decor' }>;
 
 /**
@@ -330,7 +326,10 @@ export function SelectionBar({
   );
 }
 
-/** Текстовый блок целиком: правки в журнал, та же проводка, что у панели «Дизайн». */
+/**
+ * Текстовый блок целиком: правки в журнал. B/I/U, «−»/«+» и выравнивание — те же команды,
+ * что у Ctrl+B/I/U, Ctrl+Shift+</> и Ctrl+Shift+L/E/R/J; остальное — проводка панели «Дизайн».
+ */
 function TextControls({
   element,
   designSystem,
@@ -346,17 +345,10 @@ function TextControls({
     live: true,
     setFont: (fontFamily) => actions.onProps(ids, { fontFamily }),
     setSize: (sizePt) => actions.onFontSizes([{ elementId: element.elementId, sizePt }]),
-    // Кегль внутри блока разный: шаг — от первого непустого run, как в панели.
-    stepSize: (direction) => {
-      const lead = leadSizePt(element, designSystem);
-      if (lead === null) return;
-      actions.onFontSizes([
-        { elementId: element.elementId, sizePt: stepFontSize(lead, direction) },
-      ]);
-    },
-    setFlag: (flag, on) => actions.onProps(ids, { [flag]: on }),
+    stepSize: (step) => actions.onCommand({ kind: 'text-size', step }),
+    toggleFlag: (flag) => actions.onCommand({ kind: 'text-flag', flag }),
     setColor: (color, hex, mode) => actions.onColorAll(ids, color, hex, mode),
-    setAlign: (align) => actions.onProps(ids, { align }),
+    setAlign: (align) => actions.onCommand({ kind: 'text-align', align }),
     setVerticalAlign: (verticalAlign) => actions.onProps(ids, { verticalAlign }),
     onPreviewEnd: actions.onPreviewEnd,
   };
@@ -577,14 +569,12 @@ function CommonControls({
   const t = useTranslations('selectionBar');
   const menu = useTranslations('canvasMenu');
   const panel = useTranslations('designPanel');
-  const ids = selected.map((element) => element.elementId);
   const locked = selected.every((element) => element.locked === true);
-  const decors = selected.filter((element): element is Decor => element.kind === 'decor');
-  const flippable = decors.length === selected.length;
+  const flippable = selected.every((element) => element.kind === 'decor');
   const run = (command: CanvasCommand) => () => actions.onCommand(command);
-  const shortcut = (keys: readonly string[]) => (
+  const shortcut = (id: ShortcutId) => (
     <DropdownMenuShortcut>
-      <ShortcutKeys keys={keys} />
+      <ShortcutKeys shortcut={id} />
     </DropdownMenuShortcut>
   );
 
@@ -593,31 +583,32 @@ function CommonControls({
       <BarButton
         icon={Copy01Icon}
         label={menu('duplicate')}
-        keys={BAR_SHORTCUTS.duplicate}
+        shortcut="duplicate"
         onClick={run({ kind: 'duplicate' })}
       />
       <BarMenu
         icon={Layers01Icon}
         label={t('layers')}
-        content={LAYERS.map(({ id, icon }) => (
+        content={LAYERS.map(({ id, icon, shortcut: keys }) => (
           <DropdownMenuItem key={id} onSelect={run({ kind: 'arrange', to: id })}>
             <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
             {menu(id)}
-            {shortcut(BAR_SHORTCUTS[id])}
+            {shortcut(keys)}
           </DropdownMenuItem>
         ))}
       />
       <BarButton
         icon={locked ? LockIcon : LockOpenIcon}
         label={locked ? panel('unlock') : panel('lock')}
-        keys={BAR_SHORTCUTS.lock}
+        shortcut="lock"
         pressed={locked}
-        onClick={() => actions.onProps(ids, { locked: !locked })}
+        // Как Alt+Shift+L: заблокированное не выделяется, и выделение снимается.
+        onClick={run({ kind: 'lock' })}
       />
       <BarButton
         icon={Delete02Icon}
         label={menu('remove')}
-        keys={BAR_SHORTCUTS.remove}
+        shortcut="remove"
         tone="danger"
         onClick={run({ kind: 'remove' })}
       />
@@ -629,15 +620,15 @@ function CommonControls({
           <>
             <DropdownMenuItem onSelect={run({ kind: 'copy' })}>
               {menu('copy')}
-              {shortcut(BAR_SHORTCUTS.copy)}
+              {shortcut('copy')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={run({ kind: 'cut' })}>
               {menu('cut')}
-              {shortcut(BAR_SHORTCUTS.cut)}
+              {shortcut('cut')}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={!actions.canPaste} onSelect={run({ kind: 'paste' })}>
               {menu('paste')}
-              {shortcut(BAR_SHORTCUTS.paste)}
+              {shortcut('paste')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
@@ -659,19 +650,15 @@ function CommonControls({
             </DropdownMenuSub>
             {flippable ? (
               <>
-                <DropdownMenuItem
-                  onSelect={() => actions.onPropsEach(flipEntries(decors, 'flipH'))}
-                >
+                <DropdownMenuItem onSelect={run({ kind: 'flip', axis: 'horizontal' })}>
                   <HugeiconsIcon icon={FlipHorizontalIcon} strokeWidth={1.5} color="currentColor" />
                   {panel('flipH')}
-                  {shortcut(BAR_SHORTCUTS.flipH)}
+                  {shortcut('flip-horizontal')}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => actions.onPropsEach(flipEntries(decors, 'flipV'))}
-                >
+                <DropdownMenuItem onSelect={run({ kind: 'flip', axis: 'vertical' })}>
                   <HugeiconsIcon icon={FlipVerticalIcon} strokeWidth={1.5} color="currentColor" />
                   {panel('flipV')}
-                  {shortcut(BAR_SHORTCUTS.flipV)}
+                  {shortcut('flip-vertical')}
                 </DropdownMenuItem>
               </>
             ) : null}

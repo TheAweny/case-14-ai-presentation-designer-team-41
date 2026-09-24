@@ -20,15 +20,12 @@ import { FitSlide, ZoomBasis, ZoomHud } from '@/components/editor/canvas-zoom';
 import { zoomScaleFor } from '@/components/editor/zoom-input';
 import {
   CanvasViewContext,
-  clampCanvasScale,
-  clampPosition,
-  KEY_ZOOM_FACTOR,
   MAX_CANVAS_SCALE,
   MIN_CANVAS_SCALE,
   transformToFit,
-  wheelZoomFactor,
   type CanvasView,
 } from '@/components/editor/canvas-viewport';
+import { useCanvasNavigation, zoomCanvasAt } from '@/components/editor/use-canvas-navigation';
 import {
   createImageElement,
   createInsertedElements,
@@ -58,11 +55,26 @@ import { carriesFiles, imageFilesOf, pickImageFiles, registerImage } from '@/lib
 /** Здесь стрелки — свои клавиши виджета, а не сдвиг объекта. */
 const ARROW_OWNERS =
   '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="toolbar"]';
+/** Отсюда протяжка вставки не начинается: это интерфейс поверх холста, а не поле. */
+const INSERT_SKIPS = `[data-text-editor], [data-selection-bar], [data-text-format], [data-dock-obstacle], button, [role="menu"], ${EDITOR_CHROME}`;
 /** Клик сюда не закрывает набор: это само поле, его полоса и кнопки поверх холста. */
 const KEEPS_EDITING = `[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"], ${EDITOR_CHROME}`;
 
-function isFormField(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest('input, textarea, select') !== null;
+/**
+ * Поле вокруг слайда приглушено: вынесенное за край видно, но читается как «не на слайде».
+ * Тень-подложка выходит за слайд на весь холст даже при самом мелком зуме.
+ */
+const PASTEBOARD_VEIL = `0 0 0 1px var(--border), 0 0 0 ${Math.ceil(100 / MIN_CANVAS_SCALE)}vmax color-mix(in oklab, var(--background) 62%, transparent)`;
+
+/**
+ * Что редактор может попросить у холста с клавиатуры: Enter открывает набор (как двойной
+ * клик), переход между слайдами возвращает фокус на холст.
+ */
+export interface CanvasControl {
+  /** Открыть набор текста или правку таблицы у объекта. `false` — у объекта такого нет. */
+  startEditing(elementId: string): boolean;
+  /** Фокус на холст: клавиши снова у слайда, а не у кнопки или списка. */
+  focus(): void;
 }
 
 /**
@@ -98,6 +110,7 @@ export function SlideCanvas({
   hasLocked,
   onTableCell,
   onRotate,
+  controlRef,
   selectionActions,
   className,
 }: {
@@ -131,6 +144,8 @@ export function SlideCanvas({
   onTableCell: (elementId: string, cell: TableCell, text: string) => void;
   /** Угол объекта после поворота ручкой. */
   onRotate: (elementId: string, rotation: number) => void;
+  /** Сюда холст кладёт то, что умеет по просьбе клавиатуры: см. `CanvasControl`. */
+  controlRef?: { current: CanvasControl | null };
   /** Правки полосы свойств над выделением. */
   selectionActions: SelectionBarActions;
   className?: string;
@@ -150,7 +165,6 @@ export function SlideCanvas({
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const finishEditing = useRef<(() => void) | null>(null);
   const [gesture, setGesture] = useState(false);
-  const [spacePan, setSpacePan] = useState(false);
   const [fitWidth, setFitWidth] = useState(0);
   const [draft, setDraft] = useState<{
     x: number;
@@ -158,13 +172,13 @@ export function SlideCanvas({
     width: number;
     height: number;
   } | null>(null);
-  const pan = tool === 'hand' || spacePan;
   const inserting = isInsertTool(tool);
+  // Точка, куда встанет каретка. Без точки (вход с клавиатуры) выделяется весь текст.
   const [session, setSession] = useState<{
     slideId: string;
     elementId: string;
-    x: number;
-    y: number;
+    x: number | null;
+    y: number | null;
   } | null>(null);
   const aligned = useMemo(
     () => gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy),
@@ -217,6 +231,8 @@ export function SlideCanvas({
   useEffect(() => {
     if (!area || (!session && !tableSession)) return;
     const onDown = (event: PointerEvent) => {
+      // Средняя кнопка тащит холст: набор при этом не закрывается.
+      if (event.button === 1) return;
       const target = event.target;
       if (target instanceof Element && target.closest(KEEPS_EDITING)) return;
       finishEditing.current?.();
@@ -286,8 +302,9 @@ export function SlideCanvas({
           cy: 0,
         };
       }
-      const fx = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-      const fy = Math.min(Math.max((clientY - rect.top) / rect.height, 0), 1);
+      // Брошенное на поле вокруг слайда ложится там же, за краем: это место для композиции.
+      const fx = (clientX - rect.left) / rect.width;
+      const fy = (clientY - rect.top) / rect.height;
       return {
         x: Math.round(fx * current.slideCx),
         y: Math.round(fy * current.slideCy),
@@ -354,7 +371,8 @@ export function SlideCanvas({
     };
     const zoomAtCenter = (scale: number) => {
       const point = center();
-      if (point) void api()?.zoomToPoint(clampCanvasScale(scale), point.x, point.y, 0);
+      const controls = api();
+      if (point && controls) zoomCanvasAt(controls, point.x, point.y, scale);
     };
     const zoomToFit = () => void api()?.centerView(1, 0);
     return {
@@ -389,45 +407,21 @@ export function SlideCanvas({
           controls.instance.state,
         );
         if (!next) return;
-        void controls.setTransform(
-          clampPosition(next.positionX, box.width, next.scale),
-          clampPosition(next.positionY, box.height, next.scale),
-          next.scale,
-          0,
-        );
+        void controls.setTransform(next.positionX, next.positionY, next.scale, 0);
       },
     };
   }, [actualScale, slideRoot]);
 
-  // Пробел временно включает руку, как у инструментов выбора. В поле ввода и на кнопках он
-  // остаётся прежним: пробел в списке слайдов поднимает миниатюру для перестановки.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space') return;
-      if (isTypingTarget(event.target)) return;
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest('button, a, [role="listbox"], [role="toolbar"], [role="menu"]')
-      ) {
-        return;
-      }
-      event.preventDefault();
-      if (!event.repeat) setSpacePan(true);
-    };
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space') setSpacePan(false);
-    };
-    const clear = () => setSpacePan(false);
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', clear);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', clear);
-    };
-  }, []);
+  const handTool = tool === 'hand';
+  // Пан (средняя кнопка, рука, пробел), колесо и клавиши зума.
+  const { spacePan, panning } = useCanvasNavigation({
+    area,
+    slideRoot,
+    transformRef,
+    handTool,
+    view,
+  });
+  const pan = handTool || spacePan;
 
   // Стрелка сдвигает выделенное ровно в свою сторону: шаг — baseline сетки, с Shift — крупный.
   // Слушатель стоит на погружении: он раньше общих клавиш редактора, и `preventDefault`
@@ -455,51 +449,9 @@ export function SlideCanvas({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, []);
 
-  // Клавиши зума: Ctrl/Cmd+= и − по шагу, Ctrl/Cmd+0 — 100 %, Shift+1 — вписать,
-  // Shift+2 — к выделению. Ctrl-зум работает и во время набора: браузерный зум страницы тут лишний.
+  // Протяжка вставки начинается и на поле вокруг слайда: объект можно положить за край.
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.altKey) return;
-      if (event.metaKey || event.ctrlKey) {
-        if (isFormField(event.target)) return;
-        if (event.code === 'Equal' || event.code === 'NumpadAdd') view.zoomBy(KEY_ZOOM_FACTOR);
-        else if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
-          view.zoomBy(1 / KEY_ZOOM_FACTOR);
-        } else if (event.code === 'Digit0' || event.code === 'Numpad0') view.zoomToActual();
-        else return;
-        event.preventDefault();
-        return;
-      }
-      if (!event.shiftKey || isTypingTarget(event.target)) return;
-      if (event.code === 'Digit1') view.zoomToFit();
-      else if (event.code === 'Digit2') view.zoomToSelection();
-      else return;
-      event.preventDefault();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [view]);
-
-  // Ctrl/Cmd+колесо и щипок тачпада — плавный зум к курсору. Без модификатора колесо и два
-  // пальца двигают увеличенный лист: это делает сама библиотека (trackPadPanning).
-  useEffect(() => {
-    if (!area) return;
-    const onWheel = (event: WheelEvent) => {
-      if (!(event.ctrlKey || event.metaKey)) return;
-      const controls = transformRef.current;
-      if (!controls) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const scale = controls.instance.state.scale;
-      const next = clampCanvasScale(scale * wheelZoomFactor(event.deltaY, event.deltaMode));
-      if (next !== scale) void controls.zoomToPoint(next, event.clientX, event.clientY, 0);
-    };
-    area.addEventListener('wheel', onWheel, { passive: false, capture: true });
-    return () => area.removeEventListener('wheel', onWheel, { capture: true });
-  }, [area]);
-
-  useEffect(() => {
-    if (!host || pan || !isInsertTool(tool)) return;
+    if (!host || !area || pan || !isInsertTool(tool)) return;
     const active: InsertTool = tool;
     let start: { x: number; y: number } | null = null;
     let box: { x: number; y: number; width: number; height: number } | null = null;
@@ -518,17 +470,11 @@ export function SlideCanvas({
     const onDown = (event: PointerEvent) => {
       if (event.button !== 0 || event.detail >= 2) return;
       const target = event.target;
-      if (!(target instanceof Element) || !host.contains(target)) return;
-      if (
-        target.closest(
-          `[data-text-editor], [data-selection-bar], [data-text-format], ${EDITOR_CHROME}`,
-        )
-      ) {
-        return;
-      }
+      if (!(target instanceof Element) || !area.contains(target)) return;
+      if (target.closest(INSERT_SKIPS)) return;
       event.preventDefault();
       pointer = event.pointerId;
-      host.setPointerCapture(pointer);
+      area.setPointerCapture(pointer);
       start = toLayout(event);
       box = { x: start.x, y: start.y, width: 0, height: 0 };
       setDraft(box);
@@ -555,7 +501,7 @@ export function SlideCanvas({
       start = null;
       box = null;
       setDraft(null);
-      if (host.hasPointerCapture(event.pointerId)) host.releasePointerCapture(event.pointerId);
+      if (area.hasPointerCapture(event.pointerId)) area.releasePointerCapture(event.pointerId);
       const rect = host.getBoundingClientRect();
       const scaleX = rect.width / (host.offsetWidth || 1);
       const scaleY = rect.height / (host.offsetHeight || 1);
@@ -603,17 +549,17 @@ export function SlideCanvas({
       box = null;
       setDraft(null);
     };
-    host.addEventListener('pointerdown', onDown);
-    host.addEventListener('pointermove', onMove);
-    host.addEventListener('pointerup', finish);
-    host.addEventListener('pointercancel', cancel);
+    area.addEventListener('pointerdown', onDown);
+    area.addEventListener('pointermove', onMove);
+    area.addEventListener('pointerup', finish);
+    area.addEventListener('pointercancel', cancel);
     return () => {
-      host.removeEventListener('pointerdown', onDown);
-      host.removeEventListener('pointermove', onMove);
-      host.removeEventListener('pointerup', finish);
-      host.removeEventListener('pointercancel', cancel);
+      area.removeEventListener('pointerdown', onDown);
+      area.removeEventListener('pointermove', onMove);
+      area.removeEventListener('pointerup', finish);
+      area.removeEventListener('pointercancel', cancel);
     };
-  }, [aligned, designSystem, host, insertImages, onInsert, onSelect, pan, slide, tool]);
+  }, [aligned, area, designSystem, host, insertImages, onInsert, onSelect, pan, slide, tool]);
 
   useEffect(() => {
     if (!host) return;
@@ -656,6 +602,49 @@ export function SlideCanvas({
     return () => host.removeEventListener('dblclick', onDoubleClick);
   }, [host, onSelect, replaceImage, slide, tool]);
 
+  // Двойной клик по пустому полю вокруг слайда возвращает слайд в кадр.
+  useEffect(() => {
+    if (!area || !slideRoot) return;
+    const onDoubleClick = (event: MouseEvent) => {
+      if (event.button !== 0 || isInsertTool(tool)) return;
+      const target = event.target;
+      if (!(target instanceof Element) || slideRoot.contains(target)) return;
+      if (target.closest(INSERT_SKIPS)) return;
+      event.preventDefault();
+      view.zoomToFit();
+    };
+    area.addEventListener('dblclick', onDoubleClick);
+    return () => area.removeEventListener('dblclick', onDoubleClick);
+  }, [area, slideRoot, tool, view]);
+
+  // Enter на выделенном объекте — тот же вход, что и двойной клик: текст открывает набор,
+  // таблица — правку ячеек с первой.
+  useEffect(() => {
+    if (!controlRef) return;
+    const control: CanvasControl = {
+      startEditing: (elementId) => {
+        const element = slide.elements.find((item) => item.elementId === elementId);
+        if (!element || element.locked) return false;
+        if (element.kind === 'text') {
+          onSelect([]);
+          setSession({ slideId: slide.slideId, elementId, x: null, y: null });
+          return true;
+        }
+        if (element.kind === 'table') {
+          onSelect([elementId]);
+          setTableSession({ slideId: slide.slideId, elementId, focus: { row: 0, column: 0 } });
+          return true;
+        }
+        return false;
+      },
+      focus: () => area?.focus({ preventScroll: true }),
+    };
+    controlRef.current = control;
+    return () => {
+      if (controlRef.current === control) controlRef.current = null;
+    };
+  }, [area, controlRef, onSelect, slide]);
+
   const selectUnderPointer = (event: ReactMouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element) || !slideRoot?.contains(target)) {
@@ -677,21 +666,33 @@ export function SlideCanvas({
       <ContextMenuTrigger asChild disabled={session !== null || tableSession !== null || pan}>
         <div
           ref={rememberArea}
+          // Фокус сюда ставит переход между слайдами с клавиатуры; сам в порядок Tab не входит.
+          tabIndex={-1}
+          data-canvas-area=""
           onContextMenu={selectUnderPointer}
-          className={cn('relative size-full overflow-hidden [container-type:size]', className)}
+          className={cn(
+            'relative size-full overflow-hidden outline-none',
+            // Рука и пробел: курсор руки поверх всего, что на холсте, включая ручки.
+            panning
+              ? 'cursor-grabbing [&_*]:cursor-grabbing!'
+              : pan
+                ? 'cursor-grab touch-none [&_*]:cursor-grab!'
+                : inserting && 'cursor-crosshair touch-none',
+          )}
         >
           {/*
            * Лист уже вписан в область контейнером размеров. Библиотека масштабирует этот вписанный
-           * лист: единица — это «вписать». Ctrl+колесо и щипок увеличивают к курсору, колесо и два
-           * пальца двигают увеличенный лист, рука и пробел тащат его.
+           * лист: единица — это «вписать». Панорама, колесо и клавиши — в `useCanvasNavigation`:
+           * она же держит вид на поле вокруг слайда, поэтому границы библиотеки выключены.
+           * Отступы области — внутри трансформа: вынесенное за край слайда видно до самых краёв
+           * холста, а не обрезается рамкой отступов.
            */}
           <TransformWrapper
             ref={transformRef}
             minScale={MIN_CANVAS_SCALE}
             maxScale={MAX_CANVAS_SCALE}
             centerOnInit
-            centerZoomedOut
-            limitToBounds
+            limitToBounds={false}
             disablePadding
             doubleClick={{ disabled: true }}
             keyboard={{ disabled: true }}
@@ -699,21 +700,25 @@ export function SlideCanvas({
             velocityAnimation={{ disabled: true }}
             zoomAnimation={{ disabled: true }}
             wheel={{ disabled: true }}
-            trackPadPanning={{ disabled: false, velocityDisabled: true }}
-            panning={{ disabled: !pan, allowLeftClickPan: true, velocityDisabled: true }}
+            trackPadPanning={{ disabled: true }}
+            panning={{ disabled: true }}
           >
             <CanvasViewContext.Provider value={view}>
               <ZoomBasis slideWidthEmu={slide.slideCx}>
                 <TransformComponent
-                  wrapperClass={pan ? 'cursor-grab active:cursor-grabbing' : ''}
                   wrapperStyle={{ width: '100%', height: '100%' }}
                   contentStyle={{ width: '100%', height: '100%' }}
                 >
-                  <div className="grid size-full place-items-center">
+                  <div
+                    className={cn(
+                      'grid size-full place-items-center [container-type:size]',
+                      className,
+                    )}
+                  >
                     <div
                       ref={rememberHost}
                       style={{ width: `min(100cqw, 100cqh * ${slide.slideCx} / ${slide.slideCy})` }}
-                      className={cn('relative', inserting && 'cursor-crosshair touch-none')}
+                      className="relative"
                     >
                       <div ref={rememberSlide} data-canvas-slide="" data-slide-id={slide.slideId}>
                         <SlideView
@@ -721,9 +726,20 @@ export function SlideCanvas({
                           profile={designSystem}
                           label={label}
                           resolveMedia={resolveMedia}
-                          className="rounded-xl bg-card text-foreground shadow-sm ring-1 ring-border"
+                          showOutside
+                          className="bg-card text-foreground shadow-sm"
                         />
                       </div>
+                      {/*
+                       * Вуаль поля: приглушает всё, что вылезло за край, и рисует кромку слайда.
+                       * Углы прямые, как у слайда в показе: кромка — ровно граница кадра.
+                       */}
+                      <div
+                        aria-hidden
+                        data-pasteboard-veil=""
+                        className="pointer-events-none absolute inset-0 z-[1]"
+                        style={{ boxShadow: PASTEBOARD_VEIL }}
+                      />
                       {draft ? (
                         <div
                           aria-hidden
@@ -750,7 +766,7 @@ export function SlideCanvas({
                       grid={aligned}
                       selectedIds={selectedIds}
                       editingId={editingId ?? editingTable?.elementId ?? null}
-                      suspended={pan || inserting || editingTable !== undefined}
+                      suspended={handTool || inserting || editingTable !== undefined}
                       onSelect={onSelect}
                       onCommit={onCommit}
                       onRotate={onRotate}
@@ -764,8 +780,8 @@ export function SlideCanvas({
                       slide={slide}
                       designSystem={designSystem}
                       selectedIds={selectedIds}
-                      // Во время жеста и набора в таблице полоса только мешала бы.
-                      hidden={gesture || pan || editingTable !== undefined}
+                      // Во время жеста, пана и набора в таблице полоса только мешала бы.
+                      hidden={gesture || panning || handTool || editingTable !== undefined}
                       actions={selectionActions}
                       onEditTable={(elementId) =>
                         setTableSession({
@@ -783,7 +799,11 @@ export function SlideCanvas({
                     element={editing}
                     profile={designSystem}
                     slide={{ cx: slide.slideCx, cy: slide.slideCy }}
-                    origin={{ x: session.x, y: session.y }}
+                    origin={
+                      session.x === null || session.y === null
+                        ? null
+                        : { x: session.x, y: session.y }
+                    }
                     finishRef={finishEditing}
                     onCommit={(paragraphs) => {
                       committedText.current = paragraphs;

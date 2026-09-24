@@ -1,15 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useEffectEvent } from 'react';
+import { useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { SlideIr } from '@lct/contracts';
-import {
-  SLIDE_PARAM,
-  isTypingTarget,
-  pageKeyStep,
-  slideIndexFromParam,
-  stepSlide,
-} from '@/components/editor/slide-navigation';
+import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navigation';
 
 /**
  * Открытый слайд колоды. Он живёт в адресе (`?slide=<slideId>`), а не в состоянии: ссылка
@@ -19,7 +13,8 @@ import {
  * страницы, а не проходить по всем слайдам. Next подхватывает вызов сам и обновляет
  * `useSearchParams` без запроса к серверу. Поэтому хук требует границу Suspense выше.
  *
- * PageUp/PageDown листают колоду из любого места редактора, кроме полей ввода.
+ * Клавиши листания (PageUp/PageDown, Ctrl+1…9, Home/End) слушает редактор по общему реестру
+ * сочетаний, см. `editor-keymap.ts`.
  */
 export function useSlideSelection(slides: readonly SlideIr[]) {
   const searchParams = useSearchParams();
@@ -43,22 +38,6 @@ export function useSlideSelection(slides: readonly SlideIr[]) {
     },
     [selectById, slides],
   );
-
-  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    // Клавишу уже забрал кто-то ближе к фокусу: меню, список, поле.
-    if (event.defaultPrevented || event.isComposing) return;
-    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-    const step = pageKeyStep(event.key);
-    if (step === null || isTypingTarget(event.target)) return;
-    event.preventDefault();
-    select(stepSlide(index, step, slides.length));
-  });
-
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => onKeyDown(event);
-    window.addEventListener('keydown', listener);
-    return () => window.removeEventListener('keydown', listener);
-  }, []);
 
   return { index, select, selectById };
 }

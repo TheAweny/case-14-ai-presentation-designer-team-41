@@ -29,6 +29,8 @@ import {
   textExtensions,
 } from '@/components/editor/text-document';
 import { TextFormatBar } from '@/components/editor/text-format';
+import { editorCommand } from '@/components/editor/editor-keymap';
+import { runTextCommand, sizeLadder, type InheritedText } from '@/components/editor/text-shortcuts';
 
 type TextElement = Extract<SlideElement, { kind: 'text' }>;
 
@@ -100,7 +102,8 @@ function placeCaret(editor: Editor, origin: { readonly x: number; readonly y: nu
       const coords = editor.view.posAtCoords({ left: origin.x, top: origin.y });
       if (coords) editor.commands.setTextSelection(coords.pos);
     } else {
-      editor.commands.setTextSelection(editor.state.doc.content.size);
+      // Вход с клавиатуры (Enter), как в Figma и PowerPoint: выделен весь текст.
+      editor.commands.selectAll();
     }
     editor.commands.focus(null, { scrollIntoView: false });
   } catch {
@@ -164,6 +167,12 @@ export function TextEditor({
   const epoch = useRef(0);
   onCommitRef.current = onCommit;
   onCloseRef.current = onClose;
+  // Клавиши набора читают текущий стиль роли и шкалу, не пересоздавая редактор.
+  const keys = useRef<{ inherited: InheritedText; ladder: readonly number[] }>({
+    inherited: look,
+    ladder: [],
+  });
+  keys.current = { inherited: look, ladder: sizeLadder(profile) };
 
   const finishNow = useRef<() => void>(() => undefined);
   finishNow.current = () => {
@@ -186,10 +195,22 @@ export function TextEditor({
         'aria-label': t('editText'),
         'aria-multiline': 'true',
       },
+      // Сочетания из общего реестра: Esc выходит из набора в выделение объекта, Ctrl+B/I/U,
+      // выравнивание и кегль правят фрагмент. Остальное — Tiptap и браузеру.
       handleKeyDown: (_view, event) => {
-        if (event.key !== 'Escape' || event.isComposing) return false;
+        if (event.isComposing) return false;
+        const command = editorCommand(event, 'text');
+        if (!command) return false;
+        if (command.kind === 'text-exit') {
+          event.preventDefault();
+          finishNow.current();
+          return true;
+        }
+        const current = editorRef.current;
+        if (!current) return false;
+        const { inherited, ladder } = keys.current;
+        if (!runTextCommand(current, command, inherited, ladder)) return false;
         event.preventDefault();
-        finishNow.current();
         return true;
       },
       handlePaste: (view, event) => pasteAsPlainText(view, event),
@@ -272,7 +293,9 @@ export function TextEditor({
     <>
       <style>{EDITOR_CSS}</style>
       <style>{hiddenSourceCss(element.elementId)}</style>
-      {editor ? <TextFormatBar editor={editor} element={element} profile={profile} /> : null}
+      {editor ? (
+        <TextFormatBar editor={editor} element={element} profile={profile} inherited={look} />
+      ) : null}
       <EditorContent
         editor={editor}
         data-text-editor=""

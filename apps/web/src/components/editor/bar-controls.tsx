@@ -23,7 +23,13 @@ import { Kbd } from '@/components/ui/kbd';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMenuFocus } from '@/components/editor/chrome-focus';
-import { shortcutLabel } from '@/components/editor/editor-keymap';
+import {
+  ariaKeyShortcuts,
+  isMacPlatform,
+  shortcutKeys,
+  shortcutLabel,
+  type ShortcutId,
+} from '@/components/editor/editor-shortcuts';
 import { leavesField, rovingIndex } from '@/components/editor/selection-bar-model';
 import { cn } from '@/lib/utils';
 
@@ -41,16 +47,16 @@ const subscribeNothing = () => () => undefined;
 
 /** ⌘ на Mac, Ctrl на остальных. На сервере — Ctrl, после гидратации — как у человека. */
 function useMac(): boolean {
-  return useSyncExternalStore(
-    subscribeNothing,
-    () => /Mac|iPhone|iPad/.test(navigator.platform),
-    () => false,
-  );
+  return useSyncExternalStore(subscribeNothing, isMacPlatform, () => false);
 }
 
-/** Сочетание в подсказке: одна клавиша — одна плашка. */
-export function ShortcutKeys({ keys }: { keys: readonly string[] }) {
+/**
+ * Сочетание из общего реестра редактора — то же, что слушает клавиатура. Одна клавиша —
+ * одна плашка.
+ */
+export function ShortcutKeys({ shortcut }: { shortcut: ShortcutId }) {
   const mac = useMac();
+  const keys = shortcutKeys(shortcut);
   if (keys.length === 0) return null;
   return (
     <span className="flex gap-0.5">
@@ -64,11 +70,11 @@ export function ShortcutKeys({ keys }: { keys: readonly string[] }) {
 /** Подсказка с названием и сочетанием, в сторону от выделения. */
 export function BarTooltip({
   label,
-  keys,
+  shortcut,
   children,
 }: {
   label: string;
-  keys?: readonly string[];
+  shortcut?: ShortcutId;
   children: ReactNode;
 }) {
   const side = useContext(BarSideContext);
@@ -77,7 +83,7 @@ export function BarTooltip({
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side={side}>
         {label}
-        {keys ? <ShortcutKeys keys={keys} /> : null}
+        {shortcut ? <ShortcutKeys shortcut={shortcut} /> : null}
       </TooltipContent>
     </Tooltip>
   );
@@ -98,7 +104,7 @@ export const BAR_BUTTON_CLASS = cn(
 export function BarButton({
   icon,
   label,
-  keys,
+  shortcut,
   pressed,
   tone,
   className,
@@ -107,17 +113,18 @@ export function BarButton({
 }: Omit<ComponentProps<'button'>, 'children'> & {
   icon?: IconSvgElement;
   label: string;
-  keys?: readonly string[];
+  shortcut?: ShortcutId;
   /** Переключатель: `aria-pressed` и подсветка включённого. */
   pressed?: boolean;
   tone?: 'danger';
   children?: ReactNode;
 }) {
   return (
-    <BarTooltip label={label} keys={keys}>
+    <BarTooltip label={label} shortcut={shortcut}>
       <button
         type="button"
         aria-label={label}
+        aria-keyshortcuts={shortcut ? ariaKeyShortcuts(shortcut) : undefined}
         aria-pressed={pressed}
         {...rest}
         className={cn(
@@ -143,7 +150,7 @@ export function BarButton({
 export function BarMenu({
   icon,
   label,
-  keys,
+  shortcut,
   children,
   content,
   disabled,
@@ -151,7 +158,7 @@ export function BarMenu({
 }: {
   icon?: IconSvgElement;
   label: string;
-  keys?: readonly string[];
+  shortcut?: ShortcutId;
   /** Что нарисовать в кнопке рядом с иконкой. */
   children?: ReactNode;
   /** Пункты меню. */
@@ -164,7 +171,7 @@ export function BarMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled} {...focus.trigger}>
-        <BarButton icon={icon} label={label} keys={keys} aria-haspopup="menu">
+        <BarButton icon={icon} label={label} shortcut={shortcut} aria-haspopup="menu">
           {children}
           <HugeiconsIcon
             icon={ArrowDown01Icon}
@@ -192,17 +199,17 @@ export function BarMenu({
 /** Составной контрол (поле, пикер) под общей подсказкой полосы. */
 export function BarItem({
   label,
-  keys,
+  shortcut,
   className,
   children,
 }: {
   label: string;
-  keys?: readonly string[];
+  shortcut?: ShortcutId;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <BarTooltip label={label} keys={keys}>
+    <BarTooltip label={label} shortcut={shortcut}>
       <span className={cn('flex shrink-0 items-center', className)}>{children}</span>
     </BarTooltip>
   );

@@ -1,5 +1,4 @@
 import type { SlideElement } from '@lct/contracts';
-import { FONT_SIZE_PT } from '@lct/deck-ops';
 
 /**
  * Что показывает полоса над выделением. Один объект — свои свойства по виду, как контекстные
@@ -23,15 +22,6 @@ export function barContext(selected: readonly SlideElement[]): BarContext | null
     case 'chart':
       return 'chart';
   }
-}
-
-/**
- * Кегль после «−» или «+»: на целый пункт, как в Google Slides. Дробный кегль сначала встаёт
- * на ближайший целый в ту же сторону. Предел — тот же, что у правки кегля в журнале.
- */
-export function stepFontSize(sizePt: number, direction: 1 | -1): number {
-  const next = direction > 0 ? Math.floor(sizePt) + 1 : Math.ceil(sizePt) - 1;
-  return Math.min(Math.max(next, FONT_SIZE_PT.min), FONT_SIZE_PT.max);
 }
 
 /**
@@ -67,30 +57,6 @@ export function leavesField(
   if (key === 'ArrowRight') return caret.start === caret.length;
   return false;
 }
-
-/**
- * Сочетания в подсказках полосы. `Mod` — Ctrl, на Mac — ⌘. Те же сочетания, что у клавиатуры
- * редактора и меню холста.
- */
-export const BAR_SHORTCUTS = {
-  bold: ['Mod', 'B'],
-  italic: ['Mod', 'I'],
-  underline: ['Mod', 'U'],
-  duplicate: ['Mod', 'D'],
-  front: ['Mod', 'Shift', ']'],
-  forward: ['Mod', ']'],
-  backward: ['Mod', '['],
-  back: ['Mod', 'Shift', '['],
-  lock: ['Mod', 'Shift', 'L'],
-  remove: ['Del'],
-  flipH: ['Mod', 'Shift', 'H'],
-  flipV: ['Mod', 'Shift', 'V'],
-  copy: ['Mod', 'C'],
-  cut: ['Mod', 'X'],
-  paste: ['Mod', 'V'],
-} as const satisfies Record<string, readonly string[]>;
-
-export type BarShortcut = keyof typeof BAR_SHORTCUTS;
 
 interface Insets {
   readonly top: number;

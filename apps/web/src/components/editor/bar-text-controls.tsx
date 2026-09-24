@@ -31,20 +31,28 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
 } from '@/components/ui/dropdown-menu';
 import { ColorField, FontPicker, NumberCombobox } from '@/components/editor/inspector/controls';
 import { colorHex } from '@/components/editor/inspector/fields/color';
 import { templateFonts, typeSteps, type TextLook } from '@/components/editor/inspector/text-model';
 import type { EditMode } from '@/components/editor/use-deck-history';
-import { BAR_SHORTCUTS, stepFontSize } from '@/components/editor/selection-bar-model';
-import { BarButton, BarItem, BarMenu, BarSideContext } from '@/components/editor/bar-controls';
+import type { TextFlag } from '@/components/editor/editor-keymap';
+import type { ShortcutId } from '@/components/editor/editor-shortcuts';
+import {
+  BarButton,
+  BarItem,
+  BarMenu,
+  BarSideContext,
+  ShortcutKeys,
+} from '@/components/editor/bar-controls';
 
 const TEXT_ALIGNS = [
-  { value: 'left', icon: TextAlignLeftIcon },
-  { value: 'center', icon: TextAlignCenterIcon },
-  { value: 'right', icon: TextAlignRightIcon },
-  { value: 'justify', icon: TextAlignJustifyLeftIcon },
-] as const satisfies readonly { value: ParagraphAlign; icon: unknown }[];
+  { value: 'left', icon: TextAlignLeftIcon, shortcut: 'align-left' },
+  { value: 'center', icon: TextAlignCenterIcon, shortcut: 'align-center' },
+  { value: 'right', icon: TextAlignRightIcon, shortcut: 'align-right' },
+  { value: 'justify', icon: TextAlignJustifyLeftIcon, shortcut: 'align-justify' },
+] as const satisfies readonly { value: ParagraphAlign; icon: unknown; shortcut: ShortcutId }[];
 
 const VERTICAL_ALIGNS = [
   { value: 'top', icon: AlignTopIcon },
@@ -62,9 +70,10 @@ export interface TextBarActions {
   readonly live: boolean;
   setFont(family: string | null): void;
   setSize(sizePt: number): void;
-  /** «−» и «+» при разных кеглях: каждому от своего. Без неё кнопки при разных неактивны. */
-  stepSize?(direction: 1 | -1): void;
-  setFlag(flag: 'bold' | 'italic' | 'underline', on: boolean): void;
+  /** «−» и «+» — ступень шкалы шаблона, как Ctrl+Shift+< и Ctrl+Shift+>. */
+  stepSize(step: -1 | 1): void;
+  /** Как Ctrl+B/I/U: всё уже с флагом — снять, иначе поставить; начертание роли учтено. */
+  toggleFlag(flag: TextFlag): void;
   setColor(color: ColorValue, hex: string, mode: EditMode): void;
   setAlign(align: ParagraphAlign): void;
   /** Вертикальная привязка — свойство рамки. В наборе её нет. */
@@ -90,14 +99,7 @@ export function TextBarControls({
   const side = useContext(BarSideContext);
   const { look } = actions;
   const mixed = panel('mixed');
-  const step = (direction: 1 | -1) => {
-    if (look.sizePt !== null) actions.setSize(stepFontSize(look.sizePt, direction));
-    else actions.stepSize?.(direction);
-  };
-  const canStep = look.sizePt !== null || actions.stepSize !== undefined;
   const align = TEXT_ALIGNS.find((option) => option.value === look.align) ?? TEXT_ALIGNS[0];
-  const flag = (name: 'bold' | 'italic' | 'underline', on: boolean | null) =>
-    actions.setFlag(name, on !== true);
 
   return (
     <>
@@ -115,8 +117,9 @@ export function TextBarControls({
         <BarButton
           icon={MinusSignIcon}
           label={t('smaller')}
-          disabled={!canStep || look.sizePt === FONT_SIZE_PT.min}
-          onClick={() => step(-1)}
+          shortcut="size-down"
+          disabled={look.sizePt === FONT_SIZE_PT.min}
+          onClick={() => actions.stepSize(-1)}
           className="min-w-6 px-0.5"
         />
         <BarItem label={panel('fontSize')} className="w-[4.75rem]">
@@ -139,31 +142,32 @@ export function TextBarControls({
         <BarButton
           icon={PlusSignIcon}
           label={t('larger')}
-          disabled={!canStep || look.sizePt === FONT_SIZE_PT.max}
-          onClick={() => step(1)}
+          shortcut="size-up"
+          disabled={look.sizePt === FONT_SIZE_PT.max}
+          onClick={() => actions.stepSize(1)}
           className="min-w-6 px-0.5"
         />
       </div>
       <BarButton
         icon={TextBoldIcon}
         label={t('bold')}
-        keys={BAR_SHORTCUTS.bold}
+        shortcut="bold"
         pressed={look.bold === true}
-        onClick={() => flag('bold', look.bold)}
+        onClick={() => actions.toggleFlag('bold')}
       />
       <BarButton
         icon={TextItalicIcon}
         label={t('italic')}
-        keys={BAR_SHORTCUTS.italic}
+        shortcut="italic"
         pressed={look.italic === true}
-        onClick={() => flag('italic', look.italic)}
+        onClick={() => actions.toggleFlag('italic')}
       />
       <BarButton
         icon={TextUnderlineIcon}
         label={panel('underline')}
-        keys={BAR_SHORTCUTS.underline}
+        shortcut="underline"
         pressed={look.underline}
-        onClick={() => flag('underline', look.underline)}
+        onClick={() => actions.toggleFlag('underline')}
       />
       <BarItem label={panel('textColor')}>
         <ColorField
@@ -208,6 +212,9 @@ export function TextBarControls({
                 <DropdownMenuRadioItem key={option.value} value={option.value}>
                   <HugeiconsIcon icon={option.icon} strokeWidth={1.5} color="currentColor" />
                   {panel(`textAligns.${option.value}`)}
+                  <DropdownMenuShortcut>
+                    <ShortcutKeys shortcut={option.shortcut} />
+                  </DropdownMenuShortcut>
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>

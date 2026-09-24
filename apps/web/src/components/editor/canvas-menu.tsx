@@ -7,7 +7,8 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
 } from '@/components/ui/context-menu';
-import { shortcutLabel, type CanvasCommand } from '@/components/editor/editor-keymap';
+import type { CanvasCommand } from '@/components/editor/editor-keymap';
+import { shortcutKeys, shortcutLabel } from '@/components/editor/editor-shortcuts';
 
 type MenuId =
   | 'cut'
@@ -32,46 +33,51 @@ type Entry = {
 
 const GROUPS: readonly (readonly Entry[])[] = [
   [
-    { id: 'cut', command: { kind: 'cut' }, keys: ['Mod', 'X'], needsSelection: true },
-    { id: 'copy', command: { kind: 'copy' }, keys: ['Mod', 'C'], needsSelection: true },
-    { id: 'paste', command: { kind: 'paste' }, keys: ['Mod', 'V'] },
-    { id: 'duplicate', command: { kind: 'duplicate' }, keys: ['Mod', 'D'], needsSelection: true },
+    { id: 'cut', command: { kind: 'cut' }, keys: shortcutKeys('cut'), needsSelection: true },
+    { id: 'copy', command: { kind: 'copy' }, keys: shortcutKeys('copy'), needsSelection: true },
+    { id: 'paste', command: { kind: 'paste' }, keys: shortcutKeys('paste') },
+    {
+      id: 'duplicate',
+      command: { kind: 'duplicate' },
+      keys: shortcutKeys('duplicate'),
+      needsSelection: true,
+    },
   ],
   [
     {
       id: 'front',
       command: { kind: 'arrange', to: 'front' },
-      keys: ['Mod', 'Shift', ']'],
+      keys: shortcutKeys('bring-front'),
       needsSelection: true,
     },
     {
       id: 'forward',
       command: { kind: 'arrange', to: 'forward' },
-      keys: ['Mod', ']'],
+      keys: shortcutKeys('bring-forward'),
       needsSelection: true,
     },
     {
       id: 'backward',
       command: { kind: 'arrange', to: 'backward' },
-      keys: ['Mod', '['],
+      keys: shortcutKeys('send-backward'),
       needsSelection: true,
     },
     {
       id: 'back',
       command: { kind: 'arrange', to: 'back' },
-      keys: ['Mod', 'Shift', '['],
+      keys: shortcutKeys('send-back'),
       needsSelection: true,
     },
   ],
   [
-    { id: 'selectAll', command: { kind: 'select-all' }, keys: ['Mod', 'A'] },
+    { id: 'selectAll', command: { kind: 'select-all' }, keys: shortcutKeys('select-all') },
     { id: 'unlockAll', command: { kind: 'unlock-all' }, keys: [] },
   ],
   [
     {
       id: 'remove',
       command: { kind: 'remove' },
-      keys: ['Del'],
+      keys: shortcutKeys('remove'),
       needsSelection: true,
       destructive: true,
     },

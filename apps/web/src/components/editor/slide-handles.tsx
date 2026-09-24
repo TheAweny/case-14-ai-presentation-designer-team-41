@@ -351,25 +351,12 @@ export function SlideHandles({
     setHoverRect((previous) => (sameRect(previous, next) ? previous : next));
   }, [hovered, overlay, slideRoot, slide, view]);
 
+  // Края слайда, поля и колонки — направляющие, а не стены: объект можно вынести за край, как
+  // на монтажный стол в Figma или Keynote. Что за краем, в показ и экспорт не попадает.
   const guides = view
     ? gridGuidelines(grid, view, { x: view.x, y: view.y })
     : { vertical: [], horizontal: [] };
   const byId = new Map(slide.elements.map((element) => [element.elementId, element]));
-  // Слайд — граница, поля — только направляющие. Объект, уже вылезший за край, не заталкиваем.
-  const onSlide = selectedIds.every((id) => {
-    const box = byId.get(id)?.box;
-    return (
-      !box ||
-      (box.x >= 0 &&
-        box.y >= 0 &&
-        box.x + box.cx <= slide.slideCx &&
-        box.y + box.cy <= slide.slideCy)
-    );
-  });
-  const bounds =
-    view && onSlide
-      ? { left: view.x, top: view.y, right: view.x + view.width, bottom: view.y + view.height }
-      : null;
 
   const remember = (nodes: readonly (HTMLElement | SVGElement)[]) => {
     for (const node of nodes) {
@@ -509,7 +496,6 @@ export function SlideHandles({
           elementGuidelines={neighbors}
           verticalGuidelines={guides.vertical}
           horizontalGuidelines={guides.horizontal}
-          bounds={bounds}
           onDragStart={(event) => {
             if (isDoubleOrShift(event.inputEvent)) {
               event.stopDrag();
