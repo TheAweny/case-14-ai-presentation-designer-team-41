@@ -1,11 +1,16 @@
 import type { Editor } from '@tiptap/core';
 import type { Mark } from '@tiptap/pm/model';
-import type { DesignSystem } from '@lct/contracts';
+import type { DesignSystem, ElementRole } from '@lct/contracts';
 import { FONT_SIZE_PT, type ElementProps } from '@lct/deck-ops';
 import { leadSizePt, textLook, typeSteps, type TextElement } from './inspector/text-model';
 import type { FontSizeEntry } from './use-deck-history';
-import { setParagraphAlign, setRangeSize, setRunFlag } from './active-text-editor';
-import type { EditorCommand, TextFlag } from './editor-keymap';
+import {
+  setParagraphAlign,
+  setRangeSize,
+  setRunFlag,
+  stepParagraphLevel,
+} from './active-text-editor';
+import type { EditorCommand, KeyLike, TextFlag } from './editor-keymap';
 import { sizeOf } from './text-document';
 
 /**
@@ -143,7 +148,30 @@ export function runTextCommand(
     case 'text-size':
       stepRangeSize(editor, inherited, ladder, command.step);
       return true;
+    case 'text-indent':
+      stepParagraphLevel(editor, command.step);
+      return true;
     default:
       return false;
   }
+}
+
+/**
+ * У каких текстов Tab меняет уровень: список и основной текст. Заголовку, подписи, цифре KPI
+ * уровни не нужны — там Tab просто не выходит из набора.
+ */
+export function canIndent(role: ElementRole): boolean {
+  return role === 'bullet-list' || role === 'body';
+}
+
+/**
+ * Символ, который клавиша напечатала бы: буква любой раскладки, цифра, знак. Null — клавиша не
+ * печатает (стрелки, F-клавиши, Dead и Process у IME), идёт с Ctrl, Cmd или Alt, или это пробел:
+ * пробел на холсте держит руку.
+ */
+export function typedText(event: KeyLike): string | null {
+  if (event.ctrlKey || event.metaKey || event.altKey) return null;
+  const { key } = event;
+  if ([...key].length !== 1 || /\s|\p{C}/u.test(key)) return null;
+  return key;
 }

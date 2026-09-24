@@ -36,6 +36,8 @@ export type EditorCommand =
   | { readonly kind: 'text-align'; readonly align: ParagraphAlign }
   | { readonly kind: 'text-size'; readonly step: -1 | 1 }
   | { readonly kind: 'text-exit' }
+  // Tab / Shift+Tab в наборе: уровень абзацев выделения.
+  | { readonly kind: 'text-indent'; readonly step: -1 | 1 }
   | { readonly kind: 'shortcuts' };
 
 export interface KeyLike {
@@ -132,6 +134,12 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
       return { kind: 'text-size', step: -1 };
     case 'text-exit':
       return { kind: 'text-exit' };
+    case 'indent':
+      return { kind: 'text-indent', step: 1 };
+    case 'outdent':
+      return { kind: 'text-indent', step: -1 };
+    case 'type-to-edit':
+      return null;
     case 'copy':
     case 'cut':
     case 'paste':
