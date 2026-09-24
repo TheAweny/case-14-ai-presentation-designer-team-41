@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampCanvasScale,
-  clampPosition,
+  clampToRegion,
   MAX_CANVAS_SCALE,
   MIN_CANVAS_SCALE,
+  pasteboardRegion,
   transformToFit,
+  wheelIntent,
   wheelZoomFactor,
+  zoomAtPoint,
 } from './canvas-viewport';
 import { zoomPercent, zoomScaleFor } from './zoom-input';
 
@@ -65,9 +68,111 @@ describe('canvas zoom', () => {
     ).toBeNull();
   });
 
-  it('keeps the sheet against the edges when it is larger and centred when it is smaller', () => {
-    expect(clampPosition(50, 800, 2)).toBe(0);
-    expect(clampPosition(-2000, 800, 2)).toBe(-800);
-    expect(clampPosition(-100, 800, 0.5)).toBe(200);
+  it('keeps the point under the cursor in place while zooming', () => {
+    const next = zoomAtPoint({ scale: 1, positionX: 10, positionY: 20 }, { x: 110, y: 70 }, 2);
+    expect(next.scale).toBe(2);
+    // Точка содержимого (100, 50) была под курсором и осталась там.
+    expect(next.positionX + 100 * 2).toBeCloseTo(110, 6);
+    expect(next.positionY + 50 * 2).toBeCloseTo(70, 6);
+    expect(zoomAtPoint({ scale: 1, positionX: 0, positionY: 0 }, { x: 0, y: 0 }, 99).scale).toBe(
+      MAX_CANVAS_SCALE,
+    );
+  });
+});
+
+describe('canvas wheel', () => {
+  it('zooms with Ctrl or Cmd and with a trackpad pinch', () => {
+    const zoom = wheelIntent({ deltaX: 0, deltaY: -100, ctrlKey: true });
+    expect(zoom.kind).toBe('zoom');
+    if (zoom.kind === 'zoom') expect(zoom.factor).toBeCloseTo(wheelZoomFactor(-100), 9);
+    expect(wheelIntent({ deltaX: 0, deltaY: 4, metaKey: true }).kind).toBe('zoom');
+  });
+
+  it('pans vertically with a plain wheel: scrolling down lifts the sheet', () => {
+    expect(wheelIntent({ deltaX: 0, deltaY: 100 })).toEqual({ kind: 'pan', dx: 0, dy: -100 });
+  });
+
+  it('pans horizontally with Shift, whichever axis the browser reported', () => {
+    expect(wheelIntent({ deltaX: 0, deltaY: 100, shiftKey: true })).toEqual({
+      kind: 'pan',
+      dx: -100,
+      dy: 0,
+    });
+    expect(wheelIntent({ deltaX: 100, deltaY: 0, shiftKey: true })).toEqual({
+      kind: 'pan',
+      dx: -100,
+      dy: 0,
+    });
+  });
+
+  it('follows two fingers on a trackpad on both axes', () => {
+    expect(wheelIntent({ deltaX: -12, deltaY: 30 })).toEqual({ kind: 'pan', dx: 12, dy: -30 });
+  });
+
+  it('turns lines and pages into pixels', () => {
+    expect(wheelIntent({ deltaX: 0, deltaY: 3, deltaMode: 1 })).toEqual({
+      kind: 'pan',
+      dx: 0,
+      dy: -48,
+    });
+    const page = wheelIntent({ deltaX: 0, deltaY: 1, deltaMode: 2 });
+    expect(page.kind === 'pan' && page.dy < -100).toBe(true);
+  });
+});
+
+describe('pasteboard', () => {
+  const slide = { left: 100, top: 50, width: 400, height: 200 };
+  const viewport = { width: 600, height: 300 };
+
+  it('leaves half a slide of room on every side', () => {
+    expect(pasteboardRegion(slide)).toEqual({ left: -100, top: -50, width: 800, height: 400 });
+  });
+
+  it('reaches objects put far past the slide edge', () => {
+    const region = pasteboardRegion(slide, [{ left: 900, top: 60, width: 100, height: 40 }]);
+    expect(region.left).toBe(-100);
+    expect(region.left + region.width).toBe(1000);
+    expect(region.height).toBe(400);
+  });
+
+  it('leaves half the screen of room when that is more than half a slide', () => {
+    expect(pasteboardRegion(slide, [], { width: 300, height: 50 })).toEqual({
+      left: -200,
+      top: -50,
+      width: 1000,
+      height: 400,
+    });
+  });
+
+  it('lets the view travel around the slide but not past the room', () => {
+    const region = pasteboardRegion(slide);
+    const start = { scale: 1, positionX: 0, positionY: 0 };
+    // Поле 800 × 400 больше области 600 × 300: область не выходит за поле.
+    const at = (positionX: number, positionY = 0) =>
+      clampToRegion({ ...start, positionX, positionY }, start, viewport, region);
+    expect(at(50).positionX).toBe(50);
+    expect(at(500).positionX).toBe(100);
+    expect(at(-900).positionX).toBe(-100);
+    expect(at(0, -900).positionY).toBe(-50);
+    expect(at(0, 900).positionY).toBe(50);
+  });
+
+  it('keeps a small zoomed-out field on screen', () => {
+    const region = pasteboardRegion(slide);
+    const start = { scale: 0.25, positionX: 200, positionY: 100 };
+    // Поле при 0,25 — 200 × 100: целиком в области; у левого края сдвиг 25, у правого — 425.
+    const at = (positionX: number) =>
+      clampToRegion({ ...start, positionX }, start, viewport, region).positionX;
+    expect(at(-500)).toBe(25);
+    expect(at(900)).toBe(425);
+  });
+
+  it('never jerks a view that is already outside back in, but lets it come back', () => {
+    const region = pasteboardRegion(slide);
+    const outside = { scale: 1, positionX: 300, positionY: 0 };
+    const at = (positionX: number) =>
+      clampToRegion({ ...outside, positionX }, outside, viewport, region).positionX;
+    expect(at(320)).toBe(300);
+    expect(at(250)).toBe(250);
   });
 });
