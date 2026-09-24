@@ -3,6 +3,7 @@ import type { Box, DesignSystem, SlideElement, ElementStroke, StrokeDash } from 
 import { EMU_PER_PT, cqw, emuToCqw, round, type SlideSize } from '../geometry.js';
 import { paint, resolveColor } from './color.js';
 import { markHooks, markStyle } from './mark.js';
+import { ShapeText } from './shape-text.js';
 
 type DecorElement = Extract<SlideElement, { kind: 'decor' }>;
 
@@ -253,15 +254,18 @@ export function DecorMark({
   const hooks = markHooks(element, thumbnail);
 
   if (!statesItsLook(element)) {
+    const background = guessedPaint(box, size, profile);
     return (
       <div
         {...hooks}
         style={{
           ...markStyle(element, size),
-          background: guessedPaint(box, size, profile),
+          background,
           ...zeroAxis,
         }}
-      />
+      >
+        <ShapeText element={element} size={size} profile={profile} fill={background} />
+      </div>
     );
   }
 
@@ -272,6 +276,8 @@ export function DecorMark({
   };
   const guessed = guessedPaint(box, size, profile);
   let drawing: JSX.Element;
+  // What the words of the shape sit on: its fill, or the slide when it has none.
+  let ground: string | null = null;
   if (shape === 'line') {
     // A line that states no stroke is a template rule: the least width in the guessed colour.
     const stroke: ElementStroke = element.stroke ?? {
@@ -300,6 +306,7 @@ export function DecorMark({
         : element.fill === null
           ? 'none'
           : resolveColor(profile.palette, element.fill, 'surface');
+    ground = fill === 'none' ? null : fill;
     const stroke = element.stroke ?? null;
     drawing = (
       <ClosedShape
@@ -328,6 +335,7 @@ export function DecorMark({
       >
         {drawing}
       </svg>
+      <ShapeText element={element} size={size} profile={profile} fill={ground} />
     </div>
   );
 }

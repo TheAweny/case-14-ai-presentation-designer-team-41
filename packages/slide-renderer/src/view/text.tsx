@@ -105,7 +105,7 @@ export function TextMark({
   );
 }
 
-function ParagraphView({
+export function ParagraphView({
   paragraph,
   size,
   typeSizeEmu,
