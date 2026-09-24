@@ -756,11 +756,14 @@ export function EditorShell({
       const [box] = createInsertedElements('text', center, grid, { profile: designSystem });
       if (!box || box.kind !== 'text') return;
       const lines = paragraphs.length;
+      // Вставленный текст — по центру слайда: инструмент ставит текст от точки клика, а у
+      // вставки точки нет.
       const element: SlideElement = {
         ...box,
         box: {
           ...box.box,
-          y: Math.round(box.box.y - (box.box.cy * (lines - 1)) / 2),
+          x: Math.round(center.x - box.box.cx / 2),
+          y: Math.round(center.y - (box.box.cy * lines) / 2),
           cy: box.box.cy * lines,
         },
         paragraphs,
