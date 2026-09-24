@@ -82,6 +82,15 @@
                 "minLength": 1,
                 "type": "string"
               },
+              "groupIds": {
+                "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "kind": {
                 "const": "text",
                 "type": "string"
@@ -387,6 +396,15 @@
                   "cover"
                 ],
                 "type": "string"
+              },
+              "groupIds": {
+                "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
               },
               "kind": {
                 "const": "image",
@@ -708,6 +726,15 @@
                 "minLength": 1,
                 "type": "string"
               },
+              "groupIds": {
+                "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "headerRow": {
                 "description": "Whether the first row looks like a header (OOXML firstRow). Absent means true.",
                 "type": "boolean"
@@ -860,6 +887,15 @@
               "elementId": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "groupIds": {
+                "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
               },
               "kind": {
                 "const": "chart",
@@ -1047,6 +1083,15 @@
               "flipV": {
                 "description": "Mirrored vertically.",
                 "type": "boolean"
+              },
+              "groupIds": {
+                "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
               },
               "kind": {
                 "const": "decor",

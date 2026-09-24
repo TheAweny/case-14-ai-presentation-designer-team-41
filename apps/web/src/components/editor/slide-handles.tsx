@@ -193,6 +193,26 @@ function rectIn(overlay: HTMLElement, element: Element): PixelBox {
   };
 }
 
+/** Общий прямоугольник нескольких объектов: рамка группы, как её подсвечивает Figma. */
+function unionRect(rects: readonly PixelBox[]): PixelBox | null {
+  if (rects.length === 0) return null;
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/** Рамка объектов с этими id в пикселях слоя `overlay`; `null`, если их нет в кадре. */
+function rectOf(overlay: HTMLElement, root: HTMLElement, ids: readonly string[]): PixelBox | null {
+  return unionRect(
+    ids.flatMap((id) => {
+      const element = elementById(root, id);
+      return element ? [rectIn(overlay, element)] : [];
+    }),
+  );
+}
+
 /** Прямоугольник в координатах окна: в них Moveable считает рамку, направляющие и границы. */
 function screenRect(element: Element): PixelBox {
   const rect = element.getBoundingClientRect();
@@ -312,6 +332,9 @@ export function SlideHandles({
   onLineEnds,
   onRotateMany,
   onGestureChange,
+  hoverUnit,
+  highlightIds,
+  groupFrame = false,
 }: {
   /** Слой в экранных пикселях поверх холста: здесь ручки и рамка. */
   overlay: HTMLElement;
@@ -326,7 +349,11 @@ export function SlideHandles({
   editingId: string | null;
   /** Рука, пробел или вставка: жест принадлежит им, а не выделению. */
   suspended?: boolean;
-  onSelect: (ids: readonly string[]) => void;
+  /**
+   * `additive` — щелчок или рамка с Shift: выделение пополняют, а не заменяют. `deep` — выбор
+   * сквозь объекты (Ctrl/Cmd+щелчок): берётся сам объект, а не группа, в которой он лежит.
+   */
+  onSelect: (ids: readonly string[], pick?: SelectPick) => void;
   onCommit: (moves: readonly ElementMove[]) => void;
   /** Новый угол объекта в конце поворота, в градусах по часовой. */
   onRotate?: (elementId: string, rotation: number) => void;
@@ -341,6 +368,12 @@ export function SlideHandles({
   onRotateMany?: (turns: readonly TurnedElement[]) => void;
   /** Рамку тащат или тянут за ручку: с первого сдвига до отпускания. Простой клик сюда не входит. */
   onGestureChange?: (active: boolean) => void;
+  /** Что выберет щелчок по объекту: он сам или вся его группа. Её и подсвечивает наведение. */
+  hoverUnit?: (elementId: string) => readonly string[];
+  /** Объекты, которые подсвечивает панель слоёв, пока над строкой курсор. */
+  highlightIds?: readonly string[];
+  /** Выделена одна группа: у неё одна рамка, как в Figma, без рамок каждого объекта. */
+  groupFrame?: boolean;
 }) {
   const moveableRef = useRef<Moveable>(null);
   const selectoRef = useRef<Selecto>(null);
@@ -495,10 +528,38 @@ export function SlideHandles({
       ? hoverId
       : null;
   useLayoutEffect(() => {
-    const element = hovered ? elementById(slideRoot, hovered) : null;
-    const next = element ? rectIn(overlay, element) : null;
+    // Наведение на объект группы подсвечивает всю группу: щелчок выберет её.
+    const unit = hovered ? (hoverUnit?.(hovered) ?? [hovered]) : [];
+    const next = rectOf(overlay, slideRoot, unit);
     setHoverRect((previous) => (sameRect(previous, next) ? previous : next));
-  }, [hovered, overlay, slideRoot, slide, view]);
+  }, [hovered, hoverUnit, overlay, slideRoot, slide, view]);
+
+  // Подсветка из панели слоёв и рамки заблокированных объектов, выделенных там же: ручек у
+  // них нет, но видно, что выделено.
+  const [marks, setMarks] = useState<readonly { key: string; rect: PixelBox; dashed: boolean }[]>(
+    [],
+  );
+  useLayoutEffect(() => {
+    const next: { key: string; rect: PixelBox; dashed: boolean }[] = [];
+    const lit = rectOf(overlay, slideRoot, suspended ? [] : (highlightIds ?? []));
+    if (lit) next.push({ key: 'highlight', rect: lit, dashed: false });
+    if (!suspended) {
+      for (const id of selectedIds) {
+        const element = elementById(slideRoot, id);
+        if (element?.dataset.locked !== 'true') continue;
+        next.push({ key: id, rect: rectIn(overlay, element), dashed: true });
+      }
+    }
+    setMarks((previous) =>
+      previous.length === next.length &&
+      previous.every(
+        (mark, index) =>
+          mark.key === next[index]?.key && sameRect(mark.rect, next[index]?.rect ?? null),
+      )
+        ? previous
+        : next,
+    );
+  }, [highlightIds, selectedIds, suspended, overlay, slideRoot, slide, view]);
 
   // Края слайда, поля и колонки — направляющие, а не стены: объект можно вынести за край, как
   // на монтажный стол в Figma или Keynote. Что за краем, в показ и экспорт не попадает.
@@ -664,7 +725,13 @@ export function SlideHandles({
     const hit = target instanceof Element ? target.closest(ELEMENT) : null;
     const id = idOf(hit);
     if (shiftOf(input)) {
-      if (id && selectedIds.includes(id)) onSelect(selectedIds.filter((item) => item !== id));
+      // Снимается всё, что выбирал бы этот объект, — у группы вся группа.
+      if (id && selectedIds.includes(id)) {
+        onSelect(
+          selectedIds.filter((item) => item !== id),
+          { additive: true },
+        );
+      }
       return;
     }
     if (pending && !selectedIds.includes(pending)) onSelect([pending]);
@@ -758,14 +825,18 @@ export function SlideHandles({
 
   /**
    * Ctrl/Cmd+щелчок — объект под тем, что выделен сейчас, по кругу: так достаётся перекрытое.
-   * Если выделенного под курсором нет, берётся второй сверху: верхний даёт и простой щелчок.
+   * Это и глубокое выделение Figma: выбирается сам объект, сквозь группы. Если выделенного под
+   * курсором нет, берётся второй сверху — верхний даёт и простой щелчок; а если верхний лежит в
+   * группе, простой щелчок дал бы группу, и глубокий начинается с него самого.
    */
   const selectThrough = (clientX: number, clientY: number) => {
     const stack = stackAt(clientX, clientY);
-    if (stack.length === 0) return;
+    const [top] = stack;
+    if (top === undefined) return;
     const at = selectedIds.length === 1 && selectedIds[0] ? stack.indexOf(selectedIds[0]) : -1;
-    const next = at >= 0 ? stack[(at + 1) % stack.length] : (stack[1] ?? stack[0]);
-    if (next) onSelect([next]);
+    const grouped = (hoverUnit?.(top) ?? [top]).length > 1;
+    const next = at >= 0 ? stack[(at + 1) % stack.length] : grouped ? top : (stack[1] ?? top);
+    if (next) onSelect([next], { additive: false, deep: true });
   };
 
   /** Точка внутри выделенного объекта, даже если сверху лежит другой. */
@@ -873,6 +944,23 @@ export function SlideHandles({
   return (
     <>
       <style>{HANDLES_CSS}</style>
+      {marks.map((mark) => (
+        <div
+          key={mark.key}
+          aria-hidden
+          className={
+            mark.dashed
+              ? 'pointer-events-none absolute z-[2] outline outline-1 outline-dashed outline-[var(--canvas-selection)]'
+              : 'pointer-events-none absolute z-[2] outline outline-2 outline-[var(--canvas-selection)]'
+          }
+          style={{
+            left: mark.rect.x,
+            top: mark.rect.y,
+            width: mark.rect.width,
+            height: mark.rect.height,
+          }}
+        />
+      ))}
       {hoverRect ? (
         <div
           aria-hidden
@@ -895,6 +983,7 @@ export function SlideHandles({
           ref={moveableRef}
           className={cn('lct-moveable', line && 'lct-moveable-line')}
           target={targets}
+          hideChildMoveableDefaultLines={groupFrame}
           flushSync={flushSync}
           draggable
           // У линии вместо рамки — ручки концов, у остальных восемь ручек.
@@ -1217,7 +1306,7 @@ export function SlideHandles({
               const id = idOf(element);
               return id ? [id] : [];
             });
-            onSelect(ids);
+            onSelect(ids, { additive: input.shiftKey });
             // Невыделенный объект тянется с первого жеста: Moveable подхватывает тот же mousedown.
             if (!event.isDragStart || ids.length === 0 || input.shiftKey) return;
             input.preventDefault();
@@ -1231,6 +1320,12 @@ export function SlideHandles({
       ) : null}
     </>
   );
+}
+
+/** Как выбирали: с Shift пополняют выделение, сквозь объекты — берут сам объект. */
+export interface SelectPick {
+  readonly additive: boolean;
+  readonly deep?: boolean;
 }
 
 interface ResizeLast {

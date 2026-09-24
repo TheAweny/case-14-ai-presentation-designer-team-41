@@ -44,10 +44,28 @@ export {
 } from './element-ops.js';
 export {
   commitDuplicateSlide,
+  commitDuplicateSlides,
   commitInsertSlide,
+  commitMoveSlides,
   commitRemoveSlide,
+  commitRemoveSlides,
   commitSlideBackground,
 } from './slide-ops.js';
+export { commitGroup, commitMoveLayer, commitUngroup } from './group-ops.js';
+export {
+  commonPath,
+  findLayer,
+  groupPath,
+  layerElementIds,
+  layerElements,
+  layerTree,
+  layersAt,
+  pickedLayers,
+  type ElementLayer,
+  type GroupLayer,
+  type LayerNode,
+  type PickedLayer,
+} from './layers.js';
 export {
   TABLE_MIN_TRACK_EMU,
   commitDistributeTable,

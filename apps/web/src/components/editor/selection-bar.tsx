@@ -78,8 +78,8 @@ import {
 } from '@/components/editor/inspector/selection-model';
 import { textLook, type TextElement } from '@/components/editor/inspector/text-model';
 import { barArea, barContext } from '@/components/editor/selection-bar-model';
+import { distributeUnits, isWholeGroup, unitCount } from '@/components/editor/group-selection';
 import {
-  distributeBoxes,
   placeSelectionBar,
   rotatedBounds,
   SELECTION_BAR_CLEARANCE,
@@ -295,7 +295,7 @@ export function SelectionBar({
       </BarButton>
     );
   } else {
-    controls = <ArrangeControls selected={selected} actions={actions} />;
+    controls = <ArrangeControls slide={slide} selected={selected} actions={actions} />;
   }
 
   return (
@@ -516,23 +516,30 @@ function ImageControls({
   );
 }
 
-/** Несколько объектов: выровнять между собой и распределить промежутки поровну. */
+/**
+ * Несколько объектов: выровнять между собой и распределить промежутки поровну. Группа — один
+ * объект: в подписи, в выравнивании и в распределении она едет целиком.
+ */
 function ArrangeControls({
+  slide,
   selected,
   actions,
 }: {
+  slide: SlideIr;
   selected: readonly SlideElement[];
   actions: SelectionBarActions;
 }) {
   const t = useTranslations('selectionBar');
+  const ids = selected.map((element) => element.elementId);
+  const units = unitCount(slide.elements, ids);
   const distribute = (axis: DistributeAxis) => {
-    const moves = distributeBoxes(selected, axis);
+    const moves = distributeUnits(slide.elements, ids, axis);
     if (moves.length > 0) actions.onCommit(moves);
   };
   return (
     <>
       <span className="px-1.5 text-xs font-medium whitespace-nowrap text-foreground tabular-nums">
-        {t('count', { count: selected.length })}
+        {isWholeGroup(slide.elements, ids) ? t('group') : t('count', { count: units })}
       </span>
       {ALIGNMENTS.map(({ id, icon }) => (
         <BarButton
@@ -545,7 +552,7 @@ function ArrangeControls({
       <BarMenu
         icon={DistributeHorizontalCenterIcon}
         label={t('distribute')}
-        disabled={selected.length < 3}
+        disabled={units < 3}
         content={
           <>
             <DropdownMenuItem onSelect={() => distribute('horizontal')}>

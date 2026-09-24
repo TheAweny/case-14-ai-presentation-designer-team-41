@@ -23,6 +23,8 @@ export type DeckChangeKind =
   | 'paste'
   | 'duplicate'
   | 'arrange'
+  | 'group'
+  | 'ungroup'
   | 'image'
   | 'table'
   | 'chart'

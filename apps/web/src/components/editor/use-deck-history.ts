@@ -88,6 +88,8 @@ export type ChangeKind =
   | 'paste'
   | 'duplicate'
   | 'arrange'
+  | 'group'
+  | 'ungroup'
   | 'image'
   | 'table'
   | 'chart'
@@ -113,6 +115,8 @@ const KIND_OF: Readonly<Record<DeckChange['kind'], ChangeKind>> = {
   paste: 'paste',
   duplicate: 'duplicate',
   arrange: 'arrange',
+  group: 'group',
+  ungroup: 'ungroup',
   image: 'image',
   table: 'table',
   chart: 'chart',

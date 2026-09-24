@@ -106,6 +106,16 @@ describe('objects from the keyboard', () => {
     });
   });
 
+  it('groups with Ctrl+G and ungroups with Ctrl+Shift+G, in any layout', () => {
+    expect(editorCommand(key('KeyG', { key: 'п', ctrlKey: true }))).toEqual({ kind: 'group' });
+    expect(editorCommand(key('KeyG', { metaKey: true, shiftKey: true }))).toEqual({
+      kind: 'ungroup',
+    });
+    // Без модификатора G — инструмент рейки, а в наборе Ctrl+G не наш.
+    expect(editorCommand(key('KeyG'))).toBeNull();
+    expect(editorCommand(key('KeyG', { ctrlKey: true }), 'text')).toBeNull();
+  });
+
   it('opens text or table editing with Enter', () => {
     expect(editorCommand(key('Enter'))).toEqual({ kind: 'edit' });
     expect(editorCommand(key('NumpadEnter'))).toEqual({ kind: 'edit' });

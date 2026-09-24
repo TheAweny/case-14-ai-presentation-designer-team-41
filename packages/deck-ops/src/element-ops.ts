@@ -36,6 +36,14 @@ import {
   type DeckCommit,
 } from './core.js';
 import { parsedElements } from './journal.js';
+import {
+  arrangedLayers,
+  flattenLayers,
+  groupIdsOf,
+  groupPath,
+  layerTree,
+  tidyLayers,
+} from './layers.js';
 
 /*
  * Properties
@@ -407,10 +415,20 @@ function shifted<T extends SlideElement>(element: T, offset: Offset, elementId: 
   return copy;
 }
 
+/** The same element in the groups `renamed` maps to; a group it does not name keeps its id. */
+function regrouped<T extends SlideElement>(element: T, renamed: ReadonlyMap<string, string>): T {
+  const path = groupPath(element);
+  if (path.length === 0) return element;
+  return { ...element, groupIds: path.map((id) => renamed.get(id) ?? id) };
+}
+
 /**
  * Copy elements of a slide. The copies get new ids, shift by `offset` (a hundredth of the slide
  * width by default) and sit as one block right above the topmost original, in the originals'
  * paint order. Undo selects the originals, redo the copies.
+ *
+ * A group copied whole is a new group; a copy of part of a group joins that group, the way
+ * duplicating inside a group works in Figma.
  */
 export function commitDuplicate(
   slides: readonly SlideIr[],
@@ -428,7 +446,7 @@ export function commitDuplicate(
   if (originals.length === 0) return unchanged(slides);
   const offset = change.offset ?? defaultOffset(slide);
   const next = freshIds(
-    slide.elements.map((element) => element.elementId),
+    [...slide.elements.map((element) => element.elementId), ...groupIdsOf(slide.elements)],
     change.nextId ?? randomId,
   );
   const copies: SlideElement[] = [];
@@ -437,13 +455,26 @@ export function commitDuplicate(
     if (id === null) return unchanged(slides);
     copies.push(shifted(original, offset, id));
   }
+  const renamed = new Map<string, string>();
+  for (const groupId of groupIdsOf(originals)) {
+    const members = slide.elements.filter((element) => groupPath(element).includes(groupId));
+    if (!members.every((element) => wanted.has(element.elementId))) continue;
+    const id = next();
+    if (id === null) return unchanged(slides);
+    renamed.set(groupId, id);
+  }
   const top = Math.max(
     ...originals.map((original) => slide.elements.findIndex((item) => item === original)),
   );
   const produced = produceSlides(slides, (draft) => {
     const target = slideOf(draft, change.slideId);
     if (!target) return;
-    target.elements.splice(top + 1, 0, ...structuredClone(copies));
+    target.elements.splice(
+      top + 1,
+      0,
+      ...structuredClone(copies.map((copy) => regrouped(copy, renamed))),
+    );
+    tidyLayers(target);
   });
   return commitProduced(slides, produced, change.slideId, [], {
     kind: 'duplicate',
@@ -478,7 +509,7 @@ export function commitPaste(
   const parsed = parsedElements(change.elements);
   if (!parsed) return unchanged(slides);
   const next = freshIds(
-    slide.elements.map((element) => element.elementId),
+    [...slide.elements.map((element) => element.elementId), ...groupIdsOf(slide.elements)],
     change.nextId ?? randomId,
   );
   const offset = change.offset ?? { x: 0, y: 0 };
@@ -488,10 +519,18 @@ export function commitPaste(
     if (id === null) return unchanged(slides);
     pasted.push(shifted(element, offset, id));
   }
+  // Groups come along as new groups: the ones they had may mean something else on this slide.
+  const renamed = new Map<string, string>();
+  for (const groupId of groupIdsOf(parsed)) {
+    const id = next();
+    if (id === null) return unchanged(slides);
+    renamed.set(groupId, id);
+  }
   const produced = produceSlides(slides, (draft) => {
     const target = slideOf(draft, change.slideId);
     if (!target) return;
-    target.elements.push(...structuredClone(pasted));
+    target.elements.push(...structuredClone(pasted.map((element) => regrouped(element, renamed))));
+    tidyLayers(target);
   });
   return commitProduced(slides, produced, change.slideId, [], {
     kind: 'paste',
@@ -541,7 +580,9 @@ function arranged<T>(items: readonly T[], selected: (item: T) => boolean, to: Ar
 
 /**
  * Move elements through the paint order of their slide. Stepping forward passes the next element
- * that is not selected; front and back keep the selected elements in their own order.
+ * that is not selected; front and back keep the selected elements in their own order. Groups
+ * are single steps: a selected group moves past whole groups, and an element inside a group
+ * moves among its siblings there, up to the top or bottom of the group.
  */
 export function commitArrange(
   slides: readonly SlideIr[],
@@ -555,9 +596,12 @@ export function commitArrange(
   if (!slide) return unchanged(slides);
   const wanted = new Set(change.elementIds);
   const picked = (element: SlideElement) => wanted.has(element.elementId);
-  const order = arranged(slide.elements, picked, change.to);
-  if (order.every((element, index) => element === slide.elements[index])) return unchanged(slides);
-  const ids = order.map((element) => element.elementId);
+  // Siblings move among siblings: a group moves as one, an element inside one stays inside it.
+  const layers = arrangedLayers(layerTree(slide.elements), wanted, (items, pick) =>
+    arranged(items, pick, change.to),
+  );
+  const ids = flattenLayers(layers).map((layer) => layer.elementId);
+  if (ids.every((id, index) => id === slide.elements[index]?.elementId)) return unchanged(slides);
   const produced = produceSlides(slides, (draft) => {
     const target = slideOf(draft, change.slideId);
     if (!target) return;

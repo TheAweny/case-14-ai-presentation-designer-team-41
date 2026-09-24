@@ -20,7 +20,8 @@
     "inspectorShow": "Show panel",
     "tabs": {
       "design": "Design",
-      "assistant": "Assistant"
+      "assistant": "Assistant",
+      "layers": "Layers"
     },
     "resizeSlides": "Slide list width",
     "resizeInspector": "Properties panel width",
@@ -111,7 +112,8 @@
     "more": "More",
     "alignToSlide": "Align to slide",
     "openInspector": "Open in design panel",
-    "openData": "Open data in design panel"
+    "openData": "Open data in design panel",
+    "group": "Group"
   },
   "formatBar": {
     "label": "Text format"
@@ -147,6 +149,8 @@
         "slide-add": "new slide",
         "slide-remove": "slide removal",
         "background": "slide background",
+        "group": "grouping",
+        "ungroup": "ungrouping",
         "crop": "crop",
         "notes": "notes edit",
         "other": "change"
@@ -326,7 +330,9 @@
     "back": "Send to back",
     "selectAll": "Select all",
     "remove": "Delete",
-    "unlockAll": "Unlock all on slide"
+    "unlockAll": "Unlock all on slide",
+    "group": "Group",
+    "ungroup": "Ungroup"
   },
   "inspectorFields": {
     "mixed": "Mixed",
@@ -420,6 +426,8 @@
       "zoom-fit": "Fit slide",
       "zoom-selection": "Zoom to selection",
       "pan": "Pan the canvas (hold)",
+      "group": "Group",
+      "ungroup": "Ungroup",
       "present": "Present from the beginning",
       "present-current": "Present from current slide"
     }
@@ -486,5 +494,31 @@
     "borderWidth": "Line width",
     "distributeColumns": "Distribute columns evenly",
     "distributeRows": "Distribute rows evenly"
+  },
+  "layersPanel": {
+    "label": "Slide layers",
+    "empty": "Nothing on this slide yet",
+    "hint": "Top of the list is on top of the slide. Drag a row to change the order.",
+    "group": "Group",
+    "groupCount": "{count, plural, one {# object} other {# objects}}",
+    "line": "Line",
+    "shape": "Shape",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "expand": "Expand group",
+    "collapse": "Collapse group",
+    "locked": "locked",
+    "reorderHint": "Press Space, then the up and down arrows, to move a layer. Or drag its row.",
+    "dragStart": "Moving layer {layer}",
+    "dragOver": "{layer} will move to {over}",
+    "dragEnd": "{layer} moved",
+    "dragCancel": "Move cancelled"
+  },
+  "slideList": {
+    "duplicateSlides": "Duplicate slides ({count})",
+    "removeSlides": "Delete slides ({count})",
+    "selected": "{count, plural, one {# slide selected} other {# slides selected}}",
+    "dragStartMany": "Moving {count, plural, one {# slide} other {# slides}}",
+    "dragEndMany": "{count, plural, one {# slide moved} other {# slides moved}}"
   }
 }

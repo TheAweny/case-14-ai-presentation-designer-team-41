@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import {
@@ -42,6 +42,9 @@ import {
   nearestScroll,
   type ListOrientation,
 } from '@/components/editor/slide-navigation';
+import { blockDropIndex, pickSlide, type PickModifiers } from '@/components/editor/slide-picks';
+
+const PLAIN: PickModifiers = { range: false, toggle: false };
 
 /**
  * Список слайдов колоды: колонка на широком экране, горизонтальная лента на узком.
@@ -50,13 +53,16 @@ import {
  * долях своей ширины, поэтому уменьшается вместе с рамкой и остаётся похожим на слайд.
  * Правка на холсте меняет один слайд колоды, и перерисовывается одна миниатюра.
  *
- * По семантике это listbox с одиночным выбором, где выбор идёт за фокусом: стрелки, Home и End
- * сразу открывают слайд. В порядке табуляции только открытый слайд (roving tabindex), так что
- * Tab проходит список за одно нажатие.
+ * По семантике это listbox с множественным выбором, где открытый слайд идёт за фокусом: стрелки,
+ * Home и End сразу открывают слайд, с Shift — ещё и расширяют выбор. Щелчок с Ctrl (Cmd)
+ * добавляет слайд к выбранным, с Shift — диапазон, Ctrl+A — все. Перенос, копия и удаление
+ * работают над всеми выбранными сразу, одной записью журнала. В порядке табуляции только
+ * открытый слайд (roving tabindex), так что Tab проходит список за одно нажатие.
  *
  * Порядок меняет dnd-kit: мышь сдвигает миниатюру после короткого пути, палец — после удержания,
  * чтобы смахивание ленты на узком экране оставалось прокруткой. Пробел берёт слайд с клавиатуры,
- * и только тогда стрелки переставляют его, а не открывают соседний.
+ * и только тогда стрелки переставляют его, а не открывают соседний. Выбранные слайды едут
+ * вместе с тем, за который взялись.
  */
 export function SlideList({
   slides,
@@ -65,7 +71,7 @@ export function SlideList({
   current,
   resolveMedia,
   onSelect,
-  onReorder,
+  onMove,
   onAdd,
   onDuplicate,
   onRemove,
@@ -79,18 +85,65 @@ export function SlideList({
   /** Адрес картинки по `mediaPart` — тот же, что у холста. */
   resolveMedia?: (mediaPart: string) => string | null;
   onSelect: (index: number) => void;
-  /** Индексы до перестановки. Отмена возвращает прежний порядок. */
-  onReorder: (from: number, to: number) => void;
+  /**
+   * Перенести слайды блоком: `index` — место блока среди остальных слайдов. Отмена
+   * возвращает прежний порядок.
+   */
+  onMove: (slideIds: readonly string[], index: number) => void;
   /** Новый слайд после слайда с этим индексом. */
   onAdd: (after: number) => void;
-  onDuplicate: (index: number) => void;
+  /** Копии выбранных слайдов; возвращает id копий, чтобы выбрать их. */
+  onDuplicate: (slideIds: readonly string[]) => readonly string[];
   /** Последний слайд не удаляется: колода без слайдов — не колода. */
-  onRemove: (index: number) => void;
+  onRemove: (slideIds: readonly string[]) => void;
   className?: string;
 }) {
   const t = useTranslations('editor');
+  const many = useTranslations('slideList');
   const listRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const order = useMemo(() => slides.map((slide) => slide.slideId), [slides]);
+  const currentId = order[current] ?? null;
+  // Выбор — id слайдов. Открытый слайд в нём всегда: если слайд открыли не отсюда (клавишами
+  // с холста, по ссылке), выбор сходится к нему одному.
+  const [picks, setPicks] = useState<{ picked: readonly string[]; anchor: string | null }>({
+    picked: [],
+    anchor: null,
+  });
+  const collapsed = currentId === null || !picks.picked.includes(currentId);
+  const selection = useMemo(() => {
+    if (currentId === null) return [];
+    return collapsed ? [currentId] : order.filter((id) => picks.picked.includes(id));
+  }, [collapsed, currentId, order, picks.picked]);
+  const anchor = collapsed ? currentId : (picks.anchor ?? currentId);
+  const picked = useMemo(() => new Set(selection), [selection]);
+
+  const pick = useCallback(
+    (index: number, modifiers: PickModifiers) => {
+      const id = order[index];
+      if (!id) return;
+      const next = pickSlide(order, { picked: selection, anchor }, id, modifiers);
+      setPicks({ picked: next.picked, anchor: next.anchor });
+      const open = order.indexOf(next.open);
+      if (open >= 0) onSelect(open);
+    },
+    [anchor, onSelect, order, selection],
+  );
+
+  const duplicatePicked = useCallback(() => {
+    const copies = onDuplicate(selection);
+    if (copies.length > 0) setPicks({ picked: copies, anchor: copies[0] ?? null });
+  }, [onDuplicate, selection]);
+  const removePicked = useCallback(() => {
+    if (selection.length > 0 && selection.length < slides.length) onRemove(selection);
+  }, [onRemove, selection, slides.length]);
+  /** Что едет, когда тянут этот слайд: все выбранные, если он среди них, иначе он один. */
+  const movingWith = useCallback(
+    (id: UniqueIdentifier): readonly string[] =>
+      picked.has(String(id)) ? selection : [String(id)],
+    [picked, selection],
+  );
   const reduceMotion = useReducedMotion() === true;
   const orientation: ListOrientation = useMediaQuery(NARROW_SCREEN) ? 'horizontal' : 'vertical';
   /** В какой ориентации список уже прокручивали: `null` до первого показа. */
@@ -154,13 +207,14 @@ export function SlideList({
 
   const onDragEnd = (event: DragEndEvent) => {
     dragging.current = false;
+    setDraggingId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const from = slides.findIndex((slide) => slide.slideId === active.id);
-    const to = slides.findIndex((slide) => slide.slideId === over.id);
-    if (from < 0 || to < 0 || from === to) return;
-    onReorder(from, to);
+    const moving = movingWith(active.id);
+    const index = blockDropIndex(order, moving, String(active.id), String(over.id));
+    if (index !== null) onMove(moving, index);
   };
+  const carried = draggingId === null ? [] : movingWith(draggingId);
 
   return (
     // Свой `id`: иначе dnd-kit берёт номер из сквозного счётчика, и подписи для чтения с
@@ -172,21 +226,33 @@ export function SlideList({
       accessibility={{
         screenReaderInstructions: { draggable: t('reorderHint') },
         announcements: {
-          onDragStart: ({ active }) => t('dragStart', { slide: labelFor(active.id) }),
+          onDragStart: ({ active }) => {
+            const count = movingWith(active.id).length;
+            return count > 1
+              ? many('dragStartMany', { count })
+              : t('dragStart', { slide: labelFor(active.id) });
+          },
           onDragOver: ({ active, over }) =>
             over
               ? t('dragOver', { slide: labelFor(active.id), over: labelFor(over.id) })
               : undefined,
-          onDragEnd: ({ active, over }) =>
-            over ? t('dragEnd', { slide: labelFor(active.id) }) : t('dragCancel'),
+          onDragEnd: ({ active, over }) => {
+            if (!over) return t('dragCancel');
+            const count = movingWith(active.id).length;
+            return count > 1
+              ? many('dragEndMany', { count })
+              : t('dragEnd', { slide: labelFor(active.id) });
+          },
           onDragCancel: () => t('dragCancel'),
         },
       }}
-      onDragStart={() => {
+      onDragStart={({ active }) => {
         dragging.current = true;
+        setDraggingId(String(active.id));
       }}
       onDragCancel={() => {
         dragging.current = false;
+        setDraggingId(null);
       }}
       onDragEnd={onDragEnd}
     >
@@ -203,6 +269,7 @@ export function SlideList({
               role="listbox"
               aria-label={t('slides')}
               aria-orientation={orientation}
+              aria-multiselectable
               onKeyDown={(event) => {
                 // Пока слайд поднят с клавиатуры, стрелки принадлежат перестановке.
                 if (dragging.current) return;
@@ -210,14 +277,17 @@ export function SlideList({
                 if (action) {
                   event.preventDefault();
                   if (action === 'add') onAdd(current);
-                  if (action === 'duplicate') onDuplicate(current);
-                  if (action === 'remove' && slides.length > 1) onRemove(current);
+                  if (action === 'duplicate') duplicatePicked();
+                  if (action === 'remove') removePicked();
+                  if (action === 'select-all') setPicks({ picked: order, anchor: currentId });
                   return;
                 }
+                if (event.ctrlKey || event.metaKey || event.altKey) return;
                 const target = listKeyTarget(event.key, current, slides.length, orientation);
                 if (target === null) return;
                 event.preventDefault();
-                onSelect(target);
+                // С Shift стрелки расширяют выбор от якоря, как в Google Slides.
+                pick(target, { range: event.shiftKey, toggle: false });
               }}
               className={cn(
                 'flex gap-1 overscroll-contain p-2 [scrollbar-width:thin]',
@@ -232,19 +302,27 @@ export function SlideList({
                   designSystem={designSystem}
                   label={labels[index] ?? ''}
                   index={index}
-                  selected={index === current}
+                  current={index === current}
+                  selected={picked.has(slide.slideId)}
+                  carried={
+                    carried.length > 1 &&
+                    draggingId !== slide.slideId &&
+                    carried.includes(slide.slideId)
+                  }
+                  count={draggingId === slide.slideId ? carried.length : 0}
                   digits={digits}
                   resolveMedia={resolveMedia}
-                  onSelect={onSelect}
+                  onPick={pick}
                 />
               ))}
             </div>
           </ContextMenuTrigger>
           <SlideMenu
-            canRemove={slides.length > 1}
+            count={selection.length}
+            canRemove={selection.length < slides.length}
             onAdd={() => onAdd(current)}
-            onDuplicate={() => onDuplicate(current)}
-            onRemove={() => onRemove(current)}
+            onDuplicate={duplicatePicked}
+            onRemove={removePicked}
           />
         </ContextMenu>
         <button
@@ -265,9 +343,12 @@ export function SlideList({
   );
 }
 
-type SlideAction = 'add' | 'duplicate' | 'remove';
+type SlideAction = 'add' | 'duplicate' | 'remove' | 'select-all';
 
-/** Клавиши списка: как в Google Slides — Ctrl+M новый слайд, Ctrl+D копия, Delete удалить. */
+/**
+ * Клавиши списка: как в Google Slides — Ctrl+M новый слайд, Ctrl+D копия, Delete удалить,
+ * Ctrl+A выбрать все слайды.
+ */
 function slideKeyAction(event: {
   code: string;
   key: string;
@@ -280,22 +361,27 @@ function slideKeyAction(event: {
   const command = event.ctrlKey || event.metaKey;
   if (command && event.code === 'KeyM') return 'add';
   if (command && event.code === 'KeyD') return 'duplicate';
+  if (command && event.code === 'KeyA') return 'select-all';
   if (!command && (event.key === 'Delete' || event.key === 'Backspace')) return 'remove';
   return null;
 }
 
 function SlideMenu({
+  count,
   canRemove,
   onAdd,
   onDuplicate,
   onRemove,
 }: {
+  /** Сколько слайдов выбрано: копия и удаление — над всеми. */
+  count: number;
   canRemove: boolean;
   onAdd: () => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
   const t = useTranslations('editor');
+  const many = useTranslations('slideList');
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
     <ContextMenuContent>
@@ -304,12 +390,12 @@ function SlideMenu({
         <ContextMenuShortcut>{shortcutLabel(shortcutKeys('slide-new'), mac)}</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuItem onSelect={onDuplicate}>
-        {t('duplicateSlide')}
+        {count > 1 ? many('duplicateSlides', { count }) : t('duplicateSlide')}
         <ContextMenuShortcut>{shortcutLabel(['Mod', 'D'], mac)}</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem variant="destructive" disabled={!canRemove} onSelect={onRemove}>
-        {t('removeSlide')}
+        {count > 1 ? many('removeSlides', { count }) : t('removeSlide')}
         <ContextMenuShortcut>{shortcutLabel(shortcutKeys('remove'), mac)}</ContextMenuShortcut>
       </ContextMenuItem>
     </ContextMenuContent>
@@ -338,19 +424,29 @@ const SortableSlide = memo(function SortableSlide({
   designSystem,
   label,
   index,
+  current,
   selected,
+  carried,
+  count,
   digits,
   resolveMedia,
-  onSelect,
+  onPick,
 }: {
   slide: SlideIr;
   designSystem: DesignSystem;
   label: string;
   index: number;
+  /** Открытый слайд: на нём фокус и самая яркая рамка. */
+  current: boolean;
+  /** Среди выбранных. */
   selected: boolean;
+  /** Едет вместе с перетаскиваемым слайдом: на своём месте он бледнеет. */
+  carried: boolean;
+  /** Сколько слайдов тянут вместе с этим; больше одного — значок со счётом. */
+  count: number;
   digits: number;
   resolveMedia?: (mediaPart: string) => string | null;
-  onSelect: (index: number) => void;
+  onPick: (index: number, modifiers: PickModifiers) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: slide.slideId,
@@ -366,21 +462,28 @@ const SortableSlide = memo(function SortableSlide({
       aria-label={label}
       aria-describedby={attributes['aria-describedby']}
       aria-roledescription={attributes['aria-roledescription']}
-      tabIndex={selected ? 0 : -1}
+      tabIndex={current ? 0 : -1}
       data-index={index}
       data-slide-id={slide.slideId}
+      data-current={current ? '' : undefined}
       {...listeners}
-      onClick={() => onSelect(index)}
-      onContextMenu={() => onSelect(index)}
+      onClick={(event) =>
+        onPick(index, { range: event.shiftKey, toggle: event.ctrlKey || event.metaKey })
+      }
+      // Правый щелчок по выбранному не сбрасывает выбор: меню — для всех выбранных.
+      onContextMenu={() => {
+        if (!selected) onPick(index, PLAIN);
+      }}
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
       }}
       className={cn(
-        'group/slide flex shrink-0 cursor-grab scroll-m-2 rounded-lg p-1 outline-none',
-        'gap-1 max-md:flex-col md:gap-2',
+        'group/slide relative flex shrink-0 cursor-grab scroll-m-2 rounded-lg p-1 outline-none',
+        'gap-1 select-none max-md:flex-col md:gap-2',
         'active:cursor-grabbing',
         isDragging && 'z-[1] cursor-grabbing opacity-80',
+        carried && 'opacity-40',
       )}
     >
       <span
@@ -395,6 +498,14 @@ const SortableSlide = memo(function SortableSlide({
       >
         {index + 1}
       </span>
+      {count > 1 ? (
+        <span
+          aria-hidden
+          className="absolute -top-1 -right-1 z-[2] grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[0.6875rem] font-medium text-primary-foreground tabular-nums shadow-sm"
+        >
+          {count}
+        </span>
+      ) : null}
       {/*
        * Размер миниатюры задаёт ось списка: в колонке — ширина, в ленте — высота. Вторую
        * сторону даёт пропорция самого слайда, какой бы она ни была у шаблона.
@@ -405,7 +516,9 @@ const SortableSlide = memo(function SortableSlide({
           'overflow-hidden rounded-md bg-card ring-1 ring-border',
           'transition-[box-shadow] duration-150 motion-reduce:transition-none',
           'group-hover/slide:ring-foreground/30',
-          'group-aria-selected/slide:ring-2 group-aria-selected/slide:ring-primary',
+          // Выбранные — рамкой потише, открытый — яркой.
+          'group-aria-selected/slide:ring-2 group-aria-selected/slide:ring-primary/45',
+          'group-data-current/slide:ring-2 group-data-current/slide:ring-primary',
           'group-focus-visible/slide:ring-2 group-focus-visible/slide:ring-ring',
           'max-md:h-16 md:min-w-0 md:flex-1',
         )}

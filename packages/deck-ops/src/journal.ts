@@ -22,6 +22,7 @@ import {
   type DeckHistory,
   type DeckSelection,
 } from './core.js';
+import { tidyLayers } from './layers.js';
 
 export type { DeckChange, DeckChangeKind, DeckCommit, DeckHistory, DeckSelection } from './core.js';
 
@@ -279,6 +280,8 @@ export function commitRemove(
       const element = target.elements[index];
       if (element && wanted.has(element.elementId)) target.elements.splice(index, 1);
     }
+    // A group left with one member is no group, as in PowerPoint.
+    tidyLayers(target);
   });
   const ids = removed.map((element) => element.elementId);
   return commitProduced(
