@@ -2386,6 +2386,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@lct/input-validation@workspace:^, @lct/input-validation@workspace:packages/input-validation":
+  version: 0.0.0-use.local
+  resolution: "@lct/input-validation@workspace:packages/input-validation"
+  dependencies:
+    "@lct/contracts": "workspace:^"
+  languageName: unknown
+  linkType: soft
+
 "@lct/pipeline@workspace:^, @lct/pipeline@workspace:packages/pipeline":
   version: 0.0.0-use.local
   resolution: "@lct/pipeline@workspace:packages/pipeline"
@@ -3981,6 +3989,7 @@ __metadata:
   dependencies:
     "@lct/contracts": "workspace:^"
     "@lct/engine-client": "workspace:^"
+    "@lct/input-validation": "workspace:^"
     "@lct/pipeline": "workspace:^"
     "@lct/registry": "workspace:^"
     "@lct/run-store": "workspace:^"
@@ -4492,6 +4501,7 @@ __metadata:
   resolution: "cli@workspace:apps/cli"
   dependencies:
     "@lct/contracts": "workspace:^"
+    "@lct/input-validation": "workspace:^"
     "@lct/registry": "workspace:^"
     "@lct/run-store": "workspace:^"
     yaml: "npm:^2.8.0"

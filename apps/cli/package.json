@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@lct/contracts": "workspace:^",
+    "@lct/input-validation": "workspace:^",
     "@lct/registry": "workspace:^",
     "@lct/run-store": "workspace:^",
     "yaml": "^2.8.0"

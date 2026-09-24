@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { PostgresRunRepository, type RunRecord } from '@lct/run-store';
+import { validateLocalRunInputs } from '@lct/input-validation';
 import { readRunConfig } from './config.js';
 
 export async function initializeRun(
@@ -7,10 +8,11 @@ export async function initializeRun(
   connectionString = process.env.DATABASE_URL,
   createId?: () => string,
 ): Promise<RunRecord> {
-  readRunConfig(configPath);
+  const config = readRunConfig(configPath);
   if (connectionString === undefined || connectionString.length === 0) {
     throw new Error('DATABASE_URL is required. Start PostgreSQL or use docker compose.');
   }
+  validateLocalRunInputs(config);
   const repository = new PostgresRunRepository({ connectionString, createId });
   try {
     await repository.migrate();

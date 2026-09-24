@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
 import { MemoryRunRepository } from '@lct/run-store';
 import { RunsController } from './runs.controller.js';
 import { RunsService } from './runs.service.js';
@@ -19,5 +20,11 @@ describe('RunsController', () => {
     await runs.create();
 
     await expect(runs.status('run-api')).resolves.toMatchObject({ state: 'queued' });
+  });
+
+  it('rejects an invalid local input configuration before a run starts', () => {
+    const runs = controller();
+
+    expect(() => runs.validateInputs({})).toThrow(BadRequestException);
   });
 });

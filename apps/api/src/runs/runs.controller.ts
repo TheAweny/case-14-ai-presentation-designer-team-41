@@ -1,4 +1,16 @@
-import { Controller, Get, HttpCode, Inject, NotFoundException, Param, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
+import { LocalInputValidationError, type ValidatedLocalInputs } from '@lct/input-validation';
+import { runConfigSchema } from '@lct/contracts';
 import type { RunRecord } from '@lct/run-store';
 import { RunsService } from './runs.service.js';
 
@@ -10,6 +22,19 @@ export class RunsController {
   @HttpCode(202)
   create(): Promise<RunRecord> {
     return this.runs.create();
+  }
+
+  @Post('validate-inputs')
+  validateInputs(@Body() body: unknown): ValidatedLocalInputs {
+    try {
+      const config = runConfigSchema.parse(body);
+      return this.runs.validateInputs(config);
+    } catch (error) {
+      if (error instanceof LocalInputValidationError) {
+        throw new BadRequestException({ code: error.code, message: error.message });
+      }
+      throw new BadRequestException('Run input configuration is invalid.');
+    }
   }
 
   @Get(':runId')

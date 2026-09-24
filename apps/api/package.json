@@ -8,6 +8,7 @@
   "dependencies": {
     "@lct/contracts": "workspace:^",
     "@lct/engine-client": "workspace:^",
+    "@lct/input-validation": "workspace:^",
     "@lct/pipeline": "workspace:^",
     "@lct/registry": "workspace:^",
     "@lct/run-store": "workspace:^",

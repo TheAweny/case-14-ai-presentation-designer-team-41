@@ -1,5 +1,7 @@
 import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import type { RunRecord, RunRepository, RunState } from '@lct/run-store';
+import { validateLocalRunInputs, type ValidatedLocalInputs } from '@lct/input-validation';
+import type { RunConfig } from '@lct/contracts';
 import { RUN_REPOSITORY } from './runs.tokens.js';
 
 @Injectable()
@@ -20,6 +22,12 @@ export class RunsService implements OnApplicationShutdown {
 
   ping(): Promise<void> {
     return this.repository.ping();
+  }
+
+  validateInputs(
+    config: Pick<RunConfig, 'contentPath' | 'outputDir' | 'templatePath'>,
+  ): ValidatedLocalInputs {
+    return validateLocalRunInputs(config);
   }
 
   onApplicationShutdown(): Promise<void> {
