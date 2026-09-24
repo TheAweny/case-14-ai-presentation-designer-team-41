@@ -134,6 +134,8 @@
         "slide-add": "new slide",
         "slide-remove": "slide removal",
         "background": "slide background",
+        "crop": "crop",
+        "notes": "notes edit",
         "other": "change"
       }
     },
