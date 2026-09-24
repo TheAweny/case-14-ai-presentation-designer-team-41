@@ -85,6 +85,27 @@ export function createDraft(
   return { version: DRAFT_VERSION, deckId, base, savedAt, slides, media: uploadPartsOf(slides) };
 }
 
+/**
+ * Сколько ждать чтения черновика, прежде чем открыть колоду как есть. IndexedDB отвечает за
+ * единицы миллисекунд; дольше — значит, база занята другой вкладкой или браузер тормозит, и
+ * держать человека перед скелетоном дольше нельзя.
+ */
+export const DRAFT_READ_TIMEOUT_MS = 1500;
+
+/**
+ * Открыть ли прочитанный черновик вместо колоды. Нет — если черновика нет, он совпадает с
+ * исходной колодой или человек уже начал править то, что открылось без него: его свежая
+ * правка важнее вчерашнего черновика, а подмена колоды посреди жеста сорвала бы его.
+ */
+export function shouldRestoreDraft(
+  draft: DeckDraft | null,
+  origin: readonly SlideIr[],
+  edited: readonly SlideIr[] | null,
+): boolean {
+  if (!draft || sameSlides(draft.slides, origin)) return false;
+  return edited === null || sameSlides(edited, origin);
+}
+
 const slidesSchema = slideIrSchema.array().min(1);
 
 /**

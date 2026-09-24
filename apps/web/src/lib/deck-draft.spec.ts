@@ -10,6 +10,7 @@ import {
   mediaPrefix,
   readDraft,
   sameSlides,
+  shouldRestoreDraft,
   uploadPartsOf,
 } from './deck-draft';
 
@@ -84,5 +85,18 @@ describe('deck draft', () => {
     expect(
       readDraft({ ...draft, slides: [{ ...first, elements: [{ kind: 'text' }] }] }, expected),
     ).toBeNull();
+  });
+
+  it('открывает черновик, только пока человек ничего не правил сам', () => {
+    const edited = withImage('upload/a.png');
+    const draft = createDraft('demo', base, edited, 1);
+    expect(shouldRestoreDraft(draft, slides, null)).toBe(true);
+    // Правок ещё нет: оболочка сообщила исходную колоду.
+    expect(shouldRestoreDraft(draft, slides, structuredClone(slides))).toBe(true);
+    // Человек уже правит: его правка важнее, колоду посреди жеста не подменяем.
+    expect(shouldRestoreDraft(draft, slides, withImage('upload/b.png'))).toBe(false);
+    expect(shouldRestoreDraft(null, slides, null)).toBe(false);
+    // Черновик, равный колоде, открывать незачем.
+    expect(shouldRestoreDraft(createDraft('demo', base, slides, 1), slides, null)).toBe(false);
   });
 });

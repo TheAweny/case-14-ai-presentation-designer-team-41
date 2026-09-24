@@ -11,14 +11,20 @@ import {
 } from '@hugeicons/core-free-icons';
 import type { SlideIr } from '@lct/contracts';
 import type { Deck } from '@/lib/deck-source';
-import { createDraft, deckFingerprint, sameSlides } from '@/lib/deck-draft';
+import {
+  DRAFT_READ_TIMEOUT_MS,
+  createDraft,
+  deckFingerprint,
+  sameSlides,
+  shouldRestoreDraft,
+} from '@/lib/deck-draft';
 import { createAutosave, type SaveStatus } from '@/lib/draft-autosave';
 import { browserDraftStore, createDraftStorage } from '@/lib/draft-storage';
 import { uploadedMedia } from '@/lib/media-registry';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
-import type { EditorLayout } from '@/components/editor/editor-layout';
+import { EDITOR_LAYOUT_DEFAULT, type EditorLayout } from '@/components/editor/editor-layout';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 
@@ -57,6 +63,8 @@ export function DeckEditor({
   // Пока черновик не прочитан, писать нельзя: исходная колода стёрла бы его.
   const loaded = useRef(false);
   const latest = useRef<readonly SlideIr[] | null>(null);
+  /** Что лежит в хранилище сейчас; null — неизвестно, тогда пишем любую новую правку. */
+  const persisted = useRef<readonly SlideIr[] | null>(null);
 
   const autosave = useMemo(
     () =>
@@ -65,10 +73,12 @@ export function DeckEditor({
           if (!storage) throw new Error('IndexedDB is not available');
           if (sameSlides(slides, origin)) {
             await storage.clear(deck.deckId);
+            persisted.current = origin;
             setHasDraft(false);
             return;
           }
           await storage.save(createDraft(deck.deckId, base, slides, Date.now()), uploadedMedia);
+          persisted.current = slides;
           setHasDraft(true);
         },
         onStatus: setStatus,
@@ -77,38 +87,58 @@ export function DeckEditor({
   );
   useEffect(() => () => autosave.dispose(), [autosave]);
 
+  /*
+   * Оболочка открывается, когда черновик прочитан: иначе исходная колода мелькнула бы до
+   * подмены, а подмена пришлась бы на жест человека (протяжку вставки, набор) и сорвала его.
+   * Чтение — единицы миллисекунд, пока идёт — скелетон. Если база не отвечает дольше
+   * `DRAFT_READ_TIMEOUT_MS`, колода открывается как есть, а поздний черновик применяется,
+   * только пока человек ничего не поправил (`shouldRestoreDraft`).
+   */
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    const finish = () => {
+    // `stored` — что лежит в хранилище: исходная колода (черновика нет), неоткрытый черновик
+    // или null, если прочитать не удалось.
+    const finish = (stored: readonly SlideIr[] | null) => {
       loaded.current = true;
+      persisted.current = stored;
+      setReady(true);
       // Человек успел что-то поправить, пока черновик читался: его правка важнее.
       if (latest.current && !sameSlides(latest.current, origin)) {
         autosave.schedule(latest.current);
       }
     };
     if (!storage) {
-      finish();
+      finish(origin);
       return;
     }
+    const timer = window.setTimeout(() => {
+      if (!cancelled) setReady(true);
+    }, DRAFT_READ_TIMEOUT_MS);
     storage
       .load(deck.deckId, base, uploadedMedia)
       .then((draft) => {
         if (cancelled) return;
-        const untouched = !latest.current || sameSlides(latest.current, origin);
-        if (draft && untouched && !sameSlides(draft.slides, origin)) {
+        window.clearTimeout(timer);
+        if (draft && shouldRestoreDraft(draft, origin, latest.current)) {
           setOpened((current) => ({ slides: draft.slides, generation: current.generation + 1 }));
           setRestored(draft.slides);
           setHasDraft(true);
           loaded.current = true;
+          persisted.current = draft.slides;
+          setReady(true);
           return;
         }
-        finish();
+        finish(draft ? draft.slides : origin);
       })
       .catch(() => {
-        if (!cancelled) finish();
+        if (cancelled) return;
+        window.clearTimeout(timer);
+        finish(null);
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [autosave, base, deck.deckId, origin, storage]);
 
@@ -116,6 +146,11 @@ export function DeckEditor({
     (slides: readonly SlideIr[]) => {
       latest.current = slides;
       if (!loaded.current) return;
+      // Оболочка сообщает и сами открытые слайды, при каждом открытии: это не правка, писать
+      // нечего, и браузер не должен переспрашивать об уходе. Пока запись ждёт, сообщение
+      // заменяет её — отмена до записи должна дойти до черновика.
+      const kept = persisted.current;
+      if (kept && !autosave.busy() && sameSlides(slides, kept)) return;
       // Плашка про восстановленное уходит с первой новой правкой: отказ от черновика дальше
       // стёр бы и её.
       setRestored((shown) => (shown && !sameSlides(slides, shown) ? null : shown));
@@ -154,6 +189,8 @@ export function DeckEditor({
 
   const shown = useMemo(() => ({ ...deck, slides: opened.slides }), [deck, opened.slides]);
 
+  if (!ready) return <EditorSkeleton slide={deck.slides[0]} layout={layout} />;
+
   return (
     <>
       <EditorShell
@@ -166,6 +203,35 @@ export function DeckEditor({
       />
       {restored ? <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} /> : null}
     </>
+  );
+}
+
+/**
+ * Пока читается черновик: колонка слайдов той же ширины и лист в пропорции слайда. Ввода
+ * нет — принимать его до того, как ясно, какая колода откроется, нельзя.
+ */
+function EditorSkeleton({ slide, layout }: { slide?: SlideIr; layout?: EditorLayout }) {
+  const t = useTranslations('draft');
+  const ratio = slide ? `${slide.slideCx} / ${slide.slideCy}` : '16 / 9';
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label={t('loading')}
+      data-editor-loading=""
+      className="flex h-dvh overflow-hidden bg-background max-md:flex-col-reverse"
+    >
+      <div
+        style={{ width: layout?.slides ?? EDITOR_LAYOUT_DEFAULT.slides }}
+        className="shrink-0 bg-sidebar max-md:h-24 max-md:w-full!"
+      />
+      <div className="grid min-h-0 min-w-0 flex-1 place-items-center p-3 [container-type:size] md:px-6 md:py-14">
+        <div
+          style={{ aspectRatio: ratio, width: `min(100cqw, 100cqh * ${ratio})` }}
+          className="rounded-sm bg-card ring-1 ring-border animate-pulse motion-reduce:animate-none"
+        />
+      </div>
+    </div>
   );
 }
 

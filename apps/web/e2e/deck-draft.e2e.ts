@@ -36,6 +36,39 @@ test.describe('черновик колоды (F-90)', () => {
     await expect(page.locator('[data-draft-restored]')).toHaveCount(0);
   });
 
+  test('черновик читается до первого кадра: исходная колода не мелькает', async ({ page }) => {
+    await openEditor(page);
+    const target = freeObject(page);
+    const id = (await target.getAttribute('data-element-id')) ?? '';
+    await target.click();
+    await page.keyboard.press('Delete');
+    await expect(page.locator('[data-save-status="saved"]')).toBeVisible();
+
+    // Сторож с самого начала загрузки: появлялся ли удалённый объект на холсте хоть на кадр.
+    await page.addInitScript((elementId) => {
+      const flags = window as unknown as { __flashed?: boolean };
+      flags.__flashed = false;
+      new MutationObserver(() => {
+        if (document.querySelector(`[data-canvas-slide] [data-element-id="${elementId}"]`)) {
+          flags.__flashed = true;
+        }
+      }).observe(document, { childList: true, subtree: true });
+    }, id);
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.locator('[data-draft-restored]')).toBeVisible();
+    await expect(objectById(page, id)).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as unknown as { __flashed?: boolean }).__flashed),
+    ).toBe(false);
+
+    // Плашка восстановления не мешает первому жесту: объект выделяется и удаляется как обычно.
+    const next = freeObject(page);
+    const nextId = (await next.getAttribute('data-element-id')) ?? '';
+    await next.click();
+    await page.keyboard.press('Delete');
+    await expect(objectById(page, nextId)).toHaveCount(0);
+  });
+
   test('браузер переспрашивает об уходе, только пока правка не записана', async ({ page }) => {
     await openEditor(page);
     expect(await wouldWarn(page)).toBe(false);
