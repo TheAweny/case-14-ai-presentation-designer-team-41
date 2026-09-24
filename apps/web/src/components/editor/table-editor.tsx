@@ -26,7 +26,6 @@ import {
 import {
   bodyRowsOf,
   cellText,
-  cellsOf,
   clampCell,
   clearedCells,
   columnInsertion,
@@ -717,9 +716,4 @@ export function TableEditor({
     </>,
     slideRoot,
   );
-}
-
-/** Ячейки диапазона для чтения с экрана и тестов: сколько их выделено. */
-export function selectedCount(anchor: GridCell, head: GridCell): number {
-  return cellsOf(rangeOf(anchor, head)).length;
 }
