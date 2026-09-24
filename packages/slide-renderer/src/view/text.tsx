@@ -1,12 +1,33 @@
 import type { CSSProperties, JSX } from 'react';
-import type { DesignSystem, Paragraph, TextRun } from '@lct/contracts';
-import { EMU_PER_PT, boxStyle, cqw, ptToCqw, type SlideSize } from '../geometry.js';
+import type {
+  DesignSystem,
+  Paragraph,
+  ParagraphAlign,
+  TextRun,
+  VerticalAlign,
+} from '@lct/contracts';
+import { EMU_PER_PT, cqw, ptToCqw, type SlideSize } from '../geometry.js';
 import { createTypeResolver, typeRoleOf, type TextElement } from '../schematic/text-layout.js';
 import { fontFamily, paint } from './color.js';
+import { markHooks, markStyle } from './mark.js';
 
 function runColor(color: string, fallback: string): string {
   return /^[0-9a-fA-F]{6}$/.test(color) ? `#${color}` : fallback;
 }
+
+/** Where the lines sit in a box taller than they are. PowerPoint's default anchor is the top. */
+const ANCHOR: Record<VerticalAlign, CSSProperties['justifyContent']> = {
+  top: 'flex-start',
+  middle: 'center',
+  bottom: 'flex-end',
+};
+
+const ALIGN: Record<ParagraphAlign, CSSProperties['textAlign']> = {
+  left: 'left',
+  center: 'center',
+  right: 'right',
+  justify: 'justify',
+};
 
 function showBreaks(text: string): string {
   return text.replaceAll('\v', '\n').replaceAll('\u2028', '\n');
@@ -14,16 +35,20 @@ function showBreaks(text: string): string {
 
 /**
  * The copy, as the IR states it. Nothing is trimmed or rewritten: when the engine has already
- * recorded an overflow, a mark sits on the box and the words stay whole.
+ * recorded an overflow, a mark sits on the box and the words stay whole. Text that runs past a
+ * box anchored in the middle or at the bottom spills both ways or upwards, as it does in
+ * PowerPoint.
  */
 export function TextMark({
   element,
   size,
   profile,
+  thumbnail = false,
 }: {
   element: TextElement;
   size: SlideSize;
   profile: DesignSystem;
+  thumbnail?: boolean;
 }): JSX.Element {
   const type = createTypeResolver(profile, size.cy);
   const style = profile.typeScale.find((entry) => entry.role === typeRoleOf(element.role));
@@ -37,10 +62,14 @@ export function TextMark({
 
   return (
     <div
-      data-kind="text"
-      data-role={element.role}
-      data-element-id={element.elementId}
-      style={{ ...boxStyle(element.box, size), overflow: 'visible' }}
+      {...markHooks(element, thumbnail)}
+      style={{
+        ...markStyle(element, size),
+        overflow: 'visible',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: ANCHOR[element.verticalAlign ?? 'top'],
+      }}
     >
       {element.paragraphs.map((paragraph, index) => (
         <ParagraphView
@@ -58,7 +87,7 @@ export function TextMark({
           first={index === 0}
         />
       ))}
-      {element.overflow ? (
+      {element.overflow && !thumbnail ? (
         <span
           data-overflow="true"
           aria-hidden
@@ -102,6 +131,7 @@ function ParagraphView({
   first: boolean;
 }): JSX.Element {
   const lead = paragraph.runs[0];
+  const align = paragraph.align ? ALIGN[paragraph.align] : undefined;
   const leadSize = lead?.sizePt ?? styleSizePt ?? (typeSizeEmu > 0 ? typeSizeEmu / EMU_PER_PT : 16);
   const marker = runColor(lead?.color ?? '', inherited);
 
@@ -131,7 +161,7 @@ function ParagraphView({
           }}
         />
       ) : null}
-      <span style={{ minWidth: 0 }}>
+      <span style={{ minWidth: 0, flex: '1 1 0%', textAlign: align }}>
         {paragraph.runs.map((run, index) => (
           <span
             key={index}
@@ -171,6 +201,7 @@ function runStyle(
     fontSize: cqw(ptToCqw(sizePt, size)),
     fontWeight: (run.bold ?? styleBold) ? 700 : 400,
     fontStyle: (run.italic ?? styleItalic) ? 'italic' : 'normal',
+    ...(run.underline ? { textDecoration: 'underline' } : null),
     color: runColor(run.color, inherited),
     whiteSpace: 'pre-wrap',
     overflowWrap: 'break-word',

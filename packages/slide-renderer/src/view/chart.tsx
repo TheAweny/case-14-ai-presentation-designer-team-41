@@ -4,9 +4,11 @@ import { Group } from '@visx/group';
 import { scaleBand, scaleLinear } from '@visx/scale';
 import { AreaClosed, Bar, Circle, Line, LinePath, Pie } from '@visx/shape';
 import type { Box, DesignSystem, SlideElement } from '@lct/contracts';
-import { EMU_PER_PT, boxStyle, type SlideSize } from '../geometry.js';
+import { EMU_PER_PT, type SlideSize } from '../geometry.js';
 import { createTypeResolver, textWidthEmu, typeRoleOf } from '../schematic/text-layout.js';
+import { wrapLabel } from './chart-labels.js';
 import { fontFamily, paint, seriesPaint } from './color.js';
+import { markHooks, markStyle } from './mark.js';
 
 type ChartElement = Extract<SlideElement, { kind: 'chart' }>;
 
@@ -60,6 +62,7 @@ function Label({
   x,
   y,
   text,
+  lines,
   metrics,
   anchor = 'start',
   baseline = 'auto',
@@ -67,6 +70,8 @@ function Label({
   x: number;
   y: number;
   text: string;
+  /** Text already broken to fit its slot; one line per entry. */
+  lines?: readonly string[];
   metrics: Metrics;
   anchor?: 'start' | 'middle' | 'end';
   baseline?: 'auto' | 'middle' | 'hanging';
@@ -81,10 +86,34 @@ function Label({
       textAnchor={anchor}
       dominantBaseline={baseline}
     >
-      {text}
+      {lines && lines.length > 1
+        ? lines.map((line, index) => (
+            <tspan key={index} x={x} dy={index === 0 ? 0 : `${LABEL_LINE}em`}>
+              {line}
+            </tspan>
+          ))
+        : (lines?.[0] ?? text)}
+      {lines && lines.join(' ') !== text ? <title>{text}</title> : null}
     </text>
   );
 }
+
+/** Line pitch of wrapped category labels, in em. */
+const LABEL_LINE = 1.15;
+
+/** How many lines the widest category label needs under a column or trend chart. */
+function labelLinesOf(element: ChartElement, plot: Plot, metrics: Metrics): number {
+  const count = element.categories.length;
+  if (count === 0) return 1;
+  const slot = ((plot.right - plot.left) / count) * SLOT_FILL;
+  return Math.max(
+    1,
+    ...element.categories.map((name) => wrapLabel(name, slot, metrics.size).length),
+  );
+}
+
+/** Share of a category slot a label may take: a gap stays between neighbours. */
+const SLOT_FILL = 0.92;
 
 function Titles({
   element,
@@ -121,9 +150,16 @@ function Titles({
   );
 }
 
-function plotOf(element: ChartElement, box: Box, metrics: Metrics, left: number): Plot {
+function plotOf(
+  element: ChartElement,
+  box: Box,
+  metrics: Metrics,
+  left: number,
+  labelLines = 1,
+): Plot {
   const top = metrics.size * (element.yTitle || element.series.length > 1 ? 2.4 : 0.6);
-  const bottom = box.cy - metrics.size * (element.xTitle ? 3.2 : 2);
+  const labels = (labelLines - 1) * LABEL_LINE;
+  const bottom = box.cy - metrics.size * ((element.xTitle ? 3.2 : 2) + labels);
   return {
     left,
     right: box.cx - metrics.size * 0.4,
@@ -214,17 +250,21 @@ function Columns({
           );
         }),
       )}
-      {domain.map((id) => (
-        <Label
-          key={`label-${id}`}
-          x={(x0(id) ?? 0) + x0.bandwidth() / 2}
-          y={plot.bottom + metrics.size * 0.35}
-          text={element.categories[Number(id)] ?? ''}
-          metrics={metrics}
-          anchor="middle"
-          baseline="hanging"
-        />
-      ))}
+      {domain.map((id) => {
+        const text = element.categories[Number(id)] ?? '';
+        return (
+          <Label
+            key={`label-${id}`}
+            x={(x0(id) ?? 0) + x0.bandwidth() / 2}
+            y={plot.bottom + metrics.size * 0.35}
+            text={text}
+            lines={wrapLabel(text, x0.step() * SLOT_FILL, metrics.size)}
+            metrics={metrics}
+            anchor="middle"
+            baseline="hanging"
+          />
+        );
+      })}
     </Group>
   );
 }
@@ -355,17 +395,21 @@ function Trend({
           </Group>
         );
       })}
-      {domain.map((id) => (
-        <Label
-          key={`label-${id}`}
-          x={(x(id) ?? 0) + x.bandwidth() / 2}
-          y={plot.bottom + metrics.size * 0.35}
-          text={element.categories[Number(id)] ?? ''}
-          metrics={metrics}
-          anchor="middle"
-          baseline="hanging"
-        />
-      ))}
+      {domain.map((id) => {
+        const text = element.categories[Number(id)] ?? '';
+        return (
+          <Label
+            key={`label-${id}`}
+            x={(x(id) ?? 0) + x.bandwidth() / 2}
+            y={plot.bottom + metrics.size * 0.35}
+            text={text}
+            lines={wrapLabel(text, x.step() * SLOT_FILL, metrics.size)}
+            metrics={metrics}
+            anchor="middle"
+            baseline="hanging"
+          />
+        );
+      })}
     </Group>
   );
 }
@@ -421,22 +465,30 @@ export function ChartMark({
   element,
   size,
   profile,
+  thumbnail = false,
 }: {
   element: ChartElement;
   size: SlideSize;
   profile: DesignSystem;
+  thumbnail?: boolean;
 }): JSX.Element {
   const { box } = element;
   const frame: Box = { x: 0, y: 0, cx: box.cx / EMU_PER_PT, cy: box.cy / EMU_PER_PT };
   const metrics = metricsOf(profile, frame, size.cy);
-  const plot = plotOf(element, frame, metrics, metrics.size * 0.5);
+  const first = plotOf(element, frame, metrics, metrics.size * 0.5);
+  // Long category names wrap under their column; the plot gives up the height they take.
+  const plot = plotOf(
+    element,
+    frame,
+    metrics,
+    metrics.size * 0.5,
+    labelLinesOf(element, first, metrics),
+  );
   return (
     <div
-      data-kind="chart"
-      data-role={element.role}
-      data-element-id={element.elementId}
-      data-chart-type={element.chartType}
-      style={{ ...boxStyle(box, size), overflow: 'visible' }}
+      {...markHooks(element, thumbnail)}
+      {...(thumbnail ? null : { 'data-chart-type': element.chartType })}
+      style={{ ...markStyle(element, size), overflow: 'visible' }}
     >
       {frame.cx > 0 && frame.cy > 0 ? (
         <svg

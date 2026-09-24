@@ -547,6 +547,97 @@ function decorLevel(box: Box, size: SlideSize): InkLevel {
   return 'decor';
 }
 
+/** Head size in EMU from the box, capped so the shaft stays a line. */
+function arrowHeadEmu(box: Box): { wing: number; tip: number } {
+  const cross = Math.min(box.cx, box.cy);
+  const span = Math.max(box.cx, box.cy);
+  const thick = cross > 0 ? cross : span * 0.06;
+  return {
+    wing: Math.min(thick * 0.34, span * 0.1),
+    tip: Math.min(thick * 0.56, span * 0.16),
+  };
+}
+
+function arrowHeadLengths(box: Box, size: SlideSize): { wing: string; tip: string } {
+  const head = arrowHeadEmu(box);
+  return {
+    wing: cqw(emuToCqw(head.wing, size)),
+    tip: cqw(emuToCqw(head.tip, size)),
+  };
+}
+
+function axisStroke(horizontal: boolean, color: string, thickness: string): CSSProperties {
+  return horizontal
+    ? {
+        position: 'absolute',
+        left: 0,
+        top: '50%',
+        width: '100%',
+        height: thickness,
+        transform: 'translateY(-50%)',
+        background: color,
+      }
+    : {
+        position: 'absolute',
+        top: 0,
+        left: '50%',
+        width: thickness,
+        height: '100%',
+        transform: 'translateX(-50%)',
+        background: color,
+      };
+}
+
+function ArrowHead({
+  horizontal,
+  color,
+  wing,
+  tip,
+}: {
+  horizontal: boolean;
+  color: string;
+  wing: string;
+  tip: string;
+}): JSX.Element {
+  const flank = `${wing} solid transparent`;
+  const point = `${tip} solid ${color}`;
+  return horizontal ? (
+    <div
+      style={{
+        position: 'absolute',
+        right: 0,
+        top: '50%',
+        width: '0',
+        height: '0',
+        marginTop: `-${wing}`,
+        borderTop: flank,
+        borderBottom: flank,
+        borderLeft: point,
+      }}
+    />
+  ) : (
+    <div
+      style={{
+        position: 'absolute',
+        left: '50%',
+        bottom: 0,
+        width: '0',
+        height: '0',
+        marginLeft: `-${wing}`,
+        borderLeft: flank,
+        borderRight: flank,
+        borderTop: point,
+      }}
+    />
+  );
+}
+
+/** Outlines a schematic can draw with a box: everything but a line, which is a rule. */
+const CLIP: Partial<Record<NonNullable<ElementOf<'decor'>['shape']>, string>> = {
+  triangle: 'polygon(50% 0, 100% 100%, 0 100%)',
+  diamond: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+};
+
 function DecorSchematic({
   element,
   context,
@@ -556,15 +647,47 @@ function DecorSchematic({
 }): JSX.Element {
   const { box } = element;
   // A line shape has no height (or no width) in OOXML; it still has to show.
-  const line = hairline(cqw(0.08));
+  const thickness = hairline(cqw(0.08));
+  const zeroAxis = {
+    ...(box.cy === 0 ? { height: thickness } : null),
+    ...(box.cx === 0 ? { width: thickness } : null),
+  };
+  // A line keeps rule ink even when its box is large enough to be a panel.
+  if (element.shape === 'line') {
+    const horizontal = box.cx >= box.cy;
+    const color = ink('rule');
+    const arrow = element.stroke?.tail === 'arrow' || element.stroke?.head === 'arrow';
+    const head = arrow ? arrowHeadLengths(box, context.size) : null;
+    return (
+      <Element element={element} context={context} style={zeroAxis}>
+        <div style={axisStroke(horizontal, color, thickness)} />
+        {head ? (
+          <ArrowHead horizontal={horizontal} color={color} wing={head.wing} tip={head.tip} />
+        ) : null}
+      </Element>
+    );
+  }
+  const clip = element.shape ? CLIP[element.shape] : undefined;
+  const corner =
+    element.shape === 'ellipse'
+      ? '50%'
+      : element.shape === 'round-rect'
+        ? cqw(emuToCqw((element.cornerRadius ?? 1 / 6) * Math.min(box.cx, box.cy), context.size))
+        : null;
   return (
     <Element
       element={element}
       context={context}
       style={{
-        background: ink(decorLevel(box, context.size)),
-        ...(box.cy === 0 ? { height: line } : null),
-        ...(box.cx === 0 ? { width: line } : null),
+        // No fill leaves the outline, if there is one, as a rule around an empty box.
+        ...(element.fill === null
+          ? element.stroke
+            ? { boxShadow: `inset 0 0 0 ${thickness} ${ink('rule')}` }
+            : null
+          : { background: ink(decorLevel(box, context.size)) }),
+        ...(corner ? { borderRadius: corner } : null),
+        ...(clip ? { clipPath: clip } : null),
+        ...zeroAxis,
       }}
     />
   );

@@ -1,12 +1,14 @@
 import type { JSX } from 'react';
-import type { Box, DesignSystem, SlideElement } from '@lct/contracts';
-import { boxStyle, cqw, emuToCqw, type SlideSize } from '../geometry.js';
+import type { DesignSystem, SlideElement } from '@lct/contracts';
+import { cqw, emuToCqw, type SlideSize } from '../geometry.js';
 import { createTypeResolver, typeRoleOf } from '../schematic/text-layout.js';
 import { fontFamily, paint } from './color.js';
+import { markHooks, markStyle } from './mark.js';
+
+export { DecorMark } from './decor.js';
 
 type ImageElement = Extract<SlideElement, { kind: 'image' }>;
 type TableElement = Extract<SlideElement, { kind: 'table' }>;
-type DecorElement = Extract<SlideElement, { kind: 'decor' }>;
 
 function hairline(size: SlideSize): string {
   return cqw(emuToCqw(Math.max(size.cx * 0.0012, 1), size));
@@ -18,21 +20,21 @@ export function ImageMark({
   size,
   profile,
   resolveMedia,
+  thumbnail = false,
 }: {
   element: ImageElement;
   size: SlideSize;
   profile: DesignSystem;
   resolveMedia?: (mediaPart: string) => string | null;
+  thumbnail?: boolean;
 }): JSX.Element {
   const url = resolveMedia?.(element.mediaPart) ?? null;
   const line = paint(profile.palette, 'line', 'text');
   return (
     <div
-      data-kind="image"
-      data-role={element.role}
-      data-element-id={element.elementId}
+      {...markHooks(element, thumbnail)}
       style={{
-        ...boxStyle(element.box, size),
+        ...markStyle(element, size),
         overflow: 'hidden',
         background: url ? undefined : paint(profile.palette, 'surface', 'background'),
         boxShadow: url ? undefined : `inset 0 0 0 ${hairline(size)} ${line}`,
@@ -53,10 +55,12 @@ export function TableMark({
   element,
   size,
   profile,
+  thumbnail = false,
 }: {
   element: TableElement;
   size: SlideSize;
   profile: DesignSystem;
+  thumbnail?: boolean;
 }): JSX.Element {
   const type = createTypeResolver(profile, size.cy);
   const style = profile.typeScale.find((entry) => entry.role === typeRoleOf(element.role));
@@ -66,10 +70,8 @@ export function TableMark({
   const rows = [element.headers, ...element.rows];
   return (
     <div
-      data-kind="table"
-      data-role={element.role}
-      data-element-id={element.elementId}
-      style={{ ...boxStyle(element.box, size), overflow: 'visible' }}
+      {...markHooks(element, thumbnail)}
+      style={{ ...markStyle(element, size), overflow: 'visible' }}
     >
       <table
         style={{
@@ -112,46 +114,5 @@ export function TableMark({
         </tbody>
       </table>
     </div>
-  );
-}
-
-/**
- * Decoration carries no fill of its own. The box is the target, painted with a palette role
- * chosen from its share of the slide: a full-bleed panel and a small mark read as accent,
- * a card as surface, a rule as a line.
- */
-function decorPaint(box: Box, size: SlideSize, profile: DesignSystem): string {
-  const area = box.cx > 0 && box.cy > 0 ? (box.cx * box.cy) / (size.cx * size.cy) : 0;
-  const thin = Math.min(box.cx, box.cy) / size.cx;
-  if (box.cx === 0 || box.cy === 0 || thin <= 0.012)
-    return paint(profile.palette, 'accent', 'line');
-  if (area >= 0.5 || area <= 0.01) return paint(profile.palette, 'accent', 'text');
-  return paint(profile.palette, 'surface', 'background');
-}
-
-export function DecorMark({
-  element,
-  size,
-  profile,
-}: {
-  element: DecorElement;
-  size: SlideSize;
-  profile: DesignSystem;
-}): JSX.Element | null {
-  const { box } = element;
-  if (box.cx < 0 || box.cy < 0 || box.cx + box.cy === 0) return null;
-  const thickness = hairline(size);
-  return (
-    <div
-      data-kind="decor"
-      data-role={element.role}
-      data-element-id={element.elementId}
-      style={{
-        ...boxStyle(box, size),
-        background: decorPaint(box, size, profile),
-        ...(box.cy === 0 ? { height: thickness } : null),
-        ...(box.cx === 0 ? { width: thickness } : null),
-      }}
-    />
   );
 }

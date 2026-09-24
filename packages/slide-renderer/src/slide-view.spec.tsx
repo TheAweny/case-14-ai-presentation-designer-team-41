@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DesignSystem, SlideIr } from '@lct/contracts';
+import type { DesignSystem, SlideElement, SlideIr } from '@lct/contracts';
 import { SlideView } from './slide-view.js';
 import { CONTENT, COVER, WIDE, box, paragraph, text } from './testing/deck.js';
+import { fontFamily, genericFamily, seriesPaint, seriesRoles } from './view/color.js';
 
 const PROFILE = {
   schemaVersion: 1,
@@ -65,11 +66,59 @@ const PROFILE = {
   notes: [],
 } satisfies DesignSystem;
 
-function render(slide: SlideIr, resolveMedia?: (mediaPart: string) => string | null): string {
+function render(
+  slide: SlideIr,
+  resolveMedia?: (mediaPart: string) => string | null,
+  thumbnail?: boolean,
+): string {
   return renderToStaticMarkup(
-    <SlideView slide={slide} profile={PROFILE} label="Слайд" resolveMedia={resolveMedia} />,
+    <SlideView
+      slide={slide}
+      profile={PROFILE}
+      label="Слайд"
+      resolveMedia={resolveMedia}
+      thumbnail={thumbnail}
+    />,
   );
 }
+
+function only(slide: SlideIr, ...elements: SlideElement[]): SlideIr {
+  return { ...slide, elements };
+}
+
+function openTag(html: string, id: string): string {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`<div\\b(?=[^>]*data-element-id="${escaped}")[^>]*>`).exec(html)?.[0] ?? '';
+}
+
+/** The markup of one element: from its opening tag up to the next element. */
+function markup(html: string, id: string): string {
+  const start = html.indexOf(`data-element-id="${id}"`);
+  if (start < 0) return '';
+  const next = html.indexOf('data-element-id="', start + 1);
+  return html.slice(start, next < 0 ? undefined : next);
+}
+
+type Decor = Extract<SlideElement, { kind: 'decor' }>;
+
+function shape(elementId: string, frame: ReturnType<typeof box>, look: Partial<Decor>): Decor {
+  return {
+    kind: 'decor',
+    elementId,
+    role: 'decoration',
+    box: frame,
+    sourceShapeId: null,
+    ...look,
+  };
+}
+
+const STROKE = {
+  color: 'accent',
+  widthEmu: 25_400,
+  dash: 'solid',
+  head: 'none',
+  tail: 'none',
+} as const;
 
 describe('SlideView', () => {
   it('draws the copy in the template face and keeps every word', () => {
@@ -123,10 +172,280 @@ describe('SlideView', () => {
     }
     expect(html).toContain('<rect');
     expect(html).toContain('<path');
-    expect(html).toContain('fill="#111111"');
+    // Series take the accent first, then the next mark colour; never the colour of body text.
+    const columns = markup(html, 'content-chart-column');
+    expect(columns).toContain('fill="#3355E0"');
+    expect(columns).toContain('fill="#CC3333"');
+    expect(columns).not.toContain('fill="#111111"');
     expect(html).toContain('fill="#666666"');
     const used = [...html.matchAll(/#([0-9a-fA-F]{6})/g)].map((match) => match[1]?.toUpperCase());
     const allowed = new Set(PROFILE.palette.map((entry) => entry.hex.toUpperCase()));
     for (const hex of used) expect(allowed.has(hex ?? '')).toBe(true);
+  });
+});
+
+describe('thumbnail', () => {
+  const slide: SlideIr = {
+    ...CONTENT,
+    elements: [
+      ...CONTENT.elements,
+      {
+        ...text('late', 'body', box(48, 40, 200, 24), [paragraph('Не влезает')]),
+        overflow: { lines: 2, emu: 20_000 },
+      },
+      shape('arrow', box(80, 80, 200, 100), {
+        shape: 'line',
+        fill: null,
+        stroke: { ...STROKE, tail: 'arrow' },
+      }),
+    ],
+  };
+
+  it('draws the same slide without hooks, overflow marks or pointer', () => {
+    const html = render(slide, undefined, true);
+    expect(html).toContain('Все виды элементов на одном слайде');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toMatch(/pointer-events:\s*none/);
+    for (const hook of [
+      'data-element-id',
+      'data-slide-root',
+      'data-slide-id',
+      'data-kind',
+      'data-role',
+      'data-overflow',
+      'data-chart-type',
+      'data-shape',
+      'aria-label',
+      'pointer-events="stroke"',
+    ]) {
+      expect(html).not.toContain(hook);
+    }
+  });
+
+  it('keeps the hooks the canvas looks elements up by when it is not a thumbnail', () => {
+    const html = render(slide);
+    expect(html).toContain('data-slide-root="true"');
+    expect(html).toContain(`data-slide-id="${CONTENT.slideId}"`);
+    expect(html).toContain('aria-label="Слайд"');
+    expect(html).toContain('data-element-id="content-title"');
+    expect(html).toContain('data-kind="text"');
+    expect(html).toContain('data-overflow="true"');
+    expect(html).not.toMatch(/pointer-events:\s*none/);
+  });
+});
+
+describe('shapes', () => {
+  const card = box(80, 80, 320, 180);
+  const small = box(80, 80, 40, 20);
+
+  it('fills a shape with its own role at any size, where template decor guesses', () => {
+    const smallHtml = render(only(COVER, shape('mark', small, { shape: 'rect', fill: 'accent' })));
+    const largeHtml = render(only(COVER, shape('mark', card, { shape: 'rect', fill: 'accent' })));
+    expect(markup(smallHtml, 'mark')).toContain('fill="#3355E0"');
+    expect(markup(largeHtml, 'mark')).toContain('fill="#3355E0"');
+    expect(openTag(largeHtml, 'mark')).toContain('data-shape="rect"');
+
+    // The same boxes without a look of their own flip between accent and surface by area.
+    const guessedSmall = render(only(COVER, shape('mark', small, { sourceShapeId: 7 })));
+    const guessedLarge = render(only(COVER, shape('mark', card, { sourceShapeId: 7 })));
+    expect(openTag(guessedSmall, 'mark')).toContain('background:#3355E0');
+    expect(openTag(guessedLarge, 'mark')).toContain('background:#EEEEEE');
+    expect(openTag(guessedLarge, 'mark')).not.toContain('data-shape');
+    expect(guessedLarge).not.toContain('<svg');
+  });
+
+  it('draws each geometry, outline and corner from its fields', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('round', card, {
+          shape: 'round-rect',
+          fill: 'surface',
+          stroke: { ...STROKE, dash: 'dash' },
+          cornerRadius: 0.25,
+        }),
+        shape('oval', card, { shape: 'ellipse', fill: null, stroke: STROKE }),
+        shape('tri', card, { shape: 'triangle', fill: 'negative', stroke: null }),
+        shape('gem', card, { shape: 'diamond', fill: 'accent' }),
+      ),
+    );
+    const round = markup(html, 'round');
+    // A quarter of the shorter side, 180 pt; a 2 pt line dashed at 4:3 of its width.
+    expect(round).toContain('rx="45"');
+    expect(round).toContain('fill="#EEEEEE"');
+    expect(round).toContain('stroke="#3355E0"');
+    expect(round).toContain('stroke-width="2"');
+    expect(round).toContain('stroke-dasharray="8 6"');
+    expect(round).toContain('viewBox="0 0 320 180"');
+    expect(round).toContain('preserveAspectRatio="none"');
+
+    const oval = markup(html, 'oval');
+    expect(oval).toContain('<ellipse');
+    expect(oval).toContain('fill="none"');
+    expect(oval).not.toContain('stroke-dasharray');
+
+    const tri = markup(html, 'tri');
+    expect(tri).toContain('points="160,0 320,180 0,180"');
+    expect(tri).toContain('fill="#CC3333"');
+    expect(tri).not.toContain('stroke=');
+    expect(markup(html, 'gem')).toContain('points="160,0 320,90 160,180 0,90"');
+
+    const used = [...html.matchAll(/#([0-9a-fA-F]{6})/g)].map((match) => match[1]);
+    for (const hex of used) {
+      expect(PROFILE.palette.some((entry) => entry.hex === hex)).toBe(true);
+    }
+  });
+
+  it('flips a triangle upside down about its box', () => {
+    const html = render(
+      only(COVER, shape('down', card, { shape: 'triangle', fill: 'accent', flipV: true })),
+    );
+    expect(markup(html, 'down')).toContain('transform="translate(0 180) scale(1 -1)"');
+  });
+
+  it('runs a line corner to corner, flips it and puts the arrow on the tail', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('down', card, { shape: 'line', fill: null, stroke: STROKE }),
+        shape('back', card, {
+          shape: 'line',
+          fill: null,
+          stroke: { ...STROKE, tail: 'arrow' },
+          flipH: true,
+        }),
+        shape('rule', box(80, 80, 320, 0), { shape: 'line', stroke: { ...STROKE, dash: 'dot' } }),
+      ),
+    );
+    const down = markup(html, 'down');
+    expect(down).toMatch(/<line x1="0" y1="0" x2="320" y2="180" stroke="#3355E0"/);
+    expect(down).not.toContain('<polygon');
+
+    // Drawn from right to left: it starts at the top right and the head points at the bottom left.
+    const back = markup(html, 'back');
+    expect(back).toMatch(/<line x1="320" y1="0" x2="\d/);
+    expect(back).toContain('<polygon points="0,180 ');
+    expect(back).toContain('pointer-events="stroke"');
+
+    const rule = markup(html, 'rule');
+    expect(rule).toContain('stroke-dasharray="2 2"');
+    expect(openTag(html, 'rule')).toContain('height:0.12cqw');
+  });
+});
+
+describe('look shared by every kind', () => {
+  it('rotates about the centre and fades, and leaves an unrotated element alone', () => {
+    const turned = {
+      ...text('turned', 'body', box(48, 40, 200, 24), [paragraph('Поворот')]),
+      rotation: 30,
+      opacity: 0.5,
+    };
+    const plain = text('plain', 'body', box(48, 80, 200, 24), [paragraph('Прямо')]);
+    const picture: SlideElement = {
+      kind: 'image',
+      elementId: 'picture',
+      role: 'image',
+      box: box(300, 80, 200, 100),
+      sourceShapeId: null,
+      mediaPart: 'upload/picture.png',
+      fit: 'cover',
+      rotation: 90,
+    };
+    const html = render(only(COVER, turned, plain, picture));
+    expect(openTag(html, 'turned')).toContain('transform:rotate(30deg)');
+    expect(openTag(html, 'turned')).toContain('opacity:0.5');
+    expect(openTag(html, 'picture')).toContain('transform:rotate(90deg)');
+    expect(openTag(html, 'plain')).not.toContain('transform');
+    expect(openTag(html, 'plain')).not.toContain('opacity');
+  });
+
+  it('marks a locked element for the editor', () => {
+    const html = render(
+      only(COVER, shape('panel', box(0, 0, 960, 540), { sourceShapeId: 3, locked: true })),
+    );
+    expect(openTag(html, 'panel')).toContain('data-locked="true"');
+    expect(openTag(render(COVER), 'cover-panel')).not.toContain('data-locked');
+  });
+
+  it('fills the slide with its background role, and with the template background otherwise', () => {
+    const root = /<div[^>]*data-slide-root="true"[^>]*>/;
+    expect(root.exec(render({ ...COVER, background: 'accent' }))?.[0]).toContain(
+      'background:#3355E0',
+    );
+    expect(root.exec(render({ ...COVER, background: null }))?.[0]).toContain('background:#FFFFFF');
+    expect(root.exec(render(COVER))?.[0]).toContain('background:#FFFFFF');
+  });
+});
+
+describe('text look', () => {
+  it('aligns paragraphs, anchors the box and underlines runs', () => {
+    const element: SlideElement = {
+      ...text('note', 'body', box(48, 40, 400, 200), [
+        { ...paragraph('По центру'), align: 'center' },
+        { ...paragraph('Как у шаблона'), align: null },
+        {
+          level: 0,
+          align: 'justify',
+          runs: [
+            {
+              text: 'Подчёркнуто',
+              font: '',
+              sizePt: 16,
+              bold: null,
+              italic: null,
+              underline: true,
+              color: '',
+            },
+          ],
+        },
+      ]),
+      verticalAlign: 'bottom',
+    };
+    const html = render(only(COVER, element));
+    expect(openTag(html, 'note')).toContain('justify-content:flex-end');
+    expect(html).toContain('text-align:center');
+    expect(html).toContain('text-align:justify');
+    expect(html.match(/text-align:/g)).toHaveLength(2);
+    expect(html.match(/text-decoration:underline/g)).toHaveLength(1);
+  });
+});
+
+describe('palette order for series', () => {
+  it('starts with the accent whatever order the palette is listed in', () => {
+    const reversed = [...PROFILE.palette].reverse();
+    expect(seriesRoles(reversed)).toEqual(['accent', 'negative', 'text', 'text-muted']);
+    expect(seriesPaint(reversed, 0)).toBe('#3355E0');
+    expect(seriesPaint(reversed, 1)).toBe('#CC3333');
+    expect(seriesPaint(reversed, 4)).toBe('#3355E0');
+  });
+
+  it('ranks the alternate accent and the signal colours ahead of type colours', () => {
+    const full = [
+      ...PROFILE.palette,
+      { role: 'accent-alt', hex: '14A085', source: 'theme', coverage: 0 },
+      { role: 'positive', hex: '2E9E5B', source: 'theme', coverage: 0 },
+    ] satisfies DesignSystem['palette'];
+    expect(seriesRoles(full)).toEqual([
+      'accent',
+      'accent-alt',
+      'positive',
+      'negative',
+      'text',
+      'text-muted',
+    ]);
+  });
+});
+
+describe('fontFamily', () => {
+  it('adds the generic family, so a missing face does not fall back to a serif', () => {
+    expect(fontFamily('Inter')).toBe('"Inter", sans-serif');
+    expect(fontFamily(' PT Serif ')).toBe('"PT Serif", serif');
+    expect(fontFamily('Noto Sans')).toBe('"Noto Sans", sans-serif');
+    expect(fontFamily('Times New Roman')).toBe('"Times New Roman", serif');
+    expect(fontFamily('JetBrains Mono')).toBe('"JetBrains Mono", monospace');
+    expect(fontFamily('Say "hi"')).toBe('"Say hi", sans-serif');
+    expect(fontFamily('')).toBeUndefined();
+    expect(genericFamily('Georgia')).toBe('serif');
+    expect(render(CONTENT)).toContain('font-family:&quot;Deck Face&quot;, sans-serif');
   });
 });

@@ -21,11 +21,17 @@ export interface SlideViewProps {
   readonly resolveMedia?: (mediaPart: string) => string | null;
   /** Host chrome on the frame, such as the canvas corner radius. */
   readonly className?: string;
+  /**
+   * A miniature for a slide list. The slide looks the same, but it is inert: no overflow marks,
+   * no `data-*` hooks the editor looks elements up by, hidden from assistive technology (the
+   * host labels the list item) and transparent to the pointer.
+   */
+  readonly thumbnail?: boolean;
 }
 
 /**
  * One slide of the IR, drawn with the template profile. Text stays as written: an overflow is a
- * mark, not a cut. Charts are visx shapes coloured by palette roles, in palette order.
+ * mark, not a cut. Charts are visx shapes coloured by palette roles.
  */
 export function SlideView({
   slide,
@@ -33,24 +39,42 @@ export function SlideView({
   label,
   resolveMedia,
   className,
+  thumbnail = false,
 }: SlideViewProps): JSX.Element {
   const size = slideSizeOf(slide);
+  const hooks = thumbnail
+    ? { 'aria-hidden': true }
+    : { 'data-slide-root': 'true', 'data-slide-id': slide.slideId, 'aria-label': label };
   return (
     <SlideFrame
       size={size}
       className={className}
-      data-slide-root="true"
-      aria-label={label}
+      {...hooks}
       style={{
-        background: paint(profile.palette, 'background', 'surface'),
+        background: paint(
+          profile.palette,
+          slide.background ?? 'background',
+          'background',
+          'surface',
+        ),
         color: paint(profile.palette, 'text', 'background'),
+        ...(thumbnail ? { pointerEvents: 'none', userSelect: 'none' } : null),
       }}
     >
-      {slide.elements.map((element, index) => {
-        const key = `${index}:${element.elementId}`;
+      {slide.elements.map((element) => {
+        // Keyed by id, not by position: inserting or removing one element keeps the DOM of the rest.
+        const key = element.elementId;
         switch (element.kind) {
           case 'text':
-            return <TextMark key={key} element={element} size={size} profile={profile} />;
+            return (
+              <TextMark
+                key={key}
+                element={element}
+                size={size}
+                profile={profile}
+                thumbnail={thumbnail}
+              />
+            );
           case 'image':
             return (
               <ImageMark
@@ -59,14 +83,39 @@ export function SlideView({
                 size={size}
                 profile={profile}
                 resolveMedia={resolveMedia}
+                thumbnail={thumbnail}
               />
             );
           case 'table':
-            return <TableMark key={key} element={element} size={size} profile={profile} />;
+            return (
+              <TableMark
+                key={key}
+                element={element}
+                size={size}
+                profile={profile}
+                thumbnail={thumbnail}
+              />
+            );
           case 'chart':
-            return <ChartMark key={key} element={element} size={size} profile={profile} />;
+            return (
+              <ChartMark
+                key={key}
+                element={element}
+                size={size}
+                profile={profile}
+                thumbnail={thumbnail}
+              />
+            );
           case 'decor':
-            return <DecorMark key={key} element={element} size={size} profile={profile} />;
+            return (
+              <DecorMark
+                key={key}
+                element={element}
+                size={size}
+                profile={profile}
+                thumbnail={thumbnail}
+              />
+            );
         }
       })}
     </SlideFrame>

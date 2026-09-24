@@ -2,6 +2,7 @@ export {
   EMU_PER_PT,
   boxStyle,
   boxToRect,
+  cqw,
   emuToCqw,
   ptToCqw,
   slideSizeOf,
@@ -10,4 +11,7 @@ export {
 } from './geometry.js';
 export { SlideFrame, type SlideFrameProps } from './slide-frame.js';
 export { SlideSchematic, type SlideSchematicProps } from './schematic/slide-schematic.js';
+export { createTypeResolver, typeRoleOf, type TypeResolver } from './schematic/text-layout.js';
 export { SlideView, type SlideViewProps } from './slide-view.js';
+export { fontFamily, genericFamily, paint, seriesPaint, seriesRoles } from './view/color.js';
+export { markHooks, markStyle } from './view/mark.js';
