@@ -65,6 +65,8 @@ const KEEPS_EDITING = `[data-text-editor], [data-text-format], [data-table-edito
 /** Здесь буквы — клавиши виджета (поиск по пунктам, ячейки), а не начало набора в тексте. */
 const TYPE_SKIPS =
   '[role="menu"], [role="menubar"], [role="listbox"], [role="dialog"], [role="combobox"], [role="grid"], [data-table-editor]';
+/** Здесь фокус свой: набор текста, его полоса и ячейки таблицы. Холст его не отбирает. */
+const OWNS_FOCUS = '[data-text-editor], [data-text-format], [data-table-editor]';
 
 /**
  * Поле вокруг слайда приглушено: вынесенное за край видно, но читается как «не на слайде».
@@ -255,6 +257,31 @@ export function SlideCanvas({
     area.addEventListener('pointerdown', onDown, true);
     return () => area.removeEventListener('pointerdown', onDown, true);
   }, [area, session, tableSession]);
+
+  // Щелчок по холсту забирает клавиатуру у списка слайдов и кнопок, как в Figma и Slides:
+  // Delete, стрелки и пробел дальше про холст, а не про миниатюру. Сам браузер фокус сюда не
+  // перенесёт — Selecto и Moveable гасят mousedown. Поле, набор и ячейка фокус берут сами,
+  // а открытый набор его не теряет: закрывает набор обработчик выше.
+  useEffect(() => {
+    if (!area) return;
+    const onDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (isTypingTarget(target)) return;
+      if (target instanceof Element && target.closest(OWNS_FOCUS)) return;
+      const active = document.activeElement;
+      if (active === area) return;
+      if (
+        active instanceof Element &&
+        area.contains(active) &&
+        (isTypingTarget(active) || active.closest(OWNS_FOCUS))
+      ) {
+        return;
+      }
+      area.focus({ preventScroll: true });
+    };
+    area.addEventListener('pointerdown', onDown, true);
+    return () => area.removeEventListener('pointerdown', onDown, true);
+  }, [area]);
 
   useEffect(() => {
     if (!host) return;
@@ -739,7 +766,8 @@ export function SlideCanvas({
       <ContextMenuTrigger asChild disabled={session !== null || tableSession !== null || pan}>
         <div
           ref={rememberArea}
-          // Фокус сюда ставит переход между слайдами с клавиатуры; сам в порядок Tab не входит.
+          // Фокус сюда ставят щелчок по холсту и переход между слайдами с клавиатуры; сам в
+          // порядок Tab не входит.
           tabIndex={-1}
           data-canvas-area=""
           onContextMenu={selectUnderPointer}

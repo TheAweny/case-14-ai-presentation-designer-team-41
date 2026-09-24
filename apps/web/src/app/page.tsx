@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
-import { EditorShell } from '@/components/editor/editor-shell';
+import { DeckEditor } from '@/components/editor/deck-editor';
 import { EDITOR_LAYOUT_COOKIE, parseEditorLayout } from '@/components/editor/editor-layout';
 import { mediaUrls } from '@/lib/deck-source';
 import { DEMO_DECK_ID } from '@/mocks/demo-deck';
@@ -20,7 +20,7 @@ export default async function HomePage() {
   return (
     // Открытый слайд редактор читает из адреса через `useSearchParams`, а тому нужна граница.
     <Suspense>
-      <EditorShell deck={deck} media={mediaUrls(deckSource, deck)} layout={layout} />
+      <DeckEditor deck={deck} media={mediaUrls(deckSource, deck)} layout={layout} />
     </Suspense>
   );
 }

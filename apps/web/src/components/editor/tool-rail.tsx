@@ -31,6 +31,7 @@ import {
   Image01Icon,
   KeyboardIcon,
   MinusSignIcon,
+  PlayIcon,
   SquareIcon,
   Table01Icon,
   TextFontIcon,
@@ -58,6 +59,7 @@ import {
   type ShortcutId,
 } from '@/components/editor/editor-shortcuts';
 import type { ChangeKind } from '@/components/editor/use-deck-history';
+import { isInsertTool, type InsertTool } from '@/components/editor/insert-element';
 
 /**
  * Идентификаторы инструментов и вариантов — они же ключи словаря `toolRail`: подписи
@@ -79,7 +81,7 @@ export type VariantId =
   | 'chart'
   | 'table'
   | 'diagram';
-export type RailActionId = 'ai' | 'shortcuts';
+export type RailActionId = 'ai' | 'shortcuts' | 'present';
 
 /** Кнопки истории живут на той же панели, но это не инструменты: вариантов у них нет. */
 type HistoryId = 'undo' | 'redo';
@@ -179,6 +181,14 @@ const ACTIONS: readonly Action[] = [
   { id: 'shortcuts', icon: KeyboardIcon, shortcut: null, registry: 'shortcuts' },
 ];
 
+/** Показ с открытого слайда, как главная кнопка Google Slides. F5 — с начала, из реестра. */
+const SHOW_ACTION: Action = {
+  id: 'present',
+  icon: PlayIcon,
+  shortcut: null,
+  registry: 'present-current',
+};
+
 /** Клавиши кнопки действия для подсказки: свои однобуквенные или из реестра редактора. */
 function actionKeys(action: Action): readonly string[] {
   if (action.shortcut) return [action.shortcut.key];
@@ -208,6 +218,17 @@ export const RAIL_SHORTCUTS: readonly (
     action.shortcut ? [{ kind: 'action' as const, id: action.id, key: action.shortcut.key }] : [],
   ),
 ];
+
+/**
+ * Что можно вставить, по кнопкам рейки: текст, картинка, фигуры, данные. Нижняя панель узкого
+ * экрана строит из этого своё меню — подписи и значки те же, что на рейке.
+ */
+export const INSERT_GROUPS: readonly (readonly { id: InsertTool; icon: IconSvgElement }[])[] =
+  TOOLS.map((tool) =>
+    tool.variants.flatMap((variant) =>
+      isInsertTool(variant.id) ? [{ id: variant.id, icon: variant.icon }] : [],
+    ),
+  ).filter((group) => group.length > 0);
 
 const TOOL_BY_ID = new Map(TOOLS.map((tool) => [tool.id, tool]));
 
@@ -619,6 +640,30 @@ export const ToolRail = memo(function ToolRail({
             </div>
           </>
         )}
+
+        <RailSeparator axis={axis} />
+        <div role="group" aria-label={t('groups.show')} className="p-0.5">
+          <RailTooltip
+            label={t(`tools.${SHOW_ACTION.id}`)}
+            keys={actionKeys(SHOW_ACTION)}
+            side={toward}
+          >
+            <ToolbarPrimitive.Button
+              aria-label={t(`tools.${SHOW_ACTION.id}`)}
+              aria-keyshortcuts={actionAria(SHOW_ACTION)}
+              onMouseDown={keepCanvasFocus}
+              onClick={() => onActionRef.current?.(SHOW_ACTION.id)}
+              className={BUTTON}
+            >
+              <HugeiconsIcon
+                icon={SHOW_ACTION.icon}
+                size={18}
+                strokeWidth={1.5}
+                color="currentColor"
+              />
+            </ToolbarPrimitive.Button>
+          </RailTooltip>
+        </div>
       </ToolbarPrimitive.Root>
     </TooltipProvider>
   );

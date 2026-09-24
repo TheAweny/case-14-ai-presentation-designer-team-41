@@ -38,7 +38,9 @@ export type EditorCommand =
   | { readonly kind: 'text-exit' }
   // Tab / Shift+Tab в наборе: уровень абзацев выделения.
   | { readonly kind: 'text-indent'; readonly step: -1 | 1 }
-  | { readonly kind: 'shortcuts' };
+  | { readonly kind: 'shortcuts' }
+  // Показ на весь экран: с первого слайда или с открытого.
+  | { readonly kind: 'present'; readonly from: 'start' | 'current' };
 
 export interface KeyLike {
   readonly code: string;
@@ -140,6 +142,10 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
       return { kind: 'text-indent', step: -1 };
     case 'type-to-edit':
       return null;
+    case 'present':
+      return { kind: 'present', from: 'start' };
+    case 'present-current':
+      return { kind: 'present', from: 'current' };
     case 'copy':
     case 'cut':
     case 'paste':

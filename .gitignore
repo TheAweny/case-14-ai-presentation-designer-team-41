@@ -21,6 +21,10 @@ coverage/
 .nx/cache
 .nx/workspace-data
 
+# playwright
+apps/web/test-results/
+apps/web/playwright-report/
+
 # python
 .venv/
 __pycache__/
