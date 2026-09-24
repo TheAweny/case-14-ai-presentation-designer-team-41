@@ -1,6 +1,6 @@
 'use client';
 
-import type { KeyboardEvent } from 'react';
+import { useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Add01Icon,
@@ -8,6 +8,7 @@ import {
   ChartColumnIcon,
   ChartLineData01Icon,
   BarChartHorizontalIcon,
+  ClipboardPasteIcon,
   MinusSignIcon,
   PieChartIcon,
 } from '@hugeicons/core-free-icons';
@@ -27,6 +28,14 @@ import {
   setValue,
   type ChartData,
 } from '@/components/editor/inspector/chart-data';
+import {
+  chartDataFromRows,
+  isRange,
+  parseDelimited,
+  pasteRows,
+  type ChartCell,
+  type ChartNames,
+} from '@/components/editor/inspector/chart-paste';
 
 type ChartElement = Extract<SlideElement, { kind: 'chart' }>;
 
@@ -40,19 +49,30 @@ const TYPES = [
 
 /**
  * Поле таблицы данных. Значение применяется по Enter или уходу из поля, Esc возвращает прежнее.
- * `key` с текущим значением пересоздаёт поле, когда данные поменяла отмена.
+ * `key` с текущим значением пересоздаёт поле, когда данные поменяла отмена. Диапазон из буфера
+ * (несколько ячеек из Excel или Google Таблиц) поле не берёт себе, а отдаёт `onPasteRange`.
  */
 function CellInput({
   value,
   ariaLabel,
   numeric,
   onCommit,
+  onPasteRange,
 }: {
   value: string;
   ariaLabel: string;
   numeric?: boolean;
   onCommit: (text: string) => boolean;
+  onPasteRange?: (text: string) => void;
 }) {
+  const onPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const text = event.clipboardData.getData('text/plain');
+    if (!onPasteRange || !isRange(text)) return;
+    event.preventDefault();
+    // Поле возвращается к своему значению: диапазон ложится в данные целиком, одной правкой.
+    event.currentTarget.value = value;
+    onPasteRange(text);
+  };
   const commit = (input: HTMLInputElement) => {
     if (input.value === value) return;
     if (!onCommit(input.value)) input.value = value;
@@ -76,6 +96,7 @@ function CellInput({
       onFocus={(event) => event.currentTarget.select()}
       onBlur={(event) => commit(event.currentTarget)}
       onKeyDown={onKeyDown}
+      onPaste={onPaste}
       className={cn(
         'h-6 w-full min-w-0 rounded-[5px] bg-transparent px-1.5 text-xs text-foreground outline-none',
         'hover:bg-muted focus:bg-background focus:ring-1 focus:ring-ring',
@@ -106,6 +127,32 @@ export function ChartSection({
     if (!sameData(next, data)) onChartData(chart.elementId, next);
   };
   const pie = chart.chartType === 'pie';
+  const names: ChartNames = {
+    series: (n) => t('seriesName', { n }),
+    category: (n) => String(n),
+  };
+  /** Диапазон, вставленный в ячейку: ложится от неё вправо и вниз, одной записью журнала. */
+  const pasteAt = (at: ChartCell) => (text: string) => {
+    apply(pasteRows(data, parseDelimited(text), at, names));
+  };
+  // Подсказка под таблицей, когда кнопке «Вставить» нечего вставить или буфер закрыт.
+  const [pasteNote, setPasteNote] = useState<'empty' | 'denied' | null>(null);
+  const pasteClipboard = async () => {
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      setPasteNote('denied');
+      return;
+    }
+    const next = chartDataFromRows(parseDelimited(text), names);
+    if (!next) {
+      setPasteNote('empty');
+      return;
+    }
+    setPasteNote(null);
+    apply(next);
+  };
 
   return (
     <>
@@ -142,6 +189,11 @@ export function ChartSection({
         actions={
           <>
             <IconButton
+              icon={ClipboardPasteIcon}
+              label={t('pasteChartData')}
+              onClick={() => void pasteClipboard()}
+            />
+            <IconButton
               icon={MinusSignIcon}
               label={t('removeSeries')}
               disabled={data.series.length <= 1}
@@ -165,6 +217,7 @@ export function ChartSection({
                     <CellInput
                       value={series.name}
                       ariaLabel={t('seriesLabel', { n: s + 1 })}
+                      onPasteRange={pasteAt({ row: 0, column: s + 1 })}
                       onCommit={(text) => {
                         if (text.trim() === '') return false;
                         apply(setSeriesName(data, s, text.trim()));
@@ -182,6 +235,7 @@ export function ChartSection({
                     <CellInput
                       value={category}
                       ariaLabel={t('categoryLabel', { n: c + 1 })}
+                      onPasteRange={pasteAt({ row: c + 1, column: 0 })}
                       onCommit={(text) => {
                         if (text.trim() === '') return false;
                         apply(setCategory(data, c, text.trim()));
@@ -195,6 +249,7 @@ export function ChartSection({
                         numeric
                         value={String(series.values[c] ?? 0)}
                         ariaLabel={t('valueLabel', { series: series.name, category })}
+                        onPasteRange={pasteAt({ row: c + 1, column: s + 1 })}
                         onCommit={(text) => {
                           const value = parseNumber(text);
                           if (value === null) return false;
@@ -223,6 +278,17 @@ export function ChartSection({
             onClick={() => apply(addCategory(data, String(data.categories.length + 1)))}
           />
         </div>
+        <p
+          role={pasteNote ? 'status' : undefined}
+          data-chart-paste-note={pasteNote ?? undefined}
+          className={cn('text-xs', pasteNote ? 'text-foreground' : 'text-muted-foreground')}
+        >
+          {pasteNote === 'empty'
+            ? t('pasteChartEmpty')
+            : pasteNote === 'denied'
+              ? t('pasteChartDenied')
+              : t('pasteChartHint')}
+        </p>
       </Section>
     </>
   );
