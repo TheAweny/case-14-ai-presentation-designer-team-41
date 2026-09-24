@@ -45,6 +45,8 @@ import {
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
 import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canvas';
+import type { LineReshape } from '@/components/editor/slide-handles';
+import { flipEntries } from '@/components/editor/inspector/selection-model';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
@@ -196,6 +198,8 @@ export function EditorShell({
     slides,
     committedSlides,
     move,
+    nudge,
+    reshape,
     setText,
     remove,
     reorder,
@@ -312,6 +316,36 @@ export function EditorShell({
       move(slideId, moves, mode);
     },
     [move, slideId],
+  );
+
+  /** Стрелки: серия сдвигов подряд — один шаг отмены. */
+  const nudgeOf = useCallback(
+    (moves: readonly ElementMove[]) => {
+      if (slideId) nudge(slideId, moves);
+    },
+    [nudge, slideId],
+  );
+
+  /** Alt+перетаскивание: копии там, куда дотащили, одной записью журнала. */
+  const duplicateTo = useCallback(
+    (elementIds: readonly string[], offset: { x: number; y: number }) => {
+      if (slideId) duplicate(slideId, elementIds, offset);
+    },
+    [duplicate, slideId],
+  );
+
+  /** Конец линии: рамка и отражения вместе, живым видом на время жеста. */
+  const reshapeLine = useCallback(
+    (elementId: string, line: LineReshape | null, mode: EditMode) => {
+      if (!slideId) return;
+      if (!line) {
+        endPreview();
+        return;
+      }
+      const { box, ...props } = line;
+      reshape(slideId, [{ elementId, box, props }], mode);
+    },
+    [endPreview, reshape, slideId],
   );
 
   const removeSelected = useCallback(() => {
@@ -500,15 +534,11 @@ export function EditorShell({
         }
         case 'flip': {
           // Каждой фигуре — от её собственного отражения, одной записью журнала.
-          const key = command.axis === 'horizontal' ? 'flipH' : 'flipV';
           const shapes = selected.filter((element) => element.kind === 'decor');
           if (shapes.length === 0) return;
           setPropsEach(
             slide.slideId,
-            shapes.map((shape) => ({
-              elementIds: [shape.elementId],
-              props: { [key]: shape[key] !== true },
-            })),
+            flipEntries(shapes, command.axis === 'horizontal' ? 'flipH' : 'flipV'),
           );
           return;
         }
@@ -610,7 +640,7 @@ export function EditorShell({
         }
         case 'nudge': {
           const grid = gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy);
-          move(
+          nudge(
             slide.slideId,
             selected.map((element) => ({
               elementId: element.elementId,
@@ -627,7 +657,7 @@ export function EditorShell({
       arrange,
       designSystem.grid,
       duplicate,
-      move,
+      nudge,
       pasteElements,
       redo,
       rememberCopy,
@@ -967,6 +997,9 @@ export function EditorShell({
                       hasLocked={slide.elements.some((element) => element.locked === true)}
                       tableOps={tableOps}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
+                      onNudge={nudgeOf}
+                      onDuplicate={duplicateTo}
+                      onLineEnds={reshapeLine}
                       controlRef={canvasControl}
                       selectionActions={selectionActions}
                       className={CANVAS_PADDING}

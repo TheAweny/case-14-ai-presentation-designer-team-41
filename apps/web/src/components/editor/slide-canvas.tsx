@@ -33,7 +33,7 @@ import {
 } from '@/components/editor/insert-element';
 import { SelectionBar, type SelectionBarActions } from '@/components/editor/selection-bar';
 import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus';
-import { SlideHandles } from '@/components/editor/slide-handles';
+import { SlideHandles, type LineReshape } from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
 import { TableEditor, type TableEntry } from '@/components/editor/table-editor';
 import { TableHandles } from '@/components/editor/table-handles';
@@ -47,7 +47,7 @@ import {
 } from '@/components/editor/slide-geometry';
 import { isTypingTarget } from '@/components/editor/slide-navigation';
 import type { VariantId } from '@/components/editor/tool-rail';
-import type { ElementMove } from '@/components/editor/use-deck-history';
+import type { EditMode, ElementMove } from '@/components/editor/use-deck-history';
 import { cn } from '@/lib/utils';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { CanvasMenuContent } from '@/components/editor/canvas-menu';
@@ -114,6 +114,9 @@ export function SlideCanvas({
   hasLocked,
   tableOps,
   onRotate,
+  onNudge,
+  onDuplicate,
+  onLineEnds,
   controlRef,
   selectionActions,
   className,
@@ -148,6 +151,12 @@ export function SlideCanvas({
   tableOps: TableOps;
   /** Угол объекта после поворота ручкой. */
   onRotate: (elementId: string, rotation: number) => void;
+  /** Сдвиг стрелкой: серия нажатий — один шаг отмены. Без него — как любой `onCommit`. */
+  onNudge?: (moves: readonly ElementMove[]) => void;
+  /** Alt+перетаскивание: копии со сдвигом в EMU, оригиналы на месте. */
+  onDuplicate?: (elementIds: readonly string[], offset: { x: number; y: number }) => void;
+  /** Конец линии перетащили: живой вид жеста, запись или отмена живого вида (`null`). */
+  onLineEnds?: (elementId: string, line: LineReshape | null, mode: EditMode) => void;
   /** Сюда холст кладёт то, что умеет по просьбе клавиатуры: см. `CanvasControl`. */
   controlRef?: { current: CanvasControl | null };
   /** Правки полосы свойств над выделением. */
@@ -208,9 +217,9 @@ export function SlideCanvas({
       : undefined;
 
   // Клавиши и команды зума читают текущее, не пересоздавая слушателей на каждую правку.
-  const latest = useRef({ slide, selectedIds, aligned, onCommit });
+  const latest = useRef({ slide, selectedIds, aligned, onCommit, onNudge });
   useEffect(() => {
-    latest.current = { slide, selectedIds, aligned, onCommit };
+    latest.current = { slide, selectedIds, aligned, onCommit, onNudge };
   });
 
   useEffect(() => {
@@ -461,7 +470,8 @@ export function SlideCanvas({
       if (!direction || isTypingTarget(event.target)) return;
       const target = event.target;
       if (target instanceof Element && target.closest(ARROW_OWNERS)) return;
-      const { slide: current, selectedIds: ids, aligned: grid, onCommit: commit } = latest.current;
+      const { slide: current, selectedIds: ids, aligned: grid } = latest.current;
+      const commit = latest.current.onNudge ?? latest.current.onCommit;
       if (ids.length === 0) return;
       event.preventDefault();
       commit(
@@ -828,6 +838,8 @@ export function SlideCanvas({
                       onSelect={onSelect}
                       onCommit={onCommit}
                       onRotate={onRotate}
+                      onDuplicate={onDuplicate}
+                      onLineEnds={onLineEnds}
                       onGestureChange={setGesture}
                     />
                   ) : null}
