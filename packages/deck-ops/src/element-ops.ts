@@ -341,8 +341,10 @@ export function commitElementProps(
       if (target.kind === 'text') applyText(target, props);
       if (target.kind === 'table') applyTable(target, props);
       if (target.kind === 'image' && props.fit !== undefined) {
-        if (imageFitSchema.safeParse(props.fit).success && target.fit !== props.fit) {
-          target.fit = props.fit;
+        if (imageFitSchema.safeParse(props.fit).success) {
+          if (target.fit !== props.fit) target.fit = props.fit;
+          // Fit places the whole picture: a crop would hide the change, so choosing one drops it.
+          if (target.crop !== undefined) delete target.crop;
         }
       }
       if (target.kind === 'chart' && props.chartType !== undefined) {

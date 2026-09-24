@@ -62,4 +62,11 @@ export {
   type TableCellStyleChange,
   type TableRange,
 } from './table-ops.js';
+export {
+  MIN_CROP_REST,
+  commitImageCrop,
+  commitShapeText,
+  commitSlideNotes,
+  normalCrop,
+} from './content-ops.js';
 export type { DeckChange, DeckChangeKind, DeckCommit, DeckHistory, DeckSelection } from './core.js';

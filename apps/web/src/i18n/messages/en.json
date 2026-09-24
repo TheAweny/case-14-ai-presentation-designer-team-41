@@ -147,6 +147,8 @@
         "slide-add": "new slide",
         "slide-remove": "slide removal",
         "background": "slide background",
+        "crop": "crop",
+        "notes": "notes edit",
         "other": "change"
       }
     },
@@ -252,6 +254,8 @@
       "cover": "Fill frame"
     },
     "replaceImage": "Replace…",
+    "cropImage": "Crop",
+    "resetCrop": "Reset crop",
     "slide": "Slide",
     "background": "Background",
     "templateBackground": "Reset to template background",
@@ -284,9 +288,32 @@
     "seriesLabel": "Series {n} name",
     "categoryLabel": "Category {n}",
     "valueLabel": "{series}: {category}",
+    "pasteChartData": "Paste data from clipboard",
+    "pasteChartHint": "You can also paste a range from Excel or Google Sheets into a cell: Ctrl+V.",
+    "pasteChartEmpty": "The clipboard holds no numbers. Copy a range: series in the first row, categories in the first column.",
+    "pasteChartDenied": "The browser would not let us read the clipboard. Select a cell and press Ctrl+V.",
     "lock": "Lock",
     "unlock": "Unlock",
     "textSelectionHint": "Changes apply to the selected words; alignment and line height to the paragraphs under the cursor."
+  },
+  "imageCrop": {
+    "label": "Crop picture",
+    "frame": "Crop frame",
+    "picture": "Picture: drag to move it in the frame",
+    "handle": "Frame edge",
+    "corner": "Picture corner: drag to scale",
+    "done": "Done",
+    "reset": "Reset",
+    "replace": "Replace…",
+    "cancel": "Cancel"
+  },
+  "speakerNotes": {
+    "label": "Speaker notes",
+    "placeholder": "Notes for this slide: only the presenter sees them",
+    "show": "Show notes",
+    "hide": "Hide notes",
+    "resize": "Resize notes",
+    "has": "Has notes"
   },
   "canvasMenu": {
     "cut": "Cut",

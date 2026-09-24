@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
   KEEPS_TEXT_FOCUS,
@@ -60,6 +60,10 @@ const EDITOR_CSS = `
 }
 [data-text-editor] .ProseMirror p {
   margin: 0;
+}
+/* В фигуре поле ровно по тексту: якорь (по центру, сверху, снизу) ставит рамка вокруг. */
+[data-text-editor][data-in-shape] .ProseMirror {
+  min-height: 0;
 }
 /* Жирный — ровно 700, как на слайде: у strong по умолчанию bolder, и поверх жирной роли
    получалось 900 — шире, с другими переносами, чем у текста до двойного клика. */
@@ -161,9 +165,23 @@ function contentHeightPx(dom: HTMLElement): number {
   return last.getBoundingClientRect().bottom - dom.getBoundingClientRect().top;
 }
 
-/** Пока поле открыто, исходный текст под ним не виден. Правило, а не запись в стиль узла. */
-function hiddenSourceCss(elementId: string): string {
-  return `[data-canvas-slide] [data-slide-root] > [data-element-id="${CSS.escape(elementId)}"] { visibility: hidden; }`;
+/**
+ * Пока поле открыто, исходный текст под ним не виден. Правило, а не запись в стиль узла.
+ * У фигуры прячется только её текст: сама фигура остаётся фоном поля.
+ */
+function hiddenSourceCss(elementId: string, inShape = false): string {
+  const part = inShape ? ' [data-shape-text]' : '';
+  return `[data-canvas-slide] [data-slide-root] > [data-element-id="${CSS.escape(elementId)}"]${part} { visibility: hidden; }`;
+}
+
+/**
+ * Набор внутри фигуры: вид текста берётся у фигуры (тип основного текста, цвет под заливку),
+ * а `style` ставит поле внутрь её полей и по её якорю. Фигура под текст не растёт: лишний
+ * текст подсвечивается, как у рамки шаблона.
+ */
+export interface ShapeTextFrame {
+  readonly look: ReturnType<typeof inheritedLook>;
+  readonly style: CSSProperties;
 }
 
 /**
@@ -180,6 +198,7 @@ export function TextEditor({
   finishRef,
   onCommit,
   onClose,
+  shape,
 }: {
   /** Кадр открытого слайда: поле встаёт в него поверх исходного текста. */
   slideRoot: HTMLElement;
@@ -201,12 +220,14 @@ export function TextEditor({
    */
   onCommit: (paragraphs: readonly Paragraph[], box?: Box) => void;
   onClose: () => void;
+  /** Текст в фигуре, а не текстовый блок: см. `ShapeTextFrame`. */
+  shape?: ShapeTextFrame;
 }) {
   const t = useTranslations('editor');
-  const look = inheritedLook(profile, element, slide.cy);
+  const look = shape?.look ?? inheritedLook(profile, element, slide.cy);
   const bullets = element.role === 'bullet-list';
   const indentable = canIndent(element.role);
-  const fit = textFitOf(element);
+  const fit = shape ? 'fixed' : textFitOf(element);
   const base = element.box;
   const [fitted, setFitted] = useState<FittedBox>({ box: base, overflow: false });
   const fittedRef = useRef(fitted);
@@ -426,7 +447,7 @@ export function TextEditor({
   return createPortal(
     <>
       <style>{EDITOR_CSS}</style>
-      <style>{hiddenSourceCss(element.elementId)}</style>
+      <style>{hiddenSourceCss(element.elementId, shape !== undefined)}</style>
       {editor ? (
         <TextFormatBar editor={editor} element={element} profile={profile} inherited={look} />
       ) : null}
@@ -434,6 +455,7 @@ export function TextEditor({
         editor={editor}
         data-text-editor=""
         data-bullets={bullets ? 'true' : 'false'}
+        data-in-shape={shape ? '' : undefined}
         data-overflow={fitted.overflow ? 'true' : 'false'}
         style={{
           ...boxStyle(fitted.box, slide),
@@ -446,6 +468,7 @@ export function TextEditor({
           fontSize: cqw(ptToCqw(look.sizePt, slide)),
           color: look.color,
           cursor: 'text',
+          ...shape?.style,
         }}
       />
       {fitted.overflow ? (
