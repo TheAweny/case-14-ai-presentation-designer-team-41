@@ -1,15 +1,20 @@
 import { Editor, getSchema } from '@tiptap/core';
 import { undo } from '@tiptap/pm/history';
 import { Node, type DOMOutputSpec } from '@tiptap/pm/model';
-import type { Transaction } from '@tiptap/pm/state';
+import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import { describe, expect, it } from 'vitest';
 import type { Paragraph } from '@lct/contracts';
 import {
   documentToParagraphs,
+  htmlParagraphs,
   paragraphsToCommit,
   paragraphsToDoc,
-  pasteAsPlainText,
+  pasteText,
+  plainParagraphs,
+  steppedLevel,
   textExtensions,
+  wordAt,
+  type HtmlNodeLike,
 } from './text-document';
 
 const SLIDE = { cx: 1_270_000, cy: 1_270_000 };
@@ -97,37 +102,6 @@ describe('text document', () => {
     const schema = getSchema(textExtensions(METRICS));
     const baseline = Node.fromJSON(schema, paragraphsToDoc(RICH)).toJSON();
     expect(paragraphsToCommit(baseline, baseline)).toBeNull();
-  });
-
-  it('pastes plain text and drops HTML formatting', () => {
-    let inserted = '';
-    let prevented = false;
-    const handled = pasteAsPlainText(
-      {
-        state: {
-          tr: {
-            insertText(text: string) {
-              inserted = text;
-              return this;
-            },
-          },
-        },
-        dispatch(step: unknown) {
-          void step;
-        },
-      },
-      {
-        clipboardData: {
-          getData: (type: string) => (type === 'text/plain' ? 'plain' : '<b>html</b>'),
-        },
-        preventDefault() {
-          prevented = true;
-        },
-      } as ClipboardEvent,
-    );
-    expect(handled).toBe(true);
-    expect(prevented).toBe(true);
-    expect(inserted).toBe('plain');
   });
 
   it('keeps the new character in the run marks, and history undoes that one step', () => {
@@ -312,5 +286,227 @@ describe('font, letter spacing and line spacing survive the editor', () => {
     expect(styleOf(0)).toContain('font-family: "Deck Face"');
     expect(styleOf(1)).toContain('letter-spacing: 0cqw');
     expect(styleOf(2)).not.toContain('letter-spacing');
+  });
+});
+
+type Child = HtmlNodeLike | string;
+
+function textNode(value: string): HtmlNodeLike {
+  return { nodeType: 3, nodeName: '#text', nodeValue: value, childNodes: [] };
+}
+
+/** An element as `DOMParser` gives it, built by hand: the tests run without a DOM. */
+function el(tag: string, attrs: Record<string, string>, ...children: Child[]): HtmlNodeLike {
+  return {
+    nodeType: 1,
+    nodeName: tag.toUpperCase(),
+    nodeValue: null,
+    childNodes: children.map((child) => (typeof child === 'string' ? textNode(child) : child)),
+    getAttribute: (name: string) => attrs[name] ?? null,
+  };
+}
+
+const COMMENT: HtmlNodeLike = {
+  nodeType: 8,
+  nodeName: '#comment',
+  nodeValue: 'StartFragment',
+  childNodes: [],
+};
+
+describe('pasted text', () => {
+  it('makes a paragraph of every plain line and drops one trailing break', () => {
+    expect(plainParagraphs('one\r\ntwo\n\nthree\n')).toEqual([
+      [{ text: 'one' }],
+      [{ text: 'two' }],
+      [],
+      [{ text: 'three' }],
+    ]);
+    expect(plainParagraphs('single')).toEqual([[{ text: 'single' }]]);
+  });
+
+  it('reads Google Docs HTML: the not-bold wrapper, bold, italic and underline spans', () => {
+    const docs = el(
+      'body',
+      {},
+      el(
+        'b',
+        { style: 'font-weight:normal;', id: 'docs-internal-guid-1' },
+        el(
+          'p',
+          { dir: 'ltr' },
+          el('span', { style: 'font-size:11pt;font-weight:700;color:#ff0000' }, 'Жирный'),
+          el('span', { style: 'font-size:11pt;font-weight:400' }, ' и '),
+          el('span', { style: 'font-style:italic' }, 'курсив'),
+        ),
+        el('br', {}),
+        el('p', {}, el('span', { style: 'text-decoration:underline;' }, 'подчёркнуто')),
+      ),
+    );
+    expect(htmlParagraphs(docs)).toEqual([
+      [{ text: 'Жирный', bold: true }, { text: ' и ' }, { text: 'курсив', italic: true }],
+      [{ text: 'подчёркнуто', underline: true }],
+    ]);
+  });
+
+  it('reads Word HTML: skips styles, comments and list markers, collapses whitespace', () => {
+    const word = el(
+      'html',
+      {},
+      el('head', {}, el('style', {}, 'p.MsoNormal { margin: 0 }')),
+      el(
+        'body',
+        {},
+        COMMENT,
+        el(
+          'p',
+          { class: 'MsoNormal' },
+          el('b', {}, el('span', {}, 'Слово\n  жирное')),
+          el('span', {}, ' обычное', el('o:p', {})),
+        ),
+        el(
+          'p',
+          { class: 'MsoListParagraph' },
+          el('span', { style: 'mso-list:Ignore' }, '·', el('span', {}, '  ')),
+          el('u', {}, 'Пункт'),
+        ),
+        el('p', { class: 'MsoNormal' }, el('o:p', {}, ' ')),
+      ),
+    );
+    expect(htmlParagraphs(word)).toEqual([
+      [{ text: 'Слово жирное', bold: true }, { text: ' обычное' }],
+      [{ text: 'Пункт', underline: true }],
+    ]);
+  });
+});
+
+describe('paste into the open editor', () => {
+  const BULLETS: Paragraph[] = [
+    {
+      level: 1,
+      lineSpacing: null,
+      runs: [{ text: 'Item', font: 'Deck Face', sizePt: 20, bold: null, italic: null, color: '' }],
+    },
+  ];
+
+  function openAtEnd(paragraphs: readonly Paragraph[]) {
+    const editor = new Editor({
+      element: null,
+      injectCSS: false,
+      enablePasteRules: false,
+      extensions: textExtensions({ ...METRICS, bullets: true }),
+      content: paragraphsToDoc(paragraphs),
+    });
+    let state = editor.state.reconfigure({ plugins: editor.extensionManager.plugins });
+    state = state.apply(state.tr.setSelection(TextSelection.atEnd(state.doc)));
+    const view = {
+      get state() {
+        return state;
+      },
+      dispatch(transaction: Transaction) {
+        state = state.apply(transaction);
+      },
+    };
+    return { editor, view };
+  }
+
+  function clipboard(data: Record<string, string>) {
+    let prevented = false;
+    return {
+      event: {
+        clipboardData: { getData: (type: string) => data[type] ?? '' } as DataTransfer,
+        preventDefault() {
+          prevented = true;
+        },
+      },
+      prevented: () => prevented,
+    };
+  }
+
+  it('turns three pasted lines into three list items with the caret style', () => {
+    const { editor, view } = openAtEnd(BULLETS);
+    const paste = clipboard({ 'text/plain': ' one\ntwo\nthree' });
+    expect(pasteText(view, paste.event)).toBe(true);
+    expect(paste.prevented()).toBe(true);
+    const pasted = documentToParagraphs(view.state.doc.toJSON());
+    expect(pasted.map((paragraph) => paragraph.runs.map((run) => run.text).join(''))).toEqual([
+      'Item one',
+      'two',
+      'three',
+    ]);
+    expect(pasted.every((paragraph) => paragraph.level === 1)).toBe(true);
+    expect(
+      pasted.every((paragraph) => paragraph.runs.every((run) => run.font === 'Deck Face')),
+    ).toBe(true);
+    expect(pasted[2]?.runs[0]?.sizePt).toBe(20);
+
+    // One paste is one step of the editor's own history.
+    expect(undo(view.state, (transaction) => view.dispatch(transaction))).toBe(true);
+    expect(documentToParagraphs(view.state.doc.toJSON())).toEqual(BULLETS);
+    editor.destroy();
+  });
+
+  it('keeps bold and underline from HTML and the rest from the text being edited', () => {
+    const { editor, view } = openAtEnd(BULLETS);
+    const paste = clipboard({ 'text/html': '<p>…</p>', 'text/plain': 'plain fallback' });
+    const tree = el(
+      'body',
+      {},
+      el('p', {}, ' ', el('strong', { style: 'color: red' }, 'B'), el('u', {}, 'U')),
+    );
+    expect(pasteText(view, paste.event, () => tree)).toBe(true);
+    const [paragraph] = documentToParagraphs(view.state.doc.toJSON());
+    expect(paragraph?.runs).toEqual([
+      { text: 'Item', font: 'Deck Face', sizePt: 20, bold: null, italic: null, color: '' },
+      { text: 'B', font: 'Deck Face', sizePt: 20, bold: true, italic: null, color: '' },
+      {
+        text: 'U',
+        font: 'Deck Face',
+        sizePt: 20,
+        bold: null,
+        italic: null,
+        color: '',
+        underline: true,
+      },
+    ]);
+    editor.destroy();
+  });
+
+  it('falls back to plain text when the HTML has no text, and leaves files alone', () => {
+    const { editor, view } = openAtEnd(BULLETS);
+    const paste = clipboard({ 'text/html': '<img>', 'text/plain': '!' });
+    expect(pasteText(view, paste.event, () => el('body', {}, el('img', {})))).toBe(true);
+    expect(documentToParagraphs(view.state.doc.toJSON())[0]?.runs[0]?.text).toBe('Item!');
+
+    const files = clipboard({});
+    expect(pasteText(view, files.event)).toBe(false);
+    expect(files.prevented()).toBe(false);
+    editor.destroy();
+  });
+});
+
+describe('words and levels', () => {
+  it('finds the word under the caret, joined words included', () => {
+    const text = 'Смотри из-за угла, v2 don’t';
+    expect(wordAt(text, 0)).toEqual([0, 6]);
+    expect(wordAt(text, 3)).toEqual([0, 6]);
+    // Right after a word still names it.
+    expect(wordAt(text, 6)).toEqual([0, 6]);
+    expect(wordAt(text, 8)).toEqual([7, 12]);
+    expect(wordAt(text, 19)).toEqual([19, 21]);
+    expect(wordAt(text, text.length)).toEqual([22, 27]);
+    expect(wordAt(', ', 1)).toBeNull();
+    expect(wordAt('', 0)).toBeNull();
+  });
+
+  it('counts offsets in UTF-16 units, as ProseMirror does', () => {
+    // «𝔸» is two units long.
+    expect(wordAt('𝔸b c', 1)).toEqual([0, 3]);
+  });
+
+  it('steps paragraph levels within 0…8', () => {
+    expect(steppedLevel(0, 1)).toBe(1);
+    expect(steppedLevel(0, -1)).toBe(0);
+    expect(steppedLevel(8, 1)).toBe(8);
+    expect(steppedLevel('2', -1)).toBe(1);
   });
 });

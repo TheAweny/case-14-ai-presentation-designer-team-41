@@ -194,11 +194,36 @@ describe('text from the keyboard', () => {
     // Всё это в наборе — клавиши самого текста.
     expect(text('Slash', { shiftKey: true })).toBeNull();
     expect(text('Enter')).toBeNull();
-    expect(text('Tab')).toBeNull();
+    expect(text('F2')).toBeNull();
     expect(text('Delete')).toBeNull();
     expect(text('KeyZ', { ctrlKey: true })).toBeNull();
     expect(text('Digit2', { ctrlKey: true })).toBeNull();
     expect(text('ArrowLeft')).toBeNull();
+  });
+
+  it('gives Tab to the list level in the open editor and to objects on the canvas', () => {
+    expect(editorCommand(key('Tab'), 'text')).toEqual({ kind: 'text-indent', step: 1 });
+    expect(editorCommand(key('Tab', { shiftKey: true }), 'text')).toEqual({
+      kind: 'text-indent',
+      step: -1,
+    });
+    expect(editorCommand(key('Tab'))).toEqual({ kind: 'select-step', step: 1 });
+  });
+
+  it('opens the text with F2 as with Enter, as in PowerPoint', () => {
+    expect(editorCommand(key('F2'))).toEqual({ kind: 'edit' });
+  });
+
+  it('starts the show like PowerPoint, on the canvas and while typing', () => {
+    for (const context of ['canvas', 'text'] as const) {
+      expect(editorCommand(key('F5'), context)).toEqual({ kind: 'present', from: 'start' });
+      expect(editorCommand(key('F5', { shiftKey: true }), context)).toEqual({
+        kind: 'present',
+        from: 'current',
+      });
+    }
+    // Ctrl+Enter — новый слайд, а не показ.
+    expect(editorCommand(key('Enter', { ctrlKey: true }))).toEqual({ kind: 'new-slide' });
   });
 });
 
