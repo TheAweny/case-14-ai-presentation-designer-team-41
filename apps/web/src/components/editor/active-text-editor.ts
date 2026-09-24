@@ -4,7 +4,16 @@ import { useSyncExternalStore } from 'react';
 import type { ChainedCommands, Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { ParagraphAlign } from '@lct/contracts';
-import { alignOf, colorOf, fontOf, letterSpacingOf, sizeOf, spacingOf } from './text-document';
+import { EDITOR_CHROME } from './chrome-focus';
+import {
+  alignOf,
+  colorOf,
+  fontOf,
+  letterSpacingOf,
+  sizeOf,
+  spacingOf,
+  steppedLevel,
+} from './text-document';
 
 /**
  * Открытый на холсте редактор текста. Панель «Дизайн» правит через него выделенный фрагмент,
@@ -45,11 +54,10 @@ export function useActiveTextEditor(): ActiveTextEditor | null {
 
 /**
  * Куда может уйти фокус, не закрывая набор: полоса форматирования, текстовая секция панели,
- * их выпадающие меню и поповеры полей панели (пикер цвета, список шрифтов).
- * Всё остальное — конец набора.
+ * их выпадающие меню и поповеры полей панели (пикер цвета, список шрифтов), любой интерфейс
+ * поверх холста (`EDITOR_CHROME`). Всё остальное — конец набора.
  */
-export const KEEPS_TEXT_FOCUS =
-  '[data-text-format], [data-text-panel], [role="menu"], [data-inspector-popover]';
+export const KEEPS_TEXT_FOCUS = `[data-text-format], [data-text-panel], [role="menu"], [data-inspector-popover], ${EDITOR_CHROME}`;
 
 /** Поповер поля панели сам держит фокус: пикер тянут, в HEX и поиск шрифта печатают. */
 const OWNS_FOCUS = '[data-inspector-popover]';
@@ -94,6 +102,25 @@ export function setRunFlag(editor: Editor, flag: 'bold' | 'italic' | 'underline'
 /** Выравнивание абзацев, которых касается выделение. */
 export function setParagraphAlign(editor: Editor, align: ParagraphAlign) {
   chainOf(editor).updateAttributes('paragraph', { align }).run();
+}
+
+/**
+ * Уровень абзацев, которых касается выделение, на шаг глубже или мельче: Tab и Shift+Tab в
+ * списке. Каждый абзац — от своего уровня, как в Google Slides.
+ */
+export function stepParagraphLevel(editor: Editor, step: -1 | 1) {
+  chainOf(editor)
+    .command(({ tr }) => {
+      const { from, to } = tr.selection;
+      tr.doc.nodesBetween(from, to, (node, pos) => {
+        if (node.type.name !== 'paragraph') return true;
+        const level = steppedLevel(node.attrs.level, step);
+        if (level !== node.attrs.level) tr.setNodeMarkup(pos, undefined, { ...node.attrs, level });
+        return false;
+      });
+      return true;
+    })
+    .run();
 }
 
 /**

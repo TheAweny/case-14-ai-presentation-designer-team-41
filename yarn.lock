@@ -1933,7 +1933,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@floating-ui/react-dom@npm:^2.0.0":
+"@floating-ui/react-dom@npm:2.1.9, @floating-ui/react-dom@npm:^2.0.0":
   version: 2.1.9
   resolution: "@floating-ui/react-dom@npm:2.1.9"
   dependencies:
@@ -5515,7 +5515,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tiptap/extension-bubble-menu@npm:3.31.3, @tiptap/extension-bubble-menu@npm:^3.31.3":
+"@tiptap/extension-bubble-menu@npm:^3.31.3":
   version: 3.31.3
   resolution: "@tiptap/extension-bubble-menu@npm:3.31.3"
   dependencies:
@@ -13540,6 +13540,7 @@ __metadata:
     "@dnd-kit/core": "npm:6.3.1"
     "@dnd-kit/sortable": "npm:10.0.0"
     "@dnd-kit/utilities": "npm:3.2.2"
+    "@floating-ui/react-dom": "npm:2.1.9"
     "@formatjs/icu-messageformat-parser": "npm:3.5.20"
     "@hugeicons/core-free-icons": "npm:4.3.4"
     "@hugeicons/react": "npm:1.1.10"
@@ -13551,7 +13552,6 @@ __metadata:
     "@tanstack/react-virtual": "npm:3.14.13"
     "@tiptap/core": "npm:3.31.3"
     "@tiptap/extension-bold": "npm:3.31.3"
-    "@tiptap/extension-bubble-menu": "npm:3.31.3"
     "@tiptap/extension-color": "npm:3.31.3"
     "@tiptap/extension-document": "npm:3.31.3"
     "@tiptap/extension-font-family": "npm:3.31.3"
