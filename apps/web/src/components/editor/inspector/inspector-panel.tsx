@@ -1,0 +1,99 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { AiSparklesIcon, PanelRightCloseIcon } from '@hugeicons/core-free-icons';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { keepCanvasFocus } from '@/components/editor/chrome-focus';
+import { DesignPanel, type DesignPanelProps } from '@/components/editor/inspector/design-panel';
+
+export type InspectorTab = 'design' | 'assistant';
+
+export const INSPECTOR_TABS = ['design', 'assistant'] as const satisfies readonly InspectorTab[];
+
+function isTab(value: string): value is InspectorTab {
+  return (INSPECTOR_TABS as readonly string[]).includes(value);
+}
+
+/**
+ * Правая панель редактора: свойства выделения и ассистент. Вкладки, а не две панели, —
+ * место справа одно, и человек сам решает, что там сейчас нужнее.
+ */
+export function InspectorPanel({
+  tab,
+  onTabChange,
+  onCollapse,
+  design,
+}: {
+  tab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
+  onCollapse: () => void;
+  design: DesignPanelProps;
+}) {
+  const t = useTranslations('editor');
+
+  return (
+    <TooltipProvider>
+      <aside aria-label={t('inspector')} className="flex h-full min-w-0 flex-col bg-sidebar">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            if (isTab(value)) onTabChange(value);
+          }}
+          className="flex min-h-0 flex-1 flex-col gap-0"
+        >
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2">
+            <TabsList>
+              <TabsTrigger value="design">{t('tabs.design')}</TabsTrigger>
+              <TabsTrigger value="assistant">{t('tabs.assistant')}</TabsTrigger>
+            </TabsList>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('inspectorHide')}
+                  onMouseDown={keepCanvasFocus}
+                  onClick={onCollapse}
+                  className={cn(
+                    'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none',
+                    'transition-colors duration-100 motion-reduce:transition-none',
+                    'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+                  )}
+                >
+                  <HugeiconsIcon
+                    icon={PanelRightCloseIcon}
+                    size={16}
+                    strokeWidth={1.5}
+                    color="currentColor"
+                  />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('inspectorHide')}</TooltipContent>
+            </Tooltip>
+          </div>
+
+          <TabsContent value="design" className="min-h-0 overflow-y-auto">
+            <DesignPanel {...design} />
+          </TabsContent>
+          <TabsContent
+            value="assistant"
+            className="grid min-h-0 place-items-center overflow-y-auto p-6"
+          >
+            <div className="flex max-w-56 flex-col items-center gap-3 text-center">
+              <HugeiconsIcon
+                icon={AiSparklesIcon}
+                size={20}
+                strokeWidth={1.5}
+                color="currentColor"
+                className="text-muted-foreground"
+              />
+              <p className="text-sm text-balance text-muted-foreground">{t('assistantSoon')}</p>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </aside>
+    </TooltipProvider>
+  );
+}

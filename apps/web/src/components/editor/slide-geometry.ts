@@ -1,4 +1,5 @@
 import type { Box, Grid } from '@lct/contracts';
+import { EMU_PER_CSS_PX } from './zoom-input';
 
 /** A box in the rendered slide, in CSS pixels, origin at the slide's top left. */
 export interface PixelBox {
@@ -74,24 +75,30 @@ function columnEdges(grid: Grid): number[] {
 }
 
 /**
- * Snap lines in CSS pixels of a frame showing this slide: slide edges, margins, columns,
- * gutters and every baseline between the vertical margins.
+ * Snap lines in pixels of a frame showing this slide: slide edges and centre, margins, columns
+ * and gutters. Baselines are not guides: at a few pixels apart they would catch every move.
+ * `origin` is where the frame's top left sits in the pixels the guides are drawn in.
  */
 export function gridGuidelines(
   grid: Grid,
   frame: FrameSize,
+  origin: { readonly x: number; readonly y: number } = { x: 0, y: 0 },
 ): { vertical: number[]; horizontal: number[] } {
   const vertical = uniqueSorted(
-    [0, grid.marginLeft, grid.slideCx - grid.marginRight, grid.slideCx, ...columnEdges(grid)].map(
-      (emu) => emuToPx(emu, grid.slideCx, frame.width),
+    [
+      0,
+      grid.marginLeft,
+      grid.slideCx / 2,
+      grid.slideCx - grid.marginRight,
+      grid.slideCx,
+      ...columnEdges(grid),
+    ].map((emu) => origin.x + emuToPx(emu, grid.slideCx, frame.width)),
+  );
+  const horizontal = uniqueSorted(
+    [0, grid.marginTop, grid.slideCy / 2, grid.slideCy - grid.marginBottom, grid.slideCy].map(
+      (emu) => origin.y + emuToPx(emu, grid.slideCy, frame.height),
     ),
   );
-  const bottom = grid.slideCy - grid.marginBottom;
-  const rows = [0, grid.marginTop, bottom, grid.slideCy];
-  if (grid.baseline > 0) {
-    for (let y = grid.marginTop; y <= bottom; y += grid.baseline) rows.push(y);
-  }
-  const horizontal = uniqueSorted(rows.map((emu) => emuToPx(emu, grid.slideCy, frame.height)));
   return { vertical, horizontal };
 }
 
@@ -132,15 +139,111 @@ export function fitsInMargins(box: Box, grid: Grid): boolean {
   return box.cx <= contentW && box.cy <= contentH;
 }
 
-/** One arrow key: a single baseline step, then back inside the margins. */
-export function nudgeByBaseline(box: Box, direction: ArrowDirection, grid: Grid): Box {
-  const step = grid.baseline;
+/** Shift+arrow moves this many baselines at once. */
+export const LARGE_NUDGE_BASELINES = 4;
+
+/**
+ * One arrow key: exactly one step in the arrow's direction and nowhere else. The step is the
+ * baseline, the same length across as down, and `large` is the Shift step. Margins are guides,
+ * not walls: a box in the margin or past the slide edge moves like any other.
+ */
+export function nudgeBox(box: Box, direction: ArrowDirection, grid: Grid, large = false): Box {
+  const step = Math.max(1, grid.baseline) * (large ? LARGE_NUDGE_BASELINES : 1);
   const next = { ...box };
   if (direction === 'left') next.x -= step;
   if (direction === 'right') next.x += step;
   if (direction === 'up') next.y -= step;
   if (direction === 'down') next.y += step;
-  return clampToMargins(next, grid);
+  return next;
+}
+
+/** One arrow key without Shift. */
+export function nudgeByBaseline(box: Box, direction: ArrowDirection, grid: Grid): Box {
+  return nudgeBox(box, direction, grid);
+}
+
+/** A drag, as the gesture reports it: the translate in pixels of the slide frame. */
+export function translatedBox(
+  box: Box,
+  translate: readonly [number, number] | readonly number[],
+  frame: FrameSize,
+  slideCx: number,
+  slideCy: number,
+): Box {
+  if (frame.width <= 0 || frame.height <= 0) return box;
+  const [dx = 0, dy = 0] = translate;
+  return {
+    ...box,
+    x: Math.round(box.x + (dx / frame.width) * slideCx),
+    y: Math.round(box.y + (dy / frame.height) * slideCy),
+  };
+}
+
+export interface ResizeDelta {
+  /** Change of width and height in frame pixels. */
+  readonly dist: readonly number[];
+  /** The handle: -1 left or top, 1 right or bottom, 0 the middle of that side. */
+  readonly direction: readonly number[];
+  /** Where the box moved while it grew, in frame pixels. */
+  readonly translate: readonly number[];
+}
+
+function resizedAxis(
+  start: number,
+  size: number,
+  dist: number,
+  direction: number,
+  translate: number,
+  pxToEmu: number,
+  anchored: boolean,
+): { start: number; size: number } {
+  // No change on this axis: the EMU size stays exactly as it was, whatever pixels said.
+  const next = dist === 0 ? size : Math.max(1, Math.round(size + dist * pxToEmu));
+  if (!anchored) return { start: Math.round(start + translate * pxToEmu), size: next };
+  if (direction > 0) return { start, size: next };
+  if (direction < 0) return { start: start + size - next, size: next };
+  return { start: Math.round(start + (size - next) / 2), size: next };
+}
+
+/**
+ * A resize, from the box it started with and the change the gesture reports. The box is never
+ * measured back from the screen, so repeated resizes do not drift. A single box keeps the side
+ * opposite the handle fixed in EMU; boxes of a group move by their own translate.
+ */
+export function resizedBox(
+  box: Box,
+  delta: ResizeDelta,
+  frame: FrameSize,
+  slideCx: number,
+  slideCy: number,
+  anchored = true,
+): Box {
+  if (frame.width <= 0 || frame.height <= 0) return box;
+  const x = resizedAxis(
+    box.x,
+    box.cx,
+    delta.dist[0] ?? 0,
+    delta.direction[0] ?? 0,
+    delta.translate[0] ?? 0,
+    slideCx / frame.width,
+    anchored,
+  );
+  const y = resizedAxis(
+    box.y,
+    box.cy,
+    delta.dist[1] ?? 0,
+    delta.direction[1] ?? 0,
+    delta.translate[1] ?? 0,
+    slideCy / frame.height,
+    anchored,
+  );
+  return { x: x.start, y: y.start, cx: x.size, cy: y.size };
+}
+
+/** A distance on screen, in pixels of the slide at 100 %, for the snap labels. */
+export function slidePixels(screenPx: number, frameWidthPx: number, slideCx: number): number {
+  if (frameWidthPx <= 0) return 0;
+  return Math.round(((screenPx / frameWidthPx) * slideCx) / EMU_PER_CSS_PX);
 }
 
 export function arrowDirection(code: string): ArrowDirection | null {
@@ -156,4 +259,61 @@ export function arrowDirection(code: string): ArrowDirection | null {
     default:
       return null;
   }
+}
+
+/** The smallest box around all of these. */
+export function unionBox(boxes: readonly Box[]): Box | null {
+  if (boxes.length === 0) return null;
+  const left = Math.min(...boxes.map((box) => box.x));
+  const top = Math.min(...boxes.map((box) => box.y));
+  const right = Math.max(...boxes.map((box) => box.x + box.cx));
+  const bottom = Math.max(...boxes.map((box) => box.y + box.cy));
+  return { x: left, y: top, cx: right - left, cy: bottom - top };
+}
+
+export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+
+/**
+ * Line boxes up on one edge or axis of their common bounds. Boxes already in place are left
+ * out, so the journal records only what moved.
+ */
+export function alignBoxes(
+  items: readonly { readonly elementId: string; readonly box: Box }[],
+  alignment: Alignment,
+): { elementId: string; box: Box }[] {
+  const bounds = unionBox(items.map((item) => item.box));
+  if (!bounds || items.length < 2) return [];
+  const right = bounds.x + bounds.cx;
+  const bottom = bounds.y + bounds.cy;
+  return items.flatMap(({ elementId, box }) => {
+    const next = { ...box };
+    if (alignment === 'left') next.x = bounds.x;
+    if (alignment === 'center') next.x = Math.round(bounds.x + (bounds.cx - box.cx) / 2);
+    if (alignment === 'right') next.x = right - box.cx;
+    if (alignment === 'top') next.y = bounds.y;
+    if (alignment === 'middle') next.y = Math.round(bounds.y + (bounds.cy - box.cy) / 2);
+    if (alignment === 'bottom') next.y = bottom - box.cy;
+    return next.x === box.x && next.y === box.y ? [] : [{ elementId, box: next }];
+  });
+}
+
+/**
+ * Where the selection's property bar goes, in the same pixels as the boxes: centred over the
+ * selection, below it when there is no room above, and never outside the visible area.
+ */
+export function placeSelectionBar(
+  selection: PixelBox,
+  bar: FrameSize,
+  area: PixelBox,
+  gap: number,
+): { x: number; y: number; below: boolean } {
+  const minX = area.x + gap;
+  const maxX = Math.max(minX, area.x + area.width - gap - bar.width);
+  const x = Math.min(Math.max(selection.x + (selection.width - bar.width) / 2, minX), maxX);
+  const above = selection.y - gap - bar.height;
+  if (above >= area.y + gap) return { x: Math.round(x), y: Math.round(above), below: false };
+  const minY = area.y + gap;
+  const maxY = Math.max(minY, area.y + area.height - gap - bar.height);
+  const below = Math.min(Math.max(selection.y + selection.height + gap, minY), maxY);
+  return { x: Math.round(x), y: Math.round(below), below: true };
 }

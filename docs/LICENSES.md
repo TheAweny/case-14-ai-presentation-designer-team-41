@@ -6,13 +6,13 @@
 копилефт-лицензиями: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, CC-BY-4.0, CC0-1.0, ISC, MIT, MIT-0, MIT-CMU, MPL-2.0, PSF-2.0, Python-2.0, Unlicense.
 GPL и AGPL не подходят: заказчик берёт решение в пилот и внедрение.
 
-Всего зависимостей: 1092 (npm: 1035, python: 57).
+Всего зависимостей: 1131 (npm: 1074, python: 57).
 
 ## Сводка по лицензиям
 
 | Лицензия | Пакетов | Статус |
 | --- | --- | --- |
-| MIT | 913 | разрешена |
+| MIT | 952 | разрешена |
 | ISC | 58 | разрешена |
 | Apache-2.0 | 46 | разрешена |
 | BSD-3-Clause | 29 | разрешена |
@@ -160,6 +160,10 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @clack/prompts | 1.7.0 | MIT |
 | npm | @colors/colors | 1.5.0 | MIT |
 | npm | @daybrush/utils | 1.13.0 | MIT |
+| npm | @dnd-kit/accessibility | 3.1.1 | MIT |
+| npm | @dnd-kit/core | 6.3.1 | MIT |
+| npm | @dnd-kit/sortable | 10.0.0 | MIT |
+| npm | @dnd-kit/utilities | 3.2.2 | MIT |
 | npm | @dotenvx/dotenvx | 1.75.1 | BSD-3-Clause |
 | npm | @dotenvx/primitives | 0.8.0 | BSD-3-Clause |
 | npm | @egjs/agent | 2.4.4 | MIT |
@@ -348,6 +352,21 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @tailwindcss/oxide | 4.3.3 | MIT |
 | npm | @tailwindcss/oxide-win32-x64-msvc | 4.3.3 | MIT |
 | npm | @tailwindcss/postcss | 4.3.3 | MIT |
+| npm | @tiptap/core | 3.31.3 | MIT |
+| npm | @tiptap/extension-bold | 3.31.3 | MIT |
+| npm | @tiptap/extension-bubble-menu | 3.31.3 | MIT |
+| npm | @tiptap/extension-color | 3.31.3 | MIT |
+| npm | @tiptap/extension-document | 3.31.3 | MIT |
+| npm | @tiptap/extension-floating-menu | 3.31.3 | MIT |
+| npm | @tiptap/extension-font-family | 3.31.3 | MIT |
+| npm | @tiptap/extension-history | 3.31.3 | MIT |
+| npm | @tiptap/extension-italic | 3.31.3 | MIT |
+| npm | @tiptap/extension-paragraph | 3.31.3 | MIT |
+| npm | @tiptap/extension-text | 3.31.3 | MIT |
+| npm | @tiptap/extension-text-style | 3.31.3 | MIT |
+| npm | @tiptap/extensions | 3.31.3 | MIT |
+| npm | @tiptap/pm | 3.31.3 | MIT |
+| npm | @tiptap/react | 3.31.3 | MIT |
 | npm | @tokenizer/inflate | 0.4.1 | MIT |
 | npm | @tokenizer/token | 0.3.0 | MIT |
 | npm | @ts-morph/common | 0.27.0 | MIT |
@@ -381,6 +400,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @types/react | 19.3.0 | MIT |
 | npm | @types/react-dom | 19.3.0 | MIT |
 | npm | @types/unist | 3.0.3 | MIT |
+| npm | @types/use-sync-external-store | 0.0.6 | MIT |
 | npm | @types/validate-npm-package-name | 4.0.2 | MIT |
 | npm | @types/ws | 8.18.1 | MIT |
 | npm | @typescript-eslint/eslint-plugin | 8.70.0 | MIT |
@@ -602,6 +622,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | extend | 3.0.2 | MIT |
 | npm | extend-shallow | 2.0.1 | MIT |
 | npm | fast-deep-equal | 3.1.3 | MIT |
+| npm | fast-equals | 5.4.3 | MIT |
 | npm | fast-glob | 3.3.3 | MIT |
 | npm | fast-json-stable-stringify | 2.1.0 | MIT |
 | npm | fast-levenshtein | 2.0.6 | MIT |
@@ -850,6 +871,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | ora | 5.4.1 | MIT |
 | npm | ora | 8.2.0 | MIT |
 | npm | ora | 9.4.1 | MIT |
+| npm | orderedmap | 2.1.1 | MIT |
 | npm | overlap-area | 1.1.0 | MIT |
 | npm | p-limit | 2.3.0 | MIT |
 | npm | p-limit | 3.1.0 | MIT |
@@ -891,6 +913,19 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | proc-log | 7.0.0 | ISC |
 | npm | promise-limit | 2.7.0 | ISC |
 | npm | prompts | 2.4.2 | MIT |
+| npm | prosemirror-changeset | 2.4.3 | MIT |
+| npm | prosemirror-commands | 1.7.2 | MIT |
+| npm | prosemirror-dropcursor | 1.8.3 | MIT |
+| npm | prosemirror-gapcursor | 1.4.1 | MIT |
+| npm | prosemirror-history | 1.5.0 | MIT |
+| npm | prosemirror-inputrules | 1.5.1 | MIT |
+| npm | prosemirror-keymap | 1.2.3 | MIT |
+| npm | prosemirror-model | 1.25.11 | MIT |
+| npm | prosemirror-schema-list | 1.5.1 | MIT |
+| npm | prosemirror-state | 1.4.4 | MIT |
+| npm | prosemirror-tables | 1.8.5 | MIT |
+| npm | prosemirror-transform | 1.12.1 | MIT |
+| npm | prosemirror-view | 1.42.4 | MIT |
 | npm | proxy-addr | 2.0.8 | MIT |
 | npm | proxy-from-env | 2.1.0 | MIT |
 | npm | punycode | 2.3.1 | MIT |
@@ -909,6 +944,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | react-resizable-panels | 4.12.4 | MIT |
 | npm | react-selecto | 1.26.3 | MIT |
 | npm | react-style-singleton | 2.2.3 | MIT |
+| npm | react-zoom-pan-pinch | 4.2.0 | MIT |
 | npm | readable-stream | 3.6.2 | MIT |
 | npm | readdirp | 5.1.1 | MIT |
 | npm | recast | 0.23.21 | MIT |
@@ -932,6 +968,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | reusify | 1.1.0 | MIT |
 | npm | robust-predicates | 3.0.3 | Unlicense |
 | npm | rollup | 4.63.3 | MIT |
+| npm | rope-sequence | 1.3.4 | MIT |
 | npm | router | 2.2.0 | MIT |
 | npm | run-applescript | 7.0.0 | MIT |
 | npm | run-applescript | 7.1.0 | MIT |
@@ -1040,6 +1077,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | use-callback-ref | 1.3.3 | MIT |
 | npm | use-intl | 4.14.5 | MIT |
 | npm | use-sidecar | 1.1.3 | MIT |
+| npm | use-sync-external-store | 1.7.0 | MIT |
 | npm | util-deprecate | 1.0.2 | MIT |
 | npm | uuid | 11.1.1 | MIT |
 | npm | validate-npm-package-name | 7.0.2 | ISC |
@@ -1048,6 +1086,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | vfile-message | 4.0.3 | MIT |
 | npm | vite | 7.3.6 | MIT |
 | npm | vitest | 5.0.1 | MIT |
+| npm | w3c-keyname | 2.2.8 | MIT |
 | npm | wcwidth | 1.0.1 | MIT |
 | npm | which | 2.0.2 | ISC |
 | npm | which | 3.0.1 | ISC |

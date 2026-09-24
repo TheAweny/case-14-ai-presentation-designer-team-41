@@ -102,7 +102,23 @@ export function image(
   return { kind: 'image', elementId, role, box, sourceShapeId, mediaPart, fit };
 }
 
-/** Фигура из шаблона без нашего содержимого: линейка, плашка, карточка. */
-export function decor(elementId: string, box: Box, sourceShapeId: number): DecorElement {
-  return { kind: 'decor', elementId, role: 'decoration', box, sourceShapeId };
+/**
+ * Фигура из шаблона без нашего содержимого: линейка, плашка, карточка. Вид и заливку шаблонный
+ * decor не называет — так же, как их не знает парсер, — и рендерер выводит цвет из геометрии.
+ * Фон слайда помечается `locked`: случайно сдвинуть подложку нельзя.
+ */
+export function decor(
+  elementId: string,
+  box: Box,
+  sourceShapeId: number,
+  look: { readonly locked?: boolean } = {},
+): DecorElement {
+  return {
+    kind: 'decor',
+    elementId,
+    role: 'decoration',
+    box,
+    sourceShapeId,
+    ...(look.locked ? { locked: true } : null),
+  };
 }

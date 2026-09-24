@@ -25,16 +25,23 @@ export function useSlideSelection(slides: readonly SlideIr[]) {
   const searchParams = useSearchParams();
   const index = slideIndexFromParam(slides, searchParams.get(SLIDE_PARAM));
 
+  /**
+   * Открыть слайд по id. Нужен сразу после вставки слайда: в `slides` нового ещё нет, а в
+   * адрес он уже может попасть — индекс найдётся на следующем рендере.
+   */
+  const selectById = useCallback((slideId: string) => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(SLIDE_PARAM) === slideId) return;
+    params.set(SLIDE_PARAM, slideId);
+    window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
+  }, []);
+
   const select = useCallback(
     (next: number) => {
       const slide = slides[next];
-      if (!slide) return;
-      const params = new URLSearchParams(window.location.search);
-      if (params.get(SLIDE_PARAM) === slide.slideId) return;
-      params.set(SLIDE_PARAM, slide.slideId);
-      window.history.replaceState(null, '', `?${params.toString()}${window.location.hash}`);
+      if (slide) selectById(slide.slideId);
     },
-    [slides],
+    [selectById, slides],
   );
 
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -53,5 +60,5 @@ export function useSlideSelection(slides: readonly SlideIr[]) {
     return () => window.removeEventListener('keydown', listener);
   }, []);
 
-  return { index, select };
+  return { index, select, selectById };
 }

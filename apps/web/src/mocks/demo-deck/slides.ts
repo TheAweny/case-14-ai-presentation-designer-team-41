@@ -110,6 +110,7 @@ const cover = slide('cover', 'title-slide', ({ id }) => [
     id('panel'),
     box({ x: columns(8, 4).x, cx: SLIDE_CX - columns(8, 4).x }, FULL_HEIGHT),
     SHAPE.panel,
+    { locked: true },
   ),
   image(id('logo'), 'logo', box(columns(0, 2), rows(40, 40)), LOGO_PART, 'contain', SHAPE.logo),
   decor(id('title-rule'), box(columns(0, 2), rows(160, 4)), SHAPE.titleRule),
@@ -177,7 +178,7 @@ const caseQuote = slide('case-quote', 'quote', ({ id, chrome }) => [
 ]);
 
 const sectionSolution = slide('section-solution', 'section-header', ({ id, chrome }) => [
-  decor(id('panel'), box(FULL_WIDTH, FULL_HEIGHT), SHAPE.panel),
+  decor(id('panel'), box(FULL_WIDTH, FULL_HEIGHT), SHAPE.panel, { locked: true }),
   text(
     id('title'),
     'title',
