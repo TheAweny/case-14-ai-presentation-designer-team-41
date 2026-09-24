@@ -397,5 +397,12 @@
     "next": "Next slide",
     "exit": "Exit slideshow",
     "end": "End of slideshow. Click to exit."
+  },
+  "mobileBar": {
+    "label": "Actions",
+    "insert": "Insert",
+    "insertHint": "Tap the slide: {tool}",
+    "cancelInsert": "Cancel insert",
+    "properties": "Properties"
   }
 }

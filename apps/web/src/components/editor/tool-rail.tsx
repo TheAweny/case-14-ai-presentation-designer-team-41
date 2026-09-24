@@ -59,6 +59,7 @@ import {
   type ShortcutId,
 } from '@/components/editor/editor-shortcuts';
 import type { ChangeKind } from '@/components/editor/use-deck-history';
+import { isInsertTool, type InsertTool } from '@/components/editor/insert-element';
 
 /**
  * Идентификаторы инструментов и вариантов — они же ключи словаря `toolRail`: подписи
@@ -217,6 +218,17 @@ export const RAIL_SHORTCUTS: readonly (
     action.shortcut ? [{ kind: 'action' as const, id: action.id, key: action.shortcut.key }] : [],
   ),
 ];
+
+/**
+ * Что можно вставить, по кнопкам рейки: текст, картинка, фигуры, данные. Нижняя панель узкого
+ * экрана строит из этого своё меню — подписи и значки те же, что на рейке.
+ */
+export const INSERT_GROUPS: readonly (readonly { id: InsertTool; icon: IconSvgElement }[])[] =
+  TOOLS.map((tool) =>
+    tool.variants.flatMap((variant) =>
+      isInsertTool(variant.id) ? [{ id: variant.id, icon: variant.icon }] : [],
+    ),
+  ).filter((group) => group.length > 0);
 
 const TOOL_BY_ID = new Map(TOOLS.map((tool) => [tool.id, tool]));
 
