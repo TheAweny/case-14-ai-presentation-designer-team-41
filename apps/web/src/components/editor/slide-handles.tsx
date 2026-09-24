@@ -349,8 +349,11 @@ export function SlideHandles({
   editingId: string | null;
   /** Рука, пробел или вставка: жест принадлежит им, а не выделению. */
   suspended?: boolean;
-  /** `additive` — щелчок или рамка с Shift: выделение пополняют, а не заменяют. */
-  onSelect: (ids: readonly string[], pick?: { readonly additive: boolean }) => void;
+  /**
+   * `additive` — щелчок или рамка с Shift: выделение пополняют, а не заменяют. `deep` — выбор
+   * сквозь объекты (Ctrl/Cmd+щелчок): берётся сам объект, а не группа, в которой он лежит.
+   */
+  onSelect: (ids: readonly string[], pick?: SelectPick) => void;
   onCommit: (moves: readonly ElementMove[]) => void;
   /** Новый угол объекта в конце поворота, в градусах по часовой. */
   onRotate?: (elementId: string, rotation: number) => void;
@@ -722,7 +725,13 @@ export function SlideHandles({
     const hit = target instanceof Element ? target.closest(ELEMENT) : null;
     const id = idOf(hit);
     if (shiftOf(input)) {
-      if (id && selectedIds.includes(id)) onSelect(selectedIds.filter((item) => item !== id));
+      // Снимается всё, что выбирал бы этот объект, — у группы вся группа.
+      if (id && selectedIds.includes(id)) {
+        onSelect(
+          selectedIds.filter((item) => item !== id),
+          { additive: true },
+        );
+      }
       return;
     }
     if (pending && !selectedIds.includes(pending)) onSelect([pending]);
@@ -816,14 +825,18 @@ export function SlideHandles({
 
   /**
    * Ctrl/Cmd+щелчок — объект под тем, что выделен сейчас, по кругу: так достаётся перекрытое.
-   * Если выделенного под курсором нет, берётся второй сверху: верхний даёт и простой щелчок.
+   * Это и глубокое выделение Figma: выбирается сам объект, сквозь группы. Если выделенного под
+   * курсором нет, берётся второй сверху — верхний даёт и простой щелчок; а если верхний лежит в
+   * группе, простой щелчок дал бы группу, и глубокий начинается с него самого.
    */
   const selectThrough = (clientX: number, clientY: number) => {
     const stack = stackAt(clientX, clientY);
-    if (stack.length === 0) return;
+    const [top] = stack;
+    if (top === undefined) return;
     const at = selectedIds.length === 1 && selectedIds[0] ? stack.indexOf(selectedIds[0]) : -1;
-    const next = at >= 0 ? stack[(at + 1) % stack.length] : (stack[1] ?? stack[0]);
-    if (next) onSelect([next]);
+    const grouped = (hoverUnit?.(top) ?? [top]).length > 1;
+    const next = at >= 0 ? stack[(at + 1) % stack.length] : grouped ? top : (stack[1] ?? top);
+    if (next) onSelect([next], { additive: false, deep: true });
   };
 
   /** Точка внутри выделенного объекта, даже если сверху лежит другой. */
@@ -1307,6 +1320,12 @@ export function SlideHandles({
       ) : null}
     </>
   );
+}
+
+/** Как выбирали: с Shift пополняют выделение, сквозь объекты — берут сам объект. */
+export interface SelectPick {
+  readonly additive: boolean;
+  readonly deep?: boolean;
 }
 
 interface ResizeLast {

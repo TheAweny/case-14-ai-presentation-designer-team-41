@@ -86,6 +86,7 @@ import {
   type ElementMove,
 } from '@/components/editor/use-deck-history';
 import { useSlideSelection } from '@/components/editor/use-slide-selection';
+import type { SelectPick } from '@/components/editor/slide-handles';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SpeakerNotesPanel } from '@/components/editor/speaker-notes-panel';
 
@@ -394,10 +395,10 @@ export function EditorShell({
    * самого выделения — см. `group-selection.ts`.
    */
   const pickOnCanvas = useCallback(
-    (ids: readonly string[], pick?: { readonly additive: boolean }) => {
+    (ids: readonly string[], pick?: SelectPick) => {
       if (!slide) return;
       setSelectedIds((previous) =>
-        resolvePick(slide.elements, previous, ids, pick?.additive === true),
+        resolvePick(slide.elements, previous, ids, pick?.additive === true, pick?.deep === true),
       );
     },
     [slide],

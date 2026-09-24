@@ -43,6 +43,7 @@ import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus'
 import {
   SlideHandles,
   type LineReshape,
+  type SelectPick,
   type TurnedElement,
 } from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
@@ -203,7 +204,7 @@ export function SlideCanvas({
    * Выбор щелчком, рамкой или правой кнопкой: редактор разворачивает объект в его группу.
    * Без него выбор идёт прямо в `onSelect`.
    */
-  onPick?: (ids: readonly string[], pick?: { readonly additive: boolean }) => void;
+  onPick?: (ids: readonly string[], pick?: SelectPick) => void;
   /** Двойной щелчок по объекту группы: `true` — редактор вошёл в группу, набор не нужен. */
   onEnterGroup?: (elementId: string) => boolean;
   /** Что выберет щелчок по объекту: его и подсвечивает наведение. */

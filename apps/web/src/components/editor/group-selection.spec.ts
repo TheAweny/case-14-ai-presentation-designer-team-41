@@ -74,6 +74,11 @@ describe('выделение с группами', () => {
     expect(resolvePick(card, both, ['rule', 'panel', 'caption'], true)).toEqual(['rule']);
   });
 
+  it('Ctrl+щелчок выбирает объект сквозь группы', () => {
+    expect(resolvePick(card, [], ['caption'], false, true)).toEqual(['caption']);
+    expect(selectionScope(card, ['caption'])).toEqual(['card', 'label']);
+  });
+
   it('Esc поднимается на уровень вверх', () => {
     expect(exitGroup(card, ['number'])).toEqual(['number', 'caption']);
     expect(exitGroup(card, ['number', 'caption'])).toEqual(['panel', 'number', 'caption']);

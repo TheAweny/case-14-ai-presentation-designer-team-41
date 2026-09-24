@@ -72,13 +72,16 @@ export function unitOf(
  * Выделение после щелчка или рамки. `next` — что отдала рамка выделения (объекты, а не
  * группы). Без Shift каждый объект разворачивается в то, что щелчок по нему выбирает. С
  * Shift добавленное добавляется целиком, а снятый объект снимает всё, что выбирал бы он.
+ * Глубокий выбор (`deep`, Ctrl/Cmd+щелчок) берёт объекты как есть, сквозь группы.
  */
 export function resolvePick(
   elements: readonly SlideElement[],
   previous: readonly string[],
   next: readonly string[],
   additive: boolean,
+  deep = false,
 ): string[] {
+  if (deep) return unique(next);
   const scope = selectionScope(elements, previous);
   const expand = (ids: readonly string[]) => ids.flatMap((id) => unitOf(elements, id, scope));
   if (!additive) return unique(expand(next));
