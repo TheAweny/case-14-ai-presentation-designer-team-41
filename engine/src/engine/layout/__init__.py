@@ -20,4 +20,40 @@ def build_slide_ir(plan: DeckPlan, profile: TemplateProfile) -> list[SlideIR]:
     Returns:
         One IR entry per slide, each carrying its overflow signals.
     """
-    raise NotImplementedError
+    width = profile.slideSize.widthPt
+    height = profile.slideSize.heightPt
+    slides: list[SlideIR] = []
+    for slide in plan.slides:
+        slides.append(
+            SlideIR.model_validate(
+                {
+                    "schemaVersion": "1.0.0",
+                    "slideId": slide.slideId,
+                    "objects": [
+                        {
+                            "objectId": f"title-{slide.slideId}",
+                            "kind": "text",
+                            "text": slide.title,
+                            "bbox": {
+                                "x": width * 0.1,
+                                "y": height * 0.12,
+                                "width": width * 0.8,
+                                "height": height * 0.16,
+                            },
+                        },
+                        {
+                            "objectId": f"body-{slide.slideId}",
+                            "kind": "text",
+                            "text": slide.intent,
+                            "bbox": {
+                                "x": width * 0.1,
+                                "y": height * 0.36,
+                                "width": width * 0.8,
+                                "height": height * 0.48,
+                            },
+                        },
+                    ],
+                }
+            )
+        )
+    return slides

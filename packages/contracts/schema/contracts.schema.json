@@ -314,6 +314,218 @@
       "title": "DeckPlan",
       "type": "object"
     },
+    "EditableDeckRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "outputPath": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runId": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        },
+        "slides": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "slideId": {
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "slideId",
+              "title",
+              "body"
+            ],
+            "type": "object"
+          },
+          "maxItems": 15,
+          "minItems": 1,
+          "type": "array"
+        },
+        "templatePath": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "runId",
+        "templatePath",
+        "outputPath",
+        "slides"
+      ],
+      "title": "EditableDeckRequest",
+      "type": "object"
+    },
+    "EditableDeckResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "outputPath": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "profile": {
+          "additionalProperties": false,
+          "properties": {
+            "palette": {
+              "items": {
+                "pattern": "^#[A-Fa-f0-9]{6}$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array"
+            },
+            "protectedElements": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "bbox": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "height": {
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      },
+                      "width": {
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      },
+                      "x": {
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "y": {
+                        "minimum": 0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y",
+                      "width",
+                      "height"
+                    ],
+                    "type": "object"
+                  },
+                  "kind": {
+                    "enum": [
+                      "logo",
+                      "footer",
+                      "page-number",
+                      "background"
+                    ],
+                    "type": "string"
+                  },
+                  "objectId": {
+                    "pattern": "^[a-z][a-z0-9-]*$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "objectId",
+                  "kind",
+                  "bbox"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "schemaVersion": {
+              "const": "1.0.0",
+              "type": "string"
+            },
+            "slideSize": {
+              "additionalProperties": false,
+              "properties": {
+                "heightPt": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                "widthPt": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "widthPt",
+                "heightPt"
+              ],
+              "type": "object"
+            },
+            "sourceSha256": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "templateId": {
+              "pattern": "^[a-z][a-z0-9-]*$",
+              "type": "string"
+            },
+            "typography": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "family": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "sizePt": {
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  },
+                  "weight": {
+                    "maximum": 900,
+                    "minimum": 100,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "family",
+                  "sizePt",
+                  "weight"
+                ],
+                "type": "object"
+              },
+              "maxItems": 32,
+              "type": "array"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "templateId",
+            "sourceSha256",
+            "slideSize",
+            "palette",
+            "typography",
+            "protectedElements"
+          ],
+          "type": "object"
+        },
+        "slideCount": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "outputPath",
+        "profile",
+        "slideCount"
+      ],
+      "title": "EditableDeckResponse",
+      "type": "object"
+    },
     "HealthCheck": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -553,6 +765,10 @@
               "objectId": {
                 "pattern": "^[a-z][a-z0-9-]*$",
                 "type": "string"
+              },
+              "text": {
+                "minLength": 1,
+                "type": "string"
               }
             },
             "required": [
@@ -735,6 +951,12 @@
     },
     "DeckPlan": {
       "$ref": "#/$defs/DeckPlan"
+    },
+    "EditableDeckRequest": {
+      "$ref": "#/$defs/EditableDeckRequest"
+    },
+    "EditableDeckResponse": {
+      "$ref": "#/$defs/EditableDeckResponse"
     },
     "HealthCheck": {
       "$ref": "#/$defs/HealthCheck"

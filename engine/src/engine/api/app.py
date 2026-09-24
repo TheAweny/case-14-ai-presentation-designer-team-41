@@ -1,11 +1,18 @@
 """FastAPI application of the engine."""
 
 import time
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
-from engine import __version__
-from engine.contracts import HealthCheck, Status
+from engine import __version__, export, layout, parser
+from engine.contracts import (
+    DeckPlan,
+    EditableDeckRequest,
+    EditableDeckResponse,
+    HealthCheck,
+    Status,
+)
 
 _STARTED_AT = time.monotonic()
 
@@ -27,4 +34,43 @@ def health() -> HealthCheck:
         service="engine",
         version=__version__,
         uptimeSeconds=time.monotonic() - _STARTED_AT,
+    )
+
+
+@app.post(
+    "/v1/editable-decks",
+    response_model=EditableDeckResponse,
+    summary="Build one editable PPTX from a local template and fixture content",
+)
+def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
+    """Join deterministic parser, layout and export layers for the MVP vertical slice."""
+    template_path = Path(request.templatePath).resolve()
+    if not template_path.is_file():
+        raise HTTPException(status_code=404, detail="Template PPTX was not found.")
+
+    profile = parser.parse_template(template_path)
+    plan = DeckPlan.model_validate(
+        {
+            "schemaVersion": "1.0.0",
+            "runId": request.runId,
+            "slides": [
+                {
+                    "slideId": slide.slideId,
+                    "title": slide.title,
+                    "intent": slide.body,
+                    "sourceRefs": [{"sourceId": "content-pack", "location": f"slide:{index}"}],
+                }
+                for index, slide in enumerate(request.slides, start=1)
+            ],
+        }
+    )
+    output_path = Path(request.outputPath).resolve()
+    slide_ir = layout.build_slide_ir(plan, profile)
+    export.export_pptx(slide_ir, profile, template_path, output_path)
+    return EditableDeckResponse.model_validate(
+        {
+            "outputPath": str(output_path),
+            "profile": profile.model_dump(mode="json"),
+            "slideCount": len(slide_ir),
+        }
     )

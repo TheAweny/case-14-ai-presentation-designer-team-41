@@ -155,6 +155,84 @@ class DeckPlan(BaseModel):
     slides: list[Slide] = Field(..., max_length=15, min_length=1)
 
 
+class Slide1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    body: constr(min_length=1)
+    slideId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    title: constr(min_length=1)
+
+
+class EditableDeckRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    outputPath: constr(min_length=1)
+    runId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    slides: list[Slide1] = Field(..., max_length=15, min_length=1)
+    templatePath: constr(min_length=1)
+
+
+class PaletteItem(RootModel[constr(pattern=r"^#[A-Fa-f0-9]{6}$")]):
+    root: constr(pattern=r"^#[A-Fa-f0-9]{6}$")
+
+
+class Kind(StrEnum):
+    logo = "logo"
+    footer = "footer"
+    page_number = "page-number"
+    background = "background"
+
+
+class ProtectedElement(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bbox: Bbox
+    kind: Kind
+    objectId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+
+
+class SlideSize(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    heightPt: PositiveFloat
+    widthPt: PositiveFloat
+
+
+class TypographyItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    family: constr(min_length=1)
+    sizePt: PositiveFloat
+    weight: conint(ge=100, le=900)
+
+
+class Profile(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    palette: list[PaletteItem] = Field(..., max_length=32)
+    protectedElements: list[ProtectedElement]
+    schemaVersion: Literal["1.0.0"]
+    slideSize: SlideSize
+    sourceSha256: constr(pattern=r"^[a-f0-9]{64}$")
+    templateId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    typography: list[TypographyItem] = Field(..., max_length=32)
+
+
+class EditableDeckResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    outputPath: constr(min_length=1)
+    profile: Profile
+    slideCount: conint(le=9007199254740991, gt=0)
+
+
 class Status(StrEnum):
     """
     Current state of the component.
@@ -269,7 +347,7 @@ class RunEvent(BaseModel):
     status: Status1
 
 
-class Kind(StrEnum):
+class Kind1(StrEnum):
     text = "text"
     shape = "shape"
     image = "image"
@@ -283,8 +361,9 @@ class Object(BaseModel):
         extra="forbid",
     )
     bbox: Bbox
-    kind: Kind
+    kind: Kind1
     objectId: constr(pattern=r"^[a-z][a-z0-9-]*$")
+    text: constr(min_length=1) | None = None
 
 
 class SlideIR(BaseModel):
@@ -296,41 +375,20 @@ class SlideIR(BaseModel):
     slideId: constr(pattern=r"^[a-z][a-z0-9-]*$")
 
 
-class PaletteItem(RootModel[constr(pattern=r"^#[A-Fa-f0-9]{6}$")]):
-    root: constr(pattern=r"^#[A-Fa-f0-9]{6}$")
-
-
-class Kind1(StrEnum):
+class Kind2(StrEnum):
     logo = "logo"
     footer = "footer"
     page_number = "page-number"
     background = "background"
 
 
-class ProtectedElement(BaseModel):
+class ProtectedElement1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     bbox: Bbox
-    kind: Kind1
+    kind: Kind2
     objectId: constr(pattern=r"^[a-z][a-z0-9-]*$")
-
-
-class SlideSize(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    heightPt: PositiveFloat
-    widthPt: PositiveFloat
-
-
-class TypographyItem(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    family: constr(min_length=1)
-    sizePt: PositiveFloat
-    weight: conint(ge=100, le=900)
 
 
 class TemplateProfile(BaseModel):
@@ -338,7 +396,7 @@ class TemplateProfile(BaseModel):
         extra="forbid",
     )
     palette: list[PaletteItem] = Field(..., max_length=32)
-    protectedElements: list[ProtectedElement]
+    protectedElements: list[ProtectedElement1]
     schemaVersion: Literal["1.0.0"]
     slideSize: SlideSize
     sourceSha256: constr(pattern=r"^[a-f0-9]{64}$")
@@ -358,6 +416,12 @@ class ContractsBundle(BaseModel):
     ArtifactManifest_1: ArtifactManifest | None = Field(None, alias="ArtifactManifest")
     AuditFinding_1: AuditFinding | None = Field(None, alias="AuditFinding")
     DeckPlan_1: DeckPlan | None = Field(None, alias="DeckPlan")
+    EditableDeckRequest_1: EditableDeckRequest | None = Field(
+        None, alias="EditableDeckRequest"
+    )
+    EditableDeckResponse_1: EditableDeckResponse | None = Field(
+        None, alias="EditableDeckResponse"
+    )
     HealthCheck_1: HealthCheck | None = Field(None, alias="HealthCheck")
     RunConfig_1: RunConfig | None = Field(None, alias="RunConfig")
     RunEvent_1: RunEvent | None = Field(None, alias="RunEvent")

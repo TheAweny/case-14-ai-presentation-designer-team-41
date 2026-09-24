@@ -48,6 +48,10 @@
           "objectId": {
             "pattern": "^[a-z][a-z0-9-]*$",
             "type": "string"
+          },
+          "text": {
+            "minLength": 1,
+            "type": "string"
           }
         },
         "required": [

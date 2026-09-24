@@ -57,12 +57,32 @@ const slideObjectSchema = z.object({
   objectId: stableIdSchema,
   kind: z.enum(['text', 'shape', 'image', 'table', 'chart', 'diagram']),
   bbox: boundingBoxSchema,
+  text: z.string().min(1).optional(),
 });
 
 export const slideIrSchema = z.object({
   schemaVersion: schemaVersionSchema,
   slideId: stableIdSchema,
   objects: z.array(slideObjectSchema),
+});
+
+const editableDeckSlideSchema = z.object({
+  slideId: stableIdSchema,
+  title: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export const editableDeckRequestSchema = z.object({
+  runId: stableIdSchema,
+  templatePath: z.string().min(1),
+  outputPath: z.string().min(1),
+  slides: z.array(editableDeckSlideSchema).min(1).max(15),
+});
+
+export const editableDeckResponseSchema = z.object({
+  outputPath: z.string().min(1),
+  profile: templateProfileSchema,
+  slideCount: z.number().int().positive(),
 });
 
 export const auditFindingSchema = z.object({
@@ -113,6 +133,8 @@ export type ArtifactManifest = z.infer<typeof artifactManifestSchema>;
 export type AuditFinding = z.infer<typeof auditFindingSchema>;
 export type BoundingBox = z.infer<typeof boundingBoxSchema>;
 export type DeckPlan = z.infer<typeof deckPlanSchema>;
+export type EditableDeckRequest = z.infer<typeof editableDeckRequestSchema>;
+export type EditableDeckResponse = z.infer<typeof editableDeckResponseSchema>;
 export type RunEvent = z.infer<typeof runEventSchema>;
 export type SlideIR = z.infer<typeof slideIrSchema>;
 export type TemplateProfile = z.infer<typeof templateProfileSchema>;

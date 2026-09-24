@@ -6,6 +6,7 @@ import {
   auditFindingSchema,
   contractRegistry,
   deckPlanSchema,
+  editableDeckRequestSchema,
   runEventSchema,
   slideIrSchema,
   templateProfileSchema,
@@ -61,6 +62,27 @@ describe('deck contracts', () => {
         objects: [{ objectId: 'title-1', kind: 'text', bbox: { ...BBOX, width: 0 } }],
       }).success,
     ).toBe(false);
+  });
+
+  it('accepts text content for editable slide objects', () => {
+    expect(
+      slideIrSchema.parse({
+        schemaVersion: '1.0.0',
+        slideId: 'slide-1',
+        objects: [{ objectId: 'title-1', kind: 'text', bbox: BBOX, text: 'Editable title' }],
+      }).objects[0]?.text,
+    ).toBe('Editable title');
+  });
+
+  it('requires local paths and content for an editable deck request', () => {
+    expect(
+      editableDeckRequestSchema.safeParse({
+        runId: 'run-1',
+        templatePath: 'fixture.pptx',
+        outputPath: 'output.pptx',
+        slides: [{ slideId: 'slide-1', title: 'Title', body: 'Body' }],
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts an audit finding linked to a stable slide and object id', () => {

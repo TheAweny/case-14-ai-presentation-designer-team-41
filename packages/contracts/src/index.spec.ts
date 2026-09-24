@@ -13,6 +13,8 @@ describe('contract registry', () => {
       'ArtifactManifest',
       'AuditFinding',
       'DeckPlan',
+      'EditableDeckRequest',
+      'EditableDeckResponse',
       'HealthCheck',
       'RunConfig',
       'RunEvent',

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "outputPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "runId": {
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "type": "string"
+    },
+    "slides": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "slideId": {
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "slideId",
+          "title",
+          "body"
+        ],
+        "type": "object"
+      },
+      "maxItems": 15,
+      "minItems": 1,
+      "type": "array"
+    },
+    "templatePath": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "runId",
+    "templatePath",
+    "outputPath",
+    "slides"
+  ],
+  "title": "EditableDeckRequest",
+  "type": "object"
+}
