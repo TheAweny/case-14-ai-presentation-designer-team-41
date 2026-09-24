@@ -62,6 +62,17 @@ export const colorRoleSchema = z.enum([
   'negative',
 ]);
 
+/**
+ * A colour the editor lets a user pick: a palette role, or six hex digits of their own.
+ *
+ * A role is what the layout writes and what keeps a deck on brand. A literal value only appears
+ * when a person asked for it; the audit may flag it as off-palette, the contract does not refuse it.
+ * No role name is six hex digits, so a string alone tells the two apart.
+ */
+export const colorValueSchema = z
+  .union([colorRoleSchema, hexColorSchema])
+  .describe('A palette role, or six hex digits without a hash when a user chose their own.');
+
 export const paletteEntrySchema = z.object({
   role: colorRoleSchema,
   hex: hexColorSchema,
@@ -210,6 +221,7 @@ export const designSystemSchema = z.object({
 export type StyleSource = z.infer<typeof styleSourceSchema>;
 export type TokenMeta = z.infer<typeof tokenMetaSchema>;
 export type ColorRole = z.infer<typeof colorRoleSchema>;
+export type ColorValue = z.infer<typeof colorValueSchema>;
 export type PaletteEntry = z.infer<typeof paletteEntrySchema>;
 export type Surface = z.infer<typeof surfaceSchema>;
 export type TypeFamily = z.infer<typeof typeFamilySchema>;

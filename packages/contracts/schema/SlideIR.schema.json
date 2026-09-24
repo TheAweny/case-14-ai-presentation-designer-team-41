@@ -5,25 +5,35 @@
     "background": {
       "anyOf": [
         {
-          "enum": [
-            "background",
-            "surface",
-            "text",
-            "text-muted",
-            "text-on-accent",
-            "accent",
-            "accent-alt",
-            "line",
-            "positive",
-            "negative"
+          "anyOf": [
+            {
+              "enum": [
+                "background",
+                "surface",
+                "text",
+                "text-muted",
+                "text-on-accent",
+                "accent",
+                "accent-alt",
+                "line",
+                "positive",
+                "negative"
+              ],
+              "type": "string"
+            },
+            {
+              "description": "Six hex digits, no leading hash.",
+              "pattern": "^[0-9a-fA-F]{6}$",
+              "type": "string"
+            }
           ],
-          "type": "string"
+          "description": "A palette role, or six hex digits without a hash when a user chose their own."
         },
         {
           "type": "null"
         }
       ],
-      "description": "Palette role the slide is filled with. Null or absent: the template background."
+      "description": "Colour the slide is filled with. Null or absent: the template background."
     },
     "elements": {
       "description": "In paint order, lowest first.",
@@ -179,6 +189,13 @@
                             "description": "Null when inherited.",
                             "type": [
                               "boolean",
+                              "null"
+                            ]
+                          },
+                          "letterSpacingPt": {
+                            "description": "Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+                            "type": [
+                              "number",
                               "null"
                             ]
                           },
@@ -734,19 +751,29 @@
               "fill": {
                 "anyOf": [
                   {
-                    "enum": [
-                      "background",
-                      "surface",
-                      "text",
-                      "text-muted",
-                      "text-on-accent",
-                      "accent",
-                      "accent-alt",
-                      "line",
-                      "positive",
-                      "negative"
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "background",
+                          "surface",
+                          "text",
+                          "text-muted",
+                          "text-on-accent",
+                          "accent",
+                          "accent-alt",
+                          "line",
+                          "positive",
+                          "negative"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "description": "Six hex digits, no leading hash.",
+                        "pattern": "^[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      }
                     ],
-                    "type": "string"
+                    "description": "A palette role, or six hex digits without a hash when a user chose their own."
                   },
                   {
                     "type": "null"
@@ -832,20 +859,29 @@
                     "additionalProperties": false,
                     "properties": {
                       "color": {
-                        "description": "A role, never a literal colour: the template supplies it.",
-                        "enum": [
-                          "background",
-                          "surface",
-                          "text",
-                          "text-muted",
-                          "text-on-accent",
-                          "accent",
-                          "accent-alt",
-                          "line",
-                          "positive",
-                          "negative"
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "background",
+                              "surface",
+                              "text",
+                              "text-muted",
+                              "text-on-accent",
+                              "accent",
+                              "accent-alt",
+                              "line",
+                              "positive",
+                              "negative"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "description": "Six hex digits, no leading hash.",
+                            "pattern": "^[0-9a-fA-F]{6}$",
+                            "type": "string"
+                          }
                         ],
-                        "type": "string"
+                        "description": "A palette role, or a hex value a user chose."
                       },
                       "dash": {
                         "enum": [

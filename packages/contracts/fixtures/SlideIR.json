@@ -253,8 +253,8 @@
       }
     },
     {
-      "name": "shape filled with a literal colour",
-      "why": "A colour is a palette role; a hex value here is hardcoding one template into the slide.",
+      "name": "shape filled with a CSS colour",
+      "why": "A colour is a palette role or six hex digits; a hash or a CSS name is neither and would not survive export.",
       "path": ["elements", 0, "fill"],
       "payload": {
         "schemaVersion": 1,
@@ -277,7 +277,7 @@
             },
             "sourceShapeId": null,
             "shape": "rect",
-            "fill": "3355E0"
+            "fill": "#3355E0"
           }
         ]
       }

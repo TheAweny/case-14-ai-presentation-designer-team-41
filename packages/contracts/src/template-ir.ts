@@ -63,6 +63,11 @@ export const textRunSchema = z.object({
   color: z
     .string()
     .describe('Six-digit hex when the run states a colour. Empty when it inherits one.'),
+  letterSpacingPt: z
+    .number()
+    .nullable()
+    .optional()
+    .describe('Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.'),
 });
 
 /** Horizontal alignment of a paragraph, as OOXML `algn` names it in full. */

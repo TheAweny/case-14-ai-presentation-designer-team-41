@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { colorRoleSchema } from './design-system.js';
+import { colorValueSchema } from './design-system.js';
 import { boxSchema, paragraphSchema } from './template-ir.js';
 
 /**
@@ -18,7 +18,8 @@ import { boxSchema, paragraphSchema } from './template-ir.js';
  * The editor saves its result as SlideIR too, so the look it lets a user change lives here as
  * optional fields: rotation, opacity, a lock, the style of a shape, text alignment, a slide
  * background. Absent means what it meant before those fields existed, which keeps every payload
- * written without them valid. Colours are palette roles throughout, never literal values.
+ * written without them valid. Colours are palette roles unless a user chose a hex value of their
+ * own, which the audit may flag as off-palette.
  */
 
 /** Which of the three renderings of a plan this slide belongs to. */
@@ -151,7 +152,7 @@ export const lineEndSchema = z.enum(['none', 'arrow']);
 
 /** The outline of a shape, or the whole of a line. */
 export const elementStrokeSchema = z.object({
-  color: colorRoleSchema.describe('A role, never a literal colour: the template supplies it.'),
+  color: colorValueSchema.describe('A palette role, or a hex value a user chose.'),
   widthEmu: z.number().int().positive().describe('Line width in EMU.'),
   dash: strokeDashSchema,
   head: lineEndSchema.describe('Mark at the start of a line.'),
@@ -180,7 +181,7 @@ export const decorElementSchema = z.object({
   shape: decorShapeSchema
     .optional()
     .describe('Absent for template decoration of a geometry the parser did not name.'),
-  fill: colorRoleSchema
+  fill: colorValueSchema
     .nullable()
     .optional()
     .describe('Null for no fill. Absent when the template did not state one.'),
@@ -221,10 +222,10 @@ export const slideIrSchema = z.object({
   slideCx: z.number().int().positive().describe('Slide width in EMU, from the template.'),
   slideCy: z.number().int().positive().describe('Slide height in EMU, from the template.'),
   elements: z.array(slideElementSchema).describe('In paint order, lowest first.'),
-  background: colorRoleSchema
+  background: colorValueSchema
     .nullable()
     .optional()
-    .describe('Palette role the slide is filled with. Null or absent: the template background.'),
+    .describe('Colour the slide is filled with. Null or absent: the template background.'),
 });
 
 export type LayoutVariantName = z.infer<typeof layoutVariantNameSchema>;

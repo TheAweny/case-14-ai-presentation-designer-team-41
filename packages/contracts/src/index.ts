@@ -69,6 +69,7 @@ export {
   protectedZoneSchema,
   designWarningSchema,
   colorRoleSchema,
+  colorValueSchema,
   typeRoleSchema,
   styleSourceSchema,
   hexColorSchema,
@@ -85,6 +86,7 @@ export {
   type ProtectedZone,
   type DesignWarning,
   type ColorRole,
+  type ColorValue,
   type TypeRole,
   type StyleSource,
 } from './design-system.js';

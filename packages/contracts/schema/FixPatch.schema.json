@@ -96,6 +96,13 @@
                               "null"
                             ]
                           },
+                          "letterSpacingPt": {
+                            "description": "Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
                           "sizePt": {
                             "description": "Size in points, or null when inherited.",
                             "type": [

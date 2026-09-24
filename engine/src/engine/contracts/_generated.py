@@ -254,6 +254,10 @@ class Run(BaseModel):
         description="Typeface named on the run. Empty when it inherits from the theme.",
     )
     italic: bool | None = Field(..., description="Null when inherited.")
+    letterSpacingPt: float | None = Field(
+        None,
+        description="Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+    )
     sizePt: float | None = Field(
         ..., description="Size in points, or null when inherited."
     )
@@ -1774,7 +1778,7 @@ class RunConfig(BaseModel):
 
 class Background(StrEnum):
     """
-    Palette role the slide is filled with. Null or absent: the template background.
+    A palette role, or six hex digits without a hash when a user chose their own.
     """
 
     background = "background"
@@ -1994,7 +1998,7 @@ class Elements3(BaseModel):
 
 class Fill(StrEnum):
     """
-    Null for no fill. Absent when the template did not state one.
+    A palette role, or six hex digits without a hash when a user chose their own.
     """
 
     background = "background"
@@ -2024,7 +2028,7 @@ class Shape(StrEnum):
 
 class Color(StrEnum):
     """
-    A role, never a literal colour: the template supplies it.
+    A palette role, or a hex value a user chose.
     """
 
     background = "background"
@@ -2071,8 +2075,8 @@ class Stroke1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color = Field(
-        ..., description="A role, never a literal colour: the template supplies it."
+    color: Color | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="A palette role, or a hex value a user chose."
     )
     dash: Dash
     head: Head = Field(..., description="Mark at the start of a line.")
@@ -2092,7 +2096,7 @@ class Elements4(BaseModel):
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
     )
     elementId: constr(min_length=1)
-    fill: Fill | None = Field(
+    fill: Fill | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
         None,
         description="Null for no fill. Absent when the template did not state one.",
     )
@@ -2138,9 +2142,9 @@ class SlideIR(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    background: Background | None = Field(
+    background: Background | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
         None,
-        description="Palette role the slide is filled with. Null or absent: the template background.",
+        description="Colour the slide is filled with. Null or absent: the template background.",
     )
     elements: list[Elements | Elements1 | Elements2 | Elements3 | Elements4] = Field(
         ..., description="In paint order, lowest first."
