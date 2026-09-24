@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
-import type { ColorValue, SlideElement } from '@lct/contracts';
+import type { ColorValue, SlideElement, SlideIr } from '@lct/contracts';
 import type {
   ArrangeTarget,
   DeckChangeKind,
@@ -163,12 +163,18 @@ export function EditorShell({
   deck,
   media = {},
   layout: saved = EDITOR_LAYOUT_DEFAULT,
+  onSlidesChange,
+  saveStatus,
 }: {
   deck: Deck;
   /** Адрес картинки по `mediaPart`. Нет адреса — на слайде рамка. */
   media?: Readonly<Record<string, string>>;
   /** Раскладка из cookie: сервер знает её заранее, поэтому колонки не прыгают. */
   layout?: EditorLayout;
+  /** Записанные слайды после каждой правки (без живого вида жеста): для черновика колоды. */
+  onSlidesChange?: (slides: readonly SlideIr[]) => void;
+  /** Значок сохранения в подвале списка слайдов. */
+  saveStatus?: ReactNode;
 }) {
   const t = useTranslations('editor');
   const slidesPanelRef = usePanelRef();
@@ -226,6 +232,10 @@ export function EditorShell({
     [undoKind, redoKind, undo, redo],
   );
   const { designSystem } = deck;
+  // Черновик колоды хранит тот, кто открыл редактор: оболочка только сообщает правки.
+  useEffect(() => {
+    onSlidesChange?.(committedSlides);
+  }, [committedSlides, onSlidesChange]);
   const { index, select, selectById } = useSlideSelection(slides);
   const slide = slides[index];
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
@@ -819,6 +829,7 @@ export function EditorShell({
                 )}
               >
                 <LocaleSwitcher />
+                {saveStatus}
                 <p className="px-2 text-xs text-muted-foreground tabular-nums">
                   <span className="sr-only">
                     {t('slideLabel', { number: index + 1, total: slides.length })}

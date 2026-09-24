@@ -8784,6 +8784,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"idb-keyval@npm:6.3.0":
+  version: 6.3.0
+  resolution: "idb-keyval@npm:6.3.0"
+  checksum: 10/e89299183e067de3faff54449905dde82df30b2936079ca565e778e0d71bbffaef514ac1339be76b835cddd3679815f8c8728f29c9eed6844e61d66fd486e042
+  languageName: node
+  linkType: hard
+
 "ieee754@npm:1.2.1, ieee754@npm:^1.1.13, ieee754@npm:^1.2.1":
   version: 1.2.1
   resolution: "ieee754@npm:1.2.1"
@@ -13505,6 +13512,7 @@ __metadata:
     "@types/react-dom": "npm:^19.3.0"
     class-variance-authority: "npm:0.7.1"
     cn: "npm:0.3.0"
+    idb-keyval: "npm:6.3.0"
     motion: "npm:13.4.0"
     next: "npm:^16.3.0"
     next-intl: "npm:4.14.5"

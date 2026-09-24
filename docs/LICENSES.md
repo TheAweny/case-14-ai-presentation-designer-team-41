@@ -6,7 +6,7 @@
 копилефт-лицензиями: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, CC-BY-4.0, CC0-1.0, ISC, MIT, MIT-0, MIT-CMU, MPL-2.0, PSF-2.0, Python-2.0, Unlicense.
 GPL и AGPL не подходят: заказчик берёт решение в пилот и внедрение.
 
-Всего зависимостей: 1146 (npm: 1089, python: 57).
+Всего зависимостей: 1147 (npm: 1090, python: 57).
 
 ## Сводка по лицензиям
 
@@ -14,7 +14,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | --- | --- | --- |
 | MIT | 965 | разрешена |
 | ISC | 60 | разрешена |
-| Apache-2.0 | 46 | разрешена |
+| Apache-2.0 | 47 | разрешена |
 | BSD-3-Clause | 29 | разрешена |
 | BSD-2-Clause | 21 | разрешена |
 | BlueOak-1.0.0 | 10 | разрешена |
@@ -688,6 +688,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | human-signals | 8.0.1 | Apache-2.0 |
 | npm | iconv-lite | 0.7.3 | MIT |
 | npm | icu-minify | 4.14.6 | MIT |
+| npm | idb-keyval | 6.3.0 | Apache-2.0 |
 | npm | ieee754 | 1.2.1 | BSD-3-Clause |
 | npm | ignore | 5.3.2 | MIT |
 | npm | ignore | 7.0.5 | MIT |
