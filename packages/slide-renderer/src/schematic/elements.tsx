@@ -3,6 +3,7 @@ import type { Box, ElementRole, SlideElement } from '@lct/contracts';
 import { boxStyle, cqw, emuToCqw, percent, round, type SlideSize } from '../geometry.js';
 import { SERIES_LEVELS, hairline, ink, type InkLevel } from './ink.js';
 import { layoutText, textWidthEmu, type TextElement, type TypeResolver } from './text-layout.js';
+import { trackShares } from '../view/table.js';
 
 type ElementOf<K extends SlideElement['kind']> = Extract<SlideElement, { kind: K }>;
 
@@ -227,32 +228,41 @@ function TableSchematic({
 }): JSX.Element {
   const { box, headers, rows } = element;
   const all = [headers, ...rows];
-  const columns = Math.max(...all.map((row) => row.length));
-  const rowH = box.cy / all.length;
-  const colW = box.cx / columns;
-  // Column widths and cell type are not in the IR: equal columns, text sized from the row.
-  const size = Math.min(context.type.sizeEmu('table'), rowH * 0.42);
-  const pad = Math.min(rowH * 0.4, colW * 0.08);
+  const columns = headers.length;
+  const rowShares = trackShares(element.rowHeights, all.length);
+  const colShares = trackShares(element.columnWidths, columns);
+  const starts = (shares: readonly number[], length: number) =>
+    shares.map(
+      (_, index) => shares.slice(0, index).reduce((sum, share) => sum + share, 0) * length,
+    );
+  const rowTops = starts(rowShares, box.cy);
+  const colLefts = starts(colShares, box.cx);
+  const header = element.headerRow !== false;
+  const lowest = Math.min(...rowShares) * box.cy;
+  // Cell type is not in the IR: text sized from the lowest row.
+  const size = Math.min(context.type.sizeEmu('table'), lowest * 0.42);
   const rule = hairline(cqw(0.08));
   return (
     <Element element={element} context={context}>
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: '100%',
-          height: percent(100 / all.length),
-          background: ink('fill'),
-        }}
-      />
+      {header ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: '100%',
+            height: percent((rowShares[0] ?? 0) * 100),
+            background: ink('fill'),
+          }}
+        />
+      ) : null}
       {all.map((_, r) => (
         <div
           key={`r${r}`}
           style={{
             position: 'absolute',
             left: 0,
-            top: percent(((r + 1) * 100) / all.length),
+            top: percent((((rowTops[r] ?? 0) + (rowShares[r] ?? 0) * box.cy) / box.cy) * 100),
             width: '100%',
             height: rule,
             transform: 'translateY(-50%)',
@@ -261,10 +271,13 @@ function TableSchematic({
         />
       ))}
       {all.flatMap((row, r) =>
-        row.map((cell, c) => {
-          const header = r === 0;
-          const thickness = size * (header ? 0.6 : 0.5);
-          const width = Math.min(textWidthEmu(cell, size, header), colW - pad * 2);
+        row.slice(0, columns).map((cell, c) => {
+          const strong = header && r === 0;
+          const rowH = (rowShares[r] ?? 0) * box.cy;
+          const colW = (colShares[c] ?? 0) * box.cx;
+          const pad = Math.min(rowH * 0.4, colW * 0.08);
+          const thickness = size * (strong ? 0.6 : 0.5);
+          const width = Math.min(textWidthEmu(cell, size, strong), colW - pad * 2);
           if (cell.trim() === '' || width <= 0) return null;
           return (
             <div
@@ -272,11 +285,11 @@ function TableSchematic({
               style={bar(
                 box,
                 context,
-                c * colW + pad,
-                r * rowH + (rowH - thickness) / 2,
+                (colLefts[c] ?? 0) + pad,
+                (rowTops[r] ?? 0) + (rowH - thickness) / 2,
                 width,
                 thickness,
-                header ? 'text' : 'muted',
+                strong ? 'text' : 'muted',
               )}
             />
           );

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { colorValueSchema } from './design-system.js';
-import { boxSchema, paragraphSchema } from './template-ir.js';
+import { boxSchema, paragraphAlignSchema, paragraphSchema } from './template-ir.js';
 
 /**
  * SlideIR — one laid-out slide, in template units, ready to be written as native objects.
@@ -108,6 +108,42 @@ export const imageElementSchema = z.object({
   fit: imageFitSchema.describe('Never stretch: the audit looks for distortion.'),
 });
 
+/**
+ * The look of one table cell, as a user set it. Every key is optional: absent inherits from the
+ * header or banded row the cell sits in, then from the type role of the table. It maps onto
+ * OOXML one to one: `fill` is the `a:tcPr` fill, `color`, `bold`, `italic` and `underline` the
+ * `a:rPr` of its runs, `align` the paragraph `algn`, `verticalAlign` the `anchor` of the cell.
+ */
+export const tableCellStyleSchema = z.object({
+  fill: colorValueSchema
+    .nullable()
+    .optional()
+    .describe('Background of the cell. Null for none, even in a header or banded row.'),
+  color: colorValueSchema.optional().describe('Colour of the text. Absent: the type role.'),
+  bold: z.boolean().optional().describe('Absent: bold in the header row, regular elsewhere.'),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  align: paragraphAlignSchema.optional().describe('Horizontal alignment. Absent means left.'),
+  verticalAlign: verticalAlignSchema.optional().describe('Absent means top.'),
+});
+
+/** The rules drawn between and around the cells of a table. */
+export const tableBordersSchema = z.object({
+  color: colorValueSchema.describe('A palette role, or a hex value a user chose.'),
+  widthEmu: z.number().int().positive().describe('Line width in EMU.'),
+  horizontal: z.boolean().describe('A rule under every row, the last one included.'),
+  vertical: z.boolean().describe('Rules between columns.'),
+  outer: z.boolean().describe('A frame around the whole table.'),
+});
+
+/**
+ * A table: the header row, then the body rows, every row as wide as the header.
+ *
+ * Geometry and look are optional and written by the editor. Column widths and row heights are
+ * shares of the box rather than lengths, so a table resized as a whole keeps its proportions and
+ * the box stays the one source of its size; export multiplies them out into `a:gridCol w` and
+ * `a:tr h`. Per-row and per-column arrays run header first, the same order as `cellStyles`.
+ */
 export const tableElementSchema = z.object({
   kind: z.literal('table'),
   elementId: z.string().min(1),
@@ -117,6 +153,44 @@ export const tableElementSchema = z.object({
   sourceShapeId: z.number().int().nullable(),
   headers: z.array(z.string()).min(1),
   rows: z.array(z.array(z.string())).min(1),
+  columnWidths: z
+    .array(z.number().positive())
+    .min(1)
+    .optional()
+    .describe(
+      'Share of the box width each column takes, one per header, read relative to their sum. ' +
+        'Absent: equal columns.',
+    ),
+  rowHeights: z
+    .array(z.number().positive())
+    .min(1)
+    .optional()
+    .describe(
+      'Share of the box height each row takes, header first, read relative to their sum. A row ' +
+        'still grows to fit its text, as a PowerPoint row does. Absent: the rows share the box, ' +
+        'each growing to fit its text.',
+    ),
+  headerRow: z
+    .boolean()
+    .optional()
+    .describe('Whether the first row looks like a header (OOXML firstRow). Absent means true.'),
+  bandedRows: z
+    .boolean()
+    .optional()
+    .describe('Whether every other body row is tinted (OOXML bandRow). Absent means false.'),
+  bandFill: colorValueSchema
+    .optional()
+    .describe('Fill of the tinted body rows. Absent: the surface role.'),
+  borders: tableBordersSchema
+    .nullable()
+    .optional()
+    .describe('Null for no lines. Absent: a hairline in the line role under every row.'),
+  cellStyles: z
+    .array(z.array(tableCellStyleSchema.nullable()))
+    .optional()
+    .describe(
+      'Look of each cell, header row first, then by column. A missing or null entry inherits.',
+    ),
 });
 
 export const chartTypeSchema = z.enum(['bar', 'column', 'line', 'pie', 'area']);
@@ -237,6 +311,9 @@ export type LineEnd = z.infer<typeof lineEndSchema>;
 export type ElementStroke = z.infer<typeof elementStrokeSchema>;
 export type ImageFit = z.infer<typeof imageFitSchema>;
 export type ChartType = z.infer<typeof chartTypeSchema>;
+export type TableCellStyle = z.infer<typeof tableCellStyleSchema>;
+export type TableBorders = z.infer<typeof tableBordersSchema>;
+export type TableElement = z.infer<typeof tableElementSchema>;
 export type SlideElement = z.infer<typeof slideElementSchema>;
 export type SlideElementKind = SlideElement['kind'];
 export type SlideIr = z.infer<typeof slideIrSchema>;

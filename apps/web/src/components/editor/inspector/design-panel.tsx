@@ -3,7 +3,6 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  Add01Icon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -93,6 +92,8 @@ import { colorHex } from '@/components/editor/inspector/fields/color';
 import { cn } from '@/lib/utils';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
 import { ChartSection } from '@/components/editor/inspector/chart-section';
+import { TableSection, type TableAction } from '@/components/editor/inspector/table-section';
+import type { TableOps } from '@/components/editor/use-table-ops';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
 import {
   leadSizePt,
@@ -171,12 +172,14 @@ export type DesignPanelProps = {
   onSlideBackground: (background: ColorValue | null, mode?: EditMode) => void;
   /** Строки и столбцы таблицы. */
   onTable: (elementId: string, action: TableAction) => void;
+  /** Ячейки, размеры и вид таблицы; без них панель показывает только размер сеткой. */
+  tableOps?: TableOps;
   /** Данные графика целиком: одна запись журнала на правку. */
   onChartData: (elementId: string, data: ChartData) => void;
   onChartAxes: (elementId: string, titles: { xTitle?: string; yTitle?: string }) => void;
 };
 
-export type TableAction = 'add-row' | 'remove-row' | 'add-column' | 'remove-column';
+export type { TableAction } from '@/components/editor/inspector/table-section';
 
 const ALIGN_X = [
   { id: 'left', icon: AlignLeftIcon },
@@ -322,7 +325,15 @@ export function DesignPanel(props: DesignPanelProps) {
       <AppearanceSection {...props} selected={selected} decors={decors} />
       {texts.length > 0 ? <TextSections {...props} texts={texts} /> : null}
       {images.length > 0 ? <ImageSection {...props} images={images} /> : null}
-      {table ? <TableSection {...props} table={table} /> : null}
+      {table ? (
+        <TableSection
+          table={table}
+          slide={slide}
+          designSystem={props.designSystem}
+          ops={props.tableOps}
+          onTable={props.onTable}
+        />
+      ) : null}
       {chart ? <ChartSection {...props} chart={chart} /> : null}
       {decors.length > 0 ? <DecorSections {...props} decors={decors} /> : null}
     </div>
@@ -1028,48 +1039,6 @@ function ImageSection({
           {t('replaceImage')}
         </button>
       ) : null}
-    </Section>
-  );
-}
-
-/**
- * Таблица: размер сеткой. Сами ячейки правятся на слайде — двойной клик по таблице.
- */
-function TableSection({
-  table,
-  onTable,
-}: DesignPanelProps & { table: Extract<SlideElement, { kind: 'table' }> }) {
-  const t = useTranslations('designPanel');
-  const rows = table.rows.length;
-  const columns = table.headers.length;
-  const stepper = (
-    label: string,
-    value: number,
-    min: number,
-    add: TableAction,
-    remove: TableAction,
-  ) => (
-    <div className="flex items-center gap-1">
-      <span className="flex-1 text-xs text-muted-foreground">{label}</span>
-      <IconButton
-        icon={MinusSignIcon}
-        label={t(remove === 'remove-row' ? 'removeRow' : 'removeColumn')}
-        disabled={value <= min}
-        onClick={() => onTable(table.elementId, remove)}
-      />
-      <span className="w-6 text-center text-xs tabular-nums text-foreground">{value}</span>
-      <IconButton
-        icon={Add01Icon}
-        label={t(add === 'add-row' ? 'addRow' : 'addColumn')}
-        onClick={() => onTable(table.elementId, add)}
-      />
-    </div>
-  );
-  return (
-    <Section title={t('table')}>
-      {stepper(t('rows'), rows, 1, 'add-row', 'remove-row')}
-      {stepper(t('columns'), columns, 1, 'add-column', 'remove-column')}
-      <p className="text-xs text-balance text-muted-foreground">{t('tableHint')}</p>
     </Section>
   );
 }
