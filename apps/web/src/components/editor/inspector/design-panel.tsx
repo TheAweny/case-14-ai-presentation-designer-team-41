@@ -90,6 +90,7 @@ import {
   type NumberPreset,
 } from '@/components/editor/inspector/controls';
 import { colorHex } from '@/components/editor/inspector/fields/color';
+import { shapeAsText } from '@/components/editor/shape-text';
 import { cn } from '@/lib/utils';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
 import { ChartSection } from '@/components/editor/inspector/chart-section';
@@ -316,6 +317,15 @@ export function DesignPanel(props: DesignPanelProps) {
   const images = selected.every(isImage) ? (selected as ImageElement[]) : [];
   const table = single?.kind === 'table' ? single : undefined;
   const chart = single?.kind === 'chart' ? single : undefined;
+  // Текст в фигурах: те же поля, что у текстового блока, — по словам фигур. Пока в фигуре
+  // идёт набор, в ней уже есть куда писать, даже если слов ещё нет.
+  const shapeTexts =
+    decors.length > 0 &&
+    decors.every(
+      (decor) => decor.paragraphs !== undefined || props.textEditor?.elementId === decor.elementId,
+    )
+      ? decors.map(shapeWords)
+      : [];
 
   return (
     <div className="flex flex-col">
@@ -341,6 +351,7 @@ export function DesignPanel(props: DesignPanelProps) {
       ) : null}
       {chart ? <ChartSection {...props} chart={chart} /> : null}
       {decors.length > 0 ? <DecorSections {...props} decors={decors} /> : null}
+      {shapeTexts.length > 0 ? <TextSections {...props} texts={shapeTexts} inShape /> : null}
     </div>
   );
 }
@@ -699,7 +710,29 @@ interface TextActions {
  * выделенные слова и абзацы, как в Figma; в журнал они попадут одним `set-text`, когда набор
  * закроется.
  */
-function TextSections(props: DesignPanelProps & { texts: readonly TextElement[] }) {
+/**
+ * Слова фигуры глазами панели: текстовый блок с её абзацами. Без своих значений текст фигуры
+ * стоит по центру в обе стороны, как на слайде, — так панель его и показывает.
+ */
+function shapeWords(decor: Decor): TextElement {
+  const text = shapeAsText(decor);
+  return {
+    ...text,
+    verticalAlign: decor.verticalAlign ?? 'middle',
+    paragraphs: text.paragraphs.map((paragraph) => ({
+      ...paragraph,
+      align: paragraph.align ?? 'center',
+    })),
+  };
+}
+
+/** `inShape` — слова внутри фигуры: цвет текста в «Типографике», «Заливка» — у самой фигуры. */
+type TextSectionProps = DesignPanelProps & {
+  texts: readonly TextElement[];
+  inShape?: boolean;
+};
+
+function TextSections(props: TextSectionProps) {
   const { texts, textEditor } = props;
   const only = texts.length === 1 ? texts[0] : undefined;
   if (textEditor && only && only.elementId === textEditor.elementId) {
@@ -716,12 +749,13 @@ function letterSpacingValue(pt: number): number | null {
 function WholeText({
   designSystem,
   texts,
+  inShape,
   onFontSizes,
   onColorAll,
   onProps,
   onPropsEach,
   onPreviewEnd,
-}: DesignPanelProps & { texts: readonly TextElement[] }) {
+}: TextSectionProps) {
   const ids = texts.map((element) => element.elementId);
   const look = textLook(texts, designSystem);
   const lookOf = (element: TextElement) => textLook([element], designSystem);
@@ -742,6 +776,7 @@ function WholeText({
     <TextControls
       designSystem={designSystem}
       onPreviewEnd={onPreviewEnd}
+      inShape={inShape}
       actions={{
         look,
         live: true,
@@ -800,9 +835,10 @@ function RangeText({
   designSystem,
   editor,
   element,
+  inShape,
   onProps,
   onPreviewEnd,
-}: DesignPanelProps & { editor: Editor; element: TextElement }) {
+}: TextSectionProps & { editor: Editor; element: TextElement }) {
   const marks = useEditorState({ editor, selector: ({ editor: current }) => rangeMarks(current) });
   const look = rangeLook(marks, element, designSystem);
   return (
@@ -810,6 +846,7 @@ function RangeText({
       <TextControls
         designSystem={designSystem}
         onPreviewEnd={onPreviewEnd}
+        inShape={inShape}
         range
         actions={{
           look,
@@ -838,11 +875,13 @@ function TextControls({
   designSystem,
   actions,
   range,
+  inShape,
   onPreviewEnd,
 }: {
   designSystem: DesignSystem;
   actions: TextActions;
   range?: boolean;
+  inShape?: boolean;
   onPreviewEnd: () => void;
 }) {
   const t = useTranslations('designPanel');
@@ -869,6 +908,21 @@ function TextControls({
     { value: null, label: t('auto'), hint: auto === null ? undefined : `${auto} %` },
     ...LINE_HEIGHTS.map((value) => ({ value })),
   ];
+  const textColor = (
+    <ColorField
+      ariaLabel={t('textColor')}
+      palette={designSystem.palette}
+      value={look.color ?? undefined}
+      mixedLabel={mixed}
+      roleLabel={(role: ColorRole) => palette(role)}
+      onChange={(value) => {
+        const hex = value === null ? null : colorHex(designSystem.palette, value);
+        if (value !== null && hex !== null) actions.setColor(value, hex, 'commit');
+      }}
+      onPreview={(hex) => actions.setColor(hex, hex, live ? 'preview' : 'commit')}
+      onPreviewEnd={live ? onPreviewEnd : undefined}
+    />
+  );
   const lineHeight =
     look.lineSpacing === undefined
       ? undefined
@@ -978,22 +1032,9 @@ function TextControls({
             onChange={actions.setVerticalAlign}
           />
         </FieldRow>
+        {inShape ? textColor : null}
       </Section>
-      <Section title={t('fill')}>
-        <ColorField
-          ariaLabel={t('textColor')}
-          palette={designSystem.palette}
-          value={look.color ?? undefined}
-          mixedLabel={mixed}
-          roleLabel={(role: ColorRole) => palette(role)}
-          onChange={(value) => {
-            const hex = value === null ? null : colorHex(designSystem.palette, value);
-            if (value !== null && hex !== null) actions.setColor(value, hex, 'commit');
-          }}
-          onPreview={(hex) => actions.setColor(hex, hex, live ? 'preview' : 'commit')}
-          onPreviewEnd={live ? onPreviewEnd : undefined}
-        />
-      </Section>
+      {inShape ? null : <Section title={t('fill')}>{textColor}</Section>}
     </>
   );
 }
