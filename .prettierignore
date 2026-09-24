@@ -5,6 +5,7 @@ dist
 coverage
 .nx
 packages/contracts/schema
+packages/contracts/fixtures/golden
 docs/AUDIT.md
 docs/LICENSES.md
 engine/src/engine/contracts/_generated.py

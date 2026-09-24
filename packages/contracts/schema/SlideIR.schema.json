@@ -1,0 +1,705 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "elements": {
+      "description": "In paint order, lowest first.",
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
+              },
+              "elementId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "text",
+                "type": "string"
+              },
+              "overflow": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "emu": {
+                        "description": "How far past the box the text runs.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "lines": {
+                        "description": "Lines that do not fit.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "lines",
+                      "emu"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null when the text fits. Set instead of truncating it."
+              },
+              "paragraphs": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "level": {
+                      "description": "Indent level, zero at the top.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "lineSpacing": {
+                      "anyOf": [
+                        {
+                          "exclusiveMinimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Multiple of single spacing, when stated as a percentage."
+                    },
+                    "runs": {
+                      "description": "Runs in reading order.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "bold": {
+                            "description": "Null when inherited.",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                            "type": "string"
+                          },
+                          "font": {
+                            "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                            "type": "string"
+                          },
+                          "italic": {
+                            "description": "Null when inherited.",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "sizePt": {
+                            "description": "Size in points, or null when inherited.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "text": {
+                            "description": "Literal text of the run.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "font",
+                          "sizePt",
+                          "bold",
+                          "italic",
+                          "color"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "level",
+                    "runs",
+                    "lineSpacing"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "subtitle",
+                  "body",
+                  "bullet-list",
+                  "kpi-value",
+                  "kpi-caption",
+                  "quote",
+                  "table",
+                  "chart",
+                  "image",
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
+                ],
+                "type": "string"
+              },
+              "sourceShapeId": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Template shape this was placed from, when it came from one."
+              }
+            },
+            "required": [
+              "kind",
+              "elementId",
+              "role",
+              "box",
+              "sourceShapeId",
+              "paragraphs",
+              "overflow"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
+              },
+              "elementId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "fit": {
+                "description": "Never stretch: the audit looks for distortion.",
+                "enum": [
+                  "contain",
+                  "cover"
+                ],
+                "type": "string"
+              },
+              "kind": {
+                "const": "image",
+                "type": "string"
+              },
+              "mediaPart": {
+                "description": "Part name inside the template, or a path under the run directory.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "subtitle",
+                  "body",
+                  "bullet-list",
+                  "kpi-value",
+                  "kpi-caption",
+                  "quote",
+                  "table",
+                  "chart",
+                  "image",
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
+                ],
+                "type": "string"
+              },
+              "sourceShapeId": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "elementId",
+              "role",
+              "box",
+              "sourceShapeId",
+              "mediaPart",
+              "fit"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
+              },
+              "elementId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "headers": {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "kind": {
+                "const": "table",
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "subtitle",
+                  "body",
+                  "bullet-list",
+                  "kpi-value",
+                  "kpi-caption",
+                  "quote",
+                  "table",
+                  "chart",
+                  "image",
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
+                ],
+                "type": "string"
+              },
+              "rows": {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "sourceShapeId": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "elementId",
+              "role",
+              "box",
+              "sourceShapeId",
+              "headers",
+              "rows"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
+              },
+              "categories": {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "chartType": {
+                "enum": [
+                  "bar",
+                  "column",
+                  "line",
+                  "pie",
+                  "area"
+                ],
+                "type": "string"
+              },
+              "elementId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "chart",
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "subtitle",
+                  "body",
+                  "bullet-list",
+                  "kpi-value",
+                  "kpi-caption",
+                  "quote",
+                  "table",
+                  "chart",
+                  "image",
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
+                ],
+                "type": "string"
+              },
+              "series": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "values": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "values"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "sourceShapeId": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "xTitle": {
+                "type": "string"
+              },
+              "yTitle": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "elementId",
+              "role",
+              "box",
+              "sourceShapeId",
+              "chartType",
+              "categories",
+              "series",
+              "xTitle",
+              "yTitle"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
+              },
+              "elementId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "decor",
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "subtitle",
+                  "body",
+                  "bullet-list",
+                  "kpi-value",
+                  "kpi-caption",
+                  "quote",
+                  "table",
+                  "chart",
+                  "image",
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
+                ],
+                "type": "string"
+              },
+              "sourceShapeId": {
+                "description": "Decoration always comes from the template.",
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "elementId",
+              "role",
+              "box",
+              "sourceShapeId"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "index": {
+      "description": "Position in the deck, from zero.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "patternId": {
+      "description": "Pattern from the template profile this slide was built on.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Incremented by any incompatible change.",
+      "type": "number"
+    },
+    "slideCx": {
+      "description": "Slide width in EMU, from the template.",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "slideCy": {
+      "description": "Slide height in EMU, from the template.",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "slideId": {
+      "description": "Matches the planned slide, across all three variants.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "variant": {
+      "enum": [
+        "dense",
+        "balanced",
+        "airy"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "slideId",
+    "variant",
+    "index",
+    "patternId",
+    "slideCx",
+    "slideCy",
+    "elements"
+  ],
+  "title": "SlideIR",
+  "type": "object"
+}

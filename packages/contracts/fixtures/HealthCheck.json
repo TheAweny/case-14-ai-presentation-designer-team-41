@@ -1,0 +1,47 @@
+{
+  "contract": "HealthCheck",
+  "valid": [
+    {
+      "name": "engine is up",
+      "payload": {
+        "status": "ok",
+        "service": "engine",
+        "version": "0.1.0",
+        "uptimeSeconds": 12.5
+      }
+    },
+    {
+      "name": "degraded but answering",
+      "payload": {
+        "status": "degraded",
+        "service": "api",
+        "version": "0.1.0",
+        "uptimeSeconds": 0
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown status",
+      "why": "A status outside the enum would let a caller invent one.",
+      "path": ["status"],
+      "payload": {
+        "status": "starting",
+        "service": "engine",
+        "version": "0.1.0",
+        "uptimeSeconds": 1
+      }
+    },
+    {
+      "name": "negative uptime",
+      "why": "Uptime runs forward.",
+      "path": ["uptimeSeconds"],
+      "payload": {
+        "status": "ok",
+        "service": "engine",
+        "version": "0.1.0",
+        "uptimeSeconds": -1
+      }
+    }
+  ]
+}

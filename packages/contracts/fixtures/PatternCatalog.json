@@ -1,0 +1,90 @@
+{
+  "contract": "PatternCatalog",
+  "valid": [
+    {
+      "name": "one arrangement found four times",
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "patterns": [
+          {
+            "patternId": "title-over-two-columns",
+            "sourceParts": ["ppt/slideLayouts/slideLayout2.xml"],
+            "intents": ["bullets", "two-column"],
+            "slots": [
+              {
+                "slotId": "title",
+                "role": "title",
+                "box": {
+                  "x": 838200,
+                  "y": 365125,
+                  "cx": 10515600,
+                  "cy": 1325563
+                },
+                "optional": false,
+                "maxChars": 80
+              },
+              {
+                "slotId": "left",
+                "role": "body",
+                "box": {
+                  "x": 838200,
+                  "y": 1971675,
+                  "cx": 5105400,
+                  "cy": 3810000
+                },
+                "optional": false,
+                "maxChars": 420
+              },
+              {
+                "slotId": "right",
+                "role": "body",
+                "box": {
+                  "x": 6248400,
+                  "y": 1971675,
+                  "cx": 5105400,
+                  "cy": 3810000
+                },
+                "optional": true,
+                "maxChars": 420
+              }
+            ],
+            "occurrences": 4,
+            "density": 0.58
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "catalogue with no patterns",
+      "why": "A template nothing can be laid out on is rejected at import, not carried forward.",
+      "path": ["patterns"],
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "patterns": []
+      }
+    },
+    {
+      "name": "pattern with no slots",
+      "why": "A pattern is its slots; without them there is nowhere to put content.",
+      "path": ["patterns", 0, "slots"],
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "patterns": [
+          {
+            "patternId": "title-over-two-columns",
+            "sourceParts": ["ppt/slideLayouts/slideLayout2.xml"],
+            "intents": ["bullets", "two-column"],
+            "slots": [],
+            "occurrences": 4,
+            "density": 0.58
+          }
+        ]
+      }
+    }
+  ]
+}

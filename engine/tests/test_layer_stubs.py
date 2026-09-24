@@ -1,32 +1,26 @@
-"""Every layer exposes its public entry point with the signature of the future contract."""
+"""Every layer still to be written exposes its entry point with the signature of the contract.
+
+The parser has since been implemented, so it left this file: its behaviour is pinned by
+``test_parser.py`` instead.
+"""
 
 from pathlib import Path
+from typing import cast
 
 import pytest
+from engine.contracts.provisional import TemplateProfile
 
-from engine import checks, export, layout, parser, render, visuals
-
-
-def test_parser_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        parser.parse_template(Path("data/templates/example.pptx"))
-
-
-def test_layout_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        layout.build_slide_ir({}, {})
+from engine import checks, export, render, visuals
 
 
 def test_visuals_entry_points_are_declared() -> None:
     with pytest.raises(NotImplementedError):
-        visuals.build_chart({}, {})
+        visuals.build_chart({}, cast(TemplateProfile, {}))
     with pytest.raises(NotImplementedError):
-        visuals.build_table({}, {})
+        visuals.build_table({}, cast(TemplateProfile, {}))
 
 
-def test_export_entry_points_are_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        export.export_pptx([], {}, Path("runs/deck.pptx"))
+def test_export_pdf_entry_point_is_declared() -> None:
     with pytest.raises(NotImplementedError):
         export.export_pdf(Path("runs/deck.pptx"), Path("runs/deck.pdf"))
 
@@ -38,4 +32,4 @@ def test_render_entry_point_is_declared() -> None:
 
 def test_checks_entry_point_is_declared() -> None:
     with pytest.raises(NotImplementedError):
-        checks.run_deterministic_checks([], {}, {})
+        checks.run_deterministic_checks([], cast(TemplateProfile, {}), {})

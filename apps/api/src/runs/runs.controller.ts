@@ -1,25 +1,23 @@
-import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, NotFoundException, Param, Post } from '@nestjs/common';
+import type { RunRecord } from '@lct/run-store';
+import { RunsService } from './runs.service.js';
 
-/** Status of a run as reported to the web client. */
-export interface RunStatus {
-  readonly runId: string;
-  readonly state: 'queued' | 'running' | 'done' | 'failed';
-}
-
-/**
- * Runs: create one, poll its status, follow its progress over SSE.
- * The handlers answer with placeholders until the workflow in `@lct/pipeline` is wired in.
- */
 @Controller('runs')
 export class RunsController {
+  constructor(@Inject(RunsService) private readonly runs: RunsService) {}
+
   @Post()
   @HttpCode(202)
-  create(): RunStatus {
-    return { runId: 'not-started', state: 'queued' };
+  create(): Promise<RunRecord> {
+    return this.runs.create();
   }
 
   @Get(':runId')
-  status(@Param('runId') runId: string): RunStatus {
-    return { runId, state: 'queued' };
+  async status(@Param('runId') runId: string): Promise<RunRecord> {
+    const run = await this.runs.get(runId);
+    if (run === null) {
+      throw new NotFoundException(`Run ${runId} was not found.`);
+    }
+    return run;
   }
 }

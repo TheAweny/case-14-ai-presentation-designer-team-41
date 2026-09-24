@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "appliedPatchIds": {
+      "description": "Fixes the user accepted, so the delivered deck is reproducible too.",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "artifacts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "deck-plan",
+              "slide-ir",
+              "preview",
+              "pptx",
+              "pdf",
+              "html",
+              "audit"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "Relative to the run directory.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dense",
+                  "balanced",
+                  "airy"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "variant",
+          "path",
+          "bytes",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "contentPackId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "finishedAt": {
+      "description": "ISO 8601 timestamp, UTC.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "modelCalls": {
+      "description": "Empty for a run on the fake provider.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "agentId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "calls": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "inputTokens": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "modelId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "outputTokens": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agentId",
+          "modelId",
+          "calls",
+          "inputTokens",
+          "outputTokens"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "planId": {
+      "description": "The plan all three variants were laid out from.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "revisions": {
+      "description": "Every component that could change the output.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "description": "Digest of the exact bytes used, which is what makes the version checkable.",
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          },
+          "id": {
+            "description": "Identifier within its kind, such as an agent id.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "agent",
+              "prompt",
+              "model",
+              "config",
+              "engine",
+              "template"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "description": "Semver for our own components, the provider revision for a model.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "version",
+          "hash"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "runId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Incremented by any incompatible change.",
+      "type": "number"
+    },
+    "seed": {
+      "description": "Seed given to every sampler. The same seed and the same revisions repeat the run.",
+      "maximum": 9007199254740991,
+      "minimum": -9007199254740991,
+      "type": "integer"
+    },
+    "startedAt": {
+      "description": "ISO 8601 timestamp, UTC.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "templateHash": {
+      "description": "Hash of the TemplateIR the run was built on.",
+      "maxLength": 64,
+      "minLength": 64,
+      "type": "string"
+    },
+    "timings": {
+      "description": "One entry per stage that ran.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "ms": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stage": {
+            "enum": [
+              "queued",
+              "parsing-template",
+              "profiling-template",
+              "planning",
+              "laying-out",
+              "rendering",
+              "auditing",
+              "exporting"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "ms"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "totalMs": {
+      "description": "Wall clock, against the five minute budget.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "runId",
+    "startedAt",
+    "finishedAt",
+    "templateHash",
+    "contentPackId",
+    "planId",
+    "seed",
+    "revisions",
+    "modelCalls",
+    "artifacts",
+    "timings",
+    "totalMs",
+    "appliedPatchIds"
+  ],
+  "title": "ArtifactManifest",
+  "type": "object"
+}

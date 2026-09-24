@@ -1,8 +1,15 @@
 # cli
 
-Runs a deck generation from a config file, with no web UI involved — the reproducible entry point
-used by `eval/` scenarios and by CI.
+Initialises a generation run in PostgreSQL from a validated config, with no web UI involved. It is
+the reproducible entry point used by `eval/` scenarios and CI.
 
-- Can import: `@lct/contracts`, `@lct/registry`, `@lct/pipeline`, Node built-ins.
+```bash
+yarn nx run cli:run-config
+```
+
+The command requires `DATABASE_URL`, applies pending versioned migrations and creates a queued run.
+Later pipeline stages place binary inputs and outputs under `runs/<run-id>/` and register their
+metadata in PostgreSQL; files themselves are not stored in the database.
+
+- Can import: `@lct/contracts`, `@lct/registry`, `@lct/run-store`, `@lct/pipeline`, Node built-ins.
 - Must not import: `apps/web`, `apps/api`, `.pptx` libraries.
-- Today it validates `configs/run.example.yaml` against the contract and prints the parsed config.

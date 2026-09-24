@@ -1,0 +1,151 @@
+{
+  "contract": "SlideIR",
+  "valid": [
+    {
+      "name": "text that overflows says so instead of being cut",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "title-over-two-columns",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "text",
+            "elementId": "s2-title",
+            "role": "title",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
+            },
+            "sourceShapeId": 2,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Конверсия выросла на треть",
+                    "font": "Play",
+                    "sizePt": 40,
+                    "bold": true,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": {
+              "lines": 1,
+              "emu": 228600
+            }
+          },
+          {
+            "kind": "decor",
+            "elementId": "s2-rule",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1790700,
+              "cx": 10515600,
+              "cy": 12700
+            },
+            "sourceShapeId": 7
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "element of an unknown kind",
+      "why": "The renderer, the export and the overlay switch on kind; an unknown one is silence.",
+      "path": ["elements", 0, "kind"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "video",
+            "elementId": "e1",
+            "role": "body",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
+            },
+            "sourceShapeId": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "text element without paragraphs",
+      "why": "An empty text box on a delivered slide is the failure the audit exists to catch.",
+      "path": ["elements", 0, "paragraphs"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "text",
+            "elementId": "e1",
+            "role": "body",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
+            },
+            "sourceShapeId": null,
+            "paragraphs": [],
+            "overflow": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "decoration with no shape behind it",
+      "why": "Decoration is carried over from the template, so it always has a source shape.",
+      "path": ["elements", 0, "sourceShapeId"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
+            },
+            "sourceShapeId": null
+          }
+        ]
+      }
+    }
+  ]
+}

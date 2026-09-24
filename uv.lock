@@ -335,11 +335,15 @@ name = "lct-tools"
 version = "0.1.0"
 source = { editable = "tools" }
 dependencies = [
+    { name = "engine" },
     { name = "pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyyaml", specifier = ">=6.0.2" }]
+requires-dist = [
+    { name = "engine", editable = "engine" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+]
 
 [[package]]
 name = "lct26"

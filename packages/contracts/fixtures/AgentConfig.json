@@ -1,0 +1,59 @@
+{
+  "contract": "AgentConfig",
+  "valid": [
+    {
+      "name": "planner agent",
+      "payload": {
+        "id": "deck-planner",
+        "version": "1.2.0",
+        "description": "Turns a content pack into a deck plan.",
+        "modelId": "planner-default",
+        "generation": {
+          "temperature": 0.2,
+          "topP": 0.9,
+          "maxOutputTokens": 4096
+        },
+        "outputSchema": "DeckPlan",
+        "instructionsFile": "instructions.md"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "version is not semver",
+      "why": "The manifest records agent versions; a loose string makes two runs incomparable.",
+      "path": ["version"],
+      "payload": {
+        "id": "deck-planner",
+        "version": "v1",
+        "description": "Turns a content pack into a deck plan.",
+        "modelId": "planner-default",
+        "generation": {
+          "temperature": 0.2,
+          "topP": 0.9,
+          "maxOutputTokens": 4096
+        },
+        "outputSchema": "DeckPlan",
+        "instructionsFile": "instructions.md"
+      }
+    },
+    {
+      "name": "id is not kebab-case",
+      "why": "The id is a directory name under registry/agents.",
+      "path": ["id"],
+      "payload": {
+        "id": "Deck Planner",
+        "version": "1.0.0",
+        "description": "x",
+        "modelId": "planner-default",
+        "generation": {
+          "temperature": 0.2,
+          "topP": 0.9,
+          "maxOutputTokens": 4096
+        },
+        "outputSchema": "DeckPlan",
+        "instructionsFile": "instructions.md"
+      }
+    }
+  ]
+}

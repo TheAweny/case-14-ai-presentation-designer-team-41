@@ -1,5 +1,5 @@
-# NestJS API. Mastra runs inside this process as a library; its state lives in a LibSQL file
-# under runs/, so no database service is needed.
+# NestJS API. PostgreSQL stores run metadata; generated artifacts and Mastra workflow state use
+# the mounted runs directory.
 FROM node:22.13-bookworm-slim AS builder
 
 ENV YARN_ENABLE_GLOBAL_CACHE=0 \

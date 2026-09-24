@@ -16,3 +16,14 @@ describe('readRunConfig', () => {
     expect(() => readRunConfig('configs/missing.yaml')).toThrowError();
   });
 });
+
+describe('database configuration', () => {
+  it('fails clearly when PostgreSQL is not configured', async () => {
+    const { initializeRun } = await import('./main.js');
+    const configPath = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../configs/run.example.yaml',
+    );
+    await expect(initializeRun(configPath, '')).rejects.toThrow('DATABASE_URL is required');
+  });
+});

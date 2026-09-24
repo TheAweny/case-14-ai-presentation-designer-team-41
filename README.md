@@ -40,12 +40,16 @@ uv sync
 ## Локальный запуск
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres
+set -a && source .env && set +a
 yarn nx run api:serve     # NestJS на http://localhost:3001
 yarn nx run web:serve     # Next.js на http://localhost:3000
 uv run uvicorn engine.api:app --reload --port 8000   # движок
 ```
 
-Переменные окружения — по образцу из `.env.example`; скопируйте его в `.env`.
+API и CLI используют PostgreSQL из `DATABASE_URL`. Compose публикует локальную БД на порту
+`5433`, чтобы не конфликтовать с часто установленным системным PostgreSQL на `5432`.
 
 ## Запуск в Docker
 
@@ -54,8 +58,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Поднимаются три контейнера: `web`, `api` и `engine`. Движок наружу не публикуется и доступен
-только для API.
+Поднимаются четыре контейнера: `web`, `api`, `engine` и `postgres`. Движок наружу не публикуется
+и доступен только для API. PostgreSQL хранит состояния прогонов и метаданные артефактов в
+именованном volume; PPTX, превью и входные файлы остаются в `runs/`.
 
 ## Запуск по конфигу
 
