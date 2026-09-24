@@ -35,6 +35,7 @@ import { SelectionBar, type SelectionBarActions } from '@/components/editor/sele
 import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus';
 import { SlideHandles } from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
+import { typedText } from '@/components/editor/text-shortcuts';
 import { TableEditor, type TableEntry } from '@/components/editor/table-editor';
 import { TableHandles } from '@/components/editor/table-handles';
 import { useTableClickEntry } from '@/components/editor/table-entry';
@@ -61,6 +62,9 @@ const ARROW_OWNERS =
 const INSERT_SKIPS = `[data-text-editor], [data-selection-bar], [data-text-format], [data-dock-obstacle], button, [role="menu"], ${EDITOR_CHROME}`;
 /** Клик сюда не закрывает набор: это само поле, его полоса и кнопки поверх холста. */
 const KEEPS_EDITING = `[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"], ${EDITOR_CHROME}`;
+/** Здесь буквы — клавиши виджета (поиск по пунктам, ячейки), а не начало набора в тексте. */
+const TYPE_SKIPS =
+  '[role="menu"], [role="menubar"], [role="listbox"], [role="dialog"], [role="combobox"], [role="grid"], [data-table-editor]';
 /** Здесь фокус свой: набор текста, его полоса и ячейки таблицы. Холст его не отбирает. */
 const OWNS_FOCUS = '[data-text-editor], [data-text-format], [data-table-editor]';
 
@@ -130,8 +134,16 @@ export function SlideCanvas({
   onSelect: (ids: readonly string[]) => void;
   /** Конец жеста: один список новых рамок, не шаг на каждый пиксель. */
   onCommit: (moves: readonly ElementMove[]) => void;
-  /** Закрытие набора: один `set-text`, не шаг на каждый символ. */
-  onTextCommit: (slideId: string, elementId: string, paragraphs: readonly Paragraph[]) => void;
+  /**
+   * Закрытие набора: один `set-text`, не шаг на каждый символ. `box` — рамка, выросшая под
+   * текст: её пишут той же записью журнала.
+   */
+  onTextCommit: (
+    slideId: string,
+    elementId: string,
+    paragraphs: readonly Paragraph[],
+    options?: { readonly box?: Box },
+  ) => void;
   /** Удалить эти объекты, выделены они или нет: пустой текст после набора. */
   onRemoveElements: (elementIds: readonly string[]) => void;
   /** Новый объект. В журнал он попадает целиком, одним шагом. */
@@ -178,11 +190,13 @@ export function SlideCanvas({
   } | null>(null);
   const inserting = isInsertTool(tool);
   // Точка, куда встанет каретка. Без точки (вход с клавиатуры) выделяется весь текст.
+  // `typed` — символ, с которого начали печатать на выделенной рамке.
   const [session, setSession] = useState<{
     slideId: string;
     elementId: string;
     x: number | null;
     y: number | null;
+    typed?: string;
   } | null>(null);
   const aligned = useMemo(
     () => gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy),
@@ -700,6 +714,35 @@ export function SlideCanvas({
     };
   }, [area, controlRef, onSelect, slide]);
 
+  // Печать на выделенном тексте открывает набор и дописывает символ (реестр: `type-to-edit`).
+  // Фаза захвата: при выделенном тексте буквы инструментов рейки уступают набору.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      const typed = typedText(event);
+      if (!typed) return;
+      const target = event.target;
+      if (isTypingTarget(target)) return;
+      if (target instanceof Element && target.closest(TYPE_SKIPS)) return;
+      const { slide: current, selectedIds: ids } = latest.current;
+      if (ids.length !== 1) return;
+      const element = current.elements.find((item) => item.elementId === ids[0]);
+      if (!element || element.kind !== 'text' || element.locked) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onSelect([]);
+      setSession({
+        slideId: current.slideId,
+        elementId: element.elementId,
+        x: null,
+        y: null,
+        typed,
+      });
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [onSelect]);
+
   const selectUnderPointer = (event: ReactMouseEvent) => {
     const target = event.target;
     // В правке таблицы меню своё, у ячеек: выделение объекта оно не трогает.
@@ -730,6 +773,8 @@ export function SlideCanvas({
           onContextMenu={selectUnderPointer}
           className={cn(
             'relative size-full overflow-hidden outline-none',
+            // Жесты на холсте не выделяют текст страницы; поле набора и ячейки — выделяют.
+            'select-none [&_[data-table-editor]]:select-text [&_[data-text-editor]]:select-text',
             // Рука и пробел: курсор руки поверх всего, что на холсте, включая ручки.
             panning
               ? 'cursor-grabbing [&_*]:cursor-grabbing!'
@@ -872,10 +917,11 @@ export function SlideCanvas({
                         ? null
                         : { x: session.x, y: session.y }
                     }
+                    typed={session.typed ?? null}
                     finishRef={finishEditing}
-                    onCommit={(paragraphs) => {
+                    onCommit={(paragraphs, box) => {
                       committedText.current = paragraphs;
-                      onTextCommit(session.slideId, editing.elementId, paragraphs);
+                      onTextCommit(session.slideId, editing.elementId, paragraphs, { box });
                     }}
                     onClose={() => {
                       // Пустой текст на слайде не остаётся: вставка и удаление схлопываются в
