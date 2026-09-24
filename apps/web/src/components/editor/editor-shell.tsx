@@ -35,6 +35,7 @@ import {
   type EditorCommand,
 } from '@/components/editor/editor-keymap';
 import { ShortcutsDialog } from '@/components/editor/shortcuts-dialog';
+import { SlideShow } from '@/components/editor/slide-show';
 import { flagProps, sizeEntries } from '@/components/editor/text-shortcuts';
 import {
   ELEMENTS_MIME,
@@ -107,6 +108,7 @@ const WITHOUT_SELECTION: ReadonlySet<EditorCommand['kind']> = new Set<EditorComm
   'new-slide',
   'duplicate-slide',
   'shortcuts',
+  'present',
 ]);
 
 /** Команды колоды: работают и из списка слайдов, если список не забрал клавишу себе. */
@@ -118,6 +120,7 @@ const DECK_COMMANDS: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand[
   'new-slide',
   'duplicate-slide',
   'shortcuts',
+  'present',
 ]);
 
 /** Переходы между слайдами: после них клавиатура у холста. */
@@ -242,6 +245,8 @@ export function EditorShell({
   const activeText = useActiveTextEditor();
   const canvasControl = useRef<CanvasControl | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /** Идёт показ слайдов: с какого слайда он начат. */
+  const [show, setShow] = useState<{ start: number } | null>(null);
   const slideId = slide?.slideId;
   // Выделение, которое надо поставить, когда откроется другой слайд: после отмены правки на
   // соседнем слайде редактор переходит туда и выделяет то, что было выделено.
@@ -545,10 +550,23 @@ export function EditorShell({
     [designSystem, setFontSizes, setProps, setPropsEach, slide],
   );
 
+  /**
+   * Показ на весь экран. Выделение снимается: под показом холст продолжает слушать стрелки, и
+   * выделенный объект не должен от них сдвинуться.
+   */
+  const startShow = useCallback((start: number) => {
+    setSelectedIds([]);
+    setShow({ start });
+  }, []);
+
   /** Одна точка входа для клавиатуры и контекстного меню холста. */
   const runCommand = useCallback(
     (command: CanvasCommand) => {
       if (command.kind === 'undo') return undo();
+      if (command.kind === 'present') {
+        startShow(command.from === 'start' ? 0 : index);
+        return;
+      }
       if (command.kind === 'redo') return redo();
       if (command.kind === 'shortcuts') {
         setShortcutsOpen(true);
@@ -630,6 +648,8 @@ export function EditorShell({
       setProps,
       slide,
       undo,
+      startShow,
+      index,
     ],
   );
 
@@ -641,7 +661,7 @@ export function EditorShell({
       const typing = isTypingTarget(event.target);
       const command = editorCommand(event, typing ? 'text' : 'canvas');
       if (!command) return;
-      if (typing && command.kind !== 'shortcuts') return;
+      if (typing && command.kind !== 'shortcuts' && command.kind !== 'present') return;
       const target = event.target;
       // Открытое окно (та же шпаргалка) держит клавиатуру у себя.
       if (target instanceof Element && target.closest('[role="dialog"]')) return;
@@ -853,6 +873,7 @@ export function EditorShell({
                 onToolChange={setTool}
                 onAction={(id) => {
                   if (id === 'shortcuts') setShortcutsOpen(true);
+                  else if (id === 'present') startShow(index);
                   else openInspector('assistant');
                 }}
                 history={history}
@@ -969,6 +990,20 @@ export function EditorShell({
         </ResizablePanel>
       </ResizablePanelGroup>
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      {show ? (
+        <SlideShow
+          slides={slides}
+          designSystem={designSystem}
+          labels={labels}
+          start={show.start}
+          resolveMedia={resolveMedia}
+          onExit={(at) => {
+            setShow(null);
+            select(at);
+            canvasControl.current?.focus();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

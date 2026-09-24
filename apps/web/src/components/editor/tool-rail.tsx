@@ -31,6 +31,7 @@ import {
   Image01Icon,
   KeyboardIcon,
   MinusSignIcon,
+  PlayIcon,
   SquareIcon,
   Table01Icon,
   TextFontIcon,
@@ -79,7 +80,7 @@ export type VariantId =
   | 'chart'
   | 'table'
   | 'diagram';
-export type RailActionId = 'ai' | 'shortcuts';
+export type RailActionId = 'ai' | 'shortcuts' | 'present';
 
 /** Кнопки истории живут на той же панели, но это не инструменты: вариантов у них нет. */
 type HistoryId = 'undo' | 'redo';
@@ -178,6 +179,14 @@ const ACTIONS: readonly Action[] = [
   { id: 'ai', icon: AiSparklesIcon, shortcut: { key: 'J', code: 'KeyJ' } },
   { id: 'shortcuts', icon: KeyboardIcon, shortcut: null, registry: 'shortcuts' },
 ];
+
+/** Показ с открытого слайда, как главная кнопка Google Slides. F5 — с начала, из реестра. */
+const SHOW_ACTION: Action = {
+  id: 'present',
+  icon: PlayIcon,
+  shortcut: null,
+  registry: 'present-current',
+};
 
 /** Клавиши кнопки действия для подсказки: свои однобуквенные или из реестра редактора. */
 function actionKeys(action: Action): readonly string[] {
@@ -619,6 +628,30 @@ export const ToolRail = memo(function ToolRail({
             </div>
           </>
         )}
+
+        <RailSeparator axis={axis} />
+        <div role="group" aria-label={t('groups.show')} className="p-0.5">
+          <RailTooltip
+            label={t(`tools.${SHOW_ACTION.id}`)}
+            keys={actionKeys(SHOW_ACTION)}
+            side={toward}
+          >
+            <ToolbarPrimitive.Button
+              aria-label={t(`tools.${SHOW_ACTION.id}`)}
+              aria-keyshortcuts={actionAria(SHOW_ACTION)}
+              onMouseDown={keepCanvasFocus}
+              onClick={() => onActionRef.current?.(SHOW_ACTION.id)}
+              className={BUTTON}
+            >
+              <HugeiconsIcon
+                icon={SHOW_ACTION.icon}
+                size={18}
+                strokeWidth={1.5}
+                color="currentColor"
+              />
+            </ToolbarPrimitive.Button>
+          </RailTooltip>
+        </div>
       </ToolbarPrimitive.Root>
     </TooltipProvider>
   );

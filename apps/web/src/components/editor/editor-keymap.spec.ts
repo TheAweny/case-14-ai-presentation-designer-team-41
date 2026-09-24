@@ -190,6 +190,18 @@ describe('text from the keyboard', () => {
     expect(text('Digit2', { ctrlKey: true })).toBeNull();
     expect(text('ArrowLeft')).toBeNull();
   });
+
+  it('starts the show like PowerPoint, on the canvas and while typing', () => {
+    for (const context of ['canvas', 'text'] as const) {
+      expect(editorCommand(key('F5'), context)).toEqual({ kind: 'present', from: 'start' });
+      expect(editorCommand(key('F5', { shiftKey: true }), context)).toEqual({
+        kind: 'present',
+        from: 'current',
+      });
+    }
+    // Ctrl+Enter — новый слайд, а не показ.
+    expect(editorCommand(key('Enter', { ctrlKey: true }))).toEqual({ kind: 'new-slide' });
+  });
 });
 
 describe('shortcutLabel', () => {
