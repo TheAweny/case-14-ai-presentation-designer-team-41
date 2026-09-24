@@ -6,25 +6,25 @@
 копилефт-лицензиями: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, CC-BY-4.0, CC0-1.0, ISC, MIT, MIT-0, MIT-CMU, MPL-2.0, PSF-2.0, Python-2.0, Unlicense.
 GPL и AGPL не подходят: заказчик берёт решение в пилот и внедрение.
 
-Всего зависимостей: 1146 (npm: 1089, python: 57).
+Всего зависимостей: 1155 (npm: 1098, python: 57).
 
 ## Сводка по лицензиям
 
 | Лицензия | Пакетов | Статус |
 | --- | --- | --- |
-| MIT | 965 | разрешена |
+| MIT | 970 | разрешена |
 | ISC | 60 | разрешена |
-| Apache-2.0 | 46 | разрешена |
-| BSD-3-Clause | 29 | разрешена |
+| Apache-2.0 | 51 | разрешена |
+| BSD-3-Clause | 28 | разрешена |
 | BSD-2-Clause | 21 | разрешена |
 | BlueOak-1.0.0 | 10 | разрешена |
 | MPL-2.0 | 4 | разрешена |
 | 0BSD | 1 | разрешена |
 | AFL-2.1 OR BSD-3-Clause | 1 | требует проверки |
-| Apache-2.0 AND LGPL-3.0-or-later | 1 | требует проверки |
 | Apache-2.0 AND MIT | 1 | требует проверки |
 | Apache-2.0 OR BSD-2-Clause | 1 | требует проверки |
 | CC-BY-4.0 | 1 | разрешена |
+| LGPL-3.0-or-later | 1 | требует проверки |
 | MIT and ISC | 1 | требует проверки |
 | MIT-CMU | 1 | разрешена |
 | PSF-2.0 | 1 | разрешена |
@@ -35,7 +35,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 
 | Экосистема | Пакет | Версия | Лицензия |
 | --- | --- | --- | --- |
-| npm | @img/sharp-win32-x64 | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
+| npm | @img/sharp-libvips-linux-x64 | 1.3.3 | LGPL-3.0-or-later |
 
 ## Полный список
 
@@ -179,7 +179,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @emnapi/runtime | 1.4.5 | MIT |
 | npm | @emnapi/wasi-threads | 1.0.4 | MIT |
 | npm | @emnapi/wasi-threads | 1.2.3 | MIT |
-| npm | @esbuild/win32-x64 | 0.28.2 | MIT |
+| npm | @esbuild/linux-x64 | 0.28.2 | MIT |
 | npm | @eslint-community/eslint-utils | 4.10.1 | MIT |
 | npm | @eslint-community/regexpp | 4.12.2 | MIT |
 | npm | @eslint/config-array | 0.23.5 | Apache-2.0 |
@@ -207,7 +207,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @humanwhocodes/module-importer | 1.0.1 | Apache-2.0 |
 | npm | @humanwhocodes/retry | 0.4.3 | Apache-2.0 |
 | npm | @img/colour | 1.1.0 | MIT |
-| npm | @img/sharp-win32-x64 | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
+| npm | @img/sharp-libvips-linux-x64 | 1.3.3 | LGPL-3.0-or-later |
+| npm | @img/sharp-linux-x64 | 0.35.4 | Apache-2.0 |
 | npm | @inquirer/ansi | 2.0.8 | MIT |
 | npm | @inquirer/checkbox | 5.2.5 | MIT |
 | npm | @inquirer/confirm | 6.3.2 | MIT |
@@ -239,7 +240,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @libsql/core | 0.18.0 | MIT |
 | npm | @libsql/hrana-client | 0.10.0 | MIT |
 | npm | @libsql/isomorphic-ws | 0.1.5 | MIT |
-| npm | @libsql/win32-x64-msvc | 0.5.29 | MIT |
+| npm | @libsql/linux-x64-gnu | 0.5.29 | MIT |
+| npm | @libsql/linux-x64-musl | 0.5.29 | MIT |
 | npm | @lukeed/csprng | 1.1.0 | MIT |
 | npm | @lukeed/uuid | 2.0.1 | MIT |
 | npm | @mastra/core | 1.66.0 | Apache-2.0 |
@@ -248,6 +250,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @modelcontextprotocol/core | 2.0.0 | MIT |
 | npm | @modelcontextprotocol/sdk | 1.30.0 | MIT |
 | npm | @modelcontextprotocol/server | 2.0.0 | MIT |
+| npm | @napi-rs/lzma-linux-x64-gnu | 1.5.1 | MIT |
 | npm | @napi-rs/wasm-runtime | 0.2.4 | MIT |
 | npm | @neon-rs/load | 0.0.4 | MIT |
 | npm | @nestjs/cli | 12.0.3 | MIT |
@@ -257,18 +260,19 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @nestjs/schematics | 12.0.3 | MIT |
 | npm | @nestjs/testing | 12.0.3 | MIT |
 | npm | @next/env | 16.3.5 | MIT |
-| npm | @next/swc-win32-x64-msvc | 16.3.5 | MIT |
+| npm | @next/swc-linux-x64-gnu | 16.3.5 | MIT |
 | npm | @nodelib/fs.scandir | 2.1.5 | MIT |
 | npm | @nodelib/fs.stat | 2.0.5 | MIT |
 | npm | @nodelib/fs.walk | 1.2.8 | MIT |
 | npm | @nx/devkit | 23.2.1 | MIT |
 | npm | @nx/eslint-plugin | 23.2.1 | MIT |
 | npm | @nx/js | 23.2.1 | MIT |
-| npm | @nx/nx-win32-x64-msvc | 23.2.1 | MIT |
+| npm | @nx/nx-linux-x64-gnu | 23.2.1 | MIT |
 | npm | @nx/workspace | 23.2.1 | MIT |
 | npm | @parcel/watcher | 2.6.0 | MIT |
-| npm | @parcel/watcher-win32-x64 | 2.6.0 | MIT |
+| npm | @parcel/watcher-linux-x64-glibc | 2.6.0 | MIT |
 | npm | @phenomnomnominal/tsquery | 6.2.0 | MIT |
+| npm | @playwright/test | 1.56.1 | Apache-2.0 |
 | npm | @posthog/core | 1.54.3 | MIT |
 | npm | @posthog/types | 1.412.1 | MIT |
 | npm | @radix-ui/number | 1.1.3 | MIT |
@@ -331,8 +335,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @radix-ui/react-use-size | 1.1.4 | MIT |
 | npm | @radix-ui/react-visually-hidden | 1.2.11 | MIT |
 | npm | @radix-ui/rect | 1.1.3 | MIT |
-| npm | @rollup/rollup-win32-x64-gnu | 4.63.3 | MIT |
-| npm | @rollup/rollup-win32-x64-msvc | 4.63.3 | MIT |
+| npm | @rollup/rollup-linux-x64-gnu | 4.63.3 | MIT |
 | npm | @scena/dragscroll | 1.4.0 | MIT |
 | npm | @scena/event-emitter | 1.0.5 | MIT |
 | npm | @scena/matrix | 1.1.1 | MIT |
@@ -344,14 +347,16 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @sindresorhus/transliterate | 1.6.0 | MIT |
 | npm | @standard-schema/spec | 1.1.0 | MIT |
 | npm | @swc/core | 1.16.2 | Apache-2.0 |
-| npm | @swc/core-win32-x64-msvc | 1.16.2 | Apache-2.0 AND MIT |
+| npm | @swc/core-linux-x64-gnu | 1.16.2 | Apache-2.0 AND MIT |
 | npm | @swc/counter | 0.1.3 | Apache-2.0 |
 | npm | @swc/helpers | 0.5.23 | Apache-2.0 |
 | npm | @swc/types | 0.1.28 | Apache-2.0 |
 | npm | @tailwindcss/node | 4.3.3 | MIT |
 | npm | @tailwindcss/oxide | 4.3.3 | MIT |
-| npm | @tailwindcss/oxide-win32-x64-msvc | 4.3.3 | MIT |
+| npm | @tailwindcss/oxide-linux-x64-gnu | 4.3.3 | MIT |
 | npm | @tailwindcss/postcss | 4.3.3 | MIT |
+| npm | @tanstack/react-virtual | 3.14.13 | MIT |
+| npm | @tanstack/virtual-core | 3.17.11 | MIT |
 | npm | @tiptap/core | 3.31.3 | MIT |
 | npm | @tiptap/extension-bold | 3.31.3 | MIT |
 | npm | @tiptap/extension-bubble-menu | 3.31.3 | MIT |
@@ -688,6 +693,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | human-signals | 8.0.1 | Apache-2.0 |
 | npm | iconv-lite | 0.7.3 | MIT |
 | npm | icu-minify | 4.14.6 | MIT |
+| npm | idb-keyval | 6.3.0 | Apache-2.0 |
 | npm | ieee754 | 1.2.1 | BSD-3-Clause |
 | npm | ignore | 5.3.2 | MIT |
 | npm | ignore | 7.0.5 | MIT |
@@ -758,11 +764,11 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | kleur | 3.0.3 | MIT |
 | npm | kleur | 4.1.5 | MIT |
 | npm | lefthook | 2.1.14 | MIT |
-| npm | lefthook-windows-x64 | 2.1.14 | MIT |
+| npm | lefthook-linux-x64 | 2.1.14 | MIT |
 | npm | levn | 0.4.1 | MIT |
 | npm | libsql | 0.5.29 | MIT |
 | npm | lightningcss | 1.32.0 | MPL-2.0 |
-| npm | lightningcss-win32-x64-msvc | 1.32.0 | MPL-2.0 |
+| npm | lightningcss-linux-x64-gnu | 1.32.0 | MPL-2.0 |
 | npm | lines-and-columns | 1.2.4 | MIT |
 | npm | lines-and-columns | 2.0.3 | MIT |
 | npm | load-esm | 1.0.3 | MIT |
@@ -908,6 +914,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | picomatch | 4.0.7 | MIT |
 | npm | pkce-challenge | 5.0.1 | MIT |
 | npm | pkg-up | 3.1.0 | MIT |
+| npm | playwright | 1.56.1 | Apache-2.0 |
+| npm | playwright-core | 1.56.1 | Apache-2.0 |
 | npm | pluralize | 8.0.0 | MIT |
 | npm | po-parser | 2.2.0 | MIT |
 | npm | postcss | 8.5.23 | MIT |
@@ -949,6 +957,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | range-parser | 1.3.0 | MIT |
 | npm | raw-body | 3.0.2 | MIT |
 | npm | react | 19.3.0 | MIT |
+| npm | react-colorful | 5.8.1 | MIT |
 | npm | react-css-styled | 1.1.9 | MIT |
 | npm | react-dom | 19.3.0 | MIT |
 | npm | react-moveable | 0.56.0 | MIT |
@@ -1141,7 +1150,6 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | python | black | 26.5.1 | MIT |
 | python | certifi | 2026.7.22 | MPL-2.0 |
 | python | click | 8.5.0 | BSD-3-Clause |
-| python | colorama | 0.4.6 | BSD-3-Clause |
 | python | coverage | 7.16.1 | Apache-2.0 |
 | python | datamodel-code-generator | 0.82.0 | MIT |
 | python | engine | 0.1.0 | Apache-2.0 |
@@ -1184,6 +1192,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | python | typing-inspection | 0.4.4 | MIT |
 | python | typing_extensions | 4.16.0 | PSF-2.0 |
 | python | uvicorn | 0.53.0 | BSD-3-Clause |
+| python | uvloop | 0.22.1 | MIT |
 | python | watchfiles | 1.2.0 | MIT |
 | python | websockets | 17.1 | BSD-3-Clause |
 | python | xlsxwriter | 3.2.9 | BSD-2-Clause |

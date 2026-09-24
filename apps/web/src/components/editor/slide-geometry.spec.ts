@@ -3,11 +3,13 @@ import type { Grid } from '@lct/contracts';
 import {
   alignBoxes,
   clampToMargins,
+  distributeBoxes,
   gridGuidelines,
   nudgeBox,
   pixelBoxToEmu,
   placeSelectionBar,
   resizedBox,
+  rotatedBounds,
   slidePixels,
   translatedBox,
   unionBox,
@@ -186,6 +188,75 @@ describe('alignment', () => {
 
   it('does nothing with a single box', () => {
     expect(alignBoxes(items.slice(0, 1), 'right')).toEqual([]);
+  });
+});
+
+describe('distributing boxes', () => {
+  const row = [
+    { elementId: 'c', box: { x: 700, y: 0, cx: 100, cy: 50 } },
+    { elementId: 'a', box: { x: 0, y: 0, cx: 100, cy: 50 } },
+    { elementId: 'b', box: { x: 150, y: 90, cx: 200, cy: 50 } },
+  ];
+
+  it('makes the gaps between neighbours equal and keeps the outer boxes', () => {
+    // Span 0..800, boxes take 400, two gaps of 200.
+    expect(distributeBoxes(row, 'horizontal')).toEqual([
+      { elementId: 'b', box: { x: 300, y: 90, cx: 200, cy: 50 } },
+    ]);
+  });
+
+  it('works down the slide the same way', () => {
+    const column = row.map(({ elementId, box }) => ({
+      elementId,
+      box: { x: box.y, y: box.x, cx: box.cy, cy: box.cx },
+    }));
+    expect(distributeBoxes(column, 'vertical')).toEqual([
+      { elementId: 'b', box: { x: 90, y: 300, cx: 50, cy: 200 } },
+    ]);
+  });
+
+  it('leaves evenly spaced boxes alone', () => {
+    const even = [
+      { elementId: 'a', box: { x: 0, y: 0, cx: 100, cy: 50 } },
+      { elementId: 'b', box: { x: 200, y: 0, cx: 100, cy: 50 } },
+      { elementId: 'c', box: { x: 400, y: 0, cx: 100, cy: 50 } },
+    ];
+    expect(distributeBoxes(even, 'horizontal')).toEqual([]);
+  });
+
+  it('needs at least three boxes', () => {
+    expect(distributeBoxes(row.slice(0, 2), 'horizontal')).toEqual([]);
+  });
+
+  it('lets boxes overlap when they are wider than the span', () => {
+    const tight = [
+      { elementId: 'a', box: { x: 0, y: 0, cx: 100, cy: 10 } },
+      { elementId: 'b', box: { x: 10, y: 0, cx: 100, cy: 10 } },
+      { elementId: 'c', box: { x: 50, y: 0, cx: 100, cy: 10 } },
+    ];
+    // Span 0..150 holds 300 of boxes: each gap is -75.
+    expect(distributeBoxes(tight, 'horizontal')).toEqual([
+      { elementId: 'b', box: { x: 25, y: 0, cx: 100, cy: 10 } },
+    ]);
+  });
+});
+
+describe('rotated bounds', () => {
+  const box = { x: 100, y: 100, cx: 200, cy: 100 };
+
+  it('is the box itself without rotation or at a half turn', () => {
+    expect(rotatedBounds(box)).toEqual(box);
+    expect(rotatedBounds(box, 180)).toEqual(box);
+  });
+
+  it('swaps the sides at a quarter turn about the centre', () => {
+    expect(rotatedBounds(box, 90)).toEqual({ x: 150, y: 50, cx: 100, cy: 200 });
+    expect(rotatedBounds(box, 270)).toEqual({ x: 150, y: 50, cx: 100, cy: 200 });
+  });
+
+  it('grows to hold the corners at an angle', () => {
+    const turned = rotatedBounds({ x: 0, y: 0, cx: 100, cy: 100 }, 45);
+    expect(turned).toEqual({ x: -21, y: -21, cx: 141, cy: 141 });
   });
 });
 

@@ -14,6 +14,7 @@
     "assistant": "Assistant",
     "assistantSoon": "An AI agent is supposed to live here, but we haven't got round to it yet :(",
     "editText": "Edit text",
+    "textOverflow": "The text doesn't fit the template box",
     "inspector": "Properties panel",
     "inspectorHide": "Hide panel",
     "inspectorShow": "Show panel",
@@ -45,7 +46,6 @@
   "selectionBar": {
     "label": "Selection properties",
     "count": "{count, plural, one {# object} other {# objects}}",
-    "remove": "Delete",
     "align": {
       "left": "Align left",
       "center": "Align centre",
@@ -70,8 +70,6 @@
       "page-number": "Slide number",
       "decoration": "Decoration"
     },
-    "size": "Size",
-    "color": "Colour",
     "type": {
       "title": "Title",
       "subtitle": "Subtitle",
@@ -95,14 +93,28 @@
       "line": "Line",
       "positive": "Positive",
       "negative": "Negative"
-    }
-  },
-  "formatBar": {
-    "label": "Text format",
+    },
     "bold": "Bold",
     "italic": "Italic",
-    "font": "Font",
-    "underline": "Underline"
+    "smaller": "Decrease font size",
+    "larger": "Increase font size",
+    "strokeWidths": "Common line widths",
+    "replace": "Replace",
+    "editTable": "Edit table cells",
+    "editTableShort": "Edit",
+    "editChart": "Edit chart data in the design panel",
+    "editChartShort": "Data",
+    "distribute": "Distribute",
+    "distributeHorizontal": "Distribute horizontal spacing",
+    "distributeVertical": "Distribute vertical spacing",
+    "layers": "Layer order",
+    "more": "More",
+    "alignToSlide": "Align to slide",
+    "openInspector": "Open in design panel",
+    "openData": "Open data in design panel"
+  },
+  "formatBar": {
+    "label": "Text format"
   },
   "toolRail": {
     "label": "Tools",
@@ -111,7 +123,8 @@
     "groups": {
       "canvas": "Canvas",
       "panels": "Panels",
-      "history": "History"
+      "history": "History",
+      "show": "Slideshow"
     },
     "history": {
       "undo": "Undo {change}",
@@ -147,7 +160,8 @@
       "shape": "Shapes",
       "data": "Data",
       "ai": "Assistant",
-      "shortcuts": "Keyboard shortcuts"
+      "shortcuts": "Keyboard shortcuts",
+      "present": "Present from current slide"
     },
     "variants": {
       "select": "Select",
@@ -376,6 +390,7 @@
       "select-next": "Next object",
       "select-previous": "Previous object",
       "edit": "Edit text or table",
+      "type-to-edit": "Start typing into the selected text",
       "duplicate": "Duplicate",
       "remove": "Delete",
       "nudge": "Nudge",
@@ -397,13 +412,40 @@
       "size-up": "Larger font size",
       "size-down": "Smaller font size",
       "text-exit": "Stop editing text",
+      "indent": "Indent list item",
+      "outdent": "Outdent list item",
       "zoom-in": "Zoom in",
       "zoom-out": "Zoom out",
       "zoom-actual": "Zoom to 100%",
       "zoom-fit": "Fit slide",
       "zoom-selection": "Zoom to selection",
-      "pan": "Pan the canvas (hold)"
+      "pan": "Pan the canvas (hold)",
+      "present": "Present from the beginning",
+      "present-current": "Present from current slide"
     }
+  },
+  "draft": {
+    "restored": "Unsaved changes restored",
+    "discard": "Undo",
+    "dismiss": "Dismiss",
+    "saving": "Saving changes in this browser…",
+    "saved": "Changes saved in this browser",
+    "error": "Couldn't save changes in this browser. Keep this tab open."
+  },
+  "slideShow": {
+    "label": "Slideshow",
+    "counter": "{number} / {total}",
+    "previous": "Previous slide",
+    "next": "Next slide",
+    "exit": "Exit slideshow",
+    "end": "End of slideshow. Click to exit."
+  },
+  "mobileBar": {
+    "label": "Actions",
+    "insert": "Insert",
+    "insertHint": "Tap the slide: {tool}",
+    "cancelInsert": "Cancel insert",
+    "properties": "Properties"
   },
   "tableMenu": {
     "insertRowAbove": "Insert row above",

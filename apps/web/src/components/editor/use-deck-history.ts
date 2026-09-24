@@ -184,16 +184,26 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     },
     [applyAll],
   );
+  /**
+   * Текст после набора. `box` — рамка, выросшая под текст: она ложится той же записью журнала,
+   * и одна отмена возвращает и текст, и высоту.
+   */
   const setText = useCallback(
     (
       slideId: string,
       elementId: string,
       paragraphs: readonly Paragraph[],
-      options?: RecordOptions,
+      options?: RecordOptions & { readonly box?: Box },
     ) => {
-      apply((current) => commitSetText(current, { slideId, elementId, paragraphs }), options);
+      const text: Commit = (current) => commitSetText(current, { slideId, elementId, paragraphs });
+      const box = options?.box;
+      if (!box) {
+        apply(text, options);
+        return;
+      }
+      applyAll([text, (current) => commitMoves(current, { slideId, moves: [{ elementId, box }] })]);
     },
-    [apply],
+    [apply, applyAll],
   );
   const remove = useCallback(
     (slideId: string, elementIds: readonly string[]) => {

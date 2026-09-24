@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { DesignSystem, Paragraph, SlideIr, TextRun } from '@lct/contracts';
 import { commitElementProps } from '@lct/deck-ops';
 import type { TextElement } from './inspector/text-model';
+import type { KeyLike } from './editor-keymap';
 import { documentToParagraphs, paragraphsToDoc, textExtensions } from './text-document';
 import {
+  canIndent,
   flagProps,
   rangeFlagOn,
   runTextCommand,
@@ -12,6 +14,7 @@ import {
   sizeLadder,
   stepFontSize,
   toggleRangeFlag,
+  typedText,
 } from './text-shortcuts';
 import { tokenMeta } from '../../mocks/demo-deck/token-meta';
 
@@ -204,5 +207,63 @@ describe('Ctrl+B/I/U inside the open editor', () => {
     const [paragraph] = documentToParagraphs(editor.getJSON());
     expect(paragraph?.align).toBe('center');
     expect(paragraph?.runs).toEqual([run('Hello', { sizePt: 24 })]);
+  });
+});
+
+describe('Tab and Shift+Tab inside the open editor', () => {
+  const levels = (editor: Editor) =>
+    documentToParagraphs(editor.getJSON()).map((paragraph) => paragraph.level);
+
+  it('steps the level of every paragraph the selection touches, each from its own', () => {
+    const editor = open([
+      { level: 0, lineSpacing: null, runs: [run('one')] },
+      { level: 1, lineSpacing: null, runs: [run('two')] },
+      { level: 0, lineSpacing: null, runs: [run('three')] },
+    ]);
+    // From inside «one» to inside «two»: the third paragraph stays.
+    editor.commands.setTextSelection({ from: 2, to: 8 });
+    const ladder = sizeLadder(designSystem);
+    expect(runTextCommand(editor, { kind: 'text-indent', step: 1 }, BODY, ladder)).toBe(true);
+    expect(levels(editor)).toEqual([1, 2, 0]);
+    runTextCommand(editor, { kind: 'text-indent', step: -1 }, BODY, ladder);
+    runTextCommand(editor, { kind: 'text-indent', step: -1 }, BODY, ladder);
+    expect(levels(editor)).toEqual([0, 0, 0]);
+  });
+
+  it('indents lists and body text only', () => {
+    expect(canIndent('bullet-list')).toBe(true);
+    expect(canIndent('body')).toBe(true);
+    expect(canIndent('title')).toBe(false);
+    expect(canIndent('kpi-value')).toBe(false);
+  });
+});
+
+describe('typing on a selected text', () => {
+  const key = (value: string, extra: Partial<KeyLike> = {}): KeyLike => ({
+    code: '',
+    key: value,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...extra,
+  });
+
+  it('takes a printed character of any layout', () => {
+    expect(typedText(key('a'))).toBe('a');
+    expect(typedText(key('Ж', { shiftKey: true }))).toBe('Ж');
+    expect(typedText(key('7'))).toBe('7');
+    expect(typedText(key('?', { shiftKey: true }))).toBe('?');
+    expect(typedText(key('😀'))).toBe('😀');
+  });
+
+  it('leaves chords, named keys and the space alone', () => {
+    expect(typedText(key('b', { ctrlKey: true }))).toBeNull();
+    expect(typedText(key('b', { metaKey: true }))).toBeNull();
+    expect(typedText(key('b', { altKey: true }))).toBeNull();
+    expect(typedText(key('Enter'))).toBeNull();
+    expect(typedText(key('F2'))).toBeNull();
+    expect(typedText(key('Dead'))).toBeNull();
+    expect(typedText(key(' '))).toBeNull();
   });
 });

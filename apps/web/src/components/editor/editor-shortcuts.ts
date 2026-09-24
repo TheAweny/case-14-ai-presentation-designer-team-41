@@ -67,12 +67,17 @@ export type ShortcutId =
   | 'size-up'
   | 'size-down'
   | 'text-exit'
+  | 'indent'
+  | 'outdent'
+  | 'type-to-edit'
   | 'zoom-in'
   | 'zoom-out'
   | 'zoom-actual'
   | 'zoom-fit'
   | 'zoom-selection'
-  | 'pan';
+  | 'pan'
+  | 'present'
+  | 'present-current';
 
 /** Одно сочетание: физическая клавиша и модификаторы, которые должны быть нажаты ровно так. */
 export interface Chord {
@@ -199,7 +204,19 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
     id: 'edit',
     group: 'objects',
     scope: 'canvas',
-    chords: [{ code: 'Enter' }, { code: 'NumpadEnter', hidden: true }],
+    // F2 — как в PowerPoint.
+    chords: [{ code: 'Enter' }, { code: 'F2' }, { code: 'NumpadEnter', hidden: true }],
+  },
+  {
+    // Буква или цифра на выделенном тексте открывает набор и печатается в конец, как в
+    // Google Slides. Слушает холст: печатный символ — не сочетание, а буквы инструментов рейки
+    // при выделенном тексте уступают набору.
+    id: 'type-to-edit',
+    group: 'objects',
+    scope: 'canvas',
+    external: true,
+    chords: [],
+    display: [['A…Z']],
   },
   { id: 'duplicate', group: 'objects', scope: 'canvas', chords: [{ code: 'KeyD', mod: true }] },
   {
@@ -306,6 +323,9 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
     chords: [{ code: 'Comma', mod: true, shift: true, label: '<' }],
   },
   { id: 'text-exit', group: 'text', scope: 'text', chords: [{ code: 'Escape' }] },
+  // Уровень пункта списка, как в Google Slides и PowerPoint. На холсте Tab — обход объектов.
+  { id: 'indent', group: 'text', scope: 'text', chords: [{ code: 'Tab' }] },
+  { id: 'outdent', group: 'text', scope: 'text', chords: [{ code: 'Tab', shift: true }] },
 
   // Вид: слушает холст, здесь — подписи.
   {
@@ -349,6 +369,15 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
     scope: 'canvas',
     external: true,
     chords: [{ code: 'Space' }],
+  },
+  // Показ — как в PowerPoint: F5 с начала, Shift+F5 с текущего слайда. Работает и в наборе:
+  // иначе F5 перезагрузил бы страницу.
+  { id: 'present', group: 'view', scope: 'both', chords: [{ code: 'F5' }] },
+  {
+    id: 'present-current',
+    group: 'view',
+    scope: 'both',
+    chords: [{ code: 'F5', shift: true }],
   },
 ];
 
