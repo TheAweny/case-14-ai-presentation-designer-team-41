@@ -160,22 +160,26 @@
     }
   },
   "designPanel": {
-    "empty": "Nothing selected",
     "emptyHint": "Pick an object on the slide — its properties show up here.",
     "mixed": "Mixed",
+    "position": "Position",
     "layout": "Layout",
     "x": "Horizontal position, pt",
     "y": "Vertical position, pt",
     "width": "Width, pt",
     "height": "Height, pt",
+    "constrainProportions": "Constrain proportions",
     "rotation": "Rotation",
-    "layer": "Layer",
+    "rotate90": "Rotate 90° clockwise",
+    "flipH": "Flip horizontal",
+    "flipV": "Flip vertical",
     "arrange": {
       "back": "Send to back",
       "backward": "Send backward",
       "forward": "Bring forward",
       "front": "Bring to front"
     },
+    "appearance": "Appearance",
     "opacity": "Opacity",
     "shape": "Shape",
     "shapes": {
@@ -201,10 +205,15 @@
     "ends": "Ends",
     "headArrow": "Arrow at start",
     "tailArrow": "Arrow at end",
-    "text": "Text",
+    "typography": "Typography",
+    "font": "Font",
+    "templateFont": "Template default",
     "fontSize": "Font size",
-    "bold": "Bold",
-    "italic": "Italic",
+    "fontSizePresets": "Template sizes",
+    "lineHeight": "Line height, %",
+    "lineHeightPresets": "Common line heights",
+    "auto": "Auto",
+    "letterSpacing": "Letter spacing, pt",
     "underline": "Underline",
     "textAlign": "Text alignment",
     "textAligns": {
@@ -220,7 +229,6 @@
       "bottom": "Bottom"
     },
     "textColor": "Text colour",
-    "offScale": "Off the template scale",
     "image": "Image",
     "fit": "Image placement",
     "fits": {
@@ -230,7 +238,7 @@
     "replaceImage": "Replace…",
     "slide": "Slide",
     "background": "Background",
-    "templateBackground": "As in the template",
+    "templateBackground": "Reset to template background",
     "table": "Table",
     "rows": "Rows",
     "columns": "Columns",
@@ -262,8 +270,7 @@
     "valueLabel": "{series}: {category}",
     "lock": "Lock",
     "unlock": "Unlock",
-    "textSelection": "Text — selection",
-    "textSelectionHint": "Buttons change the selected words; alignment applies to the paragraphs under the caret."
+    "textSelectionHint": "Changes apply to the selected words; alignment and line height to the paragraphs under the cursor."
   },
   "canvasMenu": {
     "cut": "Cut",
@@ -277,5 +284,33 @@
     "selectAll": "Select all",
     "remove": "Delete",
     "unlockAll": "Unlock all on slide"
+  },
+  "inspectorFields": {
+    "mixed": "Mixed",
+    "color": {
+      "openPicker": "Pick a colour",
+      "hex": "Colour, HEX",
+      "editHex": "Enter a custom HEX colour",
+      "eyedropper": "Pick a colour from the screen",
+      "templateColors": "Template colours"
+    },
+    "font": {
+      "search": "Search fonts",
+      "list": "Fonts",
+      "templateFonts": "Template fonts",
+      "allFonts": "All fonts",
+      "showLocal": "Show fonts on this computer",
+      "loadingLocal": "Loading fonts…",
+      "localDenied": "The browser did not allow access to local fonts.",
+      "localUnavailable": "This browser does not list local fonts, so common ones are shown.",
+      "notFound": "No such font"
+    },
+    "fontStyle": {
+      "label": "Font style",
+      "regular": "Regular",
+      "italic": "Italic",
+      "bold": "Bold",
+      "boldItalic": "Bold Italic"
+    }
   }
 }

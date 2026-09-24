@@ -4,9 +4,13 @@ import { parseNumber, stepNumber } from './number-input';
 import {
   alignToSlide,
   commonValue,
+  cornerRadiusProps,
+  cornerRadiusPt,
   emuToPt,
+  maxCornerRadiusPt,
   ptToEmu,
   setBoxField,
+  setBoxFieldEach,
   setBoxSizeLocked,
 } from './selection-model';
 
@@ -108,5 +112,42 @@ describe('alignToSlide', () => {
   it('records nothing for an element already in place', () => {
     const placed = decor('p', { x: 0, y: 0, cx: PT, cy: PT });
     expect(alignToSlide([placed], 'left', slide)).toEqual([]);
+  });
+});
+
+describe('setBoxFieldEach', () => {
+  it('moves each object from its own value', () => {
+    const a = decor('a', { x: PT * 10, y: 0, cx: PT, cy: PT });
+    const b = decor('b', { x: PT * 25, y: 0, cx: PT, cy: PT });
+    const moves = setBoxFieldEach([a, b], 'x', (old) => old + 10);
+    expect(moves.map((move) => move.box.x)).toEqual([PT * 20, PT * 35]);
+  });
+
+  it('leaves out objects the edit does not change', () => {
+    const a = decor('a', { x: PT * 10, y: 0, cx: PT, cy: PT });
+    expect(setBoxFieldEach([a], 'x', (old) => old)).toEqual([]);
+  });
+});
+
+type Decor = Extract<SlideElement, { kind: 'decor' }>;
+
+describe('corner radius in points', () => {
+  const box = { x: 0, y: 0, cx: PT * 200, cy: PT * 100 };
+
+  it('reads a share of the shorter side as points, with the contract default', () => {
+    expect(
+      cornerRadiusPt(decor('a', box, { shape: 'round-rect', cornerRadius: 0.1 }) as Decor),
+    ).toBeCloseTo(10);
+    expect(cornerRadiusPt(decor('a', box, { shape: 'round-rect' }) as Decor)).toBeCloseTo(100 / 6);
+    expect(cornerRadiusPt(decor('a', box, { shape: 'rect' }) as Decor)).toBe(0);
+    expect(cornerRadiusPt(decor('a', box, { shape: 'ellipse' }) as Decor)).toBeNull();
+    expect(maxCornerRadiusPt(decor('a', box) as Decor)).toBe(50);
+  });
+
+  it('turns points back into a share and rounds a rectangle only when asked', () => {
+    const rect = decor('a', box, { shape: 'rect' }) as Decor;
+    expect(cornerRadiusProps(rect, 12)).toEqual({ shape: 'round-rect', cornerRadius: 0.12 });
+    expect(cornerRadiusProps(rect, 0)).toEqual({ shape: 'rect' });
+    expect(cornerRadiusProps(rect, 500)).toEqual({ shape: 'round-rect', cornerRadius: 0.5 });
   });
 });

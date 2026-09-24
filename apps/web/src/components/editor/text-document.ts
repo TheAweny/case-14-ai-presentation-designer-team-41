@@ -26,6 +26,12 @@ export interface TextEditorMetrics {
 
 const MODE_TRUE = 'true';
 const MODE_FALSE = 'false';
+/**
+ * An optional field (run underline and letter spacing, paragraph alignment) stated as null. The
+ * contract lets it be null or absent, both meaning "inherit"; the editor keeps which one it was,
+ * so the runs come back exactly as they went in.
+ */
+const INHERIT = 'inherit';
 
 /** Vertical tab and the Unicode line separator are line breaks on the slide. */
 function editorText(text: string): string {
@@ -38,19 +44,30 @@ function levelOf(value: unknown): number {
   return Math.floor(level);
 }
 
-function sizeOf(value: unknown): number | null {
+export function sizeOf(value: unknown): number | null {
   const points =
     typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   return Number.isFinite(points) && points > 0 ? points : null;
 }
 
+/**
+ * Letter spacing in points, or null when the run does not state it. Zero and negative
+ * (condensed) spacing are real values. Stored as a string, like the size, so an empty text
+ * style check does not drop a zero.
+ */
+export function letterSpacingOf(value: unknown): number | null {
+  if (value == null || value === '' || value === INHERIT) return null;
+  const points = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(points) ? points : null;
+}
+
 /** Line spacing the paragraph states, as a multiple of single; null when it inherits. */
-function spacingOf(value: unknown): number | null {
+export function spacingOf(value: unknown): number | null {
   const multiple = typeof value === 'number' ? value : Number(value);
   return value != null && Number.isFinite(multiple) && multiple > 0 ? multiple : null;
 }
 
-function colorOf(value: unknown): string {
+export function colorOf(value: unknown): string {
   if (typeof value !== 'string') return '';
   const match = /^#?([0-9a-fA-F]{6})$/.exec(value.trim());
   return match?.[1] ?? '';
@@ -63,7 +80,7 @@ export function alignOf(value: unknown): ParagraphAlign | null {
   return ALIGNS.find((align) => align === value) ?? null;
 }
 
-function fontOf(value: unknown): string {
+export function fontOf(value: unknown): string {
   if (typeof value !== 'string') return '';
   const name = value.trim().replace(/^["']+|["']+$/g, '');
   return name;
@@ -97,6 +114,11 @@ function marksFor(run: TextRun): DocMark[] {
   if (run.italic === false) attrs.italicMode = MODE_FALSE;
   if (run.underline === true) attrs.underlineMode = MODE_TRUE;
   if (run.underline === false) attrs.underlineMode = MODE_FALSE;
+  if (run.underline === null) attrs.underlineMode = INHERIT;
+  if (run.letterSpacingPt === null) attrs.letterSpacing = INHERIT;
+  else if (run.letterSpacingPt != null && Number.isFinite(run.letterSpacingPt)) {
+    attrs.letterSpacing = String(run.letterSpacingPt);
+  }
 
   const marks: DocMark[] = [];
   if (Object.keys(attrs).length > 0) marks.push({ type: 'textStyle', attrs });
@@ -112,6 +134,7 @@ function sameStyle(left: TextRun, right: TextRun): boolean {
     left.bold === right.bold &&
     left.italic === right.italic &&
     (left.underline ?? null) === (right.underline ?? null) &&
+    (left.letterSpacingPt ?? null) === (right.letterSpacingPt ?? null) &&
     left.color === right.color
   );
 }
@@ -146,7 +169,7 @@ export function paragraphsToDoc(paragraphs: readonly Paragraph[]): JSONContent {
       type: 'paragraph',
       attrs: {
         level: levelOf(paragraph.level),
-        align: alignOf(paragraph.align),
+        align: paragraph.align === null ? INHERIT : alignOf(paragraph.align),
         lineSpacing: spacingOf(paragraph.lineSpacing),
       },
     };
@@ -170,9 +193,16 @@ function runFrom(node: Record<string, unknown>): TextRun | null {
     italic: flag(has('italic'), attrs.italicMode),
     color: colorOf(attrs.color),
   };
-  // Underline is optional in the contract: a run that never had it keeps no key.
-  if (attrs.underlineMode === MODE_TRUE) return { ...run, underline: true };
-  if (attrs.underlineMode === MODE_FALSE) return { ...run, underline: false };
+  // Underline and letter spacing are optional in the contract: a run that never had them
+  // keeps no key, and one that stated null keeps its null.
+  if (attrs.underlineMode === MODE_TRUE) run.underline = true;
+  else if (attrs.underlineMode === MODE_FALSE) run.underline = false;
+  else if (attrs.underlineMode === INHERIT) run.underline = null;
+  if (attrs.letterSpacing === INHERIT) run.letterSpacingPt = null;
+  else {
+    const spacing = letterSpacingOf(attrs.letterSpacing);
+    if (spacing != null) run.letterSpacingPt = spacing;
+  }
   return run;
 }
 
@@ -195,6 +225,7 @@ export function documentToParagraphs(doc: JSONContent): Paragraph[] {
       runs,
       lineSpacing: spacingOf(attrs.lineSpacing),
     };
+    if (attrs.align === INHERIT) return [{ ...paragraph, align: null }];
     const align = alignOf(attrs.align);
     return [align ? { ...paragraph, align } : paragraph];
   });
@@ -251,7 +282,7 @@ function slideParagraph(metrics: TextEditorMetrics) {
           parseHTML: () => null,
           renderHTML: () => ({}),
         },
-        // Carried through untouched so editing the words keeps the template's spacing.
+        // Multiple of single spacing; null inherits the role's. Painted as `line-height`.
         lineSpacing: {
           default: null,
           parseHTML: () => null,
@@ -269,6 +300,9 @@ function slideParagraph(metrics: TextEditorMetrics) {
       if (metrics.bullets) style.push(`--bullet-x: ${indent}em`);
       const align = alignOf(node.attrs.align);
       if (align) style.push(`text-align: ${align}`);
+      // The paragraph's own spacing wins over the role's, as on the slide.
+      const lineSpacing = spacingOf(node.attrs.lineSpacing);
+      if (lineSpacing != null) style.push(`line-height: ${lineSpacing}`);
       return [
         'p',
         mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { style: style.join('; ') }),
@@ -327,6 +361,31 @@ function slideFontSize(slide: SlideSize) {
   });
 }
 
+/** Letter spacing in points, painted in `cqw` like the size, so it tracks the frame. */
+function slideLetterSpacing(slide: SlideSize) {
+  return Extension.create({
+    name: 'letterSpacing',
+    addGlobalAttributes() {
+      return [
+        {
+          types: ['textStyle'],
+          attributes: {
+            letterSpacing: {
+              default: null,
+              parseHTML: () => null,
+              renderHTML: (attributes: { letterSpacing?: unknown }) => {
+                const points = letterSpacingOf(attributes.letterSpacing);
+                if (points == null) return {};
+                return { style: `letter-spacing: ${cqw(ptToCqw(points, slide))}` };
+              },
+            },
+          },
+        },
+      ];
+    },
+  });
+}
+
 /** Explicit bold/italic, including "off", which the mark alone cannot tell from inherit. */
 function runModes() {
   return Extension.create({
@@ -374,7 +433,7 @@ function runModes() {
 }
 
 /**
- * The text schema: paragraph → text, with bold, italic, font, size and colour.
+ * The text schema: paragraph → text, with bold, italic, font, size, letter spacing and colour.
  * `@tiptap/extension-history` is UndoRedo from `@tiptap/extensions` (same MIT line).
  * Size lives on the text-style package; there is no separate font-size package in this line.
  */
@@ -389,6 +448,7 @@ export function textExtensions(metrics: TextEditorMetrics): Extensions {
     Color,
     slideFontFamily(),
     slideFontSize(metrics.slide),
+    slideLetterSpacing(metrics.slide),
     runModes(),
     History,
   ];

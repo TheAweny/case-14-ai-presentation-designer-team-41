@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
-import type { ColorRole, SlideElement } from '@lct/contracts';
+import type { ColorValue, SlideElement } from '@lct/contracts';
 import type {
   ArrangeTarget,
   DeckChangeKind,
@@ -53,7 +53,11 @@ import {
 import { isTypingTarget, slideTitle } from '@/components/editor/slide-navigation';
 import { ToolRailDock } from '@/components/editor/tool-rail-dock';
 import type { VariantId } from '@/components/editor/tool-rail';
-import { useDeckHistory, type ElementMove } from '@/components/editor/use-deck-history';
+import {
+  useDeckHistory,
+  type EditMode,
+  type ElementMove,
+} from '@/components/editor/use-deck-history';
 import { useSlideSelection } from '@/components/editor/use-slide-selection';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 
@@ -118,6 +122,7 @@ export function EditorShell({
   const startSlides = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
   const {
     slides,
+    committedSlides,
     move,
     setText,
     remove,
@@ -126,7 +131,9 @@ export function EditorShell({
     setFontSize,
     setColor,
     setProps,
-    setFontSizeAll,
+    setPropsEach,
+    endPreview,
+    setFontSizes,
     setColorAll,
     arrange,
     replaceImage,
@@ -219,9 +226,9 @@ export function EditorShell({
   });
 
   const commit = useCallback(
-    (moves: readonly ElementMove[]) => {
+    (moves: readonly ElementMove[], mode?: EditMode) => {
       if (!slideId) return;
-      move(slideId, moves);
+      move(slideId, moves, mode);
     },
     [move, slideId],
   );
@@ -250,24 +257,24 @@ export function EditorShell({
   );
 
   const setColorOf = useCallback(
-    (elementId: string, colorRole: ColorRole, hex: string) => {
+    (elementId: string, color: ColorValue, hex: string) => {
       if (!slideId) return;
-      setColor(slideId, elementId, colorRole, hex);
+      setColor(slideId, elementId, color, hex);
     },
     [setColor, slideId],
   );
 
   const setPropsOf = useCallback(
-    (elementIds: readonly string[], props: ElementProps) => {
+    (elementIds: readonly string[], props: ElementProps, mode?: EditMode) => {
       if (!slideId || elementIds.length === 0) return;
-      setProps(slideId, elementIds, props);
+      setProps(slideId, elementIds, props, mode);
     },
     [setProps, slideId],
   );
 
   const setBackgroundOf = useCallback(
-    (background: ColorRole | null) => {
-      if (slideId) setSlideBackground(slideId, background);
+    (background: ColorValue | null, mode?: EditMode) => {
+      if (slideId) setSlideBackground(slideId, background, mode);
     },
     [setSlideBackground, slideId],
   );
@@ -740,7 +747,9 @@ export function EditorShell({
               onTabChange={setTab}
               onCollapse={closeInspector}
               design={{
-                slide,
+                // Панель считает значения без живого вида жеста: правка «каждому от своего»
+                // идёт от записанного, а не от того, что сейчас показано.
+                slide: committedSlides[index],
                 designSystem,
                 // Пока открыт набор, панель показывает редактируемый текст.
                 selectedIds: activeText ? [activeText.elementId] : selectedIds,
@@ -748,14 +757,16 @@ export function EditorShell({
                 onCommit: commit,
                 onRemove: removeSelected,
                 onAlign: alignSelected,
-                onFontSize: setFontSizeOf,
-                onColor: setColorOf,
                 onProps: setPropsOf,
-                onFontSizeAll: (ids, sizePt) => {
-                  if (slideId) setFontSizeAll(slideId, ids, sizePt);
+                onPropsEach: (entries, mode) => {
+                  if (slideId) setPropsEach(slideId, entries, mode);
                 },
-                onColorAll: (ids, role, hex) => {
-                  if (slideId) setColorAll(slideId, ids, role, hex);
+                onPreviewEnd: endPreview,
+                onFontSizes: (entries, mode) => {
+                  if (slideId) setFontSizes(slideId, entries, mode);
+                },
+                onColorAll: (ids, color, hex, mode) => {
+                  if (slideId) setColorAll(slideId, ids, color, hex, mode);
                 },
                 onArrange: arrangeSelected,
                 onReplaceImage: replaceImageOf,

@@ -5467,6 +5467,25 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tanstack/react-virtual@npm:3.14.13":
+  version: 3.14.13
+  resolution: "@tanstack/react-virtual@npm:3.14.13"
+  dependencies:
+    "@tanstack/virtual-core": "npm:3.17.11"
+  peerDependencies:
+    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+  checksum: 10/c2f33950da8d7f002dfcc0c4c135d93dc0534bdf07bfeb9d9d3be715aa9467a03391cf843bf48239307db426a93638de3951f4ef35d5964d0d5739c8493c3bb3
+  languageName: node
+  linkType: hard
+
+"@tanstack/virtual-core@npm:3.17.11":
+  version: 3.17.11
+  resolution: "@tanstack/virtual-core@npm:3.17.11"
+  checksum: 10/836b4287ad4968e70aedb1a93618e4480218dc01f0e2d85e16003b2c1c69a7422f17b2b434eb53faedeaa4906aea76a05dd584626e898a73f95d9d2f72bc7352
+  languageName: node
+  linkType: hard
+
 "@tiptap/core@npm:3.31.3":
   version: 3.31.3
   resolution: "@tiptap/core@npm:3.31.3"
@@ -11682,6 +11701,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-colorful@npm:5.8.1":
+  version: 5.8.1
+  resolution: "react-colorful@npm:5.8.1"
+  peerDependencies:
+    react: ">=16.8.0"
+    react-dom: ">=16.8.0"
+  checksum: 10/4b896fc53c052c2a6bfde4cbc0cc59e6fe907782f0d7f08fc7336b37aa4daf4b3a32cbca53b39031829a07f98417a4ea7eee68a2e2dd67f42918b90acd1d611e
+  languageName: node
+  linkType: hard
+
 "react-css-styled@npm:^1.1.9":
   version: 1.1.9
   resolution: "react-css-styled@npm:1.1.9"
@@ -13457,6 +13486,7 @@ __metadata:
     "@lct/deck-ops": "workspace:^"
     "@lct/slide-renderer": "workspace:^"
     "@tailwindcss/postcss": "npm:4.3.3"
+    "@tanstack/react-virtual": "npm:3.14.13"
     "@tiptap/core": "npm:3.31.3"
     "@tiptap/extension-bold": "npm:3.31.3"
     "@tiptap/extension-bubble-menu": "npm:3.31.3"
@@ -13481,6 +13511,7 @@ __metadata:
     postcss: "npm:^8.5.0"
     radix-ui: "npm:1.6.7"
     react: "npm:^19.3.0"
+    react-colorful: "npm:5.8.1"
     react-dom: "npm:^19.3.0"
     react-moveable: "npm:0.56.0"
     react-resizable-panels: "npm:4.12.4"

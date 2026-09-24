@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import type { Box, ColorRole, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
+import { useCallback, useMemo, useState } from 'react';
+import type { Box, ColorValue, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import {
   commitArrange,
   commitChartAxes,
@@ -33,6 +33,7 @@ import {
   type ArrangeTarget,
   type ChartSeries,
   type DeckChange,
+  type DeckCommit,
   type DeckSelection,
   type ElementProps,
   type Offset,
@@ -44,6 +45,27 @@ export interface ElementMove {
   readonly elementId: string;
   readonly box: Box;
 }
+
+/**
+ * `commit` — запись в журнал. `preview` — живой вид на время жеста (перетаскивание за подпись
+ * поля, пикер цвета): слайды показывают правку, журнал её не видит. Жест кончается записью
+ * или `endPreview`.
+ */
+export type EditMode = 'commit' | 'preview';
+
+/** Свои свойства каждой группе объектов — одной записью журнала. */
+export interface PropsEntry {
+  readonly elementIds: readonly string[];
+  readonly props: ElementProps;
+}
+
+/** Кегль одного текстового объекта. */
+export interface FontSizeEntry {
+  readonly elementId: string;
+  readonly sizePt: number;
+}
+
+type Commit = (slides: readonly SlideIr[]) => DeckCommit;
 
 /** What an undo or redo button would bring back, in words the tooltip can name. */
 export type ChangeKind =
@@ -102,28 +124,60 @@ export function changeKind(change: DeckChange | undefined): ChangeKind | null {
 export function useDeckHistory(slides: readonly SlideIr[]) {
   const [history, setHistory] = useState(() => createDeckHistory(slides));
   const signature = slides.map((slide) => slide.slideId).join('\0');
+  /** Правка, которую сейчас показывают, не записав: см. `EditMode`. */
+  const [preview, setPreview] = useState<Commit | null>(null);
   const [seen, setSeen] = useState(signature);
   if (seen !== signature) {
     setSeen(signature);
     setHistory(createDeckHistory(slides));
+    setPreview(null);
   }
 
-  /** Одна правка — одна запись журнала. Всё, что ниже, отличается только тем, что коммитит. */
-  const apply = useCallback(
-    (
-      commit: (current: readonly SlideIr[]) => ReturnType<typeof commitMoves>,
-      options?: RecordOptions,
-    ) => {
-      setHistory((current) => recordChange(current, commit(current.slides), options));
-    },
-    [],
+  const shown = useMemo(
+    () => (preview ? preview(history.slides).slides : history.slides),
+    [history.slides, preview],
   );
 
+  /** Одна правка — одна запись журнала. Всё, что ниже, отличается только тем, что коммитит. */
+  const apply = useCallback((commit: Commit, options?: RecordOptions) => {
+    setPreview(null);
+    setHistory((current) => recordChange(current, commit(current.slides), options));
+  }, []);
+
+  /**
+   * Несколько правок одной записью журнала либо их живой вид. Склейка идёт внутри одного
+   * обновления: правка, которой менять нечего, не склеит следующую с чужой прежней записью.
+   */
+  const applyAll = useCallback((commits: readonly Commit[], mode: EditMode = 'commit') => {
+    if (mode === 'preview') {
+      const composed: Commit = (slides) => ({
+        slides: commits.reduce((current, commit) => commit(current).slides, slides),
+        change: null,
+      });
+      setPreview(() => composed);
+      return;
+    }
+    setPreview(null);
+    setHistory((current) => {
+      let next = current;
+      let first = true;
+      for (const commit of commits) {
+        const result = commit(next.slides);
+        if (!result.change) continue;
+        next = recordChange(next, result, first ? undefined : { merge: true });
+        first = false;
+      }
+      return next;
+    });
+  }, []);
+
+  const endPreview = useCallback(() => setPreview(null), []);
+
   const move = useCallback(
-    (slideId: string, moves: readonly ElementMove[]) => {
-      apply((current) => commitMoves(current, { slideId, moves }));
+    (slideId: string, moves: readonly ElementMove[], mode?: EditMode) => {
+      applyAll([(current) => commitMoves(current, { slideId, moves })], mode);
     },
-    [apply],
+    [applyAll],
   );
   const setText = useCallback(
     (
@@ -160,56 +214,65 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     },
     [apply],
   );
+  /** Цвет текста: роль палитры или свой HEX; `hex` — чем красить runs. */
   const setColor = useCallback(
-    (slideId: string, elementId: string, colorRole: ColorRole, hex: string) => {
-      apply((current) => commitSetColor(current, { slideId, elementId, colorRole, hex }));
+    (slideId: string, elementId: string, color: ColorValue, hex: string) => {
+      apply((current) => commitSetColor(current, { slideId, elementId, color, hex }));
     },
     [apply],
   );
-  /**
-   * Кегль или цвет сразу нескольким текстам — одной записью журнала. Склейка идёт внутри
-   * одного обновления: объект, которому менять нечего, не склеит правку с чужой прежней.
-   */
-  const applyEach = useCallback(
-    (
-      elementIds: readonly string[],
-      commit: (slides: readonly SlideIr[], elementId: string) => ReturnType<typeof commitMoves>,
-    ) => {
-      setHistory((current) => {
-        let next = current;
-        let first = true;
-        for (const elementId of elementIds) {
-          const result = commit(next.slides, elementId);
-          if (!result.change) continue;
-          next = recordChange(next, result, first ? undefined : { merge: true });
-          first = false;
-        }
-        return next;
-      });
-    },
-    [],
-  );
-  const setFontSizeAll = useCallback(
-    (slideId: string, elementIds: readonly string[], sizePt: number) => {
-      applyEach(elementIds, (slides, elementId) =>
-        commitSetFontSize(slides, { slideId, elementId, sizePt }),
+  /** Кегль нескольким текстам, каждому свой, — одной записью журнала. */
+  const setFontSizes = useCallback(
+    (slideId: string, entries: readonly FontSizeEntry[], mode?: EditMode) => {
+      applyAll(
+        entries.map(
+          ({ elementId, sizePt }): Commit =>
+            (slides) =>
+              commitSetFontSize(slides, { slideId, elementId, sizePt }),
+        ),
+        mode,
       );
     },
-    [applyEach],
+    [applyAll],
   );
   const setColorAll = useCallback(
-    (slideId: string, elementIds: readonly string[], colorRole: ColorRole, hex: string) => {
-      applyEach(elementIds, (slides, elementId) =>
-        commitSetColor(slides, { slideId, elementId, colorRole, hex }),
+    (
+      slideId: string,
+      elementIds: readonly string[],
+      color: ColorValue,
+      hex: string,
+      mode?: EditMode,
+    ) => {
+      applyAll(
+        elementIds.map(
+          (elementId): Commit =>
+            (slides) =>
+              commitSetColor(slides, { slideId, elementId, color, hex }),
+        ),
+        mode,
       );
     },
-    [applyEach],
+    [applyAll],
   );
   const setProps = useCallback(
-    (slideId: string, elementIds: readonly string[], props: ElementProps) => {
-      apply((current) => commitElementProps(current, { slideId, elementIds, props }));
+    (slideId: string, elementIds: readonly string[], props: ElementProps, mode?: EditMode) => {
+      applyAll([(current) => commitElementProps(current, { slideId, elementIds, props })], mode);
     },
-    [apply],
+    [applyAll],
+  );
+  /** Разные свойства разным объектам (поворот на 90° каждому от своего угла) — одной записью. */
+  const setPropsEach = useCallback(
+    (slideId: string, entries: readonly PropsEntry[], mode?: EditMode) => {
+      applyAll(
+        entries.map(
+          ({ elementIds, props }): Commit =>
+            (slides) =>
+              commitElementProps(slides, { slideId, elementIds, props }),
+        ),
+        mode,
+      );
+    },
+    [applyAll],
   );
   const duplicate = useCallback(
     (slideId: string, elementIds: readonly string[], offset?: Offset) => {
@@ -301,20 +364,25 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     [apply],
   );
   const setSlideBackground = useCallback(
-    (slideId: string, background: ColorRole | null) => {
-      apply((current) => commitSlideBackground(current, { slideId, background }));
+    (slideId: string, background: ColorValue | null, mode?: EditMode) => {
+      applyAll([(current) => commitSlideBackground(current, { slideId, background })], mode);
     },
-    [apply],
+    [applyAll],
   );
   const undo = useCallback(() => {
+    setPreview(null);
     setHistory((current) => undoDeck(current));
   }, []);
   const redo = useCallback(() => {
+    setPreview(null);
     setHistory((current) => redoDeck(current));
   }, []);
 
   return {
-    slides: history.slides,
+    /** Что показывать: колода с живым видом жеста, если он идёт. */
+    slides: shown,
+    /** Колода без живого вида: от неё панель считает значения полей и правки «каждому своё». */
+    committedSlides: history.slides,
     move,
     setText,
     remove,
@@ -322,9 +390,11 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     insert,
     setFontSize,
     setColor,
-    setFontSizeAll,
+    setFontSizes,
     setColorAll,
     setProps,
+    setPropsEach,
+    endPreview,
     duplicate,
     paste,
     arrange,

@@ -1,4 +1,5 @@
 import type { Box, SlideElement } from '@lct/contracts';
+import type { ElementProps } from '@lct/deck-ops';
 import { EMU_PER_PT } from '@lct/slide-renderer';
 import type { Alignment } from '@/components/editor/slide-geometry';
 import type { ElementMove } from '@/components/editor/use-deck-history';
@@ -89,4 +90,52 @@ export function setBoxSizeLocked(
         : { ...box, cy: emu, cx: Math.max(1, Math.round(emu * ratio)) };
     return [{ elementId: element.elementId, box: next }];
   });
+}
+
+/**
+ * Правка поля рамки «каждому от своего»: `+10` к X при мультивыделении сдвигает каждый
+ * объект на 10 пт от его собственного X, как в Figma.
+ */
+export function setBoxFieldEach(
+  items: readonly SlideElement[],
+  field: BoxField,
+  apply: (oldPt: number) => number,
+): ElementMove[] {
+  return items.flatMap((element) =>
+    setBoxField([element], field, apply(emuToPt(element.box[field]))),
+  );
+}
+
+type Decor = Extract<SlideElement, { kind: 'decor' }>;
+
+/** Скругление, которое контракт подразумевает у round-rect без явного значения. */
+export const DEFAULT_CORNER_RADIUS = 1 / 6;
+
+/**
+ * Радиус скругления в пунктах, как его показывает Figma. В слайде он хранится долей короткой
+ * стороны; у прямоугольника он ноль. У остальных фигур скругления нет — null.
+ */
+export function cornerRadiusPt(element: Decor): number | null {
+  const side = emuToPt(Math.min(element.box.cx, element.box.cy));
+  if (element.shape === 'rect') return 0;
+  if (element.shape !== 'round-rect') return null;
+  return (element.cornerRadius ?? DEFAULT_CORNER_RADIUS) * side;
+}
+
+/** Наибольший радиус фигуры: половина короткой стороны, в пунктах. */
+export function maxCornerRadiusPt(element: Decor): number {
+  return emuToPt(Math.min(element.box.cx, element.box.cy)) / 2;
+}
+
+/**
+ * Свойства, которые дают фигуре радиус `radiusPt`. Ноль делает её прямоугольником, любой
+ * другой радиус — скруглённым прямоугольником, как в Figma, где радиус есть у любого
+ * прямоугольника. Радиус больше половины короткой стороны упирается в неё.
+ */
+export function cornerRadiusProps(element: Decor, radiusPt: number): ElementProps {
+  if (radiusPt <= 0) return { shape: 'rect' };
+  const side = Math.min(element.box.cx, element.box.cy);
+  if (side <= 0) return { shape: 'round-rect' };
+  const share = Math.min(0.5, ptToEmu(radiusPt) / side);
+  return { shape: 'round-rect', cornerRadius: Math.round(share * 1e6) / 1e6 };
 }

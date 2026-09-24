@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  Add01Icon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -11,71 +13,92 @@ import {
   ArrowRight01Icon,
   CircleIcon,
   DashedLine01Icon,
+  DashedLine02Icon,
   DiamondIcon,
+  FitToScreenIcon,
+  FlipHorizontalIcon,
+  FlipVerticalIcon,
+  ImageCropIcon,
+  ImageUploadIcon,
   LayerBringForwardIcon,
   LayerBringToFrontIcon,
   LayerSendBackwardIcon,
   LayerSendToBackIcon,
+  LetterSpacingIcon,
+  Link01Icon,
+  LockIcon,
+  LockOpenIcon,
   MinusSignIcon,
+  ParagraphSpacingIcon,
   Rotate01Icon,
+  RotateClockwiseIcon,
   SquareIcon,
   SquareRoundCornerIcon,
-  TransparencyIcon,
-  TriangleIcon,
-  DashedLine02Icon,
   TextAlignCenterIcon,
   TextAlignJustifyLeftIcon,
   TextAlignLeftIcon,
   TextAlignRightIcon,
-  TextBoldIcon,
-  TextItalicIcon,
+  TextFontIcon,
   TextUnderlineIcon,
-  ArrowDown01Icon,
-  FitToScreenIcon,
-  ImageCropIcon,
-  ImageUploadIcon,
-  Add01Icon,
-  LockIcon,
-  LockOpenIcon,
+  TransparencyIcon,
+  TriangleIcon,
+  UndoIcon,
+  Unlink01Icon,
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type {
   ColorRole,
+  ColorValue,
   DecorShape,
   DesignSystem,
+  ElementStroke,
   ImageFit,
   ParagraphAlign,
   SlideElement,
   SlideIr,
-  ElementStroke,
   StrokeDash,
   TypeRole,
   VerticalAlign,
 } from '@lct/contracts';
-import type { ArrangeTarget, ElementProps } from '@lct/deck-ops';
-import { EMU_PER_PT } from '@lct/slide-renderer';
-import type { MouseEvent } from 'react';
-import type { Alignment } from '@/components/editor/slide-geometry';
-import type { ElementMove } from '@/components/editor/use-deck-history';
 import {
+  FONT_SIZE_PT,
+  LETTER_SPACING_PT,
+  LINE_SPACING,
+  type ArrangeTarget,
+  type ElementProps,
+} from '@lct/deck-ops';
+import { EMU_PER_PT } from '@lct/slide-renderer';
+import type { Editor } from '@tiptap/core';
+import { useEditorState } from '@tiptap/react';
+import type { Alignment } from '@/components/editor/slide-geometry';
+import type {
+  EditMode,
+  ElementMove,
+  FontSizeEntry,
+  PropsEntry,
+} from '@/components/editor/use-deck-history';
+import {
+  ColorField,
   FieldRow,
+  FontPicker,
+  FontStyleField,
   IconButton,
+  NumberCombobox,
   NumberField,
   Section,
   Segmented,
-  SwatchPicker,
+  type NumberFieldProps,
+  type NumberPreset,
 } from '@/components/editor/inspector/controls';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { colorHex } from '@/components/editor/inspector/fields/color';
 import { cn } from '@/lib/utils';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
 import { ChartSection } from '@/components/editor/inspector/chart-section';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
 import {
+  leadSizePt,
+  rangeLook,
+  templateFonts,
   textLook,
   typeSteps,
   type TextElement,
@@ -84,53 +107,65 @@ import {
 import {
   rangeMarks,
   setParagraphAlign,
+  setParagraphLineSpacing,
   setRangeColor,
+  setRangeFont,
+  setRangeLetterSpacing,
   setRangeSize,
   setRunFlag,
   type ActiveTextEditor,
 } from '@/components/editor/active-text-editor';
-import type { Editor } from '@tiptap/core';
-import { useEditorState } from '@tiptap/react';
-import { typeRoleOf } from '@lct/slide-renderer';
 import {
   alignToSlide,
   commonValue,
+  cornerRadiusProps,
+  cornerRadiusPt,
   emuToPt,
+  maxCornerRadiusPt,
   setBoxField,
+  setBoxFieldEach,
+  setBoxSizeLocked,
   type BoxField,
 } from '@/components/editor/inspector/selection-model';
 
 /**
  * Что панель «Дизайн» умеет сделать со слайдом. Правки уходят в журнал колоды одной записью
- * на жест: число в поле — по Enter или уходу из поля, цвет — по клику.
+ * на жест: число — по Enter, уходу из поля или отпусканию мыши, цвет — по выбору или отпусканию
+ * мыши в пикере. `mode: 'preview'` — живой вид на время жеста, без записи в журнал.
  */
 export type DesignPanelProps = {
-  /** Открытый слайд. Пока колода пуста, его нет. */
+  /** Открытый слайд без живого вида жеста: от него панель считает значения. */
   slide: SlideIr | undefined;
   designSystem: DesignSystem;
   selectedIds: readonly string[];
   /** Новые рамки объектов: один список на жест, не шаг на каждый пиксель. */
-  onCommit: (moves: readonly ElementMove[]) => void;
+  onCommit: (moves: readonly ElementMove[], mode?: EditMode) => void;
   onRemove: () => void;
   /** Выровнять выделенные объекты между собой. */
   onAlign: (alignment: Alignment) => void;
-  /** Кегль из шкалы шаблона — один `set-font-size` на весь текстовый объект. */
-  onFontSize: (elementId: string, sizePt: number) => void;
-  /** Роль палитры. В runs пишется её hex, в журнал — сама роль. */
-  onColor: (elementId: string, colorRole: ColorRole, hex: string) => void;
-  /** Кегль или цвет всем выделенным текстам — одной записью журнала. */
-  onFontSizeAll: (elementIds: readonly string[], sizePt: number) => void;
-  onColorAll: (elementIds: readonly string[], colorRole: ColorRole, hex: string) => void;
-  /** Свойства вида: заливка, обводка, форма, поворот, прозрачность и остальное из `ElementProps`. */
-  onProps: (elementIds: readonly string[], props: ElementProps) => void;
-  /** Открытый на холсте набор: секция «Текст» правит его выделенный фрагмент. */
+  /** Кегль текстам, каждому свой, — одной записью журнала. */
+  onFontSizes: (entries: readonly FontSizeEntry[], mode?: EditMode) => void;
+  /** Цвет всем выделенным текстам: роль палитры или свой HEX; `hex` — чем красить runs. */
+  onColorAll: (
+    elementIds: readonly string[],
+    color: ColorValue,
+    hex: string,
+    mode?: EditMode,
+  ) => void;
+  /** Свойства вида: заливка, обводка, форма, поворот, шрифт и остальное из `ElementProps`. */
+  onProps: (elementIds: readonly string[], props: ElementProps, mode?: EditMode) => void;
+  /** Каждому объекту свои свойства — одной записью журнала. */
+  onPropsEach: (entries: readonly PropsEntry[], mode?: EditMode) => void;
+  /** Жест кончился без записи (Esc): живой вид убрать. */
+  onPreviewEnd: () => void;
+  /** Открытый на холсте набор: типографика правит его выделенный фрагмент. */
   textEditor: ActiveTextEditor | null;
   /** Порядок слоёв выделенного. */
   onArrange: (to: ArrangeTarget) => void;
   /** Новый файл в рамке картинки. */
   onReplaceImage: (elementId: string, mediaPart: string) => void;
-  /** Фон слайда: роль палитры или null — как задал шаблон. */
-  onSlideBackground: (background: ColorRole | null) => void;
+  /** Фон слайда: роль палитры, свой HEX или null — как задал шаблон. */
+  onSlideBackground: (background: ColorValue | null, mode?: EditMode) => void;
   /** Строки и столбцы таблицы. */
   onTable: (elementId: string, action: TableAction) => void;
   /** Данные графика целиком: одна запись журнала на правку. */
@@ -140,10 +175,13 @@ export type DesignPanelProps = {
 
 export type TableAction = 'add-row' | 'remove-row' | 'add-column' | 'remove-column';
 
-const ALIGNMENTS = [
+const ALIGN_X = [
   { id: 'left', icon: AlignLeftIcon },
   { id: 'center', icon: AlignHorizontalCenterIcon },
   { id: 'right', icon: AlignRightIcon },
+] as const satisfies readonly { id: Alignment; icon: unknown }[];
+
+const ALIGN_Y = [
   { id: 'top', icon: AlignTopIcon },
   { id: 'middle', icon: AlignVerticalCenterIcon },
   { id: 'bottom', icon: AlignBottomIcon },
@@ -171,27 +209,6 @@ const DASHES = [
   { value: 'dot', icon: DashedLine02Icon },
 ] as const satisfies readonly { value: StrokeDash; icon: unknown }[];
 
-/** Обводка, которую получает фигура без неё: тонкая сплошная линия цвета текста. */
-function freshStroke(color: ColorRole): ElementStroke {
-  return { color, widthEmu: EMU_PER_PT, dash: 'solid', head: 'none', tail: 'none' };
-}
-
-type Decor = Extract<SlideElement, { kind: 'decor' }>;
-
-function isDecor(element: SlideElement): element is Decor {
-  return element.kind === 'decor';
-}
-
-function isText(element: SlideElement): element is TextElement {
-  return element.kind === 'text';
-}
-
-type ImageElement = Extract<SlideElement, { kind: 'image' }>;
-
-function isImage(element: SlideElement): element is ImageElement {
-  return element.kind === 'image';
-}
-
 const FITS = [
   { value: 'contain', icon: FitToScreenIcon },
   { value: 'cover', icon: ImageCropIcon },
@@ -210,7 +227,73 @@ const VERTICAL_ALIGNS = [
   { value: 'bottom', icon: AlignBottomIcon },
 ] as const satisfies readonly { value: VerticalAlign; icon: unknown }[];
 
-/** Свойства выделения, по секциям, как в панели Design у Figma. */
+/** Частые межстрочные интервалы, в процентах одинарного. */
+const LINE_HEIGHTS = [100, 120, 150, 200] as const;
+
+/** Обводка, которую получает фигура без неё: тонкая сплошная линия. */
+function freshStroke(color: ColorValue): ElementStroke {
+  return { color, widthEmu: EMU_PER_PT, dash: 'solid', head: 'none', tail: 'none' };
+}
+
+type Decor = Extract<SlideElement, { kind: 'decor' }>;
+type ImageElement = Extract<SlideElement, { kind: 'image' }>;
+
+function isDecor(element: SlideElement): element is Decor {
+  return element.kind === 'decor';
+}
+
+function isText(element: SlideElement): element is TextElement {
+  return element.kind === 'text';
+}
+
+function isImage(element: SlideElement): element is ImageElement {
+  return element.kind === 'image';
+}
+
+/** Одно значение на всех или null — «разные». Числа сравниваются с допуском на округление. */
+function common(values: readonly number[]): number | null {
+  const [first, ...rest] = values;
+  if (first === undefined) return null;
+  return rest.every((value) => Math.abs(value - first) < 1e-6) ? first : null;
+}
+
+function commonString<T extends string>(values: readonly (T | null)[]): T | null {
+  const [first, ...rest] = values;
+  if (first === undefined) return null;
+  return rest.every((value) => value === first) ? first : null;
+}
+
+/**
+ * Проводка числового поля к правке, которая умеет и запись, и живой вид: `set` — одно
+ * значение всем, `each` — каждому от своего (`+10` при «разных»).
+ */
+function edits(
+  set: (value: number, mode: EditMode) => void,
+  each: ((apply: (old: number) => number, mode: EditMode) => void) | undefined,
+  onPreviewEnd: () => void,
+): Pick<
+  NumberFieldProps,
+  'onCommit' | 'onPreview' | 'onCommitEach' | 'onPreviewEach' | 'onPreviewEnd'
+> {
+  return {
+    onCommit: (value) => set(value, 'commit'),
+    onPreview: (value) => set(value, 'preview'),
+    onCommitEach: each ? (apply) => each(apply, 'commit') : undefined,
+    onPreviewEach: each ? (apply) => each(apply, 'preview') : undefined,
+    onPreviewEnd,
+  };
+}
+
+/** Группа кнопок-иконок на серой плашке. */
+function ButtonGroup({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex h-7 min-w-0 items-center justify-between rounded-md bg-muted/60">
+      {children}
+    </div>
+  );
+}
+
+/** Свойства выделения по секциям, в порядке панели Design у Figma. */
 export function DesignPanel(props: DesignPanelProps) {
   const names = useTranslations('selectionBar');
   const { slide, selectedIds } = props;
@@ -219,7 +302,7 @@ export function DesignPanel(props: DesignPanelProps) {
     : [];
 
   if (!slide) return null;
-  if (selected.length === 0) return <SlideSection {...props} slide={slide} />;
+  if (selected.length === 0) return <SlidePanel {...props} slide={slide} />;
 
   const single = selected.length === 1 ? selected[0] : undefined;
   const decors = selected.every(isDecor) ? (selected as Decor[]) : [];
@@ -230,15 +313,16 @@ export function DesignPanel(props: DesignPanelProps) {
 
   return (
     <div className="flex flex-col">
-      <div className="flex min-h-10 items-center gap-2 border-b border-border pr-2 pl-4">
+      <div className="flex min-h-10 items-center gap-2 border-b border-border pr-2 pl-3">
         <h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
           {single ? names(`roles.${single.role}`) : names('count', { count: selected.length })}
         </h2>
         <LockToggle {...props} selected={selected} />
       </div>
-      <LayoutSection {...props} slide={slide} selected={selected} />
-      <LayerSection {...props} selected={selected} />
-      {texts.length > 0 ? <TextSection {...props} texts={texts} /> : null}
+      <PositionSection {...props} slide={slide} selected={selected} decors={decors} />
+      <LayoutSection {...props} selected={selected} />
+      <AppearanceSection {...props} selected={selected} decors={decors} />
+      {texts.length > 0 ? <TextSections {...props} texts={texts} /> : null}
       {images.length > 0 ? <ImageSection {...props} images={images} /> : null}
       {table ? <TableSection {...props} table={table} /> : null}
       {chart ? <ChartSection {...props} chart={chart} /> : null}
@@ -247,10 +331,6 @@ export function DesignPanel(props: DesignPanelProps) {
   );
 }
 
-/**
- * Ничего не выделено — панель показывает сам слайд, как Figma показывает фрейм. Подсказка
- * остаётся: без неё пустая панель выглядит сломанной.
- */
 /** Замок: заблокированное не выделяется на холсте и не двигается, пока его не откроют. */
 function LockToggle({
   selected,
@@ -273,40 +353,70 @@ function LockToggle({
   );
 }
 
-function SlideSection({
+/**
+ * Ничего не выделено — панель показывает сам слайд, как Figma показывает фрейм: его заливку.
+ * Подсказка остаётся: без неё пустая панель выглядит сломанной.
+ */
+function SlidePanel({
   slide,
   designSystem,
   onSlideBackground,
+  onPreviewEnd,
 }: DesignPanelProps & { slide: SlideIr }) {
   const t = useTranslations('designPanel');
   const palette = useTranslations('selectionBar.palette');
+  const own = slide.background ?? null;
+  // Без своего фона слайд рисуется ролью «фон»: её поле и показывает.
+  const shown =
+    own ??
+    (designSystem.palette.some((entry) => entry.role === 'background') ? 'background' : null);
   return (
     <div className="flex flex-col">
-      <div className="flex min-h-10 items-center border-b border-border px-4">
+      <div className="flex min-h-10 items-center border-b border-border px-3">
         <h2 className="truncate text-xs font-semibold text-foreground">{t('slide')}</h2>
       </div>
-      <Section title={t('background')}>
-        <SwatchPicker
+      <Section
+        title={t('fill')}
+        actions={
+          own === null ? null : (
+            <IconButton
+              icon={UndoIcon}
+              label={t('templateBackground')}
+              onClick={() => onSlideBackground(null)}
+            />
+          )
+        }
+      >
+        <ColorField
           ariaLabel={t('background')}
           palette={designSystem.palette}
-          value={slide.background ?? null}
+          value={shown}
           roleLabel={(role) => palette(role)}
-          noneLabel={t('templateBackground')}
-          onChange={onSlideBackground}
+          onChange={(value) => onSlideBackground(value)}
+          onPreview={(hex) => onSlideBackground(hex, 'preview')}
+          onPreviewEnd={onPreviewEnd}
         />
       </Section>
-      <p className="px-4 py-3 text-xs text-balance text-muted-foreground">{t('emptyHint')}</p>
+      <p className="px-3 py-3 text-xs text-balance text-muted-foreground">{t('emptyHint')}</p>
     </div>
   );
 }
 
-function LayoutSection({
+/** Положение: выравнивание, X/Y, поворот, у фигур — отражение. */
+function PositionSection({
   slide,
   selected,
+  decors,
   onCommit,
   onAlign,
   onProps,
-}: DesignPanelProps & { slide: SlideIr; selected: readonly SlideElement[] }) {
+  onPropsEach,
+  onPreviewEnd,
+}: DesignPanelProps & {
+  slide: SlideIr;
+  selected: readonly SlideElement[];
+  decors: readonly Decor[];
+}) {
   const t = useTranslations('designPanel');
   const aligns = useTranslations('selectionBar.align');
   const mixed = t('mixed');
@@ -316,55 +426,59 @@ function LayoutSection({
     if (selected.length > 1) onAlign(alignment);
     else onCommit(alignToSlide(selected, alignment, slide));
   };
-  const field = (name: BoxField) => {
-    const value = commonValue(selected, (element) => element.box[name]);
-    return value === null ? null : emuToPt(value);
-  };
-  const commitField = (name: BoxField) => (value: number) => {
-    const moves = setBoxField(selected, name, value);
-    if (moves.length > 0) onCommit(moves);
-  };
-  const rotation = commonValue(selected, (element) => element.rotation ?? 0);
+  const box = (name: BoxField) =>
+    edits(
+      (value, mode) => {
+        const moves = setBoxField(selected, name, value);
+        if (moves.length > 0) onCommit(moves, mode);
+      },
+      (apply, mode) => {
+        const moves = setBoxFieldEach(selected, name, apply);
+        if (moves.length > 0) onCommit(moves, mode);
+      },
+      onPreviewEnd,
+    );
+  const rotation = common(selected.map((element) => element.rotation ?? 0));
+  const rotateEach = (apply: (old: number) => number, mode: EditMode = 'commit') =>
+    onPropsEach(
+      selected.map((element) => ({
+        elementIds: [element.elementId],
+        props: { rotation: apply(element.rotation ?? 0) },
+      })),
+      mode,
+    );
+  const flip = (axis: 'flipH' | 'flipV') =>
+    onPropsEach(
+      decors.map((element) => ({
+        elementIds: [element.elementId],
+        props:
+          axis === 'flipH' ? { flipH: element.flipH !== true } : { flipV: element.flipV !== true },
+      })),
+    );
+  const alignButton = ({ id, icon }: { id: Alignment; icon: typeof AlignLeftIcon }) => (
+    <IconButton key={id} icon={icon} label={aligns(id)} onClick={() => align(id)} />
+  );
 
   return (
-    <Section title={t('layout')}>
-      <div className="flex items-center justify-between rounded-md bg-muted/60 p-0.5">
-        {ALIGNMENTS.map(({ id, icon }) => (
-          <IconButton key={id} icon={icon} label={aligns(id)} onClick={() => align(id)} />
-        ))}
-      </div>
+    <Section title={t('position')}>
+      <FieldRow>
+        <ButtonGroup>{ALIGN_X.map(alignButton)}</ButtonGroup>
+        <ButtonGroup>{ALIGN_Y.map(alignButton)}</ButtonGroup>
+      </FieldRow>
       <FieldRow>
         <NumberField
           label="X"
           ariaLabel={t('x')}
           mixedLabel={mixed}
-          value={field('x')}
-          onCommit={commitField('x')}
+          value={common(selected.map((element) => emuToPt(element.box.x)))}
+          {...box('x')}
         />
         <NumberField
           label="Y"
           ariaLabel={t('y')}
           mixedLabel={mixed}
-          value={field('y')}
-          onCommit={commitField('y')}
-        />
-      </FieldRow>
-      <FieldRow>
-        <NumberField
-          label="W"
-          ariaLabel={t('width')}
-          mixedLabel={mixed}
-          value={field('cx')}
-          min={1}
-          onCommit={commitField('cx')}
-        />
-        <NumberField
-          label="H"
-          ariaLabel={t('height')}
-          mixedLabel={mixed}
-          value={field('cy')}
-          min={1}
-          onCommit={commitField('cy')}
+          value={common(selected.map((element) => emuToPt(element.box.y)))}
+          {...box('y')}
         />
       </FieldRow>
       <FieldRow>
@@ -374,62 +488,211 @@ function LayoutSection({
           mixedLabel={mixed}
           value={rotation}
           suffix="°"
-          onCommit={(value) => onProps(ids, { rotation: value })}
+          {...edits(
+            (value, mode) => onProps(ids, { rotation: value }, mode),
+            rotateEach,
+            onPreviewEnd,
+          )}
         />
+        <div className="flex items-center gap-0.5">
+          <IconButton
+            icon={RotateClockwiseIcon}
+            label={t('rotate90')}
+            onClick={() => rotateEach((old) => old + 90)}
+          />
+          {decors.length > 0 ? (
+            <>
+              <IconButton
+                icon={FlipHorizontalIcon}
+                label={t('flipH')}
+                pressed={decors.every((element) => element.flipH === true)}
+                onClick={() => flip('flipH')}
+              />
+              <IconButton
+                icon={FlipVerticalIcon}
+                label={t('flipV')}
+                pressed={decors.every((element) => element.flipV === true)}
+                onClick={() => flip('flipV')}
+              />
+            </>
+          ) : null}
+        </div>
       </FieldRow>
     </Section>
   );
 }
 
-function LayerSection({
+/** Макет: ширина и высота, замок пропорций. */
+function LayoutSection({
   selected,
-  onArrange,
-  onProps,
+  onCommit,
+  onPreviewEnd,
 }: DesignPanelProps & { selected: readonly SlideElement[] }) {
   const t = useTranslations('designPanel');
+  const [constrained, setConstrained] = useState(false);
+  const mixed = t('mixed');
+
+  const size = (name: 'cx' | 'cy') =>
+    edits(
+      (value, mode) => {
+        const moves = constrained
+          ? setBoxSizeLocked(selected, name, value)
+          : setBoxField(selected, name, value);
+        if (moves.length > 0) onCommit(moves, mode);
+      },
+      (apply, mode) => {
+        const moves = constrained
+          ? selected.flatMap((element) =>
+              setBoxSizeLocked([element], name, apply(emuToPt(element.box[name]))),
+            )
+          : setBoxFieldEach(selected, name, apply);
+        if (moves.length > 0) onCommit(moves, mode);
+      },
+      onPreviewEnd,
+    );
+
+  return (
+    <Section title={t('layout')}>
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+        <NumberField
+          label="W"
+          ariaLabel={t('width')}
+          mixedLabel={mixed}
+          value={common(selected.map((element) => emuToPt(element.box.cx)))}
+          min={1}
+          {...size('cx')}
+        />
+        <NumberField
+          label="H"
+          ariaLabel={t('height')}
+          mixedLabel={mixed}
+          value={common(selected.map((element) => emuToPt(element.box.cy)))}
+          min={1}
+          {...size('cy')}
+        />
+        <IconButton
+          icon={constrained ? Link01Icon : Unlink01Icon}
+          label={t('constrainProportions')}
+          pressed={constrained}
+          onClick={() => setConstrained(!constrained)}
+        />
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * Оформление: порядок слоёв, у фигур — форма, непрозрачность, у прямоугольников — радиус в
+ * пунктах. В слайде радиус — доля короткой стороны, поэтому у фигур разного размера один
+ * радиус в пунктах — это разные доли.
+ */
+function AppearanceSection({
+  selected,
+  decors,
+  onArrange,
+  onProps,
+  onPropsEach,
+  onPreviewEnd,
+}: DesignPanelProps & { selected: readonly SlideElement[]; decors: readonly Decor[] }) {
+  const t = useTranslations('designPanel');
+  const mixed = t('mixed');
   const ids = selected.map((element) => element.elementId);
-  const opacity = commonValue(selected, (element) => element.opacity ?? 1);
+  const opacity = common(selected.map((element) => element.opacity ?? 1));
+  const shapes = decors.every((element) => element.shape !== 'line') ? decors : [];
+  const shape = commonString(shapes.map((element) => element.shape ?? null));
+  const rounded = shapes.filter((element) => cornerRadiusPt(element) !== null);
+  const radii = rounded.length === shapes.length ? rounded : [];
+  const radius = common(radii.map((element) => cornerRadiusPt(element) ?? 0));
+  const single = radii.length === 1 ? radii[0] : undefined;
+
+  const radiusEach = (apply: (old: number) => number, mode: EditMode) =>
+    onPropsEach(
+      radii.map((element) => ({
+        elementIds: [element.elementId],
+        props: cornerRadiusProps(element, apply(cornerRadiusPt(element) ?? 0)),
+      })),
+      mode,
+    );
 
   return (
     <Section
-      title={t('layer')}
+      title={t('appearance')}
       actions={ARRANGE.map(({ id, icon }) => (
         <IconButton key={id} icon={icon} label={t(`arrange.${id}`)} onClick={() => onArrange(id)} />
       ))}
     >
+      {shapes.length > 0 ? (
+        <Segmented
+          ariaLabel={t('shape')}
+          value={shape}
+          options={SHAPES.map((option) => ({ ...option, label: t(`shapes.${option.value}`) }))}
+          onChange={(value) => onProps(ids, { shape: value })}
+        />
+      ) : null}
       <FieldRow>
         <NumberField
           icon={TransparencyIcon}
           ariaLabel={t('opacity')}
-          mixedLabel={t('mixed')}
+          mixedLabel={mixed}
           value={opacity === null ? null : Math.round(opacity * 100)}
           min={0}
           max={100}
+          precision={0}
           suffix="%"
-          onCommit={(value) => onProps(ids, { opacity: value / 100 })}
+          {...edits(
+            (value, mode) => onProps(ids, { opacity: value / 100 }, mode),
+            (apply, mode) =>
+              onPropsEach(
+                selected.map((element) => ({
+                  elementIds: [element.elementId],
+                  props: { opacity: apply(Math.round((element.opacity ?? 1) * 100)) / 100 },
+                })),
+                mode,
+              ),
+            onPreviewEnd,
+          )}
         />
+        {radii.length > 0 ? (
+          <NumberField
+            icon={SquareRoundCornerIcon}
+            ariaLabel={t('radius')}
+            mixedLabel={mixed}
+            value={radius}
+            min={0}
+            max={single ? maxCornerRadiusPt(single) : undefined}
+            {...edits((value, mode) => radiusEach(() => value, mode), radiusEach, onPreviewEnd)}
+          />
+        ) : null}
       </FieldRow>
     </Section>
   );
 }
 
-/** Что умеет секция «Текст»: одинаково для всего блока и для фрагмента в открытом наборе. */
+/** Что умеют секции текста: одинаково для всего блока и для фрагмента в открытом наборе. */
 interface TextActions {
   readonly look: TextLook;
-  setSize(sizePt: number): void;
-  setBold(on: boolean): void;
-  setItalic(on: boolean): void;
+  /** Живой вид при перетаскивании за подпись: только для целого блока, набор правится сразу. */
+  readonly live: boolean;
+  setSize(sizePt: number, mode: EditMode): void;
+  setSizeEach?(apply: (old: number) => number, mode: EditMode): void;
+  setFont(family: string | null): void;
+  setStyle(flags: { bold: boolean; italic: boolean }): void;
   setUnderline(on: boolean): void;
+  setLineSpacing(multiple: number | null, mode: EditMode): void;
+  setLineSpacingEach?(apply: (old: number) => number, mode: EditMode): void;
+  setLetterSpacing(pt: number, mode: EditMode): void;
+  setLetterSpacingEach?(apply: (old: number) => number, mode: EditMode): void;
   setAlign(align: ParagraphAlign): void;
   setVerticalAlign(align: VerticalAlign): void;
-  setColor(role: ColorRole, hex: string): void;
+  setColor(color: ColorValue, hex: string, mode: EditMode): void;
 }
 
 /**
- * Текст. Выделен блок — правки на весь блок. Открыт набор — на выделенные слова и абзацы, как
- * в Figma; в журнал они попадут одним `set-text`, когда набор закроется.
+ * Типографика и заливка текста. Выделен блок — правки на весь блок. Открыт набор — на
+ * выделенные слова и абзацы, как в Figma; в журнал они попадут одним `set-text`, когда набор
+ * закроется.
  */
-function TextSection(props: DesignPanelProps & { texts: readonly TextElement[] }) {
+function TextSections(props: DesignPanelProps & { texts: readonly TextElement[] }) {
   const { texts, textEditor } = props;
   const only = texts.length === 1 ? texts[0] : undefined;
   if (textEditor && only && only.elementId === textEditor.elementId) {
@@ -438,35 +701,88 @@ function TextSection(props: DesignPanelProps & { texts: readonly TextElement[] }
   return <WholeText {...props} />;
 }
 
+/** Межбуквенный интервал 0 — это «как у роли»: так он и хранится. */
+function letterSpacingValue(pt: number): number | null {
+  return pt === 0 ? null : pt;
+}
+
 function WholeText({
   designSystem,
   texts,
-  onFontSizeAll,
+  onFontSizes,
   onColorAll,
   onProps,
+  onPropsEach,
+  onPreviewEnd,
 }: DesignPanelProps & { texts: readonly TextElement[] }) {
-  const t = useTranslations('designPanel');
   const ids = texts.map((element) => element.elementId);
   const look = textLook(texts, designSystem);
+  const lookOf = (element: TextElement) => textLook([element], designSystem);
+  const each = (
+    read: (element: TextElement) => number,
+    write: (value: number) => ElementProps,
+    apply: (old: number) => number,
+    mode: EditMode,
+  ) =>
+    onPropsEach(
+      texts.map((element) => ({
+        elementIds: [element.elementId],
+        props: write(apply(read(element))),
+      })),
+      mode,
+    );
   return (
     <TextControls
-      title={t('text')}
       designSystem={designSystem}
+      onPreviewEnd={onPreviewEnd}
       actions={{
         look,
-        setSize: (sizePt) => onFontSizeAll(ids, sizePt),
-        setBold: (on) => onProps(ids, { bold: on }),
-        setItalic: (on) => onProps(ids, { italic: on }),
+        live: true,
+        setSize: (sizePt, mode) =>
+          onFontSizes(
+            ids.map((elementId) => ({ elementId, sizePt })),
+            mode,
+          ),
+        setSizeEach: (apply, mode) =>
+          onFontSizes(
+            texts.flatMap((element) => {
+              const old = leadSizePt(element, designSystem);
+              return old === null ? [] : [{ elementId: element.elementId, sizePt: apply(old) }];
+            }),
+            mode,
+          ),
+        setFont: (fontFamily) => onProps(ids, { fontFamily }),
+        setStyle: ({ bold, italic }) => onProps(ids, { bold, italic }),
         setUnderline: (on) => onProps(ids, { underline: on }),
+        setLineSpacing: (lineSpacing, mode) => onProps(ids, { lineSpacing }, mode),
+        setLineSpacingEach: (apply, mode) =>
+          each(
+            (element) => {
+              const own = lookOf(element);
+              return Math.round((own.lineSpacing ?? own.autoLineSpacing ?? 1) * 100);
+            },
+            (percent) => ({ lineSpacing: percent / 100 }),
+            apply,
+            mode,
+          ),
+        setLetterSpacing: (pt, mode) =>
+          onProps(ids, { letterSpacingPt: letterSpacingValue(pt) }, mode),
+        setLetterSpacingEach: (apply, mode) =>
+          each(
+            (element) => lookOf(element).letterSpacingPt ?? 0,
+            (pt) => ({ letterSpacingPt: letterSpacingValue(pt) }),
+            apply,
+            mode,
+          ),
         setAlign: (align) => onProps(ids, { align }),
         setVerticalAlign: (verticalAlign) => onProps(ids, { verticalAlign }),
-        setColor: (role, hex) => onColorAll(ids, role, hex),
+        setColor: (color, hex, mode) => onColorAll(ids, color, hex, mode),
       }}
     />
   );
 }
 
-/** Кнопки панели не забирают фокус у поля: иначе набор закрылся бы от первого клика. */
+/** Кнопки панели не забирают фокус у набора: иначе он закрылся бы от первого клика. */
 function keepEditorFocus(event: MouseEvent) {
   const target = event.target;
   if (target instanceof HTMLInputElement) return;
@@ -478,40 +794,33 @@ function RangeText({
   editor,
   element,
   onProps,
+  onPreviewEnd,
 }: DesignPanelProps & { editor: Editor; element: TextElement }) {
-  const t = useTranslations('designPanel');
   const marks = useEditorState({ editor, selector: ({ editor: current }) => rangeMarks(current) });
-  const style = designSystem.typeScale.find((entry) => entry.role === typeRoleOf(element.role));
-  const colorRole = marks.color
-    ? (designSystem.palette.find(
-        (entry) => `#${entry.hex}`.toLowerCase() === marks.color?.toLowerCase(),
-      )?.role ?? null)
-    : (style?.colorRole ?? null);
-  const look: TextLook = {
-    sizePt: marks.sizePt ?? style?.sizePt ?? null,
-    color: colorRole,
-    bold: marks.bold || (marks.boldMode !== 'false' && (style?.bold ?? false)),
-    italic: marks.italic || (marks.italicMode !== 'false' && (style?.italic ?? false)),
-    underline: marks.underlineMode === 'true',
-    align: marks.align ?? 'left',
-    verticalAlign: element.verticalAlign ?? 'top',
-  };
+  const look = rangeLook(marks, element, designSystem);
   return (
     <div data-text-panel="" onMouseDown={keepEditorFocus}>
       <TextControls
-        title={t('textSelection')}
-        hint={t('textSelectionHint')}
         designSystem={designSystem}
+        onPreviewEnd={onPreviewEnd}
+        range
         actions={{
           look,
+          live: false,
           setSize: (sizePt) => setRangeSize(editor, sizePt),
-          setBold: (on) => setRunFlag(editor, 'bold', on),
-          setItalic: (on) => setRunFlag(editor, 'italic', on),
+          setFont: (family) => setRangeFont(editor, family),
+          setStyle: ({ bold, italic }) => {
+            setRunFlag(editor, 'bold', bold);
+            setRunFlag(editor, 'italic', italic);
+          },
           setUnderline: (on) => setRunFlag(editor, 'underline', on),
+          setLineSpacing: (multiple) => setParagraphLineSpacing(editor, multiple),
+          setLetterSpacing: (pt) => setRangeLetterSpacing(editor, letterSpacingValue(pt)),
           setAlign: (align) => setParagraphAlign(editor, align),
           // Вертикальная привязка — свойство рамки, а не слов: её набор не трогает.
           setVerticalAlign: (verticalAlign) => onProps([element.elementId], { verticalAlign }),
-          setColor: (_role, hex) => setRangeColor(editor, hex),
+          // Цвет в наборе меняется сразу и попадёт в журнал вместе с текстом.
+          setColor: (_color, hex) => setRangeColor(editor, hex),
         }}
       />
     </div>
@@ -519,87 +828,130 @@ function RangeText({
 }
 
 function TextControls({
-  title,
-  hint,
   designSystem,
   actions,
+  range,
+  onPreviewEnd,
 }: {
-  title: string;
-  hint?: string;
   designSystem: DesignSystem;
   actions: TextActions;
+  range?: boolean;
+  onPreviewEnd: () => void;
 }) {
   const t = useTranslations('designPanel');
   const scale = useTranslations('selectionBar.type');
   const palette = useTranslations('selectionBar.palette');
-  const { look } = actions;
-  const steps = typeSteps(designSystem);
-  const current = steps.find((step) => step.sizePt === look.sizePt);
+  const { look, live } = actions;
+  const mixed = t('mixed');
+  // Во время набора живой вид не нужен: фрагмент правится сразу.
+  const noPreview = () => undefined;
+  const wire = (
+    set: (value: number, mode: EditMode) => void,
+    each?: (apply: (old: number) => number, mode: EditMode) => void,
+  ) => {
+    const wired = edits(set, each, onPreviewEnd);
+    return live ? wired : { ...wired, onPreview: noPreview, onPreviewEach: undefined };
+  };
+
+  const sizePresets: NumberPreset[] = typeSteps(designSystem).map((step) => ({
+    value: step.sizePt,
+    hint: scale(step.role as TypeRole),
+  }));
+  const auto = look.autoLineSpacing === null ? null : Math.round(look.autoLineSpacing * 100);
+  const lineHeightPresets: NumberPreset[] = [
+    { value: null, label: t('auto'), hint: auto === null ? undefined : `${auto} %` },
+    ...LINE_HEIGHTS.map((value) => ({ value })),
+  ];
+  const lineHeight =
+    look.lineSpacing === undefined
+      ? undefined
+      : look.lineSpacing === null
+        ? null
+        : Math.round(look.lineSpacing * 100);
 
   return (
-    <Section title={title}>
-      {hint ? <p className="-mt-1 text-xs text-balance text-muted-foreground">{hint}</p> : null}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={t('fontSize')}
-            className={cn(
-              'flex h-7 w-full items-center gap-2 rounded-md bg-muted/60 px-2 text-xs outline-none',
-              'ring-1 ring-transparent transition-colors duration-100 hover:ring-border',
-              'focus-visible:ring-ring data-[state=open]:ring-ring',
-            )}
-          >
-            <span className="min-w-0 flex-1 truncate text-left text-foreground">
-              {current
-                ? scale(current.role as TypeRole)
-                : look.sizePt === null
-                  ? t('mixed')
-                  : t('offScale')}
-            </span>
-            <span className="text-muted-foreground tabular-nums">
-              {look.sizePt === null ? '' : `${look.sizePt} ${t('pt')}`}
-            </span>
-            <HugeiconsIcon
-              icon={ArrowDown01Icon}
-              size={12}
-              strokeWidth={1.5}
-              color="currentColor"
-              className="text-muted-foreground"
-            />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-56">
-          {steps.map((step) => (
-            <DropdownMenuItem key={step.role} onSelect={() => actions.setSize(step.sizePt)}>
-              {scale(step.role as TypeRole)}
-              <span className="ml-auto pl-3 text-muted-foreground tabular-nums">{step.sizePt}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-0.5 rounded-md bg-muted/60 p-0.5">
-          <IconButton
-            icon={TextBoldIcon}
-            label={t('bold')}
-            pressed={look.bold}
-            onClick={() => actions.setBold(!look.bold)}
-          />
-          <IconButton
-            icon={TextItalicIcon}
-            label={t('italic')}
-            pressed={look.italic}
-            onClick={() => actions.setItalic(!look.italic)}
-          />
+    <>
+      <Section
+        title={t('typography')}
+        actions={
           <IconButton
             icon={TextUnderlineIcon}
             label={t('underline')}
             pressed={look.underline}
             onClick={() => actions.setUnderline(!look.underline)}
           />
-        </div>
-        <div className="min-w-0 flex-1">
+        }
+      >
+        {range ? (
+          <p className="-mt-1 text-xs text-balance text-muted-foreground">
+            {t('textSelectionHint')}
+          </p>
+        ) : null}
+        <FontPicker
+          ariaLabel={t('font')}
+          value={look.font}
+          templateFonts={templateFonts(designSystem)}
+          placeholder={mixed}
+          resetLabel={t('templateFont')}
+          onChange={actions.setFont}
+        />
+        <FieldRow>
+          <FontStyleField
+            bold={look.bold}
+            italic={look.italic}
+            fontFamily={look.font ?? undefined}
+            mixedLabel={mixed}
+            onChange={actions.setStyle}
+          />
+          <NumberCombobox
+            icon={TextFontIcon}
+            ariaLabel={t('fontSize')}
+            presetsLabel={t('fontSizePresets')}
+            mixedLabel={mixed}
+            value={look.sizePt ?? undefined}
+            presets={sizePresets}
+            min={FONT_SIZE_PT.min}
+            max={FONT_SIZE_PT.max}
+            {...wire(actions.setSize, actions.setSizeEach)}
+            onCommit={(value) => {
+              if (value !== null) actions.setSize(value, 'commit');
+            }}
+          />
+        </FieldRow>
+        <FieldRow>
+          <NumberCombobox
+            icon={ParagraphSpacingIcon}
+            ariaLabel={t('lineHeight')}
+            presetsLabel={t('lineHeightPresets')}
+            mixedLabel={mixed}
+            unsetLabel={auto === null ? t('auto') : String(auto)}
+            value={lineHeight}
+            presets={lineHeightPresets}
+            min={LINE_SPACING.min * 100}
+            max={LINE_SPACING.max * 100}
+            precision={0}
+            suffix="%"
+            {...wire(
+              (percent, mode) => actions.setLineSpacing(percent / 100, mode),
+              actions.setLineSpacingEach,
+            )}
+            onCommit={(percent) =>
+              actions.setLineSpacing(percent === null ? null : percent / 100, 'commit')
+            }
+          />
+          <NumberField
+            icon={LetterSpacingIcon}
+            ariaLabel={t('letterSpacing')}
+            mixedLabel={mixed}
+            value={look.letterSpacingPt}
+            min={LETTER_SPACING_PT.min}
+            max={LETTER_SPACING_PT.max}
+            step={0.1}
+            suffix={t('pt')}
+            {...wire(actions.setLetterSpacing, actions.setLetterSpacingEach)}
+          />
+        </FieldRow>
+        <FieldRow>
           <Segmented
             ariaLabel={t('textAlign')}
             value={look.align}
@@ -609,28 +961,33 @@ function TextControls({
             }))}
             onChange={actions.setAlign}
           />
-        </div>
-      </div>
-      <Segmented
-        ariaLabel={t('verticalAlign')}
-        value={look.verticalAlign}
-        options={VERTICAL_ALIGNS.map((option) => ({
-          ...option,
-          label: t(`verticalAligns.${option.value}`),
-        }))}
-        onChange={actions.setVerticalAlign}
-      />
-      <SwatchPicker
-        ariaLabel={t('textColor')}
-        palette={designSystem.palette}
-        value={look.color ?? undefined}
-        roleLabel={(role) => palette(role)}
-        onChange={(role) => {
-          const entry = designSystem.palette.find((item) => item.role === role);
-          if (entry) actions.setColor(entry.role, entry.hex);
-        }}
-      />
-    </Section>
+          <Segmented
+            ariaLabel={t('verticalAlign')}
+            value={look.verticalAlign}
+            options={VERTICAL_ALIGNS.map((option) => ({
+              ...option,
+              label: t(`verticalAligns.${option.value}`),
+            }))}
+            onChange={actions.setVerticalAlign}
+          />
+        </FieldRow>
+      </Section>
+      <Section title={t('fill')}>
+        <ColorField
+          ariaLabel={t('textColor')}
+          palette={designSystem.palette}
+          value={look.color ?? undefined}
+          mixedLabel={mixed}
+          roleLabel={(role: ColorRole) => palette(role)}
+          onChange={(value) => {
+            const hex = value === null ? null : colorHex(designSystem.palette, value);
+            if (value !== null && hex !== null) actions.setColor(value, hex, 'commit');
+          }}
+          onPreview={(hex) => actions.setColor(hex, hex, live ? 'preview' : 'commit')}
+          onPreviewEnd={live ? onPreviewEnd : undefined}
+        />
+      </Section>
+    </>
   );
 }
 
@@ -726,128 +1083,132 @@ function TableSection({
   );
 }
 
+/** Заливка и обводка фигур; у линий — только линия и её концы. */
 function DecorSections({
   designSystem,
   decors,
   onProps,
+  onPropsEach,
+  onPreviewEnd,
 }: DesignPanelProps & { decors: readonly Decor[] }) {
   const t = useTranslations('designPanel');
   const palette = useTranslations('selectionBar.palette');
   const ids = decors.map((element) => element.elementId);
   const lines = decors.every((element) => element.shape === 'line');
   const noLines = decors.every((element) => element.shape !== 'line');
-  const shape = commonValue(decors as SlideElement[], (element) =>
-    isDecor(element) ? (element.shape ?? null) : null,
-  );
-  const fill = commonValue(decors as SlideElement[], (element) =>
-    isDecor(element) ? (element.fill ?? null) : null,
-  );
-  const strokeColor = commonValue(decors as SlideElement[], (element) =>
-    isDecor(element) ? (element.stroke?.color ?? null) : null,
-  );
-  const strokes = decors.flatMap((element) => (element.stroke ? [element.stroke] : []));
-  const allStroked = strokes.length === decors.length;
-  const strokeWidth = allStroked ? commonNumber(strokes.map((stroke) => stroke.widthEmu)) : null;
-  const dash = allStroked ? commonString(strokes.map((stroke) => stroke.dash)) : null;
-  const radius = commonValue(decors as SlideElement[], (element) =>
-    isDecor(element) ? (element.cornerRadius ?? null) : null,
-  );
+  const fills = decors.map((element) => element.fill ?? null);
+  const fill = fills.every((value) => value === fills[0]) ? fills[0] : undefined;
+  const stroked = decors.filter((element) => element.stroke);
+  const bare = decors.filter((element) => !element.stroke);
+  const strokeColors = stroked.map((element) => element.stroke?.color ?? null);
+  const strokeColor =
+    stroked.length === 0
+      ? null
+      : bare.length === 0 && strokeColors.every((value) => value === strokeColors[0])
+        ? strokeColors[0]
+        : undefined;
+  const strokeWidth =
+    bare.length === 0
+      ? common(stroked.map((element) => (element.stroke?.widthEmu ?? 0) / EMU_PER_PT))
+      : null;
+  const dash =
+    bare.length === 0
+      ? commonString(stroked.map((element) => element.stroke?.dash ?? 'solid'))
+      : null;
   const roleLabel = (role: ColorRole) => palette(role);
-  const fallbackStroke = designSystem.palette.some((entry) => entry.role === 'text')
+  const fallbackStroke: ColorValue = designSystem.palette.some((entry) => entry.role === 'text')
     ? 'text'
     : (designSystem.palette[0]?.role ?? 'text');
+  const strokedIds = stroked.map((element) => element.elementId);
 
-  const setStrokeColor = (color: ColorRole | null) => {
+  const setStrokeColor = (color: ColorValue | null, mode: EditMode = 'commit') => {
     if (color === null) {
-      onProps(ids, { stroke: null });
+      onProps(ids, { stroke: null }, mode);
       return;
     }
     // Фигура без обводки получает её целиком, у остальных меняется только цвет.
-    const bare = decors.filter((element) => !element.stroke).map((element) => element.elementId);
-    const stroked = decors.filter((element) => element.stroke).map((element) => element.elementId);
-    if (bare.length > 0) onProps(bare, { stroke: freshStroke(color) });
-    if (stroked.length > 0) onProps(stroked, { stroke: { color } });
+    const entries: PropsEntry[] = [];
+    if (bare.length > 0) {
+      entries.push({
+        elementIds: bare.map((element) => element.elementId),
+        props: { stroke: freshStroke(color) },
+      });
+    }
+    if (stroked.length > 0) entries.push({ elementIds: strokedIds, props: { stroke: { color } } });
+    onPropsEach(entries, mode);
   };
 
   return (
     <>
       {noLines ? (
-        <Section title={t('shape')}>
-          <Segmented
-            ariaLabel={t('shape')}
-            value={shape}
-            options={SHAPES.map((option) => ({ ...option, label: t(`shapes.${option.value}`) }))}
-            onChange={(value) => onProps(ids, { shape: value })}
-          />
-          {shape === 'round-rect' ? (
-            <FieldRow>
-              <NumberField
-                icon={SquareRoundCornerIcon}
-                ariaLabel={t('radius')}
-                mixedLabel={t('mixed')}
-                value={radius === null ? null : Math.round(radius * 200)}
-                min={0}
-                max={100}
-                suffix="%"
-                onCommit={(value) => onProps(ids, { cornerRadius: value / 200 })}
-              />
-            </FieldRow>
-          ) : null}
-        </Section>
-      ) : null}
-      {noLines ? (
         <Section title={t('fill')}>
-          <SwatchPicker
+          <ColorField
             ariaLabel={t('fill')}
             palette={designSystem.palette}
             value={fill}
             roleLabel={roleLabel}
             noneLabel={t('none')}
+            mixedLabel={t('mixed')}
             onChange={(value) => onProps(ids, { fill: value })}
+            onPreview={(hex) => onProps(ids, { fill: hex }, 'preview')}
+            onPreviewEnd={onPreviewEnd}
           />
         </Section>
       ) : null}
       <Section title={lines ? t('line') : t('stroke')}>
-        <SwatchPicker
+        <ColorField
           ariaLabel={lines ? t('line') : t('stroke')}
           palette={designSystem.palette}
-          value={allStroked ? strokeColor : strokes.length === 0 ? null : undefined}
+          value={strokeColor}
           roleLabel={roleLabel}
           noneLabel={lines ? undefined : t('none')}
-          onChange={setStrokeColor}
+          mixedLabel={t('mixed')}
+          onChange={(value) => setStrokeColor(value)}
+          onPreview={(hex) => setStrokeColor(hex, 'preview')}
+          onPreviewEnd={onPreviewEnd}
         />
-        {strokes.length > 0 ? (
+        {stroked.length > 0 ? (
           <FieldRow>
             <NumberField
               icon={MinusSignIcon}
               ariaLabel={t('strokeWidth')}
               mixedLabel={t('mixed')}
-              value={strokeWidth === null ? null : strokeWidth / EMU_PER_PT}
+              value={strokeWidth}
               step={0.5}
               min={0.25}
               max={50}
+              precision={2}
               suffix={t('pt')}
-              onCommit={(value) =>
-                onProps(
-                  decors.filter((element) => element.stroke).map((element) => element.elementId),
-                  { stroke: { widthEmu: Math.max(1, Math.round(value * EMU_PER_PT)) } },
-                )
-              }
+              {...edits(
+                (value, mode) =>
+                  onProps(strokedIds, { stroke: { widthEmu: value * EMU_PER_PT } }, mode),
+                (apply, mode) =>
+                  onPropsEach(
+                    stroked.map((element) => ({
+                      elementIds: [element.elementId],
+                      props: {
+                        stroke: {
+                          widthEmu:
+                            apply((element.stroke?.widthEmu ?? 0) / EMU_PER_PT) * EMU_PER_PT,
+                        },
+                      },
+                    })),
+                    mode,
+                  ),
+                onPreviewEnd,
+              )}
             />
             <Segmented
               ariaLabel={t('dash')}
-              value={dash as StrokeDash | null}
+              value={dash}
               options={DASHES.map((option) => ({ ...option, label: t(`dashes.${option.value}`) }))}
-              onChange={(value) =>
-                onProps(
-                  decors.filter((element) => element.stroke).map((element) => element.elementId),
-                  { stroke: { dash: value } },
-                )
-              }
+              onChange={(value) => onProps(strokedIds, { stroke: { dash: value } })}
             />
           </FieldRow>
         ) : null}
-        {lines ? <LineEnds decors={decors} onProps={onProps} strokeColor={fallbackStroke} /> : null}
+        {lines ? (
+          <LineEnds decors={decors} onPropsEach={onPropsEach} strokeColor={fallbackStroke} />
+        ) : null}
       </Section>
     </>
   );
@@ -856,12 +1217,12 @@ function DecorSections({
 /** Концы линии: стрелка в начале и в конце. */
 function LineEnds({
   decors,
-  onProps,
+  onPropsEach,
   strokeColor,
 }: {
   decors: readonly Decor[];
-  onProps: DesignPanelProps['onProps'];
-  strokeColor: ColorRole;
+  onPropsEach: DesignPanelProps['onPropsEach'];
+  strokeColor: ColorValue;
 }) {
   const t = useTranslations('designPanel');
   const head = decors.every((element) => element.stroke?.head === 'arrow');
@@ -871,8 +1232,16 @@ function LineEnds({
     // Обводка сливается с той, что у линии уже есть; линии без неё получают её целиком.
     const stroked = decors.filter((element) => element.stroke).map((element) => element.elementId);
     const bare = decors.filter((element) => !element.stroke).map((element) => element.elementId);
-    if (stroked.length > 0) onProps(stroked, { stroke: { [end]: mark } });
-    if (bare.length > 0) onProps(bare, { stroke: { ...freshStroke(strokeColor), [end]: mark } });
+    const entries: PropsEntry[] = [];
+    if (stroked.length > 0)
+      entries.push({ elementIds: stroked, props: { stroke: { [end]: mark } } });
+    if (bare.length > 0) {
+      entries.push({
+        elementIds: bare,
+        props: { stroke: { ...freshStroke(strokeColor), [end]: mark } },
+      });
+    }
+    onPropsEach(entries);
   };
   return (
     <div className="flex items-center gap-1">
@@ -893,16 +1262,4 @@ function LineEnds({
       />
     </div>
   );
-}
-
-function commonNumber(values: readonly number[]): number | null {
-  const [first, ...rest] = values;
-  if (first === undefined) return null;
-  return rest.every((value) => value === first) ? first : null;
-}
-
-function commonString(values: readonly string[]): string | null {
-  const [first, ...rest] = values;
-  if (first === undefined) return null;
-  return rest.every((value) => value === first) ? first : null;
 }
