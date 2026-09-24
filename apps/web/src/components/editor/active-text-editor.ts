@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import type { ChainedCommands, Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { ParagraphAlign } from '@lct/contracts';
+import { EDITOR_CHROME } from './chrome-focus';
 import {
   alignOf,
   colorOf,
@@ -53,11 +54,10 @@ export function useActiveTextEditor(): ActiveTextEditor | null {
 
 /**
  * Куда может уйти фокус, не закрывая набор: полоса форматирования, текстовая секция панели,
- * их выпадающие меню и поповеры полей панели (пикер цвета, список шрифтов).
- * Всё остальное — конец набора.
+ * их выпадающие меню и поповеры полей панели (пикер цвета, список шрифтов), любой интерфейс
+ * поверх холста (`EDITOR_CHROME`). Всё остальное — конец набора.
  */
-export const KEEPS_TEXT_FOCUS =
-  '[data-text-format], [data-text-panel], [role="menu"], [data-inspector-popover]';
+export const KEEPS_TEXT_FOCUS = `[data-text-format], [data-text-panel], [role="menu"], [data-inspector-popover], ${EDITOR_CHROME}`;
 
 /** Поповер поля панели сам держит фокус: пикер тянут, в HEX и поиск шрифта печатают. */
 const OWNS_FOCUS = '[data-inspector-popover]';

@@ -286,6 +286,9 @@ export function TextEditor({
     content: paragraphsToDoc(element.paragraphs),
     injectCSS: true,
     enablePasteRules: false,
+    // Поле создаётся после монтирования, как Tiptap и делает под Next; явно — без предупреждения
+    // в консоли на каждое открытие набора.
+    immediatelyRender: false,
     editorProps: {
       attributes: {
         'aria-label': t('editText'),
