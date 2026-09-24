@@ -11,6 +11,7 @@ import {
   commitRemoveTableRow,
   commitTableCellStyle,
   commitTableColumnWidth,
+  commitTableFitRows,
   commitTableRowHeight,
   commitTableTexts,
   rangeCells,
@@ -177,6 +178,22 @@ describe('row height', () => {
     const table = tableOf(commitTableRowHeight(slides, { ...AT, row: 0, heightEmu: -5 }).slides);
     const heights = tableShares(table.rowHeights, 3).map((share) => share * table.box.cy);
     expect(heights[0]).toBeCloseTo(TABLE_MIN_TRACK_EMU, -1);
+  });
+
+  it('grows the box to rows that outgrew it, and leaves a table that fits alone', () => {
+    const slides = deck();
+    const table = expectStep(
+      slides,
+      commitTableFitRows(slides, { ...AT, measuredEmu: [300_000, 700_000, 300_000] }),
+    );
+    expect(table.box.cy).toBe(1_300_000);
+    const heights = tableShares(table.rowHeights, 3).map((share) => share * table.box.cy);
+    expect(heights[1]).toBeCloseTo(700_000, -1);
+    expectNothing(
+      slides,
+      commitTableFitRows(slides, { ...AT, measuredEmu: [300_000, 300_000, 300_000] }),
+    );
+    expectNothing(slides, commitTableFitRows(slides, { ...AT, measuredEmu: [300_000, 700_000] }));
   });
 
   it('evens rows out over the height the table is drawn at', () => {

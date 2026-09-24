@@ -52,6 +52,7 @@ export {
   commitDistributeTable,
   commitTableCellStyle,
   commitTableColumnWidth,
+  commitTableFitRows,
   commitTableRowHeight,
   commitTableTexts,
   rangeCells,

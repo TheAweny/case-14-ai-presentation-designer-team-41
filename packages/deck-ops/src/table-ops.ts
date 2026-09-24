@@ -401,6 +401,30 @@ export function commitTableRowHeight(
 }
 
 /**
+ * Grow the box of a table to the rows as drawn, when its text made them taller than the box:
+ * PowerPoint grows the frame with the text, so the frame the editor selects and the height the
+ * audit measures are those of the table people see. A table that fits is left as it is.
+ */
+export function commitTableFitRows(
+  slides: readonly SlideIr[],
+  change: Target & { readonly measuredEmu: readonly number[] },
+): DeckCommit {
+  const element = elementOf(slides, change.slideId, change.elementId);
+  if (!element || element.kind !== 'table') return unchanged(slides);
+  const { measuredEmu } = change;
+  const usable =
+    measuredEmu.length === element.rows.length + 1 &&
+    measuredEmu.every((value) => Number.isFinite(value) && value > 0);
+  if (!usable) return unchanged(slides);
+  const total = Math.round(measuredEmu.reduce((sum, value) => sum + value, 0));
+  if (total <= element.box.cy) return unchanged(slides);
+  return commitTable(slides, change, (table) => {
+    table.box.cy = total;
+    setTracks(table, 'rowHeights', measuredEmu);
+  });
+}
+
+/**
  * Even out the columns or the rows. Columns go back to the default, equal widths inside the box;
  * rows get equal stated heights, since rows left to themselves size to their text, and share
  * the height the table has as drawn when the caller measured it.
