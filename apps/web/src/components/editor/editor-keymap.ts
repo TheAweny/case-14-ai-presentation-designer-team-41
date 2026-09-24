@@ -36,7 +36,9 @@ export type EditorCommand =
   | { readonly kind: 'text-align'; readonly align: ParagraphAlign }
   | { readonly kind: 'text-size'; readonly step: -1 | 1 }
   | { readonly kind: 'text-exit' }
-  | { readonly kind: 'shortcuts' };
+  | { readonly kind: 'shortcuts' }
+  // Показ на весь экран: с первого слайда или с открытого.
+  | { readonly kind: 'present'; readonly from: 'start' | 'current' };
 
 export interface KeyLike {
   readonly code: string;
@@ -132,6 +134,10 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
       return { kind: 'text-size', step: -1 };
     case 'text-exit':
       return { kind: 'text-exit' };
+    case 'present':
+      return { kind: 'present', from: 'start' };
+    case 'present-current':
+      return { kind: 'present', from: 'current' };
     case 'copy':
     case 'cut':
     case 'paste':

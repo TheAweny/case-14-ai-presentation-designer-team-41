@@ -72,7 +72,9 @@ export type ShortcutId =
   | 'zoom-actual'
   | 'zoom-fit'
   | 'zoom-selection'
-  | 'pan';
+  | 'pan'
+  | 'present'
+  | 'present-current';
 
 /** Одно сочетание: физическая клавиша и модификаторы, которые должны быть нажаты ровно так. */
 export interface Chord {
@@ -349,6 +351,15 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
     scope: 'canvas',
     external: true,
     chords: [{ code: 'Space' }],
+  },
+  // Показ — как в PowerPoint: F5 с начала, Shift+F5 с текущего слайда. Работает и в наборе:
+  // иначе F5 перезагрузил бы страницу.
+  { id: 'present', group: 'view', scope: 'both', chords: [{ code: 'F5' }] },
+  {
+    id: 'present-current',
+    group: 'view',
+    scope: 'both',
+    chords: [{ code: 'F5', shift: true }],
   },
 ];
 

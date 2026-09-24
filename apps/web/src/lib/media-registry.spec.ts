@@ -10,7 +10,7 @@ function registry() {
     created,
     media: createMediaRegistry({
       createUrl: (file) => {
-        const url = `blob:${file.name}`;
+        const url = `blob:${file instanceof File ? file.name : `restored-${file.size}`}`;
         created.push(url);
         return url;
       },
@@ -63,5 +63,27 @@ describe('media registry', () => {
     media.clear();
     expect(revoked).toEqual(created);
     expect(media.url(part)).toBeNull();
+  });
+
+  it('отдаёт файл части, чтобы черновик мог его сохранить', () => {
+    const { media } = registry();
+    const picture = file('a.png');
+    const part = media.register(picture);
+    expect(media.file(part)).toBe(picture);
+    expect(media.file('ppt/media/image1.png')).toBeNull();
+  });
+
+  it('возвращает файл черновика под прежней частью и не заменяет уже известную', () => {
+    const { media, created } = registry();
+    const listener = vi.fn();
+    media.subscribe(listener);
+    const blob = new Blob([new Uint8Array([1, 2])], { type: 'image/png' });
+    media.restore('upload/old.png', blob);
+    expect(media.url('upload/old.png')).toBe('blob:restored-2');
+    expect(media.file('upload/old.png')).toBe(blob);
+    expect(listener).toHaveBeenCalledTimes(1);
+    media.restore('upload/old.png', new Blob([new Uint8Array([9])]));
+    expect(media.file('upload/old.png')).toBe(blob);
+    expect(created).toHaveLength(1);
   });
 });

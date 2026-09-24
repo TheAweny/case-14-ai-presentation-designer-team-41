@@ -122,7 +122,8 @@
     "groups": {
       "canvas": "Canvas",
       "panels": "Panels",
-      "history": "History"
+      "history": "History",
+      "show": "Slideshow"
     },
     "history": {
       "undo": "Undo {change}",
@@ -156,7 +157,8 @@
       "shape": "Shapes",
       "data": "Data",
       "ai": "Assistant",
-      "shortcuts": "Keyboard shortcuts"
+      "shortcuts": "Keyboard shortcuts",
+      "present": "Present from current slide"
     },
     "variants": {
       "select": "Select",
@@ -386,8 +388,33 @@
       "zoom-actual": "Zoom to 100%",
       "zoom-fit": "Fit slide",
       "zoom-selection": "Zoom to selection",
-      "pan": "Pan the canvas (hold)"
+      "pan": "Pan the canvas (hold)",
+      "present": "Present from the beginning",
+      "present-current": "Present from current slide"
     }
+  },
+  "draft": {
+    "restored": "Unsaved changes restored",
+    "discard": "Undo",
+    "dismiss": "Dismiss",
+    "saving": "Saving changes in this browser…",
+    "saved": "Changes saved in this browser",
+    "error": "Couldn't save changes in this browser. Keep this tab open."
+  },
+  "slideShow": {
+    "label": "Slideshow",
+    "counter": "{number} / {total}",
+    "previous": "Previous slide",
+    "next": "Next slide",
+    "exit": "Exit slideshow",
+    "end": "End of slideshow. Click to exit."
+  },
+  "mobileBar": {
+    "label": "Actions",
+    "insert": "Insert",
+    "insertHint": "Tap the slide: {tool}",
+    "cancelInsert": "Cancel insert",
+    "properties": "Properties"
   },
   "tableMenu": {
     "insertRowAbove": "Insert row above",
