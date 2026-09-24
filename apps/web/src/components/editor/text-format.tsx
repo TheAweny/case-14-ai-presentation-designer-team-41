@@ -13,6 +13,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import {
+  ariaKeyShortcuts,
+  isMacPlatform,
+  shortcutText,
+  type ShortcutId,
+} from '@/components/editor/editor-shortcuts';
+import type { TextFlag } from '@/components/editor/editor-keymap';
+import {
+  rangeFlagOn,
+  toggleRangeFlag,
+  type InheritedText,
+} from '@/components/editor/text-shortcuts';
 
 /*
  * BubbleMenu пересылает плагину свои опции транзакцией всякий раз, когда меняется ссылка на
@@ -27,20 +39,34 @@ function preventFocusLoss(event: { preventDefault: () => void }) {
   event.preventDefault();
 }
 
-/** Только то, что рисует полоса: перерисовка — когда меняются эти флаги, а не на каждую транзакцию. */
-function selectMarks({ editor }: EditorStateSnapshot<Editor>) {
-  return { bold: editor.isActive('bold'), italic: editor.isActive('italic') };
-}
-
 /**
  * Метки набора: жирный, курсив, шрифт и цвет роли. В журнал колоды они попадут одним
  * `set-text`, когда поле закроется. `mousedown` не отдаёт фокус, иначе поле решит, что набор
  * кончился, ещё до команды.
  */
-export function TextFormatBar({ editor, profile }: { editor: Editor; profile: DesignSystem }) {
+export function TextFormatBar({
+  editor,
+  profile,
+  inherited,
+}: {
+  editor: Editor;
+  profile: DesignSystem;
+  /** Начертание роли: жирный заголовок нажат, пока его не сняли. */
+  inherited: InheritedText;
+}) {
   const t = useTranslations('formatBar');
   const style = useTranslations('selectionBar');
-  const marks = useEditorState({ editor, selector: selectMarks });
+  // Только то, что рисует полоса: перерисовка — когда меняются эти флаги, а не на каждую
+  // транзакцию. Флаги — с учётом роли, как у Ctrl+B/I/U.
+  const marks = useEditorState({
+    editor,
+    selector: ({ editor: current }: EditorStateSnapshot<Editor>) => ({
+      bold: rangeFlagOn(current, 'bold', inherited),
+      italic: rangeFlagOn(current, 'italic', inherited),
+      underline: rangeFlagOn(current, 'underline', inherited),
+    }),
+  });
+  const toggle = (flag: TextFlag) => toggleRangeFlag(editor, flag, inherited);
 
   const fonts = [...new Set(profile.typeScale.map((entry) => entry.font).filter(Boolean))];
   const sizes = profile.typeScale.filter(
@@ -61,19 +87,30 @@ export function TextFormatBar({ editor, profile }: { editor: Editor; profile: De
     >
       <FormatButton
         label={t('bold')}
+        shortcut="bold"
         pressed={marks.bold}
         strong
-        onClick={() => editor.chain().focus().toggleBold().run()}
+        onClick={() => toggle('bold')}
       >
         B
       </FormatButton>
       <FormatButton
         label={t('italic')}
+        shortcut="italic"
         pressed={marks.italic}
         italic
-        onClick={() => editor.chain().focus().toggleItalic().run()}
+        onClick={() => toggle('italic')}
       >
         I
+      </FormatButton>
+      <FormatButton
+        label={t('underline')}
+        shortcut="underline"
+        pressed={marks.underline}
+        underline
+        onClick={() => toggle('underline')}
+      >
+        U
       </FormatButton>
       <MenuButton label={t('font')}>
         {fonts.map((font) => (
@@ -131,13 +168,18 @@ function FormatButton({
   pressed,
   strong,
   italic,
+  underline,
+  shortcut,
   onClick,
   children,
 }: {
   label: string;
+  /** Сочетание из общего реестра: в подсказке и в `aria-keyshortcuts`. */
+  shortcut: ShortcutId;
   pressed: boolean;
   strong?: boolean;
   italic?: boolean;
+  underline?: boolean;
   onClick: () => void;
   children: string;
 }) {
@@ -145,6 +187,8 @@ function FormatButton({
     <button
       type="button"
       aria-label={label}
+      aria-keyshortcuts={ariaKeyShortcuts(shortcut)}
+      title={`${label} (${shortcutText(shortcut, isMacPlatform())})`}
       aria-pressed={pressed}
       onMouseDown={preventFocusLoss}
       onClick={onClick}
@@ -154,6 +198,7 @@ function FormatButton({
         pressed ? 'bg-muted text-foreground' : 'text-muted-foreground',
         strong && 'font-semibold',
         italic && 'italic',
+        underline && 'underline',
       )}
     >
       {children}

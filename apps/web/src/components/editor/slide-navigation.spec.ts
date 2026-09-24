@@ -4,9 +4,9 @@ import {
   isTypingTarget,
   listKeyTarget,
   nearestScroll,
-  pageKeyStep,
   slideIndexFromParam,
   slideTitle,
+  stepSelection,
   stepSlide,
 } from './slide-navigation';
 
@@ -128,12 +128,29 @@ describe('nearestScroll', () => {
   });
 });
 
-describe('pageKeyStep', () => {
-  it('PageUp — назад, PageDown — вперёд, остальное не его', () => {
-    expect(pageKeyStep('PageUp')).toBe(-1);
-    expect(pageKeyStep('PageDown')).toBe(1);
-    expect(pageKeyStep('ArrowDown')).toBeNull();
-    expect(pageKeyStep('Space')).toBeNull();
+describe('stepSelection', () => {
+  const ELEMENTS = [
+    { elementId: 'a' },
+    { elementId: 'locked', locked: true },
+    { elementId: 'b' },
+    { elementId: 'c' },
+  ];
+
+  it('Tab берёт следующий объект по кругу и пропускает заблокированные', () => {
+    expect(stepSelection(ELEMENTS, ['a'], 1)).toEqual(['b']);
+    expect(stepSelection(ELEMENTS, ['c'], 1)).toEqual(['a']);
+    expect(stepSelection(ELEMENTS, ['a', 'b'], 1)).toEqual(['c']);
+  });
+
+  it('Shift+Tab идёт назад', () => {
+    expect(stepSelection(ELEMENTS, ['b'], -1)).toEqual(['a']);
+    expect(stepSelection(ELEMENTS, ['a'], -1)).toEqual(['c']);
+  });
+
+  it('без выделения — первый или последний, на пустом слайде — ничего', () => {
+    expect(stepSelection(ELEMENTS, [], 1)).toEqual(['a']);
+    expect(stepSelection(ELEMENTS, [], -1)).toEqual(['c']);
+    expect(stepSelection([{ elementId: 'x', locked: true }], [], 1)).toEqual([]);
   });
 });
 

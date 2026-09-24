@@ -249,6 +249,43 @@ describe('thumbnail', () => {
   });
 });
 
+describe('past the slide edge', () => {
+  const outside = only(CONTENT, shape('bleed', box(-100, 400, 300, 200), { shape: 'rect' }));
+  const frameTag = (html: string) => /<div\b[^>]*>/.exec(html)?.[0] ?? '';
+
+  it('cuts off what lies outside the slide by default, as the export does', () => {
+    expect(frameTag(render(outside))).toMatch(/overflow:\s*hidden/);
+  });
+
+  it('shows it on an editor canvas that asks for the pasteboard', () => {
+    const html = renderToStaticMarkup(
+      <SlideView slide={outside} profile={PROFILE} label="Слайд" showOutside />,
+    );
+    expect(frameTag(html)).toMatch(/overflow:\s*visible/);
+    expect(html).toContain('data-element-id="bleed"');
+  });
+
+  it('keeps the slide background behind an element that reaches past the edge', () => {
+    const inside = shape('inside', box(100, 100, 50, 50), { shape: 'rect' });
+    const html = renderToStaticMarkup(
+      <SlideView
+        slide={{ ...outside, elements: [...outside.elements, inside] }}
+        profile={PROFILE}
+        showOutside
+      />,
+    );
+    expect(html.match(/data-outside-backdrop/g)).toHaveLength(1);
+    expect(render(outside)).not.toContain('data-outside-backdrop');
+  });
+
+  it('keeps a thumbnail cut even when asked to show the outside', () => {
+    const html = renderToStaticMarkup(
+      <SlideView slide={outside} profile={PROFILE} thumbnail showOutside />,
+    );
+    expect(frameTag(html)).toMatch(/overflow:\s*hidden/);
+  });
+});
+
 describe('shapes', () => {
   const card = box(80, 80, 320, 180);
   const small = box(80, 80, 40, 20);
