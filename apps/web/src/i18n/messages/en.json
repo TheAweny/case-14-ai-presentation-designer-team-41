@@ -45,7 +45,6 @@
   "selectionBar": {
     "label": "Selection properties",
     "count": "{count, plural, one {# object} other {# objects}}",
-    "remove": "Delete",
     "align": {
       "left": "Align left",
       "center": "Align centre",
@@ -70,8 +69,6 @@
       "page-number": "Slide number",
       "decoration": "Decoration"
     },
-    "size": "Size",
-    "color": "Colour",
     "type": {
       "title": "Title",
       "subtitle": "Subtitle",
@@ -95,14 +92,28 @@
       "line": "Line",
       "positive": "Positive",
       "negative": "Negative"
-    }
-  },
-  "formatBar": {
-    "label": "Text format",
+    },
     "bold": "Bold",
     "italic": "Italic",
-    "font": "Font",
-    "underline": "Underline"
+    "smaller": "Decrease font size",
+    "larger": "Increase font size",
+    "strokeWidths": "Common line widths",
+    "replace": "Replace",
+    "editTable": "Edit table cells",
+    "editTableShort": "Edit",
+    "editChart": "Edit chart data in the design panel",
+    "editChartShort": "Data",
+    "distribute": "Distribute",
+    "distributeHorizontal": "Distribute horizontal spacing",
+    "distributeVertical": "Distribute vertical spacing",
+    "layers": "Layer order",
+    "more": "More",
+    "alignToSlide": "Align to slide",
+    "openInspector": "Open in design panel",
+    "openData": "Open data in design panel"
+  },
+  "formatBar": {
+    "label": "Text format"
   },
   "toolRail": {
     "label": "Tools",
@@ -250,7 +261,7 @@
     "removeRow": "Remove last row",
     "addColumn": "Add column",
     "removeColumn": "Remove last column",
-    "tableHint": "Double-click the table to type in cells. Tab moves on, Enter moves down.",
+    "tableHint": "Click a selected table to put the caret in a cell. Tab moves on, Shift+Enter starts a new line, drag to select cells, drag a border to resize.",
     "chart": "Chart",
     "chartType": "Chart type",
     "chartTypes": {
@@ -404,5 +415,45 @@
     "insertHint": "Tap the slide: {tool}",
     "cancelInsert": "Cancel insert",
     "properties": "Properties"
+  },
+  "tableMenu": {
+    "insertRowAbove": "Insert row above",
+    "insertRowBelow": "Insert row below",
+    "insertColumnLeft": "Insert column left",
+    "insertColumnRight": "Insert column right",
+    "removeRows": "{count, plural, one {Delete row} other {Delete # rows}}",
+    "removeColumns": "{count, plural, one {Delete column} other {Delete # columns}}",
+    "clearCells": "Clear cells",
+    "resetLook": "Reset cell formatting",
+    "fill": "Cell fill",
+    "noFill": "No fill",
+    "resizeColumn": "Column {index} border",
+    "resizeRow": "Row {index} border",
+    "resizeHint": "Drag to resize. Double-click to fit the content"
+  },
+  "tablePanel": {
+    "cells": "Cells",
+    "wholeTable": "Whole table",
+    "selectedCells": "{count, plural, one {# cell} other {# cells}}",
+    "fill": "Cell fill",
+    "textColor": "Text colour",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "align": "Horizontal alignment",
+    "verticalAlign": "Vertical alignment",
+    "resetLook": "Reset formatting",
+    "style": "Table style",
+    "headerRow": "Header row",
+    "bandedRows": "Banded rows",
+    "bandFill": "Band colour",
+    "borders": "Lines",
+    "bordersHorizontal": "Lines between rows",
+    "bordersVertical": "Lines between columns",
+    "bordersOuter": "Frame around the table",
+    "borderColor": "Line colour",
+    "borderWidth": "Line width",
+    "distributeColumns": "Distribute columns evenly",
+    "distributeRows": "Distribute rows evenly"
   }
 }

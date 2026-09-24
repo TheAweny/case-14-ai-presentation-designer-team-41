@@ -3,7 +3,6 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  Add01Icon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -51,7 +50,6 @@ import type {
   ColorValue,
   DecorShape,
   DesignSystem,
-  ElementStroke,
   ImageFit,
   ParagraphAlign,
   SlideElement,
@@ -94,6 +92,8 @@ import { colorHex } from '@/components/editor/inspector/fields/color';
 import { cn } from '@/lib/utils';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
 import { ChartSection } from '@/components/editor/inspector/chart-section';
+import { TableSection, type TableAction } from '@/components/editor/inspector/table-section';
+import type { TableOps } from '@/components/editor/use-table-ops';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
 import {
   leadSizePt,
@@ -120,11 +120,15 @@ import {
   commonValue,
   cornerRadiusProps,
   cornerRadiusPt,
+  defaultStrokeColor,
   emuToPt,
+  flipEntries,
+  lineEndEntries,
   maxCornerRadiusPt,
   setBoxField,
   setBoxFieldEach,
   setBoxSizeLocked,
+  strokeColorEntries,
   type BoxField,
 } from '@/components/editor/inspector/selection-model';
 
@@ -168,12 +172,14 @@ export type DesignPanelProps = {
   onSlideBackground: (background: ColorValue | null, mode?: EditMode) => void;
   /** Строки и столбцы таблицы. */
   onTable: (elementId: string, action: TableAction) => void;
+  /** Ячейки, размеры и вид таблицы; без них панель показывает только размер сеткой. */
+  tableOps?: TableOps;
   /** Данные графика целиком: одна запись журнала на правку. */
   onChartData: (elementId: string, data: ChartData) => void;
   onChartAxes: (elementId: string, titles: { xTitle?: string; yTitle?: string }) => void;
 };
 
-export type TableAction = 'add-row' | 'remove-row' | 'add-column' | 'remove-column';
+export type { TableAction } from '@/components/editor/inspector/table-section';
 
 const ALIGN_X = [
   { id: 'left', icon: AlignLeftIcon },
@@ -229,11 +235,6 @@ const VERTICAL_ALIGNS = [
 
 /** Частые межстрочные интервалы, в процентах одинарного. */
 const LINE_HEIGHTS = [100, 120, 150, 200] as const;
-
-/** Обводка, которую получает фигура без неё: тонкая сплошная линия. */
-function freshStroke(color: ColorValue): ElementStroke {
-  return { color, widthEmu: EMU_PER_PT, dash: 'solid', head: 'none', tail: 'none' };
-}
 
 type Decor = Extract<SlideElement, { kind: 'decor' }>;
 type ImageElement = Extract<SlideElement, { kind: 'image' }>;
@@ -324,7 +325,15 @@ export function DesignPanel(props: DesignPanelProps) {
       <AppearanceSection {...props} selected={selected} decors={decors} />
       {texts.length > 0 ? <TextSections {...props} texts={texts} /> : null}
       {images.length > 0 ? <ImageSection {...props} images={images} /> : null}
-      {table ? <TableSection {...props} table={table} /> : null}
+      {table ? (
+        <TableSection
+          table={table}
+          slide={slide}
+          designSystem={props.designSystem}
+          ops={props.tableOps}
+          onTable={props.onTable}
+        />
+      ) : null}
       {chart ? <ChartSection {...props} chart={chart} /> : null}
       {decors.length > 0 ? <DecorSections {...props} decors={decors} /> : null}
     </div>
@@ -447,14 +456,7 @@ function PositionSection({
       })),
       mode,
     );
-  const flip = (axis: 'flipH' | 'flipV') =>
-    onPropsEach(
-      decors.map((element) => ({
-        elementIds: [element.elementId],
-        props:
-          axis === 'flipH' ? { flipH: element.flipH !== true } : { flipV: element.flipV !== true },
-      })),
-    );
+  const flip = (axis: 'flipH' | 'flipV') => onPropsEach(flipEntries(decors, axis));
   const alignButton = ({ id, icon }: { id: Alignment; icon: typeof AlignLeftIcon }) => (
     <IconButton key={id} icon={icon} label={aligns(id)} onClick={() => align(id)} />
   );
@@ -1041,48 +1043,6 @@ function ImageSection({
   );
 }
 
-/**
- * Таблица: размер сеткой. Сами ячейки правятся на слайде — двойной клик по таблице.
- */
-function TableSection({
-  table,
-  onTable,
-}: DesignPanelProps & { table: Extract<SlideElement, { kind: 'table' }> }) {
-  const t = useTranslations('designPanel');
-  const rows = table.rows.length;
-  const columns = table.headers.length;
-  const stepper = (
-    label: string,
-    value: number,
-    min: number,
-    add: TableAction,
-    remove: TableAction,
-  ) => (
-    <div className="flex items-center gap-1">
-      <span className="flex-1 text-xs text-muted-foreground">{label}</span>
-      <IconButton
-        icon={MinusSignIcon}
-        label={t(remove === 'remove-row' ? 'removeRow' : 'removeColumn')}
-        disabled={value <= min}
-        onClick={() => onTable(table.elementId, remove)}
-      />
-      <span className="w-6 text-center text-xs tabular-nums text-foreground">{value}</span>
-      <IconButton
-        icon={Add01Icon}
-        label={t(add === 'add-row' ? 'addRow' : 'addColumn')}
-        onClick={() => onTable(table.elementId, add)}
-      />
-    </div>
-  );
-  return (
-    <Section title={t('table')}>
-      {stepper(t('rows'), rows, 1, 'add-row', 'remove-row')}
-      {stepper(t('columns'), columns, 1, 'add-column', 'remove-column')}
-      <p className="text-xs text-balance text-muted-foreground">{t('tableHint')}</p>
-    </Section>
-  );
-}
-
 /** Заливка и обводка фигур; у линий — только линия и её концы. */
 function DecorSections({
   designSystem,
@@ -1116,27 +1076,11 @@ function DecorSections({
       ? commonString(stroked.map((element) => element.stroke?.dash ?? 'solid'))
       : null;
   const roleLabel = (role: ColorRole) => palette(role);
-  const fallbackStroke: ColorValue = designSystem.palette.some((entry) => entry.role === 'text')
-    ? 'text'
-    : (designSystem.palette[0]?.role ?? 'text');
+  const fallbackStroke = defaultStrokeColor(designSystem);
   const strokedIds = stroked.map((element) => element.elementId);
 
-  const setStrokeColor = (color: ColorValue | null, mode: EditMode = 'commit') => {
-    if (color === null) {
-      onProps(ids, { stroke: null }, mode);
-      return;
-    }
-    // Фигура без обводки получает её целиком, у остальных меняется только цвет.
-    const entries: PropsEntry[] = [];
-    if (bare.length > 0) {
-      entries.push({
-        elementIds: bare.map((element) => element.elementId),
-        props: { stroke: freshStroke(color) },
-      });
-    }
-    if (stroked.length > 0) entries.push({ elementIds: strokedIds, props: { stroke: { color } } });
-    onPropsEach(entries, mode);
-  };
+  const setStrokeColor = (color: ColorValue | null, mode: EditMode = 'commit') =>
+    onPropsEach(strokeColorEntries(decors, color), mode);
 
   return (
     <>
@@ -1227,22 +1171,8 @@ function LineEnds({
   const t = useTranslations('designPanel');
   const head = decors.every((element) => element.stroke?.head === 'arrow');
   const tail = decors.every((element) => element.stroke?.tail === 'arrow');
-  const toggle = (end: 'head' | 'tail', on: boolean) => {
-    const mark = on ? 'arrow' : 'none';
-    // Обводка сливается с той, что у линии уже есть; линии без неё получают её целиком.
-    const stroked = decors.filter((element) => element.stroke).map((element) => element.elementId);
-    const bare = decors.filter((element) => !element.stroke).map((element) => element.elementId);
-    const entries: PropsEntry[] = [];
-    if (stroked.length > 0)
-      entries.push({ elementIds: stroked, props: { stroke: { [end]: mark } } });
-    if (bare.length > 0) {
-      entries.push({
-        elementIds: bare,
-        props: { stroke: { ...freshStroke(strokeColor), [end]: mark } },
-      });
-    }
-    onPropsEach(entries);
-  };
+  const toggle = (end: 'head' | 'tail', on: boolean) =>
+    onPropsEach(lineEndEntries(decors, end, on, strokeColor));
   return (
     <div className="flex items-center gap-1">
       <span className="flex-1 text-xs text-muted-foreground">{t('ends')}</span>

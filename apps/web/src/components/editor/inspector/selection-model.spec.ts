@@ -6,12 +6,16 @@ import {
   commonValue,
   cornerRadiusProps,
   cornerRadiusPt,
+  defaultStrokeColor,
   emuToPt,
+  flipEntries,
+  lineEndEntries,
   maxCornerRadiusPt,
   ptToEmu,
   setBoxField,
   setBoxFieldEach,
   setBoxSizeLocked,
+  strokeColorEntries,
 } from './selection-model';
 
 const PT = 12_700;
@@ -149,5 +153,57 @@ describe('corner radius in points', () => {
     expect(cornerRadiusProps(rect, 12)).toEqual({ shape: 'round-rect', cornerRadius: 0.12 });
     expect(cornerRadiusProps(rect, 0)).toEqual({ shape: 'rect' });
     expect(cornerRadiusProps(rect, 500)).toEqual({ shape: 'round-rect', cornerRadius: 0.5 });
+  });
+});
+
+describe('stroke edits', () => {
+  type Decor = Extract<SlideElement, { kind: 'decor' }>;
+  const box = { x: 0, y: 0, cx: 100, cy: 100 };
+  const bare = decor('bare', box) as Decor;
+  const outlined = decor('outlined', box, {
+    stroke: { color: 'line', widthEmu: 2 * PT, dash: 'dash', head: 'none', tail: 'none' },
+  }) as Decor;
+  const thin = { color: 'accent', widthEmu: PT, dash: 'solid', head: 'none', tail: 'none' };
+
+  it('gives a bare shape a whole outline and recolours only the outlined one', () => {
+    expect(strokeColorEntries([bare, outlined], 'accent')).toEqual([
+      { elementIds: ['bare'], props: { stroke: thin } },
+      { elementIds: ['outlined'], props: { stroke: { color: 'accent' } } },
+    ]);
+  });
+
+  it('removes the outline from every shape with null', () => {
+    expect(strokeColorEntries([bare, outlined], null)).toEqual([
+      { elementIds: ['bare', 'outlined'], props: { stroke: null } },
+    ]);
+    expect(strokeColorEntries([], 'accent')).toEqual([]);
+  });
+
+  it('puts an arrow on a line end, drawing the line where it had no stroke', () => {
+    expect(lineEndEntries([outlined, bare], 'tail', true, 'accent')).toEqual([
+      { elementIds: ['outlined'], props: { stroke: { tail: 'arrow' } } },
+      { elementIds: ['bare'], props: { stroke: { ...thin, tail: 'arrow' } } },
+    ]);
+    expect(lineEndEntries([outlined], 'head', false, 'accent')).toEqual([
+      { elementIds: ['outlined'], props: { stroke: { head: 'none' } } },
+    ]);
+  });
+
+  it('flips each shape from its own state', () => {
+    const flipped = decor('flipped', box, { flipH: true }) as Decor;
+    expect(flipEntries([bare, flipped], 'flipH')).toEqual([
+      { elementIds: ['bare'], props: { flipH: true } },
+      { elementIds: ['flipped'], props: { flipH: false } },
+    ]);
+    expect(flipEntries([flipped], 'flipV')).toEqual([
+      { elementIds: ['flipped'], props: { flipV: true } },
+    ]);
+  });
+
+  it('draws a new outline in the text colour of the template, or its first colour', () => {
+    const palette = (roles: string[]) =>
+      ({ palette: roles.map((role) => ({ role, hex: '000000' })) }) as never;
+    expect(defaultStrokeColor(palette(['accent', 'text']))).toBe('text');
+    expect(defaultStrokeColor(palette(['accent']))).toBe('accent');
   });
 });

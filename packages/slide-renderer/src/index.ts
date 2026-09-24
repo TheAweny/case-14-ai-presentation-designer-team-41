@@ -23,3 +23,15 @@ export {
   seriesRoles,
 } from './view/color.js';
 export { markHooks, markStyle } from './view/mark.js';
+export {
+  TABLE_CELL_PADDING,
+  TableColumns,
+  isBandedRow,
+  isHeaderRow,
+  tableBordersOf,
+  tableCellLook,
+  tableView,
+  trackShares,
+  type TableCellLook,
+  type TableView,
+} from './view/table.js';

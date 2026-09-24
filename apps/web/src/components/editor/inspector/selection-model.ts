@@ -1,8 +1,8 @@
-import type { Box, SlideElement } from '@lct/contracts';
+import type { Box, ColorValue, DesignSystem, ElementStroke, SlideElement } from '@lct/contracts';
 import type { ElementProps } from '@lct/deck-ops';
 import { EMU_PER_PT } from '@lct/slide-renderer';
 import type { Alignment } from '@/components/editor/slide-geometry';
-import type { ElementMove } from '@/components/editor/use-deck-history';
+import type { ElementMove, PropsEntry } from '@/components/editor/use-deck-history';
 
 /** Поля рамки, которые панель показывает числами. */
 export type BoxField = 'x' | 'y' | 'cx' | 'cy';
@@ -138,4 +138,68 @@ export function cornerRadiusProps(element: Decor, radiusPt: number): ElementProp
   if (side <= 0) return { shape: 'round-rect' };
   const share = Math.min(0.5, ptToEmu(radiusPt) / side);
   return { shape: 'round-rect', cornerRadius: Math.round(share * 1e6) / 1e6 };
+}
+
+/** Обводка, которую получает фигура без неё: тонкая сплошная линия. */
+export function freshStroke(color: ColorValue): ElementStroke {
+  return { color, widthEmu: EMU_PER_PT, dash: 'solid', head: 'none', tail: 'none' };
+}
+
+/**
+ * Цвет новой обводки или линии, когда человек ещё не выбрал свой: роль текста шаблона, а без
+ * неё — первая роль палитры.
+ */
+export function defaultStrokeColor(designSystem: DesignSystem): ColorValue {
+  return designSystem.palette.some((entry) => entry.role === 'text')
+    ? 'text'
+    : (designSystem.palette[0]?.role ?? 'text');
+}
+
+/**
+ * Цвет обводки фигурам — одной записью журнала. Фигура без обводки получает её целиком, у
+ * остальных меняется только цвет. `null` убирает обводку у всех.
+ */
+export function strokeColorEntries(
+  decors: readonly Decor[],
+  color: ColorValue | null,
+): PropsEntry[] {
+  if (decors.length === 0) return [];
+  if (color === null) {
+    return [{ elementIds: decors.map((element) => element.elementId), props: { stroke: null } }];
+  }
+  const bare = decors.filter((element) => !element.stroke).map((element) => element.elementId);
+  const stroked = decors.filter((element) => element.stroke).map((element) => element.elementId);
+  const entries: PropsEntry[] = [];
+  if (bare.length > 0) entries.push({ elementIds: bare, props: { stroke: freshStroke(color) } });
+  if (stroked.length > 0) entries.push({ elementIds: stroked, props: { stroke: { color } } });
+  return entries;
+}
+
+/**
+ * Стрелка на конце линий: `head` — в начале, `tail` — в конце. Обводка сливается с той, что у
+ * линии уже есть; линии без неё получают её целиком цветом `color`.
+ */
+export function lineEndEntries(
+  decors: readonly Decor[],
+  end: 'head' | 'tail',
+  on: boolean,
+  color: ColorValue,
+): PropsEntry[] {
+  const mark = on ? 'arrow' : 'none';
+  const stroked = decors.filter((element) => element.stroke).map((element) => element.elementId);
+  const bare = decors.filter((element) => !element.stroke).map((element) => element.elementId);
+  const entries: PropsEntry[] = [];
+  if (stroked.length > 0) entries.push({ elementIds: stroked, props: { stroke: { [end]: mark } } });
+  if (bare.length > 0) {
+    entries.push({ elementIds: bare, props: { stroke: { ...freshStroke(color), [end]: mark } } });
+  }
+  return entries;
+}
+
+/** Отражение фигур по оси: каждая — от своего состояния, всё одной записью журнала. */
+export function flipEntries(decors: readonly Decor[], axis: 'flipH' | 'flipV'): PropsEntry[] {
+  return decors.map((element) => ({
+    elementIds: [element.elementId],
+    props: axis === 'flipH' ? { flipH: element.flipH !== true } : { flipV: element.flipV !== true },
+  }));
 }

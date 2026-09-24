@@ -297,6 +297,59 @@ export function alignBoxes(
   });
 }
 
+export type DistributeAxis = 'horizontal' | 'vertical';
+
+/**
+ * Space boxes out evenly along an axis, as Figma's "distribute spacing" does: the first and the
+ * last stay where they are, and every gap between neighbours becomes the same. Boxes are taken
+ * in the order they start on the axis. With fewer than three there is only one gap, so nothing
+ * moves; boxes already in place are left out, so the journal records only what moved.
+ */
+export function distributeBoxes(
+  items: readonly { readonly elementId: string; readonly box: Box }[],
+  axis: DistributeAxis,
+): { elementId: string; box: Box }[] {
+  if (items.length < 3) return [];
+  const start = axis === 'horizontal' ? 'x' : 'y';
+  const size = axis === 'horizontal' ? 'cx' : 'cy';
+  const sorted = [...items].sort(
+    (left, right) =>
+      left.box[start] - right.box[start] ||
+      left.box[start] + left.box[size] - (right.box[start] + right.box[size]),
+  );
+  const first = sorted[0];
+  if (!first) return [];
+  const from = first.box[start];
+  const to = Math.max(...sorted.map(({ box }) => box[start] + box[size]));
+  const occupied = sorted.reduce((sum, { box }) => sum + box[size], 0);
+  const gap = (to - from - occupied) / (sorted.length - 1);
+  let cursor = from;
+  return sorted.flatMap(({ elementId, box }) => {
+    const at = Math.round(cursor);
+    cursor += box[size] + gap;
+    return at === box[start] ? [] : [{ elementId, box: { ...box, [start]: at } }];
+  });
+}
+
+/**
+ * The box a rotated element covers on the slide: its own box turned about the centre, then
+ * bounded again. Anything placed next to the element, like the property bar, has to clear this.
+ */
+export function rotatedBounds(box: Box, rotation = 0): Box {
+  const turn = (((rotation % 180) + 180) % 180) * (Math.PI / 180);
+  if (turn === 0) return box;
+  const cos = Math.abs(Math.cos(turn));
+  const sin = Math.abs(Math.sin(turn));
+  const cx = box.cx * cos + box.cy * sin;
+  const cy = box.cx * sin + box.cy * cos;
+  return {
+    x: Math.round(box.x + (box.cx - cx) / 2),
+    y: Math.round(box.y + (box.cy - cy) / 2),
+    cx: Math.round(cx),
+    cy: Math.round(cy),
+  };
+}
+
 /**
  * Where the selection's property bar goes, in the same pixels as the boxes: centred over the
  * selection, below it when there is no room above, and never outside the visible area.

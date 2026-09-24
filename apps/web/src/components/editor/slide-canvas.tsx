@@ -13,16 +13,8 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from 'react-zoom-pan-pinch';
-import type {
-  Box,
-  ColorRole,
-  DesignSystem,
-  Paragraph,
-  SlideElement,
-  SlideIr,
-} from '@lct/contracts';
+import type { Box, DesignSystem, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
-import type { TableCell } from '@lct/deck-ops';
 import { FitSlide, ZoomBasis, ZoomHud } from '@/components/editor/canvas-zoom';
 import { zoomScaleFor } from '@/components/editor/zoom-input';
 import {
@@ -39,16 +31,19 @@ import {
   isInsertTool,
   type InsertTool,
 } from '@/components/editor/insert-element';
-import { SelectionBar } from '@/components/editor/selection-bar';
+import { SelectionBar, type SelectionBarActions } from '@/components/editor/selection-bar';
+import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus';
 import { SlideHandles } from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
-import { TableEditor, type GridCell } from '@/components/editor/table-editor';
+import { TableEditor, type TableEntry } from '@/components/editor/table-editor';
+import { TableHandles } from '@/components/editor/table-handles';
+import { useTableClickEntry } from '@/components/editor/table-entry';
+import type { TableOps } from '@/components/editor/use-table-ops';
 import {
   arrowDirection,
   gridForSlide,
   nudgeBox,
   pixelBoxToEmu,
-  type Alignment,
 } from '@/components/editor/slide-geometry';
 import { isTypingTarget } from '@/components/editor/slide-navigation';
 import type { VariantId } from '@/components/editor/tool-rail';
@@ -61,13 +56,11 @@ import { carriesFiles, imageFilesOf, pickImageFiles, registerImage } from '@/lib
 
 /** Здесь стрелки — свои клавиши виджета, а не сдвиг объекта. */
 const ARROW_OWNERS =
-  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"]';
+  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="grid"], [role="toolbar"]';
 /** Отсюда протяжка вставки не начинается: это интерфейс поверх холста, а не поле. */
-const INSERT_SKIPS =
-  '[data-text-editor], [data-selection-bar], [data-text-format], [data-dock-obstacle], button, [role="menu"]';
+const INSERT_SKIPS = `[data-text-editor], [data-selection-bar], [data-text-format], [data-dock-obstacle], button, [role="menu"], ${EDITOR_CHROME}`;
 /** Клик сюда не закрывает набор: это само поле, его полоса и кнопки поверх холста. */
-const KEEPS_EDITING =
-  '[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"]';
+const KEEPS_EDITING = `[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"], ${EDITOR_CHROME}`;
 /** Здесь фокус свой: набор текста, его полоса и ячейки таблицы. Холст его не отбирает. */
 const OWNS_FOCUS = '[data-text-editor], [data-text-format], [data-table-editor]';
 
@@ -113,19 +106,16 @@ export function SlideCanvas({
   onSelect,
   onCommit,
   onTextCommit,
-  onRemove,
   onRemoveElements,
-  onAlign,
   onInsert,
-  onFontSize,
-  onColor,
   onReplaceImage,
   onCommand,
   canPaste,
   hasLocked,
-  onTableCell,
+  tableOps,
   onRotate,
   controlRef,
+  selectionActions,
   className,
 }: {
   slide: SlideIr;
@@ -142,16 +132,10 @@ export function SlideCanvas({
   onCommit: (moves: readonly ElementMove[]) => void;
   /** Закрытие набора: один `set-text`, не шаг на каждый символ. */
   onTextCommit: (slideId: string, elementId: string, paragraphs: readonly Paragraph[]) => void;
-  /** Удалить выделенное. */
-  onRemove: () => void;
   /** Удалить эти объекты, выделены они или нет: пустой текст после набора. */
   onRemoveElements: (elementIds: readonly string[]) => void;
-  /** Выровнять выделенные объекты между собой. */
-  onAlign: (alignment: Alignment) => void;
   /** Новый объект. В журнал он попадает целиком, одним шагом. */
   onInsert: (elements: readonly SlideElement[]) => void;
-  onFontSize: (elementId: string, sizePt: number) => void;
-  onColor: (elementId: string, colorRole: ColorRole, hex: string) => void;
   /** Новый файл в рамке картинки: рамка и вписывание остаются, меняется только `mediaPart`. */
   onReplaceImage: (elementId: string, mediaPart: string) => void;
   /** Команда из контекстного меню холста. */
@@ -160,12 +144,14 @@ export function SlideCanvas({
   canPaste: boolean;
   /** На слайде есть заблокированные объекты: меню предлагает их разблокировать. */
   hasLocked: boolean;
-  /** Текст ячейки таблицы: одна запись журнала на ячейку. */
-  onTableCell: (elementId: string, cell: TableCell, text: string) => void;
+  /** Правки таблицы: ячейки, строки и столбцы, размеры и вид. */
+  tableOps: TableOps;
   /** Угол объекта после поворота ручкой. */
   onRotate: (elementId: string, rotation: number) => void;
   /** Сюда холст кладёт то, что умеет по просьбе клавиатуры: см. `CanvasControl`. */
   controlRef?: { current: CanvasControl | null };
+  /** Правки полосы свойств над выделением. */
+  selectionActions: SelectionBarActions;
   className?: string;
 }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -208,13 +194,11 @@ export function SlideCanvas({
       : undefined;
   const editingId = editing?.kind === 'text' ? editing.elementId : null;
   const committedText = useRef<readonly Paragraph[] | null>(null);
-  // Правка таблицы по двойному клику: таблица остаётся выделенной, чтобы в панели были
-  // строки и столбцы, а ручки на это время прячутся.
-  const [tableSession, setTableSession] = useState<{
-    slideId: string;
-    elementId: string;
-    focus: GridCell;
-  } | null>(null);
+  // Правка таблицы: второй щелчок, двойной щелчок или Enter. Таблица остаётся выделенной,
+  // чтобы в панели были её ячейки, а ручки рамки на это время прячутся.
+  const [tableSession, setTableSession] = useState<
+    ({ slideId: string; elementId: string } & TableEntry) | null
+  >(null);
   const finishTable = useRef<(() => void) | null>(null);
   const editingTable =
     tableSession?.slideId === slide.slideId
@@ -628,6 +612,7 @@ export function SlideCanvas({
           slideId: slide.slideId,
           elementId: table.dataset.elementId,
           focus: { row: Math.max(0, row), column: Math.max(0, cell?.cellIndex ?? 0) },
+          point: { x: event.clientX, y: event.clientY },
         });
         return;
       }
@@ -644,6 +629,28 @@ export function SlideCanvas({
     host.addEventListener('dblclick', onDoubleClick);
     return () => host.removeEventListener('dblclick', onDoubleClick);
   }, [host, onSelect, replaceImage, slide, tool]);
+
+  // Второй щелчок по выделенной таблице — каретка в ячейку под курсором.
+  useTableClickEntry({
+    host,
+    slide,
+    selectedIds,
+    disabled: tool === 'hand' || inserting || tableSession !== null,
+    onEnter: (elementId, focus, point) =>
+      setTableSession({ slideId: slide.slideId, elementId, focus, point }),
+  });
+  // Границы колонок и строк тянутся у одной выделенной таблицы без поворота и в её правке.
+  const selectedTable =
+    selectedIds.length === 1
+      ? slide.elements.find((item) => item.elementId === selectedIds[0])
+      : undefined;
+  const tableInFocus =
+    editingTable?.kind === 'table'
+      ? editingTable
+      : selectedTable?.kind === 'table' && !selectedTable.locked && !inserting
+        ? selectedTable
+        : undefined;
+  const resizableTable = (tableInFocus?.rotation ?? 0) === 0 ? tableInFocus : undefined;
 
   // Двойной клик по пустому полю вокруг слайда возвращает слайд в кадр.
   useEffect(() => {
@@ -675,7 +682,12 @@ export function SlideCanvas({
         }
         if (element.kind === 'table') {
           onSelect([elementId]);
-          setTableSession({ slideId: slide.slideId, elementId, focus: { row: 0, column: 0 } });
+          setTableSession({
+            slideId: slide.slideId,
+            elementId,
+            focus: { row: 0, column: 0 },
+            selectAll: true,
+          });
           return true;
         }
         return false;
@@ -690,8 +702,10 @@ export function SlideCanvas({
 
   const selectUnderPointer = (event: ReactMouseEvent) => {
     const target = event.target;
+    // В правке таблицы меню своё, у ячеек: выделение объекта оно не трогает.
+    if (target instanceof Element && target.closest('[data-table-editor]')) return;
     if (!(target instanceof Element) || !slideRoot?.contains(target)) {
-      if (target instanceof Element && target.closest('[data-selection-bar]')) return;
+      if (isEditorChrome(target)) return;
       onSelect([]);
       return;
     }
@@ -824,11 +838,26 @@ export function SlideCanvas({
                       slide={slide}
                       designSystem={designSystem}
                       selectedIds={selectedIds}
-                      hidden={gesture || panning || handTool}
-                      onRemove={onRemove}
-                      onAlign={onAlign}
-                      onFontSize={onFontSize}
-                      onColor={onColor}
+                      // Во время жеста, пана и набора в таблице полоса только мешала бы.
+                      hidden={gesture || panning || handTool || editingTable !== undefined}
+                      actions={selectionActions}
+                      onEditTable={(elementId) =>
+                        setTableSession({
+                          slideId: slide.slideId,
+                          elementId,
+                          focus: { row: 0, column: 0 },
+                        })
+                      }
+                    />
+                  ) : null}
+                  {overlay && slideRoot && resizableTable && !gesture && !panning && !pan ? (
+                    <TableHandles
+                      overlay={overlay}
+                      slideRoot={slideRoot}
+                      slide={slide}
+                      element={resizableTable}
+                      editing={editingTable !== undefined}
+                      ops={tableOps}
                     />
                   ) : null}
                 </div>
@@ -870,9 +899,9 @@ export function SlideCanvas({
                     element={editingTable}
                     profile={designSystem}
                     slide={{ cx: slide.slideCx, cy: slide.slideCy }}
-                    focus={tableSession.focus}
+                    entry={tableSession}
                     finishRef={finishTable}
-                    onCell={(cell, text) => onTableCell(editingTable.elementId, cell, text)}
+                    ops={tableOps}
                     onClose={() => setTableSession(null)}
                   />
                 ) : null}
