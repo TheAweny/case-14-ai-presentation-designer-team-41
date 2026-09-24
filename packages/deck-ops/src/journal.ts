@@ -1,96 +1,27 @@
-import { enablePatches, Immer, type Patch } from 'immer';
+import type { Patch } from 'immer';
 import {
-  patchOpSchema,
+  slideElementSchema,
   type Box,
+  type ColorRole,
   type Paragraph,
-  type PatchOp,
   type SlideElement,
   type SlideIr,
 } from '@lct/contracts';
+import {
+  commitProduced,
+  elementOf,
+  journal,
+  produceSlides,
+  selectionOf,
+  slideOf,
+  unchanged,
+  type DeckChange,
+  type DeckCommit,
+  type DeckHistory,
+  type DeckSelection,
+} from './core.js';
 
-// Patches stay off until asked for. Freezing is off too: a commit shares unchanged slides with
-// the deck it was given, and the default freeze would make those slides read-only.
-enablePatches();
-const journal = new Immer({ autoFreeze: false });
-
-/**
- * One committed editor change.
- *
- * `patches` replay the gesture, `inversePatches` are the undo. `ops` is what the engine applies
- * for the same gesture: one `move` or one `set-text`, never a step per pixel or character.
- * A deck-level change such as reordering slides carries no engine op.
- */
-export interface DeckChange {
-  /** Slide the engine ops belong to. Null when the change is the deck itself. */
-  readonly slideId: string | null;
-  readonly patches: readonly Patch[];
-  readonly inversePatches: readonly Patch[];
-  readonly ops: readonly PatchOp[];
-}
-
-/** The deck after a commit. `change` is null when the slides were left as they were. */
-export interface DeckCommit {
-  readonly slides: readonly SlideIr[];
-  readonly change: DeckChange | null;
-}
-
-/** Present slides plus the undo and redo stacks. The newest change is last in each stack. */
-export interface DeckHistory {
-  readonly slides: readonly SlideIr[];
-  readonly undo: readonly DeckChange[];
-  readonly redo: readonly DeckChange[];
-}
-
-interface Produced {
-  readonly next: readonly SlideIr[];
-  readonly patches: readonly Patch[];
-  readonly inversePatches: readonly Patch[];
-}
-
-function unchanged(slides: readonly SlideIr[]): DeckCommit {
-  return { slides, change: null };
-}
-
-function produceSlides(slides: readonly SlideIr[], recipe: (draft: SlideIr[]) => void): Produced {
-  const [next, patches, inversePatches] = journal.produceWithPatches(slides as SlideIr[], recipe);
-  return { next, patches, inversePatches };
-}
-
-/**
- * Immer's patch values alias the objects they came from. The journal keeps its own copy, so a
- * later edit of the slide that was current at commit time cannot rewrite undo.
- */
-function snapshotPatches(patches: readonly Patch[]): readonly Patch[] {
-  return structuredClone(patches);
-}
-
-function elementOf(
-  slides: readonly SlideIr[],
-  slideId: string,
-  elementId: string,
-): SlideElement | undefined {
-  return slides
-    .find((slide) => slide.slideId === slideId)
-    ?.elements.find((element) => element.elementId === elementId);
-}
-
-function commitProduced(
-  slides: readonly SlideIr[],
-  produced: Produced,
-  slideId: string | null,
-  ops: readonly PatchOp[],
-): DeckCommit {
-  if (produced.patches.length === 0) return unchanged(slides);
-  return {
-    slides: produced.next,
-    change: {
-      slideId,
-      patches: snapshotPatches(produced.patches),
-      inversePatches: snapshotPatches(produced.inversePatches),
-      ops: ops.map((op) => patchOpSchema.parse(op)),
-    },
-  };
-}
+export type { DeckChange, DeckChangeKind, DeckCommit, DeckHistory, DeckSelection } from './core.js';
 
 function integralBox(box: Box): Box {
   return {
@@ -135,6 +66,7 @@ export function commitMoves(
       target.box = { ...box };
     }
   });
+  const moved = selectionOf(change.slideId, [...boxes.keys()]);
   return commitProduced(
     slides,
     produced,
@@ -144,6 +76,7 @@ export function commitMoves(
       elementId,
       box: { ...box },
     })),
+    { kind: 'move', before: moved, after: moved },
   );
 }
 
@@ -181,6 +114,9 @@ export function commitMoveGesture(
 /**
  * Replace the copy of one text element. Call this once, when the text editor closes:
  * the keystrokes belong to that editor, not to the deck journal.
+ *
+ * The engine measured the overflow of the old copy, so the flag goes back to null: a stale mark
+ * on new words is worse than none until the engine measures again.
  */
 export function commitSetText(
   slides: readonly SlideIr[],
@@ -199,10 +135,16 @@ export function commitSetText(
     const target = elementOf(draft, change.slideId, change.elementId);
     if (!target || target.kind !== 'text') return;
     target.paragraphs = structuredClone(paragraphs) as Paragraph[];
+    if (target.overflow !== null) target.overflow = null;
   });
-  return commitProduced(slides, produced, change.slideId, [
-    { op: 'set-text', elementId: change.elementId, paragraphs: structuredClone(paragraphs) },
-  ]);
+  const edited = selectionOf(change.slideId, [change.elementId]);
+  return commitProduced(
+    slides,
+    produced,
+    change.slideId,
+    [{ op: 'set-text', elementId: change.elementId, paragraphs: structuredClone(paragraphs) }],
+    { kind: 'text', before: edited, after: edited },
+  );
 }
 
 /**
@@ -227,6 +169,170 @@ export function commitSetTextGesture(
 }
 
 /**
+ * Set one size, in points, on every existing run of a text element.
+ * Runs are not invented. One gesture is one `set-font-size`.
+ */
+export function commitSetFontSize(
+  slides: readonly SlideIr[],
+  change: { readonly slideId: string; readonly elementId: string; readonly sizePt: number },
+): DeckCommit {
+  const { sizePt } = change;
+  if (!Number.isFinite(sizePt) || sizePt <= 0) return unchanged(slides);
+  const element = elementOf(slides, change.slideId, change.elementId);
+  if (!element || element.kind !== 'text') return unchanged(slides);
+  const runs = element.paragraphs.flatMap((paragraph) => paragraph.runs);
+  if (runs.length === 0 || runs.every((run) => run.sizePt === sizePt)) return unchanged(slides);
+
+  const produced = produceSlides(slides, (draft) => {
+    const target = elementOf(draft, change.slideId, change.elementId);
+    if (!target || target.kind !== 'text') return;
+    for (const paragraph of target.paragraphs) {
+      for (const run of paragraph.runs) {
+        run.sizePt = sizePt;
+      }
+    }
+  });
+  const edited = selectionOf(change.slideId, [change.elementId]);
+  return commitProduced(
+    slides,
+    produced,
+    change.slideId,
+    [{ op: 'set-font-size', elementId: change.elementId, sizePt }],
+    { kind: 'font-size', before: edited, after: edited },
+  );
+}
+
+/**
+ * Set one color on every existing run of a text element.
+ * The engine op names the role and not the hex: the hex is only how the slide looks
+ * until export learns the role.
+ */
+export function commitSetColor(
+  slides: readonly SlideIr[],
+  change: {
+    readonly slideId: string;
+    readonly elementId: string;
+    readonly colorRole: ColorRole;
+    readonly hex: string;
+  },
+): DeckCommit {
+  if (!/^[0-9a-fA-F]{6}$/.test(change.hex)) return unchanged(slides);
+  const element = elementOf(slides, change.slideId, change.elementId);
+  if (!element || element.kind !== 'text') return unchanged(slides);
+  const runs = element.paragraphs.flatMap((paragraph) => paragraph.runs);
+  if (runs.length === 0 || runs.every((run) => run.color === change.hex)) return unchanged(slides);
+
+  const produced = produceSlides(slides, (draft) => {
+    const target = elementOf(draft, change.slideId, change.elementId);
+    if (!target || target.kind !== 'text') return;
+    for (const paragraph of target.paragraphs) {
+      for (const run of paragraph.runs) {
+        run.color = change.hex;
+      }
+    }
+  });
+  const edited = selectionOf(change.slideId, [change.elementId]);
+  return commitProduced(
+    slides,
+    produced,
+    change.slideId,
+    [{ op: 'set-color', elementId: change.elementId, colorRole: change.colorRole }],
+    { kind: 'color', before: edited, after: edited },
+  );
+}
+
+/**
+ * Remove elements from one slide. Several elements share one journal entry, and undo puts
+ * each back at its old place in the paint order.
+ */
+export function commitRemove(
+  slides: readonly SlideIr[],
+  change: { readonly slideId: string; readonly elementIds: readonly string[] },
+): DeckCommit {
+  const wanted = new Set(change.elementIds);
+  const elements = slideOf(slides, change.slideId)?.elements ?? [];
+  const removed = elements.filter((element) => wanted.has(element.elementId));
+  if (removed.length === 0) return unchanged(slides);
+  const produced = produceSlides(slides, (draft) => {
+    const target = slideOf(draft, change.slideId);
+    if (!target) return;
+    // From the end, so the indices still to visit stay where they were.
+    for (let index = target.elements.length - 1; index >= 0; index -= 1) {
+      const element = target.elements[index];
+      if (element && wanted.has(element.elementId)) target.elements.splice(index, 1);
+    }
+  });
+  const ids = removed.map((element) => element.elementId);
+  return commitProduced(
+    slides,
+    produced,
+    change.slideId,
+    ids.map((elementId) => ({ op: 'remove' as const, elementId })),
+    {
+      kind: 'remove',
+      before: selectionOf(change.slideId, ids),
+      after: selectionOf(change.slideId, []),
+    },
+  );
+}
+
+export function parsedElements(elements: readonly SlideElement[]): readonly SlideElement[] | null {
+  try {
+    return elements.map((element) => slideElementSchema.parse(element));
+  } catch {
+    return null;
+  }
+}
+
+/** A text element with no words yet: what the text tool puts down before the first keystroke. */
+function isEmptyText(element: SlideElement): boolean {
+  return (
+    element.kind === 'text' &&
+    element.paragraphs.every((paragraph) => paragraph.runs.every((run) => run.text === ''))
+  );
+}
+
+/**
+ * Append elements to one slide, in paint order, above what is already there, keeping the ids the
+ * caller gave. The engine has no insert operation, so the entry names the slide and carries no
+ * ops. Elements are cloned inside the recipe: the next slides must not alias the caller's objects.
+ *
+ * A single empty text element is marked pending: its first edit folds into this entry (see
+ * `recordChange`).
+ */
+export function commitInsert(
+  slides: readonly SlideIr[],
+  change: { readonly slideId: string; readonly elements: readonly SlideElement[] },
+): DeckCommit {
+  if (change.elements.length === 0) return unchanged(slides);
+  const existing = slideOf(slides, change.slideId);
+  if (!existing) return unchanged(slides);
+
+  const inserted = parsedElements(change.elements);
+  if (!inserted) return unchanged(slides);
+  const taken = new Set(existing.elements.map((element) => element.elementId));
+  const ids = inserted.map((element) => element.elementId);
+  if (ids.some((id) => taken.has(id)) || new Set(ids).size !== ids.length) {
+    return unchanged(slides);
+  }
+
+  const produced = produceSlides(slides, (draft) => {
+    const target = slideOf(draft, change.slideId);
+    if (!target) return;
+    for (const element of structuredClone(inserted)) {
+      target.elements.push(element);
+    }
+  });
+  const [only] = inserted;
+  return commitProduced(slides, produced, change.slideId, [], {
+    kind: 'insert',
+    before: selectionOf(change.slideId, []),
+    after: selectionOf(change.slideId, ids),
+    pendingText: inserted.length === 1 && only && isEmptyText(only) ? only.elementId : null,
+  });
+}
+
+/**
  * Move a slide to another position in the deck and renumber `index`.
  * This is not a `PatchOp`: the engine has no reorder operation.
  */
@@ -241,28 +347,107 @@ export function reorderSlides(
   }
   if (fromIndex === toIndex) return unchanged(slides);
 
+  const moved = slides[fromIndex]?.slideId ?? null;
   const produced = produceSlides(slides, (draft) => {
-    const [moved] = draft.splice(fromIndex, 1);
-    if (!moved) return;
-    draft.splice(toIndex, 0, moved);
-    for (const [index, slide] of draft.entries()) {
-      if (slide.index !== index) slide.index = index;
+    const [slide] = draft.splice(fromIndex, 1);
+    if (!slide) return;
+    draft.splice(toIndex, 0, slide);
+    for (const [index, item] of draft.entries()) {
+      if (item.index !== index) item.index = index;
     }
   });
-  return commitProduced(slides, produced, null, []);
+  return commitProduced(slides, produced, null, [], {
+    kind: 'slide-order',
+    before: selectionOf(moved, []),
+    after: selectionOf(moved, []),
+  });
 }
 
 export function createDeckHistory(slides: readonly SlideIr[]): DeckHistory {
-  return { slides, undo: [], redo: [] };
+  return { slides, undo: [], redo: [], restored: null };
 }
 
-/** Push a commit onto the journal. A no-op commit leaves the history as it was and keeps redo. */
-export function recordChange(history: DeckHistory, commit: DeckCommit): DeckHistory {
+/**
+ * Two changes as one: the patches of the first then the second, undone in the opposite order.
+ * The entry keeps the kind and the selection before of the first, and the selection after of
+ * the second.
+ */
+export function mergeChanges(earlier: DeckChange, later: DeckChange): DeckChange {
+  return {
+    slideId: earlier.slideId === later.slideId ? earlier.slideId : null,
+    patches: [...earlier.patches, ...later.patches],
+    inversePatches: [...later.inversePatches, ...earlier.inversePatches],
+    ops: [...earlier.ops, ...later.ops],
+    kind: earlier.kind,
+    before: earlier.before,
+    after: later.after,
+    pendingText: null,
+  };
+}
+
+export interface RecordOptions {
+  /** Fold this change into the newest entry, so one undo takes both back. */
+  readonly merge?: boolean;
+  /** The selection undo should bring back, when the caller knows it better than the change. */
+  readonly before?: DeckSelection | null;
+  /** The selection redo should bring back. */
+  readonly after?: DeckSelection | null;
+}
+
+function onlyElement(change: DeckChange, elementId: string): boolean {
+  return (
+    change.after?.elementIds.length === 1 &&
+    change.after.elementIds[0] === elementId &&
+    change.ops.every((op) => 'elementId' in op && op.elementId === elementId)
+  );
+}
+
+/**
+ * Push a commit onto the journal. A no-op commit leaves the history as it was and keeps redo.
+ *
+ * Right after an empty text element was inserted, its first `text` change folds into the insert
+ * entry, and removing it drops the insert entry altogether: a text box put down and left empty
+ * leaves no step behind.
+ */
+export function recordChange(
+  history: DeckHistory,
+  commit: DeckCommit,
+  options: RecordOptions = {},
+): DeckHistory {
   if (!commit.change) return history;
+  const change: DeckChange = {
+    ...commit.change,
+    ...(options.before !== undefined ? { before: options.before } : null),
+    ...(options.after !== undefined ? { after: options.after } : null),
+  };
+  const last = history.undo.at(-1);
+  const pending = last?.pendingText ?? null;
+  if (last && pending !== null && last.slideId === change.slideId) {
+    if (change.kind === 'text' && onlyElement(change, pending)) {
+      return {
+        slides: commit.slides,
+        undo: [...history.undo.slice(0, -1), mergeChanges(last, change)],
+        redo: [],
+        restored: null,
+      };
+    }
+    if (change.kind === 'remove' && change.before?.elementIds.join('\0') === pending) {
+      return { slides: commit.slides, undo: history.undo.slice(0, -1), redo: [], restored: null };
+    }
+  }
+  if (options.merge && last) {
+    return {
+      slides: commit.slides,
+      undo: [...history.undo.slice(0, -1), mergeChanges(last, change)],
+      redo: [],
+      restored: null,
+    };
+  }
   return {
     slides: commit.slides,
-    undo: [...history.undo, commit.change],
+    undo: [...history.undo, change],
     redo: [],
+    restored: null,
   };
 }
 
@@ -277,6 +462,7 @@ export function undoDeck(history: DeckHistory): DeckHistory {
     slides: applyChange(history.slides, change.inversePatches),
     undo: history.undo.slice(0, -1),
     redo: [...history.redo, change],
+    restored: change.before,
   };
 }
 
@@ -287,5 +473,6 @@ export function redoDeck(history: DeckHistory): DeckHistory {
     slides: applyChange(history.slides, change.patches),
     undo: [...history.undo, change],
     redo: history.redo.slice(0, -1),
+    restored: change.after,
   };
 }
