@@ -33,7 +33,11 @@ import {
 } from '@/components/editor/insert-element';
 import { SelectionBar, type SelectionBarActions } from '@/components/editor/selection-bar';
 import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus';
-import { SlideHandles, type LineReshape } from '@/components/editor/slide-handles';
+import {
+  SlideHandles,
+  type LineReshape,
+  type TurnedElement,
+} from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
 import { typedText } from '@/components/editor/text-shortcuts';
 import { TableEditor, type TableEntry } from '@/components/editor/table-editor';
@@ -121,6 +125,7 @@ export function SlideCanvas({
   onNudge,
   onDuplicate,
   onLineEnds,
+  onRotateMany,
   controlRef,
   selectionActions,
   className,
@@ -169,6 +174,8 @@ export function SlideCanvas({
   onDuplicate?: (elementIds: readonly string[], offset: { x: number; y: number }) => void;
   /** Конец линии перетащили: живой вид жеста, запись или отмена живого вида (`null`). */
   onLineEnds?: (elementId: string, line: LineReshape | null, mode: EditMode) => void;
+  /** Поворот нескольких объектов вокруг общего центра: рамки и углы одной записью. */
+  onRotateMany?: (turns: readonly TurnedElement[]) => void;
   /** Сюда холст кладёт то, что умеет по просьбе клавиатуры: см. `CanvasControl`. */
   controlRef?: { current: CanvasControl | null };
   /** Правки полосы свойств над выделением. */
@@ -885,6 +892,7 @@ export function SlideCanvas({
                       onRotate={onRotate}
                       onDuplicate={onDuplicate}
                       onLineEnds={onLineEnds}
+                      onRotateMany={onRotateMany}
                       onGestureChange={setGesture}
                     />
                   ) : null}

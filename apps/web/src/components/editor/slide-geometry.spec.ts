@@ -19,6 +19,7 @@ import {
   snapValue,
   slidePixels,
   translatedBox,
+  turnedAbout,
   unionBox,
 } from './slide-geometry';
 import { tokenMeta } from '../../mocks/demo-deck/token-meta';
@@ -462,5 +463,15 @@ describe('point in a box', () => {
     // Повёрнутая на 90° полоса стоит вертикально вокруг своего центра (100, 10).
     expect(boxContains(box, { x: 100, y: 80 }, 90)).toBe(true);
     expect(boxContains(box, { x: 180, y: 10 }, 90)).toBe(false);
+  });
+});
+
+describe('turning a selection', () => {
+  it('carries each box round the pivot and adds the turn to its own angle', () => {
+    const pivot = { x: 100, y: 100 };
+    const right = turnedAbout({ x: 180, y: 90, cx: 40, cy: 20 }, 10, pivot, 90);
+    // Центр (200, 100) уходит вниз, в (100, 200); угол 10° + 90°.
+    expect(right).toEqual({ box: { x: 80, y: 190, cx: 40, cy: 20 }, rotation: 100 });
+    expect(turnedAbout({ x: 0, y: 0, cx: 10, cy: 10 }, 350, pivot, 30).rotation).toBe(20);
   });
 });

@@ -45,7 +45,7 @@ import {
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
 import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canvas';
-import type { LineReshape } from '@/components/editor/slide-handles';
+import type { LineReshape, TurnedElement } from '@/components/editor/slide-handles';
 import { flipEntries } from '@/components/editor/inspector/selection-model';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
@@ -346,6 +346,18 @@ export function EditorShell({
       reshape(slideId, [{ elementId, box, props }], mode);
     },
     [endPreview, reshape, slideId],
+  );
+
+  /** Поворот выделения вокруг общего центра: рамки и углы одной записью журнала. */
+  const rotateMany = useCallback(
+    (turns: readonly TurnedElement[]) => {
+      if (!slideId || turns.length === 0) return;
+      reshape(
+        slideId,
+        turns.map(({ elementId, box, rotation }) => ({ elementId, box, props: { rotation } })),
+      );
+    },
+    [reshape, slideId],
   );
 
   const removeSelected = useCallback(() => {
@@ -1003,6 +1015,7 @@ export function EditorShell({
                       onNudge={nudgeOf}
                       onDuplicate={duplicateTo}
                       onLineEnds={reshapeLine}
+                      onRotateMany={rotateMany}
                       controlRef={canvasControl}
                       selectionActions={selectionActions}
                       className={CANVAS_PADDING}

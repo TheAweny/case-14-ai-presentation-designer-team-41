@@ -505,3 +505,20 @@ export function boxContains(box: Box, point: Point, rotation = 0): boolean {
     local.x >= box.x && local.x <= box.x + box.cx && local.y >= box.y && local.y <= box.y + box.cy
   );
 }
+
+/**
+ * One box of a selection turned together about `pivot`: its centre goes round the pivot and its
+ * own angle grows by the same `delta`, in degrees clockwise.
+ */
+export function turnedAbout(
+  box: Box,
+  rotation: number,
+  pivot: Point,
+  delta: number,
+): { box: Box; rotation: number } {
+  const center = turned({ x: box.x + box.cx / 2, y: box.y + box.cy / 2 }, pivot, delta);
+  return {
+    box: { ...box, x: Math.round(center.x - box.cx / 2), y: Math.round(center.y - box.cy / 2) },
+    rotation: (((rotation + delta) % 360) + 360) % 360,
+  };
+}

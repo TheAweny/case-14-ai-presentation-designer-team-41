@@ -25,6 +25,7 @@ import {
   slidePixels,
   snapValue,
   translatedBox,
+  turnedAbout,
   unionBox,
   type FrameSize,
   type PixelBox,
@@ -267,6 +268,13 @@ export interface LineReshape {
   readonly rotation?: number;
 }
 
+/** Объект после поворота выделения вокруг общего центра. */
+export interface TurnedElement {
+  readonly elementId: string;
+  readonly box: Box;
+  readonly rotation: number;
+}
+
 interface LineDrag {
   readonly elementId: string;
   readonly end: 'from' | 'to';
@@ -302,6 +310,7 @@ export function SlideHandles({
   onRotate,
   onDuplicate,
   onLineEnds,
+  onRotateMany,
   onGestureChange,
 }: {
   /** Слой в экранных пикселях поверх холста: здесь ручки и рамка. */
@@ -328,6 +337,8 @@ export function SlideHandles({
    * сорвался, живой вид надо убрать.
    */
   onLineEnds?: (elementId: string, line: LineReshape | null, mode: EditMode) => void;
+  /** Несколько объектов повернули вместе: у каждого новая рамка и угол. Одна запись журнала. */
+  onRotateMany?: (turns: readonly TurnedElement[]) => void;
   /** Рамку тащат или тянут за ручку: с первого сдвига до отпускания. Простой клик сюда не входит. */
   onGestureChange?: (active: boolean) => void;
 }) {
@@ -347,6 +358,8 @@ export function SlideHandles({
   /** Нажатие внутри выделения на другой объект: без сдвига щелчок выберет его. */
   const pendingSelect = useRef<string | null>(null);
   const lineDrag = useRef<LineDrag | null>(null);
+  /** Центр рамки группы в EMU: вокруг него поворачивается несколько объектов. */
+  const pivot = useRef<Point | null>(null);
   const [keys, setKeys] = useState({ shift: false, alt: false, mod: false });
   /** Рамку тащит Moveable: ручки концов линии на это время прячутся. */
   const [moving, setMoving] = useState(false);
@@ -887,8 +900,8 @@ export function SlideHandles({
           // У линии вместо рамки — ручки концов, у остальных восемь ручек.
           resizable={!line}
           // Поворот как в Figma: тянуть сразу за угловыми ручками, с Shift — шагом 15°.
-          // Группу не вращаем: у SlideIR нет общего центра группы, только углы объектов.
-          rotatable={targets.length === 1 && !line}
+          // Несколько объектов вращаются вокруг центра общей рамки, каждый — со своим углом.
+          rotatable={targets.length > 1 ? onRotateMany !== undefined : !line}
           rotationPosition="none"
           rotateAroundControls
           throttleRotate={keys.shift ? 15 : 0}
@@ -982,6 +995,50 @@ export function SlideHandles({
             if (event.isDrag && id && last?.rotation !== undefined) {
               const rotation = last.rotation;
               flushSync(() => onRotate?.(id, rotation));
+            }
+            end();
+          }}
+          onRotateGroupStart={(event) => {
+            remember(event.targets);
+            // Центр рамки группы, как её нарисовал Moveable: вокруг него крутится вид. Рамка
+            // могла остаться повёрнутой с прошлого раза, поэтому — по её угловым ручкам.
+            const box = moveableRef.current?.getControlBoxElement();
+            const corners = box
+              ? [...box.querySelectorAll('.moveable-control.moveable-direction')]
+                  .filter((node) =>
+                    ['nw', 'ne', 'sw', 'se'].includes(node.getAttribute('data-direction') ?? ''),
+                  )
+                  .map((node) => node.getBoundingClientRect())
+              : [];
+            if (corners.length !== 4) {
+              pivot.current = null;
+              return;
+            }
+            const x = corners.reduce((sum, rect) => sum + rect.left + rect.width / 2, 0) / 4;
+            const y = corners.reduce((sum, rect) => sum + rect.top + rect.height / 2, 0) / 4;
+            pivot.current = toSlide(x, y);
+          }}
+          onRotateGroup={({ events, dist, inputEvent }) => {
+            begin();
+            // Каждый объект и поворачивается, и обходит центр группы: это `drag.transform`.
+            for (const item of events) item.target.style.transform = item.drag.transform;
+            readoutAtPointer(`${degrees(dist)}°`, inputEvent);
+          }}
+          onRotateGroupEnd={(event) => {
+            const last = event.lastEvent as { dist?: number } | undefined;
+            const center = pivot.current;
+            pivot.current = null;
+            restore();
+            if (event.isDrag && center && last?.dist !== undefined && last.dist !== 0) {
+              const delta = last.dist;
+              const turns = event.targets.flatMap((target) => {
+                const id = idOf(target);
+                const element = id ? byId.get(id) : undefined;
+                if (!id || !element) return [];
+                const next = turnedAbout(element.box, element.rotation ?? 0, center, delta);
+                return [{ elementId: id, ...next }];
+              });
+              flushSync(() => onRotateMany?.(turns));
             }
             end();
           }}
