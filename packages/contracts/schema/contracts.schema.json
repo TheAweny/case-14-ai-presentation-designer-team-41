@@ -458,6 +458,23 @@
                             "items": {
                               "additionalProperties": false,
                               "properties": {
+                                "align": {
+                                  "anyOf": [
+                                    {
+                                      "enum": [
+                                        "left",
+                                        "center",
+                                        "right",
+                                        "justify"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "Null or absent when the paragraph inherits its alignment."
+                                },
                                 "level": {
                                   "description": "Indent level, zero at the top.",
                                   "maximum": 9007199254740991,
@@ -501,6 +518,13 @@
                                       "text": {
                                         "description": "Literal text of the run.",
                                         "type": "string"
+                                      },
+                                      "underline": {
+                                        "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                        "type": [
+                                          "boolean",
+                                          "null"
+                                        ]
                                       }
                                     },
                                     "required": [
@@ -1707,6 +1731,23 @@
                     "items": {
                       "additionalProperties": false,
                       "properties": {
+                        "align": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "left",
+                                "center",
+                                "right",
+                                "justify"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null or absent when the paragraph inherits its alignment."
+                        },
                         "level": {
                           "description": "Indent level, zero at the top.",
                           "maximum": 9007199254740991,
@@ -1750,6 +1791,13 @@
                               "text": {
                                 "description": "Literal text of the run.",
                                 "type": "string"
+                              },
+                              "underline": {
+                                "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
                               }
                             },
                             "required": [
@@ -2750,6 +2798,29 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "background": {
+          "anyOf": [
+            {
+              "enum": [
+                "background",
+                "surface",
+                "text",
+                "text-muted",
+                "text-on-accent",
+                "accent",
+                "accent-alt",
+                "line",
+                "positive",
+                "negative"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Palette role the slide is filled with. Null or absent: the template background."
+        },
         "elements": {
           "description": "In paint order, lowest first.",
           "items": {
@@ -2801,6 +2872,16 @@
                     "const": "text",
                     "type": "string"
                   },
+                  "locked": {
+                    "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "description": "From 0 to 1. Absent means opaque.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
                   "overflow": {
                     "anyOf": [
                       {
@@ -2835,6 +2916,23 @@
                     "items": {
                       "additionalProperties": false,
                       "properties": {
+                        "align": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "left",
+                                "center",
+                                "right",
+                                "justify"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null or absent when the paragraph inherits its alignment."
+                        },
                         "level": {
                           "description": "Indent level, zero at the top.",
                           "maximum": 9007199254740991,
@@ -2878,6 +2976,13 @@
                               "text": {
                                 "description": "Literal text of the run.",
                                 "type": "string"
+                              },
+                              "underline": {
+                                "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
                               }
                             },
                             "required": [
@@ -2921,6 +3026,12 @@
                     ],
                     "type": "string"
                   },
+                  "rotation": {
+                    "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                    "exclusiveMaximum": 360,
+                    "minimum": 0,
+                    "type": "number"
+                  },
                   "sourceShapeId": {
                     "anyOf": [
                       {
@@ -2933,6 +3044,15 @@
                       }
                     ],
                     "description": "Template shape this was placed from, when it came from one."
+                  },
+                  "verticalAlign": {
+                    "description": "Absent when the element inherits it, which reads as top.",
+                    "enum": [
+                      "top",
+                      "middle",
+                      "bottom"
+                    ],
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -3001,10 +3121,20 @@
                     "const": "image",
                     "type": "string"
                   },
+                  "locked": {
+                    "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                    "type": "boolean"
+                  },
                   "mediaPart": {
                     "description": "Part name inside the template, or a path under the run directory.",
                     "minLength": 1,
                     "type": "string"
+                  },
+                  "opacity": {
+                    "description": "From 0 to 1. Absent means opaque.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
                   },
                   "role": {
                     "enum": [
@@ -3024,6 +3154,12 @@
                       "decoration"
                     ],
                     "type": "string"
+                  },
+                  "rotation": {
+                    "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                    "exclusiveMaximum": 360,
+                    "minimum": 0,
+                    "type": "number"
                   },
                   "sourceShapeId": {
                     "anyOf": [
@@ -3103,6 +3239,16 @@
                     "const": "table",
                     "type": "string"
                   },
+                  "locked": {
+                    "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "description": "From 0 to 1. Absent means opaque.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
                   "role": {
                     "enum": [
                       "title",
@@ -3121,6 +3267,12 @@
                       "decoration"
                     ],
                     "type": "string"
+                  },
+                  "rotation": {
+                    "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                    "exclusiveMaximum": 360,
+                    "minimum": 0,
+                    "type": "number"
                   },
                   "rows": {
                     "items": {
@@ -3220,6 +3372,16 @@
                     "const": "chart",
                     "type": "string"
                   },
+                  "locked": {
+                    "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "description": "From 0 to 1. Absent means opaque.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
                   "role": {
                     "enum": [
                       "title",
@@ -3238,6 +3400,12 @@
                       "decoration"
                     ],
                     "type": "string"
+                  },
+                  "rotation": {
+                    "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                    "exclusiveMaximum": 360,
+                    "minimum": 0,
+                    "type": "number"
                   },
                   "series": {
                     "items": {
@@ -3336,13 +3504,60 @@
                     ],
                     "type": "object"
                   },
+                  "cornerRadius": {
+                    "description": "Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
+                    "maximum": 0.5,
+                    "minimum": 0,
+                    "type": "number"
+                  },
                   "elementId": {
                     "minLength": 1,
                     "type": "string"
                   },
+                  "fill": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "background",
+                          "surface",
+                          "text",
+                          "text-muted",
+                          "text-on-accent",
+                          "accent",
+                          "accent-alt",
+                          "line",
+                          "positive",
+                          "negative"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Null for no fill. Absent when the template did not state one."
+                  },
+                  "flipH": {
+                    "description": "Mirrored horizontally. A line runs from the top left of its box unless flipped.",
+                    "type": "boolean"
+                  },
+                  "flipV": {
+                    "description": "Mirrored vertically.",
+                    "type": "boolean"
+                  },
                   "kind": {
                     "const": "decor",
                     "type": "string"
+                  },
+                  "locked": {
+                    "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                    "type": "boolean"
+                  },
+                  "opacity": {
+                    "description": "From 0 to 1. Absent means opaque.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
                   },
                   "role": {
                     "enum": [
@@ -3363,11 +3578,103 @@
                     ],
                     "type": "string"
                   },
+                  "rotation": {
+                    "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                    "exclusiveMaximum": 360,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "shape": {
+                    "description": "Absent for template decoration of a geometry the parser did not name.",
+                    "enum": [
+                      "rect",
+                      "round-rect",
+                      "ellipse",
+                      "triangle",
+                      "diamond",
+                      "line"
+                    ],
+                    "type": "string"
+                  },
                   "sourceShapeId": {
-                    "description": "Decoration always comes from the template.",
-                    "maximum": 9007199254740991,
-                    "minimum": -9007199254740991,
-                    "type": "integer"
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Template shape this was placed from. Null when it was drawn in the editor."
+                  },
+                  "stroke": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "color": {
+                            "description": "A role, never a literal colour: the template supplies it.",
+                            "enum": [
+                              "background",
+                              "surface",
+                              "text",
+                              "text-muted",
+                              "text-on-accent",
+                              "accent",
+                              "accent-alt",
+                              "line",
+                              "positive",
+                              "negative"
+                            ],
+                            "type": "string"
+                          },
+                          "dash": {
+                            "enum": [
+                              "solid",
+                              "dash",
+                              "dot"
+                            ],
+                            "type": "string"
+                          },
+                          "head": {
+                            "description": "Mark at the start of a line.",
+                            "enum": [
+                              "none",
+                              "arrow"
+                            ],
+                            "type": "string"
+                          },
+                          "tail": {
+                            "description": "Mark at the end of a line.",
+                            "enum": [
+                              "none",
+                              "arrow"
+                            ],
+                            "type": "string"
+                          },
+                          "widthEmu": {
+                            "description": "Line width in EMU.",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "color",
+                          "widthEmu",
+                          "dash",
+                          "head",
+                          "tail"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Null for no outline. Absent when the template did not state one."
                   }
                 },
                 "required": [
@@ -3551,6 +3858,23 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "align": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "left",
+                                  "center",
+                                  "right",
+                                  "justify"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Null or absent when the paragraph inherits its alignment."
+                          },
                           "level": {
                             "description": "Indent level, zero at the top.",
                             "maximum": 9007199254740991,
@@ -3594,6 +3918,13 @@
                                 "text": {
                                   "description": "Literal text of the run.",
                                   "type": "string"
+                                },
+                                "underline": {
+                                  "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                  "type": [
+                                    "boolean",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -3834,6 +4165,23 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "align": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "left",
+                                  "center",
+                                  "right",
+                                  "justify"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Null or absent when the paragraph inherits its alignment."
+                          },
                           "level": {
                             "description": "Indent level, zero at the top.",
                             "maximum": 9007199254740991,
@@ -3877,6 +4225,13 @@
                                 "text": {
                                   "description": "Literal text of the run.",
                                   "type": "string"
+                                },
+                                "underline": {
+                                  "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                  "type": [
+                                    "boolean",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -4192,6 +4547,23 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "align": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "left",
+                                  "center",
+                                  "right",
+                                  "justify"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Null or absent when the paragraph inherits its alignment."
+                          },
                           "level": {
                             "description": "Indent level, zero at the top.",
                             "maximum": 9007199254740991,
@@ -4235,6 +4607,13 @@
                                 "text": {
                                   "description": "Literal text of the run.",
                                   "type": "string"
+                                },
+                                "underline": {
+                                  "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                  "type": [
+                                    "boolean",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [

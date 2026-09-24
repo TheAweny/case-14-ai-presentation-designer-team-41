@@ -57,6 +57,111 @@
           }
         ]
       }
+    },
+    {
+      "name": "a slide edited in the editor keeps its look in the contract",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s3",
+        "variant": "balanced",
+        "index": 2,
+        "patternId": "title-over-two-columns",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "background": "surface",
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "s3-panel",
+            "role": "decoration",
+            "box": {
+              "x": 8128000,
+              "y": 0,
+              "cx": 4064000,
+              "cy": 6858000
+            },
+            "sourceShapeId": 5,
+            "locked": true
+          },
+          {
+            "kind": "text",
+            "elementId": "s3-title",
+            "role": "title",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 6858000,
+              "cy": 1325563
+            },
+            "sourceShapeId": 2,
+            "verticalAlign": "bottom",
+            "paragraphs": [
+              {
+                "level": 0,
+                "align": "center",
+                "runs": [
+                  {
+                    "text": "Итоги квартала",
+                    "font": "Play",
+                    "sizePt": 40,
+                    "bold": true,
+                    "italic": false,
+                    "underline": true,
+                    "color": "1F1F1F"
+                  }
+                ]
+              }
+            ],
+            "overflow": null
+          },
+          {
+            "kind": "decor",
+            "elementId": "c1f0a2d4",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 2286000,
+              "cx": 2032000,
+              "cy": 1270000
+            },
+            "sourceShapeId": null,
+            "rotation": 15,
+            "opacity": 0.8,
+            "shape": "round-rect",
+            "fill": "accent",
+            "stroke": {
+              "color": "line",
+              "widthEmu": 12700,
+              "dash": "dash",
+              "head": "none",
+              "tail": "none"
+            },
+            "cornerRadius": 0.25
+          },
+          {
+            "kind": "decor",
+            "elementId": "9b3e71aa",
+            "role": "decoration",
+            "box": {
+              "x": 3200400,
+              "y": 2286000,
+              "cx": 1828800,
+              "cy": 914400
+            },
+            "sourceShapeId": null,
+            "shape": "line",
+            "fill": null,
+            "stroke": {
+              "color": "accent",
+              "widthEmu": 25400,
+              "dash": "solid",
+              "head": "none",
+              "tail": "arrow"
+            },
+            "flipH": true
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -119,8 +224,8 @@
       }
     },
     {
-      "name": "decoration with no shape behind it",
-      "why": "Decoration is carried over from the template, so it always has a source shape.",
+      "name": "element that does not say where it came from",
+      "why": "Null says the editor drew it, a number names the template shape; a missing key says nothing, so export would have to guess.",
       "path": ["elements", 0, "sourceShapeId"],
       "payload": {
         "schemaVersion": 1,
@@ -140,8 +245,66 @@
               "y": 365125,
               "cx": 10515600,
               "cy": 1325563
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape filled with a literal colour",
+      "why": "A colour is a palette role; a hex value here is hardcoding one template into the slide.",
+      "path": ["elements", 0, "fill"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
             },
-            "sourceShapeId": null
+            "sourceShapeId": null,
+            "shape": "rect",
+            "fill": "3355E0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rotation of a full turn",
+      "why": "Rotation is normalised to [0, 360) so two slides that look the same compare equal.",
+      "path": ["elements", 0, "rotation"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
+            },
+            "sourceShapeId": 7,
+            "rotation": 360
           }
         ]
       }

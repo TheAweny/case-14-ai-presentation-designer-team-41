@@ -229,6 +229,17 @@ class Origin(StrEnum):
     contextual = "contextual"
 
 
+class Align(StrEnum):
+    """
+    Null or absent when the paragraph inherits its alignment.
+    """
+
+    left = "left"
+    center = "center"
+    right = "right"
+    justify = "justify"
+
+
 class Run(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -247,11 +258,18 @@ class Run(BaseModel):
         ..., description="Size in points, or null when inherited."
     )
     text: str = Field(..., description="Literal text of the run.")
+    underline: bool | None = Field(
+        None,
+        description="Null or absent when inherited, which for almost every template means no underline.",
+    )
 
 
 class Paragraph(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
+    )
+    align: Align | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
     )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
@@ -860,6 +878,9 @@ class Paragraph1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    align: Align | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
+    )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
@@ -1380,6 +1401,23 @@ class RunConfig(BaseModel):
     )
 
 
+class Background(StrEnum):
+    """
+    Palette role the slide is filled with. Null or absent: the template background.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
 class Box4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1418,6 +1456,9 @@ class Paragraph2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    align: Align | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
+    )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
@@ -1441,6 +1482,16 @@ class Role6(StrEnum):
     decoration = "decoration"
 
 
+class VerticalAlign(StrEnum):
+    """
+    Absent when the element inherits it, which reads as top.
+    """
+
+    top = "top"
+    middle = "middle"
+    bottom = "bottom"
+
+
 class Elements(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1448,13 +1499,27 @@ class Elements(BaseModel):
     box: Box4
     elementId: constr(min_length=1)
     kind: Literal["text"]
+    locked: bool | None = Field(
+        None,
+        description="True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+    )
+    opacity: confloat(ge=0.0, le=1.0) | None = Field(
+        None, description="From 0 to 1. Absent means opaque."
+    )
     overflow: Overflow | None = Field(
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph2] = Field(..., min_length=1)
     role: Role6
+    rotation: confloat(ge=0.0, lt=360.0) | None = Field(
+        None,
+        description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ..., description="Template shape this was placed from, when it came from one."
+    )
+    verticalAlign: VerticalAlign | None = Field(
+        None, description="Absent when the element inherits it, which reads as top."
     )
 
 
@@ -1475,11 +1540,22 @@ class Elements1(BaseModel):
     elementId: constr(min_length=1)
     fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
     kind: Literal["image"]
+    locked: bool | None = Field(
+        None,
+        description="True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+    )
     mediaPart: constr(min_length=1) = Field(
         ...,
         description="Part name inside the template, or a path under the run directory.",
     )
+    opacity: confloat(ge=0.0, le=1.0) | None = Field(
+        None, description="From 0 to 1. Absent means opaque."
+    )
     role: Role6
+    rotation: confloat(ge=0.0, lt=360.0) | None = Field(
+        None,
+        description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
@@ -1491,7 +1567,18 @@ class Elements2(BaseModel):
     elementId: constr(min_length=1)
     headers: list[str] = Field(..., min_length=1)
     kind: Literal["table"]
+    locked: bool | None = Field(
+        None,
+        description="True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+    )
+    opacity: confloat(ge=0.0, le=1.0) | None = Field(
+        None, description="From 0 to 1. Absent means opaque."
+    )
     role: Role6
+    rotation: confloat(ge=0.0, lt=360.0) | None = Field(
+        None,
+        description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
     rows: list[list[str]] = Field(..., min_length=1)
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
@@ -1513,11 +1600,112 @@ class Elements3(BaseModel):
     chartType: ChartType
     elementId: constr(min_length=1)
     kind: Literal["chart"]
+    locked: bool | None = Field(
+        None,
+        description="True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+    )
+    opacity: confloat(ge=0.0, le=1.0) | None = Field(
+        None, description="From 0 to 1. Absent means opaque."
+    )
     role: Role6
+    rotation: confloat(ge=0.0, lt=360.0) | None = Field(
+        None,
+        description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
     series: list[Series1] = Field(..., min_length=1)
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
+
+
+class Fill(StrEnum):
+    """
+    Null for no fill. Absent when the template did not state one.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Shape(StrEnum):
+    """
+    Absent for template decoration of a geometry the parser did not name.
+    """
+
+    rect = "rect"
+    round_rect = "round-rect"
+    ellipse = "ellipse"
+    triangle = "triangle"
+    diamond = "diamond"
+    line = "line"
+
+
+class Color(StrEnum):
+    """
+    A role, never a literal colour: the template supplies it.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Dash(StrEnum):
+    solid = "solid"
+    dash = "dash"
+    dot = "dot"
+
+
+class Head(StrEnum):
+    """
+    Mark at the start of a line.
+    """
+
+    none = "none"
+    arrow = "arrow"
+
+
+class Tail(StrEnum):
+    """
+    Mark at the end of a line.
+    """
+
+    none = "none"
+    arrow = "arrow"
+
+
+class Stroke(BaseModel):
+    """
+    Null for no outline. Absent when the template did not state one.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color = Field(
+        ..., description="A role, never a literal colour: the template supplies it."
+    )
+    dash: Dash
+    head: Head = Field(..., description="Mark at the start of a line.")
+    tail: Tail = Field(..., description="Mark at the end of a line.")
+    widthEmu: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Line width in EMU."
+    )
 
 
 class Elements4(BaseModel):
@@ -1525,11 +1713,44 @@ class Elements4(BaseModel):
         extra="forbid",
     )
     box: Box4
+    cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
+        None,
+        description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
+    )
     elementId: constr(min_length=1)
+    fill: Fill | None = Field(
+        None,
+        description="Null for no fill. Absent when the template did not state one.",
+    )
+    flipH: bool | None = Field(
+        None,
+        description="Mirrored horizontally. A line runs from the top left of its box unless flipped.",
+    )
+    flipV: bool | None = Field(None, description="Mirrored vertically.")
     kind: Literal["decor"]
+    locked: bool | None = Field(
+        None,
+        description="True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+    )
+    opacity: confloat(ge=0.0, le=1.0) | None = Field(
+        None, description="From 0 to 1. Absent means opaque."
+    )
     role: Role6
-    sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
-        ..., description="Decoration always comes from the template."
+    rotation: confloat(ge=0.0, lt=360.0) | None = Field(
+        None,
+        description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    shape: Shape | None = Field(
+        None,
+        description="Absent for template decoration of a geometry the parser did not name.",
+    )
+    sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
+        ...,
+        description="Template shape this was placed from. Null when it was drawn in the editor.",
+    )
+    stroke: Stroke | None = Field(
+        None,
+        description="Null for no outline. Absent when the template did not state one.",
     )
 
 
@@ -1542,6 +1763,10 @@ class Variant5(StrEnum):
 class SlideIR(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
+    )
+    background: Background | None = Field(
+        None,
+        description="Palette role the slide is filled with. Null or absent: the template background.",
     )
     elements: list[Elements | Elements1 | Elements2 | Elements3 | Elements4] = Field(
         ..., description="In paint order, lowest first."
@@ -1593,6 +1818,9 @@ class Paragraph3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    align: Align | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
+    )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
@@ -1613,7 +1841,7 @@ class TableSizeItem(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]
     root: conint(ge=-9007199254740991, le=9007199254740991)
 
 
-class Shape(BaseModel):
+class Shape1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1666,7 +1894,7 @@ class Layout(BaseModel):
     part: constr(min_length=1) = Field(
         ..., description="Package part name, which identifies it."
     )
-    shapes: list[Shape] = Field(
+    shapes: list[Shape1] = Field(
         ..., description="Shapes in paint order, groups flattened."
     )
 
@@ -1675,13 +1903,16 @@ class Paragraph4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    align: Align | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
+    )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
-class Shape1(BaseModel):
+class Shape2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1734,7 +1965,7 @@ class Master(BaseModel):
     part: constr(min_length=1) = Field(
         ..., description="Package part name, which identifies it."
     )
-    shapes: list[Shape1] = Field(
+    shapes: list[Shape2] = Field(
         ..., description="Shapes in paint order, groups flattened."
     )
 
@@ -1760,13 +1991,16 @@ class Paragraph5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    align: Align | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
+    )
     level: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Indent level, zero at the top."
     )
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
-class Shape2(BaseModel):
+class Shape3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1819,7 +2053,7 @@ class Slide1(BaseModel):
     part: constr(min_length=1) = Field(
         ..., description="Package part name, which identifies it."
     )
-    shapes: list[Shape2] = Field(
+    shapes: list[Shape3] = Field(
         ..., description="Shapes in paint order, groups flattened."
     )
 
