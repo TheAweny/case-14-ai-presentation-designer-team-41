@@ -109,6 +109,7 @@ export function ImageCropper({
   onApply,
   onCancel,
   onReplace,
+  finishRef,
 }: {
   slideRoot: HTMLElement;
   overlay: HTMLElement;
@@ -119,6 +120,8 @@ export function ImageCropper({
   onApply: (crop: ImageCrop | null, box: Box) => void;
   onCancel: () => void;
   onReplace: () => void;
+  /** Сюда кладётся «применить и закрыть» — для тех, кто закрывает режим снаружи (показ). */
+  finishRef?: { current: (() => void) | null };
 }) {
   const t = useTranslations('imageCrop');
   const { box } = element;
@@ -160,6 +163,14 @@ export function ImageCropper({
     const result = cropResult(latest.current);
     onApply(result.crop, placeRotated(box, rotation, result.frame));
   }, [box, onApply, onCancel, rotation]);
+
+  useEffect(() => {
+    if (!finishRef) return;
+    finishRef.current = apply;
+    return () => {
+      if (finishRef.current === apply) finishRef.current = null;
+    };
+  }, [apply, finishRef]);
 
   // Клавиши, пока открыт кадр: Enter применяет, Esc отменяет, стрелки двигают картинку.
   useEffect(() => {

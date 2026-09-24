@@ -19,7 +19,10 @@ import { isTypingTarget } from '@/components/editor/slide-navigation';
 const CANVAS_CHROME =
   '[data-text-editor], [data-text-format], [data-table-editor], [data-selection-bar], [data-dock-obstacle], button, input, [role="toolbar"], [role="group"], [role="menu"]';
 /** Пробел здесь — своя клавиша: нажать кнопку, поднять миниатюру для перестановки. */
-const SPACE_OWNERS = 'button, a, [role="listbox"], [role="toolbar"], [role="menu"]';
+const SPACE_OWNERS =
+  'button, a, [role="listbox"], [role="toolbar"], [role="menu"], [role="dialog"]';
+/** Открытое окно (шпаргалка, показ) держит клавиатуру у себя: зум холста под ним не нужен. */
+const KEY_DIALOGS = '[role="dialog"]';
 
 type Controls = ReactZoomPanPinchContentRef;
 
@@ -165,6 +168,7 @@ export function useCanvasNavigation({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest(KEY_DIALOGS)) return;
       const command = canvasKeyCommand(event, {
         formField: isFormField(event.target),
         typing: isTypingTarget(event.target),

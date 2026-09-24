@@ -97,6 +97,12 @@ export interface CanvasControl {
   startEditing(elementId: string): boolean;
   /** Фокус на холст: клавиши снова у слайда, а не у кнопки или списка. */
   focus(): void;
+  /**
+   * Закрыть открытый режим правки — набор, ячейки, кадрирование — с сохранением сделанного.
+   * Нужен тем, кто уводит клавиатуру от холста: показ слайдов иначе делил бы стрелки и Esc с
+   * кадрированием под собой.
+   */
+  finishModes(): void;
 }
 
 /**
@@ -287,6 +293,7 @@ export function SlideCanvas({
     ({ slideId: string; elementId: string } & TableEntry) | null
   >(null);
   const finishTable = useRef<(() => void) | null>(null);
+  const finishCrop = useRef<(() => void) | null>(null);
   const editingTable =
     tableSession?.slideId === slide.slideId
       ? slide.elements.find(
@@ -356,6 +363,21 @@ export function SlideCanvas({
     area.addEventListener('pointerdown', onDown, true);
     return () => area.removeEventListener('pointerdown', onDown, true);
   }, [area]);
+
+  // Режим правки закрылся (набор, ячейки таблицы, кадрирование) — его поле ушло из DOM вместе с
+  // фокусом, и клавиши достались бы `body`. Возвращаем их холсту: Esc, Delete и стрелки дальше
+  // про выделенный объект. Если фокус уже ушёл в поле панели или в список, его не трогаем.
+  const modeOpen = session !== null || tableSession !== null || cropSession !== null;
+  const wasModeOpen = useRef(false);
+  useEffect(() => {
+    const closed = wasModeOpen.current && !modeOpen;
+    wasModeOpen.current = modeOpen;
+    if (!closed || !area) return;
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) {
+      area.focus({ preventScroll: true });
+    }
+  }, [area, modeOpen]);
 
   useEffect(() => {
     if (!host) return;
@@ -845,6 +867,11 @@ export function SlideCanvas({
         return false;
       },
       focus: () => area?.focus({ preventScroll: true }),
+      finishModes: () => {
+        finishEditing.current?.();
+        finishTable.current?.();
+        finishCrop.current?.();
+      },
     };
     controlRef.current = control;
     return () => {
@@ -1139,6 +1166,7 @@ export function SlideCanvas({
                     element={cropping}
                     size={{ cx: slide.slideCx, cy: slide.slideCy }}
                     url={croppingUrl}
+                    finishRef={finishCrop}
                     onApply={(crop, box) => {
                       onCrop?.(cropping.elementId, crop, box);
                       setCropSession(null);

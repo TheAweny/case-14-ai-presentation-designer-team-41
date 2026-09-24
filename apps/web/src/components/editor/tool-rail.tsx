@@ -488,8 +488,14 @@ export const ToolRail = memo(function ToolRail({
       if (event.repeat || event.isComposing || event.defaultPrevented) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (isTypingTarget(event.target)) return;
-      // В открытом меню буквы ищут пункт, а не меняют инструмент.
-      if (event.target instanceof Element && event.target.closest('[role="menu"]')) return;
+      // В открытом меню буквы ищут пункт, а не меняют инструмент; окно (шпаргалка) держит
+      // клавиатуру у себя, даже когда фокус на его кнопке.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="menu"], [role="dialog"]')
+      ) {
+        return;
+      }
 
       const hit = BY_CODE.get(event.code);
       if (!hit) return;

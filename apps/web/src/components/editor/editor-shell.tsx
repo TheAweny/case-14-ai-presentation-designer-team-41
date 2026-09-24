@@ -150,7 +150,7 @@ const SLIDE_MOVES: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['k
 
 /** Здесь клавиши без модификатора (Enter, Tab, Home, End) не отбираем: у виджета они свои. */
 const KEY_OWNERS =
-  'button, a[href], [role="menu"], [role="menubar"], [role="listbox"], [role="slider"], [role="tablist"], [role="toolbar"], [role="radiogroup"], [role="dialog"]';
+  'button, a[href], [role="menu"], [role="menubar"], [role="listbox"], [role="slider"], [role="tablist"], [role="toolbar"], [role="radiogroup"], [role="dialog"], [role="tree"]';
 
 /** Фокус на холсте или нигде: Enter, Tab и Home/End здесь принадлежат редактору. */
 function onCanvas(target: EventTarget | null): boolean {
@@ -667,6 +667,9 @@ export function EditorShell({
    * выделенный объект не должен от них сдвинуться.
    */
   const startShow = useCallback((start: number) => {
+    // Открытый набор, правка ячеек или кадрирование закрываются с сохранением: их клавиши
+    // (стрелки, Enter, Esc) иначе перехватывали бы клавиши показа.
+    canvasControl.current?.finishModes();
     setSelectedIds([]);
     setShow({ start });
   }, []);
@@ -789,6 +792,10 @@ export function EditorShell({
       const inList = target instanceof Element && target.closest('[role="listbox"]') !== null;
       // В списке слайдов стрелки, удаление и выделение — его собственные клавиши.
       if (inList && !DECK_COMMANDS.has(command.kind)) return;
+      // В дереве слоёв стрелки ходят по строкам и сворачивают группы: объект от них не едет.
+      // Delete там по-прежнему удаляет выбранное, как в Figma.
+      const inTree = target instanceof Element && target.closest('[role="tree"]') !== null;
+      if (inTree && command.kind === 'nudge') return;
       // Enter, Tab, Home, End — клавиши кнопок и меню, пока фокус на них. PageUp/PageDown
       // листают колоду отовсюду, кроме полей.
       if (widgetKey(event, command) && !onCanvas(target)) return;

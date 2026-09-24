@@ -105,10 +105,13 @@ export function SpeakerNotesPanel({
     timer.current = window.setTimeout(flush, NOTES_COMMIT_DELAY_MS);
   };
 
+  // Esc — из заметок обратно к слайду: клавиши снова у холста, как после набора на слайде.
   const onFieldKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Escape') return;
     event.preventDefault();
-    event.currentTarget.blur();
+    const canvas = document.querySelector<HTMLElement>('[data-canvas-area]');
+    if (canvas) canvas.focus({ preventScroll: true });
+    else event.currentTarget.blur();
   };
 
   // Высота — за верхний край, как у панели заметок в PowerPoint.
