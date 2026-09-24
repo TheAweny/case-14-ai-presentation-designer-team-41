@@ -58,6 +58,24 @@ export interface ColorFieldProps {
   mixedLabel?: string;
   ariaLabel: string;
   disabled?: boolean;
+  /**
+   * `swatch` — одна кнопка-образец без подписи, для полосы над выделением: HEX тогда вводится
+   * в самом поповере. По умолчанию — поле панели.
+   */
+  variant?: 'field' | 'swatch';
+  /** Что нарисовать в кнопке-образце вместо квадратика: например, букву с полоской цвета. */
+  renderSwatch?: (look: SwatchLook) => ReactNode;
+  /** Класс кнопки-образца. */
+  className?: string;
+  /** С какой стороны от кнопки открывается пикер. */
+  side?: 'top' | 'right' | 'bottom' | 'left';
+}
+
+/** Что показывает кнопка-образец: цвет, «без цвета» или «разные». */
+export interface SwatchLook {
+  readonly hex: string | null;
+  readonly none: boolean;
+  readonly mixed: boolean;
 }
 
 /**
@@ -76,6 +94,10 @@ export function ColorField({
   mixedLabel,
   ariaLabel,
   disabled,
+  variant = 'field',
+  renderSwatch,
+  className,
+  side = 'left',
 }: ColorFieldProps) {
   const t = useTranslations('inspectorFields');
   const [open, setOpen] = useState(false);
@@ -144,6 +166,25 @@ export function ColorField({
   const showInput = editing || (value !== undefined && value !== null && !role);
   const caption =
     value === undefined ? (mixedLabel ?? t('mixed')) : value === null ? noneLabel : null;
+  const swatch = variant === 'swatch';
+
+  const hexInput = (autoFocus: boolean) => (
+    <input
+      type="text"
+      autoComplete="off"
+      spellCheck={false}
+      maxLength={7}
+      aria-label={t('color.hex')}
+      autoFocus={autoFocus}
+      value={draft ?? shownHex ?? ''}
+      placeholder={swatch ? (caption ?? undefined) : undefined}
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onBlur={commitDraft}
+      onKeyDown={onInputKeyDown}
+      className="min-w-0 flex-1 bg-transparent uppercase tabular-nums text-foreground outline-none placeholder:normal-case placeholder:text-muted-foreground"
+    />
+  );
 
   return (
     <PopoverPrimitive.Root
@@ -153,54 +194,64 @@ export function ColorField({
         setOpen(next);
       }}
     >
-      <div
-        role="group"
-        aria-label={ariaLabel}
-        className={cn(FIELD_CLASS, 'pl-1.5', disabled && 'pointer-events-none opacity-50')}
-      >
+      {swatch ? (
         <PopoverPrimitive.Trigger asChild disabled={disabled}>
           <button
             type="button"
-            aria-label={t('color.openPicker')}
-            title={t('color.openPicker')}
+            aria-label={ariaLabel}
             {...focus.trigger}
-            className="grid size-5 shrink-0 place-items-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ColorChip hex={shownHex} none={value === null} mixed={value === undefined} />
-          </button>
-        </PopoverPrimitive.Trigger>
-        {showInput ? (
-          <input
-            type="text"
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={7}
-            aria-label={t('color.hex')}
-            autoFocus={editing}
-            value={draft ?? shownHex ?? ''}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-            onBlur={commitDraft}
-            onKeyDown={onInputKeyDown}
-            className="min-w-0 flex-1 bg-transparent uppercase tabular-nums text-foreground outline-none"
-          />
-        ) : (
-          <button
-            type="button"
-            title={t('color.editHex')}
-            onClick={() => setEditing(true)}
             className={cn(
-              'min-w-0 flex-1 truncate text-left outline-none',
-              role ? 'text-foreground' : 'text-muted-foreground',
+              'grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground outline-none',
+              'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+              'data-[state=open]:bg-muted data-[state=open]:text-foreground',
+              'disabled:pointer-events-none disabled:opacity-40',
+              className,
             )}
           >
-            {role ? roleLabel(role) : caption}
+            {renderSwatch ? (
+              renderSwatch({ hex: shownHex, none: value === null, mixed: value === undefined })
+            ) : (
+              <ColorChip hex={shownHex} none={value === null} mixed={value === undefined} round />
+            )}
           </button>
-        )}
-      </div>
+        </PopoverPrimitive.Trigger>
+      ) : (
+        <div
+          role="group"
+          aria-label={ariaLabel}
+          className={cn(FIELD_CLASS, 'pl-1.5', disabled && 'pointer-events-none opacity-50')}
+        >
+          <PopoverPrimitive.Trigger asChild disabled={disabled}>
+            <button
+              type="button"
+              aria-label={t('color.openPicker')}
+              title={t('color.openPicker')}
+              {...focus.trigger}
+              className="grid size-5 shrink-0 place-items-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ColorChip hex={shownHex} none={value === null} mixed={value === undefined} />
+            </button>
+          </PopoverPrimitive.Trigger>
+          {showInput ? (
+            hexInput(editing)
+          ) : (
+            <button
+              type="button"
+              title={t('color.editHex')}
+              onClick={() => setEditing(true)}
+              className={cn(
+                'min-w-0 flex-1 truncate text-left outline-none',
+                role ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {role ? roleLabel(role) : caption}
+            </button>
+          )}
+        </div>
+      )}
 
       <FieldPopoverContent
-        side="left"
+        side={side}
         align="start"
         sideOffset={8}
         className="flex w-60 flex-col gap-3 p-3"
@@ -209,6 +260,15 @@ export function ColorField({
         onInteractOutside={focus.content.onInteractOutside}
       >
         <style>{PICKER_CSS}</style>
+        {swatch ? (
+          <div className={cn(FIELD_CLASS, 'pl-1.5')}>
+            <ColorChip hex={shownHex} none={value === null} mixed={value === undefined} />
+            {hexInput(false)}
+            {role ? (
+              <span className="shrink-0 truncate text-muted-foreground">{roleLabel(role)}</span>
+            ) : null}
+          </div>
+        ) : null}
         <div onKeyUp={commitPending} className="inspector-color-picker">
           <HexColorPicker
             color={`#${shownHex ?? 'FFFFFF'}`}

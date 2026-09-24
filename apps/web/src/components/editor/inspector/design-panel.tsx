@@ -51,7 +51,6 @@ import type {
   ColorValue,
   DecorShape,
   DesignSystem,
-  ElementStroke,
   ImageFit,
   ParagraphAlign,
   SlideElement,
@@ -120,11 +119,15 @@ import {
   commonValue,
   cornerRadiusProps,
   cornerRadiusPt,
+  defaultStrokeColor,
   emuToPt,
+  flipEntries,
+  lineEndEntries,
   maxCornerRadiusPt,
   setBoxField,
   setBoxFieldEach,
   setBoxSizeLocked,
+  strokeColorEntries,
   type BoxField,
 } from '@/components/editor/inspector/selection-model';
 
@@ -229,11 +232,6 @@ const VERTICAL_ALIGNS = [
 
 /** Частые межстрочные интервалы, в процентах одинарного. */
 const LINE_HEIGHTS = [100, 120, 150, 200] as const;
-
-/** Обводка, которую получает фигура без неё: тонкая сплошная линия. */
-function freshStroke(color: ColorValue): ElementStroke {
-  return { color, widthEmu: EMU_PER_PT, dash: 'solid', head: 'none', tail: 'none' };
-}
 
 type Decor = Extract<SlideElement, { kind: 'decor' }>;
 type ImageElement = Extract<SlideElement, { kind: 'image' }>;
@@ -447,14 +445,7 @@ function PositionSection({
       })),
       mode,
     );
-  const flip = (axis: 'flipH' | 'flipV') =>
-    onPropsEach(
-      decors.map((element) => ({
-        elementIds: [element.elementId],
-        props:
-          axis === 'flipH' ? { flipH: element.flipH !== true } : { flipV: element.flipV !== true },
-      })),
-    );
+  const flip = (axis: 'flipH' | 'flipV') => onPropsEach(flipEntries(decors, axis));
   const alignButton = ({ id, icon }: { id: Alignment; icon: typeof AlignLeftIcon }) => (
     <IconButton key={id} icon={icon} label={aligns(id)} onClick={() => align(id)} />
   );
@@ -1116,27 +1107,11 @@ function DecorSections({
       ? commonString(stroked.map((element) => element.stroke?.dash ?? 'solid'))
       : null;
   const roleLabel = (role: ColorRole) => palette(role);
-  const fallbackStroke: ColorValue = designSystem.palette.some((entry) => entry.role === 'text')
-    ? 'text'
-    : (designSystem.palette[0]?.role ?? 'text');
+  const fallbackStroke = defaultStrokeColor(designSystem);
   const strokedIds = stroked.map((element) => element.elementId);
 
-  const setStrokeColor = (color: ColorValue | null, mode: EditMode = 'commit') => {
-    if (color === null) {
-      onProps(ids, { stroke: null }, mode);
-      return;
-    }
-    // Фигура без обводки получает её целиком, у остальных меняется только цвет.
-    const entries: PropsEntry[] = [];
-    if (bare.length > 0) {
-      entries.push({
-        elementIds: bare.map((element) => element.elementId),
-        props: { stroke: freshStroke(color) },
-      });
-    }
-    if (stroked.length > 0) entries.push({ elementIds: strokedIds, props: { stroke: { color } } });
-    onPropsEach(entries, mode);
-  };
+  const setStrokeColor = (color: ColorValue | null, mode: EditMode = 'commit') =>
+    onPropsEach(strokeColorEntries(decors, color), mode);
 
   return (
     <>
@@ -1227,22 +1202,8 @@ function LineEnds({
   const t = useTranslations('designPanel');
   const head = decors.every((element) => element.stroke?.head === 'arrow');
   const tail = decors.every((element) => element.stroke?.tail === 'arrow');
-  const toggle = (end: 'head' | 'tail', on: boolean) => {
-    const mark = on ? 'arrow' : 'none';
-    // Обводка сливается с той, что у линии уже есть; линии без неё получают её целиком.
-    const stroked = decors.filter((element) => element.stroke).map((element) => element.elementId);
-    const bare = decors.filter((element) => !element.stroke).map((element) => element.elementId);
-    const entries: PropsEntry[] = [];
-    if (stroked.length > 0)
-      entries.push({ elementIds: stroked, props: { stroke: { [end]: mark } } });
-    if (bare.length > 0) {
-      entries.push({
-        elementIds: bare,
-        props: { stroke: { ...freshStroke(strokeColor), [end]: mark } },
-      });
-    }
-    onPropsEach(entries);
-  };
+  const toggle = (end: 'head' | 'tail', on: boolean) =>
+    onPropsEach(lineEndEntries(decors, end, on, strokeColor));
   return (
     <div className="flex items-center gap-1">
       <span className="flex-1 text-xs text-muted-foreground">{t('ends')}</span>
