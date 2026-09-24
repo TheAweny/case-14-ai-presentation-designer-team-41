@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { canvasArea, centerOf, drag, objectById, openEditor, openSlide } from './editor';
+import { canvasArea, centerOf, drag, objectById, objects, openEditor, openSlide } from './editor';
 
 test.describe('холст и монтажный стол', () => {
   test('средняя кнопка двигает холст, а не объект и не выделение', async ({ page }) => {
@@ -52,5 +52,30 @@ test.describe('холст и монтажный стол', () => {
     await expect
       .poll(async () => Math.round((await title.boundingBox())?.x ?? 0))
       .toBe(Math.round(box.x));
+  });
+
+  test('Enter и Esc по режимам: инструмент, таблица, выделение', async ({ page }) => {
+    await openEditor(page);
+    await openSlide(page, 'layer-boundary');
+    const count = await objects(page).count();
+    const slide = page.locator('[data-canvas-slide]');
+
+    // Esc с инструментом вставки возвращает выбор: щелчок по слайду ничего не рисует.
+    await page.keyboard.press('r');
+    await page.keyboard.press('Escape');
+    await slide.click({ position: { x: 40, y: 40 } });
+    await expect(objects(page)).toHaveCount(count);
+
+    // Enter на таблице — правка ячеек, Esc — назад к выделенной таблице, ещё Esc — снять.
+    await objectById(page, 'layer-boundary-table').click();
+    await page.keyboard.press('Enter');
+    const editor = page.locator('[data-table-editor][role="grid"]');
+    await expect(editor).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(canvasArea(page)).toBeFocused();
+    await expect(page.locator('[data-selection-bar]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
   });
 });

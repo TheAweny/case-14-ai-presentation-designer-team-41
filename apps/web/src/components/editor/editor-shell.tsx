@@ -796,6 +796,13 @@ export function EditorShell({
       // Delete там по-прежнему удаляет выбранное, как в Figma.
       const inTree = target instanceof Element && target.closest('[role="tree"]') !== null;
       if (inTree && command.kind === 'nudge') return;
+      // Esc при инструменте вставки или руке — назад к выбору, как во всех редакторах (F-04);
+      // выделение при этом остаётся.
+      if (command.kind === 'deselect' && tool !== 'select' && onCanvas(target)) {
+        event.preventDefault();
+        setTool('select');
+        return;
+      }
       // Enter, Tab, Home, End — клавиши кнопок и меню, пока фокус на них. PageUp/PageDown
       // листают колоду отовсюду, кроме полей.
       if (widgetKey(event, command) && !onCanvas(target)) return;
@@ -810,7 +817,7 @@ export function EditorShell({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [runCommand, selectedIds.length]);
+  }, [runCommand, selectedIds.length, tool]);
 
   /**
    * Системный буфер обмена. Объекты кладутся своим типом данных и простым текстом рядом;
