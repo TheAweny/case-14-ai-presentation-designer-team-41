@@ -403,6 +403,7 @@ export function mergeChanges(earlier: DeckChange, later: DeckChange): DeckChange
     before: earlier.before,
     after: later.after,
     pendingText: null,
+    ...(later.series !== undefined ? { series: later.series } : null),
   };
 }
 
@@ -413,6 +414,22 @@ export interface RecordOptions {
   readonly before?: DeckSelection | null;
   /** The selection redo should bring back. */
   readonly after?: DeckSelection | null;
+  /**
+   * A run of changes the caller sees as one gesture, such as arrow nudges without a pause. The
+   * change folds into the newest entry when that entry is of the same series; any other change
+   * in between ends the run.
+   */
+  readonly series?: string;
+}
+
+/**
+ * How many steps undo keeps. Every entry holds its patches, so an unbounded journal would grow
+ * for the whole session; the oldest steps go first.
+ */
+export const JOURNAL_LIMIT = 200;
+
+function capped(undo: readonly DeckChange[]): readonly DeckChange[] {
+  return undo.length > JOURNAL_LIMIT ? undo.slice(undo.length - JOURNAL_LIMIT) : undo;
 }
 
 function onlyElement(change: DeckChange, elementId: string): boolean {
@@ -440,6 +457,7 @@ export function recordChange(
     ...commit.change,
     ...(options.before !== undefined ? { before: options.before } : null),
     ...(options.after !== undefined ? { after: options.after } : null),
+    ...(options.series !== undefined ? { series: options.series } : null),
   };
   const last = history.undo.at(-1);
   const pending = last?.pendingText ?? null;
@@ -456,7 +474,8 @@ export function recordChange(
       return { slides: commit.slides, undo: history.undo.slice(0, -1), redo: [], restored: null };
     }
   }
-  if (options.merge && last) {
+  const continues = options.series !== undefined && last?.series === options.series;
+  if ((options.merge || continues) && last) {
     return {
       slides: commit.slides,
       undo: [...history.undo.slice(0, -1), mergeChanges(last, change)],
@@ -466,7 +485,7 @@ export function recordChange(
   }
   return {
     slides: commit.slides,
-    undo: [...history.undo, change],
+    undo: capped([...history.undo, change]),
     redo: [],
     restored: null,
   };

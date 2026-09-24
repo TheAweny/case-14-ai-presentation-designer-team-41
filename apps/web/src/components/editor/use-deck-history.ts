@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Box, ColorValue, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import {
   commitArrange,
@@ -40,6 +40,7 @@ import {
   type RecordOptions,
   type TableCell,
 } from '@lct/deck-ops';
+import { nextNudgeSeries, type NudgeSeries } from '@/components/editor/nudge-series';
 
 export interface ElementMove {
   readonly elementId: string;
@@ -56,6 +57,13 @@ export type EditMode = 'commit' | 'preview';
 /** Свои свойства каждой группе объектов — одной записью журнала. */
 export interface PropsEntry {
   readonly elementIds: readonly string[];
+  readonly props: ElementProps;
+}
+
+/** Новая рамка и свойства одного объекта: конец линии меняет и рамку, и отражения. */
+export interface ReshapeEntry {
+  readonly elementId: string;
+  readonly box: Box;
   readonly props: ElementProps;
 }
 
@@ -185,6 +193,42 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
   const move = useCallback(
     (slideId: string, moves: readonly ElementMove[], mode?: EditMode) => {
       applyAll([(current) => commitMoves(current, { slideId, moves })], mode);
+    },
+    [applyAll],
+  );
+  /** Сдвиг стрелкой: нажатия подряд по тем же объектам — один шаг отмены (см. `nudge-series`). */
+  const series = useRef<NudgeSeries | null>(null);
+  const nudge = useCallback(
+    (slideId: string, moves: readonly ElementMove[]) => {
+      const next = nextNudgeSeries(
+        series.current,
+        slideId,
+        moves.map((item) => item.elementId),
+        Date.now(),
+      );
+      series.current = next;
+      apply((current) => commitMoves(current, { slideId, moves }), { series: next.key });
+    },
+    [apply],
+  );
+  /** Рамки и свойства вместе — одной записью журнала или живым видом жеста. */
+  const reshape = useCallback(
+    (slideId: string, entries: readonly ReshapeEntry[], mode?: EditMode) => {
+      applyAll(
+        [
+          (current) =>
+            commitMoves(current, {
+              slideId,
+              moves: entries.map(({ elementId, box }) => ({ elementId, box })),
+            }),
+          ...entries.map(
+            ({ elementId, props }): Commit =>
+              (current) =>
+                commitElementProps(current, { slideId, elementIds: [elementId], props }),
+          ),
+        ],
+        mode,
+      );
     },
     [applyAll],
   );
@@ -403,6 +447,8 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     /** Колода без живого вида: от неё панель считает значения полей и правки «каждому своё». */
     committedSlides: history.slides,
     move,
+    nudge,
+    reshape,
     setText,
     remove,
     reorder,

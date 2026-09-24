@@ -8,10 +8,18 @@ import {
   nudgeBox,
   pixelBoxToEmu,
   placeSelectionBar,
+  SELECTION_BAR_CLEARANCE,
+  angleBetween,
+  boxContains,
+  constrainedEnd,
+  lineEnds,
+  lineFromEnds,
   resizedBox,
   rotatedBounds,
+  snapValue,
   slidePixels,
   translatedBox,
+  turnedAbout,
   unionBox,
 } from './slide-geometry';
 import { tokenMeta } from '../../mocks/demo-deck/token-meta';
@@ -143,15 +151,87 @@ describe('gesture to box', () => {
 
   it('follows the translate for a box resized as part of a group', () => {
     expect(
+      resizedBox(box, { dist: [20, 10], direction: [1, 1], translate: [10, 5] }, frame, 1000, 600, {
+        anchored: false,
+      }),
+    ).toEqual({ x: 150, y: 90, cx: 300, cy: 180 });
+  });
+
+  it('grows about the centre with Alt, both sides moving by half', () => {
+    // Ручка справа, ширина +40 px кадра от центра: оба края уходят на половину прироста.
+    const wide = resizedBox(
+      box,
+      { dist: [40, 0], direction: [1, 0], translate: [0, 0] },
+      frame,
+      1000,
+      600,
+      { fromCenter: true },
+    );
+    expect(wide).toEqual({ x: 0, y: 60, cx: 400, cy: 120 });
+    expect(wide.x + wide.cx / 2).toBe(box.x + box.cx / 2);
+    const corner = resizedBox(
+      box,
+      { dist: [20, 20], direction: [-1, -1], translate: [0, 0] },
+      frame,
+      1000,
+      600,
+      { fromCenter: true },
+    );
+    expect(corner).toEqual({ x: 50, y: 0, cx: 300, cy: 240 });
+  });
+
+  it('holds the ratio in EMU when asked, led by the axis the handle pulls', () => {
+    const square = { x: 0, y: 0, cx: 300, cy: 200 };
+    // Правый край: ширина ведёт, высота следует за ней и растёт от середины.
+    expect(
       resizedBox(
-        box,
-        { dist: [20, 10], direction: [1, 1], translate: [10, 5] },
+        square,
+        { dist: [60, 41], direction: [1, 0], translate: [0, 0] },
         frame,
         1000,
         600,
-        false,
+        { keepRatio: true },
       ),
-    ).toEqual({ x: 150, y: 90, cx: 300, cy: 180 });
+    ).toEqual({ x: 0, y: -100, cx: 600, cy: 400 });
+    // Угол: ведёт ось, которая изменилась сильнее.
+    expect(
+      resizedBox(
+        square,
+        { dist: [3, 20], direction: [1, 1], translate: [0, 0] },
+        frame,
+        1000,
+        600,
+        { keepRatio: true },
+      ),
+    ).toEqual({ x: 0, y: 0, cx: 480, cy: 320 });
+  });
+
+  it('keeps the fixed side of a turned box where it is on the slide', () => {
+    // Повёрнут на 90°: его «левый» край на экране сверху. Тянем «правый» (нижний на экране).
+    const turned = { x: 100, y: 100, cx: 200, cy: 100 };
+    const grown = resizedBox(
+      turned,
+      { dist: [20, 0], direction: [1, 0], translate: [0, 0] },
+      frame,
+      1000,
+      600,
+      { rotation: 90 },
+    );
+    expect(grown.cx).toBe(300);
+    // Центр съехал вниз на половину прироста, по горизонтали остался.
+    expect(grown.x + grown.cx / 2).toBe(200);
+    expect(grown.y + grown.cy / 2).toBe(200);
+    // Без поворота то же правило, что и раньше: левый край на месте.
+    expect(
+      resizedBox(
+        turned,
+        { dist: [20, 0], direction: [1, 0], translate: [0, 0] },
+        frame,
+        1000,
+        600,
+        { rotation: 360 },
+      ),
+    ).toEqual({ x: 100, y: 100, cx: 300, cy: 100 });
   });
 
   it('tells a screen distance in pixels of the slide itself', () => {
@@ -272,6 +352,14 @@ describe('selection bar', () => {
     });
   });
 
+  it('keeps its clearance from the selection clear of the rotation zones', () => {
+    const selection = { x: 100, y: 100, width: 200, height: 80 };
+    const above = placeSelectionBar(selection, bar, area, 8, SELECTION_BAR_CLEARANCE);
+    expect(selection.y - (above.y + bar.height)).toBe(SELECTION_BAR_CLEARANCE);
+    const low = placeSelectionBar({ ...selection, y: -20 }, bar, area, 8, SELECTION_BAR_CLEARANCE);
+    expect(low).toEqual({ x: 140, y: 60 + SELECTION_BAR_CLEARANCE, below: true });
+  });
+
   it('goes below a selection at the top of the area', () => {
     expect(placeSelectionBar({ x: 100, y: -40, width: 200, height: 80 }, bar, area, 8)).toEqual({
       x: 140,
@@ -291,5 +379,99 @@ describe('selection bar', () => {
       y: 292,
       below: true,
     });
+  });
+});
+
+describe('line ends', () => {
+  const box = { x: 100, y: 200, cx: 400, cy: 100 };
+
+  it('runs from the top left to the bottom right, and flips swap the ends', () => {
+    expect(lineEnds(box)).toEqual({ from: { x: 100, y: 200 }, to: { x: 500, y: 300 } });
+    expect(lineEnds(box, { flipH: true })).toEqual({
+      from: { x: 500, y: 200 },
+      to: { x: 100, y: 300 },
+    });
+    expect(lineEnds(box, { flipV: true })).toEqual({
+      from: { x: 100, y: 300 },
+      to: { x: 500, y: 200 },
+    });
+  });
+
+  it('turns the ends about the centre of the box', () => {
+    const { from, to } = lineEnds({ x: 0, y: 0, cx: 200, cy: 0 }, {}, 90);
+    expect(from.x).toBeCloseTo(100);
+    expect(from.y).toBeCloseTo(-100);
+    expect(to.x).toBeCloseTo(100);
+    expect(to.y).toBeCloseTo(100);
+  });
+
+  it('gives back the box and flips for any two ends, keeping which end is which', () => {
+    for (const flip of [{}, { flipH: true }, { flipV: true }, { flipH: true, flipV: true }]) {
+      const { from, to } = lineEnds(box, flip);
+      expect(lineFromEnds(from, to)).toEqual({
+        box,
+        flipH: flip.flipH === true,
+        flipV: flip.flipV === true,
+      });
+    }
+    // Конец протащили левее и выше начала: линия развернулась, рамка снова положительная.
+    expect(lineFromEnds({ x: 500, y: 300 }, { x: 100, y: 250 })).toEqual({
+      box: { x: 100, y: 250, cx: 400, cy: 50 },
+      flipH: true,
+      flipV: true,
+    });
+  });
+
+  it('holds a horizontal rule at zero height', () => {
+    expect(lineFromEnds({ x: 0, y: 50 }, { x: 300, y: 50 })).toEqual({
+      box: { x: 0, y: 50, cx: 300, cy: 0 },
+      flipH: false,
+      flipV: false,
+    });
+  });
+
+  it('with Shift lays the end on a multiple of 45 degrees', () => {
+    const anchor = { x: 0, y: 0 };
+    expect(constrainedEnd(anchor, { x: 100, y: 12 })).toEqual({ x: 100, y: 0 });
+    expect(constrainedEnd(anchor, { x: -8, y: 90 })).toEqual({ x: 0, y: 90 });
+    const diagonal = constrainedEnd(anchor, { x: 100, y: 90 });
+    expect(diagonal.x).toBeCloseTo(95);
+    expect(diagonal.y).toBeCloseTo(95);
+  });
+
+  it('snaps a value to the nearest candidate within reach', () => {
+    expect(snapValue(103, [0, 100, 105], 4)).toBe(105);
+    expect(snapValue(110, [0, 100], 4)).toBe(110);
+  });
+
+  it('measures the angle clockwise from the right', () => {
+    expect(angleBetween({ x: 0, y: 0 }, { x: 0, y: 10 })).toBe(90);
+    expect(angleBetween({ x: 0, y: 0 }, { x: -10, y: 0 })).toBe(180);
+    expect(angleBetween({ x: 0, y: 0 }, { x: 10, y: -10 })).toBe(315);
+  });
+});
+
+describe('point in a box', () => {
+  const box = { x: 0, y: 0, cx: 200, cy: 20 };
+
+  it('finds a point inside a box and misses one outside', () => {
+    expect(boxContains(box, { x: 150, y: 10 })).toBe(true);
+    expect(boxContains(box, { x: 150, y: 30 })).toBe(false);
+  });
+
+  it('turns the box before it looks', () => {
+    // Повёрнутая на 90° полоса стоит вертикально вокруг своего центра (100, 10).
+    expect(boxContains(box, { x: 100, y: 80 }, 90)).toBe(true);
+    expect(boxContains(box, { x: 180, y: 10 }, 90)).toBe(false);
+  });
+});
+
+describe('turning a selection', () => {
+  it('carries each box round the pivot and adds the turn to its own angle', () => {
+    const pivot = { x: 100, y: 100 };
+    const right = turnedAbout({ x: 180, y: 90, cx: 40, cy: 20 }, 10, pivot, 90);
+    // Центр (200, 100) уходит вниз, в (100, 200); угол 10° + 90°.
+    expect(right).toEqual({ box: { x: 80, y: 190, cx: 40, cy: 20 }, rotation: 100 });
+    expect(turnedAbout({ x: 0, y: 0, cx: 10, cy: 10 }, 350, pivot, 30).rotation).toBe(20);
   });
 });

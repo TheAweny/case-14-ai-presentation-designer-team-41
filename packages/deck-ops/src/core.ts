@@ -67,6 +67,11 @@ export interface DeckChange {
    * a text box and typing into it is one step of history, and removing it again is none.
    */
   readonly pendingText: string | null;
+  /**
+   * The series this change belongs to, such as arrow nudges in a row. A later change of the same
+   * series folds into this entry, so the whole run is one step of history.
+   */
+  readonly series?: string;
 }
 
 /** The deck after a commit. `change` is null when the slides were left as they were. */

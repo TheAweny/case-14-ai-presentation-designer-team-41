@@ -9,6 +9,7 @@ export {
   commitSetText,
   commitSetTextGesture,
   FONT_SIZE_PT,
+  JOURNAL_LIMIT,
   createDeckHistory,
   mergeChanges,
   recordChange,
