@@ -35,7 +35,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { shortcutLabel } from '@/components/editor/editor-keymap';
+import { shortcutKeys, shortcutLabel } from '@/components/editor/editor-shortcuts';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import {
   listKeyTarget,
@@ -301,7 +301,7 @@ function SlideMenu({
     <ContextMenuContent>
       <ContextMenuItem onSelect={onAdd}>
         {t('addSlide')}
-        <ContextMenuShortcut>{shortcutLabel(['Mod', 'M'], mac)}</ContextMenuShortcut>
+        <ContextMenuShortcut>{shortcutLabel(shortcutKeys('slide-new'), mac)}</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuItem onSelect={onDuplicate}>
         {t('duplicateSlide')}
@@ -310,7 +310,7 @@ function SlideMenu({
       <ContextMenuSeparator />
       <ContextMenuItem variant="destructive" disabled={!canRemove} onSelect={onRemove}>
         {t('removeSlide')}
-        <ContextMenuShortcut>{shortcutLabel(['Del'], mac)}</ContextMenuShortcut>
+        <ContextMenuShortcut>{shortcutLabel(shortcutKeys('remove'), mac)}</ContextMenuShortcut>
       </ContextMenuItem>
     </ContextMenuContent>
   );
