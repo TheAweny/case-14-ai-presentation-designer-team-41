@@ -1,9 +1,10 @@
 import type { JSX } from 'react';
-import type { DesignSystem, SlideIr } from '@lct/contracts';
-import { slideSizeOf } from './geometry.js';
+import type { Box, DesignSystem, SlideIr } from '@lct/contracts';
+import { slideSizeOf, type SlideSize } from './geometry.js';
 import { SlideFrame } from './slide-frame.js';
 import { ChartMark } from './view/chart.js';
 import { paint, resolveColor } from './view/color.js';
+import { markStyle } from './view/mark.js';
 import { DecorMark, ImageMark, TableMark } from './view/marks.js';
 import { TextMark } from './view/text.js';
 
@@ -27,6 +28,17 @@ export interface SlideViewProps {
    * host labels the list item) and transparent to the pointer.
    */
   readonly thumbnail?: boolean;
+  /**
+   * Draw the parts of elements that lie past the slide edge instead of cutting them off: an
+   * editor canvas with a pasteboard around the slide. Thumbnails, previews and exports keep the
+   * cut, and a thumbnail ignores this flag.
+   */
+  readonly showOutside?: boolean;
+}
+
+/** The box reaches past the slide edge, at least in part. */
+function pastEdge(box: Box, size: SlideSize): boolean {
+  return box.x < 0 || box.y < 0 || box.x + box.cx > size.cx || box.y + box.cy > size.cy;
 }
 
 /**
@@ -40,27 +52,53 @@ export function SlideView({
   resolveMedia,
   className,
   thumbnail = false,
+  showOutside = false,
 }: SlideViewProps): JSX.Element {
   const size = slideSizeOf(slide);
+  const background = resolveColor(
+    profile.palette,
+    slide.background ?? 'background',
+    'background',
+    'surface',
+  );
+  const outside = showOutside && !thumbnail;
   const hooks = thumbnail
     ? { 'aria-hidden': true }
     : { 'data-slide-root': 'true', 'data-slide-id': slide.slideId, 'aria-label': label };
   return (
     <SlideFrame
       size={size}
+      clip={!outside}
       className={className}
       {...hooks}
       style={{
-        background: resolveColor(
-          profile.palette,
-          slide.background ?? 'background',
-          'background',
-          'surface',
-        ),
+        background,
         color: paint(profile.palette, 'text', 'background'),
         ...(thumbnail ? { pointerEvents: 'none', userSelect: 'none' } : null),
       }}
     >
+      {/*
+       * Past the edge, an element keeps a patch of the slide background behind it: text written
+       * for this slide stays readable over the host's canvas, whatever colour that is. Inside the
+       * slide the patch matches the slide and cannot be seen. All patches go first, under every
+       * element.
+       */}
+      {outside
+        ? slide.elements
+            .filter((element) => pastEdge(element.box, size))
+            .map((element) => (
+              <div
+                key={`backdrop-${element.elementId}`}
+                aria-hidden
+                data-outside-backdrop=""
+                style={{
+                  ...markStyle({ box: element.box, rotation: element.rotation }, size),
+                  background,
+                  pointerEvents: 'none',
+                }}
+              />
+            ))
+        : null}
       {slide.elements.map((element) => {
         // Keyed by id, not by position: inserting or removing one element keeps the DOM of the rest.
         const key = element.elementId;
