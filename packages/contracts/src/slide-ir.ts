@@ -17,9 +17,9 @@ import { boxSchema, paragraphAlignSchema, paragraphSchema } from './template-ir.
  *
  * The editor saves its result as SlideIR too, so the look it lets a user change lives here as
  * optional fields: rotation, opacity, a lock, the style of a shape, text alignment, a slide
- * background. Absent means what it meant before those fields existed, which keeps every payload
- * written without them valid. Colours are palette roles unless a user chose a hex value of their
- * own, which the audit may flag as off-palette.
+ * background, the groups a user made. Absent means what it meant before those fields existed,
+ * which keeps every payload written without them valid. Colours are palette roles unless a user
+ * chose a hex value of their own, which the audit may flag as off-palette.
  */
 
 /** Which of the three renderings of a plan this slide belongs to. */
@@ -61,6 +61,15 @@ const elementLook = {
     .describe(
       'True keeps the editor from selecting or moving the element by accident, as template ' +
         'backgrounds usually are. Absent means false.',
+    ),
+  groupIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .optional()
+    .describe(
+      'Groups the element belongs to, outermost first. Elements whose ids start with the same ' +
+        'run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a ' +
+        'group are consecutive in paint order. Absent: the element is in no group.',
     ),
 };
 

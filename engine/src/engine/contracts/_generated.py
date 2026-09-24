@@ -1811,6 +1811,10 @@ class Box5(BaseModel):
     )
 
 
+class GroupId(RootModel[constr(min_length=1)]):
+    root: constr(min_length=1)
+
+
 class Overflow(BaseModel):
     """
     Null when the text fits. Set instead of truncating it.
@@ -1876,6 +1880,11 @@ class Elements(BaseModel):
     )
     box: Box5
     elementId: constr(min_length=1)
+    groupIds: list[GroupId] | None = Field(
+        None,
+        description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+        min_length=1,
+    )
     kind: Literal["text"]
     locked: bool | None = Field(
         None,
@@ -1917,6 +1926,11 @@ class Elements1(BaseModel):
     box: Box5
     elementId: constr(min_length=1)
     fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
+    groupIds: list[GroupId] | None = Field(
+        None,
+        description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+        min_length=1,
+    )
     kind: Literal["image"]
     locked: bool | None = Field(
         None,
@@ -2103,6 +2117,11 @@ class Elements2(BaseModel):
         min_length=1,
     )
     elementId: constr(min_length=1)
+    groupIds: list[GroupId] | None = Field(
+        None,
+        description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+        min_length=1,
+    )
     headerRow: bool | None = Field(
         None,
         description="Whether the first row looks like a header (OOXML firstRow). Absent means true.",
@@ -2146,6 +2165,11 @@ class Elements3(BaseModel):
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType
     elementId: constr(min_length=1)
+    groupIds: list[GroupId] | None = Field(
+        None,
+        description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+        min_length=1,
+    )
     kind: Literal["chart"]
     locked: bool | None = Field(
         None,
@@ -2257,6 +2281,11 @@ class Elements4(BaseModel):
         description="Mirrored horizontally. A line runs from the top left of its box unless flipped.",
     )
     flipV: bool | None = Field(None, description="Mirrored vertically.")
+    groupIds: list[GroupId] | None = Field(
+        None,
+        description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+        min_length=1,
+    )
     kind: Literal["decor"]
     locked: bool | None = Field(
         None,

@@ -245,6 +245,141 @@
           }
         ]
       }
+    },
+    {
+      "name": "cards a user grouped, one of them inside a group of its own",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s6",
+        "variant": "balanced",
+        "index": 5,
+        "patternId": "title-over-cards",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "card-1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": ["row"]
+          },
+          {
+            "kind": "text",
+            "elementId": "card-1-text",
+            "role": "body",
+            "box": {
+              "x": 990600,
+              "y": 1828800,
+              "cx": 2133600,
+              "cy": 457200
+            },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Выручка",
+                    "font": "",
+                    "sizePt": 18,
+                    "bold": false,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null,
+            "groupIds": ["row"]
+          },
+          {
+            "kind": "decor",
+            "elementId": "card-2",
+            "role": "decoration",
+            "box": {
+              "x": 3505200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": ["row", "card-2"]
+          },
+          {
+            "kind": "text",
+            "elementId": "card-2-text",
+            "role": "body",
+            "box": {
+              "x": 3657600,
+              "y": 1828800,
+              "cx": 2133600,
+              "cy": 457200
+            },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Маржа",
+                    "font": "",
+                    "sizePt": 18,
+                    "bold": false,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null,
+            "groupIds": ["row", "card-2"]
+          },
+          {
+            "kind": "text",
+            "elementId": "note",
+            "role": "body",
+            "box": {
+              "x": 838200,
+              "y": 1828800,
+              "cx": 2133600,
+              "cy": 457200
+            },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Данные за квартал",
+                    "font": "",
+                    "sizePt": 18,
+                    "bold": false,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -419,6 +554,54 @@
             "headers": ["A", "B"],
             "rows": [["1", "2"]],
             "columnWidths": [0.5, 0]
+          }
+        ]
+      }
+    },
+    {
+      "name": "element in a group with no name",
+      "why": "A group is named by its id; a blank one cannot be told apart from another blank one, so two unrelated shapes would export as one p:grpSp.",
+      "path": ["elements", 0, "groupIds", 0],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s7",
+        "variant": "balanced",
+        "index": 6,
+        "patternId": "title-over-cards",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "card-1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": [""]
+          },
+          {
+            "kind": "decor",
+            "elementId": "card-2",
+            "role": "decoration",
+            "box": {
+              "x": 3505200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": [""]
           }
         ]
       }
