@@ -25,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, Note01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import {
   ContextMenu,
@@ -451,6 +451,9 @@ const SortableSlide = memo(function SortableSlide({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: slide.slideId,
   });
+  const notes = useTranslations('speakerNotes');
+  // Значок заметок у номера, как в PowerPoint: видно, к каким слайдам докладчик что-то записал.
+  const hasNotes = (slide.notes ?? '').trim() !== '';
 
   return (
     // Номер стоит поперёк списка — слева в колонке, сверху в ленте, — чтобы миниатюры
@@ -462,8 +465,10 @@ const SortableSlide = memo(function SortableSlide({
       aria-label={label}
       aria-describedby={attributes['aria-describedby']}
       aria-roledescription={attributes['aria-roledescription']}
+      aria-description={hasNotes ? notes('has') : undefined}
       tabIndex={current ? 0 : -1}
       data-index={index}
+      data-has-notes={hasNotes ? '' : undefined}
       data-slide-id={slide.slideId}
       data-current={current ? '' : undefined}
       {...listeners}
@@ -491,12 +496,18 @@ const SortableSlide = memo(function SortableSlide({
         // Колонка номеров шириной в самый длинный номер колоды: миниатюры стоят ровно.
         style={{ width: `${digits}ch` }}
         className={cn(
-          'shrink-0 pt-0.5 text-[0.6875rem] leading-4 tabular-nums md:text-right',
+          'flex shrink-0 gap-1 pt-0.5 text-[0.6875rem] leading-4 tabular-nums',
+          'max-md:items-center md:flex-col md:items-end md:text-right',
           'text-muted-foreground transition-colors group-hover/slide:text-foreground',
           'group-aria-selected/slide:text-foreground',
         )}
       >
         {index + 1}
+        {hasNotes ? (
+          <span data-notes-mark="" title={notes('has')} className="grid place-items-center">
+            <HugeiconsIcon icon={Note01Icon} size={11} strokeWidth={1.75} color="currentColor" />
+          </span>
+        ) : null}
       </span>
       {count > 1 ? (
         <span
