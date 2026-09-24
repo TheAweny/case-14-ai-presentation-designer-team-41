@@ -245,6 +245,80 @@
           }
         ]
       }
+    },
+    {
+      "name": "a shape with words in it, a cropped picture and speaker notes",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s6",
+        "variant": "balanced",
+        "index": 5,
+        "patternId": "title-and-picture",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "s6-badge",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 3048000,
+              "cy": 1219200
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "accent",
+            "stroke": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "align": "center",
+                "runs": [
+                  {
+                    "text": "Шаг 1",
+                    "font": "",
+                    "sizePt": 24,
+                    "bold": true,
+                    "italic": false,
+                    "color": "FFFFFF"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "verticalAlign": "middle",
+            "textInsets": {
+              "l": 91440,
+              "t": 45720,
+              "r": 91440,
+              "b": 45720
+            }
+          },
+          {
+            "kind": "image",
+            "elementId": "s6-photo",
+            "role": "image",
+            "box": {
+              "x": 4572000,
+              "y": 1600200,
+              "cx": 6781800,
+              "cy": 4114800
+            },
+            "sourceShapeId": null,
+            "mediaPart": "/ppt/media/image1.png",
+            "fit": "cover",
+            "crop": {
+              "l": 0.1,
+              "t": 0,
+              "r": 0.05,
+              "b": 0.2
+            }
+          }
+        ],
+        "notes": "Начать с цифры выручки.\nПотом — про сроки."
+      }
     }
   ],
   "invalid": [
@@ -419,6 +493,74 @@
             "headers": ["A", "B"],
             "rows": [["1", "2"]],
             "columnWidths": [0.5, 0]
+          }
+        ]
+      }
+    },
+    {
+      "name": "picture cropped away entirely",
+      "why": "Cutting off the whole width leaves nothing to fill the box, and srcRect of 100000 is a picture PowerPoint draws as empty.",
+      "path": ["elements", 0, "crop", "l"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s7",
+        "variant": "balanced",
+        "index": 6,
+        "patternId": "title-and-picture",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "image",
+            "elementId": "e1",
+            "role": "image",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "cx": 6096000,
+              "cy": 3429000
+            },
+            "sourceShapeId": null,
+            "mediaPart": "/ppt/media/image1.png",
+            "fit": "cover",
+            "crop": {
+              "l": 1,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape with an empty text body",
+      "why": "A shape with no words leaves the key out; an empty list would export a txBody with no paragraph, which PowerPoint refuses.",
+      "path": ["elements", 0, "paragraphs"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s8",
+        "variant": "balanced",
+        "index": 7,
+        "patternId": "title-and-body",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "cx": 3048000,
+              "cy": 1219200
+            },
+            "sourceShapeId": null,
+            "shape": "rect",
+            "fill": "surface",
+            "stroke": null,
+            "paragraphs": []
           }
         ]
       }
