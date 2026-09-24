@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { slideIrSchema, type Box, type SlideElement, type SlideIr } from '@lct/contracts';
 import {
   ELEMENT_PROPS,
+  LETTER_SPACING_PT,
+  LINE_SPACING,
   commitArrange,
   commitChartAxes,
   commitChartData,
@@ -327,7 +329,192 @@ describe('element properties', () => {
     expect(slides).toEqual(deck());
   });
 
+  it('fills and outlines a shape with a hex a user chose, with no engine op for it', () => {
+    const slides = deck();
+    const commit = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['panel'],
+      props: {
+        fill: '1a2B3c',
+        stroke: { color: 'FF8800', widthEmu: 12_700, dash: 'solid', head: 'none', tail: 'none' },
+      },
+    });
+    expectReversible(slides, commit);
+    expect(elementOf(commit.slides, 'opening', 'panel')).toMatchObject({
+      fill: '1a2B3c',
+      stroke: { color: 'FF8800' },
+    });
+    // The engine only knows roles; a hex travels with the slide.
+    expect(commit.change?.ops).toEqual([]);
+
+    // Back to a role: the engine hears about it again.
+    const role = commitElementProps(commit.slides, {
+      slideId: 'opening',
+      elementIds: ['panel'],
+      props: { fill: 'surface', stroke: { color: 'line' } },
+    });
+    expectReversible(commit.slides, role);
+    expect(elementOf(role.slides, 'opening', 'panel')).toMatchObject({
+      fill: 'surface',
+      stroke: { color: 'line' },
+    });
+    expect(role.change?.ops).toEqual([
+      { op: 'set-color', elementId: 'panel', colorRole: 'surface' },
+    ]);
+
+    // Neither a hash, three digits nor a stray word is a colour.
+    for (const fill of ['#1A2B3C', 'ABC', 'ultramarine']) {
+      const refused = commitElementProps(slides, {
+        slideId: 'opening',
+        elementIds: ['panel'],
+        props: { fill: fill as never },
+      });
+      expect(refused.change).toBeNull();
+    }
+    expect(
+      commitElementProps(slides, {
+        slideId: 'opening',
+        elementIds: ['panel'],
+        props: {
+          stroke: { color: '#FF8800', widthEmu: 12_700, dash: 'solid', head: 'none', tail: 'none' },
+        },
+      }).change,
+    ).toBeNull();
+  });
+
+  it('sets the face of every run and takes it back with null', () => {
+    const slides = deck();
+    const set = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { fontFamily: '  PT Serif ' },
+    });
+    expectReversible(slides, set);
+    const title = elementOf(set.slides, 'opening', 'title');
+    if (title?.kind !== 'text') throw new Error('not text');
+    expect(title.paragraphs[0]?.runs.map((run) => run.font)).toEqual(['PT Serif', 'PT Serif']);
+    expect(set.change?.kind).toBe('style');
+    expect(set.change?.ops.map((op) => op.op)).toEqual(['set-text']);
+
+    const back = commitElementProps(set.slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { fontFamily: null },
+    });
+    expect(back.slides).toEqual(slides);
+    // A blank name is no face either.
+    const blank = commitElementProps(set.slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { fontFamily: '   ' },
+    });
+    expect(blank.slides).toEqual(slides);
+  });
+
+  it('tracks every run within bounds and takes it back with null', () => {
+    const slides = deck();
+    const runsOf = (next: readonly SlideIr[]) => {
+      const title = elementOf(next, 'opening', 'title');
+      if (title?.kind !== 'text') throw new Error('not text');
+      return title.paragraphs.flatMap((paragraph) => paragraph.runs);
+    };
+    const set = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { letterSpacingPt: 1.234 },
+    });
+    expectReversible(slides, set);
+    expect(runsOf(set.slides).map((run) => run.letterSpacingPt)).toEqual([1.23, 1.23]);
+
+    for (const [asked, kept] of [
+      [-500, LETTER_SPACING_PT.min],
+      [10_000, LETTER_SPACING_PT.max],
+    ] as const) {
+      const clamped = commitElementProps(slides, {
+        slideId: 'opening',
+        elementIds: ['title'],
+        props: { letterSpacingPt: asked },
+      });
+      expect(runsOf(clamped.slides).every((run) => run.letterSpacingPt === kept)).toBe(true);
+    }
+
+    const back = commitElementProps(set.slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { letterSpacingPt: null },
+    });
+    expect(runsOf(back.slides).some((run) => 'letterSpacingPt' in run)).toBe(false);
+    expect(back.slides).toEqual(slides);
+    expect(
+      commitElementProps(slides, {
+        slideId: 'opening',
+        elementIds: ['title'],
+        props: { letterSpacingPt: Number.NaN },
+      }).change,
+    ).toBeNull();
+  });
+
+  it('spaces the lines of every paragraph within bounds and takes it back with null', () => {
+    const slides = deck();
+    const spacingOf = (next: readonly SlideIr[]) => {
+      const title = elementOf(next, 'opening', 'title');
+      if (title?.kind !== 'text') throw new Error('not text');
+      return title.paragraphs.map((paragraph) => paragraph.lineSpacing);
+    };
+    const set = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { lineSpacing: 1.5 },
+    });
+    expectReversible(slides, set);
+    expect(spacingOf(set.slides)).toEqual([1.5]);
+    expect(set.change?.ops.map((op) => op.op)).toEqual(['set-text']);
+
+    for (const [asked, kept] of [
+      [0.1, LINE_SPACING.min],
+      [-2, LINE_SPACING.min],
+      [40, LINE_SPACING.max],
+    ] as const) {
+      const clamped = commitElementProps(slides, {
+        slideId: 'opening',
+        elementIds: ['title'],
+        props: { lineSpacing: asked },
+      });
+      expect(spacingOf(clamped.slides)).toEqual([kept]);
+    }
+
+    const back = commitElementProps(set.slides, {
+      slideId: 'opening',
+      elementIds: ['title'],
+      props: { lineSpacing: null },
+    });
+    // The contract keeps the key: null is how a paragraph inherits its spacing.
+    expect(spacingOf(back.slides)).toEqual([null]);
+    expect(back.slides).toEqual(slides);
+    expect(
+      commitElementProps(slides, {
+        slideId: 'opening',
+        elementIds: ['title'],
+        props: { lineSpacing: Number.POSITIVE_INFINITY },
+      }).change,
+    ).toBeNull();
+  });
+
+  it('keeps text properties off every other kind', () => {
+    const slides = deck();
+    const commit = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['panel', 'photo'],
+      props: { fontFamily: 'Inter', letterSpacingPt: 2, lineSpacing: 2 },
+    });
+    expect(commit.change).toBeNull();
+    expect(commit.slides).toBe(slides);
+  });
+
   it('says which properties each kind takes, for a panel to read', () => {
+    expect(ELEMENT_PROPS.text).toEqual(
+      expect.arrayContaining(['fontFamily', 'letterSpacingPt', 'lineSpacing']),
+    );
     expect(ELEMENT_PROPS.decor).toContain('stroke');
     expect(ELEMENT_PROPS.text).toContain('verticalAlign');
     expect(ELEMENT_PROPS.image).toContain('fit');

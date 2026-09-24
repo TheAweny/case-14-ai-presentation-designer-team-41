@@ -175,10 +175,20 @@ describe('slide background', () => {
     ).toEqual(cleared.slides);
   });
 
-  it('ignores a colour that is not a role, a slide that is not there and a value already set', () => {
+  it('fills a slide with a hex a user chose', () => {
+    const slides = deck();
+    const filled = commitSlideBackground(slides, { slideId: 'middle', background: '1E2a3B' });
+    expectReversible(slides, filled);
+    expect(filled.slides[1]?.background).toBe('1E2a3B');
+    expect(filled.change?.ops).toEqual([]);
+  });
+
+  it('ignores a colour that is neither a role nor six hex digits, a missing slide and a value already set', () => {
     const slides = deck();
     for (const commit of [
-      commitSlideBackground(slides, { slideId: 'middle', background: '3355E0' as never }),
+      commitSlideBackground(slides, { slideId: 'middle', background: '#3355E0' }),
+      commitSlideBackground(slides, { slideId: 'middle', background: 'ultramarine' }),
+      commitSlideBackground(slides, { slideId: 'middle', background: '35E' }),
       commitSlideBackground(slides, { slideId: 'nowhere', background: 'accent' }),
       commitSlideBackground(slides, { slideId: 'middle', background: null }),
     ]) {

@@ -8,6 +8,7 @@ export {
   commitSetFontSize,
   commitSetText,
   commitSetTextGesture,
+  FONT_SIZE_PT,
   createDeckHistory,
   mergeChanges,
   recordChange,
@@ -15,9 +16,12 @@ export {
   reorderSlides,
   undoDeck,
   type RecordOptions,
+  type SetColorChange,
 } from './journal.js';
 export {
   ELEMENT_PROPS,
+  LETTER_SPACING_PT,
+  LINE_SPACING,
   commitArrange,
   commitChartAxes,
   commitChartData,

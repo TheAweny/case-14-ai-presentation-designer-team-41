@@ -2,6 +2,7 @@ import { applyPatches, type Patch } from 'immer';
 import { describe, expect, it } from 'vitest';
 import type { Box, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import {
+  FONT_SIZE_PT,
   commitInsert,
   commitMove,
   commitMoves,
@@ -469,6 +470,33 @@ describe('set-font-size', () => {
   });
 });
 
+describe('set-font-size beyond the scale', () => {
+  it('takes any size in bounds, clamps the rest and rounds to hundredths', () => {
+    const slides = deck();
+    const sizesOf = (commit: ReturnType<typeof commitSetFontSize>) => {
+      const element = commit.slides[0]?.elements[0];
+      if (!element || element.kind !== 'text') throw new Error('missing text');
+      return element.paragraphs.flatMap((paragraph) => paragraph.runs.map((run) => run.sizePt));
+    };
+    for (const [asked, kept] of [
+      [13.5, 13.5],
+      [72.3333, 72.33],
+      [0.2, FONT_SIZE_PT.min],
+      [5000, FONT_SIZE_PT.max],
+    ] as const) {
+      const commit = commitSetFontSize(slides, {
+        slideId: 'opening',
+        elementId: 'title',
+        sizePt: asked,
+      });
+      expect(commit.change?.ops).toEqual([
+        { op: 'set-font-size', elementId: 'title', sizePt: kept },
+      ]);
+      expect(sizesOf(commit).every((size) => size === kept)).toBe(true);
+    }
+  });
+});
+
 describe('set-color', () => {
   it('records one set-color with the role and stores the hex on every run', () => {
     const title = styledText('title');
@@ -507,6 +535,49 @@ describe('set-color', () => {
     });
     expect(lower.change?.ops).toEqual([{ op: 'set-color', elementId: 'title', colorRole: 'text' }]);
     expect(lower.slides[0]?.elements[0]).toEqual(withRunColor(original, 'abcdef'));
+  });
+
+  it('takes a colour value: a role journals set-color, a hex a user chose does not', () => {
+    const title = styledText('title');
+    const slides = [slide('opening', 0, [title]), ...deck().slice(1)];
+    const before = structuredClone(slides);
+    const original = before[0]?.elements[0];
+    if (!original) throw new Error('missing element');
+
+    const role = commitSetColor(slides, {
+      slideId: 'opening',
+      elementId: 'title',
+      color: 'accent',
+      hex: '3355E0',
+    });
+    expect(role.change?.ops).toEqual([
+      { op: 'set-color', elementId: 'title', colorRole: 'accent' },
+    ]);
+    expect(role.slides[0]?.elements[0]).toEqual(withRunColor(original, '3355E0'));
+
+    // A hex is its own paint: the `hex` beside it cannot disagree with it.
+    const own = commitSetColor(slides, {
+      slideId: 'opening',
+      elementId: 'title',
+      color: '12ab9F',
+      hex: '000000',
+    });
+    expect(own.change?.ops).toEqual([]);
+    expect(own.change?.kind).toBe('color');
+    expect(own.slides[0]?.elements[0]).toEqual(withRunColor(original, '12ab9F'));
+    expect(replay(own.slides, own.change?.inversePatches ?? [])).toEqual(before);
+    expect(undoDeck(recordChange(createDeckHistory(slides), own)).slides).toEqual(before);
+
+    for (const color of ['#12ab9F', 'ultramarine', 'abc']) {
+      const refused = commitSetColor(slides, {
+        slideId: 'opening',
+        elementId: 'title',
+        color,
+        hex: 'aabbcc',
+      });
+      expect(refused.change).toBeNull();
+      expect(refused.slides).toBe(slides);
+    }
   });
 
   it('restores the copy from before the gesture even if that slide is edited afterwards', () => {

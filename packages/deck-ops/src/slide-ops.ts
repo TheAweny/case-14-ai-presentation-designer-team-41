@@ -1,4 +1,4 @@
-import { colorRoleSchema, slideIrSchema, type ColorRole, type SlideIr } from '@lct/contracts';
+import { colorValueSchema, slideIrSchema, type ColorValue, type SlideIr } from '@lct/contracts';
 import {
   commitProduced,
   freshIds,
@@ -102,17 +102,17 @@ export function commitRemoveSlide(
 }
 
 /**
- * Fill a slide with a palette role. Null puts it back on the template background, which is what
- * a slide that says nothing is drawn with.
+ * Fill a slide with a palette role or a hex a user chose. Null puts it back on the template
+ * background, which is what a slide that says nothing is drawn with.
  */
 export function commitSlideBackground(
   slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly background: ColorRole | null },
+  change: { readonly slideId: string; readonly background: ColorValue | null },
 ): DeckCommit {
   const slide = slideOf(slides, change.slideId);
   if (!slide) return unchanged(slides);
   const { background } = change;
-  if (background !== null && !colorRoleSchema.safeParse(background).success) {
+  if (background !== null && !colorValueSchema.safeParse(background).success) {
     return unchanged(slides);
   }
   const produced = produceSlides(slides, (draft) => {

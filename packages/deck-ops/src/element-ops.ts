@@ -2,13 +2,14 @@ import type { Draft } from 'immer';
 import {
   chartTypeSchema,
   colorRoleSchema,
+  colorValueSchema,
   decorShapeSchema,
   imageFitSchema,
   paragraphAlignSchema,
   elementStrokeSchema,
   verticalAlignSchema,
   type ChartType,
-  type ColorRole,
+  type ColorValue,
   type DecorShape,
   type ImageFit,
   type ParagraphAlign,
@@ -53,11 +54,11 @@ export interface ElementProps {
   readonly opacity?: number;
   readonly locked?: boolean;
   readonly shape?: DecorShape;
-  /** A palette role, or null for no fill. */
-  readonly fill?: ColorRole | null;
+  /** A palette role or a hex a user chose (six digits, no hash), or null for no fill. */
+  readonly fill?: ColorValue | null;
   /**
    * Merged over the stroke the shape has, so a width alone keeps each shape's colour. A shape
-   * with no stroke needs a whole one. Null removes the outline.
+   * with no stroke needs a whole one. Null removes the outline. The colour is a role or a hex.
    */
   readonly stroke?: Partial<ElementStroke> | null;
   /** Share of the shorter side, clamped to [0, 0.5]. */
@@ -73,6 +74,18 @@ export interface ElementProps {
   readonly bold?: boolean | null;
   readonly italic?: boolean | null;
   readonly underline?: boolean | null;
+  /** Typeface of every run of a text element. Null or blank goes back to the type role's face. */
+  readonly fontFamily?: string | null;
+  /**
+   * Extra space between letters of every run, in points, clamped to
+   * [`LETTER_SPACING_PT.min`, `LETTER_SPACING_PT.max`]. Null goes back to the inherited spacing.
+   */
+  readonly letterSpacingPt?: number | null;
+  /**
+   * Line spacing of every paragraph as a multiple of single spacing, clamped to
+   * [`LINE_SPACING.min`, `LINE_SPACING.max`]. Null goes back to what the type role says.
+   */
+  readonly lineSpacing?: number | null;
 }
 
 export type ElementProp = keyof ElementProps;
@@ -81,7 +94,17 @@ const LOOK = ['rotation', 'opacity', 'locked'] as const satisfies readonly Eleme
 
 /** Which properties each kind takes. The panel shows a control only where it applies. */
 export const ELEMENT_PROPS: Readonly<Record<SlideElementKind, readonly ElementProp[]>> = {
-  text: [...LOOK, 'align', 'verticalAlign', 'bold', 'italic', 'underline'],
+  text: [
+    ...LOOK,
+    'align',
+    'verticalAlign',
+    'bold',
+    'italic',
+    'underline',
+    'fontFamily',
+    'letterSpacingPt',
+    'lineSpacing',
+  ],
   image: [...LOOK, 'fit'],
   table: [...LOOK],
   chart: [...LOOK, 'chartType'],
@@ -112,6 +135,24 @@ function clamp(value: number, min: number, max: number): number | null {
   return Math.min(Math.max(value, min), max);
 }
 
+/** Letter spacing an editor may set, in points: from very tight to wide tracking. */
+export const LETTER_SPACING_PT = { min: -50, max: 200 } as const;
+
+/** Line spacing an editor may set, as a multiple of single spacing. */
+export const LINE_SPACING = { min: 0.5, max: 5 } as const;
+
+/** Two decimals: a dragged value lands on what the field shows, without float dust. */
+function hundredths(value: number): number {
+  const rounded = Math.round(value * 100) / 100;
+  return rounded === 0 ? 0 : rounded;
+}
+
+/** `value` clamped and rounded, or null when it is not a number at all. */
+function bounded(value: number, range: { readonly min: number; readonly max: number }) {
+  const clamped = clamp(value, range.min, range.max);
+  return clamped === null ? null : hundredths(clamped);
+}
+
 function applyLook(target: Draft<SlideElement>, props: ElementProps): void {
   const look = target as unknown as Mutable;
   if (props.rotation !== undefined) {
@@ -133,7 +174,7 @@ function applyDecor(target: Draft<Extract<SlideElement, { kind: 'decor' }>>, pro
   if (props.fill !== undefined) {
     if (props.fill === null) {
       if (target.fill !== null) target.fill = null;
-    } else if (colorRoleSchema.safeParse(props.fill).success && target.fill !== props.fill) {
+    } else if (colorValueSchema.safeParse(props.fill).success && target.fill !== props.fill) {
       target.fill = props.fill;
     }
   }
@@ -186,6 +227,31 @@ function applyText(target: Draft<Extract<SlideElement, { kind: 'text' }>>, props
       setOrDrop(run as unknown as Mutable, 'underline', props.underline, null);
     }
   }
+  if (props.fontFamily !== undefined) {
+    // The run states no face as an empty string, which is what the contract reads as inherited.
+    const font = props.fontFamily?.trim() ?? '';
+    for (const run of target.paragraphs.flatMap((paragraph) => paragraph.runs)) {
+      if (run.font !== font) run.font = font;
+    }
+  }
+  if (props.letterSpacingPt !== undefined) {
+    const spacing =
+      props.letterSpacingPt === null ? null : bounded(props.letterSpacingPt, LETTER_SPACING_PT);
+    if (props.letterSpacingPt === null || spacing !== null) {
+      for (const run of target.paragraphs.flatMap((paragraph) => paragraph.runs)) {
+        setOrDrop(run as unknown as Mutable, 'letterSpacingPt', spacing, null);
+      }
+    }
+  }
+  if (props.lineSpacing !== undefined) {
+    const spacing = props.lineSpacing === null ? null : bounded(props.lineSpacing, LINE_SPACING);
+    if (props.lineSpacing === null || spacing !== null) {
+      // The contract requires the key: null, not absent, is how a paragraph inherits it.
+      for (const paragraph of target.paragraphs) {
+        if (paragraph.lineSpacing !== spacing) paragraph.lineSpacing = spacing;
+      }
+    }
+  }
 }
 
 function propsKind(props: ElementProps): DeckChangeKind {
@@ -209,8 +275,8 @@ function propsFor(kind: SlideElementKind, props: ElementProps): ElementProps {
  * Set properties on one or more elements of a slide as one journal entry.
  *
  * Text whose paragraphs changed gets a `set-text` op and a shape whose fill became a role gets a
- * `set-color`, because the engine has those operations; the rest of the look travels with the
- * slide itself.
+ * `set-color`, because the engine has those operations; a hex fill and the rest of the look travel
+ * with the slide itself.
  */
 export function commitElementProps(
   slides: readonly SlideIr[],
@@ -254,13 +320,9 @@ export function commitElementProps(
     ) {
       ops.push({ op: 'set-text', elementId: id, paragraphs: structuredClone(after.paragraphs) });
     }
-    if (
-      before.kind === 'decor' &&
-      after.kind === 'decor' &&
-      after.fill &&
-      before.fill !== after.fill
-    ) {
-      ops.push({ op: 'set-color', elementId: id, colorRole: after.fill });
+    if (before.kind === 'decor' && after.kind === 'decor' && before.fill !== after.fill) {
+      const role = colorRoleSchema.safeParse(after.fill);
+      if (role.success) ops.push({ op: 'set-color', elementId: id, colorRole: role.data });
     }
   }
   const selected = selectionOf(change.slideId, ids);

@@ -1,8 +1,10 @@
 import type { Patch } from 'immer';
 import {
+  colorRoleSchema,
   slideElementSchema,
   type Box,
   type ColorRole,
+  type ColorValue,
   type Paragraph,
   type SlideElement,
   type SlideIr,
@@ -168,16 +170,21 @@ export function commitSetTextGesture(
   });
 }
 
+/** Type sizes an editor may set, in points: any value, not only the steps of the type scale. */
+export const FONT_SIZE_PT = { min: 1, max: 1000 } as const;
+
 /**
- * Set one size, in points, on every existing run of a text element.
+ * Set one size, in points, on every existing run of a text element. Any positive size is taken,
+ * clamped to [`FONT_SIZE_PT.min`, `FONT_SIZE_PT.max`] and rounded to hundredths.
  * Runs are not invented. One gesture is one `set-font-size`.
  */
 export function commitSetFontSize(
   slides: readonly SlideIr[],
   change: { readonly slideId: string; readonly elementId: string; readonly sizePt: number },
 ): DeckCommit {
-  const { sizePt } = change;
-  if (!Number.isFinite(sizePt) || sizePt <= 0) return unchanged(slides);
+  if (!Number.isFinite(change.sizePt) || change.sizePt <= 0) return unchanged(slides);
+  const clamped = Math.min(Math.max(change.sizePt, FONT_SIZE_PT.min), FONT_SIZE_PT.max);
+  const sizePt = Math.round(clamped * 100) / 100;
   const element = elementOf(slides, change.slideId, change.elementId);
   if (!element || element.kind !== 'text') return unchanged(slides);
   const runs = element.paragraphs.flatMap((paragraph) => paragraph.runs);
@@ -202,32 +209,43 @@ export function commitSetFontSize(
   );
 }
 
+const HEX = /^[0-9a-fA-F]{6}$/;
+
+/**
+ * The colour of `commitSetColor`: `color`, a palette role or a hex a user chose, or the older
+ * `colorRole`. `hex` is what the runs are painted with; for a hex `color` it is that hex.
+ */
+export type SetColorChange = {
+  readonly slideId: string;
+  readonly elementId: string;
+  readonly hex: string;
+} & (
+  | { readonly color: ColorValue; readonly colorRole?: never }
+  | { readonly colorRole: ColorRole; readonly color?: never }
+);
+
 /**
  * Set one color on every existing run of a text element.
- * The engine op names the role and not the hex: the hex is only how the slide looks
- * until export learns the role.
+ * For a role, the engine op names the role and not the hex: the hex is only how the slide looks
+ * until export learns the role. A hex a user chose has no engine op: it travels with the slide.
  */
-export function commitSetColor(
-  slides: readonly SlideIr[],
-  change: {
-    readonly slideId: string;
-    readonly elementId: string;
-    readonly colorRole: ColorRole;
-    readonly hex: string;
-  },
-): DeckCommit {
-  if (!/^[0-9a-fA-F]{6}$/.test(change.hex)) return unchanged(slides);
+export function commitSetColor(slides: readonly SlideIr[], change: SetColorChange): DeckCommit {
+  const color: ColorValue = change.color ?? change.colorRole;
+  const hex = HEX.test(color) ? color : change.hex;
+  if (!HEX.test(hex)) return unchanged(slides);
+  const role = colorRoleSchema.safeParse(color);
+  if (!role.success && !HEX.test(color)) return unchanged(slides);
   const element = elementOf(slides, change.slideId, change.elementId);
   if (!element || element.kind !== 'text') return unchanged(slides);
   const runs = element.paragraphs.flatMap((paragraph) => paragraph.runs);
-  if (runs.length === 0 || runs.every((run) => run.color === change.hex)) return unchanged(slides);
+  if (runs.length === 0 || runs.every((run) => run.color === hex)) return unchanged(slides);
 
   const produced = produceSlides(slides, (draft) => {
     const target = elementOf(draft, change.slideId, change.elementId);
     if (!target || target.kind !== 'text') return;
     for (const paragraph of target.paragraphs) {
       for (const run of paragraph.runs) {
-        run.color = change.hex;
+        run.color = hex;
       }
     }
   });
@@ -236,7 +254,7 @@ export function commitSetColor(
     slides,
     produced,
     change.slideId,
-    [{ op: 'set-color', elementId: change.elementId, colorRole: change.colorRole }],
+    role.success ? [{ op: 'set-color', elementId: change.elementId, colorRole: role.data }] : [],
     { kind: 'color', before: edited, after: edited },
   );
 }
