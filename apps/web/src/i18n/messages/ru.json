@@ -95,7 +95,25 @@
       "line": "Линия",
       "positive": "Положительное",
       "negative": "Отрицательное"
-    }
+    },
+    "bold": "Жирный",
+    "italic": "Курсив",
+    "smaller": "Уменьшить кегль",
+    "larger": "Увеличить кегль",
+    "strokeWidths": "Частые толщины",
+    "replace": "Заменить",
+    "editTable": "Править ячейки таблицы",
+    "editTableShort": "Править",
+    "editChart": "Данные графика в панели «Дизайн»",
+    "editChartShort": "Данные",
+    "distribute": "Распределить",
+    "distributeHorizontal": "Распределить по горизонтали",
+    "distributeVertical": "Распределить по вертикали",
+    "layers": "Порядок слоёв",
+    "more": "Ещё",
+    "alignToSlide": "Выровнять по слайду",
+    "openInspector": "Открыть в панели «Дизайн»",
+    "openData": "Открыть данные в панели «Дизайн»"
   },
   "formatBar": {
     "label": "Формат текста",

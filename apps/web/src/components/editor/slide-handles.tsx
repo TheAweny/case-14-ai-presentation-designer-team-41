@@ -15,6 +15,7 @@ import {
   type PixelBox,
 } from '@/components/editor/slide-geometry';
 import type { ElementMove } from '@/components/editor/use-deck-history';
+import { EDITOR_CHROME } from '@/components/editor/chrome-focus';
 
 /** Прилипание срабатывает ближе этого, в экранных пикселях при любом зуме. */
 const SNAP_THRESHOLD_PX = 6;
@@ -27,8 +28,7 @@ const ALL_SIDES = {
   middle: true,
 } as const;
 /** Отсюда рамка выделения не начинается: это интерфейс поверх холста, а не слайд. */
-const CHROME =
-  '[data-text-editor], [data-text-format], [data-selection-bar], button, input, [role="toolbar"], [role="group"], [role="menu"]';
+const CHROME = `[data-text-editor], [data-text-format], [data-selection-bar], button, input, [role="toolbar"], [role="group"], [role="menu"], ${EDITOR_CHROME}`;
 
 /*
  * Вид ручек как в Figma: белые квадраты с обводкой цвета выделения, тонкая рамка. Цвета —

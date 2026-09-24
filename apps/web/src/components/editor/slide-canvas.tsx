@@ -13,14 +13,7 @@ import {
   TransformWrapper,
   type ReactZoomPanPinchContentRef,
 } from 'react-zoom-pan-pinch';
-import type {
-  Box,
-  ColorRole,
-  DesignSystem,
-  Paragraph,
-  SlideElement,
-  SlideIr,
-} from '@lct/contracts';
+import type { Box, DesignSystem, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import type { TableCell } from '@lct/deck-ops';
 import { FitSlide, ZoomBasis, ZoomHud } from '@/components/editor/canvas-zoom';
@@ -42,7 +35,8 @@ import {
   isInsertTool,
   type InsertTool,
 } from '@/components/editor/insert-element';
-import { SelectionBar } from '@/components/editor/selection-bar';
+import { SelectionBar, type SelectionBarActions } from '@/components/editor/selection-bar';
+import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus';
 import { SlideHandles } from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
 import { TableEditor, type GridCell } from '@/components/editor/table-editor';
@@ -51,7 +45,6 @@ import {
   gridForSlide,
   nudgeBox,
   pixelBoxToEmu,
-  type Alignment,
 } from '@/components/editor/slide-geometry';
 import { isTypingTarget } from '@/components/editor/slide-navigation';
 import type { VariantId } from '@/components/editor/tool-rail';
@@ -64,10 +57,9 @@ import { carriesFiles, imageFilesOf, pickImageFiles, registerImage } from '@/lib
 
 /** Здесь стрелки — свои клавиши виджета, а не сдвиг объекта. */
 const ARROW_OWNERS =
-  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"]';
+  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="toolbar"]';
 /** Клик сюда не закрывает набор: это само поле, его полоса и кнопки поверх холста. */
-const KEEPS_EDITING =
-  '[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"]';
+const KEEPS_EDITING = `[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"], ${EDITOR_CHROME}`;
 
 function isFormField(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('input, textarea, select') !== null;
@@ -98,18 +90,15 @@ export function SlideCanvas({
   onSelect,
   onCommit,
   onTextCommit,
-  onRemove,
   onRemoveElements,
-  onAlign,
   onInsert,
-  onFontSize,
-  onColor,
   onReplaceImage,
   onCommand,
   canPaste,
   hasLocked,
   onTableCell,
   onRotate,
+  selectionActions,
   className,
 }: {
   slide: SlideIr;
@@ -126,16 +115,10 @@ export function SlideCanvas({
   onCommit: (moves: readonly ElementMove[]) => void;
   /** Закрытие набора: один `set-text`, не шаг на каждый символ. */
   onTextCommit: (slideId: string, elementId: string, paragraphs: readonly Paragraph[]) => void;
-  /** Удалить выделенное. */
-  onRemove: () => void;
   /** Удалить эти объекты, выделены они или нет: пустой текст после набора. */
   onRemoveElements: (elementIds: readonly string[]) => void;
-  /** Выровнять выделенные объекты между собой. */
-  onAlign: (alignment: Alignment) => void;
   /** Новый объект. В журнал он попадает целиком, одним шагом. */
   onInsert: (elements: readonly SlideElement[]) => void;
-  onFontSize: (elementId: string, sizePt: number) => void;
-  onColor: (elementId: string, colorRole: ColorRole, hex: string) => void;
   /** Новый файл в рамке картинки: рамка и вписывание остаются, меняется только `mediaPart`. */
   onReplaceImage: (elementId: string, mediaPart: string) => void;
   /** Команда из контекстного меню холста. */
@@ -148,6 +131,8 @@ export function SlideCanvas({
   onTableCell: (elementId: string, cell: TableCell, text: string) => void;
   /** Угол объекта после поворота ручкой. */
   onRotate: (elementId: string, rotation: number) => void;
+  /** Правки полосы свойств над выделением. */
+  selectionActions: SelectionBarActions;
   className?: string;
 }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -534,7 +519,13 @@ export function SlideCanvas({
       if (event.button !== 0 || event.detail >= 2) return;
       const target = event.target;
       if (!(target instanceof Element) || !host.contains(target)) return;
-      if (target.closest('[data-text-editor], [data-selection-bar], [data-text-format]')) return;
+      if (
+        target.closest(
+          `[data-text-editor], [data-selection-bar], [data-text-format], ${EDITOR_CHROME}`,
+        )
+      ) {
+        return;
+      }
       event.preventDefault();
       pointer = event.pointerId;
       host.setPointerCapture(pointer);
@@ -668,7 +659,7 @@ export function SlideCanvas({
   const selectUnderPointer = (event: ReactMouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element) || !slideRoot?.contains(target)) {
-      if (target instanceof Element && target.closest('[data-selection-bar]')) return;
+      if (isEditorChrome(target)) return;
       onSelect([]);
       return;
     }
@@ -773,11 +764,16 @@ export function SlideCanvas({
                       slide={slide}
                       designSystem={designSystem}
                       selectedIds={selectedIds}
-                      hidden={gesture || pan}
-                      onRemove={onRemove}
-                      onAlign={onAlign}
-                      onFontSize={onFontSize}
-                      onColor={onColor}
+                      // Во время жеста и набора в таблице полоса только мешала бы.
+                      hidden={gesture || pan || editingTable !== undefined}
+                      actions={selectionActions}
+                      onEditTable={(elementId) =>
+                        setTableSession({
+                          slideId: slide.slideId,
+                          elementId,
+                          focus: { row: 0, column: 0 },
+                        })
+                      }
                     />
                   ) : null}
                 </div>

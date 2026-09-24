@@ -40,6 +40,7 @@ import {
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
 import { SlideCanvas } from '@/components/editor/slide-canvas';
+import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
@@ -128,8 +129,6 @@ export function EditorShell({
     remove,
     reorder,
     insert,
-    setFontSize,
-    setColor,
     setProps,
     setPropsEach,
     endPreview,
@@ -246,22 +245,6 @@ export function EditorShell({
       move(slide.slideId, alignBoxes(items, alignment));
     },
     [move, selectedIds, slide],
-  );
-
-  const setFontSizeOf = useCallback(
-    (elementId: string, sizePt: number) => {
-      if (!slideId) return;
-      setFontSize(slideId, elementId, sizePt);
-    },
-    [setFontSize, slideId],
-  );
-
-  const setColorOf = useCallback(
-    (elementId: string, color: ColorValue, hex: string) => {
-      if (!slideId) return;
-      setColor(slideId, elementId, color, hex);
-    },
-    [setColor, slideId],
   );
 
   const setPropsOf = useCallback(
@@ -554,6 +537,46 @@ export function EditorShell({
     };
   }, [designSystem, insert, pasteElements, rememberCopy, removeSelected, selectedIds, slide]);
 
+  /**
+   * Правки полосы над выделением — те же пути записи, что у панели «Дизайн», и та же точка
+   * входа для команд, что у клавиатуры и меню холста.
+   */
+  const selectionActions = useMemo<SelectionBarActions>(
+    () => ({
+      onCommit: commit,
+      onAlign: alignSelected,
+      onProps: setPropsOf,
+      onPropsEach: (entries, mode) => {
+        if (slideId) setPropsEach(slideId, entries, mode);
+      },
+      onPreviewEnd: endPreview,
+      onFontSizes: (entries, mode) => {
+        if (slideId) setFontSizes(slideId, entries, mode);
+      },
+      onColorAll: (ids, color, hex, mode) => {
+        if (slideId) setColorAll(slideId, ids, color, hex, mode);
+      },
+      onReplaceImage: replaceImageOf,
+      onCommand: runCommand,
+      onOpenInspector: () => openInspector('design'),
+      canPaste,
+    }),
+    [
+      alignSelected,
+      canPaste,
+      commit,
+      endPreview,
+      openInspector,
+      replaceImageOf,
+      runCommand,
+      setColorAll,
+      setFontSizes,
+      setPropsEach,
+      setPropsOf,
+      slideId,
+    ],
+  );
+
   /** Подпись слайда для чтения с экрана: место в колоде и, если есть, заголовок. */
   const labels = useMemo(
     () =>
@@ -681,25 +704,22 @@ export function EditorShell({
                       onSelect={setSelectedIds}
                       onCommit={commit}
                       onTextCommit={setText}
-                      onRemove={removeSelected}
                       onRemoveElements={(ids) => {
                         if (slideId) remove(slideId, ids);
                       }}
-                      onAlign={alignSelected}
                       onInsert={(elements) => {
                         if (!slideId) return;
                         insert(slideId, elements);
                         // Как в Figma: объект вставлен — курсор снова выбирает.
                         setTool('select');
                       }}
-                      onFontSize={setFontSizeOf}
-                      onColor={setColorOf}
                       onReplaceImage={replaceImageOf}
                       onCommand={runCommand}
                       canPaste={canPaste}
                       hasLocked={slide.elements.some((element) => element.locked === true)}
                       onTableCell={setTableCellOf}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
+                      selectionActions={selectionActions}
                       className={CANVAS_PADDING}
                     />
                   </ZoomBasis>
