@@ -13,6 +13,7 @@ import {
   type ColorValue,
   type DecorShape,
   type ImageFit,
+  type Paragraph,
   type ParagraphAlign,
   type PatchOp,
   type SlideElement,
@@ -77,7 +78,10 @@ export interface ElementProps {
   readonly flipV?: boolean;
   readonly fit?: ImageFit;
   readonly chartType?: ChartType;
-  /** Every paragraph of a text element. Null goes back to the inherited alignment. */
+  /**
+   * Every paragraph of a text element or of the text in a shape. Null goes back to the
+   * inherited alignment. The other word properties below reach shape text the same way.
+   */
   readonly align?: ParagraphAlign | null;
   readonly verticalAlign?: VerticalAlign;
   /** Every run of a text element. Null goes back to what the type role says. */
@@ -113,23 +117,25 @@ export type ElementProp = keyof ElementProps;
 
 const LOOK = ['rotation', 'opacity', 'locked'] as const satisfies readonly ElementProp[];
 
+/** The look of words: of a text element, and of the text inside a shape when it has some. */
+const WORDS = [
+  'align',
+  'verticalAlign',
+  'bold',
+  'italic',
+  'underline',
+  'fontFamily',
+  'letterSpacingPt',
+  'lineSpacing',
+] as const satisfies readonly ElementProp[];
+
 /** Which properties each kind takes. The panel shows a control only where it applies. */
 export const ELEMENT_PROPS: Readonly<Record<SlideElementKind, readonly ElementProp[]>> = {
-  text: [
-    ...LOOK,
-    'align',
-    'verticalAlign',
-    'bold',
-    'italic',
-    'underline',
-    'fontFamily',
-    'letterSpacingPt',
-    'lineSpacing',
-  ],
+  text: [...LOOK, ...WORDS],
   image: [...LOOK, 'fit'],
   table: [...LOOK, 'headerRow', 'bandedRows', 'bandFill', 'borders'],
   chart: [...LOOK, 'chartType'],
-  decor: [...LOOK, 'shape', 'fill', 'stroke', 'cornerRadius', 'flipH', 'flipV'],
+  decor: [...LOOK, 'shape', 'fill', 'stroke', 'cornerRadius', 'flipH', 'flipV', ...WORDS],
 };
 
 type Mutable = Record<string, unknown>;
@@ -223,7 +229,20 @@ function applyDecor(target: Draft<Extract<SlideElement, { kind: 'decor' }>>, pro
   if (props.flipV !== undefined) setOrDrop(decor, 'flipV', props.flipV === true, false);
 }
 
-function applyText(target: Draft<Extract<SlideElement, { kind: 'text' }>>, props: ElementProps) {
+/** What the word properties change: the paragraphs and the anchor of a text or a shape. */
+interface WordsDraft {
+  verticalAlign?: VerticalAlign;
+  paragraphs: Draft<Paragraph>[];
+}
+
+/** A shape holds words only once someone typed into it; a plain shape takes no word props. */
+function hasWords(
+  target: Draft<Extract<SlideElement, { kind: 'decor' }>>,
+): target is Draft<Extract<SlideElement, { kind: 'decor' }>> & WordsDraft {
+  return target.paragraphs !== undefined;
+}
+
+function applyText(target: WordsDraft, props: ElementProps) {
   if (
     props.verticalAlign !== undefined &&
     verticalAlignSchema.safeParse(props.verticalAlign).success
@@ -345,7 +364,10 @@ export function commitElementProps(
       if (!target) continue;
       const props = propsFor(target.kind, change.props);
       applyLook(target, props);
-      if (target.kind === 'decor') applyDecor(target, props);
+      if (target.kind === 'decor') {
+        applyDecor(target, props);
+        if (hasWords(target)) applyText(target, props);
+      }
       if (target.kind === 'text') applyText(target, props);
       if (target.kind === 'table') applyTable(target, props);
       if (target.kind === 'image' && props.fit !== undefined) {

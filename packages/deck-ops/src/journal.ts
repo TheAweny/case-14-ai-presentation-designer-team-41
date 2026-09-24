@@ -6,6 +6,7 @@ import {
   type ColorRole,
   type ColorValue,
   type Paragraph,
+  type PatchOp,
   type SlideElement,
   type SlideIr,
 } from '@lct/contracts';
@@ -17,6 +18,7 @@ import {
   selectionOf,
   slideOf,
   unchanged,
+  wordsOf,
   type DeckChange,
   type DeckCommit,
   type DeckHistory,
@@ -175,7 +177,7 @@ export function commitSetTextGesture(
 export const FONT_SIZE_PT = { min: 1, max: 1000 } as const;
 
 /**
- * Set one size, in points, on every existing run of a text element. Any positive size is taken,
+ * Set one size, in points, on every existing run of a text element or of the text in a shape. Any positive size is taken,
  * clamped to [`FONT_SIZE_PT.min`, `FONT_SIZE_PT.max`] and rounded to hundredths.
  * Runs are not invented. One gesture is one `set-font-size`.
  */
@@ -187,27 +189,28 @@ export function commitSetFontSize(
   const clamped = Math.min(Math.max(change.sizePt, FONT_SIZE_PT.min), FONT_SIZE_PT.max);
   const sizePt = Math.round(clamped * 100) / 100;
   const element = elementOf(slides, change.slideId, change.elementId);
-  if (!element || element.kind !== 'text') return unchanged(slides);
-  const runs = element.paragraphs.flatMap((paragraph) => paragraph.runs);
-  if (runs.length === 0 || runs.every((run) => run.sizePt === sizePt)) return unchanged(slides);
+  const runs = (element ? (wordsOf(element) ?? []) : []).flatMap((paragraph) => paragraph.runs);
+  if (!element || runs.length === 0 || runs.every((run) => run.sizePt === sizePt)) {
+    return unchanged(slides);
+  }
 
   const produced = produceSlides(slides, (draft) => {
     const target = elementOf(draft, change.slideId, change.elementId);
-    if (!target || target.kind !== 'text') return;
-    for (const paragraph of target.paragraphs) {
+    for (const paragraph of (target && wordsOf(target)) ?? []) {
       for (const run of paragraph.runs) {
         run.sizePt = sizePt;
       }
     }
   });
   const edited = selectionOf(change.slideId, [change.elementId]);
-  return commitProduced(
-    slides,
-    produced,
-    change.slideId,
-    [{ op: 'set-font-size', elementId: change.elementId, sizePt }],
-    { kind: 'font-size', before: edited, after: edited },
-  );
+  // The engine sizes the words of a text element; the text in a shape travels with the slide.
+  const ops: PatchOp[] =
+    element.kind === 'text' ? [{ op: 'set-font-size', elementId: change.elementId, sizePt }] : [];
+  return commitProduced(slides, produced, change.slideId, ops, {
+    kind: 'font-size',
+    before: edited,
+    after: edited,
+  });
 }
 
 const HEX = /^[0-9a-fA-F]{6}$/;
@@ -226,7 +229,7 @@ export type SetColorChange = {
 );
 
 /**
- * Set one color on every existing run of a text element.
+ * Set one color on every existing run of a text element or of the text in a shape.
  * For a role, the engine op names the role and not the hex: the hex is only how the slide looks
  * until export learns the role. A hex a user chose has no engine op: it travels with the slide.
  */
@@ -237,27 +240,30 @@ export function commitSetColor(slides: readonly SlideIr[], change: SetColorChang
   const role = colorRoleSchema.safeParse(color);
   if (!role.success && !HEX.test(color)) return unchanged(slides);
   const element = elementOf(slides, change.slideId, change.elementId);
-  if (!element || element.kind !== 'text') return unchanged(slides);
-  const runs = element.paragraphs.flatMap((paragraph) => paragraph.runs);
-  if (runs.length === 0 || runs.every((run) => run.color === hex)) return unchanged(slides);
+  const runs = (element ? (wordsOf(element) ?? []) : []).flatMap((paragraph) => paragraph.runs);
+  if (!element || runs.length === 0 || runs.every((run) => run.color === hex)) {
+    return unchanged(slides);
+  }
 
   const produced = produceSlides(slides, (draft) => {
     const target = elementOf(draft, change.slideId, change.elementId);
-    if (!target || target.kind !== 'text') return;
-    for (const paragraph of target.paragraphs) {
+    for (const paragraph of (target && wordsOf(target)) ?? []) {
       for (const run of paragraph.runs) {
         run.color = hex;
       }
     }
   });
   const edited = selectionOf(change.slideId, [change.elementId]);
-  return commitProduced(
-    slides,
-    produced,
-    change.slideId,
-    role.success ? [{ op: 'set-color', elementId: change.elementId, colorRole: role.data }] : [],
-    { kind: 'color', before: edited, after: edited },
-  );
+  // `set-color` on a shape would repaint its fill: the words in a shape travel with the slide.
+  const ops: PatchOp[] =
+    role.success && element.kind === 'text'
+      ? [{ op: 'set-color', elementId: change.elementId, colorRole: role.data }]
+      : [];
+  return commitProduced(slides, produced, change.slideId, ops, {
+    kind: 'color',
+    before: edited,
+    after: edited,
+  });
 }
 
 /**

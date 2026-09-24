@@ -2,7 +2,14 @@ import { applyPatches, type Patch } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { slideIrSchema, type Paragraph, type SlideElement, type SlideIr } from '@lct/contracts';
 import type { DeckCommit } from './core.js';
-import { createDeckHistory, recordChange, redoDeck, undoDeck } from './journal.js';
+import {
+  commitSetColor,
+  commitSetFontSize,
+  createDeckHistory,
+  recordChange,
+  redoDeck,
+  undoDeck,
+} from './journal.js';
 import { commitImageCrop, commitShapeText, commitSlideNotes, normalCrop } from './content-ops.js';
 import { commitElementProps } from './element-ops.js';
 
@@ -113,6 +120,64 @@ describe('commitShapeText', () => {
         commitShapeText(before, { slideId: 'one', elementId, paragraphs: words('Нет') }).change,
       ).toBeNull();
     }
+  });
+
+  it('gives the words in a shape the look of text: runs, paragraphs and the anchor', () => {
+    const typed = commitShapeText(deck(), {
+      slideId: 'one',
+      elementId: 'card',
+      paragraphs: words('Шаг 1'),
+    }).slides;
+    const styled = commitElementProps(typed, {
+      slideId: 'one',
+      elementIds: ['card'],
+      props: { bold: true, fontFamily: 'Deck Face', align: 'left', verticalAlign: 'top' },
+    });
+    expectReversible(typed, styled);
+    const shape = element(styled.slides, 'card');
+    if (shape?.kind !== 'decor') throw new Error('card is not a shape');
+    expect(shape.verticalAlign).toBe('top');
+    expect(shape.fill).toBe('accent');
+    expect(shape.paragraphs?.[0]?.align).toBe('left');
+    expect(shape.paragraphs?.[0]?.runs[0]).toMatchObject({ bold: true, font: 'Deck Face' });
+
+    const sized = commitSetFontSize(styled.slides, {
+      slideId: 'one',
+      elementId: 'card',
+      sizePt: 28,
+    });
+    expectReversible(styled.slides, sized);
+    // `set-font-size` and `set-color` of the engine mean a text element; on a shape the colour
+    // op would repaint its fill. The words travel with the slide instead.
+    expect(sized.change?.ops).toEqual([]);
+    const colored = commitSetColor(sized.slides, {
+      slideId: 'one',
+      elementId: 'card',
+      color: 'surface',
+      hex: 'FFFFFF',
+    });
+    expectReversible(sized.slides, colored);
+    expect(colored.change?.ops).toEqual([]);
+    const done = element(colored.slides, 'card');
+    expect(done?.kind === 'decor' && done.paragraphs?.[0]?.runs[0]).toMatchObject({
+      sizePt: 28,
+      color: 'FFFFFF',
+    });
+    expect(done?.kind === 'decor' && done.fill).toBe('accent');
+  });
+
+  it('leaves a shape without words as it is', () => {
+    const before = deck();
+    expect(
+      commitElementProps(before, {
+        slideId: 'one',
+        elementIds: ['card'],
+        props: { bold: true, verticalAlign: 'top' },
+      }).change,
+    ).toBeNull();
+    expect(
+      commitSetFontSize(before, { slideId: 'one', elementId: 'card', sizePt: 20 }).change,
+    ).toBeNull();
   });
 });
 

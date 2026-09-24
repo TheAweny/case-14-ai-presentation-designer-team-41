@@ -1,5 +1,11 @@
 import { enablePatches, Immer, type Patch } from 'immer';
-import { patchOpSchema, type PatchOp, type SlideElement, type SlideIr } from '@lct/contracts';
+import {
+  patchOpSchema,
+  type Paragraph,
+  type PatchOp,
+  type SlideElement,
+  type SlideIr,
+} from '@lct/contracts';
 
 // Patches stay off until asked for. Freezing is off too: a commit shares unchanged slides with
 // the deck it was given, and the default freeze would make those slides read-only.
@@ -160,6 +166,16 @@ export function elementOf(
   elementId: string,
 ): SlideElement | undefined {
   return slideOf(slides, slideId)?.elements.find((element) => element.elementId === elementId);
+}
+
+/**
+ * The words of an element: a text element's paragraphs or the text inside a shape. Null when it
+ * holds none: a picture, a table, a chart, a shape nobody typed into.
+ */
+export function wordsOf(element: SlideElement): Paragraph[] | null {
+  if (element.kind === 'text') return element.paragraphs;
+  if (element.kind === 'decor') return element.paragraphs ?? null;
+  return null;
 }
 
 /** The browser and Node both have it; a caller that wants stable ids passes its own source. */
