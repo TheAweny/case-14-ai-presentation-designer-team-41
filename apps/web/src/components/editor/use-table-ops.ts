@@ -10,6 +10,7 @@ import {
   commitRemoveTableRow,
   commitTableCellStyle,
   commitTableColumnWidth,
+  commitTableFitRows,
   commitTableRowHeight,
   commitTableTexts,
   type ElementProps,
@@ -17,6 +18,7 @@ import {
   type TableCellStyleChange,
   type TableRange,
 } from '@lct/deck-ops';
+import type { SlideIr } from '@lct/contracts';
 import type { Commit, EditMode } from '@/components/editor/use-deck-history';
 
 /**
@@ -26,7 +28,11 @@ import type { Commit, EditMode } from '@/components/editor/use-deck-history';
  * строкам данных, как в `@lct/deck-ops`.
  */
 export interface TableOps {
-  setTexts(elementId: string, cells: readonly GridText[]): void;
+  /**
+   * Текст ячеек. `measuredEmu` — строки как нарисованы после набора: если текст перерос рамку,
+   * она растёт вместе с ним в той же записи журнала.
+   */
+  setTexts(elementId: string, cells: readonly GridText[], measuredEmu?: readonly number[]): void;
   insertRows(elementId: string, index: number, source: number, count?: number): void;
   removeRows(elementId: string, index: number, count?: number): void;
   insertColumns(elementId: string, index: number, source: number, count?: number): void;
@@ -57,8 +63,18 @@ export function useTableOps(
     };
     const at = (elementId: string) => ({ slideId: slideId ?? '', elementId });
     return {
-      setTexts: (elementId, cells) =>
-        one((slides) => commitTableTexts(slides, { ...at(elementId), cells })),
+      setTexts: (elementId, cells, measuredEmu) => {
+        if (!slideId) return;
+        run([
+          (slides) => commitTableTexts(slides, { ...at(elementId), cells }),
+          ...(measuredEmu
+            ? [
+                (slides: readonly SlideIr[]) =>
+                  commitTableFitRows(slides, { ...at(elementId), measuredEmu }),
+              ]
+            : []),
+        ]);
+      },
       insertRows: (elementId, index, source, count) =>
         one((slides) => commitInsertTableRow(slides, { ...at(elementId), index, source, count })),
       removeRows: (elementId, index, count) =>

@@ -198,6 +198,20 @@ export function TableEditor({
   const cellNode = (cell: GridCell) =>
     rootRef.current?.querySelector<HTMLElement>(`[data-cell="${cell.row}:${cell.column}"]`) ?? null;
 
+  /**
+   * Строки редактора как нарисованы, в EMU, если текст перерос рамку таблицы: по ним рамка
+   * растёт вслед за текстом. Пиксель разницы — округление вёрстки, а не рост.
+   */
+  const drawnRows = (): number[] | undefined => {
+    const table = rootRef.current?.querySelector('table');
+    const width = slideRoot.getBoundingClientRect().width;
+    if (!table || width <= 0) return undefined;
+    const emuPerPx = slide.cx / width;
+    const rows = [...table.rows].map((row) => row.getBoundingClientRect().height * emuPerPx);
+    const total = rows.reduce((sum, value) => sum + value, 0);
+    return total > latest.current.element.box.cy + emuPerPx ? rows : undefined;
+  };
+
   /** Текст ячейки в журнал, если он поменялся. */
   const commitCell = (node: HTMLElement) => {
     const cell = cellOfNode(node);
@@ -206,7 +220,7 @@ export function TableEditor({
     const before = [current.headers, ...current.rows][cell.row]?.[cell.column];
     const text = cellText(node.innerText ?? '');
     if (before === undefined || before === text) return;
-    latest.current.ops.setTexts(current.elementId, [{ ...cell, text }]);
+    latest.current.ops.setTexts(current.elementId, [{ ...cell, text }], drawnRows());
   };
 
   const commitActive = () => {
