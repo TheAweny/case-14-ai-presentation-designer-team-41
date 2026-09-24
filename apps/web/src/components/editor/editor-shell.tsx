@@ -46,6 +46,8 @@ import {
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
 import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canvas';
+import type { LineReshape, TurnedElement } from '@/components/editor/slide-handles';
+import { flipEntries } from '@/components/editor/inspector/selection-model';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
@@ -198,6 +200,8 @@ export function EditorShell({
     slides,
     committedSlides,
     move,
+    nudge,
+    reshape,
     setText,
     remove,
     reorder,
@@ -314,6 +318,48 @@ export function EditorShell({
       move(slideId, moves, mode);
     },
     [move, slideId],
+  );
+
+  /** Стрелки: серия сдвигов подряд — один шаг отмены. */
+  const nudgeOf = useCallback(
+    (moves: readonly ElementMove[]) => {
+      if (slideId) nudge(slideId, moves);
+    },
+    [nudge, slideId],
+  );
+
+  /** Alt+перетаскивание: копии там, куда дотащили, одной записью журнала. */
+  const duplicateTo = useCallback(
+    (elementIds: readonly string[], offset: { x: number; y: number }) => {
+      if (slideId) duplicate(slideId, elementIds, offset);
+    },
+    [duplicate, slideId],
+  );
+
+  /** Конец линии: рамка и отражения вместе, живым видом на время жеста. */
+  const reshapeLine = useCallback(
+    (elementId: string, line: LineReshape | null, mode: EditMode) => {
+      if (!slideId) return;
+      if (!line) {
+        endPreview();
+        return;
+      }
+      const { box, ...props } = line;
+      reshape(slideId, [{ elementId, box, props }], mode);
+    },
+    [endPreview, reshape, slideId],
+  );
+
+  /** Поворот выделения вокруг общего центра: рамки и углы одной записью журнала. */
+  const rotateMany = useCallback(
+    (turns: readonly TurnedElement[]) => {
+      if (!slideId || turns.length === 0) return;
+      reshape(
+        slideId,
+        turns.map(({ elementId, box, rotation }) => ({ elementId, box, props: { rotation } })),
+      );
+    },
+    [reshape, slideId],
   );
 
   const removeSelected = useCallback(() => {
@@ -502,15 +548,11 @@ export function EditorShell({
         }
         case 'flip': {
           // Каждой фигуре — от её собственного отражения, одной записью журнала.
-          const key = command.axis === 'horizontal' ? 'flipH' : 'flipV';
           const shapes = selected.filter((element) => element.kind === 'decor');
           if (shapes.length === 0) return;
           setPropsEach(
             slide.slideId,
-            shapes.map((shape) => ({
-              elementIds: [shape.elementId],
-              props: { [key]: shape[key] !== true },
-            })),
+            flipEntries(shapes, command.axis === 'horizontal' ? 'flipH' : 'flipV'),
           );
           return;
         }
@@ -612,7 +654,7 @@ export function EditorShell({
         }
         case 'nudge': {
           const grid = gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy);
-          move(
+          nudge(
             slide.slideId,
             selected.map((element) => ({
               elementId: element.elementId,
@@ -629,7 +671,7 @@ export function EditorShell({
       arrange,
       designSystem.grid,
       duplicate,
-      move,
+      nudge,
       pasteElements,
       redo,
       rememberCopy,
@@ -728,11 +770,14 @@ export function EditorShell({
       const [box] = createInsertedElements('text', center, grid, { profile: designSystem });
       if (!box || box.kind !== 'text') return;
       const lines = paragraphs.length;
+      // Вставленный текст — по центру слайда: инструмент ставит текст от точки клика, а у
+      // вставки точки нет.
       const element: SlideElement = {
         ...box,
         box: {
           ...box.box,
-          y: Math.round(box.box.y - (box.box.cy * (lines - 1)) / 2),
+          x: Math.round(center.x - box.box.cx / 2),
+          y: Math.round(center.y - (box.box.cy * lines) / 2),
           cy: box.box.cy * lines,
         },
         paragraphs,
@@ -976,6 +1021,10 @@ export function EditorShell({
                       hasLocked={slide.elements.some((element) => element.locked === true)}
                       tableOps={tableOps}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
+                      onNudge={nudgeOf}
+                      onDuplicate={duplicateTo}
+                      onLineEnds={reshapeLine}
+                      onRotateMany={rotateMany}
                       controlRef={canvasControl}
                       selectionActions={selectionActions}
                       className={CANVAS_PADDING}

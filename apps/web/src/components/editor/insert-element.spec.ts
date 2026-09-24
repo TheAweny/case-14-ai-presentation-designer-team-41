@@ -173,6 +173,17 @@ describe('placedBox', () => {
     expect(Math.abs(box.x % GRID.baseline)).toBe(0);
     expect(Math.abs(box.y % GRID.baseline)).toBe(0);
   });
+
+  it('текст по клику начинается в точке клика, а не вокруг неё', () => {
+    const point: Box = { x: 2_000_123, y: 1_000_456, cx: 10, cy: 10 };
+    const box = placedBox('text', point, GRID, PROFILE);
+    expect(box.x).toBe(point.x);
+    expect(box.y).toBe(point.y);
+    expect(box.cx).toBeGreaterThan(CONTENT / 3);
+    // Протяжка текстом остаётся той рамкой, которую протянули.
+    const drag: Box = { x: 500_000, y: 600_000, cx: 3_000_000, cy: 400_000 };
+    expect(placedBox('text', drag, GRID, PROFILE)).toEqual(drag);
+  });
 });
 
 describe('fitAspect', () => {

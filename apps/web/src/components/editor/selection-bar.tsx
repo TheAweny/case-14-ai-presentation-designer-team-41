@@ -82,13 +82,14 @@ import {
   distributeBoxes,
   placeSelectionBar,
   rotatedBounds,
+  SELECTION_BAR_CLEARANCE,
   unionBox,
   type Alignment,
   type DistributeAxis,
 } from '@/components/editor/slide-geometry';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
 
-/** Зазор между полосой и выделением — и между полосой и краем видимой области. */
+/** Зазор между полосой и краем видимой области. От выделения — `SELECTION_BAR_CLEARANCE`. */
 const GAP = 8;
 const FADE = { duration: 0.12, ease: 'easeOut' } as const;
 
@@ -254,6 +255,8 @@ export function SelectionBar({
       { width: bar.offsetWidth, height: bar.offsetHeight },
       barArea(origin, railIn(overlay, origin)),
       GAP,
+      // От рамки дальше, чем от краёв: зоны поворота за угловыми ручками остаются свободны.
+      SELECTION_BAR_CLEARANCE,
     );
     setPlacement((previous) =>
       previous?.x === next.x && previous.y === next.y && previous.below === next.below
