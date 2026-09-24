@@ -293,7 +293,9 @@ export function TextEditor({
     <>
       <style>{EDITOR_CSS}</style>
       <style>{hiddenSourceCss(element.elementId)}</style>
-      {editor ? <TextFormatBar editor={editor} profile={profile} inherited={look} /> : null}
+      {editor ? (
+        <TextFormatBar editor={editor} element={element} profile={profile} inherited={look} />
+      ) : null}
       <EditorContent
         editor={editor}
         data-text-editor=""

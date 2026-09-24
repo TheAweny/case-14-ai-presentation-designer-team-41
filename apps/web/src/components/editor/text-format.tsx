@@ -1,27 +1,26 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { Editor } from '@tiptap/core';
 import { useEditorState, type EditorStateSnapshot } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import type { DesignSystem } from '@lct/contracts';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { useRovingToolbar } from '@/components/editor/bar-controls';
+import { TextBarControls, type TextBarActions } from '@/components/editor/bar-text-controls';
+import { keepFocusOnPress, stopCanvasMenu } from '@/components/editor/chrome-focus';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
-import {
-  ariaKeyShortcuts,
-  isMacPlatform,
-  shortcutText,
-  type ShortcutId,
-} from '@/components/editor/editor-shortcuts';
-import type { TextFlag } from '@/components/editor/editor-keymap';
+  rangeMarks,
+  setParagraphAlign,
+  setRangeColor,
+  setRangeFont,
+  setRangeSize,
+} from '@/components/editor/active-text-editor';
+import { rangeLook, type TextElement } from '@/components/editor/inspector/text-model';
 import {
   rangeFlagOn,
+  sizeLadder,
+  stepRangeSize,
   toggleRangeFlag,
   type InheritedText,
 } from '@/components/editor/text-shortcuts';
@@ -35,203 +34,79 @@ const ALWAYS_SHOW = () => true;
 const APPEND_TO_BODY = () => document.body;
 const MENU_OPTIONS = { placement: 'top', offset: 8 } as const;
 
-function preventFocusLoss(event: { preventDefault: () => void }) {
-  event.preventDefault();
-}
+/** Во время набора правки идут сразу в набор: живой вид и его конец не нужны. */
+const NO_PREVIEW = () => undefined;
 
 /**
- * Метки набора: жирный, курсив, шрифт и цвет роли. В журнал колоды они попадут одним
- * `set-text`, когда поле закроется. `mousedown` не отдаёт фокус, иначе поле решит, что набор
- * кончился, ещё до команды.
+ * Полоса формата в открытом наборе — те же контролы, что у полосы над выделенным блоком, но
+ * правят выделенные слова и абзацы под кареткой, как в Google Slides. Кнопки делают ровно то
+ * же, что Ctrl+B/I/U и Ctrl+Shift+>/< в наборе. В журнал колоды всё уйдёт одним `set-text`,
+ * когда набор закроется. Кнопки не забирают фокус у набора, а поля (кегль, HEX, поиск
+ * шрифта) — забирают: набор это переживает, фокус там для него «свой».
  */
 export function TextFormatBar({
   editor,
+  element,
   profile,
   inherited,
 }: {
   editor: Editor;
+  element: TextElement;
   profile: DesignSystem;
   /** Начертание роли: жирный заголовок нажат, пока его не сняли. */
   inherited: InheritedText;
 }) {
   const t = useTranslations('formatBar');
-  const style = useTranslations('selectionBar');
-  // Только то, что рисует полоса: перерисовка — когда меняются эти флаги, а не на каждую
+  const roving = useRovingToolbar();
+  // Только то, что рисует полоса: перерисовка — когда это меняется, а не на каждую
   // транзакцию. Флаги — с учётом роли, как у Ctrl+B/I/U.
-  const marks = useEditorState({
+  const state = useEditorState({
     editor,
     selector: ({ editor: current }: EditorStateSnapshot<Editor>) => ({
+      marks: rangeMarks(current),
       bold: rangeFlagOn(current, 'bold', inherited),
       italic: rangeFlagOn(current, 'italic', inherited),
       underline: rangeFlagOn(current, 'underline', inherited),
     }),
   });
-  const toggle = (flag: TextFlag) => toggleRangeFlag(editor, flag, inherited);
 
-  const fonts = [...new Set(profile.typeScale.map((entry) => entry.font).filter(Boolean))];
-  const sizes = profile.typeScale.filter(
-    (entry, index, all) => all.findIndex((other) => other.role === entry.role) === index,
-  );
+  const actions: TextBarActions = {
+    look: {
+      ...rangeLook(state.marks, element, profile),
+      bold: state.bold,
+      italic: state.italic,
+      underline: state.underline,
+    },
+    live: false,
+    setFont: (family) => setRangeFont(editor, family),
+    setSize: (sizePt) => setRangeSize(editor, sizePt),
+    stepSize: (step) => stepRangeSize(editor, inherited, sizeLadder(profile), step),
+    toggleFlag: (flag) => toggleRangeFlag(editor, flag, inherited),
+    setColor: (_color, hex) => setRangeColor(editor, hex),
+    setAlign: (align) => setParagraphAlign(editor, align),
+    onPreviewEnd: NO_PREVIEW,
+  };
 
   return (
     <BubbleMenu
+      ref={roving.ref}
       editor={editor}
       shouldShow={ALWAYS_SHOW}
       appendTo={APPEND_TO_BODY}
       options={MENU_OPTIONS}
       data-text-format=""
+      data-editor-chrome=""
       role="toolbar"
       aria-label={t('label')}
-      onMouseDown={preventFocusLoss}
+      onMouseDown={keepFocusOnPress}
+      onContextMenu={stopCanvasMenu}
+      onFocus={roving.onFocus}
+      onKeyDown={roving.onKeyDown}
       className="z-[4000] flex items-center gap-0.5 rounded-xl bg-card p-1 shadow-lg ring-1 shadow-black/25 ring-border"
     >
-      <FormatButton
-        label={t('bold')}
-        shortcut="bold"
-        pressed={marks.bold}
-        strong
-        onClick={() => toggle('bold')}
-      >
-        B
-      </FormatButton>
-      <FormatButton
-        label={t('italic')}
-        shortcut="italic"
-        pressed={marks.italic}
-        italic
-        onClick={() => toggle('italic')}
-      >
-        I
-      </FormatButton>
-      <FormatButton
-        label={t('underline')}
-        shortcut="underline"
-        pressed={marks.underline}
-        underline
-        onClick={() => toggle('underline')}
-      >
-        U
-      </FormatButton>
-      <MenuButton label={t('font')}>
-        {fonts.map((font) => (
-          <DropdownMenuItem
-            key={font}
-            onMouseDown={preventFocusLoss}
-            onSelect={() => editor.chain().focus().setFontFamily(font).run()}
-          >
-            <span style={{ fontFamily: `"${font.replaceAll('"', '')}"` }}>{font}</span>
-          </DropdownMenuItem>
-        ))}
-      </MenuButton>
-      <MenuButton label={style('size')}>
-        {sizes.map((entry) => (
-          <DropdownMenuItem
-            key={entry.role}
-            onMouseDown={preventFocusLoss}
-            onSelect={() => editor.chain().focus().setFontSize(String(entry.sizePt)).run()}
-          >
-            {style(`type.${entry.role as TypeRoleKey}`)}
-            <span className="ml-auto pl-3 text-muted-foreground tabular-nums">{entry.sizePt}</span>
-          </DropdownMenuItem>
-        ))}
-      </MenuButton>
-      <MenuButton label={style('color')}>
-        {profile.palette.map((entry) => (
-          <DropdownMenuItem
-            key={entry.role}
-            onMouseDown={preventFocusLoss}
-            onSelect={() => editor.chain().focus().setColor(`#${entry.hex}`).run()}
-          >
-            <Swatch hex={entry.hex} />
-            {style(`palette.${entry.role}`)}
-          </DropdownMenuItem>
-        ))}
-      </MenuButton>
+      <TooltipProvider>
+        <TextBarControls designSystem={profile} actions={actions} />
+      </TooltipProvider>
     </BubbleMenu>
-  );
-}
-
-type TypeRoleKey =
-  | 'title'
-  | 'subtitle'
-  | 'heading'
-  | 'body'
-  | 'bullet'
-  | 'caption'
-  | 'kpi-value'
-  | 'kpi-caption'
-  | 'quote'
-  | 'footer';
-
-function FormatButton({
-  label,
-  pressed,
-  strong,
-  italic,
-  underline,
-  shortcut,
-  onClick,
-  children,
-}: {
-  label: string;
-  /** Сочетание из общего реестра: в подсказке и в `aria-keyshortcuts`. */
-  shortcut: ShortcutId;
-  pressed: boolean;
-  strong?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  onClick: () => void;
-  children: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-keyshortcuts={ariaKeyShortcuts(shortcut)}
-      title={`${label} (${shortcutText(shortcut, isMacPlatform())})`}
-      aria-pressed={pressed}
-      onMouseDown={preventFocusLoss}
-      onClick={onClick}
-      className={cn(
-        'grid size-8 place-items-center rounded-lg text-sm outline-none',
-        'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50',
-        pressed ? 'bg-muted text-foreground' : 'text-muted-foreground',
-        strong && 'font-semibold',
-        italic && 'italic',
-        underline && 'underline',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function MenuButton({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          onMouseDown={preventFocusLoss}
-          className={cn(
-            'h-8 rounded-lg px-2 text-xs text-muted-foreground outline-none',
-            'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-          )}
-        >
-          {label}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="z-[4000] min-w-44">{children}</DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function Swatch({ hex }: { hex: string }) {
-  return (
-    <span
-      aria-hidden
-      className="size-3 shrink-0 rounded-full ring-1 ring-foreground/20"
-      style={{ background: `#${hex}` }}
-    />
   );
 }

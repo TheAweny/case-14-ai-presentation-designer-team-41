@@ -45,7 +45,6 @@
   "selectionBar": {
     "label": "Свойства выделенного",
     "count": "{count, plural, one {# объект} few {# объекта} many {# объектов} other {# объекта}}",
-    "remove": "Удалить",
     "align": {
       "left": "Выровнять по левому краю",
       "center": "Выровнять по центру",
@@ -70,8 +69,6 @@
       "page-number": "Номер слайда",
       "decoration": "Украшение"
     },
-    "size": "Размер",
-    "color": "Цвет",
     "type": {
       "title": "Заголовок",
       "subtitle": "Подзаголовок",
@@ -95,14 +92,28 @@
       "line": "Линия",
       "positive": "Положительное",
       "negative": "Отрицательное"
-    }
-  },
-  "formatBar": {
-    "label": "Формат текста",
+    },
     "bold": "Жирный",
     "italic": "Курсив",
-    "font": "Шрифт",
-    "underline": "Подчёркнутый"
+    "smaller": "Уменьшить кегль",
+    "larger": "Увеличить кегль",
+    "strokeWidths": "Частые толщины",
+    "replace": "Заменить",
+    "editTable": "Править ячейки таблицы",
+    "editTableShort": "Править",
+    "editChart": "Данные графика в панели «Дизайн»",
+    "editChartShort": "Данные",
+    "distribute": "Распределить",
+    "distributeHorizontal": "Распределить по горизонтали",
+    "distributeVertical": "Распределить по вертикали",
+    "layers": "Порядок слоёв",
+    "more": "Ещё",
+    "alignToSlide": "Выровнять по слайду",
+    "openInspector": "Открыть в панели «Дизайн»",
+    "openData": "Открыть данные в панели «Дизайн»"
+  },
+  "formatBar": {
+    "label": "Формат текста"
   },
   "toolRail": {
     "label": "Инструменты",
