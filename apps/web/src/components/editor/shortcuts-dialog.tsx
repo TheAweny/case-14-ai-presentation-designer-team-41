@@ -14,6 +14,7 @@ import {
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
 import {
+  GESTURES,
   SHORTCUT_GROUPS,
   SHORTCUTS,
   isMacPlatform,
@@ -22,6 +23,9 @@ import {
   type ShortcutGroup,
 } from '@/components/editor/editor-shortcuts';
 import { RAIL_SHORTCUTS } from '@/components/editor/tool-rail';
+
+/** Раздел шпаргалки: группа реестра, инструменты рейки или жесты мышью. */
+type Section = ShortcutGroup | 'tools' | 'gestures';
 
 interface Row {
   readonly key: string;
@@ -54,11 +58,12 @@ export function ShortcutsDialog({
 }) {
   const t = useTranslations('shortcuts');
   const rail = useTranslations('toolRail');
+  const gesture = useTranslations('shortcuts.gestures');
   const [query, setQuery] = useState('');
   const mac = open && isMacPlatform();
 
   const groups = useMemo(() => {
-    const byGroup: [ShortcutGroup | 'tools', Row[]][] = SHORTCUT_GROUPS.map((group) => [
+    const byGroup: [Section, Row[]][] = SHORTCUT_GROUPS.map((group) => [
       group,
       SHORTCUTS.filter((spec) => spec.group === group).map((spec) => ({
         key: spec.id,
@@ -74,10 +79,22 @@ export function ShortcutsDialog({
         keys: [[entry.key]],
       })),
     ]);
+    // Жесты мышью: клавиши-модификаторы и само действие словами.
+    byGroup.push([
+      'gestures',
+      GESTURES.map((spec) => ({
+        key: `gesture-${spec.id}`,
+        label: gesture(`items.${spec.id}`),
+        keys: spec.variants.map((variant) => [
+          ...variant.keys,
+          gesture(`actions.${variant.action}`),
+        ]),
+      })),
+    ]);
     const needle = query.trim().toLocaleLowerCase();
     if (!needle) return byGroup;
     return byGroup
-      .map(([group, rows]): [ShortcutGroup | 'tools', Row[]] => [
+      .map(([group, rows]): [Section, Row[]] => [
         group,
         rows.filter(
           (row) =>
@@ -86,7 +103,7 @@ export function ShortcutsDialog({
         ),
       ])
       .filter(([, rows]) => rows.length > 0);
-  }, [mac, query, rail, t]);
+  }, [gesture, mac, query, rail, t]);
 
   return (
     <Dialog

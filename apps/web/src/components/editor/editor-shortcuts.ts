@@ -391,6 +391,61 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
   },
 ];
 
+/**
+ * Жесты мышью с модификаторами. Их слушают ручки и холст (`slide-handles.tsx`,
+ * `use-canvas-navigation.ts`), а не `editorCommand`: здесь они ради шпаргалки, рядом с
+ * клавишами, чтобы подписи жили в одном месте.
+ */
+export type GestureAction =
+  'drag' | 'resize' | 'rotate' | 'click' | 'double-click-field' | 'middle-drag';
+
+export type GestureId =
+  | 'drag-copy'
+  | 'drag-axis'
+  | 'resize-ratio'
+  | 'rotate-step'
+  | 'resize-center'
+  | 'click-through'
+  | 'drag-free'
+  | 'pan-drag'
+  | 'fit-field';
+
+/** Один вариант жеста: клавиши (как в `Chord` — `Mod`, `Shift`, `Alt`, `Space`) и действие. */
+export interface GestureVariant {
+  readonly keys: readonly string[];
+  readonly action: GestureAction;
+}
+
+export interface GestureSpec {
+  readonly id: GestureId;
+  readonly variants: readonly GestureVariant[];
+}
+
+export const GESTURES: readonly GestureSpec[] = [
+  // Figma, Keynote и Canva: Alt/Option при перетаскивании оставляет оригинал на месте.
+  { id: 'drag-copy', variants: [{ keys: ['Alt'], action: 'drag' }] },
+  { id: 'drag-axis', variants: [{ keys: ['Shift'], action: 'drag' }] },
+  { id: 'resize-ratio', variants: [{ keys: ['Shift'], action: 'resize' }] },
+  { id: 'rotate-step', variants: [{ keys: ['Shift'], action: 'rotate' }] },
+  { id: 'resize-center', variants: [{ keys: ['Alt'], action: 'resize' }] },
+  { id: 'click-through', variants: [{ keys: ['Mod'], action: 'click' }] },
+  {
+    id: 'drag-free',
+    variants: [
+      { keys: ['Mod'], action: 'drag' },
+      { keys: ['Mod'], action: 'resize' },
+    ],
+  },
+  {
+    id: 'pan-drag',
+    variants: [
+      { keys: [], action: 'middle-drag' },
+      { keys: ['Space'], action: 'drag' },
+    ],
+  },
+  { id: 'fit-field', variants: [{ keys: [], action: 'double-click-field' }] },
+];
+
 const BY_ID = new Map(SHORTCUTS.map((spec) => [spec.id, spec]));
 
 export function shortcutSpec(id: ShortcutId): ShortcutSpec {

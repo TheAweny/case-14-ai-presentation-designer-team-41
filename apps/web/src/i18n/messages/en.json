@@ -375,7 +375,8 @@
       "objects": "Objects",
       "text": "Text",
       "view": "View",
-      "tools": "Tools"
+      "tools": "Tools",
+      "gestures": "Mouse and gestures"
     },
     "items": {
       "shortcuts": "Keyboard shortcuts",
@@ -430,6 +431,27 @@
       "ungroup": "Ungroup",
       "present": "Present from the beginning",
       "present-current": "Present from current slide"
+    },
+    "gestures": {
+      "items": {
+        "drag-copy": "Drag a copy, leave the original",
+        "drag-axis": "Move along one axis",
+        "resize-ratio": "Keep proportions (pictures: resize freely)",
+        "rotate-step": "Rotate in 15° steps",
+        "resize-center": "Resize from the centre",
+        "click-through": "Select through the top object or inside a group",
+        "drag-free": "Ignore snapping to the grid and neighbours",
+        "pan-drag": "Pan the canvas",
+        "fit-field": "Fit the slide to the window"
+      },
+      "actions": {
+        "drag": "drag",
+        "resize": "drag a handle",
+        "rotate": "rotate",
+        "click": "click",
+        "double-click-field": "double-click the pasteboard",
+        "middle-drag": "middle button"
+      }
     }
   },
   "draft": {

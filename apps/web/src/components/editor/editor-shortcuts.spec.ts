@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { editorCommand, type KeyContext } from './editor-keymap';
+import en from '../../i18n/messages/en.json';
+import ru from '../../i18n/messages/ru.json';
 import {
+  GESTURES,
   SHORTCUTS,
   ariaKeyShortcuts,
   chordKeys,
@@ -81,5 +84,34 @@ describe('shortcut labels', () => {
     expect(ariaKeyShortcuts('bold')).toBe('Control+B Meta+B');
     expect(ariaKeyShortcuts('lock')).toBe('Alt+Shift+L');
     expect(ariaKeyShortcuts('remove')).toBe('Delete');
+  });
+});
+
+describe('mouse gestures', () => {
+  it('has unique ids and at least one way to do each', () => {
+    const ids = GESTURES.map((spec) => spec.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const spec of GESTURES) expect(spec.variants.length, spec.id).toBeGreaterThan(0);
+  });
+
+  it('holds only modifier keys, the action is its own word', () => {
+    for (const spec of GESTURES) {
+      for (const variant of spec.variants) {
+        for (const key of variant.keys) expect(['Mod', 'Shift', 'Alt', 'Space']).toContain(key);
+      }
+    }
+  });
+
+  it('has a label for every gesture and action in both languages', () => {
+    for (const [locale, dictionary] of Object.entries({ ru, en })) {
+      const { gestures, groups } = dictionary.shortcuts;
+      expect(groups.gestures, locale).toBeTruthy();
+      for (const spec of GESTURES) {
+        expect(gestures.items[spec.id], `${locale}: ${spec.id}`).toBeTruthy();
+        for (const variant of spec.variants) {
+          expect(gestures.actions[variant.action], `${locale}: ${variant.action}`).toBeTruthy();
+        }
+      }
+    }
   });
 });
