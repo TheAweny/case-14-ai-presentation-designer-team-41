@@ -87,5 +87,6 @@ export function paragraphsOf(text: string): Paragraph[] {
   return lines.map((line) => ({
     level: 0,
     runs: [{ text: line, font: '', sizePt: null, bold: null, italic: null, color: '' }],
+    lineSpacing: null,
   }));
 }

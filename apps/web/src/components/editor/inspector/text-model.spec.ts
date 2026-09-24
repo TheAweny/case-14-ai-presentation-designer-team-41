@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DesignSystem, TextRun } from '@lct/contracts';
 import { textLook, typeSteps, type TextElement } from './text-model';
+import { tokenMeta } from '../../../mocks/demo-deck/token-meta';
 
 const designSystem = {
   palette: [
-    { role: 'text', hex: '16181D', source: 'theme' },
-    { role: 'accent', hex: '3355DD', source: 'theme' },
+    { role: 'text', hex: '16181D', meta: tokenMeta('theme') },
+    { role: 'accent', hex: '3355DD', meta: tokenMeta('theme') },
   ],
   typeScale: [
     {
@@ -16,7 +17,7 @@ const designSystem = {
       italic: false,
       lineSpacing: 1,
       colorRole: 'text',
-      source: 'theme',
+      meta: tokenMeta('theme'),
     },
     {
       role: 'body',
@@ -26,7 +27,7 @@ const designSystem = {
       italic: false,
       lineSpacing: 1.2,
       colorRole: 'text',
-      source: 'theme',
+      meta: tokenMeta('theme'),
     },
     {
       role: 'body',
@@ -36,7 +37,7 @@ const designSystem = {
       italic: false,
       lineSpacing: 1.2,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
   ],
 } as unknown as DesignSystem;

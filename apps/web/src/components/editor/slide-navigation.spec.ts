@@ -21,6 +21,7 @@ function title(elementId: string, role: SlideElement['role'], ...lines: string[]
     sourceShapeId: null,
     paragraphs: lines.map((line) => ({
       level: 0,
+      lineSpacing: null,
       runs: line.split('|').map((text) => ({
         text,
         font: '',

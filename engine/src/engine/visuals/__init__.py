@@ -4,7 +4,7 @@ Visuals are drawn as native PowerPoint shapes rather than pasted images, so they
 and keep the template's colors and fonts.
 """
 
-from engine.contracts.provisional import ChartSpec, ShapeTree, TableSpec, TemplateProfile
+from engine.contracts import ChartSpec, ShapeTree, TableSpec, TemplateProfile
 
 __all__ = ["build_chart", "build_table"]
 

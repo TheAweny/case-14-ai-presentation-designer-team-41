@@ -1,4 +1,4 @@
-import type { Box, DesignSystem, Grid, SlideElement, Stroke } from '@lct/contracts';
+import type { Box, DesignSystem, Grid, SlideElement, ElementStroke } from '@lct/contracts';
 
 /** Инструменты рейки, которые кладут новый объект на слайд. */
 export const INSERT_TOOLS = [
@@ -161,7 +161,7 @@ function run() {
   return { text: '', font: '', sizePt: null, bold: null, italic: null, color: '' };
 }
 
-function stroke(tail: 'none' | 'arrow'): Stroke {
+function stroke(tail: 'none' | 'arrow'): ElementStroke {
   return {
     color: 'accent',
     widthEmu: STROKE_PT * EMU_PER_PT,
@@ -207,7 +207,7 @@ function one(tool: InsertTool, box: Box, id: string, options: InsertOptions): Sl
         role: 'body',
         box,
         sourceShapeId: null,
-        paragraphs: [{ level: 0, runs: [run()] }],
+        paragraphs: [{ level: 0, runs: [run()], lineSpacing: null }],
         overflow: null,
       };
     case 'image':

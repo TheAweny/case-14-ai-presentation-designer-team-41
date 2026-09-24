@@ -1,4 +1,10 @@
-import { healthCheckSchema, type HealthCheck } from '@lct/contracts';
+import {
+  editableDeckResponseSchema,
+  healthCheckSchema,
+  type EditableDeckRequest,
+  type EditableDeckResponse,
+  type HealthCheck,
+} from '@lct/contracts';
 
 export interface EngineClientOptions {
   /** Base URL of the engine, e.g. http://engine:8000 */
@@ -39,10 +45,28 @@ export class EngineClient {
     return healthCheckSchema.parse(await this.get('/health'));
   }
 
+  /** `POST /v1/editable-decks` — build and validate one native editable PPTX. */
+  async createEditableDeck(request: EditableDeckRequest): Promise<EditableDeckResponse> {
+    return editableDeckResponseSchema.parse(await this.post('/v1/editable-decks', request));
+  }
+
   private async get(path: string): Promise<unknown> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!response.ok) {
+      throw new EngineHttpError(response.status, path, await response.text());
+    }
+    return response.json();
+  }
+
+  private async post(path: string, body: unknown): Promise<unknown> {
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(this.timeoutMs),
     });
     if (!response.ok) {

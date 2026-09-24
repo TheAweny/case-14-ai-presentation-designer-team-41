@@ -44,6 +44,12 @@ function sizeOf(value: unknown): number | null {
   return Number.isFinite(points) && points > 0 ? points : null;
 }
 
+/** Line spacing the paragraph states, as a multiple of single; null when it inherits. */
+function spacingOf(value: unknown): number | null {
+  const multiple = typeof value === 'number' ? value : Number(value);
+  return value != null && Number.isFinite(multiple) && multiple > 0 ? multiple : null;
+}
+
 function colorOf(value: unknown): string {
   if (typeof value !== 'string') return '';
   const match = /^#?([0-9a-fA-F]{6})$/.exec(value.trim());
@@ -125,24 +131,28 @@ function mergeRuns(runs: readonly TextRun[]): TextRun[] {
 
 /** Runs become a paragraph document. Empty runs are omitted: a text node cannot be empty. */
 export function paragraphsToDoc(paragraphs: readonly Paragraph[]): JSONContent {
-  const content = (paragraphs.length > 0 ? paragraphs : [{ level: 0, runs: [] }]).map(
-    (paragraph) => {
-      const runs = paragraph.runs.flatMap((run) => {
-        const text = editorText(run.text);
-        if (text === '') return [];
-        const marks = marksFor({ ...run, text });
-        const node: JSONContent = { type: 'text', text };
-        if (marks.length > 0) node.marks = marks;
-        return [node];
-      });
-      const node: JSONContent = {
-        type: 'paragraph',
-        attrs: { level: levelOf(paragraph.level), align: alignOf(paragraph.align) },
-      };
-      if (runs.length > 0) node.content = runs;
-      return node;
-    },
-  );
+  const content = (
+    paragraphs.length > 0 ? paragraphs : [{ level: 0, runs: [], lineSpacing: null }]
+  ).map((paragraph) => {
+    const runs = paragraph.runs.flatMap((run) => {
+      const text = editorText(run.text);
+      if (text === '') return [];
+      const marks = marksFor({ ...run, text });
+      const node: JSONContent = { type: 'text', text };
+      if (marks.length > 0) node.marks = marks;
+      return [node];
+    });
+    const node: JSONContent = {
+      type: 'paragraph',
+      attrs: {
+        level: levelOf(paragraph.level),
+        align: alignOf(paragraph.align),
+        lineSpacing: spacingOf(paragraph.lineSpacing),
+      },
+    };
+    if (runs.length > 0) node.content = runs;
+    return node;
+  });
   return { type: 'doc', content };
 }
 
@@ -180,12 +190,15 @@ export function documentToParagraphs(doc: JSONContent): Paragraph[] {
         return run ? [run] : [];
       }),
     );
+    const paragraph: Paragraph = {
+      level: levelOf(attrs.level),
+      runs,
+      lineSpacing: spacingOf(attrs.lineSpacing),
+    };
     const align = alignOf(attrs.align);
-    return [
-      align ? { level: levelOf(attrs.level), align, runs } : { level: levelOf(attrs.level), runs },
-    ];
+    return [align ? { ...paragraph, align } : paragraph];
   });
-  return paragraphs.length > 0 ? paragraphs : [{ level: 0, runs: [] }];
+  return paragraphs.length > 0 ? paragraphs : [{ level: 0, runs: [], lineSpacing: null }];
 }
 
 /**
@@ -234,6 +247,12 @@ function slideParagraph(metrics: TextEditorMetrics) {
           renderHTML: () => ({}),
         },
         align: {
+          default: null,
+          parseHTML: () => null,
+          renderHTML: () => ({}),
+        },
+        // Carried through untouched so editing the words keeps the template's spacing.
+        lineSpacing: {
           default: null,
           parseHTML: () => null,
           renderHTML: () => ({}),

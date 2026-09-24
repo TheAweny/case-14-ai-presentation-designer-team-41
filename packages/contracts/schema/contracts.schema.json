@@ -481,6 +481,18 @@
                                   "minimum": 0,
                                   "type": "integer"
                                 },
+                                "lineSpacing": {
+                                  "anyOf": [
+                                    {
+                                      "exclusiveMinimum": 0,
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "Multiple of single spacing, when stated as a percentage."
+                                },
                                 "runs": {
                                   "description": "Runs in reading order.",
                                   "items": {
@@ -542,7 +554,8 @@
                               },
                               "required": [
                                 "level",
-                                "runs"
+                                "runs",
+                                "lineSpacing"
                               ],
                               "type": "object"
                             },
@@ -1410,59 +1423,6 @@
           "description": "Aspect ratio in lowest terms, such as 16:9.",
           "type": "string"
         },
-        "assets": {
-          "description": "Empty when the template carries no imagery.",
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "heightPx": {
-                "anyOf": [
-                  {
-                    "maximum": 9007199254740991,
-                    "minimum": -9007199254740991,
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "mediaPart": {
-                "description": "Part name inside the template package.",
-                "minLength": 1,
-                "type": "string"
-              },
-              "role": {
-                "enum": [
-                  "logo",
-                  "background",
-                  "decoration"
-                ],
-                "type": "string"
-              },
-              "widthPx": {
-                "anyOf": [
-                  {
-                    "maximum": 9007199254740991,
-                    "minimum": -9007199254740991,
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "mediaPart",
-              "role",
-              "widthPx",
-              "heightPx"
-            ],
-            "type": "object"
-          },
-          "type": "array"
-        },
         "grid": {
           "additionalProperties": false,
           "properties": {
@@ -1504,6 +1464,52 @@
               "minimum": 0,
               "type": "integer"
             },
+            "meta": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "count": {
+                  "description": "Occurrences that support this value.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "parts": {
+                  "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "share": {
+                  "description": "Share of the relevant population that agrees.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "observed",
+                    "theme",
+                    "fallback"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "count",
+                "share",
+                "confidence",
+                "parts"
+              ],
+              "type": "object"
+            },
             "slideCx": {
               "description": "Slide width in EMU.",
               "exclusiveMinimum": 0,
@@ -1526,33 +1532,66 @@
             "marginBottom",
             "columns",
             "gutter",
-            "baseline"
+            "baseline",
+            "meta"
           ],
           "type": "object"
-        },
-        "notes": {
-          "description": "What had to be inferred, for a reader wondering why a value looks odd.",
-          "items": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array"
         },
         "palette": {
           "description": "One entry per role the template supports. Roles it lacks are simply absent.",
           "items": {
             "additionalProperties": false,
             "properties": {
-              "coverage": {
-                "description": "Share of the template this colour covers. Zero for a purely declared value.",
-                "maximum": 1,
-                "minimum": 0,
-                "type": "number"
-              },
               "hex": {
                 "description": "Six hex digits, no leading hash.",
                 "pattern": "^[0-9a-fA-F]{6}$",
                 "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
               },
               "role": {
                 "enum": [
@@ -1568,25 +1607,200 @@
                   "negative"
                 ],
                 "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "hex",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "protectedZones": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "description": "Where it sits, in EMU.",
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
               },
-              "source": {
+              "mediaPart": {
+                "description": "Image it draws, for a logo. Empty otherwise.",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "role": {
                 "enum": [
-                  "observed",
-                  "theme",
-                  "fallback"
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
                 ],
                 "type": "string"
               }
             },
             "required": [
               "role",
-              "hex",
-              "source",
-              "coverage"
+              "box",
+              "mediaPart",
+              "meta"
             ],
             "type": "object"
           },
-          "minItems": 1,
+          "type": "array"
+        },
+        "radii": {
+          "description": "Corner radii in use, smallest first.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "name": {
+                "enum": [
+                  "sm",
+                  "md",
+                  "lg"
+                ],
+                "type": "string"
+              },
+              "radiusPt": {
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "name",
+              "radiusPt",
+              "meta"
+            ],
+            "type": "object"
+          },
           "type": "array"
         },
         "schemaVersion": {
@@ -1594,11 +1808,337 @@
           "description": "Incremented by any incompatible change.",
           "type": "number"
         },
+        "shadows": {
+          "additionalProperties": false,
+          "properties": {
+            "meta": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "count": {
+                  "description": "Occurrences that support this value.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "parts": {
+                  "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "share": {
+                  "description": "Share of the relevant population that agrees.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "observed",
+                    "theme",
+                    "fallback"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "count",
+                "share",
+                "confidence",
+                "parts"
+              ],
+              "type": "object"
+            },
+            "present": {
+              "description": "False when the template draws no shadows. Do not add any.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "present",
+            "meta"
+          ],
+          "type": "object"
+        },
+        "strokes": {
+          "description": "Outline styles in use, most common first.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "colorRole": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "background",
+                      "surface",
+                      "text",
+                      "text-muted",
+                      "text-on-accent",
+                      "accent",
+                      "accent-alt",
+                      "line",
+                      "positive",
+                      "negative"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Palette role this colour matches, if any."
+              },
+              "hex": {
+                "description": "Six hex digits, no leading hash.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "widthPt": {
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "widthPt",
+              "hex",
+              "colorRole",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "surfaces": {
+          "description": "One per tone the template uses.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "accent": {
+                "anyOf": [
+                  {
+                    "description": "Six hex digits, no leading hash.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Accent observed on this surface, if any."
+              },
+              "background": {
+                "description": "Six hex digits, no leading hash.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "text": {
+                "description": "Text colour observed on this surface, or the best contrast.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "tone": {
+                "enum": [
+                  "light",
+                  "dark"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "tone",
+              "background",
+              "text",
+              "accent",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
         "templateHash": {
           "description": "Hash of the TemplateIR this was derived from, so the pair can be checked.",
           "maxLength": 64,
           "minLength": 64,
           "type": "string"
+        },
+        "typeFamilies": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "declared": {
+                "description": "What the theme names for this role. Differs from font when the slides disagree.",
+                "type": "string"
+              },
+              "font": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "role": {
+                "enum": [
+                  "primary",
+                  "secondary",
+                  "mono"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "font",
+              "declared",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
         },
         "typeScale": {
           "description": "One entry per role in use.",
@@ -1637,6 +2177,52 @@
                 "exclusiveMinimum": 0,
                 "type": "number"
               },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
               "role": {
                 "enum": [
                   "title",
@@ -1656,14 +2242,6 @@
                 "description": "Size in points.",
                 "exclusiveMinimum": 0,
                 "type": "number"
-              },
-              "source": {
-                "enum": [
-                  "observed",
-                  "theme",
-                  "fallback"
-                ],
-                "type": "string"
               }
             },
             "required": [
@@ -1674,11 +2252,45 @@
               "italic",
               "lineSpacing",
               "colorRole",
-              "source"
+              "meta"
             ],
             "type": "object"
           },
           "minItems": 1,
+          "type": "array"
+        },
+        "warnings": {
+          "description": "Empty only when every token was measured with confidence.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "observed-overrides-theme",
+                  "font-unavailable",
+                  "low-confidence",
+                  "missing-surface",
+                  "unresolved-color",
+                  "theme-missing"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "token": {
+                "description": "Which token it concerns, such as palette.accent or type.title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "token",
+              "message"
+            ],
+            "type": "object"
+          },
           "type": "array"
         }
       },
@@ -1687,12 +2299,111 @@
         "templateHash",
         "aspect",
         "palette",
+        "surfaces",
+        "typeFamilies",
         "typeScale",
         "grid",
-        "assets",
-        "notes"
+        "strokes",
+        "radii",
+        "shadows",
+        "protectedZones",
+        "warnings"
       ],
       "title": "DesignSystem",
+      "type": "object"
+    },
+    "EditableDeckRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "outputPath": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "default": 1,
+          "type": "number"
+        },
+        "slides": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "slideId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "slideId",
+              "title",
+              "body"
+            ],
+            "type": "object"
+          },
+          "maxItems": 15,
+          "minItems": 1,
+          "type": "array"
+        },
+        "templatePath": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "templatePath",
+        "outputPath",
+        "slides"
+      ],
+      "title": "EditableDeckRequest",
+      "type": "object"
+    },
+    "EditableDeckResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "designSystem": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "outputPath": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "slideCount": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outputPath",
+        "designSystem",
+        "slideCount"
+      ],
+      "title": "EditableDeckResponse",
       "type": "object"
     },
     "FixPatch": {
@@ -1753,6 +2464,18 @@
                           "maximum": 9007199254740991,
                           "minimum": 0,
                           "type": "integer"
+                        },
+                        "lineSpacing": {
+                          "anyOf": [
+                            {
+                              "exclusiveMinimum": 0,
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Multiple of single spacing, when stated as a percentage."
                         },
                         "runs": {
                           "description": "Runs in reading order.",
@@ -1815,7 +2538,8 @@
                       },
                       "required": [
                         "level",
-                        "runs"
+                        "runs",
+                        "lineSpacing"
                       ],
                       "type": "object"
                     },
@@ -2939,6 +3663,18 @@
                           "minimum": 0,
                           "type": "integer"
                         },
+                        "lineSpacing": {
+                          "anyOf": [
+                            {
+                              "exclusiveMinimum": 0,
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Multiple of single spacing, when stated as a percentage."
+                        },
                         "runs": {
                           "description": "Runs in reading order.",
                           "items": {
@@ -3000,7 +3736,8 @@
                       },
                       "required": [
                         "level",
-                        "runs"
+                        "runs",
+                        "lineSpacing"
                       ],
                       "type": "object"
                     },
@@ -3763,6 +4500,143 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "background": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "hex": {
+                                "description": "Six hex digits when stated outright, otherwise empty.",
+                                "type": "string"
+                              },
+                              "scheme": {
+                                "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                "type": "string"
+                              },
+                              "transforms": {
+                                "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                "items": {
+                                  "items": false,
+                                  "maxItems": 2,
+                                  "minItems": 2,
+                                  "prefixItems": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    }
+                                  ],
+                                  "type": "array"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "hex",
+                              "scheme",
+                              "transforms"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Set for a solid fill."
+                      },
+                      "kind": {
+                        "enum": [
+                          "solid",
+                          "gradient",
+                          "image",
+                          "pattern",
+                          "none"
+                        ],
+                        "type": "string"
+                      },
+                      "stops": {
+                        "description": "Gradient stops in order, for a gradient fill.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "hex": {
+                              "description": "Six hex digits when stated outright, otherwise empty.",
+                              "type": "string"
+                            },
+                            "scheme": {
+                              "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                              "type": "string"
+                            },
+                            "transforms": {
+                              "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                              "items": {
+                                "items": false,
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "prefixItems": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "maximum": 9007199254740991,
+                                    "minimum": -9007199254740991,
+                                    "type": "integer"
+                                  }
+                                ],
+                                "type": "array"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "hex",
+                            "scheme",
+                            "transforms"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "color",
+                      "stops"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null when the part inherits its background."
+              },
+              "colorMap": {
+                "description": "Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it.",
+                "items": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
               "follows": {
                 "description": "Part this one inherits from: a layout for a slide, a master for a layout.",
                 "type": "string"
@@ -3833,12 +4707,152 @@
                       "description": "Chart type, lower-cased and hyphenated.",
                       "type": "string"
                     },
+                    "cornerRadiusEmu": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Corner radius of a rounded rectangle, from its adjust value and size."
+                    },
+                    "fill": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "color": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "hex": {
+                                      "description": "Six hex digits when stated outright, otherwise empty.",
+                                      "type": "string"
+                                    },
+                                    "scheme": {
+                                      "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                      "type": "string"
+                                    },
+                                    "transforms": {
+                                      "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                      "items": {
+                                        "items": false,
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "prefixItems": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "maximum": 9007199254740991,
+                                            "minimum": -9007199254740991,
+                                            "type": "integer"
+                                          }
+                                        ],
+                                        "type": "array"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "hex",
+                                    "scheme",
+                                    "transforms"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Set for a solid fill."
+                            },
+                            "kind": {
+                              "enum": [
+                                "solid",
+                                "gradient",
+                                "image",
+                                "pattern",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "stops": {
+                              "description": "Gradient stops in order, for a gradient fill.",
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "hex": {
+                                    "description": "Six hex digits when stated outright, otherwise empty.",
+                                    "type": "string"
+                                  },
+                                  "scheme": {
+                                    "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                    "type": "string"
+                                  },
+                                  "transforms": {
+                                    "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                    "items": {
+                                      "items": false,
+                                      "maxItems": 2,
+                                      "minItems": 2,
+                                      "prefixItems": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "maximum": 9007199254740991,
+                                          "minimum": -9007199254740991,
+                                          "type": "integer"
+                                        }
+                                      ],
+                                      "type": "array"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "required": [
+                                  "hex",
+                                  "scheme",
+                                  "transforms"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "color",
+                            "stops"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null when the shape inherits its fill."
+                    },
                     "flipH": {
                       "description": "Mirrored horizontally.",
                       "type": "boolean"
                     },
                     "flipV": {
                       "description": "Mirrored vertically.",
+                      "type": "boolean"
+                    },
+                    "geometry": {
+                      "description": "Preset geometry such as rect or roundRect, empty otherwise.",
+                      "type": "string"
+                    },
+                    "hasShadow": {
+                      "description": "Whether the shape states an outer shadow of its own.",
                       "type": "boolean"
                     },
                     "kind": {
@@ -3880,6 +4894,18 @@
                             "maximum": 9007199254740991,
                             "minimum": 0,
                             "type": "integer"
+                          },
+                          "lineSpacing": {
+                            "anyOf": [
+                              {
+                                "exclusiveMinimum": 0,
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Multiple of single spacing, when stated as a percentage."
                           },
                           "runs": {
                             "description": "Runs in reading order.",
@@ -3942,7 +4968,8 @@
                         },
                         "required": [
                           "level",
-                          "runs"
+                          "runs",
+                          "lineSpacing"
                         ],
                         "type": "object"
                       },
@@ -4001,6 +5028,87 @@
                       "minimum": -9007199254740991,
                       "type": "integer"
                     },
+                    "stroke": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "color": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "hex": {
+                                      "description": "Six hex digits when stated outright, otherwise empty.",
+                                      "type": "string"
+                                    },
+                                    "scheme": {
+                                      "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                      "type": "string"
+                                    },
+                                    "transforms": {
+                                      "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                      "items": {
+                                        "items": false,
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "prefixItems": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "maximum": 9007199254740991,
+                                            "minimum": -9007199254740991,
+                                            "type": "integer"
+                                          }
+                                        ],
+                                        "type": "array"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "hex",
+                                    "scheme",
+                                    "transforms"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "visible": {
+                              "description": "False when the outline is explicitly switched off.",
+                              "type": "boolean"
+                            },
+                            "widthEmu": {
+                              "anyOf": [
+                                {
+                                  "maximum": 9007199254740991,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "visible",
+                            "color",
+                            "widthEmu"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null when the shape inherits its outline."
+                    },
                     "tableSize": {
                       "anyOf": [
                         {
@@ -4049,18 +5157,30 @@
                     "mediaPart",
                     "tableSize",
                     "chartPart",
-                    "chartType"
+                    "chartType",
+                    "fill",
+                    "stroke",
+                    "geometry",
+                    "cornerRadiusEmu",
+                    "hasShadow"
                   ],
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "theme": {
+                "description": "For a master, the theme part it uses. Empty below the master.",
+                "type": "string"
               }
             },
             "required": [
               "part",
               "name",
               "follows",
-              "shapes"
+              "shapes",
+              "background",
+              "theme",
+              "colorMap"
             ],
             "type": "object"
           },
@@ -4070,6 +5190,143 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "background": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "hex": {
+                                "description": "Six hex digits when stated outright, otherwise empty.",
+                                "type": "string"
+                              },
+                              "scheme": {
+                                "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                "type": "string"
+                              },
+                              "transforms": {
+                                "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                "items": {
+                                  "items": false,
+                                  "maxItems": 2,
+                                  "minItems": 2,
+                                  "prefixItems": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    }
+                                  ],
+                                  "type": "array"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "hex",
+                              "scheme",
+                              "transforms"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Set for a solid fill."
+                      },
+                      "kind": {
+                        "enum": [
+                          "solid",
+                          "gradient",
+                          "image",
+                          "pattern",
+                          "none"
+                        ],
+                        "type": "string"
+                      },
+                      "stops": {
+                        "description": "Gradient stops in order, for a gradient fill.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "hex": {
+                              "description": "Six hex digits when stated outright, otherwise empty.",
+                              "type": "string"
+                            },
+                            "scheme": {
+                              "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                              "type": "string"
+                            },
+                            "transforms": {
+                              "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                              "items": {
+                                "items": false,
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "prefixItems": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "maximum": 9007199254740991,
+                                    "minimum": -9007199254740991,
+                                    "type": "integer"
+                                  }
+                                ],
+                                "type": "array"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "hex",
+                            "scheme",
+                            "transforms"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "color",
+                      "stops"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null when the part inherits its background."
+              },
+              "colorMap": {
+                "description": "Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it.",
+                "items": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
               "follows": {
                 "description": "Part this one inherits from: a layout for a slide, a master for a layout.",
                 "type": "string"
@@ -4140,12 +5397,152 @@
                       "description": "Chart type, lower-cased and hyphenated.",
                       "type": "string"
                     },
+                    "cornerRadiusEmu": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Corner radius of a rounded rectangle, from its adjust value and size."
+                    },
+                    "fill": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "color": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "hex": {
+                                      "description": "Six hex digits when stated outright, otherwise empty.",
+                                      "type": "string"
+                                    },
+                                    "scheme": {
+                                      "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                      "type": "string"
+                                    },
+                                    "transforms": {
+                                      "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                      "items": {
+                                        "items": false,
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "prefixItems": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "maximum": 9007199254740991,
+                                            "minimum": -9007199254740991,
+                                            "type": "integer"
+                                          }
+                                        ],
+                                        "type": "array"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "hex",
+                                    "scheme",
+                                    "transforms"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Set for a solid fill."
+                            },
+                            "kind": {
+                              "enum": [
+                                "solid",
+                                "gradient",
+                                "image",
+                                "pattern",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "stops": {
+                              "description": "Gradient stops in order, for a gradient fill.",
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "hex": {
+                                    "description": "Six hex digits when stated outright, otherwise empty.",
+                                    "type": "string"
+                                  },
+                                  "scheme": {
+                                    "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                    "type": "string"
+                                  },
+                                  "transforms": {
+                                    "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                    "items": {
+                                      "items": false,
+                                      "maxItems": 2,
+                                      "minItems": 2,
+                                      "prefixItems": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "maximum": 9007199254740991,
+                                          "minimum": -9007199254740991,
+                                          "type": "integer"
+                                        }
+                                      ],
+                                      "type": "array"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "required": [
+                                  "hex",
+                                  "scheme",
+                                  "transforms"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "color",
+                            "stops"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null when the shape inherits its fill."
+                    },
                     "flipH": {
                       "description": "Mirrored horizontally.",
                       "type": "boolean"
                     },
                     "flipV": {
                       "description": "Mirrored vertically.",
+                      "type": "boolean"
+                    },
+                    "geometry": {
+                      "description": "Preset geometry such as rect or roundRect, empty otherwise.",
+                      "type": "string"
+                    },
+                    "hasShadow": {
+                      "description": "Whether the shape states an outer shadow of its own.",
                       "type": "boolean"
                     },
                     "kind": {
@@ -4187,6 +5584,18 @@
                             "maximum": 9007199254740991,
                             "minimum": 0,
                             "type": "integer"
+                          },
+                          "lineSpacing": {
+                            "anyOf": [
+                              {
+                                "exclusiveMinimum": 0,
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Multiple of single spacing, when stated as a percentage."
                           },
                           "runs": {
                             "description": "Runs in reading order.",
@@ -4249,7 +5658,8 @@
                         },
                         "required": [
                           "level",
-                          "runs"
+                          "runs",
+                          "lineSpacing"
                         ],
                         "type": "object"
                       },
@@ -4308,6 +5718,87 @@
                       "minimum": -9007199254740991,
                       "type": "integer"
                     },
+                    "stroke": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "color": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "hex": {
+                                      "description": "Six hex digits when stated outright, otherwise empty.",
+                                      "type": "string"
+                                    },
+                                    "scheme": {
+                                      "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                      "type": "string"
+                                    },
+                                    "transforms": {
+                                      "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                      "items": {
+                                        "items": false,
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "prefixItems": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "maximum": 9007199254740991,
+                                            "minimum": -9007199254740991,
+                                            "type": "integer"
+                                          }
+                                        ],
+                                        "type": "array"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "hex",
+                                    "scheme",
+                                    "transforms"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "visible": {
+                              "description": "False when the outline is explicitly switched off.",
+                              "type": "boolean"
+                            },
+                            "widthEmu": {
+                              "anyOf": [
+                                {
+                                  "maximum": 9007199254740991,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "visible",
+                            "color",
+                            "widthEmu"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null when the shape inherits its outline."
+                    },
                     "tableSize": {
                       "anyOf": [
                         {
@@ -4356,18 +5847,30 @@
                     "mediaPart",
                     "tableSize",
                     "chartPart",
-                    "chartType"
+                    "chartType",
+                    "fill",
+                    "stroke",
+                    "geometry",
+                    "cornerRadiusEmu",
+                    "hasShadow"
                   ],
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "theme": {
+                "description": "For a master, the theme part it uses. Empty below the master.",
+                "type": "string"
               }
             },
             "required": [
               "part",
               "name",
               "follows",
-              "shapes"
+              "shapes",
+              "background",
+              "theme",
+              "colorMap"
             ],
             "type": "object"
           },
@@ -4452,6 +5955,143 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "background": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "hex": {
+                                "description": "Six hex digits when stated outright, otherwise empty.",
+                                "type": "string"
+                              },
+                              "scheme": {
+                                "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                "type": "string"
+                              },
+                              "transforms": {
+                                "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                "items": {
+                                  "items": false,
+                                  "maxItems": 2,
+                                  "minItems": 2,
+                                  "prefixItems": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    }
+                                  ],
+                                  "type": "array"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "hex",
+                              "scheme",
+                              "transforms"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Set for a solid fill."
+                      },
+                      "kind": {
+                        "enum": [
+                          "solid",
+                          "gradient",
+                          "image",
+                          "pattern",
+                          "none"
+                        ],
+                        "type": "string"
+                      },
+                      "stops": {
+                        "description": "Gradient stops in order, for a gradient fill.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "hex": {
+                              "description": "Six hex digits when stated outright, otherwise empty.",
+                              "type": "string"
+                            },
+                            "scheme": {
+                              "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                              "type": "string"
+                            },
+                            "transforms": {
+                              "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                              "items": {
+                                "items": false,
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "prefixItems": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "maximum": 9007199254740991,
+                                    "minimum": -9007199254740991,
+                                    "type": "integer"
+                                  }
+                                ],
+                                "type": "array"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "hex",
+                            "scheme",
+                            "transforms"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "color",
+                      "stops"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null when the part inherits its background."
+              },
+              "colorMap": {
+                "description": "Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it.",
+                "items": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
               "follows": {
                 "description": "Part this one inherits from: a layout for a slide, a master for a layout.",
                 "type": "string"
@@ -4522,12 +6162,152 @@
                       "description": "Chart type, lower-cased and hyphenated.",
                       "type": "string"
                     },
+                    "cornerRadiusEmu": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Corner radius of a rounded rectangle, from its adjust value and size."
+                    },
+                    "fill": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "color": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "hex": {
+                                      "description": "Six hex digits when stated outright, otherwise empty.",
+                                      "type": "string"
+                                    },
+                                    "scheme": {
+                                      "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                      "type": "string"
+                                    },
+                                    "transforms": {
+                                      "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                      "items": {
+                                        "items": false,
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "prefixItems": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "maximum": 9007199254740991,
+                                            "minimum": -9007199254740991,
+                                            "type": "integer"
+                                          }
+                                        ],
+                                        "type": "array"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "hex",
+                                    "scheme",
+                                    "transforms"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Set for a solid fill."
+                            },
+                            "kind": {
+                              "enum": [
+                                "solid",
+                                "gradient",
+                                "image",
+                                "pattern",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "stops": {
+                              "description": "Gradient stops in order, for a gradient fill.",
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "hex": {
+                                    "description": "Six hex digits when stated outright, otherwise empty.",
+                                    "type": "string"
+                                  },
+                                  "scheme": {
+                                    "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                    "type": "string"
+                                  },
+                                  "transforms": {
+                                    "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                    "items": {
+                                      "items": false,
+                                      "maxItems": 2,
+                                      "minItems": 2,
+                                      "prefixItems": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "maximum": 9007199254740991,
+                                          "minimum": -9007199254740991,
+                                          "type": "integer"
+                                        }
+                                      ],
+                                      "type": "array"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "required": [
+                                  "hex",
+                                  "scheme",
+                                  "transforms"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "color",
+                            "stops"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null when the shape inherits its fill."
+                    },
                     "flipH": {
                       "description": "Mirrored horizontally.",
                       "type": "boolean"
                     },
                     "flipV": {
                       "description": "Mirrored vertically.",
+                      "type": "boolean"
+                    },
+                    "geometry": {
+                      "description": "Preset geometry such as rect or roundRect, empty otherwise.",
+                      "type": "string"
+                    },
+                    "hasShadow": {
+                      "description": "Whether the shape states an outer shadow of its own.",
                       "type": "boolean"
                     },
                     "kind": {
@@ -4569,6 +6349,18 @@
                             "maximum": 9007199254740991,
                             "minimum": 0,
                             "type": "integer"
+                          },
+                          "lineSpacing": {
+                            "anyOf": [
+                              {
+                                "exclusiveMinimum": 0,
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Multiple of single spacing, when stated as a percentage."
                           },
                           "runs": {
                             "description": "Runs in reading order.",
@@ -4631,7 +6423,8 @@
                         },
                         "required": [
                           "level",
-                          "runs"
+                          "runs",
+                          "lineSpacing"
                         ],
                         "type": "object"
                       },
@@ -4690,6 +6483,87 @@
                       "minimum": -9007199254740991,
                       "type": "integer"
                     },
+                    "stroke": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "color": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "hex": {
+                                      "description": "Six hex digits when stated outright, otherwise empty.",
+                                      "type": "string"
+                                    },
+                                    "scheme": {
+                                      "description": "Theme slot or alias (accent1, tx1, bg2 ...) when it refers to the theme.",
+                                      "type": "string"
+                                    },
+                                    "transforms": {
+                                      "description": "lumMod, lumOff, tint, shade and the like, in thousandths of a percent.",
+                                      "items": {
+                                        "items": false,
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "prefixItems": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "maximum": 9007199254740991,
+                                            "minimum": -9007199254740991,
+                                            "type": "integer"
+                                          }
+                                        ],
+                                        "type": "array"
+                                      },
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "hex",
+                                    "scheme",
+                                    "transforms"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "visible": {
+                              "description": "False when the outline is explicitly switched off.",
+                              "type": "boolean"
+                            },
+                            "widthEmu": {
+                              "anyOf": [
+                                {
+                                  "maximum": 9007199254740991,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "visible",
+                            "color",
+                            "widthEmu"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null when the shape inherits its outline."
+                    },
                     "tableSize": {
                       "anyOf": [
                         {
@@ -4738,18 +6612,30 @@
                     "mediaPart",
                     "tableSize",
                     "chartPart",
-                    "chartType"
+                    "chartType",
+                    "fill",
+                    "stroke",
+                    "geometry",
+                    "cornerRadiusEmu",
+                    "hasShadow"
                   ],
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "theme": {
+                "description": "For a master, the theme part it uses. Empty below the master.",
+                "type": "string"
               }
             },
             "required": [
               "part",
               "name",
               "follows",
-              "shapes"
+              "shapes",
+              "background",
+              "theme",
+              "colorMap"
             ],
             "type": "object"
           },
@@ -4766,6 +6652,10 @@
             "properties": {
               "name": {
                 "description": "Name the theme gives its colour scheme.",
+                "type": "string"
+              },
+              "part": {
+                "description": "Theme part this scheme lives in, as a master names it.",
                 "type": "string"
               },
               "slots": {
@@ -4789,7 +6679,8 @@
             },
             "required": [
               "name",
-              "slots"
+              "slots",
+              "part"
             ],
             "type": "object"
           },
@@ -4890,6 +6781,12 @@
     },
     "DesignSystem": {
       "$ref": "#/$defs/DesignSystem"
+    },
+    "EditableDeckRequest": {
+      "$ref": "#/$defs/EditableDeckRequest"
+    },
+    "EditableDeckResponse": {
+      "$ref": "#/$defs/EditableDeckResponse"
     },
     "FixPatch": {
       "$ref": "#/$defs/FixPatch"

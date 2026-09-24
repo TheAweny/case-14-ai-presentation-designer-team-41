@@ -6,14 +6,14 @@
 копилефт-лицензиями: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, CC-BY-4.0, CC0-1.0, ISC, MIT, MIT-0, MIT-CMU, MPL-2.0, PSF-2.0, Python-2.0, Unlicense.
 GPL и AGPL не подходят: заказчик берёт решение в пилот и внедрение.
 
-Всего зависимостей: 1131 (npm: 1074, python: 57).
+Всего зависимостей: 1146 (npm: 1089, python: 57).
 
 ## Сводка по лицензиям
 
 | Лицензия | Пакетов | Статус |
 | --- | --- | --- |
-| MIT | 952 | разрешена |
-| ISC | 58 | разрешена |
+| MIT | 965 | разрешена |
+| ISC | 60 | разрешена |
 | Apache-2.0 | 46 | разрешена |
 | BSD-3-Clause | 29 | разрешена |
 | BSD-2-Clause | 21 | разрешена |
@@ -397,6 +397,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @types/node | 24.13.5 | MIT |
 | npm | @types/node | 26.6.1 | MIT |
 | npm | @types/parse-json | 4.0.2 | MIT |
+| npm | @types/pg | 8.23.1 | MIT |
 | npm | @types/react | 19.3.0 | MIT |
 | npm | @types/react-dom | 19.3.0 | MIT |
 | npm | @types/unist | 3.0.3 | MIT |
@@ -648,11 +649,11 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | follow-redirects | 1.16.0 | MIT |
 | npm | form-data | 4.0.6 | MIT |
 | npm | forwarded | 0.2.0 | MIT |
-| npm | framer-motion | 13.4.0 | MIT |
+| npm | framer-motion | 13.4.1 | MIT |
 | npm | framework-utils | 1.1.0 | MIT |
 | npm | fresh | 2.0.0 | MIT |
 | npm | fs-constants | 1.0.0 | MIT |
-| npm | fs-extra | 11.4.0 | MIT |
+| npm | fs-extra | 11.4.1 | MIT |
 | npm | function-bind | 1.1.2 | MIT |
 | npm | fuzzysort | 3.1.0 | MIT |
 | npm | generator-function | 2.0.1 | MIT |
@@ -686,7 +687,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | human-signals | 2.1.0 | Apache-2.0 |
 | npm | human-signals | 8.0.1 | Apache-2.0 |
 | npm | iconv-lite | 0.7.3 | MIT |
-| npm | icu-minify | 4.14.5 | MIT |
+| npm | icu-minify | 4.14.6 | MIT |
 | npm | ieee754 | 1.2.1 | BSD-3-Clause |
 | npm | ignore | 5.3.2 | MIT |
 | npm | ignore | 7.0.5 | MIT |
@@ -837,7 +838,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | minipass | 7.1.3 | BlueOak-1.0.0 |
 | npm | minizlib | 3.1.0 | MIT |
 | npm | motion | 13.4.0 | MIT |
-| npm | motion-dom | 13.3.0 | MIT |
+| npm | motion-dom | 13.4.1 | MIT |
 | npm | motion-utils | 13.3.0 | MIT |
 | npm | ms | 2.1.3 | MIT |
 | npm | multer | 2.4.0 | MIT |
@@ -892,6 +893,14 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | path-parse | 1.0.7 | MIT |
 | npm | path-to-regexp | 8.4.2 | MIT |
 | npm | path-type | 4.0.0 | MIT |
+| npm | pg | 8.23.0 | MIT |
+| npm | pg-cloudflare | 1.4.0 | MIT |
+| npm | pg-connection-string | 2.14.0 | MIT |
+| npm | pg-int8 | 1.0.1 | ISC |
+| npm | pg-pool | 3.14.0 | MIT |
+| npm | pg-protocol | 1.16.0 | MIT |
+| npm | pg-types | 2.2.0 | MIT |
+| npm | pgpass | 1.0.5 | MIT |
 | npm | picocolors | 1.1.1 | ISC |
 | npm | picomatch | 2.3.2 | MIT |
 | npm | picomatch | 4.0.4 | MIT |
@@ -904,6 +913,10 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | postcss | 8.5.23 | MIT |
 | npm | postcss | 8.5.28 | MIT |
 | npm | postcss-selector-parser | 7.1.6 | MIT |
+| npm | postgres-array | 2.0.0 | MIT |
+| npm | postgres-bytea | 1.0.1 | MIT |
+| npm | postgres-date | 1.0.7 | MIT |
+| npm | postgres-interval | 1.2.0 | MIT |
 | npm | posthog-node | 5.52.4 | MIT |
 | npm | powershell-utils | 0.1.0 | MIT |
 | npm | powershell-utils | 0.2.1 | MIT |
@@ -920,12 +933,12 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | prosemirror-history | 1.5.0 | MIT |
 | npm | prosemirror-inputrules | 1.5.1 | MIT |
 | npm | prosemirror-keymap | 1.2.3 | MIT |
-| npm | prosemirror-model | 1.25.11 | MIT |
+| npm | prosemirror-model | 1.25.12 | MIT |
 | npm | prosemirror-schema-list | 1.5.1 | MIT |
 | npm | prosemirror-state | 1.4.4 | MIT |
 | npm | prosemirror-tables | 1.8.5 | MIT |
 | npm | prosemirror-transform | 1.12.1 | MIT |
-| npm | prosemirror-view | 1.42.4 | MIT |
+| npm | prosemirror-view | 1.42.5 | MIT |
 | npm | proxy-addr | 2.0.8 | MIT |
 | npm | proxy-from-env | 2.1.0 | MIT |
 | npm | punycode | 2.3.1 | MIT |
@@ -1005,6 +1018,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | source-map | 0.7.6 | BSD-3-Clause |
 | npm | source-map-js | 1.2.1 | BSD-3-Clause |
 | npm | source-map-support | 0.5.19 | MIT |
+| npm | split2 | 4.2.0 | ISC |
 | npm | sprintf-js | 1.0.3 | BSD-3-Clause |
 | npm | stackback | 0.0.2 | MIT |
 | npm | statuses | 2.0.2 | MIT |
@@ -1027,7 +1041,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | styled-jsx | 5.1.6 | MIT |
 | npm | supports-color | 7.2.0 | MIT |
 | npm | supports-preserve-symlinks-flag | 1.0.0 | MIT |
-| npm | systeminformation | 5.33.12 | MIT |
+| npm | systeminformation | 5.33.13 | MIT |
 | npm | tailwindcss | 4.3.3 | MIT |
 | npm | tapable | 2.3.3 | MIT |
 | npm | tar | 7.5.22 | BlueOak-1.0.0 |
@@ -1075,7 +1089,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | update-browserslist-db | 1.3.3 | MIT |
 | npm | uri-js | 4.4.1 | BSD-2-Clause |
 | npm | use-callback-ref | 1.3.3 | MIT |
-| npm | use-intl | 4.14.5 | MIT |
+| npm | use-intl | 4.14.6 | MIT |
 | npm | use-sidecar | 1.1.3 | MIT |
 | npm | use-sync-external-store | 1.7.0 | MIT |
 | npm | util-deprecate | 1.0.2 | MIT |
@@ -1098,6 +1112,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | wrappy | 1.0.2 | ISC |
 | npm | ws | 8.21.3 | MIT |
 | npm | wsl-utils | 1.0.0 | MIT |
+| npm | xtend | 4.0.2 | MIT |
 | npm | xxhash-wasm | 1.1.0 | MIT |
 | npm | y18n | 5.0.8 | ISC |
 | npm | yallist | 3.1.1 | ISC |

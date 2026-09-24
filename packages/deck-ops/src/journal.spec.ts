@@ -21,6 +21,7 @@ import {
 function paragraph(text: string): Paragraph {
   return {
     level: 0,
+    lineSpacing: null,
     runs: [{ text, font: '', sizePt: null, bold: null, italic: null, color: '' }],
   };
 }
@@ -47,6 +48,7 @@ function styledText(elementId: string): SlideElement {
     paragraphs: [
       {
         level: 0,
+        lineSpacing: null,
         runs: [
           { text: 'Hello', font: 'Face', sizePt: 32, bold: true, italic: false, color: '111111' },
           { text: ' there', font: 'Face', sizePt: 16, bold: null, italic: null, color: '222222' },
@@ -54,6 +56,7 @@ function styledText(elementId: string): SlideElement {
       },
       {
         level: 1,
+        lineSpacing: null,
         runs: [{ text: 'More', font: '', sizePt: null, bold: null, italic: true, color: '' }],
       },
     ],
@@ -437,7 +440,7 @@ describe('set-font-size', () => {
         role: 'body',
         box: { ...ORIGIN },
         sourceShapeId: null,
-        paragraphs: [{ level: 0, runs: [] }],
+        paragraphs: [{ level: 0, lineSpacing: null, runs: [] }],
         overflow: null,
       },
     ]);
@@ -555,7 +558,7 @@ describe('set-color', () => {
         role: 'body',
         box: { ...ORIGIN },
         sourceShapeId: null,
-        paragraphs: [{ level: 0, runs: [] }],
+        paragraphs: [{ level: 0, lineSpacing: null, runs: [] }],
         overflow: null,
       },
     ]);
@@ -744,6 +747,7 @@ describe('folding a new text box into what was typed into it', () => {
       paragraphs: [
         {
           level: 0,
+          lineSpacing: null,
           runs: [{ text: '', font: '', sizePt: null, bold: null, italic: null, color: '' }],
         },
       ],

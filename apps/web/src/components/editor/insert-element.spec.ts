@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { slideElementSchema, type Box, type DesignSystem, type Grid } from '@lct/contracts';
 import { createImageElement, createInsertedElements, fitAspect, placedBox } from './insert-element';
+import { tokenMeta } from '../../mocks/demo-deck/token-meta';
 
 const GRID: Grid = {
   slideCx: 12_192_000,
@@ -12,6 +13,7 @@ const GRID: Grid = {
   columns: 12,
   gutter: 182_880,
   baseline: 114_300,
+  meta: tokenMeta('fallback'),
 };
 
 const EMU_PER_PT = 12_700;
@@ -26,7 +28,7 @@ const PROFILE: Pick<DesignSystem, 'typeScale'> = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
   ],
 };

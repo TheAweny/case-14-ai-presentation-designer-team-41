@@ -1,4 +1,5 @@
 import type { Box, Grid } from '@lct/contracts';
+import { tokenMeta } from './token-meta';
 
 /**
  * Сетка демо-колоды. Все рамки слайдов строятся от неё, поэтому заголовки контентных слайдов
@@ -36,6 +37,8 @@ export const DEMO_GRID = {
   columns: COLUMNS,
   gutter: pt(GUTTER),
   baseline: pt(BASELINE),
+  // Колонок и средника OOXML не хранит: в демо они заданы руками, как запасное значение.
+  meta: tokenMeta('fallback'),
 } satisfies Grid;
 
 /** Ширина области контента и одной колонки: 864 и 50 пт. */

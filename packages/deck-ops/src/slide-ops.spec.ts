@@ -20,6 +20,7 @@ function text(elementId: string): SlideElement {
     paragraphs: [
       {
         level: 0,
+        lineSpacing: null,
         runs: [{ text: 'Текст', font: '', sizePt: 16, bold: null, italic: null, color: '' }],
       },
     ],

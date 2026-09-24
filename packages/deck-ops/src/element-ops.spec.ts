@@ -31,6 +31,7 @@ function text(elementId: string, words = 'Слово'): SlideElement {
     paragraphs: [
       {
         level: 0,
+        lineSpacing: null,
         runs: [
           { text: words, font: '', sizePt: 16, bold: null, italic: null, color: '' },
           { text: '!', font: '', sizePt: 16, bold: true, italic: null, color: '' },

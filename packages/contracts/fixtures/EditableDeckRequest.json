@@ -1,0 +1,29 @@
+{
+  "contract": "EditableDeckRequest",
+  "valid": [
+    {
+      "name": "one editable slide",
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "templatePath": "runs/input.pptx",
+        "outputPath": "runs/output.pptx",
+        "slides": [{ "slideId": "slide-1", "title": "Title", "body": "Body" }]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty deck",
+      "why": "The exporter needs at least one slide.",
+      "path": ["slides"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "templatePath": "runs/input.pptx",
+        "outputPath": "runs/output.pptx",
+        "slides": []
+      }
+    }
+  ]
+}

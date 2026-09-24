@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import zipfile
+from collections.abc import Iterable
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -23,8 +24,11 @@ from typing import Any
 from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
 from pptx.exc import PackageNotFoundError
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
+from engine.contracts import DesignSystem
 from engine.contracts.provisional import TemplateProfileDraft
+from engine.parser._design import build_design_system
 from engine.parser._errors import (
     MalformedPresentationError,
     NotAPackageError,
@@ -42,6 +46,7 @@ from engine.parser._model import (
     WarningCode,
 )
 from engine.parser._shapes import collect_shapes
+from engine.parser._style import background_of, color_map_of
 from engine.parser._theme import read_themes
 
 __all__ = [
@@ -53,6 +58,7 @@ __all__ = [
     "NotAPresentationError",
     "TemplateIR",
     "TemplateParseError",
+    "design_system_of",
     "parse_template",
     "parse_template_ir",
 ]
@@ -173,6 +179,9 @@ def _slide_likes(
                 part=master_part,
                 name=str(getattr(master, "name", "") or ""),
                 shapes=collect_shapes(master.shapes, master_part, warnings, by_digest),
+                background=background_of(master._element),
+                theme=_theme_part_of(master),
+                color_map=color_map_of(master._element),
             )
         )
         for layout in master.slide_layouts:
@@ -183,6 +192,8 @@ def _slide_likes(
                     name=str(getattr(layout, "name", "") or ""),
                     follows=master_part,
                     shapes=collect_shapes(layout.shapes, layout_part, warnings, by_digest),
+                    background=background_of(layout._element),
+                    color_map=color_map_of(layout._element),
                 )
             )
 
@@ -205,10 +216,25 @@ def _slide_likes(
                 name=f"slide{index + 1}",
                 follows=follows,
                 shapes=collect_shapes(slide.shapes, slide_part, warnings, by_digest),
+                background=background_of(slide._element),
+                color_map=color_map_of(slide._element),
             )
         )
 
     return tuple(masters), tuple(layouts), tuple(slides)
+
+
+def _theme_part_of(master: Any) -> str:
+    """Name of the theme part a master draws its colours and fonts from.
+
+    A package with two masters can carry two themes, and a scheme reference like accent1 means a
+    different colour under each. Recording the link is what lets the design-system layer resolve
+    every reference against the theme it was written for.
+    """
+    try:
+        return str(master.part.part_related_by(RT.THEME).partname)
+    except (KeyError, AttributeError):
+        return ""
 
 
 def parse_template_ir(template_path: Path) -> TemplateIR:
@@ -270,13 +296,29 @@ def ir_hash(ir: TemplateIR) -> str:
 
 
 def parse_template(template_path: Path) -> TemplateProfileDraft:
-    """Read a .pptx template and return a draft profile describing its design system.
+    """Read a .pptx template into the parser's deterministic intermediate payload."""
+    ir = parse_template_ir(Path(template_path))
+    return ir.to_dict() | {"hash": ir_hash(ir)}
+
+
+def design_system_of(
+    template_path: Path, available_fonts: Iterable[str] | None = None
+) -> dict[str, Any]:
+    """Read a template and derive the design system a layout should follow.
+
+    The payload is validated against the generated ``DesignSystem`` model before it is returned,
+    so a drift between this code and the shared contract fails here rather than in whoever reads
+    the result.
 
     Args:
         template_path: Path to the template uploaded by the user.
+        available_fonts: Fonts the renderer can draw. When given, fonts outside it are replaced
+            and the substitution is reported in ``warnings``.
 
     Returns:
-        A draft profile: colors, fonts, type scale, grid, layouts and shape patterns.
+        A payload matching the shared ``DesignSystem`` contract.
     """
     ir = parse_template_ir(Path(template_path))
-    return ir.to_dict() | {"hash": ir_hash(ir)}
+    payload = build_design_system(ir, ir_hash(ir), available_fonts)
+    DesignSystem.model_validate(payload)
+    return payload

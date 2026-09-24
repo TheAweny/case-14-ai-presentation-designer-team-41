@@ -12,6 +12,7 @@ import { auditFindingSchema } from './audit-finding.js';
 import { fixPatchSchema } from './fix-patch.js';
 import { jobEventSchema } from './job-event.js';
 import { artifactManifestSchema } from './artifact-manifest.js';
+import { editableDeckRequestSchema, editableDeckResponseSchema } from './editable-deck.js';
 
 /**
  * Every schema that gets exported to JSON Schema and, from there, to Pydantic.
@@ -25,6 +26,8 @@ export const contractRegistry = {
   HealthCheck: healthCheckSchema,
   RunConfig: runConfigSchema,
   AgentConfig: agentConfigSchema,
+  EditableDeckRequest: editableDeckRequestSchema,
+  EditableDeckResponse: editableDeckResponseSchema,
   TemplateIR: templateIrSchema,
   ContentPack: contentPackSchema,
   DesignSystem: designSystemSchema,

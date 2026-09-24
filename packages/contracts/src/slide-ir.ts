@@ -150,7 +150,7 @@ export const strokeDashSchema = z.enum(['solid', 'dash', 'dot']);
 export const lineEndSchema = z.enum(['none', 'arrow']);
 
 /** The outline of a shape, or the whole of a line. */
-export const strokeSchema = z.object({
+export const elementStrokeSchema = z.object({
   color: colorRoleSchema.describe('A role, never a literal colour: the template supplies it.'),
   widthEmu: z.number().int().positive().describe('Line width in EMU.'),
   dash: strokeDashSchema,
@@ -184,7 +184,7 @@ export const decorElementSchema = z.object({
     .nullable()
     .optional()
     .describe('Null for no fill. Absent when the template did not state one.'),
-  stroke: strokeSchema
+  stroke: elementStrokeSchema
     .nullable()
     .optional()
     .describe('Null for no outline. Absent when the template did not state one.'),
@@ -233,7 +233,7 @@ export type VerticalAlign = z.infer<typeof verticalAlignSchema>;
 export type DecorShape = z.infer<typeof decorShapeSchema>;
 export type StrokeDash = z.infer<typeof strokeDashSchema>;
 export type LineEnd = z.infer<typeof lineEndSchema>;
-export type Stroke = z.infer<typeof strokeSchema>;
+export type ElementStroke = z.infer<typeof elementStrokeSchema>;
 export type ImageFit = z.infer<typeof imageFitSchema>;
 export type ChartType = z.infer<typeof chartTypeSchema>;
 export type SlideElement = z.infer<typeof slideElementSchema>;

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { DesignSystem, SlideElement, SlideIr } from '@lct/contracts';
 import { SlideView } from './slide-view.js';
-import { CONTENT, COVER, WIDE, box, paragraph, text } from './testing/deck.js';
+import { CONTENT, COVER, WIDE, box, measured, paragraph, text } from './testing/deck.js';
 import { fontFamily, genericFamily, seriesPaint, seriesRoles } from './view/color.js';
 
 const PROFILE = {
@@ -10,14 +10,14 @@ const PROFILE = {
   templateHash: 'a'.repeat(64),
   aspect: '16:9',
   palette: [
-    { role: 'background', hex: 'FFFFFF', source: 'observed', coverage: 1 },
-    { role: 'surface', hex: 'EEEEEE', source: 'observed', coverage: 0 },
-    { role: 'text', hex: '111111', source: 'observed', coverage: 0 },
-    { role: 'text-muted', hex: '666666', source: 'observed', coverage: 0 },
-    { role: 'text-on-accent', hex: 'FFFFFF', source: 'observed', coverage: 0 },
-    { role: 'accent', hex: '3355E0', source: 'observed', coverage: 0 },
-    { role: 'line', hex: 'CCCCCC', source: 'observed', coverage: 0 },
-    { role: 'negative', hex: 'CC3333', source: 'observed', coverage: 0 },
+    { role: 'background', hex: 'FFFFFF', meta: measured('observed', 1) },
+    { role: 'surface', hex: 'EEEEEE', meta: measured('observed', 0) },
+    { role: 'text', hex: '111111', meta: measured('observed', 0) },
+    { role: 'text-muted', hex: '666666', meta: measured('observed', 0) },
+    { role: 'text-on-accent', hex: 'FFFFFF', meta: measured('observed', 0) },
+    { role: 'accent', hex: '3355E0', meta: measured('observed', 0) },
+    { role: 'line', hex: 'CCCCCC', meta: measured('observed', 0) },
+    { role: 'negative', hex: 'CC3333', meta: measured('observed', 0) },
   ],
   typeScale: [
     {
@@ -28,7 +28,7 @@ const PROFILE = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text',
-      source: 'observed',
+      meta: measured('observed'),
     },
     {
       role: 'caption',
@@ -38,7 +38,7 @@ const PROFILE = {
       italic: false,
       lineSpacing: 1.2,
       colorRole: 'text-muted',
-      source: 'observed',
+      meta: measured('observed'),
     },
     {
       role: 'bullet',
@@ -48,7 +48,7 @@ const PROFILE = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text',
-      source: 'observed',
+      meta: measured('observed'),
     },
   ],
   grid: {
@@ -61,9 +61,17 @@ const PROFILE = {
     columns: 12,
     gutter: 0,
     baseline: 12_700,
+    meta: measured('fallback'),
   },
-  assets: [],
-  notes: [],
+  surfaces: [
+    { tone: 'light', background: 'FFFFFF', text: '111111', accent: '3355E0', meta: measured() },
+  ],
+  typeFamilies: [{ role: 'primary', font: 'Deck Face', declared: 'Deck Face', meta: measured() }],
+  strokes: [],
+  radii: [],
+  shadows: { present: false, meta: measured() },
+  protectedZones: [],
+  warnings: [],
 } satisfies DesignSystem;
 
 function render(
@@ -386,6 +394,7 @@ describe('text look', () => {
         {
           level: 0,
           align: 'justify',
+          lineSpacing: null,
           runs: [
             {
               text: 'Подчёркнуто',
@@ -422,8 +431,8 @@ describe('palette order for series', () => {
   it('ranks the alternate accent and the signal colours ahead of type colours', () => {
     const full = [
       ...PROFILE.palette,
-      { role: 'accent-alt', hex: '14A085', source: 'theme', coverage: 0 },
-      { role: 'positive', hex: '2E9E5B', source: 'theme', coverage: 0 },
+      { role: 'accent-alt', hex: '14A085', meta: measured('theme', 0) },
+      { role: 'positive', hex: '2E9E5B', meta: measured('theme', 0) },
     ] satisfies DesignSystem['palette'];
     expect(seriesRoles(full)).toEqual([
       'accent',

@@ -1,4 +1,4 @@
-"""Provisional aliases for contracts that are not in the Zod registry yet.
+"""Temporary contracts that are not part of the MVP schema registry yet.
 
 Every alias here is replaced by a generated Pydantic model from ``_generated.py`` as soon as the
 matching Zod schema lands in ``packages/contracts``. They exist so the layer signatures already

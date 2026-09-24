@@ -63,6 +63,8 @@ export function para(
   return {
     level,
     runs: typeof content === 'string' ? [run(content, style, runOptions)] : content,
+    // Интервал задаёт шкала по роли; абзац его не переопределяет.
+    lineSpacing: null,
   };
 }
 

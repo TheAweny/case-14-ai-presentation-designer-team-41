@@ -15,6 +15,9 @@ export {
 } from './agent-config.js';
 export {
   templateIrSchema,
+  colorRefSchema,
+  fillSchema,
+  strokeSchema,
   boxSchema,
   textRunSchema,
   paragraphSchema,
@@ -28,6 +31,9 @@ export {
   parseWarningSchema,
   parseWarningCodeSchema,
   type TemplateIr,
+  type ColorRef,
+  type Fill,
+  type Stroke,
   type Box,
   type TextRun,
   type Paragraph,
@@ -51,19 +57,33 @@ export {
 } from './content-pack.js';
 export {
   designSystemSchema,
+  tokenMetaSchema,
   paletteEntrySchema,
+  surfaceSchema,
+  typeFamilySchema,
   typeStyleSchema,
   gridSchema,
-  brandAssetSchema,
+  strokeTokenSchema,
+  radiusTokenSchema,
+  shadowTokenSchema,
+  protectedZoneSchema,
+  designWarningSchema,
   colorRoleSchema,
   typeRoleSchema,
   styleSourceSchema,
   hexColorSchema,
   type DesignSystem,
+  type TokenMeta,
   type PaletteEntry,
+  type Surface,
+  type TypeFamily,
   type TypeStyle,
   type Grid,
-  type BrandAsset,
+  type StrokeToken,
+  type RadiusToken,
+  type ShadowToken,
+  type ProtectedZone,
+  type DesignWarning,
   type ColorRole,
   type TypeRole,
   type StyleSource,
@@ -104,7 +124,7 @@ export {
   decorShapeSchema,
   strokeDashSchema,
   lineEndSchema,
-  strokeSchema,
+  elementStrokeSchema,
   type SlideIr,
   type SlideElement,
   type SlideElementKind,
@@ -116,7 +136,7 @@ export {
   type DecorShape,
   type StrokeDash,
   type LineEnd,
-  type Stroke,
+  type ElementStroke,
 } from './slide-ir.js';
 export {
   auditFindingSchema,
@@ -161,3 +181,9 @@ export {
   type ModelCallSummary,
 } from './artifact-manifest.js';
 export { contractRegistry, type ContractName } from './registry.js';
+export {
+  editableDeckRequestSchema,
+  editableDeckResponseSchema,
+  type EditableDeckRequest,
+  type EditableDeckResponse,
+} from './editable-deck.js';

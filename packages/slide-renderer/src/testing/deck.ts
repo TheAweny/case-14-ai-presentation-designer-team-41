@@ -5,6 +5,8 @@ import type {
   Paragraph,
   SlideElement,
   SlideIr,
+  StyleSource,
+  TokenMeta,
 } from '@lct/contracts';
 
 /**
@@ -17,6 +19,11 @@ const EMU_PER_PT = 12_700;
 const pt = (value: number) => Math.round(value * EMU_PER_PT);
 
 export const WIDE = { cx: pt(960), cy: pt(540) };
+
+/** Evidence for a hand-written token. The tests never read it; the schema requires it. */
+export function measured(source: StyleSource = 'observed', share = 1): TokenMeta {
+  return { source, count: 1, share, confidence: 1, parts: [] };
+}
 
 export function box(x: number, y: number, cx: number, cy: number): Box {
   return { x: pt(x), y: pt(y), cx: pt(cx), cy: pt(cy) };
@@ -38,6 +45,7 @@ export function paragraph(
         color: '',
       },
     ],
+    lineSpacing: null,
   };
 }
 
@@ -184,7 +192,7 @@ export const TYPE_SCALE: Pick<DesignSystem, 'typeScale'> = {
       italic: false,
       lineSpacing: 1.5,
       colorRole: 'text',
-      source: 'observed',
+      meta: measured('observed'),
     },
   ],
 };

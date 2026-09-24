@@ -35,7 +35,8 @@
                     "italic": false,
                     "color": "1F1F1F"
                   }
-                ]
+                ],
+                "lineSpacing": null
               }
             ],
             "overflow": {
@@ -109,7 +110,8 @@
                     "underline": true,
                     "color": "1F1F1F"
                   }
-                ]
+                ],
+                "lineSpacing": null
               }
             ],
             "overflow": null

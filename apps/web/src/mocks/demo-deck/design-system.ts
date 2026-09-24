@@ -1,5 +1,6 @@
 import type { DesignSystem } from '@lct/contracts';
-import { DEMO_GRID } from './grid';
+import { DEMO_GRID, box, columns, rows } from './grid';
+import { tokenMeta } from './token-meta';
 
 /**
  * Дизайн-система выдуманного нейтрального шаблона, на котором свёрстана демо-колода. Значения —
@@ -11,16 +12,16 @@ export const DEMO_DESIGN_SYSTEM = {
   templateHash: 'a88d66bb434735b00556eedbafbfd80d8baa063314b78694700f25dd43ffdcb1',
   aspect: '16:9',
   palette: [
-    { role: 'background', hex: 'FFFFFF', source: 'observed', coverage: 0.78 },
-    { role: 'surface', hex: 'F2F4F7', source: 'observed', coverage: 0.08 },
-    { role: 'text', hex: '16181D', source: 'observed', coverage: 0.06 },
-    { role: 'text-muted', hex: '5F6673', source: 'observed', coverage: 0.02 },
-    { role: 'text-on-accent', hex: 'FFFFFF', source: 'observed', coverage: 0.01 },
-    { role: 'accent', hex: '3355E0', source: 'observed', coverage: 0.04 },
-    { role: 'accent-alt', hex: '14A085', source: 'theme', coverage: 0 },
-    { role: 'line', hex: 'D6DAE1', source: 'observed', coverage: 0.01 },
-    { role: 'positive', hex: '2E9E5B', source: 'theme', coverage: 0 },
-    { role: 'negative', hex: 'D8433B', source: 'theme', coverage: 0 },
+    { role: 'background', hex: 'FFFFFF', meta: tokenMeta('observed', 0.78) },
+    { role: 'surface', hex: 'F2F4F7', meta: tokenMeta('observed', 0.08) },
+    { role: 'text', hex: '16181D', meta: tokenMeta('observed', 0.06) },
+    { role: 'text-muted', hex: '5F6673', meta: tokenMeta('observed', 0.02) },
+    { role: 'text-on-accent', hex: 'FFFFFF', meta: tokenMeta('observed', 0.01) },
+    { role: 'accent', hex: '3355E0', meta: tokenMeta('observed', 0.04) },
+    { role: 'accent-alt', hex: '14A085', meta: tokenMeta('theme', 0) },
+    { role: 'line', hex: 'D6DAE1', meta: tokenMeta('observed', 0.01) },
+    { role: 'positive', hex: '2E9E5B', meta: tokenMeta('theme', 0) },
+    { role: 'negative', hex: 'D8433B', meta: tokenMeta('theme', 0) },
   ],
   typeScale: [
     {
@@ -31,7 +32,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.1,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'subtitle',
@@ -41,7 +42,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.2,
       colorRole: 'text-muted',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'heading',
@@ -51,7 +52,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.2,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'body',
@@ -61,7 +62,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'bullet',
@@ -71,7 +72,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'caption',
@@ -81,7 +82,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text-muted',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'kpi-value',
@@ -91,7 +92,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1,
       colorRole: 'accent',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'kpi-caption',
@@ -101,7 +102,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1.3,
       colorRole: 'text-muted',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'quote',
@@ -111,7 +112,7 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: true,
       lineSpacing: 1.25,
       colorRole: 'text',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
     {
       role: 'footer',
@@ -121,13 +122,46 @@ export const DEMO_DESIGN_SYSTEM = {
       italic: false,
       lineSpacing: 1,
       colorRole: 'text-muted',
-      source: 'observed',
+      meta: tokenMeta('observed'),
     },
   ],
   grid: DEMO_GRID,
-  assets: [{ mediaPart: 'ppt/media/image1.png', role: 'logo', widthPx: 480, heightPx: 160 }],
-  notes: [
-    'Демо-профиль для стенда редактора: собран вручную, а не получен парсером.',
-    'Базовая линия — 4 пт: высота слайда 540 пт на 8 не делится.',
+  surfaces: [
+    {
+      tone: 'light',
+      background: 'FFFFFF',
+      text: '16181D',
+      accent: '3355E0',
+      meta: tokenMeta('observed', 0.8),
+    },
+    {
+      tone: 'dark',
+      background: '3355E0',
+      text: 'FFFFFF',
+      accent: null,
+      meta: tokenMeta('observed', 0.2),
+    },
+  ],
+  typeFamilies: [
+    { role: 'primary', font: 'Inter', declared: 'Inter', meta: tokenMeta('observed') },
+  ],
+  strokes: [{ widthPt: 1, hex: 'D6DAE1', colorRole: 'line', meta: tokenMeta('observed') }],
+  radii: [],
+  shadows: { present: false, meta: tokenMeta('observed') },
+  protectedZones: [
+    {
+      role: 'logo',
+      box: box(columns(0, 2), rows(40, 40)),
+      mediaPart: 'ppt/media/image1.png',
+      meta: tokenMeta('observed'),
+    },
+  ],
+  warnings: [
+    {
+      code: 'low-confidence',
+      token: 'grid',
+      message:
+        'Демо-профиль собран вручную, а не получен парсером. Базовая линия — 4 пт: высота слайда 540 пт на 8 не делится.',
+    },
   ],
 } satisfies DesignSystem;

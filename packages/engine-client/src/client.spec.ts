@@ -38,4 +38,26 @@ describe('EngineClient', () => {
     });
     await expect(client.health()).rejects.toThrowError();
   });
+
+  it('posts a validated editable deck request to the engine', async () => {
+    const client = new EngineClient({
+      baseUrl: 'http://engine:8000',
+      fetchImpl: fakeFetch(200, {
+        schemaVersion: 1,
+        outputPath: '/app/runs/run-1/deck.pptx',
+        designSystem: { schemaVersion: 1 },
+        slideCount: 1,
+      }),
+    });
+
+    await expect(
+      client.createEditableDeck({
+        schemaVersion: 1,
+        runId: 'run-1',
+        templatePath: '/app/data/template.pptx',
+        outputPath: '/app/runs/run-1/deck.pptx',
+        slides: [{ slideId: 'slide-1', title: 'Title', body: 'Body' }],
+      }),
+    ).resolves.toMatchObject({ slideCount: 1 });
+  });
 });

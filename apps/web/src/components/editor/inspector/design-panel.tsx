@@ -47,7 +47,7 @@ import type {
   ParagraphAlign,
   SlideElement,
   SlideIr,
-  Stroke,
+  ElementStroke,
   StrokeDash,
   TypeRole,
   VerticalAlign,
@@ -172,7 +172,7 @@ const DASHES = [
 ] as const satisfies readonly { value: StrokeDash; icon: unknown }[];
 
 /** Обводка, которую получает фигура без неё: тонкая сплошная линия цвета текста. */
-function freshStroke(color: ColorRole): Stroke {
+function freshStroke(color: ColorRole): ElementStroke {
   return { color, widthEmu: EMU_PER_PT, dash: 'solid', head: 'none', tail: 'none' };
 }
 

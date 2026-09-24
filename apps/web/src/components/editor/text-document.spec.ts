@@ -18,6 +18,7 @@ const METRICS = { slide: SLIDE, inheritedSizePt: 16, bullets: false };
 const RICH: Paragraph[] = [
   {
     level: 0,
+    lineSpacing: null,
     runs: [
       {
         text: 'Hello ',
@@ -39,6 +40,7 @@ const RICH: Paragraph[] = [
   },
   {
     level: 2,
+    lineSpacing: 1.5,
     runs: [
       {
         text: 'line\nbreak',
@@ -59,7 +61,7 @@ function throughSchema(paragraphs: readonly Paragraph[]): Paragraph[] {
 }
 
 describe('text document', () => {
-  it('keeps bold, italic, font, size, colour and level through the schema', () => {
+  it('keeps bold, italic, font, size, colour, level and line spacing through the schema', () => {
     expect(throughSchema(RICH)).toEqual(RICH);
   });
 
@@ -67,6 +69,7 @@ describe('text document', () => {
     const [paragraph] = throughSchema([
       {
         level: 0,
+        lineSpacing: null,
         runs: [
           { text: 'one', font: 'Deck Face', sizePt: 16, bold: true, italic: null, color: '' },
           { text: 'two', font: 'Deck Face', sizePt: 16, bold: true, italic: null, color: '' },
@@ -82,6 +85,7 @@ describe('text document', () => {
     const doc = paragraphsToDoc([
       {
         level: 0,
+        lineSpacing: null,
         runs: [{ text: 'a\vb', font: '', sizePt: null, bold: null, italic: null, color: '' }],
       },
     ]);
@@ -156,6 +160,7 @@ describe('alignment and underline survive the editor', () => {
     const styled: Paragraph[] = [
       {
         level: 0,
+        lineSpacing: null,
         align: 'center',
         runs: [
           {
@@ -172,6 +177,7 @@ describe('alignment and underline survive the editor', () => {
       },
       {
         level: 0,
+        lineSpacing: null,
         runs: [{ text: 'слева', font: '', sizePt: null, bold: null, italic: null, color: '' }],
       },
     ];

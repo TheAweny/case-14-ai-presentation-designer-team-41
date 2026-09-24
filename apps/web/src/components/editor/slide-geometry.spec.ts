@@ -12,6 +12,7 @@ import {
   translatedBox,
   unionBox,
 } from './slide-geometry';
+import { tokenMeta } from '../../mocks/demo-deck/token-meta';
 
 const GRID: Grid = {
   slideCx: 1000,
@@ -23,6 +24,7 @@ const GRID: Grid = {
   columns: 2,
   gutter: 20,
   baseline: 50,
+  meta: tokenMeta('fallback'),
 };
 
 describe('slide geometry', () => {

@@ -143,6 +143,18 @@
                       "minimum": 0,
                       "type": "integer"
                     },
+                    "lineSpacing": {
+                      "anyOf": [
+                        {
+                          "exclusiveMinimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Multiple of single spacing, when stated as a percentage."
+                    },
                     "runs": {
                       "description": "Runs in reading order.",
                       "items": {
@@ -204,7 +216,8 @@
                   },
                   "required": [
                     "level",
-                    "runs"
+                    "runs",
+                    "lineSpacing"
                   ],
                   "type": "object"
                 },

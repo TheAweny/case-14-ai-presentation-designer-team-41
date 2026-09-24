@@ -1,5 +1,5 @@
 import type { JSX, SVGProps } from 'react';
-import type { Box, DesignSystem, SlideElement, Stroke, StrokeDash } from '@lct/contracts';
+import type { Box, DesignSystem, SlideElement, ElementStroke, StrokeDash } from '@lct/contracts';
 import { EMU_PER_PT, cqw, emuToCqw, round, type SlideSize } from '../geometry.js';
 import { paint } from './color.js';
 import { markHooks, markStyle } from './mark.js';
@@ -54,7 +54,7 @@ interface Frame {
   readonly h: number;
 }
 
-function strokeProps(stroke: Stroke, color: string): SVGProps<SVGElement> {
+function strokeProps(stroke: ElementStroke, color: string): SVGProps<SVGElement> {
   const width = stroke.widthEmu / EMU_PER_PT;
   const dash = DASH[stroke.dash];
   return {
@@ -115,7 +115,7 @@ function LineShape({
 }: {
   element: DecorElement;
   frame: Frame;
-  stroke: Stroke;
+  stroke: ElementStroke;
   color: string;
   interactive: boolean;
 }): JSX.Element {
@@ -162,7 +162,7 @@ function ClosedShape({
   element: DecorElement;
   frame: Frame;
   fill: string;
-  stroke: Stroke | null;
+  stroke: ElementStroke | null;
   strokeColor: string;
 }): JSX.Element {
   const { w, h } = frame;
@@ -274,7 +274,7 @@ export function DecorMark({
   let drawing: JSX.Element;
   if (shape === 'line') {
     // A line that states no stroke is a template rule: the least width in the guessed colour.
-    const stroke: Stroke = element.stroke ?? {
+    const stroke: ElementStroke = element.stroke ?? {
       color: 'accent',
       widthEmu: Math.max(1, Math.round(least)),
       dash: 'solid',

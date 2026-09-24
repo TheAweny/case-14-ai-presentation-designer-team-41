@@ -1,8 +1,10 @@
 {
   "aspect": "4:3",
-  "hash": "212a18d02f1f81d96dfa2c23b9bbdfe44bb03e734b56502c8f09a208b60a717d",
+  "hash": "07eada464d2b29c20e5951a68e35982e63114cd3782d1c8ce1d8f8cd45cfec19",
   "layouts": [
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Title Slide",
       "part": "/ppt/slideLayouts/slideLayout1.xml",
@@ -16,14 +18,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -43,6 +50,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -55,14 +63,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Subtitle 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -82,6 +95,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -94,14 +108,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -112,6 +131,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -124,14 +144,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -142,6 +167,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -154,14 +180,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -172,12 +203,16 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Title and Content",
       "part": "/ppt/slideLayouts/slideLayout2.xml",
@@ -191,14 +226,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -218,6 +258,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -230,14 +271,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Content Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -251,6 +297,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -264,6 +311,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -277,6 +325,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -290,6 +339,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -309,6 +359,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -321,14 +372,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -339,6 +395,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -351,14 +408,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -369,6 +431,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -381,14 +444,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -399,12 +467,16 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Section Header",
       "part": "/ppt/slideLayouts/slideLayout3.xml",
@@ -418,14 +490,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -445,6 +522,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -457,14 +535,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Text Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -484,6 +567,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -496,14 +580,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -514,6 +603,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -526,14 +616,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -544,6 +639,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -556,14 +652,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -574,12 +675,16 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Two Content",
       "part": "/ppt/slideLayouts/slideLayout4.xml",
@@ -593,14 +698,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -620,6 +730,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -632,14 +743,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Content Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -653,6 +769,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -666,6 +783,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -679,6 +797,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -692,6 +811,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -711,6 +831,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -723,14 +844,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Content Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -744,6 +870,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -757,6 +884,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -770,6 +898,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -783,6 +912,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -802,6 +932,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -814,14 +945,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -832,6 +968,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -844,14 +981,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -862,6 +1004,7 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         },
@@ -874,14 +1017,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 6",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -892,12 +1040,16 @@
           },
           "rotation": 0.0,
           "shapeId": 7,
+          "stroke": null,
           "tableSize": null,
           "z": 5
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Comparison",
       "part": "/ppt/slideLayouts/slideLayout5.xml",
@@ -911,14 +1063,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -938,6 +1095,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -950,14 +1108,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Text Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -977,6 +1140,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -989,14 +1153,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Content Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1010,6 +1179,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1023,6 +1193,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1036,6 +1207,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1049,6 +1221,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1068,6 +1241,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -1080,14 +1254,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Text Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1107,6 +1286,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -1119,14 +1299,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Content Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1140,6 +1325,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1153,6 +1339,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1166,6 +1353,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1179,6 +1367,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1198,6 +1387,7 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         },
@@ -1210,14 +1400,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 6",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1228,6 +1423,7 @@
           },
           "rotation": 0.0,
           "shapeId": 7,
+          "stroke": null,
           "tableSize": null,
           "z": 5
         },
@@ -1240,14 +1436,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 7",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1258,6 +1459,7 @@
           },
           "rotation": 0.0,
           "shapeId": 8,
+          "stroke": null,
           "tableSize": null,
           "z": 6
         },
@@ -1270,14 +1472,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 8",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1288,12 +1495,16 @@
           },
           "rotation": 0.0,
           "shapeId": 9,
+          "stroke": null,
           "tableSize": null,
           "z": 7
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Title Only",
       "part": "/ppt/slideLayouts/slideLayout6.xml",
@@ -1307,14 +1518,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1334,6 +1550,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -1346,14 +1563,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1364,6 +1586,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -1376,14 +1599,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1394,6 +1622,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -1406,14 +1635,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1424,12 +1658,16 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Blank",
       "part": "/ppt/slideLayouts/slideLayout7.xml",
@@ -1443,14 +1681,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1461,6 +1704,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -1473,14 +1717,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1491,6 +1740,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -1503,14 +1753,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1521,12 +1776,16 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Content with Caption",
       "part": "/ppt/slideLayouts/slideLayout8.xml",
@@ -1540,14 +1799,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1567,6 +1831,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -1579,14 +1844,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Content Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1600,6 +1870,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1613,6 +1884,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1626,6 +1898,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1639,6 +1912,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1658,6 +1932,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -1670,14 +1945,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Text Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1697,6 +1977,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -1709,14 +1990,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1727,6 +2013,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -1739,14 +2026,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1757,6 +2049,7 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         },
@@ -1769,14 +2062,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 6",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1787,12 +2085,16 @@
           },
           "rotation": 0.0,
           "shapeId": 7,
+          "stroke": null,
           "tableSize": null,
           "z": 5
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Picture with Caption",
       "part": "/ppt/slideLayouts/slideLayout9.xml",
@@ -1806,14 +2108,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1833,6 +2140,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -1845,14 +2153,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Picture Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1863,6 +2176,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -1875,14 +2189,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Text Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -1902,6 +2221,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -1914,14 +2234,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1932,6 +2257,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -1944,14 +2270,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1962,6 +2293,7 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         },
@@ -1974,14 +2306,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 6",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -1992,12 +2329,16 @@
           },
           "rotation": 0.0,
           "shapeId": 7,
+          "stroke": null,
           "tableSize": null,
           "z": 5
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Title and Vertical Text",
       "part": "/ppt/slideLayouts/slideLayout10.xml",
@@ -2011,14 +2352,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2038,6 +2384,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -2050,14 +2397,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Vertical Text Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2071,6 +2423,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2084,6 +2437,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2097,6 +2451,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2110,6 +2465,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2129,6 +2485,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -2141,14 +2498,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2159,6 +2521,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -2171,14 +2534,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2189,6 +2557,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -2201,14 +2570,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2219,12 +2593,16 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         }
-      ]
+      ],
+      "theme": ""
     },
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideMasters/slideMaster1.xml",
       "name": "Vertical Title and Text",
       "part": "/ppt/slideLayouts/slideLayout11.xml",
@@ -2238,14 +2616,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Vertical Title 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2265,6 +2648,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -2277,14 +2661,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Vertical Text Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2298,6 +2687,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2311,6 +2701,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2324,6 +2715,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2337,6 +2729,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2356,6 +2749,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -2368,14 +2762,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2386,6 +2785,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -2398,14 +2798,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2416,6 +2821,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -2428,14 +2834,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2446,14 +2857,75 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         }
-      ]
+      ],
+      "theme": ""
     }
   ],
   "masters": [
     {
+      "background": {
+        "color": {
+          "hex": "",
+          "scheme": "bg1",
+          "transforms": []
+        },
+        "kind": "solid",
+        "stops": []
+      },
+      "colorMap": [
+        [
+          "accent1",
+          "accent1"
+        ],
+        [
+          "accent2",
+          "accent2"
+        ],
+        [
+          "accent3",
+          "accent3"
+        ],
+        [
+          "accent4",
+          "accent4"
+        ],
+        [
+          "accent5",
+          "accent5"
+        ],
+        [
+          "accent6",
+          "accent6"
+        ],
+        [
+          "bg1",
+          "lt1"
+        ],
+        [
+          "bg2",
+          "lt2"
+        ],
+        [
+          "folHlink",
+          "folHlink"
+        ],
+        [
+          "hlink",
+          "hlink"
+        ],
+        [
+          "tx1",
+          "dk1"
+        ],
+        [
+          "tx2",
+          "dk2"
+        ]
+      ],
       "follows": "",
       "name": "",
       "part": "/ppt/slideMasters/slideMaster1.xml",
@@ -2467,14 +2939,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "rect",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Title Placeholder 1",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2494,6 +2971,7 @@
           },
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         },
@@ -2506,14 +2984,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "rect",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Text Placeholder 2",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2527,6 +3010,7 @@
             },
             {
               "level": 1,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2540,6 +3024,7 @@
             },
             {
               "level": 2,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2553,6 +3038,7 @@
             },
             {
               "level": 3,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2566,6 +3052,7 @@
             },
             {
               "level": 4,
+              "lineSpacing": null,
               "runs": [
                 {
                   "bold": null,
@@ -2585,6 +3072,7 @@
           },
           "rotation": 0.0,
           "shapeId": 3,
+          "stroke": null,
           "tableSize": null,
           "z": 1
         },
@@ -2597,14 +3085,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "rect",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Date Placeholder 3",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2615,6 +3108,7 @@
           },
           "rotation": 0.0,
           "shapeId": 4,
+          "stroke": null,
           "tableSize": null,
           "z": 2
         },
@@ -2627,14 +3121,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "rect",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Footer Placeholder 4",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2645,6 +3144,7 @@
           },
           "rotation": 0.0,
           "shapeId": 5,
+          "stroke": null,
           "tableSize": null,
           "z": 3
         },
@@ -2657,14 +3157,19 @@
           },
           "chartPart": "",
           "chartType": "",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "rect",
+          "hasShadow": false,
           "kind": "placeholder",
           "mediaPart": "",
           "name": "Slide Number Placeholder 5",
           "paragraphs": [
             {
               "level": 0,
+              "lineSpacing": null,
               "runs": []
             }
           ],
@@ -2675,10 +3180,12 @@
           },
           "rotation": 0.0,
           "shapeId": 6,
+          "stroke": null,
           "tableSize": null,
           "z": 4
         }
-      ]
+      ],
+      "theme": "/ppt/theme/theme1.xml"
     }
   ],
   "media": [],
@@ -2687,6 +3194,8 @@
   "slideCy": 6858000,
   "slides": [
     {
+      "background": null,
+      "colorMap": [],
       "follows": "/ppt/slideLayouts/slideLayout7.xml",
       "name": "slide1",
       "part": "/ppt/slides/slide1.xml",
@@ -2700,8 +3209,12 @@
           },
           "chartPart": "/ppt/charts/chart1.xml",
           "chartType": "column-clustered",
+          "cornerRadiusEmu": null,
+          "fill": null,
           "flipH": false,
           "flipV": false,
+          "geometry": "",
+          "hasShadow": false,
           "kind": "chart",
           "mediaPart": "",
           "name": "Chart 1",
@@ -2710,16 +3223,19 @@
           "placeholder": null,
           "rotation": 0.0,
           "shapeId": 2,
+          "stroke": null,
           "tableSize": null,
           "z": 0
         }
-      ]
+      ],
+      "theme": ""
     }
   ],
   "sourceName": "chart.pptx",
   "themeColors": [
     {
       "name": "Office",
+      "part": "/ppt/theme/theme1.xml",
       "slots": [
         [
           "dk1",

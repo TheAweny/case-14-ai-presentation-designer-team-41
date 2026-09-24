@@ -5,7 +5,7 @@ import {
   decorShapeSchema,
   imageFitSchema,
   paragraphAlignSchema,
-  strokeSchema,
+  elementStrokeSchema,
   verticalAlignSchema,
   type ChartType,
   type ColorRole,
@@ -16,7 +16,7 @@ import {
   type SlideElement,
   type SlideElementKind,
   type SlideIr,
-  type Stroke,
+  type ElementStroke,
   type VerticalAlign,
 } from '@lct/contracts';
 import {
@@ -59,7 +59,7 @@ export interface ElementProps {
    * Merged over the stroke the shape has, so a width alone keeps each shape's colour. A shape
    * with no stroke needs a whole one. Null removes the outline.
    */
-  readonly stroke?: Partial<Stroke> | null;
+  readonly stroke?: Partial<ElementStroke> | null;
   /** Share of the shorter side, clamped to [0, 0.5]. */
   readonly cornerRadius?: number;
   readonly flipH?: boolean;
@@ -141,7 +141,7 @@ function applyDecor(target: Draft<Extract<SlideElement, { kind: 'decor' }>>, pro
     if (props.stroke === null) {
       if (target.stroke !== null) target.stroke = null;
     } else {
-      const merged = strokeSchema.safeParse({
+      const merged = elementStrokeSchema.safeParse({
         ...(target.stroke ?? {}),
         ...props.stroke,
         ...(props.stroke.widthEmu !== undefined

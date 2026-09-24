@@ -1,0 +1,27 @@
+{
+  "contract": "EditableDeckResponse",
+  "valid": [
+    {
+      "name": "exported deck",
+      "payload": {
+        "schemaVersion": 1,
+        "outputPath": "runs/output.pptx",
+        "designSystem": { "schemaVersion": 1 },
+        "slideCount": 1
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "zero slides",
+      "why": "A completed export has at least one slide.",
+      "path": ["slideCount"],
+      "payload": {
+        "schemaVersion": 1,
+        "outputPath": "runs/output.pptx",
+        "designSystem": {},
+        "slideCount": 0
+      }
+    }
+  ]
+}

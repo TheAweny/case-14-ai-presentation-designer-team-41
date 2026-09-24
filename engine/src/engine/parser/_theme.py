@@ -116,7 +116,11 @@ def read_themes(
                         )
                     )
                 slots.append((name, value))
-            palettes.append(ThemeColors(name=scheme.get("name", ""), slots=tuple(slots)))
+            # The archive lists parts without the leading slash that part names carry, and a
+            # master names its theme by part name, so the two have to agree.
+            palettes.append(
+                ThemeColors(name=scheme.get("name", ""), slots=tuple(slots), part=f"/{part}")
+            )
 
         # The font scheme of the first theme wins: a package with several masters still has one
         # typographic identity, and picking the first keeps repeated runs identical.

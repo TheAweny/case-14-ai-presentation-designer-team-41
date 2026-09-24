@@ -1,0 +1,10 @@
+{
+  "runId": "run-vertical-slice",
+  "slides": [
+    {
+      "slideId": "slide-overview",
+      "title": "Growth overview",
+      "body": "Revenue increased by 28 percent while retention remained stable."
+    }
+  ]
+}
