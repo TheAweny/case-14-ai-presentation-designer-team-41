@@ -629,25 +629,66 @@ function slideParagraph(metrics: TextEditorMetrics) {
       };
     },
     renderHTML({ node, HTMLAttributes }) {
-      const level = levelOf(node.attrs.level);
-      const points = leadSize(node, metrics.inheritedSizePt);
-      const indent = level * 1.5;
-      const padding = metrics.bullets ? indent + 1.15 : indent;
-      const style = [`font-size: ${cqw(ptToCqw(points, metrics.slide))}`];
-      if (padding > 0) style.push(`padding-left: ${padding}em`);
-      if (metrics.bullets) style.push(`--bullet-x: ${indent}em`);
-      const align = alignOf(node.attrs.align);
-      if (align) style.push(`text-align: ${align}`);
-      // The paragraph's own spacing wins over the role's, as on the slide.
-      const lineSpacing = spacingOf(node.attrs.lineSpacing);
-      if (lineSpacing != null) style.push(`line-height: ${lineSpacing}`);
       return [
         'p',
-        mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { style: style.join('; ') }),
+        mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+          style: paragraphStyle(node, metrics),
+        }),
         0,
       ];
     },
+    // The paragraph's font size follows its first run, and ProseMirror does not redraw a node
+    // when only the marks inside it change. Without this view a size picked for the words
+    // keeps the old paragraph size: tighter spacing than on the slide, so the auto-height
+    // frame measured in the editor comes out shorter than the text drawn after closing.
+    addNodeView() {
+      return ({ node: first, HTMLAttributes }) => {
+        const dom = document.createElement('p');
+        for (const [name, value] of Object.entries(
+          mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
+        )) {
+          if (name !== 'style' && typeof value === 'string') dom.setAttribute(name, value);
+        }
+        let style = paragraphStyle(first, metrics);
+        dom.setAttribute('style', style);
+        return {
+          dom,
+          contentDOM: dom,
+          update: (next: ProseMirrorNode) => {
+            if (next.type !== first.type) return false;
+            const nextStyle = paragraphStyle(next, metrics);
+            if (nextStyle !== style) {
+              style = nextStyle;
+              dom.setAttribute('style', style);
+            }
+            return true;
+          },
+          ignoreMutation: (mutation: MutationRecord | { type: 'selection' }) =>
+            mutation.type === 'attributes' &&
+            'attributeName' in mutation &&
+            mutation.target === dom &&
+            mutation.attributeName === 'style',
+        };
+      };
+    },
   });
+}
+
+/** Inline style of a paragraph: size of its first run, level, alignment and spacing. */
+export function paragraphStyle(node: ProseMirrorNode, metrics: TextEditorMetrics): string {
+  const level = levelOf(node.attrs.level);
+  const points = leadSize(node, metrics.inheritedSizePt);
+  const indent = level * 1.5;
+  const padding = metrics.bullets ? indent + 1.15 : indent;
+  const style = [`font-size: ${cqw(ptToCqw(points, metrics.slide))}`];
+  if (padding > 0) style.push(`padding-left: ${padding}em`);
+  if (metrics.bullets) style.push(`--bullet-x: ${indent}em`);
+  const align = alignOf(node.attrs.align);
+  if (align) style.push(`text-align: ${align}`);
+  // The paragraph's own spacing wins over the role's, as on the slide.
+  const lineSpacing = spacingOf(node.attrs.lineSpacing);
+  if (lineSpacing != null) style.push(`line-height: ${lineSpacing}`);
+  return style.join('; ');
 }
 
 function slideFontFamily() {

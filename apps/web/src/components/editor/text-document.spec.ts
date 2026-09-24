@@ -9,6 +9,7 @@ import {
   htmlParagraphs,
   paragraphsToCommit,
   paragraphsToDoc,
+  paragraphStyle,
   pasteText,
   plainParagraphs,
   steppedLevel,
@@ -508,5 +509,26 @@ describe('words and levels', () => {
     expect(steppedLevel(0, -1)).toBe(0);
     expect(steppedLevel(8, 1)).toBe(8);
     expect(steppedLevel('2', -1)).toBe(1);
+  });
+});
+
+describe('paragraph style in the open editor', () => {
+  it('follows the size of the first run, so spacing matches the slide after a resize', () => {
+    const schema = getSchema(textExtensions(METRICS));
+    const run = { text: 'Крупно', font: '', sizePt: null, bold: null, italic: null, color: '' };
+    const doc = Node.fromJSON(
+      schema,
+      paragraphsToDoc([{ level: 1, lineSpacing: null, runs: [run] }]),
+    );
+    const paragraph = doc.firstChild;
+    const mark = schema.marks.textStyle?.create({ fontSize: '32' });
+    if (!paragraph || !mark) throw new Error('schema without paragraphs or text style');
+    const inherited = paragraphStyle(paragraph, METRICS);
+    expect(inherited).toContain('padding-left: 1.5em');
+
+    const larger = paragraph.type.create(paragraph.attrs, schema.text('Крупно', [mark]));
+    const resized = paragraphStyle(larger, METRICS);
+    expect(resized).not.toBe(inherited);
+    expect(resized).toContain('padding-left: 1.5em');
   });
 });
