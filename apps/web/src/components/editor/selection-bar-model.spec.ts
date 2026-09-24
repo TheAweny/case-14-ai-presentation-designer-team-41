@@ -6,17 +6,44 @@ const box = { x: 0, y: 0, cx: 100, cy: 100 };
 
 describe('selection bar area', () => {
   const size = { width: 800, height: 600 };
-  const padding = { top: 56, right: 24, bottom: 56, left: 76 };
+  const rail = { x: 12, y: 200, width: 52, height: 300 };
 
   it('keeps clear of the edge the tool rail is docked to', () => {
-    expect(barArea(size, padding, 'left')).toEqual({ x: 76, y: 0, width: 724, height: 600 });
-    expect(barArea(size, padding, 'right')).toEqual({ x: 0, y: 0, width: 776, height: 600 });
-    expect(barArea(size, padding, 'top')).toEqual({ x: 0, y: 56, width: 800, height: 544 });
-    expect(barArea(size, padding, 'bottom')).toEqual({ x: 0, y: 0, width: 800, height: 544 });
+    expect(barArea(size, { side: 'left', box: rail })).toEqual({
+      x: 64,
+      y: 0,
+      width: 736,
+      height: 600,
+    });
+    const right = { ...rail, x: 736 };
+    expect(barArea(size, { side: 'right', box: right })).toEqual({
+      x: 0,
+      y: 0,
+      width: 736,
+      height: 600,
+    });
+    const top = { x: 200, y: 12, width: 300, height: 52 };
+    expect(barArea(size, { side: 'top', box: top })).toEqual({
+      x: 0,
+      y: 64,
+      width: 800,
+      height: 536,
+    });
+    const bottom = { ...top, y: 536 };
+    expect(barArea(size, { side: 'bottom', box: bottom })).toEqual({
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 536,
+    });
   });
 
-  it('uses the whole layer without a rail', () => {
-    expect(barArea(size, padding, null)).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+  it('uses the whole layer without a rail or with one let go mid-canvas', () => {
+    const whole = { x: 0, y: 0, width: 800, height: 600 };
+    expect(barArea(size, null)).toEqual(whole);
+    expect(barArea(size, { side: 'left', box: { ...rail, x: 400 } })).toEqual(whole);
+    // Рейка за пределами слоя (узкое окно) места не отнимает.
+    expect(barArea(size, { side: 'left', box: { ...rail, x: -80 } })).toEqual(whole);
   });
 });
 

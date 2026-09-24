@@ -58,31 +58,42 @@ export function leavesField(
   return false;
 }
 
-interface Insets {
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-  readonly left: number;
+interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 /**
- * Где полосе можно стоять в слое холста: везде, кроме поля у того края, к которому прижата
- * рейка инструментов, — рейка лежит поверх холста, и полоса ушла бы под неё. Остальные поля
- * свободны: там полоса может встать над выделением у самого края листа.
+ * Где полосе можно стоять в слое холста: везде, кроме полосы у того края, к которому прижата
+ * рейка инструментов, — рейка лежит поверх холста, и полоса ушла бы под неё. `rail` — её
+ * прямоугольник в пикселях слоя. Рейку, которую отпустили посреди холста, не обходим: иначе
+ * от холста осталась бы щель.
  */
 export function barArea(
   size: { readonly width: number; readonly height: number },
-  padding: Insets,
-  dockSide: string | null,
-): { x: number; y: number; width: number; height: number } {
-  const left = dockSide === 'left' ? padding.left : 0;
-  const right = dockSide === 'right' ? padding.right : 0;
-  const top = dockSide === 'top' ? padding.top : 0;
-  const bottom = dockSide === 'bottom' ? padding.bottom : 0;
+  rail: { readonly side: string; readonly box: Box } | null,
+): Box {
+  const inset = { left: 0, right: 0, top: 0, bottom: 0 };
+  if (rail) {
+    const { side, box } = rail;
+    const edge = {
+      left: box.x + box.width,
+      right: size.width - box.x,
+      top: box.y + box.height,
+      bottom: size.height - box.y,
+    };
+    const span = side === 'left' || side === 'right' ? size.width : size.height;
+    if (side in edge) {
+      const value = edge[side as keyof typeof edge];
+      if (value > 0 && value <= span / 3) inset[side as keyof typeof inset] = value;
+    }
+  }
   return {
-    x: left,
-    y: top,
-    width: Math.max(0, size.width - left - right),
-    height: Math.max(0, size.height - top - bottom),
+    x: inset.left,
+    y: inset.top,
+    width: Math.max(0, size.width - inset.left - inset.right),
+    height: Math.max(0, size.height - inset.top - inset.bottom),
   };
 }

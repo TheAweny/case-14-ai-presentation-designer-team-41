@@ -117,21 +117,23 @@ const STROKE_WIDTHS = [0.5, 1, 1.5, 2, 3, 4, 6, 8] as const;
 
 type Placement = { x: number; y: number; below: boolean };
 
-/** Поля области холста: у края с рейкой в поле стоит сама рейка. */
-function paddingOf(node: HTMLElement | null) {
-  const style = node ? getComputedStyle(node) : null;
-  const read = (value: string | undefined) => Number.parseFloat(value ?? '') || 0;
+/** Рейка инструментов поверх холста: к какому краю прижата и где стоит, в пикселях слоя. */
+function railIn(overlay: HTMLElement, origin: DOMRect) {
+  const dock = overlay.closest<HTMLElement>('[data-dock-side]');
+  const rail = dock?.querySelector<HTMLElement>('[data-tool-rail]');
+  const side = dock?.dataset.dockSide;
+  if (!rail || !side) return null;
+  const rect = rail.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
   return {
-    top: read(style?.paddingTop),
-    right: read(style?.paddingRight),
-    bottom: read(style?.paddingBottom),
-    left: read(style?.paddingLeft),
+    side,
+    box: {
+      x: rect.left - origin.left,
+      y: rect.top - origin.top,
+      width: rect.width,
+      height: rect.height,
+    },
   };
-}
-
-/** К какому краю холста прижата рейка инструментов, если она есть. */
-function dockSideOf(node: HTMLElement): string | null {
-  return node.closest('[data-dock-side]')?.getAttribute('data-dock-side') ?? null;
 }
 
 type Decor = Extract<SlideElement, { kind: 'decor' }>;
@@ -248,7 +250,7 @@ export function SelectionBar({
         height: bounds.cy * scaleY,
       },
       { width: bar.offsetWidth, height: bar.offsetHeight },
-      barArea(origin, paddingOf(overlay.parentElement), dockSideOf(overlay)),
+      barArea(origin, railIn(overlay, origin)),
       GAP,
     );
     setPlacement((previous) =>
@@ -420,25 +422,27 @@ function DecorControls({
           onPreviewEnd={actions.onPreviewEnd}
         />
       </BarItem>
-      <BarItem label={panel('strokeWidth')} className="w-16">
-        <NumberCombobox
-          ariaLabel={panel('strokeWidth')}
-          presetsLabel={t('strokeWidths')}
-          mixedLabel={panel('mixed')}
-          value={stroke === null ? undefined : stroke.widthEmu / EMU_PER_PT}
-          presets={STROKE_WIDTHS.map((value) => ({ value }))}
-          step={0.5}
-          min={0.25}
-          max={50}
-          precision={2}
-          disabled={stroke === null}
-          onCommit={(value) => {
-            if (value !== null) {
-              actions.onProps(ids, { stroke: { widthEmu: Math.round(value * EMU_PER_PT) } });
-            }
-          }}
-        />
-      </BarItem>
+      {stroke === null ? null : (
+        // Толщина — только у того, что обведено: без обводки её нечему задать.
+        <BarItem label={panel('strokeWidth')} className="w-16">
+          <NumberCombobox
+            ariaLabel={panel('strokeWidth')}
+            presetsLabel={t('strokeWidths')}
+            mixedLabel={panel('mixed')}
+            value={stroke.widthEmu / EMU_PER_PT}
+            presets={STROKE_WIDTHS.map((value) => ({ value }))}
+            step={0.5}
+            min={0.25}
+            max={50}
+            precision={2}
+            onCommit={(value) => {
+              if (value !== null) {
+                actions.onProps(ids, { stroke: { widthEmu: Math.round(value * EMU_PER_PT) } });
+              }
+            }}
+          />
+        </BarItem>
+      )}
       {line ? (
         <>
           <BarButton
