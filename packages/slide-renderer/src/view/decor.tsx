@@ -32,6 +32,22 @@ function statesItsLook(element: DecorElement): boolean {
   return element.shape !== undefined || element.fill !== undefined || element.stroke !== undefined;
 }
 
+/**
+ * What a shape is filled with, as CSS, or null when the slide shows through it: no fill, or a
+ * line. Words in the shape take their colour from it, on the slide and in the editor alike.
+ */
+export function decorFill(
+  element: DecorElement,
+  size: SlideSize,
+  profile: DesignSystem,
+): string | null {
+  if (element.shape === 'line') return null;
+  if (!statesItsLook(element) || element.fill === undefined) {
+    return guessedPaint(element.box, size, profile);
+  }
+  return element.fill === null ? null : resolveColor(profile.palette, element.fill, 'surface');
+}
+
 /** Dash patterns in multiples of the line width, as PowerPoint's preset dashes are defined. */
 const DASH: Record<StrokeDash, readonly number[] | null> = {
   solid: null,
@@ -276,8 +292,6 @@ export function DecorMark({
   };
   const guessed = guessedPaint(box, size, profile);
   let drawing: JSX.Element;
-  // What the words of the shape sit on: its fill, or the slide when it has none.
-  let ground: string | null = null;
   if (shape === 'line') {
     // A line that states no stroke is a template rule: the least width in the guessed colour.
     const stroke: ElementStroke = element.stroke ?? {
@@ -300,13 +314,7 @@ export function DecorMark({
       />
     );
   } else {
-    const fill =
-      element.fill === undefined
-        ? guessed
-        : element.fill === null
-          ? 'none'
-          : resolveColor(profile.palette, element.fill, 'surface');
-    ground = fill === 'none' ? null : fill;
+    const fill = decorFill(element, size, profile) ?? 'none';
     const stroke = element.stroke ?? null;
     drawing = (
       <ClosedShape
@@ -335,7 +343,12 @@ export function DecorMark({
       >
         {drawing}
       </svg>
-      <ShapeText element={element} size={size} profile={profile} fill={ground} />
+      <ShapeText
+        element={element}
+        size={size}
+        profile={profile}
+        fill={decorFill(element, size, profile)}
+      />
     </div>
   );
 }

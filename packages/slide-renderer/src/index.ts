@@ -36,6 +36,7 @@ export {
   type TableView,
 } from './view/table.js';
 export { cropPlacement } from './view/marks.js';
+export { decorFill } from './view/decor.js';
 export {
   DEFAULT_TEXT_INSETS,
   SHAPE_TEXT_ROLE,
