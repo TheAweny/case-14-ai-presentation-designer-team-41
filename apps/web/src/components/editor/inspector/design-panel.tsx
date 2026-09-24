@@ -19,6 +19,7 @@ import {
   FlipVerticalIcon,
   ImageCropIcon,
   ImageUploadIcon,
+  CropIcon,
   LayerBringForwardIcon,
   LayerBringToFrontIcon,
   LayerSendBackwardIcon,
@@ -165,6 +166,10 @@ export type DesignPanelProps = {
   onArrange: (to: ArrangeTarget) => void;
   /** Новый файл в рамке картинки. */
   onReplaceImage: (elementId: string, mediaPart: string) => void;
+  /** Открыть кадрирование картинки на холсте, как двойной клик. */
+  onStartCrop?: (elementId: string) => void;
+  /** Убрать обрезку: картинка снова целиком, по «Вписать/Заполнить». */
+  onResetCrop?: (elementId: string) => void;
   /** Фон слайда: роль палитры, свой HEX или null — как задал шаблон. */
   onSlideBackground: (background: ColorValue | null, mode?: EditMode) => void;
   /** Строки и столбцы таблицы. */
@@ -1010,6 +1015,8 @@ function ImageSection({
   images,
   onProps,
   onReplaceImage,
+  onStartCrop,
+  onResetCrop,
 }: DesignPanelProps & { images: readonly ImageElement[] }) {
   const t = useTranslations('designPanel');
   const ids = images.map((element) => element.elementId);
@@ -1047,6 +1054,37 @@ function ImageSection({
           <HugeiconsIcon icon={ImageUploadIcon} size={14} strokeWidth={1.5} color="currentColor" />
           {t('replaceImage')}
         </button>
+      ) : null}
+      {single && (onStartCrop || (single.crop && onResetCrop)) ? (
+        <div className="grid grid-cols-2 gap-2">
+          {onStartCrop ? (
+            <button
+              type="button"
+              onClick={() => onStartCrop(single.elementId)}
+              className={cn(
+                'flex h-7 items-center justify-center gap-1.5 rounded-md bg-muted/60 text-xs text-foreground outline-none',
+                'ring-1 ring-transparent transition-colors duration-100 hover:ring-border',
+                'focus-visible:ring-ring',
+              )}
+            >
+              <HugeiconsIcon icon={CropIcon} size={14} strokeWidth={1.5} color="currentColor" />
+              {t('cropImage')}
+            </button>
+          ) : null}
+          {single.crop && onResetCrop ? (
+            <button
+              type="button"
+              onClick={() => onResetCrop(single.elementId)}
+              className={cn(
+                'flex h-7 items-center justify-center rounded-md bg-muted/60 text-xs text-foreground outline-none',
+                'ring-1 ring-transparent transition-colors duration-100 hover:ring-border',
+                'focus-visible:ring-ring',
+              )}
+            >
+              {t('resetCrop')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </Section>
   );
