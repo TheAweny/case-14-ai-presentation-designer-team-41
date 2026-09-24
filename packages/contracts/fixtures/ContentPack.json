@@ -1,0 +1,82 @@
+{
+  "contract": "ContentPack",
+  "valid": [
+    {
+      "name": "brief with two sources",
+      "payload": {
+        "schemaVersion": 1,
+        "packId": "pack-1",
+        "briefId": "brief-1",
+        "language": "ru",
+        "goal": "Убедить совет директоров продлить пилот на второй квартал.",
+        "audience": "Совет директоров",
+        "items": [
+          {
+            "itemId": "item-metrics",
+            "kind": "table",
+            "title": "Метрики пилота",
+            "text": "Конверсия выросла с 3.1% до 4.4% за три месяца.",
+            "origin": "pilot.xlsx"
+          },
+          {
+            "itemId": "item-quote",
+            "kind": "text",
+            "title": "",
+            "text": "Команда поддержки отметила сокращение обращений на треть.",
+            "origin": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "brief alone",
+      "payload": {
+        "schemaVersion": 1,
+        "packId": "pack-2",
+        "briefId": "brief-2",
+        "language": "en",
+        "goal": "Introduce the product to a technical audience.",
+        "audience": "",
+        "items": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "item without text",
+      "why": "A source a claim cannot be quoted from cannot support a claim.",
+      "path": ["items", 0, "text"],
+      "payload": {
+        "schemaVersion": 1,
+        "packId": "pack-1",
+        "briefId": "brief-1",
+        "language": "ru",
+        "goal": "x",
+        "audience": "",
+        "items": [
+          {
+            "itemId": "item-1",
+            "kind": "text",
+            "title": "",
+            "text": "",
+            "origin": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "no goal",
+      "why": "Without a goal there is nothing for the audit to judge a deck against.",
+      "path": ["goal"],
+      "payload": {
+        "schemaVersion": 1,
+        "packId": "pack-1",
+        "briefId": "brief-1",
+        "language": "ru",
+        "goal": "",
+        "audience": "",
+        "items": []
+      }
+    }
+  ]
+}

@@ -1,26 +1,23 @@
-"""Generated MVP contract validation at the TypeScript/Python boundary."""
+"""Generated contract validation at the TypeScript/Python boundary."""
+
+import json
+from pathlib import Path
 
 import pytest
-from engine.contracts import ArtifactManifest, TemplateProfile
+from engine.contracts import ArtifactManifest, DesignSystem
 from pydantic import ValidationError
 
 SHA256 = "a" * 64
 
 
-def test_template_profile_accepts_a_reproducible_template_identity() -> None:
-    profile = TemplateProfile.model_validate(
-        {
-            "schemaVersion": "1.0.0",
-            "templateId": "template-1",
-            "sourceSha256": SHA256,
-            "slideSize": {"widthPt": 960, "heightPt": 540},
-            "palette": ["#112233"],
-            "typography": [],
-            "protectedElements": [],
-        }
+def test_design_system_accepts_the_shared_fixture() -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[2] / "packages/contracts/fixtures/DesignSystem.json"
     )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    design_system = DesignSystem.model_validate(fixture["valid"][0]["payload"])
 
-    assert profile.sourceSha256 == SHA256
+    assert design_system.templateHash == "0" * 64
 
 
 def test_artifact_manifest_rejects_a_missing_variant() -> None:

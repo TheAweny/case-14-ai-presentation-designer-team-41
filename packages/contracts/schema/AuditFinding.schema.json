@@ -2,74 +2,533 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "bbox": {
+    "checkId": {
+      "description": "The check that raised it, as registered. docs/AUDIT.md is generated from these.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "confidence": {
+      "description": "One for a measurement. Below one only for a judgement.",
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number"
+    },
+    "detail": {
+      "description": "Why it is wrong, in a sentence a user can act on.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "evidence": {
       "additionalProperties": false,
       "properties": {
-        "height": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+        "expected": {
+          "description": "The rule it failed, rendered for display.",
+          "type": "string"
         },
-        "width": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+        "measured": {
+          "description": "The value observed, rendered for display. Empty if not numeric.",
+          "type": "string"
         },
-        "x": {
-          "minimum": 0,
-          "type": "number"
+        "quote": {
+          "description": "The text the judgement rests on. Empty for a measurement.",
+          "type": "string"
         },
-        "y": {
-          "minimum": 0,
-          "type": "number"
+        "screenshot": {
+          "description": "Path to a crop under the run directory, when the check rendered one.",
+          "type": "string"
+        },
+        "sources": {
+          "description": "Content this was checked against, for claims about the source material.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "itemId": {
+                "description": "Identifier of the content pack item this came from.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "quote": {
+                "description": "The passage the claim rests on, copied verbatim so it can be checked.",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "itemId",
+              "quote"
+            ],
+            "type": "object"
+          },
+          "type": "array"
         }
       },
       "required": [
-        "x",
-        "y",
-        "width",
-        "height"
+        "measured",
+        "expected",
+        "quote",
+        "sources",
+        "screenshot"
       ],
       "type": "object"
     },
-    "evidence": {
-      "minLength": 1,
-      "type": "string"
-    },
     "findingId": {
-      "pattern": "^[a-z][a-z0-9-]*$",
-      "type": "string"
-    },
-    "objectId": {
-      "pattern": "^[a-z][a-z0-9-]*$",
-      "type": "string"
-    },
-    "ruleId": {
+      "description": "Stable for a given run, so a decision can be recorded.",
       "minLength": 1,
       "type": "string"
     },
-    "schemaVersion": {
-      "const": "1.0.0",
-      "type": "string"
-    },
-    "severity": {
+    "fixability": {
       "enum": [
-        "info",
-        "warning",
-        "error"
+        "auto",
+        "assisted",
+        "manual"
       ],
       "type": "string"
     },
-    "slideId": {
-      "pattern": "^[a-z][a-z0-9-]*$",
+    "origin": {
+      "enum": [
+        "deterministic",
+        "contextual"
+      ],
+      "type": "string"
+    },
+    "proposedPatch": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "findingId": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The finding this answers. Null when the user asked for the change directly."
+            },
+            "ops": {
+              "description": "Applied in order, all of them or none.",
+              "items": {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "elementId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "op": {
+                        "const": "set-text",
+                        "type": "string"
+                      },
+                      "paragraphs": {
+                        "description": "The new copy, already fitted.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "level": {
+                              "description": "Indent level, zero at the top.",
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "lineSpacing": {
+                              "anyOf": [
+                                {
+                                  "exclusiveMinimum": 0,
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Multiple of single spacing, when stated as a percentage."
+                            },
+                            "runs": {
+                              "description": "Runs in reading order.",
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "bold": {
+                                    "description": "Null when inherited.",
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "color": {
+                                    "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                                    "type": "string"
+                                  },
+                                  "font": {
+                                    "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                                    "type": "string"
+                                  },
+                                  "italic": {
+                                    "description": "Null when inherited.",
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "sizePt": {
+                                    "description": "Size in points, or null when inherited.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "text": {
+                                    "description": "Literal text of the run.",
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "text",
+                                  "font",
+                                  "sizePt",
+                                  "bold",
+                                  "italic",
+                                  "color"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "level",
+                            "runs",
+                            "lineSpacing"
+                          ],
+                          "type": "object"
+                        },
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "elementId",
+                      "paragraphs"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "elementId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "op": {
+                        "const": "set-font-size",
+                        "type": "string"
+                      },
+                      "sizePt": {
+                        "description": "Must be a size the DesignSystem type scale allows.",
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "elementId",
+                      "sizePt"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "box": {
+                        "additionalProperties": false,
+                        "description": "New geometry in EMU, snapped to the template grid.",
+                        "properties": {
+                          "cx": {
+                            "description": "Width in EMU.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "cy": {
+                            "description": "Height in EMU.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "x": {
+                            "description": "Left edge in EMU.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "y": {
+                            "description": "Top edge in EMU.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "cx",
+                          "cy"
+                        ],
+                        "type": "object"
+                      },
+                      "elementId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "op": {
+                        "const": "move",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "elementId",
+                      "box"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "colorRole": {
+                        "description": "A role, never a literal colour: the template supplies it.",
+                        "enum": [
+                          "background",
+                          "surface",
+                          "text",
+                          "text-muted",
+                          "text-on-accent",
+                          "accent",
+                          "accent-alt",
+                          "line",
+                          "positive",
+                          "negative"
+                        ],
+                        "type": "string"
+                      },
+                      "elementId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "op": {
+                        "const": "set-color",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "elementId",
+                      "colorRole"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "elementId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "op": {
+                        "const": "remove",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "elementId"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "op": {
+                        "const": "repattern",
+                        "type": "string"
+                      },
+                      "patternId": {
+                        "description": "A pattern from the PatternCatalog of this template.",
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "patternId"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "patchId": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "rationale": {
+              "description": "One sentence, shown next to the button that applies it.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "slideId": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "touchesCopy": {
+              "description": "True when a model wrote words here, which the manifest has to record.",
+              "type": "boolean"
+            },
+            "variant": {
+              "enum": [
+                "dense",
+                "balanced",
+                "airy"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "patchId",
+            "findingId",
+            "slideId",
+            "variant",
+            "ops",
+            "rationale",
+            "touchesCopy"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Null when nothing can be proposed, which is what `manual` means."
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Incremented by any incompatible change.",
+      "type": "number"
+    },
+    "severity": {
+      "enum": [
+        "blocker",
+        "major",
+        "minor",
+        "info"
+      ],
+      "type": "string"
+    },
+    "target": {
+      "additionalProperties": false,
+      "properties": {
+        "box": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "cx": {
+                  "description": "Width in EMU.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "cy": {
+                  "description": "Height in EMU.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "x": {
+                  "description": "Left edge in EMU.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "y": {
+                  "description": "Top edge in EMU.",
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "cx",
+                "cy"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Rectangle to draw the finding on. Null when it has none."
+        },
+        "elementId": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null when the finding is about the slide as a whole."
+        },
+        "slideId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "variant": {
+          "enum": [
+            "dense",
+            "balanced",
+            "airy"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "slideId",
+        "variant",
+        "elementId",
+        "box"
+      ],
+      "type": "object"
+    },
+    "title": {
+      "description": "What is wrong, in a few words.",
+      "minLength": 1,
       "type": "string"
     }
   },
   "required": [
     "schemaVersion",
     "findingId",
-    "ruleId",
+    "checkId",
+    "origin",
     "severity",
-    "slideId",
-    "evidence"
+    "confidence",
+    "title",
+    "detail",
+    "target",
+    "evidence",
+    "fixability",
+    "proposedPatch"
   ],
   "title": "AuditFinding",
   "type": "object"

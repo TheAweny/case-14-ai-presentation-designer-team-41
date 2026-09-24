@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "queued",
+            "parsing-template",
+            "profiling-template",
+            "planning",
+            "laying-out",
+            "rendering",
+            "auditing",
+            "exporting"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "const": "stage-started",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "stage"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "done": {
+          "description": "Units finished, usually slides.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "note": {
+          "description": "What it is on right now. Empty when there is nothing to say.",
+          "type": "string"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "queued",
+            "parsing-template",
+            "profiling-template",
+            "planning",
+            "laying-out",
+            "rendering",
+            "auditing",
+            "exporting"
+          ],
+          "type": "string"
+        },
+        "total": {
+          "description": "Units expected.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "type": {
+          "const": "stage-progress",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "stage",
+        "done",
+        "total",
+        "note"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "durationMs": {
+          "description": "Goes into the manifest as a timing.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "queued",
+            "parsing-template",
+            "profiling-template",
+            "planning",
+            "laying-out",
+            "rendering",
+            "auditing",
+            "exporting"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "const": "stage-finished",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "stage",
+        "durationMs"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "deck-plan",
+            "slide-ir",
+            "preview",
+            "pptx",
+            "pdf",
+            "html",
+            "manifest"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to the run directory.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "artifact-ready",
+          "type": "string"
+        },
+        "variant": {
+          "anyOf": [
+            {
+              "enum": [
+                "dense",
+                "balanced",
+                "airy"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Null when not per variant."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "kind",
+        "variant",
+        "path"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "code": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "queued",
+            "parsing-template",
+            "profiling-template",
+            "planning",
+            "laying-out",
+            "rendering",
+            "auditing",
+            "exporting"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "const": "warning",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "stage",
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "code": {
+          "enum": [
+            "template-unreadable",
+            "template-unsupported",
+            "content-empty",
+            "model-unavailable",
+            "model-refused",
+            "budget-exceeded",
+            "engine-failed",
+            "cancelled",
+            "internal"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "description": "Written for the user, not copied from an exception.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "queued",
+            "parsing-template",
+            "profiling-template",
+            "planning",
+            "laying-out",
+            "rendering",
+            "auditing",
+            "exporting"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "const": "failed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "stage",
+        "code",
+        "message",
+        "retryable"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "ISO 8601 timestamp, UTC.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "manifestPath": {
+          "description": "Relative to the run directory.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "runId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "seq": {
+          "description": "Dense and increasing within a run.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "totalMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "done",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "seq",
+        "at",
+        "type",
+        "totalMs",
+        "manifestPath"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "JobEvent"
+}

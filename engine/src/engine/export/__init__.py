@@ -14,19 +14,19 @@ from pptx.presentation import Presentation as PresentationDocument
 from pptx.shapes.autoshape import Shape
 from pptx.util import Emu, Pt
 
-from engine.contracts import SlideIR, TemplateProfile
+from engine.contracts import SlideIR
 
 __all__ = ["export_pdf", "export_pptx"]
 
 
 def export_pptx(
-    slides: list[SlideIR], profile: TemplateProfile, template_path: Path, destination: Path
+    slides: list[SlideIR], design_system: dict[str, Any], template_path: Path, destination: Path
 ) -> Path:
     """Write the deck as a .pptx built on the uploaded template.
 
     Args:
         slides: Slide IR produced by the layout layer.
-        profile: Template profile extracted from the source template.
+        design_system: Design tokens extracted from the source template.
         template_path: Source template that supplies masters, theme and layout definitions.
         destination: Where to write the resulting presentation.
 
@@ -38,18 +38,16 @@ def export_pptx(
     layout = _blank_layout(presentation)
     for slide_ir in slides:
         slide = presentation.slides.add_slide(layout)
-        for object_ir in slide_ir.objects:
-            if object_ir.kind.value != "text" or object_ir.text is None:
+        for element in slide_ir.elements:
+            if element.kind != "text":
+                continue
+            text = "".join(run.text for paragraph in element.paragraphs for run in paragraph.runs)
+            if not text:
                 continue
             text_box = slide.shapes.add_textbox(
-                Emu(round(object_ir.bbox.x * 12_700)),
-                Emu(round(object_ir.bbox.y * 12_700)),
-                Emu(round(object_ir.bbox.width * 12_700)),
-                Emu(round(object_ir.bbox.height * 12_700)),
+                Emu(element.box.x), Emu(element.box.y), Emu(element.box.cx), Emu(element.box.cy)
             )
-            _apply_text_style(
-                text_box, object_ir.objectId.startswith("title-"), object_ir.text, profile
-            )
+            _apply_text_style(text_box, element.role == "title", text, design_system)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     presentation.save(str(destination))
@@ -82,7 +80,9 @@ def _blank_layout(presentation: PresentationDocument) -> Any:
     )
 
 
-def _apply_text_style(shape: Shape, is_title: bool, text: str, profile: TemplateProfile) -> None:
+def _apply_text_style(
+    shape: Shape, is_title: bool, text: str, design_system: dict[str, Any]
+) -> None:
     if shape.shape_type != MSO_SHAPE_TYPE.TEXT_BOX:
         raise ValueError("Expected a native PowerPoint text box.")
     text_frame = shape.text_frame
@@ -90,15 +90,14 @@ def _apply_text_style(shape: Shape, is_title: bool, text: str, profile: Template
     paragraph = text_frame.paragraphs[0]
     run = paragraph.add_run()
     run.text = text
-    if not profile.typography:
-        return
-    token = (
-        max(profile.typography, key=lambda item: item.sizePt)
-        if is_title
-        else min(profile.typography, key=lambda item: item.sizePt)
+    role = "title" if is_title else "body"
+    token = next(style for style in design_system["typeScale"] if style["role"] == role)
+    run.font.name = token["font"]
+    run.font.size = Pt(token["sizePt"])
+    run.font.bold = token["bold"]
+    color = next(
+        (entry["hex"] for entry in design_system["palette"] if entry["role"] == token["colorRole"]),
+        None,
     )
-    run.font.name = token.family
-    run.font.size = Pt(token.sizePt)
-    run.font.bold = token.weight >= 700
-    if profile.palette:
-        run.font.color.rgb = RGBColor.from_string(profile.palette[0].root.removeprefix("#"))
+    if color is not None:
+        run.font.color.rgb = RGBColor.from_string(color)

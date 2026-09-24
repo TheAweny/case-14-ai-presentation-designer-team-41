@@ -48,29 +48,36 @@ def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
     if not template_path.is_file():
         raise HTTPException(status_code=404, detail="Template PPTX was not found.")
 
-    profile = parser.parse_template(template_path)
+    design_system = parser.design_system_of(template_path)
     plan = DeckPlan.model_validate(
         {
-            "schemaVersion": "1.0.0",
-            "runId": request.runId,
+            "schemaVersion": 1,
+            "planId": f"plan-{request.runId}",
+            "briefId": request.runId,
+            "title": request.slides[0].title,
+            "language": "ru",
             "slides": [
                 {
                     "slideId": slide.slideId,
-                    "title": slide.title,
-                    "intent": slide.body,
-                    "sourceRefs": [{"sourceId": "content-pack", "location": f"slide:{index}"}],
+                    "headline": slide.title,
+                    "subhead": "",
+                    "intent": "statement",
+                    "blocks": [{"kind": "paragraph", "text": slide.body}],
+                    "speakerNotes": "",
+                    "sources": [],
                 }
                 for index, slide in enumerate(request.slides, start=1)
             ],
         }
     )
     output_path = Path(request.outputPath).resolve()
-    slide_ir = layout.build_slide_ir(plan, profile)
-    export.export_pptx(slide_ir, profile, template_path, output_path)
+    slide_ir = layout.build_slide_ir(plan, design_system)
+    export.export_pptx(slide_ir, design_system, template_path, output_path)
     return EditableDeckResponse.model_validate(
         {
+            "schemaVersion": 1,
             "outputPath": str(output_path),
-            "profile": profile.model_dump(mode="json"),
+            "designSystem": design_system,
             "slideCount": len(slide_ir),
         }
     )

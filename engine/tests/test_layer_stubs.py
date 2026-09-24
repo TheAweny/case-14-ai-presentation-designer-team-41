@@ -1,10 +1,14 @@
-"""Unimplemented layers remain explicit until their owning backlog item starts."""
+"""Every layer still to be written exposes its entry point with the signature of the contract.
+
+The parser has since been implemented, so it left this file: its behaviour is pinned by
+``test_parser.py`` instead.
+"""
 
 from pathlib import Path
 from typing import cast
 
 import pytest
-from engine.contracts import TemplateProfile
+from engine.contracts.provisional import TemplateProfile
 
 from engine import checks, export, render, visuals
 

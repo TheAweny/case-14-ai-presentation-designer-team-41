@@ -1,0 +1,162 @@
+{
+  "contract": "ArtifactManifest",
+  "valid": [
+    {
+      "name": "a finished run inside the budget",
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "startedAt": "2026-09-21T10:00:00Z",
+        "finishedAt": "2026-09-21T10:04:30Z",
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "contentPackId": "pack-1",
+        "planId": "plan-1",
+        "seed": 20260921,
+        "revisions": [
+          {
+            "kind": "agent",
+            "id": "deck-planner",
+            "version": "1.2.0",
+            "hash": "1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "kind": "prompt",
+            "id": "deck-planner/instructions.md",
+            "version": "1.2.0",
+            "hash": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          {
+            "kind": "model",
+            "id": "planner-default",
+            "version": "2026-08-01",
+            "hash": "3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          {
+            "kind": "template",
+            "id": "example.pptx",
+            "version": "1",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "modelCalls": [
+          {
+            "agentId": "deck-planner",
+            "modelId": "planner-default",
+            "calls": 1,
+            "inputTokens": 4210,
+            "outputTokens": 1880
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "pptx",
+            "variant": "balanced",
+            "path": "balanced/deck.pptx",
+            "bytes": 482301,
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "timings": [
+          {
+            "stage": "parsing-template",
+            "ms": 1840
+          },
+          {
+            "stage": "planning",
+            "ms": 42100
+          },
+          {
+            "stage": "laying-out",
+            "ms": 9600
+          }
+        ],
+        "totalMs": 270000,
+        "appliedPatchIds": ["patch-1"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "no revisions",
+      "why": "A manifest that records nothing cannot be used to repeat the run it describes.",
+      "path": ["revisions"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "startedAt": "2026-09-21T10:00:00Z",
+        "finishedAt": "2026-09-21T10:04:30Z",
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "contentPackId": "pack-1",
+        "planId": "plan-1",
+        "seed": 1,
+        "revisions": [],
+        "modelCalls": [],
+        "artifacts": [],
+        "timings": [],
+        "totalMs": 1,
+        "appliedPatchIds": []
+      }
+    },
+    {
+      "name": "revision without a hash",
+      "why": "A version string alone lets an edited prompt pass for the same run.",
+      "path": ["revisions", 0, "hash"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "startedAt": "2026-09-21T10:00:00Z",
+        "finishedAt": "2026-09-21T10:04:30Z",
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "contentPackId": "pack-1",
+        "planId": "plan-1",
+        "seed": 1,
+        "revisions": [
+          {
+            "kind": "prompt",
+            "id": "p",
+            "version": "1.0.0",
+            "hash": ""
+          }
+        ],
+        "modelCalls": [],
+        "artifacts": [],
+        "timings": [],
+        "totalMs": 1,
+        "appliedPatchIds": []
+      }
+    },
+    {
+      "name": "timing for a stage that does not exist",
+      "why": "Timings are keyed by stage so they can be compared between runs.",
+      "path": ["timings", 0, "stage"],
+      "payload": {
+        "schemaVersion": 1,
+        "runId": "run-1",
+        "startedAt": "2026-09-21T10:00:00Z",
+        "finishedAt": "2026-09-21T10:04:30Z",
+        "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "contentPackId": "pack-1",
+        "planId": "plan-1",
+        "seed": 1,
+        "revisions": [
+          {
+            "kind": "prompt",
+            "id": "p",
+            "version": "1.0.0",
+            "hash": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "modelCalls": [],
+        "artifacts": [],
+        "timings": [
+          {
+            "stage": "thinking",
+            "ms": 10
+          }
+        ],
+        "totalMs": 1,
+        "appliedPatchIds": []
+      }
+    }
+  ]
+}

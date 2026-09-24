@@ -7,8 +7,13 @@
       "type": "string"
     },
     "runId": {
-      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 1,
       "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "type": "number"
     },
     "slides": {
       "items": {
@@ -19,7 +24,7 @@
             "type": "string"
           },
           "slideId": {
-            "pattern": "^[a-z][a-z0-9-]*$",
+            "minLength": 1,
             "type": "string"
           },
           "title": {
@@ -44,6 +49,7 @@
     }
   },
   "required": [
+    "schemaVersion",
     "runId",
     "templatePath",
     "outputPath",

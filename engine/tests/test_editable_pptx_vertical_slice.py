@@ -8,7 +8,7 @@ from typing import cast
 
 from engine.api.app import app
 from engine.layout import build_slide_ir
-from engine.parser import parse_template
+from engine.parser import design_system_of
 from fastapi.testclient import TestClient
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -39,39 +39,50 @@ def build_template(destination: Path) -> Path:
     return destination
 
 
-def test_parser_extracts_identity_size_palette_and_typography(tmp_path: Path) -> None:
-    profile = parse_template(build_template(tmp_path / "unknown-name.pptx"))
+def test_parser_extracts_a_design_system_from_template_evidence(tmp_path: Path) -> None:
+    design_system = design_system_of(build_template(tmp_path / "unknown-name.pptx"))
 
-    assert profile.templateId.startswith("template-")
-    assert profile.slideSize.widthPt > 0
-    assert "#112233" in [color.root for color in profile.palette]
-    assert profile.typography[0].family == "Aptos Display"
+    assert design_system["grid"]["slideCx"] > 0
+    assert design_system["palette"]
+    assert design_system["typeScale"]
 
 
 def test_layout_builds_native_text_objects_from_content(tmp_path: Path) -> None:
     content = json.loads(FIXTURE_CONTENT.read_text(encoding="utf-8"))
-    profile = parse_template(build_template(tmp_path / "layout-source.pptx"))
+    design_system = design_system_of(build_template(tmp_path / "layout-source.pptx"))
     from engine.contracts import DeckPlan
 
     plan = DeckPlan.model_validate(
         {
-            "schemaVersion": "1.0.0",
-            "runId": content["runId"],
+            "schemaVersion": 1,
+            "planId": "plan-vertical-slice",
+            "briefId": content["runId"],
+            "title": content["slides"][0]["title"],
+            "language": "en",
             "slides": [
                 {
                     "slideId": item["slideId"],
-                    "title": item["title"],
-                    "intent": item["body"],
-                    "sourceRefs": [{"sourceId": "content-pack", "location": "slide:1"}],
+                    "headline": item["title"],
+                    "subhead": "",
+                    "intent": "statement",
+                    "blocks": [{"kind": "paragraph", "text": item["body"]}],
+                    "speakerNotes": "",
+                    "sources": [],
                 }
                 for item in content["slides"]
             ],
         }
     )
 
-    slide_ir = build_slide_ir(plan, profile)
+    slide_ir = build_slide_ir(plan, design_system)
 
-    assert [object_ir.text for object_ir in slide_ir[0].objects] == [
+    elements = slide_ir[0].model_dump()["elements"]
+    texts = [
+        paragraph["runs"][0]["text"]
+        for element in elements
+        for paragraph in element.get("paragraphs", [])
+    ]
+    assert texts == [
         "Growth overview",
         "Revenue increased by 28 percent while retention remained stable.",
     ]
@@ -84,7 +95,12 @@ def test_api_exports_an_editable_pptx_that_reopens_with_native_text_boxes(tmp_pa
 
     response = TestClient(app).post(
         "/v1/editable-decks",
-        json={**content, "templatePath": str(template_path), "outputPath": str(output_path)},
+        json={
+            **content,
+            "schemaVersion": 1,
+            "templatePath": str(template_path),
+            "outputPath": str(output_path),
+        },
     )
 
     assert response.status_code == 200
@@ -107,6 +123,7 @@ def test_api_rejects_a_missing_template(tmp_path: Path) -> None:
     response = TestClient(app).post(
         "/v1/editable-decks",
         json={
+            "schemaVersion": 1,
             "runId": "run-missing-template",
             "templatePath": str(tmp_path / "missing.pptx"),
             "outputPath": str(tmp_path / "output.pptx"),
@@ -123,6 +140,7 @@ def test_libreoffice_converts_the_exported_pptx(tmp_path: Path) -> None:
     response = TestClient(app).post(
         "/v1/editable-decks",
         json={
+            "schemaVersion": 1,
             "runId": "run-libreoffice-smoke",
             "templatePath": str(template_path),
             "outputPath": str(output_path),

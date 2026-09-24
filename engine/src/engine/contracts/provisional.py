@@ -1,12 +1,22 @@
 """Temporary contracts that are not part of the MVP schema registry yet.
 
-The shared contracts required by the local run protocol are generated in ``_generated.py``.
-Only rendering-specific values remain provisional until their Zod schemas are introduced.
+Every alias here is replaced by a generated Pydantic model from ``_generated.py`` as soon as the
+matching Zod schema lands in ``packages/contracts``. They exist so the layer signatures already
+say what they take and return.
+
+The list only shrinks. ``DeckPlan``, ``SlideIR`` and ``AuditFinding`` used to live here and are
+now generated; what is left is the shapes the visuals layer passes around internally, which have
+no consumer on the TypeScript side and so have no reason to be in the shared registry.
 """
 
 from typing import Any
 
-#: Draft profile straight out of the parser, before it is normalised and cached.
+#: Template profile: the design system and the pattern catalogue as one cached object.
+#: Superseded by ``DesignSystem`` plus ``PatternCatalog`` once the profiler assembles them.
+type TemplateProfile = dict[str, Any]
+
+#: Draft profile straight out of the parser, before it is normalised and cached. Matches the
+#: ``TemplateIR`` contract as a plain dictionary; the parser returns JSON, not a model.
 type TemplateProfileDraft = dict[str, Any]
 
 #: Description of a chart to draw with native shapes.

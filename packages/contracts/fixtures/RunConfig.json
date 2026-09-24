@@ -1,0 +1,69 @@
+{
+  "contract": "RunConfig",
+  "valid": [
+    {
+      "name": "three variants from one plan",
+      "payload": {
+        "templatePath": "data/templates/example.pptx",
+        "contentPath": "data/content/example.md",
+        "slideCount": 12,
+        "layoutVariants": ["dense", "balanced", "airy"],
+        "auditProfile": "default",
+        "models": [
+          {
+            "role": "planner",
+            "modelId": "planner-default"
+          },
+          {
+            "role": "writer",
+            "modelId": "writer-default"
+          }
+        ],
+        "seed": 20260921,
+        "outputDir": "runs"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "fewer slides than the case allows",
+      "why": "The case asks for 10 to 15 slides; a run outside that range cannot be submitted.",
+      "path": ["slideCount"],
+      "payload": {
+        "templatePath": "data/templates/example.pptx",
+        "contentPath": "data/content/example.md",
+        "slideCount": 3,
+        "layoutVariants": ["balanced"],
+        "auditProfile": "default",
+        "models": [
+          {
+            "role": "planner",
+            "modelId": "planner-default"
+          }
+        ],
+        "seed": 1,
+        "outputDir": "runs"
+      }
+    },
+    {
+      "name": "no layout variant",
+      "why": "A run that produces nothing to compare is not a run.",
+      "path": ["layoutVariants"],
+      "payload": {
+        "templatePath": "data/templates/example.pptx",
+        "contentPath": "data/content/example.md",
+        "slideCount": 12,
+        "layoutVariants": [],
+        "auditProfile": "default",
+        "models": [
+          {
+            "role": "planner",
+            "modelId": "planner-default"
+          }
+        ],
+        "seed": 1,
+        "outputDir": "runs"
+      }
+    }
+  ]
+}

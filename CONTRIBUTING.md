@@ -20,6 +20,7 @@ yarn lint && yarn typecheck && yarn test
 yarn lint:py && yarn typecheck:py && yarn test:py
 yarn boundaries:py
 yarn codegen && git diff --exit-code
+uv run write-golden-ir --check
 ```
 
 Хуки `lefthook` линтят только изменённые файлы, полный набор гоняет CI.
@@ -39,8 +40,11 @@ yarn codegen && git diff --exit-code
 - **Тесты.** Каждая новая проверка аудита приходит с двумя тестами: слайд, который её нарушает,
   и слайд, который ей соответствует. Тесты пайплайна работают с фейковым провайдером моделей,
   без GPU и без сети.
+- **Фикстуры контрактов.** `packages/contracts/fixtures` читают обе стороны: vitest гоняет их
+  через Zod, pytest — через сгенерированные Pydantic-модели. Новый контракт приходит с
+  валидным и невалидным случаем, у невалидного указано, где именно он должен упасть.
 - **Генерируемые файлы.** `docs/AUDIT.md` и `docs/LICENSES.md` собираются утилитами из `tools`,
-  руками их не правим.
+  golden-фикстуры — командой `uv run write-golden-ir`; руками их не правим.
 
 ## Грабли
 

@@ -43,22 +43,16 @@ describe('EngineClient', () => {
     const client = new EngineClient({
       baseUrl: 'http://engine:8000',
       fetchImpl: fakeFetch(200, {
+        schemaVersion: 1,
         outputPath: '/app/runs/run-1/deck.pptx',
-        profile: {
-          schemaVersion: '1.0.0',
-          templateId: 'template-1',
-          sourceSha256: 'a'.repeat(64),
-          slideSize: { widthPt: 960, heightPt: 540 },
-          palette: ['#112233'],
-          typography: [],
-          protectedElements: [],
-        },
+        designSystem: { schemaVersion: 1 },
         slideCount: 1,
       }),
     });
 
     await expect(
       client.createEditableDeck({
+        schemaVersion: 1,
         runId: 'run-1',
         templatePath: '/app/data/template.pptx',
         outputPath: '/app/runs/run-1/deck.pptx',
