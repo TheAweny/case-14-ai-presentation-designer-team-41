@@ -30,6 +30,7 @@ import {
   FlipHorizontalIcon,
   FlipVerticalIcon,
   ImageCropIcon,
+  CropIcon,
   ImageUploadIcon,
   LayerBringForwardIcon,
   LayerBringToFrontIcon,
@@ -152,6 +153,7 @@ export type SelectionBarActions = Pick<
   | 'onFontSizes'
   | 'onColorAll'
   | 'onReplaceImage'
+  | 'onStartCrop'
 > & {
   /** Та же точка входа, что у клавиатуры и контекстного меню холста. */
   readonly onCommand: (command: CanvasCommand) => void;
@@ -488,6 +490,14 @@ function ImageControls({
       >
         {t('replace')}
       </BarButton>
+      {actions.onStartCrop ? (
+        <BarButton
+          icon={CropIcon}
+          label={panel('cropImage')}
+          pressed={element.crop !== undefined}
+          onClick={() => actions.onStartCrop?.(element.elementId)}
+        />
+      ) : null}
       {FITS.map(({ id, icon }) => (
         <BarButton
           key={id}

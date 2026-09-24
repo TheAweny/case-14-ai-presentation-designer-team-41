@@ -32,7 +32,9 @@ export type DeckChangeKind =
   | 'slide-insert'
   | 'slide-duplicate'
   | 'slide-remove'
-  | 'slide-background';
+  | 'slide-background'
+  | 'crop'
+  | 'notes';
 
 /** A slide and the elements selected on it. An empty list is a slide with nothing selected. */
 export interface DeckSelection {

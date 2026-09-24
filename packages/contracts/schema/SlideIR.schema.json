@@ -348,6 +348,43 @@
                 ],
                 "type": "object"
               },
+              "crop": {
+                "additionalProperties": false,
+                "description": "The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
+                "properties": {
+                  "b": {
+                    "description": "Share of the height cut off at the bottom.",
+                    "exclusiveMaximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "l": {
+                    "description": "Share of the width cut off on the left.",
+                    "exclusiveMaximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "r": {
+                    "description": "Share of the width cut off on the right.",
+                    "exclusiveMaximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "t": {
+                    "description": "Share of the height cut off at the top.",
+                    "exclusiveMaximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "l",
+                  "t",
+                  "r",
+                  "b"
+                ],
+                "type": "object"
+              },
               "elementId": {
                 "minLength": 1,
                 "type": "string"
@@ -1070,6 +1107,122 @@
                 "minimum": 0,
                 "type": "number"
               },
+              "paragraphs": {
+                "description": "Text inside the shape. Absent when it has none.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "align": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "left",
+                            "center",
+                            "right",
+                            "justify"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null or absent when the paragraph inherits its alignment."
+                    },
+                    "level": {
+                      "description": "Indent level, zero at the top.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "lineSpacing": {
+                      "anyOf": [
+                        {
+                          "exclusiveMinimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Multiple of single spacing, when stated as a percentage."
+                    },
+                    "runs": {
+                      "description": "Runs in reading order.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "bold": {
+                            "description": "Null when inherited.",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "color": {
+                            "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                            "type": "string"
+                          },
+                          "font": {
+                            "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                            "type": "string"
+                          },
+                          "italic": {
+                            "description": "Null when inherited.",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "letterSpacingPt": {
+                            "description": "Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "sizePt": {
+                            "description": "Size in points, or null when inherited.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "text": {
+                            "description": "Literal text of the run.",
+                            "type": "string"
+                          },
+                          "underline": {
+                            "description": "Null or absent when inherited, which for almost every template means no underline.",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "font",
+                          "sizePt",
+                          "bold",
+                          "italic",
+                          "color"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "level",
+                    "runs",
+                    "lineSpacing"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "role": {
                 "enum": [
                   "title",
@@ -1195,6 +1348,48 @@
                   }
                 ],
                 "description": "Null for no outline. Absent when the template did not state one."
+              },
+              "textInsets": {
+                "additionalProperties": false,
+                "description": "Absent: the OOXML defaults, 0.1 inch left and right and 0.05 inch top and bottom.",
+                "properties": {
+                  "b": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "l": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "r": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "t": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "l",
+                  "t",
+                  "r",
+                  "b"
+                ],
+                "type": "object"
+              },
+              "verticalAlign": {
+                "description": "Where the text sits in the shape (the bodyPr anchor). Absent means middle.",
+                "enum": [
+                  "top",
+                  "middle",
+                  "bottom"
+                ],
+                "type": "string"
               }
             },
             "required": [
@@ -1215,6 +1410,10 @@
       "maximum": 9007199254740991,
       "minimum": 0,
       "type": "integer"
+    },
+    "notes": {
+      "description": "Speaker notes as plain text, one paragraph of the notes page (`p:notes`) per line. Absent or empty: the slide has none.",
+      "type": "string"
     },
     "patternId": {
       "description": "Pattern from the template profile this slide was built on.",

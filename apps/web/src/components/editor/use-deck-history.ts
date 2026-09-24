@@ -89,6 +89,8 @@ export type ChangeKind =
   | 'slide-add'
   | 'slide-remove'
   | 'background'
+  | 'crop'
+  | 'notes'
   | 'other';
 
 /** Имя правки для подсказки. Ключи словаря `editor.history.changes` совпадают с этим списком. */
@@ -115,6 +117,8 @@ const KIND_OF: Readonly<Record<DeckChange['kind'], ChangeKind>> = {
   'slide-duplicate': 'slide-add',
   'slide-remove': 'slide-remove',
   'slide-background': 'background',
+  crop: 'crop',
+  notes: 'notes',
 };
 
 export function changeKind(change: DeckChange | undefined): ChangeKind | null {

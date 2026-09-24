@@ -1910,6 +1910,28 @@ class Elements(BaseModel):
     )
 
 
+class Crop(BaseModel):
+    """
+    The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    b: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the height cut off at the bottom."
+    )
+    l: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the width cut off on the left."
+    )
+    r: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the width cut off on the right."
+    )
+    t: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the height cut off at the top."
+    )
+
+
 class Fit(StrEnum):
     """
     Never stretch: the audit looks for distortion.
@@ -1924,6 +1946,10 @@ class Elements1(BaseModel):
         extra="forbid",
     )
     box: Box5
+    crop: Crop | None = Field(
+        None,
+        description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
+    )
     elementId: constr(min_length=1)
     fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
     groupIds: list[GroupId] | None = Field(
@@ -2189,6 +2215,33 @@ class Elements3(BaseModel):
     yTitle: str
 
 
+class Align4(StrEnum):
+    """
+    Null or absent when the paragraph inherits its alignment.
+    """
+
+    left = "left"
+    center = "center"
+    right = "right"
+    justify = "justify"
+
+
+class Paragraph3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    align: Align4 | None = Field(
+        None, description="Null or absent when the paragraph inherits its alignment."
+    )
+    level: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Indent level, zero at the top."
+    )
+    lineSpacing: PositiveFloat | None = Field(
+        ..., description="Multiple of single spacing, when stated as a percentage."
+    )
+    runs: list[Run] = Field(..., description="Runs in reading order.")
+
+
 class Shape(StrEnum):
     """
     Absent for template decoration of a geometry the parser did not name.
@@ -2262,6 +2315,30 @@ class Stroke1(BaseModel):
     )
 
 
+class TextInsets(BaseModel):
+    """
+    Absent: the OOXML defaults, 0.1 inch left and right and 0.05 inch top and bottom.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    b: conint(ge=0, le=9007199254740991)
+    l: conint(ge=0, le=9007199254740991)
+    r: conint(ge=0, le=9007199254740991)
+    t: conint(ge=0, le=9007199254740991)
+
+
+class VerticalAlign2(StrEnum):
+    """
+    Where the text sits in the shape (the bodyPr anchor). Absent means middle.
+    """
+
+    top = "top"
+    middle = "middle"
+    bottom = "bottom"
+
+
 class Elements4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2294,6 +2371,11 @@ class Elements4(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
+    paragraphs: list[Paragraph3] | None = Field(
+        None,
+        description="Text inside the shape. Absent when it has none.",
+        min_length=1,
+    )
     role: Role7
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
@@ -2310,6 +2392,14 @@ class Elements4(BaseModel):
     stroke: Stroke1 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
+    )
+    textInsets: TextInsets | None = Field(
+        None,
+        description="Absent: the OOXML defaults, 0.1 inch left and right and 0.05 inch top and bottom.",
+    )
+    verticalAlign: VerticalAlign2 | None = Field(
+        None,
+        description="Where the text sits in the shape (the bodyPr anchor). Absent means middle.",
     )
 
 
@@ -2332,6 +2422,10 @@ class SlideIR(BaseModel):
     )
     index: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Position in the deck, from zero."
+    )
+    notes: str | None = Field(
+        None,
+        description="Speaker notes as plain text, one paragraph of the notes page (`p:notes`) per line. Absent or empty: the slide has none.",
     )
     patternId: constr(min_length=1) = Field(
         ..., description="Pattern from the template profile this slide was built on."
@@ -2491,18 +2585,7 @@ class Fill2(BaseModel):
     )
 
 
-class Align4(StrEnum):
-    """
-    Null or absent when the paragraph inherits its alignment.
-    """
-
-    left = "left"
-    center = "center"
-    right = "right"
-    justify = "justify"
-
-
-class Paragraph3(BaseModel):
+class Paragraph4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -2596,7 +2679,7 @@ class Shape1(BaseModel):
         ..., description="Part name of the image this shape draws, for pictures."
     )
     name: str = Field(..., description="Name the authoring tool gave the shape.")
-    paragraphs: list[Paragraph3] = Field(
+    paragraphs: list[Paragraph4] = Field(
         ..., description="Text of the shape, empty when it carries none."
     )
     path: list[conint(ge=-9007199254740991, le=9007199254740991)] = Field(
@@ -2754,7 +2837,7 @@ class Fill3(BaseModel):
     )
 
 
-class Paragraph4(BaseModel):
+class Paragraph5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -2834,7 +2917,7 @@ class Shape2(BaseModel):
         ..., description="Part name of the image this shape draws, for pictures."
     )
     name: str = Field(..., description="Name the authoring tool gave the shape.")
-    paragraphs: list[Paragraph4] = Field(
+    paragraphs: list[Paragraph5] = Field(
         ..., description="Text of the shape, empty when it carries none."
     )
     path: list[conint(ge=-9007199254740991, le=9007199254740991)] = Field(
@@ -3009,7 +3092,7 @@ class Fill4(BaseModel):
     )
 
 
-class Paragraph5(BaseModel):
+class Paragraph6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -3089,7 +3172,7 @@ class Shape3(BaseModel):
         ..., description="Part name of the image this shape draws, for pictures."
     )
     name: str = Field(..., description="Name the authoring tool gave the shape.")
-    paragraphs: list[Paragraph5] = Field(
+    paragraphs: list[Paragraph6] = Field(
         ..., description="Text of the shape, empty when it carries none."
     )
     path: list[conint(ge=-9007199254740991, le=9007199254740991)] = Field(
