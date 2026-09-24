@@ -65,7 +65,8 @@ export interface FontSizeEntry {
   readonly sizePt: number;
 }
 
-type Commit = (slides: readonly SlideIr[]) => DeckCommit;
+/** Правка колоды: чистая функция из `@lct/deck-ops`, привязанная к своим аргументам. */
+export type Commit = (slides: readonly SlideIr[]) => DeckCommit;
 
 /** What an undo or redo button would bring back, in words the tooltip can name. */
 export type ChangeKind =
@@ -422,6 +423,11 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     setSlideBackground,
     undo,
     redo,
+    /**
+     * Любые правки одной записью журнала или живым видом жеста. Для операций, у которых нет
+     * своей обёртки выше, например таблиц (см. `use-table-ops`).
+     */
+    run: applyAll,
     undoKind: changeKind(history.undo.at(-1)),
     redoKind: changeKind(history.redo.at(-1)),
     /** Выделение, которое вернула последняя отмена или повтор. Null после любого другого шага. */

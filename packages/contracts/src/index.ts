@@ -127,6 +127,8 @@ export {
   strokeDashSchema,
   lineEndSchema,
   elementStrokeSchema,
+  tableCellStyleSchema,
+  tableBordersSchema,
   type SlideIr,
   type SlideElement,
   type SlideElementKind,
@@ -139,6 +141,9 @@ export {
   type StrokeDash,
   type LineEnd,
   type ElementStroke,
+  type TableCellStyle,
+  type TableBorders,
+  type TableElement,
 } from './slide-ir.js';
 export {
   auditFindingSchema,

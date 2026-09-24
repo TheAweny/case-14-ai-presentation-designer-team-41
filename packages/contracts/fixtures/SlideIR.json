@@ -164,6 +164,87 @@
           }
         ]
       }
+    },
+    {
+      "name": "a table the editor styled keeps its grid and the look of its cells",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s4",
+        "variant": "balanced",
+        "index": 3,
+        "patternId": "title-and-table",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "table",
+            "elementId": "s4-table",
+            "role": "table",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 10515600,
+              "cy": 3657600
+            },
+            "sourceShapeId": null,
+            "headers": ["Этап", "Где живёт", "Детерминирован"],
+            "rows": [
+              ["Разбор шаблона", "Python", "Да"],
+              ["План колоды", "TypeScript\nMastra", "Нет"]
+            ],
+            "columnWidths": [0.4, 0.35, 0.25],
+            "rowHeights": [0.2, 0.4, 0.4],
+            "headerRow": true,
+            "bandedRows": true,
+            "bandFill": "EEF1F6",
+            "borders": {
+              "color": "line",
+              "widthEmu": 12700,
+              "horizontal": true,
+              "vertical": true,
+              "outer": false
+            },
+            "cellStyles": [
+              [
+                {
+                  "fill": "accent",
+                  "color": "text-on-accent"
+                },
+                {
+                  "fill": "accent",
+                  "color": "text-on-accent"
+                },
+                {
+                  "fill": "accent",
+                  "color": "text-on-accent",
+                  "align": "center"
+                }
+              ],
+              [
+                null,
+                null,
+                {
+                  "align": "center",
+                  "verticalAlign": "middle"
+                }
+              ],
+              [
+                {
+                  "bold": true,
+                  "italic": true,
+                  "underline": true
+                },
+                null,
+                {
+                  "fill": null,
+                  "align": "center",
+                  "verticalAlign": "middle"
+                }
+              ]
+            ]
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -307,6 +388,37 @@
             },
             "sourceShapeId": 7,
             "rotation": 360
+          }
+        ]
+      }
+    },
+    {
+      "name": "table column squeezed to nothing",
+      "why": "A column of zero width holds text nobody can see or click, and export would write a grid column PowerPoint refuses to open.",
+      "path": ["elements", 0, "columnWidths", 1],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s5",
+        "variant": "balanced",
+        "index": 3,
+        "patternId": "title-and-table",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "table",
+            "elementId": "e1",
+            "role": "table",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 10515600,
+              "cy": 3657600
+            },
+            "sourceShapeId": null,
+            "headers": ["A", "B"],
+            "rows": [["1", "2"]],
+            "columnWidths": [0.5, 0]
           }
         ]
       }

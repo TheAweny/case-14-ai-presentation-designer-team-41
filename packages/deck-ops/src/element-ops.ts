@@ -7,6 +7,7 @@ import {
   imageFitSchema,
   paragraphAlignSchema,
   elementStrokeSchema,
+  tableBordersSchema,
   verticalAlignSchema,
   type ChartType,
   type ColorValue,
@@ -18,6 +19,7 @@ import {
   type SlideElementKind,
   type SlideIr,
   type ElementStroke,
+  type TableBorders,
   type VerticalAlign,
 } from '@lct/contracts';
 import {
@@ -86,6 +88,17 @@ export interface ElementProps {
    * [`LINE_SPACING.min`, `LINE_SPACING.max`]. Null goes back to what the type role says.
    */
   readonly lineSpacing?: number | null;
+  /** Whether the first row of a table looks like a header. */
+  readonly headerRow?: boolean;
+  /** Whether every other body row of a table is tinted. */
+  readonly bandedRows?: boolean;
+  /** Fill of the tinted rows: a role or a hex. Null goes back to the default. */
+  readonly bandFill?: ColorValue | null;
+  /**
+   * Rules of a table, merged over the ones it states. A table that states none needs whole
+   * rules. Null draws no lines at all.
+   */
+  readonly borders?: Partial<TableBorders> | null;
 }
 
 export type ElementProp = keyof ElementProps;
@@ -106,7 +119,7 @@ export const ELEMENT_PROPS: Readonly<Record<SlideElementKind, readonly ElementPr
     'lineSpacing',
   ],
   image: [...LOOK, 'fit'],
-  table: [...LOOK],
+  table: [...LOOK, 'headerRow', 'bandedRows', 'bandFill', 'borders'],
   chart: [...LOOK, 'chartType'],
   decor: [...LOOK, 'shape', 'fill', 'stroke', 'cornerRadius', 'flipH', 'flipV'],
 };
@@ -254,6 +267,36 @@ function applyText(target: Draft<Extract<SlideElement, { kind: 'text' }>>, props
   }
 }
 
+function applyTable(target: Draft<Extract<SlideElement, { kind: 'table' }>>, props: ElementProps) {
+  const table = target as unknown as Mutable;
+  if (props.headerRow !== undefined) setOrDrop(table, 'headerRow', props.headerRow === true, true);
+  if (props.bandedRows !== undefined) {
+    setOrDrop(table, 'bandedRows', props.bandedRows === true, false);
+  }
+  if (props.bandFill !== undefined) {
+    if (props.bandFill === null) setOrDrop(table, 'bandFill', null, null);
+    else if (colorValueSchema.safeParse(props.bandFill).success) {
+      setOrDrop(table, 'bandFill', props.bandFill, null);
+    }
+  }
+  if (props.borders !== undefined) {
+    if (props.borders === null) {
+      if (target.borders !== null) target.borders = null;
+    } else {
+      const merged = tableBordersSchema.safeParse({
+        ...(target.borders ?? {}),
+        ...props.borders,
+        ...(props.borders.widthEmu !== undefined
+          ? { widthEmu: Math.max(1, Math.round(props.borders.widthEmu)) }
+          : null),
+      });
+      if (merged.success && JSON.stringify(merged.data) !== JSON.stringify(target.borders)) {
+        target.borders = merged.data;
+      }
+    }
+  }
+}
+
 function propsKind(props: ElementProps): DeckChangeKind {
   const keys = (Object.keys(props) as ElementProp[]).filter((key) => props[key] !== undefined);
   if (keys.length > 0 && keys.every((key) => key === 'rotation')) return 'rotate';
@@ -296,6 +339,7 @@ export function commitElementProps(
       applyLook(target, props);
       if (target.kind === 'decor') applyDecor(target, props);
       if (target.kind === 'text') applyText(target, props);
+      if (target.kind === 'table') applyTable(target, props);
       if (target.kind === 'image' && props.fit !== undefined) {
         if (imageFitSchema.safeParse(props.fit).success && target.fit !== props.fit) {
           target.fit = props.fit;
@@ -571,93 +615,15 @@ export function commitReplaceImage(
   });
 }
 
-/** A table cell by row and column. `row` is `'header'` for the header row, else a body row. */
-export interface TableCell {
-  readonly row: number | 'header';
-  readonly column: number;
-}
-
-function validIndex(index: number, length: number): boolean {
-  return Number.isInteger(index) && index >= 0 && index < length;
-}
-
-/** The text of one cell, the header included. */
-export function commitTableCell(
-  slides: readonly SlideIr[],
-  change: {
-    readonly slideId: string;
-    readonly elementId: string;
-    readonly cell: TableCell;
-    readonly text: string;
-  },
-): DeckCommit {
-  const { row, column } = change.cell;
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (row === 'header') {
-      if (validIndex(column, table.headers.length) && table.headers[column] !== change.text) {
-        table.headers[column] = change.text;
-      }
-      return;
-    }
-    const cells = validIndex(row, table.rows.length) ? table.rows[row] : undefined;
-    if (!cells || !validIndex(column, table.headers.length)) return;
-    // A short row grows to the column it is written in, so every row keeps the header's width.
-    while (cells.length <= column) cells.push('');
-    if (cells[column] !== change.text) cells[column] = change.text;
-  });
-}
-
-/** An empty body row at `index`, from 0 (under the header) to the row count (at the end). */
-export function commitInsertTableRow(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (!validIndex(change.index, table.rows.length + 1)) return;
-    table.rows.splice(
-      change.index,
-      0,
-      table.headers.map(() => ''),
-    );
-  });
-}
-
-/** Remove a body row. The last one stays: a table always has a row under its header. */
-export function commitRemoveTableRow(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (table.rows.length <= 1 || !validIndex(change.index, table.rows.length)) return;
-    table.rows.splice(change.index, 1);
-  });
-}
-
-/** An empty column at `index`, from 0 (first) to the column count (last). */
-export function commitInsertTableColumn(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (!validIndex(change.index, table.headers.length + 1)) return;
-    table.headers.splice(change.index, 0, '');
-    for (const cells of table.rows) cells.splice(Math.min(change.index, cells.length), 0, '');
-  });
-}
-
-/** Remove a column. The last one stays. */
-export function commitRemoveTableColumn(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (table.headers.length <= 1 || !validIndex(change.index, table.headers.length)) return;
-    table.headers.splice(change.index, 1);
-    for (const cells of table.rows) {
-      if (change.index < cells.length) cells.splice(change.index, 1);
-    }
-  });
-}
+// Table operations live in their own module; these names stay reachable from here.
+export {
+  commitInsertTableColumn,
+  commitInsertTableRow,
+  commitRemoveTableColumn,
+  commitRemoveTableRow,
+  commitTableCell,
+  type TableCell,
+} from './table-ops.js';
 
 export interface ChartSeries {
   readonly name: string;

@@ -1937,12 +1937,176 @@ class Elements1(BaseModel):
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
+class BandFill(StrEnum):
+    """
+    Fill of the tinted body rows. Absent: the surface role.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Color(StrEnum):
+    """
+    A palette role, or a hex value a user chose.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Borders(BaseModel):
+    """
+    Null for no lines. Absent: a hairline in the line role under every row.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    color: Color | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="A palette role, or a hex value a user chose."
+    )
+    horizontal: bool = Field(
+        ..., description="A rule under every row, the last one included."
+    )
+    outer: bool = Field(..., description="A frame around the whole table.")
+    vertical: bool = Field(..., description="Rules between columns.")
+    widthEmu: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Line width in EMU."
+    )
+
+
+class Align3(StrEnum):
+    """
+    Horizontal alignment. Absent means left.
+    """
+
+    left = "left"
+    center = "center"
+    right = "right"
+    justify = "justify"
+
+
+class Color1(StrEnum):
+    """
+    Colour of the text. Absent: the type role.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Fill(StrEnum):
+    """
+    A palette role, or six hex digits without a hash when a user chose their own.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class VerticalAlign1(StrEnum):
+    """
+    Absent means top.
+    """
+
+    top = "top"
+    middle = "middle"
+    bottom = "bottom"
+
+
+class CellStyles(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    align: Align3 | None = Field(
+        None, description="Horizontal alignment. Absent means left."
+    )
+    bold: bool | None = Field(
+        None, description="Absent: bold in the header row, regular elsewhere."
+    )
+    color: Color1 | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+        None, description="Colour of the text. Absent: the type role."
+    )
+    fill: Fill | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+        None,
+        description="Background of the cell. Null for none, even in a header or banded row.",
+    )
+    italic: bool | None = None
+    underline: bool | None = None
+    verticalAlign: VerticalAlign1 | None = Field(None, description="Absent means top.")
+
+
+class ColumnWidth(RootModel[PositiveFloat]):
+    root: PositiveFloat
+
+
+class RowHeight(RootModel[PositiveFloat]):
+    root: PositiveFloat
+
+
 class Elements2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    bandFill: BandFill | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+        None, description="Fill of the tinted body rows. Absent: the surface role."
+    )
+    bandedRows: bool | None = Field(
+        None,
+        description="Whether every other body row is tinted (OOXML bandRow). Absent means false.",
+    )
+    borders: Borders | None = Field(
+        None,
+        description="Null for no lines. Absent: a hairline in the line role under every row.",
+    )
     box: Box5
+    cellStyles: list[list[CellStyles | None]] | None = Field(
+        None,
+        description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
+    )
+    columnWidths: list[ColumnWidth] | None = Field(
+        None,
+        description="Share of the box width each column takes, one per header, read relative to their sum. Absent: equal columns.",
+        min_length=1,
+    )
     elementId: constr(min_length=1)
+    headerRow: bool | None = Field(
+        None,
+        description="Whether the first row looks like a header (OOXML firstRow). Absent means true.",
+    )
     headers: list[str] = Field(..., min_length=1)
     kind: Literal["table"]
     locked: bool | None = Field(
@@ -1956,6 +2120,11 @@ class Elements2(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    rowHeights: list[RowHeight] | None = Field(
+        None,
+        description="Share of the box height each row takes, header first, read relative to their sum. A row still grows to fit its text, as a PowerPoint row does. Absent: the rows share the box, each growing to fit its text.",
+        min_length=1,
     )
     rows: list[list[str]] = Field(..., min_length=1)
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
@@ -1996,23 +2165,6 @@ class Elements3(BaseModel):
     yTitle: str
 
 
-class Fill(StrEnum):
-    """
-    A palette role, or six hex digits without a hash when a user chose their own.
-    """
-
-    background = "background"
-    surface = "surface"
-    text = "text"
-    text_muted = "text-muted"
-    text_on_accent = "text-on-accent"
-    accent = "accent"
-    accent_alt = "accent-alt"
-    line = "line"
-    positive = "positive"
-    negative = "negative"
-
-
 class Shape(StrEnum):
     """
     Absent for template decoration of a geometry the parser did not name.
@@ -2026,7 +2178,7 @@ class Shape(StrEnum):
     line = "line"
 
 
-class Color(StrEnum):
+class Color2(StrEnum):
     """
     A palette role, or a hex value a user chose.
     """
@@ -2075,7 +2227,7 @@ class Stroke1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+    color: Color2 | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="A palette role, or a hex value a user chose."
     )
     dash: Dash
@@ -2174,7 +2326,7 @@ class Transform(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]):
     root: conint(ge=-9007199254740991, le=9007199254740991)
 
 
-class Color1(BaseModel):
+class Color3(BaseModel):
     """
     Set for a solid fill.
     """
@@ -2228,7 +2380,7 @@ class Background1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color1 | None = Field(..., description="Set for a solid fill.")
+    color: Color3 | None = Field(..., description="Set for a solid fill.")
     kind: Kind4
     stops: list[Stop] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
@@ -2257,7 +2409,7 @@ class Box10(BaseModel):
     )
 
 
-class Color2(BaseModel):
+class Color4(BaseModel):
     """
     Set for a solid fill.
     """
@@ -2295,7 +2447,7 @@ class Stop1(BaseModel):
     )
 
 
-class Fill1(BaseModel):
+class Fill2(BaseModel):
     """
     Null when the shape inherits its fill.
     """
@@ -2303,18 +2455,29 @@ class Fill1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color2 | None = Field(..., description="Set for a solid fill.")
+    color: Color4 | None = Field(..., description="Set for a solid fill.")
     kind: Kind4
     stops: list[Stop1] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
+class Align4(StrEnum):
+    """
+    Null or absent when the paragraph inherits its alignment.
+    """
+
+    left = "left"
+    center = "center"
+    right = "right"
+    justify = "justify"
+
+
 class Paragraph3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    align: Align | None = Field(
+    align: Align4 | None = Field(
         None, description="Null or absent when the paragraph inherits its alignment."
     )
     level: conint(ge=0, le=9007199254740991) = Field(
@@ -2336,7 +2499,7 @@ class Placeholder(BaseModel):
     type: str = Field(..., description="Placeholder type, lower-cased and hyphenated.")
 
 
-class Color3(BaseModel):
+class Color5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -2361,7 +2524,7 @@ class Stroke2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color3 | None
+    color: Color5 | None
     visible: bool = Field(
         ..., description="False when the outline is explicitly switched off."
     )
@@ -2385,7 +2548,7 @@ class Shape1(BaseModel):
         ...,
         description="Corner radius of a rounded rectangle, from its adjust value and size.",
     )
-    fill: Fill1 | None = Field(
+    fill: Fill2 | None = Field(
         ..., description="Null when the shape inherits its fill."
     )
     flipH: bool = Field(..., description="Mirrored horizontally.")
@@ -2456,7 +2619,7 @@ class Layout(BaseModel):
     )
 
 
-class Color4(BaseModel):
+class Color6(BaseModel):
     """
     Set for a solid fill.
     """
@@ -2502,14 +2665,14 @@ class Background2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color4 | None = Field(..., description="Set for a solid fill.")
+    color: Color6 | None = Field(..., description="Set for a solid fill.")
     kind: Kind4
     stops: list[Stop2] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
-class Color5(BaseModel):
+class Color7(BaseModel):
     """
     Set for a solid fill.
     """
@@ -2547,7 +2710,7 @@ class Stop3(BaseModel):
     )
 
 
-class Fill2(BaseModel):
+class Fill3(BaseModel):
     """
     Null when the shape inherits its fill.
     """
@@ -2555,7 +2718,7 @@ class Fill2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color5 | None = Field(..., description="Set for a solid fill.")
+    color: Color7 | None = Field(..., description="Set for a solid fill.")
     kind: Kind4
     stops: list[Stop3] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
@@ -2566,7 +2729,7 @@ class Paragraph4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    align: Align | None = Field(
+    align: Align4 | None = Field(
         None, description="Null or absent when the paragraph inherits its alignment."
     )
     level: conint(ge=0, le=9007199254740991) = Field(
@@ -2578,7 +2741,7 @@ class Paragraph4(BaseModel):
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
-class Color6(BaseModel):
+class Color8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -2603,7 +2766,7 @@ class Stroke3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color6 | None
+    color: Color8 | None
     visible: bool = Field(
         ..., description="False when the outline is explicitly switched off."
     )
@@ -2623,7 +2786,7 @@ class Shape2(BaseModel):
         ...,
         description="Corner radius of a rounded rectangle, from its adjust value and size.",
     )
-    fill: Fill2 | None = Field(
+    fill: Fill3 | None = Field(
         ..., description="Null when the shape inherits its fill."
     )
     flipH: bool = Field(..., description="Mirrored horizontally.")
@@ -2711,7 +2874,7 @@ class MediaItem(BaseModel):
     )
 
 
-class Color7(BaseModel):
+class Color9(BaseModel):
     """
     Set for a solid fill.
     """
@@ -2757,14 +2920,14 @@ class Background3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color7 | None = Field(..., description="Set for a solid fill.")
+    color: Color9 | None = Field(..., description="Set for a solid fill.")
     kind: Kind4
     stops: list[Stop4] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
-class Color8(BaseModel):
+class Color10(BaseModel):
     """
     Set for a solid fill.
     """
@@ -2802,7 +2965,7 @@ class Stop5(BaseModel):
     )
 
 
-class Fill3(BaseModel):
+class Fill4(BaseModel):
     """
     Null when the shape inherits its fill.
     """
@@ -2810,7 +2973,7 @@ class Fill3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color8 | None = Field(..., description="Set for a solid fill.")
+    color: Color10 | None = Field(..., description="Set for a solid fill.")
     kind: Kind4
     stops: list[Stop5] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
@@ -2821,7 +2984,7 @@ class Paragraph5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    align: Align | None = Field(
+    align: Align4 | None = Field(
         None, description="Null or absent when the paragraph inherits its alignment."
     )
     level: conint(ge=0, le=9007199254740991) = Field(
@@ -2833,7 +2996,7 @@ class Paragraph5(BaseModel):
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
-class Color9(BaseModel):
+class Color11(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -2858,7 +3021,7 @@ class Stroke4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color9 | None
+    color: Color11 | None
     visible: bool = Field(
         ..., description="False when the outline is explicitly switched off."
     )
@@ -2878,7 +3041,7 @@ class Shape3(BaseModel):
         ...,
         description="Corner radius of a rounded rectangle, from its adjust value and size.",
     )
-    fill: Fill3 | None = Field(
+    fill: Fill4 | None = Field(
         ..., description="Null when the shape inherits its fill."
     )
     flipH: bool = Field(..., description="Mirrored horizontally.")

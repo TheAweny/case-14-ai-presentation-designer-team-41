@@ -47,4 +47,18 @@ export {
   commitRemoveSlide,
   commitSlideBackground,
 } from './slide-ops.js';
+export {
+  TABLE_MIN_TRACK_EMU,
+  commitDistributeTable,
+  commitTableCellStyle,
+  commitTableColumnWidth,
+  commitTableFitRows,
+  commitTableRowHeight,
+  commitTableTexts,
+  rangeCells,
+  tableShares,
+  type GridText,
+  type TableCellStyleChange,
+  type TableRange,
+} from './table-ops.js';
 export type { DeckChange, DeckChangeKind, DeckCommit, DeckHistory, DeckSelection } from './core.js';

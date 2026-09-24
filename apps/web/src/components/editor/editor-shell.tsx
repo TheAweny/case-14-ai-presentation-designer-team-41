@@ -4,13 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
 import type { ColorValue, SlideElement } from '@lct/contracts';
-import type {
-  ArrangeTarget,
-  DeckChangeKind,
-  DeckSelection,
-  ElementProps,
-  TableCell,
-} from '@lct/deck-ops';
+import type { ArrangeTarget, DeckChangeKind, DeckSelection, ElementProps } from '@lct/deck-ops';
 import type { Deck } from '@/lib/deck-source';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -28,6 +22,8 @@ import {
 import { InspectorPanel, type InspectorTab } from '@/components/editor/inspector/inspector-panel';
 import { InspectorToggle } from '@/components/editor/inspector/inspector-toggle';
 import type { TableAction } from '@/components/editor/inspector/design-panel';
+import { useTableOps } from '@/components/editor/use-table-ops';
+import { toggledFlag, wholeTable } from '@/components/editor/table-grid';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
 import {
   editorCommand,
@@ -46,6 +42,7 @@ import {
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
 import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canvas';
+import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
@@ -192,8 +189,6 @@ export function EditorShell({
     remove,
     reorder,
     insert,
-    setFontSize,
-    setColor,
     setProps,
     setPropsEach,
     endPreview,
@@ -209,7 +204,6 @@ export function EditorShell({
     duplicateSlide,
     removeSlide,
     setSlideBackground,
-    setTableCell,
     insertTableRow,
     removeTableRow,
     insertTableColumn,
@@ -220,6 +214,7 @@ export function EditorShell({
     redo,
     undoKind,
     redoKind,
+    run,
   } = useDeckHistory(startSlides);
   const history = useMemo(
     () => ({ undo: undoKind, redo: redoKind, onUndo: undo, onRedo: redo }),
@@ -314,22 +309,6 @@ export function EditorShell({
     [move, selectedIds, slide],
   );
 
-  const setFontSizeOf = useCallback(
-    (elementId: string, sizePt: number) => {
-      if (!slideId) return;
-      setFontSize(slideId, elementId, sizePt);
-    },
-    [setFontSize, slideId],
-  );
-
-  const setColorOf = useCallback(
-    (elementId: string, color: ColorValue, hex: string) => {
-      if (!slideId) return;
-      setColor(slideId, elementId, color, hex);
-    },
-    [setColor, slideId],
-  );
-
   const setPropsOf = useCallback(
     (elementIds: readonly string[], props: ElementProps, mode?: EditMode) => {
       if (!slideId || elementIds.length === 0) return;
@@ -345,12 +324,8 @@ export function EditorShell({
     [setSlideBackground, slideId],
   );
 
-  const setTableCellOf = useCallback(
-    (elementId: string, cell: TableCell, text: string) => {
-      if (slideId) setTableCell(slideId, elementId, cell, text);
-    },
-    [setTableCell, slideId],
-  );
+  // Таблицы: холст правит ячейки, границы и строки, панель — вид выделенных ячеек.
+  const tableOps = useTableOps(run, endPreview, slideId);
 
   /** Строки и столбцы из панели: добавляются в конец, удаляются последние. */
   const editTableOf = useCallback(
@@ -487,6 +462,8 @@ export function EditorShell({
       const ids = selected.map((element) => element.elementId);
       const texts = selected.filter((element) => element.kind === 'text');
       const textIds = texts.map((element) => element.elementId);
+      // Одна выделенная таблица: Ctrl+B/I/U и выравнивание — всем её ячейкам.
+      const table = selected.length === 1 && selected[0]?.kind === 'table' ? selected[0] : null;
       switch (command.kind) {
         case 'edit':
           if (selected.length === 1 && selected[0]) {
@@ -518,10 +495,18 @@ export function EditorShell({
         case 'text-flag':
           if (texts.length > 0) {
             setProps(slide.slideId, textIds, flagProps(texts, command.flag, designSystem));
+          } else if (table) {
+            const all = wholeTable(table);
+            tableOps.style(table.elementId, all, {
+              style: { [command.flag]: toggledFlag(table, all, command.flag) },
+            });
           }
           return;
         case 'text-align':
           if (texts.length > 0) setProps(slide.slideId, textIds, { align: command.align });
+          else if (table) {
+            tableOps.style(table.elementId, wholeTable(table), { style: { align: command.align } });
+          }
           return;
         case 'text-size':
           if (texts.length > 0) {
@@ -532,7 +517,7 @@ export function EditorShell({
           return;
       }
     },
-    [designSystem, setFontSizes, setProps, setPropsEach, slide],
+    [designSystem, setFontSizes, setProps, setPropsEach, slide, tableOps],
   );
 
   /** Одна точка входа для клавиатуры и контекстного меню холста. */
@@ -728,6 +713,46 @@ export function EditorShell({
     };
   }, [designSystem, insert, pasteElements, rememberCopy, removeSelected, selectedIds, slide]);
 
+  /**
+   * Правки полосы над выделением — те же пути записи, что у панели «Дизайн», и та же точка
+   * входа для команд, что у клавиатуры и меню холста.
+   */
+  const selectionActions = useMemo<SelectionBarActions>(
+    () => ({
+      onCommit: commit,
+      onAlign: alignSelected,
+      onProps: setPropsOf,
+      onPropsEach: (entries, mode) => {
+        if (slideId) setPropsEach(slideId, entries, mode);
+      },
+      onPreviewEnd: endPreview,
+      onFontSizes: (entries, mode) => {
+        if (slideId) setFontSizes(slideId, entries, mode);
+      },
+      onColorAll: (ids, color, hex, mode) => {
+        if (slideId) setColorAll(slideId, ids, color, hex, mode);
+      },
+      onReplaceImage: replaceImageOf,
+      onCommand: runCommand,
+      onOpenInspector: () => openInspector('design'),
+      canPaste,
+    }),
+    [
+      alignSelected,
+      canPaste,
+      commit,
+      endPreview,
+      openInspector,
+      replaceImageOf,
+      runCommand,
+      setColorAll,
+      setFontSizes,
+      setPropsEach,
+      setPropsOf,
+      slideId,
+    ],
+  );
+
   /** Подпись слайда для чтения с экрана: место в колоде и, если есть, заголовок. */
   const labels = useMemo(
     () =>
@@ -858,26 +883,23 @@ export function EditorShell({
                       onSelect={setSelectedIds}
                       onCommit={commit}
                       onTextCommit={setText}
-                      onRemove={removeSelected}
                       onRemoveElements={(ids) => {
                         if (slideId) remove(slideId, ids);
                       }}
-                      onAlign={alignSelected}
                       onInsert={(elements) => {
                         if (!slideId) return;
                         insert(slideId, elements);
                         // Как в Figma: объект вставлен — курсор снова выбирает.
                         setTool('select');
                       }}
-                      onFontSize={setFontSizeOf}
-                      onColor={setColorOf}
                       onReplaceImage={replaceImageOf}
                       onCommand={runCommand}
                       canPaste={canPaste}
                       hasLocked={slide.elements.some((element) => element.locked === true)}
-                      onTableCell={setTableCellOf}
+                      tableOps={tableOps}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
                       controlRef={canvasControl}
+                      selectionActions={selectionActions}
                       className={CANVAS_PADDING}
                     />
                   </ZoomBasis>
@@ -950,6 +972,7 @@ export function EditorShell({
                 onReplaceImage: replaceImageOf,
                 onSlideBackground: setBackgroundOf,
                 onTable: editTableOf,
+                tableOps,
                 onChartData: setChartDataOf,
                 onChartAxes: setChartAxesOf,
               }}

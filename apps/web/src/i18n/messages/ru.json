@@ -46,7 +46,6 @@
   "selectionBar": {
     "label": "Свойства выделенного",
     "count": "{count, plural, one {# объект} few {# объекта} many {# объектов} other {# объекта}}",
-    "remove": "Удалить",
     "align": {
       "left": "Выровнять по левому краю",
       "center": "Выровнять по центру",
@@ -71,8 +70,6 @@
       "page-number": "Номер слайда",
       "decoration": "Украшение"
     },
-    "size": "Размер",
-    "color": "Цвет",
     "type": {
       "title": "Заголовок",
       "subtitle": "Подзаголовок",
@@ -96,14 +93,28 @@
       "line": "Линия",
       "positive": "Положительное",
       "negative": "Отрицательное"
-    }
-  },
-  "formatBar": {
-    "label": "Формат текста",
+    },
     "bold": "Жирный",
     "italic": "Курсив",
-    "font": "Шрифт",
-    "underline": "Подчёркнутый"
+    "smaller": "Уменьшить кегль",
+    "larger": "Увеличить кегль",
+    "strokeWidths": "Частые толщины",
+    "replace": "Заменить",
+    "editTable": "Править ячейки таблицы",
+    "editTableShort": "Править",
+    "editChart": "Данные графика в панели «Дизайн»",
+    "editChartShort": "Данные",
+    "distribute": "Распределить",
+    "distributeHorizontal": "Распределить по горизонтали",
+    "distributeVertical": "Распределить по вертикали",
+    "layers": "Порядок слоёв",
+    "more": "Ещё",
+    "alignToSlide": "Выровнять по слайду",
+    "openInspector": "Открыть в панели «Дизайн»",
+    "openData": "Открыть данные в панели «Дизайн»"
+  },
+  "formatBar": {
+    "label": "Формат текста"
   },
   "toolRail": {
     "label": "Инструменты",
@@ -249,7 +260,7 @@
     "removeRow": "Удалить последнюю строку",
     "addColumn": "Добавить столбец",
     "removeColumn": "Удалить последний столбец",
-    "tableHint": "Текст ячеек — двойной клик по таблице. Tab — следующая ячейка, Enter — вниз.",
+    "tableHint": "Щелчок по выделенной таблице ставит каретку в ячейку. Tab — дальше, Shift+Enter — новая строка, протяжка — выделить ячейки, границы тянутся мышью.",
     "chart": "График",
     "chartType": "Тип графика",
     "chartTypes": {
@@ -381,5 +392,45 @@
       "zoom-selection": "К выделению",
       "pan": "Двигать холст (удерживать)"
     }
+  },
+  "tableMenu": {
+    "insertRowAbove": "Вставить строку выше",
+    "insertRowBelow": "Вставить строку ниже",
+    "insertColumnLeft": "Вставить столбец слева",
+    "insertColumnRight": "Вставить столбец справа",
+    "removeRows": "{count, plural, one {Удалить строку} few {Удалить # строки} many {Удалить # строк} other {Удалить # строки}}",
+    "removeColumns": "{count, plural, one {Удалить столбец} few {Удалить # столбца} many {Удалить # столбцов} other {Удалить # столбца}}",
+    "clearCells": "Очистить ячейки",
+    "resetLook": "Сбросить оформление ячеек",
+    "fill": "Заливка ячеек",
+    "noFill": "Без заливки",
+    "resizeColumn": "Граница столбца {index}",
+    "resizeRow": "Граница строки {index}",
+    "resizeHint": "Тяните, чтобы изменить размер. Двойной щелчок — по содержимому"
+  },
+  "tablePanel": {
+    "cells": "Ячейки",
+    "wholeTable": "Вся таблица",
+    "selectedCells": "{count, plural, one {# ячейка} few {# ячейки} many {# ячеек} other {# ячейки}}",
+    "fill": "Заливка ячеек",
+    "textColor": "Цвет текста",
+    "bold": "Жирный",
+    "italic": "Курсив",
+    "underline": "Подчёркнутый",
+    "align": "Выравнивание по горизонтали",
+    "verticalAlign": "Выравнивание по вертикали",
+    "resetLook": "Сбросить оформление",
+    "style": "Стиль таблицы",
+    "headerRow": "Строка заголовка",
+    "bandedRows": "Чередование строк",
+    "bandFill": "Цвет чередования",
+    "borders": "Линии",
+    "bordersHorizontal": "Линии между строками",
+    "bordersVertical": "Линии между столбцами",
+    "bordersOuter": "Рамка вокруг таблицы",
+    "borderColor": "Цвет линий",
+    "borderWidth": "Толщина линий",
+    "distributeColumns": "Выровнять ширину столбцов",
+    "distributeRows": "Выровнять высоту строк"
   }
 }

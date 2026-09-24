@@ -422,6 +422,99 @@
           {
             "additionalProperties": false,
             "properties": {
+              "bandFill": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "background",
+                      "surface",
+                      "text",
+                      "text-muted",
+                      "text-on-accent",
+                      "accent",
+                      "accent-alt",
+                      "line",
+                      "positive",
+                      "negative"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "description": "Six hex digits, no leading hash.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  }
+                ],
+                "description": "Fill of the tinted body rows. Absent: the surface role."
+              },
+              "bandedRows": {
+                "description": "Whether every other body row is tinted (OOXML bandRow). Absent means false.",
+                "type": "boolean"
+              },
+              "borders": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "color": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "background",
+                              "surface",
+                              "text",
+                              "text-muted",
+                              "text-on-accent",
+                              "accent",
+                              "accent-alt",
+                              "line",
+                              "positive",
+                              "negative"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "description": "Six hex digits, no leading hash.",
+                            "pattern": "^[0-9a-fA-F]{6}$",
+                            "type": "string"
+                          }
+                        ],
+                        "description": "A palette role, or a hex value a user chose."
+                      },
+                      "horizontal": {
+                        "description": "A rule under every row, the last one included.",
+                        "type": "boolean"
+                      },
+                      "outer": {
+                        "description": "A frame around the whole table.",
+                        "type": "boolean"
+                      },
+                      "vertical": {
+                        "description": "Rules between columns.",
+                        "type": "boolean"
+                      },
+                      "widthEmu": {
+                        "description": "Line width in EMU.",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "color",
+                      "widthEmu",
+                      "horizontal",
+                      "vertical",
+                      "outer"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null for no lines. Absent: a hairline in the line role under every row."
+              },
               "box": {
                 "additionalProperties": false,
                 "properties": {
@@ -458,9 +551,129 @@
                 ],
                 "type": "object"
               },
+              "cellStyles": {
+                "description": "Look of each cell, header row first, then by column. A missing or null entry inherits.",
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "align": {
+                            "description": "Horizontal alignment. Absent means left.",
+                            "enum": [
+                              "left",
+                              "center",
+                              "right",
+                              "justify"
+                            ],
+                            "type": "string"
+                          },
+                          "bold": {
+                            "description": "Absent: bold in the header row, regular elsewhere.",
+                            "type": "boolean"
+                          },
+                          "color": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "background",
+                                  "surface",
+                                  "text",
+                                  "text-muted",
+                                  "text-on-accent",
+                                  "accent",
+                                  "accent-alt",
+                                  "line",
+                                  "positive",
+                                  "negative"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "description": "Six hex digits, no leading hash.",
+                                "pattern": "^[0-9a-fA-F]{6}$",
+                                "type": "string"
+                              }
+                            ],
+                            "description": "Colour of the text. Absent: the type role."
+                          },
+                          "fill": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "background",
+                                      "surface",
+                                      "text",
+                                      "text-muted",
+                                      "text-on-accent",
+                                      "accent",
+                                      "accent-alt",
+                                      "line",
+                                      "positive",
+                                      "negative"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "description": "Six hex digits, no leading hash.",
+                                    "pattern": "^[0-9a-fA-F]{6}$",
+                                    "type": "string"
+                                  }
+                                ],
+                                "description": "A palette role, or six hex digits without a hash when a user chose their own."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Background of the cell. Null for none, even in a header or banded row."
+                          },
+                          "italic": {
+                            "type": "boolean"
+                          },
+                          "underline": {
+                            "type": "boolean"
+                          },
+                          "verticalAlign": {
+                            "description": "Absent means top.",
+                            "enum": [
+                              "top",
+                              "middle",
+                              "bottom"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              "columnWidths": {
+                "description": "Share of the box width each column takes, one per header, read relative to their sum. Absent: equal columns.",
+                "items": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "elementId": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "headerRow": {
+                "description": "Whether the first row looks like a header (OOXML firstRow). Absent means true.",
+                "type": "boolean"
               },
               "headers": {
                 "items": {
@@ -507,6 +720,15 @@
                 "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
+              },
+              "rowHeights": {
+                "description": "Share of the box height each row takes, header first, read relative to their sum. A row still grows to fit its text, as a PowerPoint row does. Absent: the rows share the box, each growing to fit its text.",
+                "items": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                "minItems": 1,
+                "type": "array"
               },
               "rows": {
                 "items": {
