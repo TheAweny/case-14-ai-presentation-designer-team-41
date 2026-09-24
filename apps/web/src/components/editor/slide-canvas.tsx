@@ -69,6 +69,17 @@ const ARROW_OWNERS =
 const KEEPS_EDITING =
   '[data-text-editor], [data-text-format], [data-table-editor], button, [role="group"]';
 
+/**
+ * Что редактор может попросить у холста с клавиатуры: Enter открывает набор (как двойной
+ * клик), переход между слайдами возвращает фокус на холст.
+ */
+export interface CanvasControl {
+  /** Открыть набор текста или правку таблицы у объекта. `false` — у объекта такого нет. */
+  startEditing(elementId: string): boolean;
+  /** Фокус на холст: клавиши снова у слайда, а не у кнопки или списка. */
+  focus(): void;
+}
+
 function isFormField(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('input, textarea, select') !== null;
 }
@@ -110,6 +121,7 @@ export function SlideCanvas({
   hasLocked,
   onTableCell,
   onRotate,
+  controlRef,
   className,
 }: {
   slide: SlideIr;
@@ -148,6 +160,8 @@ export function SlideCanvas({
   onTableCell: (elementId: string, cell: TableCell, text: string) => void;
   /** Угол объекта после поворота ручкой. */
   onRotate: (elementId: string, rotation: number) => void;
+  /** Сюда холст кладёт то, что умеет по просьбе клавиатуры: см. `CanvasControl`. */
+  controlRef?: { current: CanvasControl | null };
   className?: string;
 }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -175,11 +189,12 @@ export function SlideCanvas({
   } | null>(null);
   const pan = tool === 'hand' || spacePan;
   const inserting = isInsertTool(tool);
+  // Точка, куда встанет каретка. Без точки (вход с клавиатуры) выделяется весь текст.
   const [session, setSession] = useState<{
     slideId: string;
     elementId: string;
-    x: number;
-    y: number;
+    x: number | null;
+    y: number | null;
   } | null>(null);
   const aligned = useMemo(
     () => gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy),
@@ -665,6 +680,34 @@ export function SlideCanvas({
     return () => host.removeEventListener('dblclick', onDoubleClick);
   }, [host, onSelect, replaceImage, slide, tool]);
 
+  // Enter на выделенном объекте — тот же вход, что и двойной клик: текст открывает набор,
+  // таблица — правку ячеек с первой.
+  useEffect(() => {
+    if (!controlRef) return;
+    const control: CanvasControl = {
+      startEditing: (elementId) => {
+        const element = slide.elements.find((item) => item.elementId === elementId);
+        if (!element || element.locked) return false;
+        if (element.kind === 'text') {
+          onSelect([]);
+          setSession({ slideId: slide.slideId, elementId, x: null, y: null });
+          return true;
+        }
+        if (element.kind === 'table') {
+          onSelect([elementId]);
+          setTableSession({ slideId: slide.slideId, elementId, focus: { row: 0, column: 0 } });
+          return true;
+        }
+        return false;
+      },
+      focus: () => area?.focus({ preventScroll: true }),
+    };
+    controlRef.current = control;
+    return () => {
+      if (controlRef.current === control) controlRef.current = null;
+    };
+  }, [area, controlRef, onSelect, slide]);
+
   const selectUnderPointer = (event: ReactMouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element) || !slideRoot?.contains(target)) {
@@ -686,8 +729,14 @@ export function SlideCanvas({
       <ContextMenuTrigger asChild disabled={session !== null || tableSession !== null || pan}>
         <div
           ref={rememberArea}
+          // Фокус сюда ставит переход между слайдами с клавиатуры; сам в порядок Tab не входит.
+          tabIndex={-1}
+          data-canvas-area=""
           onContextMenu={selectUnderPointer}
-          className={cn('relative size-full overflow-hidden [container-type:size]', className)}
+          className={cn(
+            'relative size-full overflow-hidden outline-none [container-type:size]',
+            className,
+          )}
         >
           {/*
            * Лист уже вписан в область контейнером размеров. Библиотека масштабирует этот вписанный
@@ -787,7 +836,11 @@ export function SlideCanvas({
                     element={editing}
                     profile={designSystem}
                     slide={{ cx: slide.slideCx, cy: slide.slideCy }}
-                    origin={{ x: session.x, y: session.y }}
+                    origin={
+                      session.x === null || session.y === null
+                        ? null
+                        : { x: session.x, y: session.y }
+                    }
                     finishRef={finishEditing}
                     onCommit={(paragraphs) => {
                       committedText.current = paragraphs;
