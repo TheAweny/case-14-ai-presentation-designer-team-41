@@ -3,6 +3,7 @@ import type { Box, DesignSystem, SlideElement, ElementStroke, StrokeDash } from 
 import { EMU_PER_PT, cqw, emuToCqw, round, type SlideSize } from '../geometry.js';
 import { paint, resolveColor } from './color.js';
 import { markHooks, markStyle } from './mark.js';
+import { ShapeText } from './shape-text.js';
 
 type DecorElement = Extract<SlideElement, { kind: 'decor' }>;
 
@@ -29,6 +30,22 @@ function guessedPaint(box: Box, size: SlideSize, profile: DesignSystem): string 
 /** Whether the element says how it looks, rather than leaving it to the geometry. */
 function statesItsLook(element: DecorElement): boolean {
   return element.shape !== undefined || element.fill !== undefined || element.stroke !== undefined;
+}
+
+/**
+ * What a shape is filled with, as CSS, or null when the slide shows through it: no fill, or a
+ * line. Words in the shape take their colour from it, on the slide and in the editor alike.
+ */
+export function decorFill(
+  element: DecorElement,
+  size: SlideSize,
+  profile: DesignSystem,
+): string | null {
+  if (element.shape === 'line') return null;
+  if (!statesItsLook(element) || element.fill === undefined) {
+    return guessedPaint(element.box, size, profile);
+  }
+  return element.fill === null ? null : resolveColor(profile.palette, element.fill, 'surface');
 }
 
 /** Dash patterns in multiples of the line width, as PowerPoint's preset dashes are defined. */
@@ -253,15 +270,18 @@ export function DecorMark({
   const hooks = markHooks(element, thumbnail);
 
   if (!statesItsLook(element)) {
+    const background = guessedPaint(box, size, profile);
     return (
       <div
         {...hooks}
         style={{
           ...markStyle(element, size),
-          background: guessedPaint(box, size, profile),
+          background,
           ...zeroAxis,
         }}
-      />
+      >
+        <ShapeText element={element} size={size} profile={profile} fill={background} />
+      </div>
     );
   }
 
@@ -294,12 +314,7 @@ export function DecorMark({
       />
     );
   } else {
-    const fill =
-      element.fill === undefined
-        ? guessed
-        : element.fill === null
-          ? 'none'
-          : resolveColor(profile.palette, element.fill, 'surface');
+    const fill = decorFill(element, size, profile) ?? 'none';
     const stroke = element.stroke ?? null;
     drawing = (
       <ClosedShape
@@ -328,6 +343,12 @@ export function DecorMark({
       >
         {drawing}
       </svg>
+      <ShapeText
+        element={element}
+        size={size}
+        profile={profile}
+        fill={decorFill(element, size, profile)}
+      />
     </div>
   );
 }

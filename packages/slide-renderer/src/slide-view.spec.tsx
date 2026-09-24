@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DesignSystem, SlideElement, SlideIr, TextRun } from '@lct/contracts';
+import type { DesignSystem, ImageCrop, SlideElement, SlideIr, TextRun } from '@lct/contracts';
 import { SlideView } from './slide-view.js';
 import { CONTENT, COVER, WIDE, box, measured, paragraph, text } from './testing/deck.js';
 import {
@@ -408,6 +408,105 @@ describe('shapes', () => {
     const rule = markup(html, 'rule');
     expect(rule).toContain('stroke-dasharray="2 2"');
     expect(openTag(html, 'rule')).toContain('height:0.12cqw');
+  });
+});
+
+describe('words in a shape', () => {
+  const card = box(80, 80, 320, 180);
+  const words = [paragraph('Шаг 1', { sizePt: null })];
+
+  it('centres the words both ways, in body type, in the colour that reads on the fill', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('badge', card, { shape: 'rect', fill: 'accent', stroke: null, paragraphs: words }),
+        shape('card', card, { shape: 'rect', fill: 'surface', stroke: null, paragraphs: words }),
+      ),
+    );
+    const badge = markup(html, 'badge');
+    expect(badge).toContain('data-shape-text');
+    expect(badge).toContain('Шаг 1');
+    expect(badge).toContain('justify-content:center');
+    expect(badge).toContain('text-align:center');
+    // 16 pt of body type on a 960 pt slide.
+    expect(badge).toContain('font-size:1.6667cqw');
+    // White on the blue accent, dark body text on the light card.
+    expect(badge).toContain('color:#FFFFFF');
+    expect(markup(html, 'card')).toContain('color:#111111');
+    // The default insets: 0.1 inch across a 960 pt slide.
+    expect(badge).toContain('padding-left:0.75cqw');
+  });
+
+  it('anchors the words where the shape says and leaves a shape without words alone', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('top', card, {
+          shape: 'ellipse',
+          fill: null,
+          paragraphs: words,
+          verticalAlign: 'top',
+          textInsets: { l: 0, t: 0, r: 0, b: 0 },
+        }),
+        shape('empty', card, { shape: 'rect', fill: 'accent' }),
+      ),
+    );
+    expect(markup(html, 'top')).toContain('justify-content:flex-start');
+    expect(markup(html, 'top')).toContain('padding-left:0cqw');
+    // No fill: the slide shows through, so the words are body text.
+    expect(markup(html, 'top')).toContain('color:#111111');
+    expect(markup(html, 'empty')).not.toContain('data-shape-text');
+  });
+
+  it('never puts words on a line', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('rule', box(80, 80, 320, 0), { shape: 'line', stroke: STROKE, paragraphs: words }),
+      ),
+    );
+    expect(markup(html, 'rule')).not.toContain('Шаг 1');
+  });
+});
+
+describe('cropped pictures', () => {
+  const picture = (crop?: ImageCrop) =>
+    ({
+      kind: 'image',
+      elementId: 'photo',
+      role: 'image',
+      box: box(100, 100, 400, 200),
+      sourceShapeId: null,
+      mediaPart: 'upload/photo.png',
+      fit: 'cover',
+      ...(crop ? { crop } : null),
+    }) satisfies SlideElement;
+
+  it('stretches what the crop leaves over the box, the rest hanging outside', () => {
+    const html = render(
+      only(COVER, picture({ l: 0.2, t: 0, r: 0.3, b: 0.5 })),
+      (part) => `/m/${part}`,
+    );
+    const photo = markup(html, 'photo');
+    // Half the width is left, so the whole picture is twice the box, shifted by 0.2 / 0.5 of it.
+    expect(photo).toContain('width:200%');
+    expect(photo).toContain('left:-40%');
+    expect(photo).toContain('height:200%');
+    expect(photo).toContain('top:0%');
+    expect(photo).toContain('object-fit:fill');
+  });
+
+  it('places an uncropped picture by fit, and ignores a crop that leaves nothing', () => {
+    const plain = markup(
+      render(only(COVER, picture()), (part) => `/m/${part}`),
+      'photo',
+    );
+    expect(plain).toContain('object-fit:cover');
+    const gone = markup(
+      render(only(COVER, picture({ l: 0.6, t: 0, r: 0.4, b: 0 })), (part) => `/m/${part}`),
+      'photo',
+    );
+    expect(gone).toContain('object-fit:cover');
   });
 });
 

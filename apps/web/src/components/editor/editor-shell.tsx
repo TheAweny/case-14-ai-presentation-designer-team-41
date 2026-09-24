@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
 import type { ColorValue, SlideElement, SlideIr } from '@lct/contracts';
 import type { ArrangeTarget, DeckChangeKind, DeckSelection, ElementProps } from '@lct/deck-ops';
+import { commitImageCrop, commitShapeText, commitSlideNotes } from '@lct/deck-ops';
 import type { Deck } from '@/lib/deck-source';
 import { cn } from '@/lib/utils';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
@@ -71,6 +72,7 @@ import {
 } from '@/components/editor/use-deck-history';
 import { useSlideSelection } from '@/components/editor/use-slide-selection';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { SpeakerNotesPanel } from '@/components/editor/speaker-notes-panel';
 
 /**
  * Ниже этой ширины правая панель сама уходит с глаз: иначе от слайда остаётся марка.
@@ -768,6 +770,7 @@ export function EditorShell({
         if (slideId) setColorAll(slideId, ids, color, hex, mode);
       },
       onReplaceImage: replaceImageOf,
+      onStartCrop: (elementId) => canvasControl.current?.startEditing(elementId),
       onCommand: runCommand,
       onOpenInspector: () => openInspector('design'),
       canPaste,
@@ -826,6 +829,12 @@ export function EditorShell({
     },
     onArrange: arrangeSelected,
     onReplaceImage: replaceImageOf,
+    onStartCrop: (elementId) => canvasControl.current?.startEditing(elementId),
+    onResetCrop: (elementId) => {
+      if (slideId) {
+        run([(current) => commitImageCrop(current, { slideId, elementId, crop: null })]);
+      }
+    },
     onSlideBackground: setBackgroundOf,
     onTable: editTableOf,
     tableOps,
@@ -925,9 +934,9 @@ export function EditorShell({
 
             <ResizableHandle aria-label={t('resizeSlides')} className="max-md:hidden" />
 
-            <ResizablePanel id="canvas" minSize="40%" className="min-w-0">
+            <ResizablePanel id="canvas" minSize="40%" className="flex min-w-0 flex-col">
               <ToolRailDock
-                className="h-full min-w-0"
+                className="min-h-0 min-w-0 flex-1"
                 railClassName="max-md:hidden"
                 dock={initial.dock}
                 onDockChange={(dock) => remember({ dock })}
@@ -970,6 +979,20 @@ export function EditorShell({
                       controlRef={canvasControl}
                       selectionActions={selectionActions}
                       className={CANVAS_PADDING}
+                      onShapeTextCommit={(target, elementId, paragraphs) =>
+                        run([
+                          (current) =>
+                            commitShapeText(current, { slideId: target, elementId, paragraphs }),
+                        ])
+                      }
+                      onCrop={(elementId, crop, box) => {
+                        if (slideId) {
+                          run([
+                            (current) =>
+                              commitImageCrop(current, { slideId, elementId, crop, box }),
+                          ]);
+                        }
+                      }}
                     />
                   </ZoomBasis>
                 ) : null}
@@ -985,6 +1008,16 @@ export function EditorShell({
                   />
                 )}
               </ToolRailDock>
+              {slide ? (
+                <SpeakerNotesPanel
+                  className="max-md:hidden"
+                  slideId={slide.slideId}
+                  notes={slide.notes}
+                  onCommit={(target, notes) =>
+                    run([(current) => commitSlideNotes(current, { slideId: target, notes })])
+                  }
+                />
+              ) : null}
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>

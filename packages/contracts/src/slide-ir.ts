@@ -94,6 +94,20 @@ export const textElementSchema = z.object({
 /** How a picture meets its box. */
 export const imageFitSchema = z.enum(['contain', 'cover']);
 
+/**
+ * The part of a picture a user cropped it to, as shares of the source picture cut off each side:
+ * `l` of its width from the left, `t` of its height from the top, and so on. It is `a:srcRect` of
+ * OOXML divided by 100 000, so export writes it one to one. What is left of the picture fills the
+ * box; the editor keeps that part as wide for its height as the box, so nothing is stretched.
+ * `l + r` and `t + b` stay below 1, which the editor ensures.
+ */
+export const imageCropSchema = z.object({
+  l: z.number().min(0).lt(1).describe('Share of the width cut off on the left.'),
+  t: z.number().min(0).lt(1).describe('Share of the height cut off at the top.'),
+  r: z.number().min(0).lt(1).describe('Share of the width cut off on the right.'),
+  b: z.number().min(0).lt(1).describe('Share of the height cut off at the bottom.'),
+});
+
 export const imageElementSchema = z.object({
   kind: z.literal('image'),
   elementId: z.string().min(1),
@@ -106,6 +120,12 @@ export const imageElementSchema = z.object({
     .min(1)
     .describe('Part name inside the template, or a path under the run directory.'),
   fit: imageFitSchema.describe('Never stretch: the audit looks for distortion.'),
+  crop: imageCropSchema
+    .optional()
+    .describe(
+      'The part of the picture that shows, filling the box. Absent: the whole picture, placed ' +
+        'by `fit`.',
+    ),
 });
 
 /**
@@ -234,12 +254,27 @@ export const elementStrokeSchema = z.object({
 });
 
 /**
+ * Space between the edge of a shape and its text, in EMU: `lIns`, `tIns`, `rIns` and `bIns` of
+ * OOXML `a:bodyPr`.
+ */
+export const textInsetsSchema = z.object({
+  l: z.number().int().nonnegative(),
+  t: z.number().int().nonnegative(),
+  r: z.number().int().nonnegative(),
+  b: z.number().int().nonnegative(),
+});
+
+/**
  * A shape that holds no content of ours: a panel, a rule or a card from the template, or a shape
  * drawn in the editor.
  *
  * Template decoration may state nothing but its box. Then `shape`, `fill` and `stroke` are absent
  * and a renderer picks a palette role from the geometry. Anything the editor draws states all
  * three, so its look never depends on its size.
+ *
+ * A closed shape may carry a few words of its own, as a PowerPoint shape does: `paragraphs` is the
+ * `p:txBody` of the `p:sp`, centred in the shape unless `verticalAlign` says otherwise. A line
+ * never carries text.
  */
 export const decorElementSchema = z.object({
   kind: z.literal('decor'),
@@ -274,6 +309,17 @@ export const decorElementSchema = z.object({
     .optional()
     .describe('Mirrored horizontally. A line runs from the top left of its box unless flipped.'),
   flipV: z.boolean().optional().describe('Mirrored vertically.'),
+  paragraphs: z
+    .array(paragraphSchema)
+    .min(1)
+    .optional()
+    .describe('Text inside the shape. Absent when it has none.'),
+  verticalAlign: verticalAlignSchema
+    .optional()
+    .describe('Where the text sits in the shape (the bodyPr anchor). Absent means middle.'),
+  textInsets: textInsetsSchema
+    .optional()
+    .describe('Absent: the OOXML defaults, 0.1 inch left and right and 0.05 inch top and bottom.'),
 });
 
 export const slideElementSchema = z.discriminatedUnion('kind', [
@@ -300,6 +346,13 @@ export const slideIrSchema = z.object({
     .nullable()
     .optional()
     .describe('Colour the slide is filled with. Null or absent: the template background.'),
+  notes: z
+    .string()
+    .optional()
+    .describe(
+      'Speaker notes as plain text, one paragraph of the notes page (`p:notes`) per line. ' +
+        'Absent or empty: the slide has none.',
+    ),
 });
 
 export type LayoutVariantName = z.infer<typeof layoutVariantNameSchema>;
@@ -310,6 +363,8 @@ export type StrokeDash = z.infer<typeof strokeDashSchema>;
 export type LineEnd = z.infer<typeof lineEndSchema>;
 export type ElementStroke = z.infer<typeof elementStrokeSchema>;
 export type ImageFit = z.infer<typeof imageFitSchema>;
+export type ImageCrop = z.infer<typeof imageCropSchema>;
+export type TextInsets = z.infer<typeof textInsetsSchema>;
 export type ChartType = z.infer<typeof chartTypeSchema>;
 export type TableCellStyle = z.infer<typeof tableCellStyleSchema>;
 export type TableBorders = z.infer<typeof tableBordersSchema>;
