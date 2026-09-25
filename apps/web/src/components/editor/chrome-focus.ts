@@ -34,3 +34,45 @@ export function useMenuFocus() {
     [],
   );
 }
+
+/**
+ * Метка интерфейса поверх холста: полоса свойств, полоса формата текста и их выпадашки. Клик
+ * сюда — не клик по слайду: он не начинает рамку выделения, не закрывает набор и не
+ * снимает выделение.
+ */
+export const EDITOR_CHROME = '[data-editor-chrome]';
+
+/** Событие пришло из интерфейса поверх холста, а не со слайда. */
+export function isEditorChrome(target: EventTarget | null): boolean {
+  const closest = (target as { closest?: unknown } | null)?.closest;
+  return (
+    typeof closest === 'function' &&
+    (closest as (selector: string) => unknown).call(target, EDITOR_CHROME) !== null
+  );
+}
+
+/**
+ * Нажатие мышью на кнопки полосы не забирает фокус (у набора текста — его выделение, у холста —
+ * пробел для руки), а в поле ввода — забирает, иначе туда не напечатать.
+ *
+ * Выпадашки Radix живут в портале, но React доносит их события по дереву компонентов до
+ * полосы. Их не трогаем: поиск шрифта и HEX в поповере должны получать фокус.
+ */
+export function keepFocusOnPress(event: MouseEvent<HTMLElement>): void {
+  const target = event.target;
+  if (!(target instanceof Node) || !event.currentTarget.contains(target)) return;
+  if (target instanceof Element && target.closest('input, textarea, select')) return;
+  event.preventDefault();
+}
+
+/**
+ * Правая кнопка на полосе и в её меню. Без этого React донёс бы событие из портала до холста,
+ * и тот снял бы выделение и открыл своё меню поверх полосы. В поле ввода остаётся системное
+ * меню: там вставляют и копируют.
+ */
+export function stopCanvasMenu(event: MouseEvent<HTMLElement>): void {
+  event.stopPropagation();
+  const target = event.target;
+  if (target instanceof Element && target.closest('input, textarea')) return;
+  event.preventDefault();
+}
