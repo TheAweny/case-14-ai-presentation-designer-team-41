@@ -34,5 +34,6 @@
   "duplicateSlide": "Дублировать слайд",
   "removeSlide": "Удалить слайд",
   "editTable": "Правка таблицы",
-  "tableCell": "Ячейка: строка {row}, столбец {column}"
+  "tableCell": "Ячейка: строка {row}, столбец {column}",
+  "untitled": "Без названия"
 }

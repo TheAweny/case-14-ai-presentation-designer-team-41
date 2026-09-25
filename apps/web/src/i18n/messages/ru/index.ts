@@ -2,6 +2,8 @@ import canvasMenu from './canvas-menu.json';
 import designPanel from './design-panel.json';
 import draft from './draft.json';
 import editor from './editor.json';
+import exportDialog from './export-dialog.json';
+import fileBar from './file-bar.json';
 import formatBar from './format-bar.json';
 import imageCrop from './image-crop.json';
 import inspectorFields from './inspector-fields.json';
@@ -26,6 +28,8 @@ const messages = {
   metadata,
   localeSwitcher,
   editor,
+  exportDialog,
+  fileBar,
   selectionBar,
   formatBar,
   toolRail,

@@ -71,7 +71,7 @@ import { carriesFiles, imageFilesOf, pickImageFiles, registerImage } from '@/lib
 
 /** Здесь стрелки — свои клавиши виджета, а не сдвиг объекта. */
 const ARROW_OWNERS =
-  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="grid"], [role="toolbar"], [role="tree"]';
+  '[role="listbox"], [role="menu"], [role="menubar"], [role="radiogroup"], [role="slider"], [role="tablist"], [role="grid"], [role="toolbar"], [role="tree"], [role="dialog"]';
 /** Отсюда протяжка вставки не начинается: это интерфейс поверх холста, а не поле. */
 const INSERT_SKIPS = `[data-text-editor], [data-selection-bar], [data-text-format], [data-dock-obstacle], button, [role="menu"], ${EDITOR_CHROME}`;
 /** Клик сюда не закрывает набор: это само поле, его полоса и кнопки поверх холста. */

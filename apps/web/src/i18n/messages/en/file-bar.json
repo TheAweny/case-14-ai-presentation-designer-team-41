@@ -1,0 +1,28 @@
+{
+  "label": "File and export",
+  "fileMenu": "File menu: {title}",
+  "rename": "Rename",
+  "renameLabel": "Presentation name",
+  "groups": {
+    "deck": "Presentation",
+    "download": "Download"
+  },
+  "newDeck": "New presentation…",
+  "replaceTemplate": "Upload another template…",
+  "replaceContent": "Replace content…",
+  "duplicate": "Make a copy",
+  "history": "Version history",
+  "exportPptx": "PowerPoint (.pptx)",
+  "exportPdf": "PDF",
+  "exportPng": "Slides as PNG (.zip)",
+  "manifest": "Run manifest (.json)",
+  "pendingApi": "Greyed-out items start working once the editor is connected to the server.",
+  "audit": "Audit",
+  "auditPending": "Audit checks are not connected yet",
+  "present": "Present",
+  "presentPending": "Presentation mode is not ready yet",
+  "export": "Export",
+  "exportPending": "Export is not connected yet",
+  "exportHtml": "HTML page",
+  "exportRunning": "Export · {percent} %"
+}

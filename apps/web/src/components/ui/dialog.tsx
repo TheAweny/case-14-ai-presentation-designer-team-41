@@ -78,6 +78,19 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return <div data-slot="dialog-header" className={cn('grid gap-1 pr-8', className)} {...props} />;
 }
 
+function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="dialog-footer"
+      className={cn(
+        'flex items-center justify-end gap-2 border-t border-border px-5 py-3',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
@@ -106,6 +119,7 @@ export {
   DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogOverlay,
   DialogTitle,

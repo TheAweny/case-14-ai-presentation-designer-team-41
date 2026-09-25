@@ -34,5 +34,6 @@
   "duplicateSlide": "Duplicate slide",
   "removeSlide": "Delete slide",
   "editTable": "Editing table",
-  "tableCell": "Cell: row {row}, column {column}"
+  "tableCell": "Cell: row {row}, column {column}",
+  "untitled": "Untitled"
 }

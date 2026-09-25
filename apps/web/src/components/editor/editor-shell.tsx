@@ -66,6 +66,11 @@ import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
 import { gridForSlide, nudgeBox, type Alignment } from '@/components/editor/slide-geometry';
 import { isTypingTarget, slideTitle, stepSlide } from '@/components/editor/slide-navigation';
+import { FileBar } from '@/components/editor/file-bar';
+import { ExportDialog, type ExportOptions } from '@/components/editor/export-dialog';
+import { useDeckExport } from '@/components/editor/use-deck-export';
+import { safeFileName, type DeckExporter, type ExportFormat } from '@/lib/deck-export';
+import { createDemoExporter } from '@/mocks/demo-exporter';
 import {
   alignUnits,
   canGroup,
@@ -185,6 +190,7 @@ export function EditorShell({
   layout: saved = EDITOR_LAYOUT_DEFAULT,
   onSlidesChange,
   saveStatus,
+  exporter: givenExporter,
 }: {
   deck: Deck;
   /** Адрес картинки по `mediaPart`. Нет адреса — на слайде рамка. */
@@ -195,6 +201,8 @@ export function EditorShell({
   onSlidesChange?: (slides: readonly SlideIr[]) => void;
   /** Значок сохранения в подвале списка слайдов. */
   saveStatus?: ReactNode;
+  /** Кто собирает файл. Пока API нет — демо: проходит те же этапы, но файла не создаёт. */
+  exporter?: DeckExporter;
 }) {
   const t = useTranslations('editor');
   const slidesPanelRef = usePanelRef();
@@ -208,6 +216,12 @@ export function EditorShell({
   const [tool, setTool] = useState<VariantId>('select');
   // Реестр знает адреса файлов, которые пользователь положил на слайд в этой вкладке.
   const resolveMedia = useMediaResolver(media);
+  // Название живёт в редакторе, пока колоду некуда сохранить: API для этого ещё нет.
+  const [title, setTitle] = useState(deck.title);
+  const [exporter] = useState(() => givenExporter ?? createDemoExporter());
+  const exportJob = useDeckExport(exporter);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('pptx');
   // Оформление шаблона заблокировано с самого начала: см. `lockTemplateDecor`.
   const startSlides = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
   const {
@@ -777,6 +791,34 @@ export function EditorShell({
     ],
   );
 
+  // Формат из меню файла открывает выбор заново; кнопка «Экспорт» — то, что уже идёт или готово.
+  const openExport = (format?: ExportFormat) => {
+    if (format) {
+      setExportFormat(format);
+      if (exportJob.phase === 'done' || exportJob.phase === 'failed') exportJob.reset();
+    }
+    setExportOpen(true);
+  };
+
+  // В файл уходит записанная колода, а не живой вид жеста, который ещё не закончился.
+  const startExport = (options: ExportOptions) => {
+    const chosen =
+      options.range === 'all'
+        ? committedSlides
+        : committedSlides.filter((item) => item.slideId === slideId);
+    if (chosen.length === 0) return;
+    setExportFormat(options.format);
+    exportJob.start({
+      deckId: deck.deckId,
+      fileName: safeFileName(options.fileName, safeFileName(title, t('untitled'))),
+      format: options.format,
+      variant: deck.variant,
+      slides: chosen,
+      designSystem,
+      audit: options.audit,
+    });
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.defaultPrevented) return;
@@ -1091,6 +1133,25 @@ export function EditorShell({
             <ResizableHandle aria-label={t('resizeSlides')} className="max-md:hidden" />
 
             <ResizablePanel id="canvas" minSize="40%" className="flex min-w-0 flex-col">
+              <FileBar
+                title={title}
+                onRename={setTitle}
+                onExport={openExport}
+                exportPercent={
+                  exportJob.phase === 'running' ? (exportJob.progress?.percent ?? 0) : null
+                }
+              />
+              <ExportDialog
+                open={exportOpen}
+                onOpenChange={setExportOpen}
+                job={exportJob}
+                initialFormat={exportFormat}
+                defaultFileName={safeFileName(title, t('untitled'))}
+                slideCount={slides.length}
+                currentIndex={index}
+                variant={deck.variant}
+                onStart={startExport}
+              />
               <ToolRailDock
                 className="min-h-0 min-w-0 flex-1"
                 railClassName="max-md:hidden"
