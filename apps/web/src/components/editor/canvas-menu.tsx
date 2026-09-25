@@ -7,7 +7,8 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
 } from '@/components/ui/context-menu';
-import { shortcutLabel, type CanvasCommand } from '@/components/editor/editor-keymap';
+import type { CanvasCommand } from '@/components/editor/editor-keymap';
+import { shortcutKeys, shortcutLabel } from '@/components/editor/editor-shortcuts';
 
 type MenuId =
   | 'cut'
@@ -18,6 +19,8 @@ type MenuId =
   | 'forward'
   | 'backward'
   | 'back'
+  | 'group'
+  | 'ungroup'
   | 'selectAll'
   | 'unlockAll'
   | 'remove';
@@ -32,46 +35,60 @@ type Entry = {
 
 const GROUPS: readonly (readonly Entry[])[] = [
   [
-    { id: 'cut', command: { kind: 'cut' }, keys: ['Mod', 'X'], needsSelection: true },
-    { id: 'copy', command: { kind: 'copy' }, keys: ['Mod', 'C'], needsSelection: true },
-    { id: 'paste', command: { kind: 'paste' }, keys: ['Mod', 'V'] },
-    { id: 'duplicate', command: { kind: 'duplicate' }, keys: ['Mod', 'D'], needsSelection: true },
+    { id: 'cut', command: { kind: 'cut' }, keys: shortcutKeys('cut'), needsSelection: true },
+    { id: 'copy', command: { kind: 'copy' }, keys: shortcutKeys('copy'), needsSelection: true },
+    { id: 'paste', command: { kind: 'paste' }, keys: shortcutKeys('paste') },
+    {
+      id: 'duplicate',
+      command: { kind: 'duplicate' },
+      keys: shortcutKeys('duplicate'),
+      needsSelection: true,
+    },
   ],
   [
     {
       id: 'front',
       command: { kind: 'arrange', to: 'front' },
-      keys: ['Mod', 'Shift', ']'],
+      keys: shortcutKeys('bring-front'),
       needsSelection: true,
     },
     {
       id: 'forward',
       command: { kind: 'arrange', to: 'forward' },
-      keys: ['Mod', ']'],
+      keys: shortcutKeys('bring-forward'),
       needsSelection: true,
     },
     {
       id: 'backward',
       command: { kind: 'arrange', to: 'backward' },
-      keys: ['Mod', '['],
+      keys: shortcutKeys('send-backward'),
       needsSelection: true,
     },
     {
       id: 'back',
       command: { kind: 'arrange', to: 'back' },
-      keys: ['Mod', 'Shift', '['],
+      keys: shortcutKeys('send-back'),
       needsSelection: true,
     },
   ],
   [
-    { id: 'selectAll', command: { kind: 'select-all' }, keys: ['Mod', 'A'] },
+    { id: 'group', command: { kind: 'group' }, keys: shortcutKeys('group'), needsSelection: true },
+    {
+      id: 'ungroup',
+      command: { kind: 'ungroup' },
+      keys: shortcutKeys('ungroup'),
+      needsSelection: true,
+    },
+  ],
+  [
+    { id: 'selectAll', command: { kind: 'select-all' }, keys: shortcutKeys('select-all') },
     { id: 'unlockAll', command: { kind: 'unlock-all' }, keys: [] },
   ],
   [
     {
       id: 'remove',
       command: { kind: 'remove' },
-      keys: ['Del'],
+      keys: shortcutKeys('remove'),
       needsSelection: true,
       destructive: true,
     },
@@ -83,7 +100,7 @@ function isMac(): boolean {
 }
 
 /**
- * Меню правой кнопки на холсте, как в Figma: буфер обмена, слои, выделить всё, удалить.
+ * Меню правой кнопки на холсте, как в Figma: буфер обмена, слои, группы, выделить всё, удалить.
  * Пункты, которым нужно выделение, без него неактивны, а не спрятаны: место каждого пункта
  * в меню постоянно.
  */
@@ -91,11 +108,17 @@ export function CanvasMenuContent({
   hasSelection,
   canPaste,
   hasLocked,
+  canGroup = false,
+  canUngroup = false,
   onCommand,
 }: {
   hasSelection: boolean;
   canPaste: boolean;
   hasLocked: boolean;
+  /** Выбрано два узла и больше: объекты или группы целиком. */
+  canGroup?: boolean;
+  /** Среди выбранного есть группа целиком. */
+  canUngroup?: boolean;
   onCommand: (command: CanvasCommand) => void;
 }) {
   const t = useTranslations('canvasMenu');
@@ -113,7 +136,9 @@ export function CanvasMenuContent({
               disabled={
                 (entry.needsSelection === true && !hasSelection) ||
                 (entry.command.kind === 'paste' && !canPaste) ||
-                (entry.command.kind === 'unlock-all' && !hasLocked)
+                (entry.command.kind === 'unlock-all' && !hasLocked) ||
+                (entry.command.kind === 'group' && !canGroup) ||
+                (entry.command.kind === 'ungroup' && !canUngroup)
               }
               onSelect={() => onCommand(entry.command)}
             >
