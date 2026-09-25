@@ -9,6 +9,7 @@ export {
   commitSetText,
   commitSetTextGesture,
   FONT_SIZE_PT,
+  JOURNAL_LIMIT,
   createDeckHistory,
   mergeChanges,
   recordChange,
@@ -43,8 +44,47 @@ export {
 } from './element-ops.js';
 export {
   commitDuplicateSlide,
+  commitDuplicateSlides,
   commitInsertSlide,
+  commitMoveSlides,
   commitRemoveSlide,
+  commitRemoveSlides,
   commitSlideBackground,
 } from './slide-ops.js';
+export { commitGroup, commitMoveLayer, commitUngroup } from './group-ops.js';
+export {
+  commonPath,
+  findLayer,
+  groupPath,
+  layerElementIds,
+  layerElements,
+  layerTree,
+  layersAt,
+  pickedLayers,
+  type ElementLayer,
+  type GroupLayer,
+  type LayerNode,
+  type PickedLayer,
+} from './layers.js';
+export {
+  TABLE_MIN_TRACK_EMU,
+  commitDistributeTable,
+  commitTableCellStyle,
+  commitTableColumnWidth,
+  commitTableFitRows,
+  commitTableRowHeight,
+  commitTableTexts,
+  rangeCells,
+  tableShares,
+  type GridText,
+  type TableCellStyleChange,
+  type TableRange,
+} from './table-ops.js';
+export {
+  MIN_CROP_REST,
+  commitImageCrop,
+  commitShapeText,
+  commitSlideNotes,
+  normalCrop,
+} from './content-ops.js';
 export type { DeckChange, DeckChangeKind, DeckCommit, DeckHistory, DeckSelection } from './core.js';

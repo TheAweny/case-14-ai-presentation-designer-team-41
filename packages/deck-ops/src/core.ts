@@ -1,5 +1,11 @@
 import { enablePatches, Immer, type Patch } from 'immer';
-import { patchOpSchema, type PatchOp, type SlideElement, type SlideIr } from '@lct/contracts';
+import {
+  patchOpSchema,
+  type Paragraph,
+  type PatchOp,
+  type SlideElement,
+  type SlideIr,
+} from '@lct/contracts';
 
 // Patches stay off until asked for. Freezing is off too: a commit shares unchanged slides with
 // the deck it was given, and the default freeze would make those slides read-only.
@@ -23,6 +29,8 @@ export type DeckChangeKind =
   | 'paste'
   | 'duplicate'
   | 'arrange'
+  | 'group'
+  | 'ungroup'
   | 'image'
   | 'table'
   | 'chart'
@@ -30,7 +38,9 @@ export type DeckChangeKind =
   | 'slide-insert'
   | 'slide-duplicate'
   | 'slide-remove'
-  | 'slide-background';
+  | 'slide-background'
+  | 'crop'
+  | 'notes';
 
 /** A slide and the elements selected on it. An empty list is a slide with nothing selected. */
 export interface DeckSelection {
@@ -63,6 +73,11 @@ export interface DeckChange {
    * a text box and typing into it is one step of history, and removing it again is none.
    */
   readonly pendingText: string | null;
+  /**
+   * The series this change belongs to, such as arrow nudges in a row. A later change of the same
+   * series folds into this entry, so the whole run is one step of history.
+   */
+  readonly series?: string;
 }
 
 /** The deck after a commit. `change` is null when the slides were left as they were. */
@@ -151,6 +166,16 @@ export function elementOf(
   elementId: string,
 ): SlideElement | undefined {
   return slideOf(slides, slideId)?.elements.find((element) => element.elementId === elementId);
+}
+
+/**
+ * The words of an element: a text element's paragraphs or the text inside a shape. Null when it
+ * holds none: a picture, a table, a chart, a shape nobody typed into.
+ */
+export function wordsOf(element: SlideElement): Paragraph[] | null {
+  if (element.kind === 'text') return element.paragraphs;
+  if (element.kind === 'decor') return element.paragraphs ?? null;
+  return null;
 }
 
 /** The browser and Node both have it; a caller that wants stable ids passes its own source. */

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Box, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import {
   FONT_SIZE_PT,
+  JOURNAL_LIMIT,
   commitInsert,
   commitMove,
   commitMoves,
@@ -919,6 +920,74 @@ describe('folding a new text box into what was typed into it', () => {
     expect(merged.undo[0]?.ops.map((op) => op.op)).toEqual(['move', 'set-text']);
     expect(undoDeck(merged).slides).toEqual(slides);
     expect(redoDeck(undoDeck(merged)).slides).toEqual(merged.slides);
+  });
+});
+
+describe('series of changes', () => {
+  const nudge = (history: ReturnType<typeof createDeckHistory>, x: number, series?: string) =>
+    recordChange(
+      history,
+      commitMove(history.slides, {
+        slideId: 'opening',
+        elementId: 'title',
+        box: { ...ORIGIN, x },
+      }),
+      series === undefined ? undefined : { series },
+    );
+
+  it('folds a run of the same series into one step', () => {
+    const slides = deck();
+    let history = createDeckHistory(slides);
+    for (const x of [1, 2, 3, 4]) history = nudge(history, x, 'nudge-a');
+
+    expect(history.undo).toHaveLength(1);
+    expect(history.undo[0]?.series).toBe('nudge-a');
+    expect(undoDeck(history).slides).toEqual(slides);
+  });
+
+  it('starts a new step for another series or after any other change', () => {
+    const slides = deck();
+    let history = nudge(createDeckHistory(slides), 1, 'nudge-a');
+    history = nudge(history, 2, 'nudge-b');
+    expect(history.undo).toHaveLength(2);
+
+    history = nudge(history, 3);
+    history = nudge(history, 4, 'nudge-b');
+    expect(history.undo).toHaveLength(4);
+  });
+
+  it('does not continue a series that undo already took back', () => {
+    const slides = deck();
+    const first = nudge(createDeckHistory(slides), 1, 'nudge-a');
+    const again = nudge(undoDeck(first), 2, 'nudge-a');
+
+    expect(again.undo).toHaveLength(1);
+    expect(undoDeck(again).slides).toEqual(slides);
+  });
+});
+
+describe('journal length', () => {
+  it(`keeps the newest ${JOURNAL_LIMIT} steps and drops the oldest`, () => {
+    const slides = deck();
+    let history = createDeckHistory(slides);
+    for (let step = 1; step <= JOURNAL_LIMIT + 5; step += 1) {
+      history = recordChange(
+        history,
+        commitMove(history.slides, {
+          slideId: 'opening',
+          elementId: 'title',
+          box: { ...ORIGIN, x: step },
+        }),
+      );
+    }
+
+    expect(history.undo).toHaveLength(JOURNAL_LIMIT);
+    let undone = history;
+    for (let step = 0; step < JOURNAL_LIMIT; step += 1) undone = undoDeck(undone);
+    // The five oldest steps are gone: undo stops at the sixth move, not at the start.
+    const title = undone.slides[0]?.elements.find((element) => element.elementId === 'title');
+    expect(title?.box.x).toBe(5);
+    expect(undoDeck(undone)).toBe(undone);
   });
 });
 

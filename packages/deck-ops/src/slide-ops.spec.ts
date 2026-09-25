@@ -5,8 +5,11 @@ import type { DeckCommit } from './core.js';
 import { createDeckHistory, recordChange, redoDeck, undoDeck } from './journal.js';
 import {
   commitDuplicateSlide,
+  commitDuplicateSlides,
   commitInsertSlide,
+  commitMoveSlides,
   commitRemoveSlide,
+  commitRemoveSlides,
   commitSlideBackground,
 } from './slide-ops.js';
 
@@ -195,5 +198,70 @@ describe('slide background', () => {
       expect(commit.change).toBeNull();
       expect(commit.slides).toBe(slides);
     }
+  });
+});
+
+describe('several slides at once', () => {
+  function five(): SlideIr[] {
+    return ['a', 'b', 'c', 'd', 'e'].map((id, index) => slide(id, index));
+  }
+  const order = (commit: DeckCommit) => commit.slides.map((item) => item.slideId);
+
+  it('moves slides as one block in deck order, whatever order they were picked in', () => {
+    const slides = five();
+    const commit = commitMoveSlides(slides, { slideIds: ['d', 'b'], index: 3 });
+    expectReversible(slides, commit);
+    expect(order(commit)).toEqual(['a', 'c', 'e', 'b', 'd']);
+    expect(commit.slides.map((item) => item.index)).toEqual([0, 1, 2, 3, 4]);
+    expect(commit.change?.kind).toBe('slide-order');
+    expect(order(commitMoveSlides(slides, { slideIds: ['c', 'e'], index: 0 }))).toEqual([
+      'c',
+      'e',
+      'a',
+      'b',
+      'd',
+    ]);
+  });
+
+  it('ignores a move that leaves the order as it was or points outside the deck', () => {
+    const slides = five();
+    for (const commit of [
+      commitMoveSlides(slides, { slideIds: ['b', 'c'], index: 1 }),
+      commitMoveSlides(slides, { slideIds: ['b'], index: 5 }),
+      commitMoveSlides(slides, { slideIds: ['b'], index: -1 }),
+      commitMoveSlides(slides, { slideIds: ['nowhere'], index: 0 }),
+    ]) {
+      expect(commit.change).toBeNull();
+    }
+  });
+
+  it('copies slides after the last of them, in deck order, under the ids asked for', () => {
+    const slides = five();
+    const commit = commitDuplicateSlides(slides, {
+      slideIds: ['d', 'b'],
+      newSlideIds: ['b-copy', 'a'],
+      nextId: () => 'fresh',
+    });
+    expectReversible(slides, commit);
+    expect(order(commit)).toEqual(['a', 'b', 'c', 'd', 'b-copy', 'fresh', 'e']);
+    expect(commit.slides[5]?.elements).toEqual(slides[3]?.elements);
+    expect(commit.change?.after?.slideId).toBe('b-copy');
+  });
+
+  it('removes slides in one step and opens the one that followed the first', () => {
+    const slides = five();
+    const commit = commitRemoveSlides(slides, { slideIds: ['b', 'c'] });
+    expectReversible(slides, commit);
+    expect(order(commit)).toEqual(['a', 'd', 'e']);
+    expect(commit.change?.after?.slideId).toBe('d');
+    const tail = commitRemoveSlides(slides, { slideIds: ['d', 'e'] });
+    expect(tail.change?.after?.slideId).toBe('c');
+  });
+
+  it('keeps at least one slide', () => {
+    const slides = five();
+    const all = commitRemoveSlides(slides, { slideIds: slides.map((item) => item.slideId) });
+    expect(all.change).toBeNull();
+    expect(all.slides).toBe(slides);
   });
 });

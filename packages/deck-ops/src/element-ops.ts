@@ -7,17 +7,20 @@ import {
   imageFitSchema,
   paragraphAlignSchema,
   elementStrokeSchema,
+  tableBordersSchema,
   verticalAlignSchema,
   type ChartType,
   type ColorValue,
   type DecorShape,
   type ImageFit,
+  type Paragraph,
   type ParagraphAlign,
   type PatchOp,
   type SlideElement,
   type SlideElementKind,
   type SlideIr,
   type ElementStroke,
+  type TableBorders,
   type VerticalAlign,
 } from '@lct/contracts';
 import {
@@ -34,6 +37,14 @@ import {
   type DeckCommit,
 } from './core.js';
 import { parsedElements } from './journal.js';
+import {
+  arrangedLayers,
+  flattenLayers,
+  groupIdsOf,
+  groupPath,
+  layerTree,
+  tidyLayers,
+} from './layers.js';
 
 /*
  * Properties
@@ -67,7 +78,10 @@ export interface ElementProps {
   readonly flipV?: boolean;
   readonly fit?: ImageFit;
   readonly chartType?: ChartType;
-  /** Every paragraph of a text element. Null goes back to the inherited alignment. */
+  /**
+   * Every paragraph of a text element or of the text in a shape. Null goes back to the
+   * inherited alignment. The other word properties below reach shape text the same way.
+   */
   readonly align?: ParagraphAlign | null;
   readonly verticalAlign?: VerticalAlign;
   /** Every run of a text element. Null goes back to what the type role says. */
@@ -86,29 +100,42 @@ export interface ElementProps {
    * [`LINE_SPACING.min`, `LINE_SPACING.max`]. Null goes back to what the type role says.
    */
   readonly lineSpacing?: number | null;
+  /** Whether the first row of a table looks like a header. */
+  readonly headerRow?: boolean;
+  /** Whether every other body row of a table is tinted. */
+  readonly bandedRows?: boolean;
+  /** Fill of the tinted rows: a role or a hex. Null goes back to the default. */
+  readonly bandFill?: ColorValue | null;
+  /**
+   * Rules of a table, merged over the ones it states. A table that states none needs whole
+   * rules. Null draws no lines at all.
+   */
+  readonly borders?: Partial<TableBorders> | null;
 }
 
 export type ElementProp = keyof ElementProps;
 
 const LOOK = ['rotation', 'opacity', 'locked'] as const satisfies readonly ElementProp[];
 
+/** The look of words: of a text element, and of the text inside a shape when it has some. */
+const WORDS = [
+  'align',
+  'verticalAlign',
+  'bold',
+  'italic',
+  'underline',
+  'fontFamily',
+  'letterSpacingPt',
+  'lineSpacing',
+] as const satisfies readonly ElementProp[];
+
 /** Which properties each kind takes. The panel shows a control only where it applies. */
 export const ELEMENT_PROPS: Readonly<Record<SlideElementKind, readonly ElementProp[]>> = {
-  text: [
-    ...LOOK,
-    'align',
-    'verticalAlign',
-    'bold',
-    'italic',
-    'underline',
-    'fontFamily',
-    'letterSpacingPt',
-    'lineSpacing',
-  ],
+  text: [...LOOK, ...WORDS],
   image: [...LOOK, 'fit'],
-  table: [...LOOK],
+  table: [...LOOK, 'headerRow', 'bandedRows', 'bandFill', 'borders'],
   chart: [...LOOK, 'chartType'],
-  decor: [...LOOK, 'shape', 'fill', 'stroke', 'cornerRadius', 'flipH', 'flipV'],
+  decor: [...LOOK, 'shape', 'fill', 'stroke', 'cornerRadius', 'flipH', 'flipV', ...WORDS],
 };
 
 type Mutable = Record<string, unknown>;
@@ -202,7 +229,20 @@ function applyDecor(target: Draft<Extract<SlideElement, { kind: 'decor' }>>, pro
   if (props.flipV !== undefined) setOrDrop(decor, 'flipV', props.flipV === true, false);
 }
 
-function applyText(target: Draft<Extract<SlideElement, { kind: 'text' }>>, props: ElementProps) {
+/** What the word properties change: the paragraphs and the anchor of a text or a shape. */
+interface WordsDraft {
+  verticalAlign?: VerticalAlign;
+  paragraphs: Draft<Paragraph>[];
+}
+
+/** A shape holds words only once someone typed into it; a plain shape takes no word props. */
+function hasWords(
+  target: Draft<Extract<SlideElement, { kind: 'decor' }>>,
+): target is Draft<Extract<SlideElement, { kind: 'decor' }>> & WordsDraft {
+  return target.paragraphs !== undefined;
+}
+
+function applyText(target: WordsDraft, props: ElementProps) {
   if (
     props.verticalAlign !== undefined &&
     verticalAlignSchema.safeParse(props.verticalAlign).success
@@ -254,6 +294,36 @@ function applyText(target: Draft<Extract<SlideElement, { kind: 'text' }>>, props
   }
 }
 
+function applyTable(target: Draft<Extract<SlideElement, { kind: 'table' }>>, props: ElementProps) {
+  const table = target as unknown as Mutable;
+  if (props.headerRow !== undefined) setOrDrop(table, 'headerRow', props.headerRow === true, true);
+  if (props.bandedRows !== undefined) {
+    setOrDrop(table, 'bandedRows', props.bandedRows === true, false);
+  }
+  if (props.bandFill !== undefined) {
+    if (props.bandFill === null) setOrDrop(table, 'bandFill', null, null);
+    else if (colorValueSchema.safeParse(props.bandFill).success) {
+      setOrDrop(table, 'bandFill', props.bandFill, null);
+    }
+  }
+  if (props.borders !== undefined) {
+    if (props.borders === null) {
+      if (target.borders !== null) target.borders = null;
+    } else {
+      const merged = tableBordersSchema.safeParse({
+        ...(target.borders ?? {}),
+        ...props.borders,
+        ...(props.borders.widthEmu !== undefined
+          ? { widthEmu: Math.max(1, Math.round(props.borders.widthEmu)) }
+          : null),
+      });
+      if (merged.success && JSON.stringify(merged.data) !== JSON.stringify(target.borders)) {
+        target.borders = merged.data;
+      }
+    }
+  }
+}
+
 function propsKind(props: ElementProps): DeckChangeKind {
   const keys = (Object.keys(props) as ElementProp[]).filter((key) => props[key] !== undefined);
   if (keys.length > 0 && keys.every((key) => key === 'rotation')) return 'rotate';
@@ -294,11 +364,17 @@ export function commitElementProps(
       if (!target) continue;
       const props = propsFor(target.kind, change.props);
       applyLook(target, props);
-      if (target.kind === 'decor') applyDecor(target, props);
+      if (target.kind === 'decor') {
+        applyDecor(target, props);
+        if (hasWords(target)) applyText(target, props);
+      }
       if (target.kind === 'text') applyText(target, props);
+      if (target.kind === 'table') applyTable(target, props);
       if (target.kind === 'image' && props.fit !== undefined) {
-        if (imageFitSchema.safeParse(props.fit).success && target.fit !== props.fit) {
-          target.fit = props.fit;
+        if (imageFitSchema.safeParse(props.fit).success) {
+          if (target.fit !== props.fit) target.fit = props.fit;
+          // Fit places the whole picture: a crop would hide the change, so choosing one drops it.
+          if (target.crop !== undefined) delete target.crop;
         }
       }
       if (target.kind === 'chart' && props.chartType !== undefined) {
@@ -361,10 +437,20 @@ function shifted<T extends SlideElement>(element: T, offset: Offset, elementId: 
   return copy;
 }
 
+/** The same element in the groups `renamed` maps to; a group it does not name keeps its id. */
+function regrouped<T extends SlideElement>(element: T, renamed: ReadonlyMap<string, string>): T {
+  const path = groupPath(element);
+  if (path.length === 0) return element;
+  return { ...element, groupIds: path.map((id) => renamed.get(id) ?? id) };
+}
+
 /**
  * Copy elements of a slide. The copies get new ids, shift by `offset` (a hundredth of the slide
  * width by default) and sit as one block right above the topmost original, in the originals'
  * paint order. Undo selects the originals, redo the copies.
+ *
+ * A group copied whole is a new group; a copy of part of a group joins that group, the way
+ * duplicating inside a group works in Figma.
  */
 export function commitDuplicate(
   slides: readonly SlideIr[],
@@ -382,7 +468,7 @@ export function commitDuplicate(
   if (originals.length === 0) return unchanged(slides);
   const offset = change.offset ?? defaultOffset(slide);
   const next = freshIds(
-    slide.elements.map((element) => element.elementId),
+    [...slide.elements.map((element) => element.elementId), ...groupIdsOf(slide.elements)],
     change.nextId ?? randomId,
   );
   const copies: SlideElement[] = [];
@@ -391,13 +477,26 @@ export function commitDuplicate(
     if (id === null) return unchanged(slides);
     copies.push(shifted(original, offset, id));
   }
+  const renamed = new Map<string, string>();
+  for (const groupId of groupIdsOf(originals)) {
+    const members = slide.elements.filter((element) => groupPath(element).includes(groupId));
+    if (!members.every((element) => wanted.has(element.elementId))) continue;
+    const id = next();
+    if (id === null) return unchanged(slides);
+    renamed.set(groupId, id);
+  }
   const top = Math.max(
     ...originals.map((original) => slide.elements.findIndex((item) => item === original)),
   );
   const produced = produceSlides(slides, (draft) => {
     const target = slideOf(draft, change.slideId);
     if (!target) return;
-    target.elements.splice(top + 1, 0, ...structuredClone(copies));
+    target.elements.splice(
+      top + 1,
+      0,
+      ...structuredClone(copies.map((copy) => regrouped(copy, renamed))),
+    );
+    tidyLayers(target);
   });
   return commitProduced(slides, produced, change.slideId, [], {
     kind: 'duplicate',
@@ -432,7 +531,7 @@ export function commitPaste(
   const parsed = parsedElements(change.elements);
   if (!parsed) return unchanged(slides);
   const next = freshIds(
-    slide.elements.map((element) => element.elementId),
+    [...slide.elements.map((element) => element.elementId), ...groupIdsOf(slide.elements)],
     change.nextId ?? randomId,
   );
   const offset = change.offset ?? { x: 0, y: 0 };
@@ -442,10 +541,18 @@ export function commitPaste(
     if (id === null) return unchanged(slides);
     pasted.push(shifted(element, offset, id));
   }
+  // Groups come along as new groups: the ones they had may mean something else on this slide.
+  const renamed = new Map<string, string>();
+  for (const groupId of groupIdsOf(parsed)) {
+    const id = next();
+    if (id === null) return unchanged(slides);
+    renamed.set(groupId, id);
+  }
   const produced = produceSlides(slides, (draft) => {
     const target = slideOf(draft, change.slideId);
     if (!target) return;
-    target.elements.push(...structuredClone(pasted));
+    target.elements.push(...structuredClone(pasted.map((element) => regrouped(element, renamed))));
+    tidyLayers(target);
   });
   return commitProduced(slides, produced, change.slideId, [], {
     kind: 'paste',
@@ -495,7 +602,9 @@ function arranged<T>(items: readonly T[], selected: (item: T) => boolean, to: Ar
 
 /**
  * Move elements through the paint order of their slide. Stepping forward passes the next element
- * that is not selected; front and back keep the selected elements in their own order.
+ * that is not selected; front and back keep the selected elements in their own order. Groups
+ * are single steps: a selected group moves past whole groups, and an element inside a group
+ * moves among its siblings there, up to the top or bottom of the group.
  */
 export function commitArrange(
   slides: readonly SlideIr[],
@@ -509,9 +618,12 @@ export function commitArrange(
   if (!slide) return unchanged(slides);
   const wanted = new Set(change.elementIds);
   const picked = (element: SlideElement) => wanted.has(element.elementId);
-  const order = arranged(slide.elements, picked, change.to);
-  if (order.every((element, index) => element === slide.elements[index])) return unchanged(slides);
-  const ids = order.map((element) => element.elementId);
+  // Siblings move among siblings: a group moves as one, an element inside one stays inside it.
+  const layers = arrangedLayers(layerTree(slide.elements), wanted, (items, pick) =>
+    arranged(items, pick, change.to),
+  );
+  const ids = flattenLayers(layers).map((layer) => layer.elementId);
+  if (ids.every((id, index) => id === slide.elements[index]?.elementId)) return unchanged(slides);
   const produced = produceSlides(slides, (draft) => {
     const target = slideOf(draft, change.slideId);
     if (!target) return;
@@ -571,93 +683,15 @@ export function commitReplaceImage(
   });
 }
 
-/** A table cell by row and column. `row` is `'header'` for the header row, else a body row. */
-export interface TableCell {
-  readonly row: number | 'header';
-  readonly column: number;
-}
-
-function validIndex(index: number, length: number): boolean {
-  return Number.isInteger(index) && index >= 0 && index < length;
-}
-
-/** The text of one cell, the header included. */
-export function commitTableCell(
-  slides: readonly SlideIr[],
-  change: {
-    readonly slideId: string;
-    readonly elementId: string;
-    readonly cell: TableCell;
-    readonly text: string;
-  },
-): DeckCommit {
-  const { row, column } = change.cell;
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (row === 'header') {
-      if (validIndex(column, table.headers.length) && table.headers[column] !== change.text) {
-        table.headers[column] = change.text;
-      }
-      return;
-    }
-    const cells = validIndex(row, table.rows.length) ? table.rows[row] : undefined;
-    if (!cells || !validIndex(column, table.headers.length)) return;
-    // A short row grows to the column it is written in, so every row keeps the header's width.
-    while (cells.length <= column) cells.push('');
-    if (cells[column] !== change.text) cells[column] = change.text;
-  });
-}
-
-/** An empty body row at `index`, from 0 (under the header) to the row count (at the end). */
-export function commitInsertTableRow(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (!validIndex(change.index, table.rows.length + 1)) return;
-    table.rows.splice(
-      change.index,
-      0,
-      table.headers.map(() => ''),
-    );
-  });
-}
-
-/** Remove a body row. The last one stays: a table always has a row under its header. */
-export function commitRemoveTableRow(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (table.rows.length <= 1 || !validIndex(change.index, table.rows.length)) return;
-    table.rows.splice(change.index, 1);
-  });
-}
-
-/** An empty column at `index`, from 0 (first) to the column count (last). */
-export function commitInsertTableColumn(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (!validIndex(change.index, table.headers.length + 1)) return;
-    table.headers.splice(change.index, 0, '');
-    for (const cells of table.rows) cells.splice(Math.min(change.index, cells.length), 0, '');
-  });
-}
-
-/** Remove a column. The last one stays. */
-export function commitRemoveTableColumn(
-  slides: readonly SlideIr[],
-  change: { readonly slideId: string; readonly elementId: string; readonly index: number },
-): DeckCommit {
-  return commitOne(slides, change, 'table', 'table', (table) => {
-    if (table.headers.length <= 1 || !validIndex(change.index, table.headers.length)) return;
-    table.headers.splice(change.index, 1);
-    for (const cells of table.rows) {
-      if (change.index < cells.length) cells.splice(change.index, 1);
-    }
-  });
-}
+// Table operations live in their own module; these names stay reachable from here.
+export {
+  commitInsertTableColumn,
+  commitInsertTableRow,
+  commitRemoveTableColumn,
+  commitRemoveTableRow,
+  commitTableCell,
+  type TableCell,
+} from './table-ops.js';
 
 export interface ChartSeries {
   readonly name: string;
