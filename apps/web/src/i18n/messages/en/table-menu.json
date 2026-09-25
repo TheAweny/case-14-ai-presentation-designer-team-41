@@ -1,0 +1,15 @@
+{
+  "insertRowAbove": "Insert row above",
+  "insertRowBelow": "Insert row below",
+  "insertColumnLeft": "Insert column left",
+  "insertColumnRight": "Insert column right",
+  "removeRows": "{count, plural, one {Delete row} other {Delete # rows}}",
+  "removeColumns": "{count, plural, one {Delete column} other {Delete # columns}}",
+  "clearCells": "Clear cells",
+  "resetLook": "Reset cell formatting",
+  "fill": "Cell fill",
+  "noFill": "No fill",
+  "resizeColumn": "Column {index} border",
+  "resizeRow": "Row {index} border",
+  "resizeHint": "Drag to resize. Double-click to fit the content"
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { editorCommand, type KeyContext } from './editor-keymap';
-import en from '../../i18n/messages/en.json';
-import ru from '../../i18n/messages/ru.json';
+import en from '../../i18n/messages/en';
+import ru from '../../i18n/messages/ru';
 import {
   GESTURES,
   SHORTCUTS,

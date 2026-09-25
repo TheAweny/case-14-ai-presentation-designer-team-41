@@ -1,0 +1,8 @@
+{
+  "label": "Speaker notes",
+  "placeholder": "Notes for this slide: only the presenter sees them",
+  "show": "Show notes",
+  "hide": "Hide notes",
+  "resize": "Resize notes",
+  "has": "Has notes"
+}

@@ -4,8 +4,8 @@ import { LOCALE_COOKIE, resolveLocale, type Locale } from './config';
 
 /** Словари грузятся по одному на запрос: в сборку попадают оба, в ответ — только нужный. */
 const MESSAGES = {
-  ru: () => import('./messages/ru.json'),
-  en: () => import('./messages/en.json'),
+  ru: () => import('./messages/ru'),
+  en: () => import('./messages/en'),
 } satisfies Record<Locale, () => Promise<unknown>>;
 
 /** Точка входа next-intl: плагин в next.config находит этот файл сам. */

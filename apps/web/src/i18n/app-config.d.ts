@@ -1,5 +1,5 @@
 import type { Locale } from './config';
-import type messages from './messages/ru.json';
+import type messages from './messages/ru';
 
 /**
  * Типы next-intl: ключи сверяются с русским словарём, он исходный. Опечатка в ключе или

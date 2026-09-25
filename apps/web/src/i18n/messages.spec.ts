@@ -9,8 +9,8 @@ import {
   type MessageFormatElement,
 } from '@formatjs/icu-messageformat-parser';
 import { DEFAULT_LOCALE, LOCALES, type Locale } from './config';
-import en from './messages/en.json';
-import ru from './messages/ru.json';
+import en from './messages/en';
+import ru from './messages/ru';
 
 const DICTIONARIES: Record<Locale, unknown> = { ru, en };
 

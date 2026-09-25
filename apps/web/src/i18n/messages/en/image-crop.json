@@ -1,0 +1,11 @@
+{
+  "label": "Crop picture",
+  "frame": "Crop frame",
+  "picture": "Picture: drag to move it in the frame",
+  "handle": "Frame edge",
+  "corner": "Picture corner: drag to scale",
+  "done": "Done",
+  "reset": "Reset",
+  "replace": "Replace…",
+  "cancel": "Cancel"
+}
