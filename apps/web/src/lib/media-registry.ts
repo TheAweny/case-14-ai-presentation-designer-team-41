@@ -40,6 +40,13 @@ export interface MediaRegistry {
   register(file: File): string;
   /** Адрес для браузера или null, если части в реестре нет: тогда на слайде рамка. */
   url(mediaPart: string): string | null;
+  /** Сам файл части — для черновика колоды. Null, если части в реестре нет. */
+  file(mediaPart: string): Blob | null;
+  /**
+   * Вернуть в реестр файл под прежним `mediaPart`: черновик колоды после перезагрузки.
+   * Часть, которая уже есть, не заменяется.
+   */
+  restore(mediaPart: string, file: Blob): void;
   /** Подписка на изменения: реестр живёт вне React, а холст должен перерисоваться. */
   subscribe(listener: () => void): () => void;
   /** Номер версии реестра: растёт на каждую регистрацию. */
@@ -49,16 +56,17 @@ export interface MediaRegistry {
 }
 
 export interface MediaRegistryOptions {
-  readonly createUrl?: (file: File) => string;
+  readonly createUrl?: (file: Blob) => string;
   readonly revokeUrl?: (url: string) => void;
   readonly nextId?: () => string;
 }
 
 export function createMediaRegistry(options: MediaRegistryOptions = {}): MediaRegistry {
-  const createUrl = options.createUrl ?? ((file: File) => URL.createObjectURL(file));
+  const createUrl = options.createUrl ?? ((file: Blob) => URL.createObjectURL(file));
   const revokeUrl = options.revokeUrl ?? ((url: string) => URL.revokeObjectURL(url));
   const nextId = options.nextId ?? (() => crypto.randomUUID());
   const urls = new Map<string, string>();
+  const files = new Map<string, Blob>();
   const listeners = new Set<() => void>();
   let version = 0;
 
@@ -71,10 +79,18 @@ export function createMediaRegistry(options: MediaRegistryOptions = {}): MediaRe
     register(file) {
       const mediaPart = `${UPLOAD_PREFIX}${nextId()}.${extensionOf(file)}`;
       urls.set(mediaPart, createUrl(file));
+      files.set(mediaPart, file);
       announce();
       return mediaPart;
     },
     url: (mediaPart) => urls.get(mediaPart) ?? null,
+    file: (mediaPart) => files.get(mediaPart) ?? null,
+    restore(mediaPart, file) {
+      if (urls.has(mediaPart)) return;
+      urls.set(mediaPart, createUrl(file));
+      files.set(mediaPart, file);
+      announce();
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -83,6 +99,7 @@ export function createMediaRegistry(options: MediaRegistryOptions = {}): MediaRe
     clear() {
       for (const url of urls.values()) revokeUrl(url);
       urls.clear();
+      files.clear();
       announce();
     },
   };
