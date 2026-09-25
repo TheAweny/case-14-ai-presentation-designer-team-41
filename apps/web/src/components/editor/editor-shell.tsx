@@ -1,19 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePanelRef } from 'react-resizable-panels';
-import type { ColorValue, SlideElement } from '@lct/contracts';
-import type {
-  ArrangeTarget,
-  DeckChangeKind,
-  DeckSelection,
-  ElementProps,
-  TableCell,
+import type { ColorValue, SlideElement, SlideIr } from '@lct/contracts';
+import type { ArrangeTarget, DeckChangeKind, DeckSelection, ElementProps } from '@lct/deck-ops';
+import {
+  commitDuplicateSlides,
+  commitGroup,
+  commitMoveLayer,
+  commitMoveSlides,
+  commitRemoveSlides,
+  commitImageCrop,
+  commitShapeText,
+  commitSlideNotes,
+  commitUngroup,
 } from '@lct/deck-ops';
 import type { Deck } from '@/lib/deck-source';
 import { cn } from '@/lib/utils';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import { useMediaResolver } from '@/lib/media-registry';
 import { imageFilesOf } from '@/lib/image-files';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -26,10 +31,22 @@ import {
   type EditorLayout,
 } from '@/components/editor/editor-layout';
 import { InspectorPanel, type InspectorTab } from '@/components/editor/inspector/inspector-panel';
+import type { LayersPanelProps } from '@/components/editor/inspector/layers-panel';
 import { InspectorToggle } from '@/components/editor/inspector/inspector-toggle';
-import type { TableAction } from '@/components/editor/inspector/design-panel';
+import type { DesignPanelProps, TableAction } from '@/components/editor/inspector/design-panel';
+import { useTableOps } from '@/components/editor/use-table-ops';
+import { toggledFlag, wholeTable } from '@/components/editor/table-grid';
 import type { ChartData } from '@/components/editor/inspector/chart-data';
-import { editorCommand, type CanvasCommand } from '@/components/editor/editor-keymap';
+import {
+  editorCommand,
+  type CanvasCommand,
+  type EditorCommand,
+} from '@/components/editor/editor-keymap';
+import { ShortcutsDialog } from '@/components/editor/shortcuts-dialog';
+import { SlideShow } from '@/components/editor/slide-show';
+import { MobileBar } from '@/components/editor/mobile-bar';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { flagProps, sizeEntries } from '@/components/editor/text-shortcuts';
 import {
   ELEMENTS_MIME,
   paragraphsOf,
@@ -39,18 +56,28 @@ import {
   serializeElements,
 } from '@/components/editor/element-clipboard';
 import { createInsertedElements } from '@/components/editor/insert-element';
-import { SlideCanvas } from '@/components/editor/slide-canvas';
+import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canvas';
+import type { LineReshape, TurnedElement } from '@/components/editor/slide-handles';
+import { flipEntries } from '@/components/editor/inspector/selection-model';
+import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { blankSlideFrom } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
+import { gridForSlide, nudgeBox, type Alignment } from '@/components/editor/slide-geometry';
+import { isTypingTarget, slideTitle, stepSlide } from '@/components/editor/slide-navigation';
 import {
-  alignBoxes,
-  gridForSlide,
-  nudgeBox,
-  type Alignment,
-} from '@/components/editor/slide-geometry';
-import { isTypingTarget, slideTitle } from '@/components/editor/slide-navigation';
+  alignUnits,
+  canGroup,
+  canUngroup,
+  enterGroup,
+  exitGroup,
+  isWholeGroup,
+  resolvePick,
+  selectionScope,
+  stepUnits,
+  unitOf,
+} from '@/components/editor/group-selection';
 import { ToolRailDock } from '@/components/editor/tool-rail-dock';
 import type { VariantId } from '@/components/editor/tool-rail';
 import {
@@ -59,7 +86,9 @@ import {
   type ElementMove,
 } from '@/components/editor/use-deck-history';
 import { useSlideSelection } from '@/components/editor/use-slide-selection';
+import type { SelectPick } from '@/components/editor/slide-handles';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { SpeakerNotesPanel } from '@/components/editor/speaker-notes-panel';
 
 /**
  * Ниже этой ширины правая панель сама уходит с глаз: иначе от слайда остаётся марка.
@@ -86,6 +115,61 @@ const CANVAS_PADDING = cn(
  */
 type InspectorState = 'auto' | 'open' | 'closed';
 
+/** Команды, которые работают и без выделения: история, слайды, шпаргалка. */
+const WITHOUT_SELECTION: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['kind']>([
+  'undo',
+  'redo',
+  'select-all',
+  'go-to-slide',
+  'step-slide',
+  'new-slide',
+  'duplicate-slide',
+  'shortcuts',
+  'present',
+]);
+
+/** Команды колоды: работают и из списка слайдов, если список не забрал клавишу себе. */
+const DECK_COMMANDS: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['kind']>([
+  'undo',
+  'redo',
+  'go-to-slide',
+  'step-slide',
+  'new-slide',
+  'duplicate-slide',
+  'shortcuts',
+  'present',
+]);
+
+/** Переходы между слайдами: после них клавиатура у холста. */
+const SLIDE_MOVES: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand['kind']>([
+  'go-to-slide',
+  'step-slide',
+  'new-slide',
+  'duplicate-slide',
+]);
+
+/** Здесь клавиши без модификатора (Enter, Tab, Home, End) не отбираем: у виджета они свои. */
+const KEY_OWNERS =
+  'button, a[href], [role="menu"], [role="menubar"], [role="listbox"], [role="slider"], [role="tablist"], [role="toolbar"], [role="radiogroup"], [role="dialog"], [role="tree"]';
+
+/** Фокус на холсте или нигде: Enter, Tab и Home/End здесь принадлежат редактору. */
+function onCanvas(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  if (target === document.body || target === document.documentElement) return true;
+  return target.closest('[data-canvas-area]') !== null && target.closest(KEY_OWNERS) === null;
+}
+
+/**
+ * Enter, Tab, Home и End без модификаторов: у кнопок, меню и списков они свои, поэтому
+ * редактор берёт их, только когда фокус на холсте. Delete и стрелки работают как раньше.
+ */
+function widgetKey(event: KeyboardEvent, command: EditorCommand): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return (
+    command.kind === 'edit' || command.kind === 'select-step' || command.kind === 'go-to-slide'
+  );
+}
+
 /** Правки, после которых редактор показывает их результат: новый объект или слайд. */
 const FOLLOWS_SELECTION: ReadonlySet<DeckChangeKind> = new Set<DeckChangeKind>([
   'paste',
@@ -99,12 +183,18 @@ export function EditorShell({
   deck,
   media = {},
   layout: saved = EDITOR_LAYOUT_DEFAULT,
+  onSlidesChange,
+  saveStatus,
 }: {
   deck: Deck;
   /** Адрес картинки по `mediaPart`. Нет адреса — на слайде рамка. */
   media?: Readonly<Record<string, string>>;
   /** Раскладка из cookie: сервер знает её заранее, поэтому колонки не прыгают. */
   layout?: EditorLayout;
+  /** Записанные слайды после каждой правки (без живого вида жеста): для черновика колоды. */
+  onSlidesChange?: (slides: readonly SlideIr[]) => void;
+  /** Значок сохранения в подвале списка слайдов. */
+  saveStatus?: ReactNode;
 }) {
   const t = useTranslations('editor');
   const slidesPanelRef = usePanelRef();
@@ -124,12 +214,11 @@ export function EditorShell({
     slides,
     committedSlides,
     move,
+    nudge,
+    reshape,
     setText,
     remove,
-    reorder,
     insert,
-    setFontSize,
-    setColor,
     setProps,
     setPropsEach,
     endPreview,
@@ -143,9 +232,7 @@ export function EditorShell({
     restored,
     insertSlide,
     duplicateSlide,
-    removeSlide,
     setSlideBackground,
-    setTableCell,
     insertTableRow,
     removeTableRow,
     insertTableColumn,
@@ -156,16 +243,28 @@ export function EditorShell({
     redo,
     undoKind,
     redoKind,
+    run,
   } = useDeckHistory(startSlides);
   const history = useMemo(
     () => ({ undo: undoKind, redo: redoKind, onUndo: undo, onRedo: redo }),
     [undoKind, redoKind, undo, redo],
   );
   const { designSystem } = deck;
+  // Черновик колоды хранит тот, кто открыл редактор: оболочка только сообщает правки.
+  useEffect(() => {
+    onSlidesChange?.(committedSlides);
+  }, [committedSlides, onSlidesChange]);
   const { index, select, selectById } = useSlideSelection(slides);
   const slide = slides[index];
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const activeText = useActiveTextEditor();
+  const canvasControl = useRef<CanvasControl | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /** Идёт показ слайдов: с какого слайда он начат. */
+  const [show, setShow] = useState<{ start: number } | null>(null);
+  // Узкий экран: рейки и правой панели нет, их заменяют нижняя панель и выезжающие свойства.
+  const narrow = useMediaQuery(NARROW_SCREEN);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const slideId = slide?.slideId;
   // Выделение, которое надо поставить, когда откроется другой слайд: после отмены правки на
   // соседнем слайде редактор переходит туда и выделяет то, что было выделено.
@@ -233,35 +332,112 @@ export function EditorShell({
     [move, slideId],
   );
 
+  /** Стрелки: серия сдвигов подряд — один шаг отмены. */
+  const nudgeOf = useCallback(
+    (moves: readonly ElementMove[]) => {
+      if (slideId) nudge(slideId, moves);
+    },
+    [nudge, slideId],
+  );
+
+  /** Alt+перетаскивание: копии там, куда дотащили, одной записью журнала. */
+  const duplicateTo = useCallback(
+    (elementIds: readonly string[], offset: { x: number; y: number }) => {
+      if (slideId) duplicate(slideId, elementIds, offset);
+    },
+    [duplicate, slideId],
+  );
+
+  /** Конец линии: рамка и отражения вместе, живым видом на время жеста. */
+  const reshapeLine = useCallback(
+    (elementId: string, line: LineReshape | null, mode: EditMode) => {
+      if (!slideId) return;
+      if (!line) {
+        endPreview();
+        return;
+      }
+      const { box, ...props } = line;
+      reshape(slideId, [{ elementId, box, props }], mode);
+    },
+    [endPreview, reshape, slideId],
+  );
+
+  /** Поворот выделения вокруг общего центра: рамки и углы одной записью журнала. */
+  const rotateMany = useCallback(
+    (turns: readonly TurnedElement[]) => {
+      if (!slideId || turns.length === 0) return;
+      reshape(
+        slideId,
+        turns.map(({ elementId, box, rotation }) => ({ elementId, box, props: { rotation } })),
+      );
+    },
+    [reshape, slideId],
+  );
+
   const removeSelected = useCallback(() => {
     if (!slideId || selectedIds.length === 0) return;
     remove(slideId, selectedIds);
     setSelectedIds([]);
   }, [remove, selectedIds, slideId]);
 
+  // Группа выравнивается как один объект: её состав едет целиком.
   const alignSelected = useCallback(
     (alignment: Alignment) => {
       if (!slide) return;
-      const items = slide.elements.filter((element) => selectedIds.includes(element.elementId));
-      move(slide.slideId, alignBoxes(items, alignment));
+      move(slide.slideId, alignUnits(slide.elements, selectedIds, alignment, slide));
     },
     [move, selectedIds, slide],
   );
 
-  const setFontSizeOf = useCallback(
-    (elementId: string, sizePt: number) => {
-      if (!slideId) return;
-      setFontSize(slideId, elementId, sizePt);
+  /*
+   * Группы на холсте. Щелчок и рамка выбирают группу целиком, двойной щелчок входит в неё,
+   * наведение подсвечивает то, что выберет щелчок. Уровень, на котором выбирают, следует из
+   * самого выделения — см. `group-selection.ts`.
+   */
+  const pickOnCanvas = useCallback(
+    (ids: readonly string[], pick?: SelectPick) => {
+      if (!slide) return;
+      setSelectedIds((previous) =>
+        resolvePick(slide.elements, previous, ids, pick?.additive === true, pick?.deep === true),
+      );
     },
-    [setFontSize, slideId],
+    [slide],
   );
-
-  const setColorOf = useCallback(
-    (elementId: string, color: ColorValue, hex: string) => {
-      if (!slideId) return;
-      setColor(slideId, elementId, color, hex);
+  const enterGroupAt = useCallback(
+    (elementId: string) => {
+      if (!slide) return false;
+      const next = enterGroup(slide.elements, selectedIds, elementId);
+      if (!next) return false;
+      setSelectedIds(next);
+      return true;
     },
-    [setColor, slideId],
+    [selectedIds, slide],
+  );
+  const hoverUnit = useCallback(
+    (elementId: string) =>
+      slide
+        ? unitOf(slide.elements, elementId, selectionScope(slide.elements, selectedIds))
+        : [elementId],
+    [selectedIds, slide],
+  );
+  const grouping = useMemo(
+    () => ({
+      canGroup: slide ? canGroup(slide.elements, selectedIds) : false,
+      canUngroup: slide ? canUngroup(slide.elements, selectedIds) : false,
+      wholeGroup: slide ? isWholeGroup(slide.elements, selectedIds) : false,
+    }),
+    [selectedIds, slide],
+  );
+  /** Строка панели слоёв под курсором: её объекты подсвечены на холсте. */
+  const [layerHover, setLayerHover] = useState<readonly string[] | null>(null);
+  useEffect(() => {
+    setLayerHover(null);
+  }, [slideId]);
+  const moveLayer = useCallback(
+    (layerId: string, overId: string) => {
+      if (slideId) run([(current) => commitMoveLayer(current, { slideId, layerId, overId })]);
+    },
+    [run, slideId],
   );
 
   const setPropsOf = useCallback(
@@ -279,12 +455,8 @@ export function EditorShell({
     [setSlideBackground, slideId],
   );
 
-  const setTableCellOf = useCallback(
-    (elementId: string, cell: TableCell, text: string) => {
-      if (slideId) setTableCell(slideId, elementId, cell, text);
-    },
-    [setTableCell, slideId],
-  );
+  // Таблицы: холст правит ячейки, границы и строки, панель — вид выделенных ячеек.
+  const tableOps = useTableOps(run, endPreview, slideId);
 
   /** Строки и столбцы из панели: добавляются в конец, удаляются последние. */
   const editTableOf = useCallback(
@@ -356,12 +528,27 @@ export function EditorShell({
     },
     [duplicateSlide, slides],
   );
-  const removeSlideAt = useCallback(
-    (at: number) => {
-      const target = slides[at];
-      if (target && slides.length > 1) removeSlide(target.slideId);
+
+  // Несколько слайдов из списка: перенос, копии и удаление — одной записью журнала.
+  const moveSlides = useCallback(
+    (slideIds: readonly string[], at: number) => {
+      run([(current) => commitMoveSlides(current, { slideIds, index: at })]);
     },
-    [removeSlide, slides],
+    [run],
+  );
+  const duplicateSlides = useCallback(
+    (slideIds: readonly string[]) => {
+      const copies = slideIds.map(() => crypto.randomUUID());
+      run([(current) => commitDuplicateSlides(current, { slideIds, newSlideIds: copies })]);
+      return copies;
+    },
+    [run],
+  );
+  const removeSlides = useCallback(
+    (slideIds: readonly string[]) => {
+      run([(current) => commitRemoveSlides(current, { slideIds })]);
+    },
+    [run],
   );
 
   /**
@@ -387,13 +574,126 @@ export function EditorShell({
     [designSystem.grid, paste, slide],
   );
 
+  /**
+   * Слайды с клавиатуры: Ctrl+1…9, PageUp/PageDown, Home/End, новый слайд и копия. Выделение
+   * снимает сама смена слайда. `true` — команда была про слайды.
+   */
+  const runDeckCommand = useCallback(
+    (command: CanvasCommand): boolean => {
+      const count = slides.length;
+      switch (command.kind) {
+        case 'go-to-slide':
+          select(command.index === 'last' ? count - 1 : Math.min(command.index, count - 1));
+          return true;
+        case 'step-slide':
+          select(stepSlide(index, command.step, count));
+          return true;
+        case 'new-slide':
+          addSlide(index);
+          return true;
+        case 'duplicate-slide':
+          duplicateSlideAt(index);
+          return true;
+        default:
+          return false;
+      }
+    },
+    [addSlide, duplicateSlideAt, index, select, slides.length],
+  );
+
+  /** Клавиши над выделенными объектами, которых нет в контекстном меню. */
+  const runObjectCommand = useCallback(
+    (command: CanvasCommand, selected: readonly SlideElement[]) => {
+      if (!slide) return;
+      const ids = selected.map((element) => element.elementId);
+      const texts = selected.filter((element) => element.kind === 'text');
+      const textIds = texts.map((element) => element.elementId);
+      // Одна выделенная таблица: Ctrl+B/I/U и выравнивание — всем её ячейкам.
+      const table = selected.length === 1 && selected[0]?.kind === 'table' ? selected[0] : null;
+      switch (command.kind) {
+        case 'edit':
+          if (selected.length === 1 && selected[0]) {
+            canvasControl.current?.startEditing(selected[0].elementId);
+          }
+          return;
+        case 'lock': {
+          // Повторное нажатие снимает блокировку. Заблокированный объект не выделяется и не
+          // двигается, поэтому после блокировки выделение снимаем.
+          const locked = selected.every((element) => element.locked === true);
+          setProps(slide.slideId, ids, { locked: !locked });
+          if (!locked) setSelectedIds([]);
+          return;
+        }
+        case 'flip': {
+          // Каждой фигуре — от её собственного отражения, одной записью журнала.
+          const shapes = selected.filter((element) => element.kind === 'decor');
+          if (shapes.length === 0) return;
+          setPropsEach(
+            slide.slideId,
+            flipEntries(shapes, command.axis === 'horizontal' ? 'flipH' : 'flipV'),
+          );
+          return;
+        }
+        case 'text-flag':
+          if (texts.length > 0) {
+            setProps(slide.slideId, textIds, flagProps(texts, command.flag, designSystem));
+          } else if (table) {
+            const all = wholeTable(table);
+            tableOps.style(table.elementId, all, {
+              style: { [command.flag]: toggledFlag(table, all, command.flag) },
+            });
+          }
+          return;
+        case 'text-align':
+          if (texts.length > 0) setProps(slide.slideId, textIds, { align: command.align });
+          else if (table) {
+            tableOps.style(table.elementId, wholeTable(table), { style: { align: command.align } });
+          }
+          return;
+        case 'text-size':
+          if (texts.length > 0) {
+            setFontSizes(slide.slideId, sizeEntries(texts, designSystem, command.step));
+          }
+          return;
+        default:
+          return;
+      }
+    },
+    [designSystem, setFontSizes, setProps, setPropsEach, slide, tableOps],
+  );
+
+  /**
+   * Показ на весь экран. Выделение снимается: под показом холст продолжает слушать стрелки, и
+   * выделенный объект не должен от них сдвинуться.
+   */
+  const startShow = useCallback((start: number) => {
+    // Открытый набор, правка ячеек или кадрирование закрываются с сохранением: их клавиши
+    // (стрелки, Enter, Esc) иначе перехватывали бы клавиши показа.
+    canvasControl.current?.finishModes();
+    setSelectedIds([]);
+    setShow({ start });
+  }, []);
+
   /** Одна точка входа для клавиатуры и контекстного меню холста. */
   const runCommand = useCallback(
     (command: CanvasCommand) => {
       if (command.kind === 'undo') return undo();
+      if (command.kind === 'present') {
+        startShow(command.from === 'start' ? 0 : index);
+        return;
+      }
       if (command.kind === 'redo') return redo();
+      if (command.kind === 'shortcuts') {
+        setShortcutsOpen(true);
+        return;
+      }
       if (!slide) return;
       const selected = slide.elements.filter((element) => selectedIds.includes(element.elementId));
+      if (runDeckCommand(command)) return;
+      if (command.kind === 'select-step') {
+        setSelectedIds(stepUnits(slide.elements, selectedIds, command.step));
+        return;
+      }
       if (command.kind === 'select-all') {
         setSelectedIds(
           slide.elements.filter((element) => !element.locked).map((element) => element.elementId),
@@ -412,9 +712,17 @@ export function EditorShell({
         return;
       }
       if (selected.length === 0) return;
+      const ids = selected.map((element) => element.elementId);
       switch (command.kind) {
         case 'deselect':
-          setSelectedIds([]);
+          // Внутри группы Esc поднимается на уровень вверх, как в Figma.
+          setSelectedIds(exitGroup(slide.elements, selectedIds) ?? []);
+          return;
+        case 'group':
+          run([(current) => commitGroup(current, { slideId: slide.slideId, elementIds: ids })]);
+          return;
+        case 'ungroup':
+          run([(current) => commitUngroup(current, { slideId: slide.slideId, elementIds: ids })]);
           return;
         case 'remove':
           removeSelected();
@@ -435,7 +743,7 @@ export function EditorShell({
         }
         case 'nudge': {
           const grid = gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy);
-          move(
+          nudge(
             slide.slideId,
             selected.map((element) => ({
               elementId: element.elementId,
@@ -444,41 +752,72 @@ export function EditorShell({
           );
           return;
         }
+        default:
+          runObjectCommand(command, selected);
       }
     },
     [
       arrange,
       designSystem.grid,
       duplicate,
-      move,
+      nudge,
       pasteElements,
       redo,
       rememberCopy,
       removeSelected,
+      run,
+      runDeckCommand,
+      runObjectCommand,
       selectedIds,
       setProps,
       slide,
       undo,
+      startShow,
+      index,
     ],
   );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || event.defaultPrevented || isTypingTarget(event.target)) return;
-      const command = editorCommand(event);
+      if (event.isComposing || event.defaultPrevented) return;
+      // В поле и в наборе текста клавиши — их; отсюда только шпаргалка. Ctrl+B и прочее
+      // набор выполняет сам (см. `TextEditor`).
+      const typing = isTypingTarget(event.target);
+      const command = editorCommand(event, typing ? 'text' : 'canvas');
       if (!command) return;
-      const history = command.kind === 'undo' || command.kind === 'redo';
+      if (typing && command.kind !== 'shortcuts' && command.kind !== 'present') return;
       const target = event.target;
+      // Открытое окно (та же шпаргалка) держит клавиатуру у себя.
+      if (target instanceof Element && target.closest('[role="dialog"]')) return;
+      const inList = target instanceof Element && target.closest('[role="listbox"]') !== null;
       // В списке слайдов стрелки, удаление и выделение — его собственные клавиши.
-      if (!history && target instanceof Element && target.closest('[role="listbox"]')) return;
-      // Без выделения стрелки и Delete ничего не делают и не должны глушить браузер.
-      if (!history && command.kind !== 'select-all' && selectedIds.length === 0) return;
+      if (inList && !DECK_COMMANDS.has(command.kind)) return;
+      // В дереве слоёв стрелки ходят по строкам и сворачивают группы: объект от них не едет.
+      // Delete там по-прежнему удаляет выбранное, как в Figma.
+      const inTree = target instanceof Element && target.closest('[role="tree"]') !== null;
+      if (inTree && command.kind === 'nudge') return;
+      // Esc при инструменте вставки или руке — назад к выбору, как во всех редакторах (F-04);
+      // выделение при этом остаётся.
+      if (command.kind === 'deselect' && tool !== 'select' && onCanvas(target)) {
+        event.preventDefault();
+        setTool('select');
+        return;
+      }
+      // Enter, Tab, Home, End — клавиши кнопок и меню, пока фокус на них. PageUp/PageDown
+      // листают колоду отовсюду, кроме полей.
+      if (widgetKey(event, command) && !onCanvas(target)) return;
+      // Без выделения стрелки, Delete и Tab ничего не делают и не должны глушить браузер:
+      // Tab без выделения уводит фокус как обычно, и с холста можно уйти с клавиатуры.
+      if (!WITHOUT_SELECTION.has(command.kind) && selectedIds.length === 0) return;
       event.preventDefault();
       runCommand(command);
+      // После перехода клавиатура у холста. Из списка фокус не уводим: там свой перебор
+      // стрелками, и фокус идёт за открытым слайдом.
+      if (SLIDE_MOVES.has(command.kind) && !inList) canvasControl.current?.focus();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [runCommand, selectedIds.length]);
+  }, [runCommand, selectedIds.length, tool]);
 
   /**
    * Системный буфер обмена. Объекты кладутся своим типом данных и простым текстом рядом;
@@ -532,11 +871,14 @@ export function EditorShell({
       const [box] = createInsertedElements('text', center, grid, { profile: designSystem });
       if (!box || box.kind !== 'text') return;
       const lines = paragraphs.length;
+      // Вставленный текст — по центру слайда: инструмент ставит текст от точки клика, а у
+      // вставки точки нет.
       const element: SlideElement = {
         ...box,
         box: {
           ...box.box,
-          y: Math.round(box.box.y - (box.box.cy * (lines - 1)) / 2),
+          x: Math.round(center.x - box.box.cx / 2),
+          y: Math.round(center.y - (box.box.cy * lines) / 2),
           cy: box.box.cy * lines,
         },
         paragraphs,
@@ -554,6 +896,47 @@ export function EditorShell({
     };
   }, [designSystem, insert, pasteElements, rememberCopy, removeSelected, selectedIds, slide]);
 
+  /**
+   * Правки полосы над выделением — те же пути записи, что у панели «Дизайн», и та же точка
+   * входа для команд, что у клавиатуры и меню холста.
+   */
+  const selectionActions = useMemo<SelectionBarActions>(
+    () => ({
+      onCommit: commit,
+      onAlign: alignSelected,
+      onProps: setPropsOf,
+      onPropsEach: (entries, mode) => {
+        if (slideId) setPropsEach(slideId, entries, mode);
+      },
+      onPreviewEnd: endPreview,
+      onFontSizes: (entries, mode) => {
+        if (slideId) setFontSizes(slideId, entries, mode);
+      },
+      onColorAll: (ids, color, hex, mode) => {
+        if (slideId) setColorAll(slideId, ids, color, hex, mode);
+      },
+      onReplaceImage: replaceImageOf,
+      onStartCrop: (elementId) => canvasControl.current?.startEditing(elementId),
+      onCommand: runCommand,
+      onOpenInspector: () => openInspector('design'),
+      canPaste,
+    }),
+    [
+      alignSelected,
+      canPaste,
+      commit,
+      endPreview,
+      openInspector,
+      replaceImageOf,
+      runCommand,
+      setColorAll,
+      setFontSizes,
+      setPropsEach,
+      setPropsOf,
+      slideId,
+    ],
+  );
+
   /** Подпись слайда для чтения с экрана: место в колоде и, если есть, заголовок. */
   const labels = useMemo(
     () =>
@@ -567,8 +950,56 @@ export function EditorShell({
     [slides, t],
   );
 
+  /** Панель слоёв — там же, где «Дизайн»: справа и в нижней панели узкого экрана. */
+  const layers: LayersPanelProps = {
+    slide,
+    selectedIds,
+    onSelect: setSelectedIds,
+    onHover: setLayerHover,
+    onLock: (ids, locked) => setPropsOf(ids, { locked }),
+    onMove: moveLayer,
+  };
+
+  /** Панель «Дизайн» — одна и та же справа и в нижней панели узкого экрана. */
+  const design: DesignPanelProps = {
+    // Панель считает значения без живого вида жеста: правка «каждому от своего»
+    // идёт от записанного, а не от того, что сейчас показано.
+    slide: committedSlides[index],
+    designSystem,
+    // Пока открыт набор, панель показывает редактируемый текст.
+    selectedIds: activeText ? [activeText.elementId] : selectedIds,
+    textEditor: activeText,
+    onCommit: commit,
+    onRemove: removeSelected,
+    onAlign: alignSelected,
+    onProps: setPropsOf,
+    onPropsEach: (entries, mode) => {
+      if (slideId) setPropsEach(slideId, entries, mode);
+    },
+    onPreviewEnd: endPreview,
+    onFontSizes: (entries, mode) => {
+      if (slideId) setFontSizes(slideId, entries, mode);
+    },
+    onColorAll: (ids, color, hex, mode) => {
+      if (slideId) setColorAll(slideId, ids, color, hex, mode);
+    },
+    onArrange: arrangeSelected,
+    onReplaceImage: replaceImageOf,
+    onStartCrop: (elementId) => canvasControl.current?.startEditing(elementId),
+    onResetCrop: (elementId) => {
+      if (slideId) {
+        run([(current) => commitImageCrop(current, { slideId, elementId, crop: null })]);
+      }
+    },
+    onSlideBackground: setBackgroundOf,
+    onTable: editTableOf,
+    tableOps,
+    onChartData: setChartDataOf,
+    onChartAxes: setChartAxesOf,
+  };
+
   return (
-    <div className="h-dvh overflow-hidden bg-background">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
       <ResizablePanelGroup
         id="editor"
         orientation="horizontal"
@@ -585,7 +1016,7 @@ export function EditorShell({
           }
         }}
         className={cn(
-          'h-full',
+          'min-h-0 flex-1',
           // Узкое окно: панель свойств уходит целиком, вместе со своей ручкой. Решает CSS —
           // на первом кадре, ещё до гидратации, иначе панель успевала бы мелькнуть.
           'max-[1099px]:data-[inspector=auto]:[&>[data-inspector-part]]:hidden!',
@@ -627,10 +1058,10 @@ export function EditorShell({
                 current={index}
                 resolveMedia={resolveMedia}
                 onSelect={select}
-                onReorder={reorder}
+                onMove={moveSlides}
                 onAdd={addSlide}
-                onDuplicate={duplicateSlideAt}
-                onRemove={removeSlideAt}
+                onDuplicate={duplicateSlides}
+                onRemove={removeSlides}
                 className="min-h-0 min-w-0 flex-1"
               />
               {/*
@@ -645,6 +1076,7 @@ export function EditorShell({
                 )}
               >
                 <LocaleSwitcher />
+                {saveStatus}
                 <p className="px-2 text-xs text-muted-foreground tabular-nums">
                   <span className="sr-only">
                     {t('slideLabel', { number: index + 1, total: slides.length })}
@@ -658,15 +1090,19 @@ export function EditorShell({
 
             <ResizableHandle aria-label={t('resizeSlides')} className="max-md:hidden" />
 
-            <ResizablePanel id="canvas" minSize="40%" className="min-w-0">
+            <ResizablePanel id="canvas" minSize="40%" className="flex min-w-0 flex-col">
               <ToolRailDock
-                className="h-full min-w-0"
+                className="min-h-0 min-w-0 flex-1"
                 railClassName="max-md:hidden"
                 dock={initial.dock}
                 onDockChange={(dock) => remember({ dock })}
                 tool={tool}
                 onToolChange={setTool}
-                onAction={() => openInspector('assistant')}
+                onAction={(id) => {
+                  if (id === 'shortcuts') setShortcutsOpen(true);
+                  else if (id === 'present') startShow(index);
+                  else openInspector('assistant');
+                }}
                 history={history}
               >
                 {slide ? (
@@ -681,26 +1117,49 @@ export function EditorShell({
                       onSelect={setSelectedIds}
                       onCommit={commit}
                       onTextCommit={setText}
-                      onRemove={removeSelected}
                       onRemoveElements={(ids) => {
                         if (slideId) remove(slideId, ids);
                       }}
-                      onAlign={alignSelected}
                       onInsert={(elements) => {
                         if (!slideId) return;
                         insert(slideId, elements);
                         // Как в Figma: объект вставлен — курсор снова выбирает.
                         setTool('select');
                       }}
-                      onFontSize={setFontSizeOf}
-                      onColor={setColorOf}
                       onReplaceImage={replaceImageOf}
                       onCommand={runCommand}
                       canPaste={canPaste}
                       hasLocked={slide.elements.some((element) => element.locked === true)}
-                      onTableCell={setTableCellOf}
+                      tableOps={tableOps}
                       onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
+                      onNudge={nudgeOf}
+                      onDuplicate={duplicateTo}
+                      onLineEnds={reshapeLine}
+                      onRotateMany={rotateMany}
+                      controlRef={canvasControl}
+                      selectionActions={selectionActions}
                       className={CANVAS_PADDING}
+                      onPick={pickOnCanvas}
+                      onEnterGroup={enterGroupAt}
+                      hoverUnit={hoverUnit}
+                      highlightIds={layerHover ?? undefined}
+                      canGroup={grouping.canGroup}
+                      canUngroup={grouping.canUngroup}
+                      groupFrame={grouping.wholeGroup}
+                      onShapeTextCommit={(target, elementId, paragraphs) =>
+                        run([
+                          (current) =>
+                            commitShapeText(current, { slideId: target, elementId, paragraphs }),
+                        ])
+                      }
+                      onCrop={(elementId, crop, box) => {
+                        if (slideId) {
+                          run([
+                            (current) =>
+                              commitImageCrop(current, { slideId, elementId, crop, box }),
+                          ]);
+                        }
+                      }}
                     />
                   </ZoomBasis>
                 ) : null}
@@ -716,6 +1175,16 @@ export function EditorShell({
                   />
                 )}
               </ToolRailDock>
+              {slide ? (
+                <SpeakerNotesPanel
+                  className="max-md:hidden"
+                  slideId={slide.slideId}
+                  notes={slide.notes}
+                  onCommit={(target, notes) =>
+                    run([(current) => commitSlideNotes(current, { slideId: target, notes })])
+                  }
+                />
+              ) : null}
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
@@ -746,39 +1215,50 @@ export function EditorShell({
               tab={tab}
               onTabChange={setTab}
               onCollapse={closeInspector}
-              design={{
-                // Панель считает значения без живого вида жеста: правка «каждому от своего»
-                // идёт от записанного, а не от того, что сейчас показано.
-                slide: committedSlides[index],
-                designSystem,
-                // Пока открыт набор, панель показывает редактируемый текст.
-                selectedIds: activeText ? [activeText.elementId] : selectedIds,
-                textEditor: activeText,
-                onCommit: commit,
-                onRemove: removeSelected,
-                onAlign: alignSelected,
-                onProps: setPropsOf,
-                onPropsEach: (entries, mode) => {
-                  if (slideId) setPropsEach(slideId, entries, mode);
-                },
-                onPreviewEnd: endPreview,
-                onFontSizes: (entries, mode) => {
-                  if (slideId) setFontSizes(slideId, entries, mode);
-                },
-                onColorAll: (ids, color, hex, mode) => {
-                  if (slideId) setColorAll(slideId, ids, color, hex, mode);
-                },
-                onArrange: arrangeSelected,
-                onReplaceImage: replaceImageOf,
-                onSlideBackground: setBackgroundOf,
-                onTable: editTableOf,
-                onChartData: setChartDataOf,
-                onChartAxes: setChartAxesOf,
-              }}
+              design={design}
+              layers={layers}
             />
           )}
         </ResizablePanel>
       </ResizablePanelGroup>
+      <MobileBar
+        className="md:hidden"
+        history={history}
+        tool={tool}
+        onToolChange={setTool}
+        onPresent={() => startShow(index)}
+        onProperties={() => setSheetOpen(true)}
+      />
+      <Sheet open={sheetOpen && narrow} onOpenChange={setSheetOpen}>
+        <SheetContent className="h-[min(60dvh,36rem)]">
+          <SheetTitle className="sr-only">{t('inspector')}</SheetTitle>
+          <SheetDescription className="sr-only">{labels[index] ?? ''}</SheetDescription>
+          <div className="min-h-0 flex-1">
+            <InspectorPanel
+              tab={tab}
+              onTabChange={setTab}
+              onCollapse={() => setSheetOpen(false)}
+              design={design}
+              layers={layers}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      {show ? (
+        <SlideShow
+          slides={slides}
+          designSystem={designSystem}
+          labels={labels}
+          start={show.start}
+          resolveMedia={resolveMedia}
+          onExit={(at) => {
+            setShow(null);
+            select(at);
+            canvasControl.current?.focus();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

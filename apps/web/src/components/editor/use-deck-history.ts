@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Box, ColorValue, Paragraph, SlideElement, SlideIr } from '@lct/contracts';
 import {
   commitArrange,
@@ -40,6 +40,7 @@ import {
   type RecordOptions,
   type TableCell,
 } from '@lct/deck-ops';
+import { nextNudgeSeries, type NudgeSeries } from '@/components/editor/nudge-series';
 
 export interface ElementMove {
   readonly elementId: string;
@@ -59,13 +60,21 @@ export interface PropsEntry {
   readonly props: ElementProps;
 }
 
+/** Новая рамка и свойства одного объекта: конец линии меняет и рамку, и отражения. */
+export interface ReshapeEntry {
+  readonly elementId: string;
+  readonly box: Box;
+  readonly props: ElementProps;
+}
+
 /** Кегль одного текстового объекта. */
 export interface FontSizeEntry {
   readonly elementId: string;
   readonly sizePt: number;
 }
 
-type Commit = (slides: readonly SlideIr[]) => DeckCommit;
+/** Правка колоды: чистая функция из `@lct/deck-ops`, привязанная к своим аргументам. */
+export type Commit = (slides: readonly SlideIr[]) => DeckCommit;
 
 /** What an undo or redo button would bring back, in words the tooltip can name. */
 export type ChangeKind =
@@ -79,6 +88,8 @@ export type ChangeKind =
   | 'paste'
   | 'duplicate'
   | 'arrange'
+  | 'group'
+  | 'ungroup'
   | 'image'
   | 'table'
   | 'chart'
@@ -86,6 +97,8 @@ export type ChangeKind =
   | 'slide-add'
   | 'slide-remove'
   | 'background'
+  | 'crop'
+  | 'notes'
   | 'other';
 
 /** Имя правки для подсказки. Ключи словаря `editor.history.changes` совпадают с этим списком. */
@@ -102,6 +115,8 @@ const KIND_OF: Readonly<Record<DeckChange['kind'], ChangeKind>> = {
   paste: 'paste',
   duplicate: 'duplicate',
   arrange: 'arrange',
+  group: 'group',
+  ungroup: 'ungroup',
   image: 'image',
   table: 'table',
   chart: 'chart',
@@ -110,6 +125,8 @@ const KIND_OF: Readonly<Record<DeckChange['kind'], ChangeKind>> = {
   'slide-duplicate': 'slide-add',
   'slide-remove': 'slide-remove',
   'slide-background': 'background',
+  crop: 'crop',
+  notes: 'notes',
 };
 
 export function changeKind(change: DeckChange | undefined): ChangeKind | null {
@@ -179,16 +196,62 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     },
     [applyAll],
   );
+  /** Сдвиг стрелкой: нажатия подряд по тем же объектам — один шаг отмены (см. `nudge-series`). */
+  const series = useRef<NudgeSeries | null>(null);
+  const nudge = useCallback(
+    (slideId: string, moves: readonly ElementMove[]) => {
+      const next = nextNudgeSeries(
+        series.current,
+        slideId,
+        moves.map((item) => item.elementId),
+        Date.now(),
+      );
+      series.current = next;
+      apply((current) => commitMoves(current, { slideId, moves }), { series: next.key });
+    },
+    [apply],
+  );
+  /** Рамки и свойства вместе — одной записью журнала или живым видом жеста. */
+  const reshape = useCallback(
+    (slideId: string, entries: readonly ReshapeEntry[], mode?: EditMode) => {
+      applyAll(
+        [
+          (current) =>
+            commitMoves(current, {
+              slideId,
+              moves: entries.map(({ elementId, box }) => ({ elementId, box })),
+            }),
+          ...entries.map(
+            ({ elementId, props }): Commit =>
+              (current) =>
+                commitElementProps(current, { slideId, elementIds: [elementId], props }),
+          ),
+        ],
+        mode,
+      );
+    },
+    [applyAll],
+  );
+  /**
+   * Текст после набора. `box` — рамка, выросшая под текст: она ложится той же записью журнала,
+   * и одна отмена возвращает и текст, и высоту.
+   */
   const setText = useCallback(
     (
       slideId: string,
       elementId: string,
       paragraphs: readonly Paragraph[],
-      options?: RecordOptions,
+      options?: RecordOptions & { readonly box?: Box },
     ) => {
-      apply((current) => commitSetText(current, { slideId, elementId, paragraphs }), options);
+      const text: Commit = (current) => commitSetText(current, { slideId, elementId, paragraphs });
+      const box = options?.box;
+      if (!box) {
+        apply(text, options);
+        return;
+      }
+      applyAll([text, (current) => commitMoves(current, { slideId, moves: [{ elementId, box }] })]);
     },
-    [apply],
+    [apply, applyAll],
   );
   const remove = useCallback(
     (slideId: string, elementIds: readonly string[]) => {
@@ -384,6 +447,8 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     /** Колода без живого вида: от неё панель считает значения полей и правки «каждому своё». */
     committedSlides: history.slides,
     move,
+    nudge,
+    reshape,
     setText,
     remove,
     reorder,
@@ -412,6 +477,11 @@ export function useDeckHistory(slides: readonly SlideIr[]) {
     setSlideBackground,
     undo,
     redo,
+    /**
+     * Любые правки одной записью журнала или живым видом жеста. Для операций, у которых нет
+     * своей обёртки выше, например таблиц (см. `use-table-ops`).
+     */
+    run: applyAll,
     undoKind: changeKind(history.undo.at(-1)),
     redoKind: changeKind(history.redo.at(-1)),
     /** Выделение, которое вернула последняя отмена или повтор. Null после любого другого шага. */

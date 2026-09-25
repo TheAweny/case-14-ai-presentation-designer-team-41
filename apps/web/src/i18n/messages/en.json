@@ -14,12 +14,14 @@
     "assistant": "Assistant",
     "assistantSoon": "An AI agent is supposed to live here, but we haven't got round to it yet :(",
     "editText": "Edit text",
+    "textOverflow": "The text doesn't fit the template box",
     "inspector": "Properties panel",
     "inspectorHide": "Hide panel",
     "inspectorShow": "Show panel",
     "tabs": {
       "design": "Design",
-      "assistant": "Assistant"
+      "assistant": "Assistant",
+      "layers": "Layers"
     },
     "resizeSlides": "Slide list width",
     "resizeInspector": "Properties panel width",
@@ -45,7 +47,6 @@
   "selectionBar": {
     "label": "Selection properties",
     "count": "{count, plural, one {# object} other {# objects}}",
-    "remove": "Delete",
     "align": {
       "left": "Align left",
       "center": "Align centre",
@@ -70,8 +71,6 @@
       "page-number": "Slide number",
       "decoration": "Decoration"
     },
-    "size": "Size",
-    "color": "Colour",
     "type": {
       "title": "Title",
       "subtitle": "Subtitle",
@@ -95,13 +94,29 @@
       "line": "Line",
       "positive": "Positive",
       "negative": "Negative"
-    }
-  },
-  "formatBar": {
-    "label": "Text format",
+    },
     "bold": "Bold",
     "italic": "Italic",
-    "font": "Font"
+    "smaller": "Decrease font size",
+    "larger": "Increase font size",
+    "strokeWidths": "Common line widths",
+    "replace": "Replace",
+    "editTable": "Edit table cells",
+    "editTableShort": "Edit",
+    "editChart": "Edit chart data in the design panel",
+    "editChartShort": "Data",
+    "distribute": "Distribute",
+    "distributeHorizontal": "Distribute horizontal spacing",
+    "distributeVertical": "Distribute vertical spacing",
+    "layers": "Layer order",
+    "more": "More",
+    "alignToSlide": "Align to slide",
+    "openInspector": "Open in design panel",
+    "openData": "Open data in design panel",
+    "group": "Group"
+  },
+  "formatBar": {
+    "label": "Text format"
   },
   "toolRail": {
     "label": "Tools",
@@ -110,7 +125,8 @@
     "groups": {
       "canvas": "Canvas",
       "panels": "Panels",
-      "history": "History"
+      "history": "History",
+      "show": "Slideshow"
     },
     "history": {
       "undo": "Undo {change}",
@@ -133,6 +149,10 @@
         "slide-add": "new slide",
         "slide-remove": "slide removal",
         "background": "slide background",
+        "group": "grouping",
+        "ungroup": "ungrouping",
+        "crop": "crop",
+        "notes": "notes edit",
         "other": "change"
       }
     },
@@ -143,7 +163,9 @@
       "image": "Image",
       "shape": "Shapes",
       "data": "Data",
-      "ai": "Assistant"
+      "ai": "Assistant",
+      "shortcuts": "Keyboard shortcuts",
+      "present": "Present from current slide"
     },
     "variants": {
       "select": "Select",
@@ -236,6 +258,8 @@
       "cover": "Fill frame"
     },
     "replaceImage": "Replace…",
+    "cropImage": "Crop",
+    "resetCrop": "Reset crop",
     "slide": "Slide",
     "background": "Background",
     "templateBackground": "Reset to template background",
@@ -246,7 +270,7 @@
     "removeRow": "Remove last row",
     "addColumn": "Add column",
     "removeColumn": "Remove last column",
-    "tableHint": "Double-click the table to type in cells. Tab moves on, Enter moves down.",
+    "tableHint": "Click a selected table to put the caret in a cell. Tab moves on, Shift+Enter starts a new line, drag to select cells, drag a border to resize.",
     "chart": "Chart",
     "chartType": "Chart type",
     "chartTypes": {
@@ -268,9 +292,32 @@
     "seriesLabel": "Series {n} name",
     "categoryLabel": "Category {n}",
     "valueLabel": "{series}: {category}",
+    "pasteChartData": "Paste data from clipboard",
+    "pasteChartHint": "You can also paste a range from Excel or Google Sheets into a cell: Ctrl+V.",
+    "pasteChartEmpty": "The clipboard holds no numbers. Copy a range: series in the first row, categories in the first column.",
+    "pasteChartDenied": "The browser would not let us read the clipboard. Select a cell and press Ctrl+V.",
     "lock": "Lock",
     "unlock": "Unlock",
     "textSelectionHint": "Changes apply to the selected words; alignment and line height to the paragraphs under the cursor."
+  },
+  "imageCrop": {
+    "label": "Crop picture",
+    "frame": "Crop frame",
+    "picture": "Picture: drag to move it in the frame",
+    "handle": "Frame edge",
+    "corner": "Picture corner: drag to scale",
+    "done": "Done",
+    "reset": "Reset",
+    "replace": "Replace…",
+    "cancel": "Cancel"
+  },
+  "speakerNotes": {
+    "label": "Speaker notes",
+    "placeholder": "Notes for this slide: only the presenter sees them",
+    "show": "Show notes",
+    "hide": "Hide notes",
+    "resize": "Resize notes",
+    "has": "Has notes"
   },
   "canvasMenu": {
     "cut": "Cut",
@@ -283,7 +330,9 @@
     "back": "Send to back",
     "selectAll": "Select all",
     "remove": "Delete",
-    "unlockAll": "Unlock all on slide"
+    "unlockAll": "Unlock all on slide",
+    "group": "Group",
+    "ungroup": "Ungroup"
   },
   "inspectorFields": {
     "mixed": "Mixed",
@@ -312,5 +361,187 @@
       "bold": "Bold",
       "boldItalic": "Bold Italic"
     }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "description": "Ctrl and Cmd work alike. Shortcuts work in any keyboard layout.",
+    "search": "Find a command or key",
+    "empty": "Nothing found",
+    "close": "Close",
+    "or": "or",
+    "groups": {
+      "general": "General",
+      "slides": "Slides",
+      "objects": "Objects",
+      "text": "Text",
+      "view": "View",
+      "tools": "Tools",
+      "gestures": "Mouse and gestures"
+    },
+    "items": {
+      "shortcuts": "Keyboard shortcuts",
+      "undo": "Undo",
+      "redo": "Redo",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "slide-go": "Go to slide by number",
+      "slide-previous": "Previous slide",
+      "slide-next": "Next slide",
+      "slide-first": "First slide",
+      "slide-last": "Last slide",
+      "slide-new": "New slide",
+      "slide-duplicate": "Duplicate slide",
+      "select-all": "Select all",
+      "deselect": "Deselect",
+      "select-next": "Next object",
+      "select-previous": "Previous object",
+      "edit": "Edit text or table",
+      "type-to-edit": "Start typing into the selected text",
+      "duplicate": "Duplicate",
+      "remove": "Delete",
+      "nudge": "Nudge",
+      "nudge-large": "Nudge by a large step",
+      "bring-forward": "Bring forward",
+      "send-backward": "Send backward",
+      "bring-front": "Bring to front",
+      "send-back": "Send to back",
+      "lock": "Lock or unlock",
+      "flip-horizontal": "Flip horizontally",
+      "flip-vertical": "Flip vertically",
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "align-left": "Align left",
+      "align-center": "Align center",
+      "align-right": "Align right",
+      "align-justify": "Justify",
+      "size-up": "Larger font size",
+      "size-down": "Smaller font size",
+      "text-exit": "Stop editing text",
+      "indent": "Indent list item",
+      "outdent": "Outdent list item",
+      "zoom-in": "Zoom in",
+      "zoom-out": "Zoom out",
+      "zoom-actual": "Zoom to 100%",
+      "zoom-fit": "Fit slide",
+      "zoom-selection": "Zoom to selection",
+      "pan": "Pan the canvas (hold)",
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "present": "Present from the beginning",
+      "present-current": "Present from current slide"
+    },
+    "gestures": {
+      "items": {
+        "drag-copy": "Drag a copy, leave the original",
+        "drag-axis": "Move along one axis",
+        "resize-ratio": "Keep proportions (pictures: resize freely)",
+        "rotate-step": "Rotate in 15° steps",
+        "resize-center": "Resize from the centre",
+        "click-through": "Select through the top object or inside a group",
+        "drag-free": "Ignore snapping to the grid and neighbours",
+        "pan-drag": "Pan the canvas",
+        "fit-field": "Fit the slide to the window"
+      },
+      "actions": {
+        "drag": "drag",
+        "resize": "drag a handle",
+        "rotate": "rotate",
+        "click": "click",
+        "double-click-field": "double-click the pasteboard",
+        "middle-drag": "middle button"
+      }
+    }
+  },
+  "draft": {
+    "restored": "Unsaved changes restored",
+    "discard": "Undo",
+    "dismiss": "Dismiss",
+    "saving": "Saving changes in this browser…",
+    "saved": "Changes saved in this browser",
+    "error": "Couldn't save changes in this browser. Keep this tab open.",
+    "loading": "Opening the deck…"
+  },
+  "slideShow": {
+    "label": "Slideshow",
+    "counter": "{number} / {total}",
+    "previous": "Previous slide",
+    "next": "Next slide",
+    "exit": "Exit slideshow",
+    "end": "End of slideshow. Click to exit."
+  },
+  "mobileBar": {
+    "label": "Actions",
+    "insert": "Insert",
+    "insertHint": "Tap the slide: {tool}",
+    "cancelInsert": "Cancel insert",
+    "properties": "Properties"
+  },
+  "tableMenu": {
+    "insertRowAbove": "Insert row above",
+    "insertRowBelow": "Insert row below",
+    "insertColumnLeft": "Insert column left",
+    "insertColumnRight": "Insert column right",
+    "removeRows": "{count, plural, one {Delete row} other {Delete # rows}}",
+    "removeColumns": "{count, plural, one {Delete column} other {Delete # columns}}",
+    "clearCells": "Clear cells",
+    "resetLook": "Reset cell formatting",
+    "fill": "Cell fill",
+    "noFill": "No fill",
+    "resizeColumn": "Column {index} border",
+    "resizeRow": "Row {index} border",
+    "resizeHint": "Drag to resize. Double-click to fit the content"
+  },
+  "tablePanel": {
+    "cells": "Cells",
+    "wholeTable": "Whole table",
+    "selectedCells": "{count, plural, one {# cell} other {# cells}}",
+    "fill": "Cell fill",
+    "textColor": "Text colour",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "align": "Horizontal alignment",
+    "verticalAlign": "Vertical alignment",
+    "resetLook": "Reset formatting",
+    "style": "Table style",
+    "headerRow": "Header row",
+    "bandedRows": "Banded rows",
+    "bandFill": "Band colour",
+    "borders": "Lines",
+    "bordersHorizontal": "Lines between rows",
+    "bordersVertical": "Lines between columns",
+    "bordersOuter": "Frame around the table",
+    "borderColor": "Line colour",
+    "borderWidth": "Line width",
+    "distributeColumns": "Distribute columns evenly",
+    "distributeRows": "Distribute rows evenly"
+  },
+  "layersPanel": {
+    "label": "Slide layers",
+    "empty": "Nothing on this slide yet",
+    "hint": "Top of the list is on top of the slide. Drag a row to change the order.",
+    "group": "Group",
+    "groupCount": "{count, plural, one {# object} other {# objects}}",
+    "line": "Line",
+    "shape": "Shape",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "expand": "Expand group",
+    "collapse": "Collapse group",
+    "locked": "locked",
+    "reorderHint": "Press Space, then the up and down arrows, to move a layer. Or drag its row.",
+    "dragStart": "Moving layer {layer}",
+    "dragOver": "{layer} will move to {over}",
+    "dragEnd": "{layer} moved",
+    "dragCancel": "Move cancelled"
+  },
+  "slideList": {
+    "duplicateSlides": "Duplicate slides ({count})",
+    "removeSlides": "Delete slides ({count})",
+    "selected": "{count, plural, one {# slide selected} other {# slides selected}}",
+    "dragStartMany": "Moving {count, plural, one {# slide} other {# slides}}",
+    "dragEndMany": "{count, plural, one {# slide moved} other {# slides moved}}"
   }
 }
