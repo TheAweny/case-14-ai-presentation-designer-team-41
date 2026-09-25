@@ -15,6 +15,7 @@
     },
     "serve": {
       "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
       "options": {
         "command": "next dev --port 3000",
         "cwd": "apps/web"
@@ -37,6 +38,14 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "vitest run --passWithNoTests",
+        "cwd": "apps/web"
+      }
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "options": {
+        "command": "playwright test",
         "cwd": "apps/web"
       }
     }
