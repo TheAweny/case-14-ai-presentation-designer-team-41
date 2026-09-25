@@ -29,7 +29,9 @@ import {
   Flowchart01Icon,
   HandIcon,
   Image01Icon,
+  KeyboardIcon,
   MinusSignIcon,
+  PlayIcon,
   SquareIcon,
   Table01Icon,
   TextFontIcon,
@@ -49,7 +51,15 @@ import { cn } from '@/lib/utils';
 import { keepCanvasFocus, useMenuFocus } from '@/components/editor/chrome-focus';
 import { dockAxis, type DockAxis, type DockSide } from '@/components/editor/dock';
 import { isTypingTarget } from '@/components/editor/slide-navigation';
+import {
+  ariaKeyShortcuts,
+  isMacPlatform,
+  shortcutKeys,
+  shortcutLabel,
+  type ShortcutId,
+} from '@/components/editor/editor-shortcuts';
 import type { ChangeKind } from '@/components/editor/use-deck-history';
+import { isInsertTool, type InsertTool } from '@/components/editor/insert-element';
 
 /**
  * Идентификаторы инструментов и вариантов — они же ключи словаря `toolRail`: подписи
@@ -71,7 +81,7 @@ export type VariantId =
   | 'chart'
   | 'table'
   | 'diagram';
-export type RailActionId = 'ai';
+export type RailActionId = 'ai' | 'shortcuts' | 'present';
 
 /** Кнопки истории живут на той же панели, но это не инструменты: вариантов у них нет. */
 type HistoryId = 'undo' | 'redo';
@@ -120,7 +130,16 @@ type Variant = { id: VariantId; icon: IconSvgElement; shortcut: Shortcut };
  */
 type Tool = { id: ToolId; variants: readonly [Variant, ...Variant[]] };
 
-type Action = { id: RailActionId; icon: IconSvgElement; shortcut: Shortcut };
+/**
+ * `shortcut` — своя клавиша без модификаторов, её слушает рейка. `registry` — сочетание из
+ * общего реестра редактора: его слушает редактор, рейка только подписывает.
+ */
+type Action = {
+  id: RailActionId;
+  icon: IconSvgElement;
+  shortcut: Shortcut | null;
+  registry?: ShortcutId;
+};
 
 const TOOLS: readonly Tool[] = [
   {
@@ -159,7 +178,57 @@ const TOOLS: readonly Tool[] = [
 
 const ACTIONS: readonly Action[] = [
   { id: 'ai', icon: AiSparklesIcon, shortcut: { key: 'J', code: 'KeyJ' } },
+  { id: 'shortcuts', icon: KeyboardIcon, shortcut: null, registry: 'shortcuts' },
 ];
+
+/** Показ с открытого слайда, как главная кнопка Google Slides. F5 — с начала, из реестра. */
+const SHOW_ACTION: Action = {
+  id: 'present',
+  icon: PlayIcon,
+  shortcut: null,
+  registry: 'present-current',
+};
+
+/** Клавиши кнопки действия для подсказки: свои однобуквенные или из реестра редактора. */
+function actionKeys(action: Action): readonly string[] {
+  if (action.shortcut) return [action.shortcut.key];
+  if (!action.registry) return [];
+  const mac = isMacPlatform();
+  return shortcutKeys(action.registry).map((key) => shortcutLabel([key], mac));
+}
+
+function actionAria(action: Action): string | undefined {
+  if (action.shortcut) return action.shortcut.key.toLowerCase();
+  return action.registry ? ariaKeyShortcuts(action.registry) : undefined;
+}
+
+/** Однобуквенные клавиши рейки — для шпаргалки редактора. */
+export const RAIL_SHORTCUTS: readonly (
+  | { readonly kind: 'variant'; readonly id: VariantId; readonly key: string }
+  | { readonly kind: 'action'; readonly id: RailActionId; readonly key: string }
+)[] = [
+  ...TOOLS.flatMap((tool) =>
+    tool.variants.map((variant) => ({
+      kind: 'variant' as const,
+      id: variant.id,
+      key: variant.shortcut.key,
+    })),
+  ),
+  ...ACTIONS.flatMap((action) =>
+    action.shortcut ? [{ kind: 'action' as const, id: action.id, key: action.shortcut.key }] : [],
+  ),
+];
+
+/**
+ * Что можно вставить, по кнопкам рейки: текст, картинка, фигуры, данные. Нижняя панель узкого
+ * экрана строит из этого своё меню — подписи и значки те же, что на рейке.
+ */
+export const INSERT_GROUPS: readonly (readonly { id: InsertTool; icon: IconSvgElement }[])[] =
+  TOOLS.map((tool) =>
+    tool.variants.flatMap((variant) =>
+      isInsertTool(variant.id) ? [{ id: variant.id, icon: variant.icon }] : [],
+    ),
+  ).filter((group) => group.length > 0);
 
 const TOOL_BY_ID = new Map(TOOLS.map((tool) => [tool.id, tool]));
 
@@ -176,7 +245,9 @@ const BY_CODE = new Map<string, ShortcutHit>([
       (variant) => [variant.shortcut.code, { kind: 'variant', tool, variant }] as const,
     ),
   ),
-  ...ACTIONS.map((action) => [action.shortcut.code, { kind: 'action', action }] as const),
+  ...ACTIONS.flatMap((action) =>
+    action.shortcut ? [[action.shortcut.code, { kind: 'action', action }] as const] : [],
+  ),
 ]);
 
 const DEFAULT_VARIANTS = Object.fromEntries(
@@ -417,8 +488,14 @@ export const ToolRail = memo(function ToolRail({
       if (event.repeat || event.isComposing || event.defaultPrevented) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (isTypingTarget(event.target)) return;
-      // В открытом меню буквы ищут пункт, а не меняют инструмент.
-      if (event.target instanceof Element && event.target.closest('[role="menu"]')) return;
+      // В открытом меню буквы ищут пункт, а не меняют инструмент; окно (шпаргалка) держит
+      // клавиатуру у себя, даже когда фокус на его кнопке.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="menu"], [role="dialog"]')
+      ) {
+        return;
+      }
 
       const hit = BY_CODE.get(event.code);
       if (!hit) return;
@@ -517,14 +594,10 @@ export const ToolRail = memo(function ToolRail({
         >
           {ACTIONS.map((action) => (
             <div key={action.id} className="p-0.5">
-              <RailTooltip
-                label={t(`tools.${action.id}`)}
-                keys={[action.shortcut.key]}
-                side={toward}
-              >
+              <RailTooltip label={t(`tools.${action.id}`)} keys={actionKeys(action)} side={toward}>
                 <ToolbarPrimitive.Button
                   aria-label={t(`tools.${action.id}`)}
-                  aria-keyshortcuts={action.shortcut.key.toLowerCase()}
+                  aria-keyshortcuts={actionAria(action)}
                   onMouseDown={keepCanvasFocus}
                   onClick={() => onActionRef.current?.(action.id)}
                   className={BUTTON}
@@ -573,6 +646,30 @@ export const ToolRail = memo(function ToolRail({
             </div>
           </>
         )}
+
+        <RailSeparator axis={axis} />
+        <div role="group" aria-label={t('groups.show')} className="p-0.5">
+          <RailTooltip
+            label={t(`tools.${SHOW_ACTION.id}`)}
+            keys={actionKeys(SHOW_ACTION)}
+            side={toward}
+          >
+            <ToolbarPrimitive.Button
+              aria-label={t(`tools.${SHOW_ACTION.id}`)}
+              aria-keyshortcuts={actionAria(SHOW_ACTION)}
+              onMouseDown={keepCanvasFocus}
+              onClick={() => onActionRef.current?.(SHOW_ACTION.id)}
+              className={BUTTON}
+            >
+              <HugeiconsIcon
+                icon={SHOW_ACTION.icon}
+                size={18}
+                strokeWidth={1.5}
+                color="currentColor"
+              />
+            </ToolbarPrimitive.Button>
+          </RailTooltip>
+        </div>
       </ToolbarPrimitive.Root>
     </TooltipProvider>
   );
