@@ -1,20 +1,44 @@
-import type { JSX } from 'react';
-import type { DesignSystem, SlideElement } from '@lct/contracts';
-import { cqw, emuToCqw, type SlideSize } from '../geometry.js';
-import { createTypeResolver, typeRoleOf } from '../schematic/text-layout.js';
-import { fontFamily, paint } from './color.js';
+import type { CSSProperties, JSX } from 'react';
+import type { DesignSystem, ImageCrop, SlideElement } from '@lct/contracts';
+import { cqw, emuToCqw, percent, type SlideSize } from '../geometry.js';
+import { paint } from './color.js';
 import { markHooks, markStyle } from './mark.js';
 
 export { DecorMark } from './decor.js';
+export { TableMark } from './table.js';
 
 type ImageElement = Extract<SlideElement, { kind: 'image' }>;
-type TableElement = Extract<SlideElement, { kind: 'table' }>;
 
 function hairline(size: SlideSize): string {
   return cqw(emuToCqw(Math.max(size.cx * 0.0012, 1), size));
 }
 
-/** A picture, contained or covered. With no address the box stays a frame. */
+/** Less than this much of the picture left on an axis is no picture: the crop is ignored. */
+const MIN_CROP_REST = 0.001;
+
+/**
+ * Where the whole picture lies relative to its box when it is cropped, as CSS percentages of the
+ * box: the part that is left fills the box and the rest hangs outside it, cut off. Null when the
+ * crop leaves nothing, and then the picture is placed by `fit` as if it had none.
+ */
+export function cropPlacement(crop: ImageCrop): CSSProperties | null {
+  const restX = 1 - crop.l - crop.r;
+  const restY = 1 - crop.t - crop.b;
+  if (restX < MIN_CROP_REST || restY < MIN_CROP_REST) return null;
+  return {
+    position: 'absolute',
+    left: percent((-crop.l / restX) * 100),
+    top: percent((-crop.t / restY) * 100),
+    width: percent(100 / restX),
+    height: percent(100 / restY),
+    maxWidth: 'none',
+  };
+}
+
+/**
+ * A picture, contained or covered. With no address the box stays a frame. A cropped picture shows
+ * the part the crop leaves, filling the box: `a:srcRect` over `a:stretch`, as export writes it.
+ */
 export function ImageMark({
   element,
   size,
@@ -30,6 +54,7 @@ export function ImageMark({
 }): JSX.Element {
   const url = resolveMedia?.(element.mediaPart) ?? null;
   const line = paint(profile.palette, 'line', 'text');
+  const placement = element.crop ? cropPlacement(element.crop) : null;
   return (
     <div
       {...markHooks(element, thumbnail)}
@@ -44,75 +69,14 @@ export function ImageMark({
         <img
           alt=""
           src={url}
-          style={{ display: 'block', width: '100%', height: '100%', objectFit: element.fit }}
+          draggable={false}
+          style={
+            placement
+              ? { display: 'block', ...placement, objectFit: 'fill' }
+              : { display: 'block', width: '100%', height: '100%', objectFit: element.fit }
+          }
         />
       ) : null}
-    </div>
-  );
-}
-
-export function TableMark({
-  element,
-  size,
-  profile,
-  thumbnail = false,
-}: {
-  element: TableElement;
-  size: SlideSize;
-  profile: DesignSystem;
-  thumbnail?: boolean;
-}): JSX.Element {
-  const type = createTypeResolver(profile, size.cy);
-  const style = profile.typeScale.find((entry) => entry.role === typeRoleOf(element.role));
-  const color = paint(profile.palette, style?.colorRole ?? 'text', 'text');
-  const line = paint(profile.palette, 'line', 'text');
-  const rule = `${hairline(size)} solid ${line}`;
-  const rows = [element.headers, ...element.rows];
-  return (
-    <div
-      {...markHooks(element, thumbnail)}
-      style={{ ...markStyle(element, size), overflow: 'visible' }}
-    >
-      <table
-        style={{
-          width: '100%',
-          height: '100%',
-          borderCollapse: 'collapse',
-          tableLayout: 'fixed',
-          fontFamily: fontFamily(style?.font ?? ''),
-          fontSize: cqw(emuToCqw(type.sizeEmu(element.role), size)),
-          color,
-          lineHeight: style?.lineSpacing ?? 1.2,
-        }}
-      >
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => {
-                const header = rowIndex === 0;
-                return (
-                  <td
-                    key={cellIndex}
-                    style={{
-                      padding: '0.35em 0.5em',
-                      borderBottom: rule,
-                      background: header
-                        ? paint(profile.palette, 'surface', 'background')
-                        : undefined,
-                      fontWeight: header ? 700 : 400,
-                      verticalAlign: 'top',
-                      whiteSpace: 'pre-wrap',
-                      overflowWrap: 'break-word',
-                    }}
-                  >
-                    {cell}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
