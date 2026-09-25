@@ -132,9 +132,19 @@ function centered(box: Box, size: { cx: number; cy: number }, grid: Grid): Box {
   };
 }
 
+/** Текст по клику начинается в точке клика, как в Figma и Slides: там левый верхний угол. */
+function startingAt(box: Box, size: { cx: number; cy: number }): Box {
+  return {
+    x: Math.round(box.x),
+    y: Math.round(box.y),
+    cx: Math.max(0, Math.round(size.cx)),
+    cy: Math.max(0, Math.round(size.cy)),
+  };
+}
+
 /**
- * Рамка, которую попросил жест. Клик берёт размер по умолчанию и встаёт по центру точки,
- * протяжка остаётся как есть. Поля сетки — направляющие, а не ограничение: объект можно
+ * Рамка, которую попросил жест. Клик берёт размер по умолчанию: текст начинается в точке
+ * клика, остальное встаёт по её центру. Протяжка остаётся как есть. Поля сетки — направляющие, а не ограничение: объект можно
  * положить и за ними, это забота аудита, а не редактора.
  */
 export function placedBox(
@@ -143,9 +153,12 @@ export function placedBox(
   grid: Grid,
   profile?: InsertOptions['profile'],
 ): Box {
-  const box = clicked(drag, grid)
-    ? centered(drag, defaultSize(tool, grid, profile), grid)
-    : { ...drag };
+  const size = clicked(drag, grid) ? defaultSize(tool, grid, profile) : null;
+  const box = !size
+    ? { ...drag }
+    : tool === 'text'
+      ? startingAt(drag, size)
+      : centered(drag, size, grid);
   box.cx = Math.max(0, Math.round(box.cx));
   box.cy = Math.max(0, Math.round(box.cy));
   if (tool !== 'line' && tool !== 'arrow') {

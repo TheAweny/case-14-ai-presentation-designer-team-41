@@ -1,192 +1,259 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import type { Editor } from '@tiptap/core';
 import { useEditorState, type EditorStateSnapshot } from '@tiptap/react';
-import { BubbleMenu } from '@tiptap/react/menus';
-import type { DesignSystem } from '@lct/contracts';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+  autoUpdate,
+  flip,
+  hide,
+  offset,
+  shift,
+  useFloating,
+  type VirtualElement,
+} from '@floating-ui/react-dom';
+import type { DesignSystem } from '@lct/contracts';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { BarSideContext, useRovingToolbar } from '@/components/editor/bar-controls';
+import { TextBarControls, type TextBarActions } from '@/components/editor/bar-text-controls';
+import { EDITOR_CHROME, keepFocusOnPress, stopCanvasMenu } from '@/components/editor/chrome-focus';
+import {
+  rangeMarks,
+  setParagraphAlign,
+  setRangeColor,
+  setRangeFont,
+  setRangeSize,
+} from '@/components/editor/active-text-editor';
+import { rangeLook, type TextElement } from '@/components/editor/inspector/text-model';
+import {
+  barBounds,
+  formatBarAnchor,
+  type RailSide,
+  type ScreenRect,
+} from '@/components/editor/text-format-anchor';
+import {
+  rangeFlagOn,
+  sizeLadder,
+  stepRangeSize,
+  toggleRangeFlag,
+  type InheritedText,
+} from '@/components/editor/text-shortcuts';
 
-/*
- * BubbleMenu пересылает плагину свои опции транзакцией всякий раз, когда меняется ссылка на
- * `shouldShow`, `appendTo` или `options`. Инлайн-значения менялись бы на каждом рендере, а
- * рендер шёл от транзакции, — отсюда бесконечный цикл. Поэтому все три живут в модуле.
- */
-const ALWAYS_SHOW = () => true;
-const APPEND_TO_BODY = () => document.body;
-const MENU_OPTIONS = { placement: 'top', offset: 8 } as const;
+/** Во время набора правки идут сразу в набор: живой вид и его конец не нужны. */
+const NO_PREVIEW = () => undefined;
 
-function preventFocusLoss(event: { preventDefault: () => void }) {
-  event.preventDefault();
+/** Зазор между полосой и тем, над чем она стоит, и отступ от краёв окна, px. */
+const GAP = 8;
+/** Высота полосы с зазором: столько места нужно над рамкой, чтобы встать над ней. */
+const ROOM = 52;
+
+function rectOf(rect: ScreenRect): DOMRect {
+  return DOMRect.fromRect({
+    x: rect.left,
+    y: rect.top,
+    width: Math.max(0, rect.right - rect.left),
+    height: Math.max(0, rect.bottom - rect.top),
+  });
 }
 
-/** Только то, что рисует полоса: перерисовка — когда меняются эти флаги, а не на каждую транзакцию. */
-function selectMarks({ editor }: EditorStateSnapshot<Editor>) {
-  return { bold: editor.isActive('bold'), italic: editor.isActive('italic') };
+const RAIL_SIDES: readonly RailSide[] = ['left', 'right', 'top', 'bottom'];
+
+/** Где полосе можно стоять: видимая часть холста без рейки инструментов. */
+function visibleBounds(dom: HTMLElement): ScreenRect | null {
+  const area = dom.closest('[data-canvas-area]');
+  if (!area) return null;
+  const dock = dom.closest<HTMLElement>('[data-dock-side]');
+  const rail = dock?.querySelector('[data-tool-rail]');
+  const side = RAIL_SIDES.find((value) => value === dock?.dataset.dockSide);
+  const rect = rail?.getBoundingClientRect();
+  return barBounds(
+    area.getBoundingClientRect(),
+    rect && side && rect.width > 0 && rect.height > 0 ? { rect, side } : null,
+  );
+}
+
+/** Та же область в виде, который понимают `flip` и `shift` Floating UI. */
+function boundaryOf(editor: Editor) {
+  const bounds = editor.isDestroyed ? null : visibleBounds(editor.view.dom);
+  if (!bounds) return 'clippingAncestors' as const;
+  return {
+    x: bounds.left,
+    y: bounds.top,
+    width: bounds.right - bounds.left,
+    height: bounds.bottom - bounds.top,
+  };
 }
 
 /**
- * Метки набора: жирный, курсив, шрифт и цвет роли. В журнал колоды они попадут одним
- * `set-text`, когда поле закроется. `mousedown` не отдаёт фокус, иначе поле решит, что набор
- * кончился, ещё до команды.
+ * Якорь полосы на экране прямо сейчас. Читается на каждом кадре: холст двигают трансформом
+ * (зум, пан), и событий прокрутки у этого нет.
  */
-export function TextFormatBar({ editor, profile }: { editor: Editor; profile: DesignSystem }) {
-  const t = useTranslations('formatBar');
-  const style = useTranslations('selectionBar');
-  const marks = useEditorState({ editor, selector: selectMarks });
-
-  const fonts = [...new Set(profile.typeScale.map((entry) => entry.font).filter(Boolean))];
-  const sizes = profile.typeScale.filter(
-    (entry, index, all) => all.findIndex((other) => other.role === entry.role) === index,
-  );
-
-  return (
-    <BubbleMenu
-      editor={editor}
-      shouldShow={ALWAYS_SHOW}
-      appendTo={APPEND_TO_BODY}
-      options={MENU_OPTIONS}
-      data-text-format=""
-      role="toolbar"
-      aria-label={t('label')}
-      onMouseDown={preventFocusLoss}
-      className="z-[4000] flex items-center gap-0.5 rounded-xl bg-card p-1 shadow-lg ring-1 shadow-black/25 ring-border"
-    >
-      <FormatButton
-        label={t('bold')}
-        pressed={marks.bold}
-        strong
-        onClick={() => editor.chain().focus().toggleBold().run()}
-      >
-        B
-      </FormatButton>
-      <FormatButton
-        label={t('italic')}
-        pressed={marks.italic}
-        italic
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-      >
-        I
-      </FormatButton>
-      <MenuButton label={t('font')}>
-        {fonts.map((font) => (
-          <DropdownMenuItem
-            key={font}
-            onMouseDown={preventFocusLoss}
-            onSelect={() => editor.chain().focus().setFontFamily(font).run()}
-          >
-            <span style={{ fontFamily: `"${font.replaceAll('"', '')}"` }}>{font}</span>
-          </DropdownMenuItem>
-        ))}
-      </MenuButton>
-      <MenuButton label={style('size')}>
-        {sizes.map((entry) => (
-          <DropdownMenuItem
-            key={entry.role}
-            onMouseDown={preventFocusLoss}
-            onSelect={() => editor.chain().focus().setFontSize(String(entry.sizePt)).run()}
-          >
-            {style(`type.${entry.role as TypeRoleKey}`)}
-            <span className="ml-auto pl-3 text-muted-foreground tabular-nums">{entry.sizePt}</span>
-          </DropdownMenuItem>
-        ))}
-      </MenuButton>
-      <MenuButton label={style('color')}>
-        {profile.palette.map((entry) => (
-          <DropdownMenuItem
-            key={entry.role}
-            onMouseDown={preventFocusLoss}
-            onSelect={() => editor.chain().focus().setColor(`#${entry.hex}`).run()}
-          >
-            <Swatch hex={entry.hex} />
-            {style(`palette.${entry.role}`)}
-          </DropdownMenuItem>
-        ))}
-      </MenuButton>
-    </BubbleMenu>
-  );
+function anchorRect(editor: Editor): DOMRect {
+  const dom = editor.view.dom;
+  const frame = dom.getBoundingClientRect();
+  try {
+    const { from, to, empty } = editor.state.selection;
+    const bounds = visibleBounds(dom);
+    return rectOf(
+      formatBarAnchor({
+        frame,
+        from: editor.view.coordsAtPos(from),
+        to: editor.view.coordsAtPos(to, -1),
+        empty,
+        visibleTop: Math.max(0, bounds?.top ?? 0),
+        room: ROOM,
+      }),
+    );
+  } catch {
+    // Поле закрывается: документ и вид уже разошлись. Держимся за рамку.
+    return frame;
+  }
 }
 
-type TypeRoleKey =
-  | 'title'
-  | 'subtitle'
-  | 'heading'
-  | 'body'
-  | 'bullet'
-  | 'caption'
-  | 'kpi-value'
-  | 'kpi-caption'
-  | 'quote'
-  | 'footer';
-
-function FormatButton({
-  label,
-  pressed,
-  strong,
-  italic,
-  onClick,
-  children,
+/**
+ * Полоса формата в открытом наборе — те же контролы, что у полосы над выделенным блоком, но
+ * правят выделенные слова и абзацы под кареткой, как в Google Slides. Кнопки делают ровно то
+ * же, что Ctrl+B/I/U и Ctrl+Shift+>/< в наборе. В журнал колоды всё уйдёт одним `set-text`,
+ * когда набор закроется. Кнопки не забирают фокус у набора, а поля (кегль, HEX, поиск
+ * шрифта) — забирают: набор это переживает, фокус там для него «свой».
+ *
+ * Полоса своя, на Floating UI, а не `BubbleMenu` Tiptap: тот в StrictMode терял свой узел и не
+ * появлялся вовсе, а его корень не нёс `data-text-format`, и меню полосы закрывало набор. Стоит
+ * над рамкой текста (см. `formatBarAnchor`) и идёт за ней при зуме и пане.
+ */
+export function TextFormatBar({
+  editor,
+  element,
+  profile,
+  inherited,
 }: {
-  label: string;
-  pressed: boolean;
-  strong?: boolean;
-  italic?: boolean;
-  onClick: () => void;
-  children: string;
+  editor: Editor;
+  element: TextElement;
+  profile: DesignSystem;
+  /** Начертание роли: жирный заголовок нажат, пока его не сняли. */
+  inherited: InheritedText;
 }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={pressed}
-      onMouseDown={preventFocusLoss}
-      onClick={onClick}
-      className={cn(
-        'grid size-8 place-items-center rounded-lg text-sm outline-none',
-        'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50',
-        pressed ? 'bg-muted text-foreground' : 'text-muted-foreground',
-        strong && 'font-semibold',
-        italic && 'italic',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
+  const t = useTranslations('formatBar');
+  const roving = useRovingToolbar();
+  // Только то, что рисует полоса: перерисовка — когда это меняется, а не на каждую
+  // транзакцию. Флаги — с учётом роли, как у Ctrl+B/I/U.
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: current }: EditorStateSnapshot<Editor>) => ({
+      marks: rangeMarks(current),
+      bold: rangeFlagOn(current, 'bold', inherited),
+      italic: rangeFlagOn(current, 'italic', inherited),
+      underline: rangeFlagOn(current, 'underline', inherited),
+    }),
+  });
 
-function MenuButton({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          onMouseDown={preventFocusLoss}
-          className={cn(
-            'h-8 rounded-lg px-2 text-xs text-muted-foreground outline-none',
-            'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-          )}
-        >
-          {label}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="z-[4000] min-w-44">{children}</DropdownMenuContent>
-    </DropdownMenu>
+  const reference = useMemo<VirtualElement>(
+    () => ({
+      getBoundingClientRect: () => anchorRect(editor),
+      // Отсюда — предки с обрезкой: полоса прячется, когда текст ушёл за край холста.
+      contextElement: editor.view.dom,
+    }),
+    [editor],
   );
-}
+  const { refs, floatingStyles, placement, isPositioned, middlewareData } = useFloating({
+    strategy: 'fixed',
+    placement: 'top',
+    elements: { reference },
+    middleware: [
+      offset(GAP),
+      // Над текстом, а без места сверху — под ним; вбок — не дальше видимого холста и рейки.
+      flip(() => ({ padding: GAP, fallbackPlacements: ['bottom'], boundary: boundaryOf(editor) })),
+      shift(() => ({ padding: GAP, boundary: boundaryOf(editor) })),
+      hide(),
+    ],
+    whileElementsMounted: (anchor, floating, update) =>
+      autoUpdate(anchor, floating, update, { animationFrame: true }),
+  });
+  const hidden = !isPositioned || middlewareData.hide?.referenceHidden === true;
+  const setFloating = refs.setFloating;
+  const setRoving = roving.ref;
 
-function Swatch({ hex }: { hex: string }) {
-  return (
-    <span
-      aria-hidden
-      className="size-3 shrink-0 rounded-full ring-1 ring-foreground/20"
-      style={{ background: `#${hex}` }}
-    />
+  /*
+   * Меню полосы, закрытое мышью, не возвращает фокус на свою кнопку (`useMenuFocus`), и он
+   * падал бы в `body`: набор открыт, а печатать некуда. Фокус ушёл из меню или поповера полосы
+   * в никуда — возвращаем его в текст, к той же каретке.
+   */
+  useEffect(() => {
+    const onFocusOut = (event: FocusEvent) => {
+      const target = event.target;
+      if (event.relatedTarget !== null || !(target instanceof Element)) return;
+      if (!target.closest(`[data-text-format], ${EDITOR_CHROME}`)) return;
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        if (!editor.isDestroyed) editor.commands.focus(null, { scrollIntoView: false });
+      }, 0);
+    };
+    document.addEventListener('focusout', onFocusOut);
+    return () => document.removeEventListener('focusout', onFocusOut);
+  }, [editor]);
+
+  /**
+   * Escape на полосе — назад к тексту, как в Google Docs; стрелки ходят по кнопкам. Только на
+   * самой полосе: меню и поповеры полей (они в портале) закрываются своим Escape. Подсказка
+   * кнопки тоже закрывается по Escape, поэтому `defaultPrevented` здесь не помеха.
+   */
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (event.key === 'Escape' && target instanceof Node && event.currentTarget.contains(target)) {
+      if (target instanceof HTMLInputElement && target.getAttribute('aria-expanded') === 'true') {
+        return;
+      }
+      event.preventDefault();
+      editor.commands.focus(null, { scrollIntoView: false });
+      return;
+    }
+    roving.onKeyDown(event);
+  };
+
+  const actions: TextBarActions = {
+    look: {
+      ...rangeLook(state.marks, element, profile),
+      bold: state.bold,
+      italic: state.italic,
+      underline: state.underline,
+    },
+    live: false,
+    setFont: (family) => setRangeFont(editor, family),
+    setSize: (sizePt) => setRangeSize(editor, sizePt),
+    stepSize: (step) => stepRangeSize(editor, inherited, sizeLadder(profile), step),
+    toggleFlag: (flag) => toggleRangeFlag(editor, flag, inherited),
+    setColor: (_color, hex) => setRangeColor(editor, hex),
+    setAlign: (align) => setParagraphAlign(editor, align),
+    onPreviewEnd: NO_PREVIEW,
+  };
+
+  return createPortal(
+    <BarSideContext.Provider value={placement.startsWith('bottom') ? 'bottom' : 'top'}>
+      <div
+        ref={(node) => {
+          setFloating(node);
+          setRoving(node);
+        }}
+        data-text-format=""
+        data-editor-chrome=""
+        role="toolbar"
+        aria-label={t('label')}
+        aria-orientation="horizontal"
+        onMouseDown={keepFocusOnPress}
+        onContextMenu={stopCanvasMenu}
+        onFocus={roving.onFocus}
+        onKeyDown={onKeyDown}
+        style={{ ...floatingStyles, visibility: hidden ? 'hidden' : 'visible' }}
+        className="z-[4000] flex items-center gap-0.5 rounded-xl bg-card p-1 shadow-lg ring-1 shadow-black/25 ring-border select-none"
+      >
+        <TooltipProvider>
+          <TextBarControls designSystem={profile} actions={actions} />
+        </TooltipProvider>
+      </div>
+    </BarSideContext.Provider>,
+    document.body,
   );
 }
