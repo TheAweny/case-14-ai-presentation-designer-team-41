@@ -1,0 +1,63 @@
+{
+  "label": "Tools",
+  "grip": "Move panel",
+  "gripHint": "Drag the panel or pick an edge with the arrow keys",
+  "groups": {
+    "canvas": "Canvas",
+    "panels": "Panels",
+    "history": "History",
+    "show": "Slideshow"
+  },
+  "history": {
+    "undo": "Undo {change}",
+    "redo": "Redo {change}",
+    "changes": {
+      "move": "move",
+      "text": "text edit",
+      "remove": "removal",
+      "style": "style",
+      "rotate": "rotation",
+      "lock": "lock",
+      "insert": "insertion",
+      "paste": "paste",
+      "duplicate": "duplication",
+      "arrange": "layer order",
+      "image": "picture change",
+      "table": "table edit",
+      "chart": "chart edit",
+      "slides": "slide reorder",
+      "slide-add": "new slide",
+      "slide-remove": "slide removal",
+      "background": "slide background",
+      "group": "grouping",
+      "ungroup": "ungrouping",
+      "crop": "crop",
+      "notes": "notes edit",
+      "other": "change"
+    }
+  },
+  "variantsOf": "{tool} options",
+  "tools": {
+    "pointer": "Pointer",
+    "text": "Text",
+    "image": "Image",
+    "shape": "Shapes",
+    "data": "Data",
+    "ai": "Assistant",
+    "shortcuts": "Keyboard shortcuts",
+    "present": "Present from current slide"
+  },
+  "variants": {
+    "select": "Select",
+    "hand": "Hand",
+    "text": "Text",
+    "image": "Image",
+    "rectangle": "Rectangle",
+    "ellipse": "Ellipse",
+    "line": "Line",
+    "arrow": "Arrow",
+    "chart": "Chart",
+    "table": "Table",
+    "diagram": "Diagram"
+  }
+}

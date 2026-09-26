@@ -1,0 +1,7 @@
+{
+  "label": "Действия",
+  "insert": "Вставить",
+  "insertHint": "Коснитесь слайда: {tool}",
+  "cancelInsert": "Отменить вставку",
+  "properties": "Свойства"
+}

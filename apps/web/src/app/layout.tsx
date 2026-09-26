@@ -1,16 +1,26 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { NavigationProgress } from '@/components/navigation-progress';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title: 'Deck generator',
-  description: 'Generates a deck in the style of an uploaded template.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('metadata');
+  return { title: t('title'), description: t('description') };
+}
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
+
   return (
-    <html lang="ru">
-      <body className="min-h-dvh antialiased">{children}</body>
+    <html lang={locale} className="dark">
+      <body className="min-h-dvh font-sans">
+        {/* Словарь и язык провайдер берёт из запроса сам: клиентские компоненты видят тот же. */}
+        <NextIntlClientProvider>
+          <NavigationProgress>{children}</NavigationProgress>
+        </NextIntlClientProvider>
+      </body>
     </html>
   );
 }

@@ -1,0 +1,65 @@
+{
+  "title": "Export presentation",
+  "description": "Layout variant: {variant}",
+  "variants": {
+    "dense": "dense",
+    "balanced": "balanced",
+    "airy": "airy"
+  },
+  "close": "Close",
+  "format": "Format",
+  "formats": {
+    "pptx": {
+      "title": "PowerPoint (.pptx)",
+      "description": "Editable objects, template master kept"
+    },
+    "pdf": {
+      "title": "PDF",
+      "description": "For sending and printing"
+    },
+    "png": {
+      "title": "PNG",
+      "description": "Each slide as an image, in a .zip"
+    },
+    "html": {
+      "title": "HTML",
+      "description": "A single page that opens in a browser"
+    }
+  },
+  "slides": "Slides",
+  "allSlides": "All · {count}",
+  "currentSlide": "Current · {number}",
+  "fileName": "File name",
+  "audit": "Run the audit before export",
+  "auditHint": "The findings report comes with the file",
+  "cancel": "Cancel",
+  "start": "Download {extension}",
+  "runningFile": "{file} · {count, plural, one {# slide} other {# slides}}",
+  "progress": "Export progress",
+  "stages": {
+    "queued": "Queued",
+    "parsing-template": "Reading the template",
+    "profiling-template": "Profiling the template",
+    "planning": "Planning the deck",
+    "laying-out": "Laying out",
+    "rendering": "Rendering slides",
+    "auditing": "Running the audit",
+    "exporting": "Building the file"
+  },
+  "stageStates": {
+    "pending": "waiting",
+    "running": "in progress",
+    "done": "done"
+  },
+  "stageCount": "{done} of {total}",
+  "hideHint": "You can minimise this window: export keeps going, and the Export button shows how far along it is.",
+  "stop": "Stop",
+  "hide": "Minimise",
+  "done": "Done: {file}",
+  "downloadAgain": "Download again",
+  "demoResult": "Demo mode: the export server is not connected yet, so no file was created. The stages above are the ones the server will report.",
+  "another": "Another format",
+  "failed": "Export failed",
+  "failedUnknown": "The connection to the server dropped. Please try again.",
+  "retry": "Retry"
+}

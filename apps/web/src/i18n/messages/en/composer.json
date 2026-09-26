@@ -1,0 +1,53 @@
+{
+  "label": "What is the new presentation about?",
+  "placeholder": "What is the presentation about? Who is it for and what should it achieve",
+  "submit": "Generate",
+  "sending": "Starting generation",
+  "needTemplate": "Choose a template first: the presentation takes its style",
+  "attach": "Attach material or a template",
+  "attachHint": "Text: {text}. Tables: {table}. Template: {template}",
+  "files": "Attachments",
+  "dropHere": "Drop to attach",
+  "removeFile": "Remove “{name}”",
+  "rejected": "Not supported: {names}.",
+  "kinds": {
+    "brief": "brief",
+    "text": "text",
+    "table": "table",
+    "figure": "figure",
+    "link": "link",
+    "template": "template"
+  },
+  "slides": {
+    "label": "Number of slides",
+    "auto": "Auto",
+    "count": "{count, plural, one {# slide} other {# slides}}",
+    "autoShort": "Auto",
+    "autoNote": "as the material needs",
+    "unit": "{count, plural, one {slide} other {slides}}",
+    "autoSwitch": "Auto",
+    "autoHint": "The plan decides how many slides the material needs.",
+    "hint": "The run settings allow {min} to {max}."
+  },
+  "template": {
+    "change": "Template: {file}. Change template",
+    "changeNew": "New template: {file}. Change template",
+    "newFile": "New: {file}",
+    "choose": "Choose a template",
+    "chooseLabel": "No template chosen. Choose a template",
+    "menu": "Presentation template",
+    "own": "In this project",
+    "ownEmpty": "No templates are attached to this project yet.",
+    "others": "Other templates",
+    "library": "Library templates",
+    "libraryEmpty": "No templates uploaded yet.",
+    "layouts": "{count, plural, one {# layout} other {# layouts}}",
+    "upload": "Upload a template…",
+    "uploadHint": ".pptx or .potx — I will read it before building"
+  },
+  "model": {
+    "change": "Model: {model}. Change model",
+    "menu": "Model that writes the text",
+    "default": "default"
+  }
+}

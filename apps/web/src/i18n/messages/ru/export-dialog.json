@@ -1,0 +1,65 @@
+{
+  "title": "Экспорт презентации",
+  "description": "Вариант вёрстки: {variant}",
+  "variants": {
+    "dense": "плотный",
+    "balanced": "сбалансированный",
+    "airy": "воздушный"
+  },
+  "close": "Закрыть",
+  "format": "Формат",
+  "formats": {
+    "pptx": {
+      "title": "PowerPoint (.pptx)",
+      "description": "Редактируемые объекты, мастер шаблона сохранён"
+    },
+    "pdf": {
+      "title": "PDF",
+      "description": "Для отправки и печати"
+    },
+    "png": {
+      "title": "PNG",
+      "description": "Каждый слайд картинкой, архивом .zip"
+    },
+    "html": {
+      "title": "HTML",
+      "description": "Одна страница, открывается в браузере"
+    }
+  },
+  "slides": "Слайды",
+  "allSlides": "Все · {count}",
+  "currentSlide": "Текущий · {number}",
+  "fileName": "Имя файла",
+  "audit": "Проверить аудитом перед выгрузкой",
+  "auditHint": "Отчёт о замечаниях придёт вместе с файлом",
+  "cancel": "Отмена",
+  "start": "Скачать {extension}",
+  "runningFile": "{file} · {count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
+  "progress": "Ход экспорта",
+  "stages": {
+    "queued": "В очереди",
+    "parsing-template": "Разбор шаблона",
+    "profiling-template": "Профиль шаблона",
+    "planning": "План колоды",
+    "laying-out": "Вёрстка",
+    "rendering": "Рендер слайдов",
+    "auditing": "Проверка аудитом",
+    "exporting": "Сборка файла"
+  },
+  "stageStates": {
+    "pending": "ждёт",
+    "running": "идёт",
+    "done": "готово"
+  },
+  "stageCount": "{done} из {total}",
+  "hideHint": "Окно можно свернуть — экспорт продолжится, а кнопка «Экспорт» покажет, сколько осталось.",
+  "stop": "Остановить",
+  "hide": "Свернуть",
+  "done": "Готово: {file}",
+  "downloadAgain": "Скачать ещё раз",
+  "demoResult": "Демо-режим: сервер экспорта ещё не подключён, поэтому файл не создан. Этапы выше — те же, что пришлёт сервер.",
+  "another": "Другой формат",
+  "failed": "Экспорт не удался",
+  "failedUnknown": "Связь с сервером прервалась. Попробуйте ещё раз.",
+  "retry": "Повторить"
+}

@@ -58,6 +58,402 @@
           }
         ]
       }
+    },
+    {
+      "name": "a slide edited in the editor keeps its look in the contract",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s3",
+        "variant": "balanced",
+        "index": 2,
+        "patternId": "title-over-two-columns",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "background": "surface",
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "s3-panel",
+            "role": "decoration",
+            "box": {
+              "x": 8128000,
+              "y": 0,
+              "cx": 4064000,
+              "cy": 6858000
+            },
+            "sourceShapeId": 5,
+            "locked": true
+          },
+          {
+            "kind": "text",
+            "elementId": "s3-title",
+            "role": "title",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 6858000,
+              "cy": 1325563
+            },
+            "sourceShapeId": 2,
+            "verticalAlign": "bottom",
+            "paragraphs": [
+              {
+                "level": 0,
+                "align": "center",
+                "runs": [
+                  {
+                    "text": "Итоги квартала",
+                    "font": "Play",
+                    "sizePt": 40,
+                    "bold": true,
+                    "italic": false,
+                    "underline": true,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null
+          },
+          {
+            "kind": "decor",
+            "elementId": "c1f0a2d4",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 2286000,
+              "cx": 2032000,
+              "cy": 1270000
+            },
+            "sourceShapeId": null,
+            "rotation": 15,
+            "opacity": 0.8,
+            "shape": "round-rect",
+            "fill": "accent",
+            "stroke": {
+              "color": "line",
+              "widthEmu": 12700,
+              "dash": "dash",
+              "head": "none",
+              "tail": "none"
+            },
+            "cornerRadius": 0.25
+          },
+          {
+            "kind": "decor",
+            "elementId": "9b3e71aa",
+            "role": "decoration",
+            "box": {
+              "x": 3200400,
+              "y": 2286000,
+              "cx": 1828800,
+              "cy": 914400
+            },
+            "sourceShapeId": null,
+            "shape": "line",
+            "fill": null,
+            "stroke": {
+              "color": "accent",
+              "widthEmu": 25400,
+              "dash": "solid",
+              "head": "none",
+              "tail": "arrow"
+            },
+            "flipH": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a table the editor styled keeps its grid and the look of its cells",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s4",
+        "variant": "balanced",
+        "index": 3,
+        "patternId": "title-and-table",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "table",
+            "elementId": "s4-table",
+            "role": "table",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 10515600,
+              "cy": 3657600
+            },
+            "sourceShapeId": null,
+            "headers": ["Этап", "Где живёт", "Детерминирован"],
+            "rows": [
+              ["Разбор шаблона", "Python", "Да"],
+              ["План колоды", "TypeScript\nMastra", "Нет"]
+            ],
+            "columnWidths": [0.4, 0.35, 0.25],
+            "rowHeights": [0.2, 0.4, 0.4],
+            "headerRow": true,
+            "bandedRows": true,
+            "bandFill": "EEF1F6",
+            "borders": {
+              "color": "line",
+              "widthEmu": 12700,
+              "horizontal": true,
+              "vertical": true,
+              "outer": false
+            },
+            "cellStyles": [
+              [
+                {
+                  "fill": "accent",
+                  "color": "text-on-accent"
+                },
+                {
+                  "fill": "accent",
+                  "color": "text-on-accent"
+                },
+                {
+                  "fill": "accent",
+                  "color": "text-on-accent",
+                  "align": "center"
+                }
+              ],
+              [
+                null,
+                null,
+                {
+                  "align": "center",
+                  "verticalAlign": "middle"
+                }
+              ],
+              [
+                {
+                  "bold": true,
+                  "italic": true,
+                  "underline": true
+                },
+                null,
+                {
+                  "fill": null,
+                  "align": "center",
+                  "verticalAlign": "middle"
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a shape with words in it, a cropped picture and speaker notes",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s6",
+        "variant": "balanced",
+        "index": 5,
+        "patternId": "title-and-picture",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "s6-badge",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 3048000,
+              "cy": 1219200
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "accent",
+            "stroke": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "align": "center",
+                "runs": [
+                  {
+                    "text": "Шаг 1",
+                    "font": "",
+                    "sizePt": 24,
+                    "bold": true,
+                    "italic": false,
+                    "color": "FFFFFF"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "verticalAlign": "middle",
+            "textInsets": {
+              "l": 91440,
+              "t": 45720,
+              "r": 91440,
+              "b": 45720
+            }
+          },
+          {
+            "kind": "image",
+            "elementId": "s6-photo",
+            "role": "image",
+            "box": {
+              "x": 4572000,
+              "y": 1600200,
+              "cx": 6781800,
+              "cy": 4114800
+            },
+            "sourceShapeId": null,
+            "mediaPart": "/ppt/media/image1.png",
+            "fit": "cover",
+            "crop": {
+              "l": 0.1,
+              "t": 0,
+              "r": 0.05,
+              "b": 0.2
+            }
+          }
+        ],
+        "notes": "Начать с цифры выручки.\nПотом — про сроки."
+      }
+    },
+    {
+      "name": "cards a user grouped, one of them inside a group of its own",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s6",
+        "variant": "balanced",
+        "index": 5,
+        "patternId": "title-over-cards",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "card-1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": ["row"]
+          },
+          {
+            "kind": "text",
+            "elementId": "card-1-text",
+            "role": "body",
+            "box": {
+              "x": 990600,
+              "y": 1828800,
+              "cx": 2133600,
+              "cy": 457200
+            },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Выручка",
+                    "font": "",
+                    "sizePt": 18,
+                    "bold": false,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null,
+            "groupIds": ["row"]
+          },
+          {
+            "kind": "decor",
+            "elementId": "card-2",
+            "role": "decoration",
+            "box": {
+              "x": 3505200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": ["row", "card-2"]
+          },
+          {
+            "kind": "text",
+            "elementId": "card-2-text",
+            "role": "body",
+            "box": {
+              "x": 3657600,
+              "y": 1828800,
+              "cx": 2133600,
+              "cy": 457200
+            },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Маржа",
+                    "font": "",
+                    "sizePt": 18,
+                    "bold": false,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null,
+            "groupIds": ["row", "card-2"]
+          },
+          {
+            "kind": "text",
+            "elementId": "note",
+            "role": "body",
+            "box": {
+              "x": 838200,
+              "y": 1828800,
+              "cx": 2133600,
+              "cy": 457200
+            },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "Данные за квартал",
+                    "font": "",
+                    "sizePt": 18,
+                    "bold": false,
+                    "italic": false,
+                    "color": "1F1F1F"
+                  }
+                ],
+                "lineSpacing": null
+              }
+            ],
+            "overflow": null
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -120,8 +516,8 @@
       }
     },
     {
-      "name": "decoration with no shape behind it",
-      "why": "Decoration is carried over from the template, so it always has a source shape.",
+      "name": "element that does not say where it came from",
+      "why": "Null says the editor drew it, a number names the template shape; a missing key says nothing, so export would have to guess.",
       "path": ["elements", 0, "sourceShapeId"],
       "payload": {
         "schemaVersion": 1,
@@ -141,8 +537,213 @@
               "y": 365125,
               "cx": 10515600,
               "cy": 1325563
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape filled with a CSS colour",
+      "why": "A colour is a palette role or six hex digits; a hash or a CSS name is neither and would not survive export.",
+      "path": ["elements", 0, "fill"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
             },
-            "sourceShapeId": null
+            "sourceShapeId": null,
+            "shape": "rect",
+            "fill": "#3355E0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rotation of a full turn",
+      "why": "Rotation is normalised to [0, 360) so two slides that look the same compare equal.",
+      "path": ["elements", 0, "rotation"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "variant": "dense",
+        "index": 1,
+        "patternId": "p",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 365125,
+              "cx": 10515600,
+              "cy": 1325563
+            },
+            "sourceShapeId": 7,
+            "rotation": 360
+          }
+        ]
+      }
+    },
+    {
+      "name": "table column squeezed to nothing",
+      "why": "A column of zero width holds text nobody can see or click, and export would write a grid column PowerPoint refuses to open.",
+      "path": ["elements", 0, "columnWidths", 1],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s5",
+        "variant": "balanced",
+        "index": 3,
+        "patternId": "title-and-table",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "table",
+            "elementId": "e1",
+            "role": "table",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 10515600,
+              "cy": 3657600
+            },
+            "sourceShapeId": null,
+            "headers": ["A", "B"],
+            "rows": [["1", "2"]],
+            "columnWidths": [0.5, 0]
+          }
+        ]
+      }
+    },
+    {
+      "name": "picture cropped away entirely",
+      "why": "Cutting off the whole width leaves nothing to fill the box, and srcRect of 100000 is a picture PowerPoint draws as empty.",
+      "path": ["elements", 0, "crop", "l"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s7",
+        "variant": "balanced",
+        "index": 6,
+        "patternId": "title-and-picture",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "image",
+            "elementId": "e1",
+            "role": "image",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "cx": 6096000,
+              "cy": 3429000
+            },
+            "sourceShapeId": null,
+            "mediaPart": "/ppt/media/image1.png",
+            "fit": "cover",
+            "crop": {
+              "l": 1,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "shape with an empty text body",
+      "why": "A shape with no words leaves the key out; an empty list would export a txBody with no paragraph, which PowerPoint refuses.",
+      "path": ["elements", 0, "paragraphs"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s8",
+        "variant": "balanced",
+        "index": 7,
+        "patternId": "title-and-body",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "e1",
+            "role": "decoration",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "cx": 3048000,
+              "cy": 1219200
+            },
+            "sourceShapeId": null,
+            "shape": "rect",
+            "fill": "surface",
+            "stroke": null,
+            "paragraphs": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "element in a group with no name",
+      "why": "A group is named by its id; a blank one cannot be told apart from another blank one, so two unrelated shapes would export as one p:grpSp.",
+      "path": ["elements", 0, "groupIds", 0],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s7",
+        "variant": "balanced",
+        "index": 6,
+        "patternId": "title-over-cards",
+        "slideCx": 12192000,
+        "slideCy": 6858000,
+        "elements": [
+          {
+            "kind": "decor",
+            "elementId": "card-1",
+            "role": "decoration",
+            "box": {
+              "x": 838200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": [""]
+          },
+          {
+            "kind": "decor",
+            "elementId": "card-2",
+            "role": "decoration",
+            "box": {
+              "x": 3505200,
+              "y": 1600200,
+              "cx": 2438400,
+              "cy": 1828800
+            },
+            "sourceShapeId": null,
+            "shape": "round-rect",
+            "fill": "surface",
+            "stroke": null,
+            "groupIds": [""]
           }
         ]
       }

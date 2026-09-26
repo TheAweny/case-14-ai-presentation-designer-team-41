@@ -1,0 +1,19 @@
+{
+  "label": "Slide layers",
+  "empty": "Nothing on this slide yet",
+  "hint": "Top of the list is on top of the slide. Drag a row to change the order.",
+  "group": "Group",
+  "groupCount": "{count, plural, one {# object} other {# objects}}",
+  "line": "Line",
+  "shape": "Shape",
+  "lock": "Lock",
+  "unlock": "Unlock",
+  "expand": "Expand group",
+  "collapse": "Collapse group",
+  "locked": "locked",
+  "reorderHint": "Press Space, then the up and down arrows, to move a layer. Or drag its row.",
+  "dragStart": "Moving layer {layer}",
+  "dragOver": "{layer} will move to {over}",
+  "dragEnd": "{layer} moved",
+  "dragCancel": "Move cancelled"
+}

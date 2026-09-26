@@ -1,0 +1,62 @@
+{
+  "deckMenu": "Actions for presentation “{title}”",
+  "projectMenu": "Actions for project “{name}”",
+  "items": {
+    "open": "Open",
+    "openInNewTab": "Open in new tab",
+    "present": "Start presenting",
+    "newDeck": "New presentation in project",
+    "rename": "Rename",
+    "moveToProject": "Move to project",
+    "appearance": "Icon and color",
+    "copyLink": "Copy link",
+    "attachTemplate": "Attach template",
+    "deleteDeck": "Delete",
+    "deleteProject": "Delete project"
+  },
+  "unavailable": {
+    "pendingApi": "Coming with the server"
+  },
+  "move": {
+    "none": "No project"
+  },
+  "notices": {
+    "linkCopied": "Link copied",
+    "linkFailed": "The browser did not allow writing to the clipboard. Copy the address from the address bar.",
+    "renameDeckFailed": "Could not rename the presentation. Please try again.",
+    "renameProjectFailed": "Could not rename the project. Please try again.",
+    "appearanceFailed": "Could not save the icon and color. Please try again.",
+    "deleteDeckFailed": "Could not delete the presentation. Please try again.",
+    "deleteProjectFailed": "Could not delete the project. Please try again.",
+    "deckDeleted": "Presentation “{title}” deleted",
+    "projectDeleted": "Project “{name}” deleted",
+    "deckMoved": "Presentation moved to “{project}”",
+    "deckMovedOut": "Presentation is no longer in a project",
+    "moveDeckFailed": "Could not move the presentation. Please try again.",
+    "dismiss": "Dismiss notification"
+  },
+  "renameDeck": {
+    "title": "Rename presentation",
+    "label": "Presentation title"
+  },
+  "renameProject": {
+    "title": "Rename project",
+    "label": "Project name"
+  },
+  "rename": {
+    "save": "Save",
+    "empty": "The name cannot be empty."
+  },
+  "deleteDeck": {
+    "title": "Delete presentation?",
+    "body": "The presentation “{title}” will be deleted permanently. This cannot be undone.",
+    "confirm": "Delete"
+  },
+  "deleteProject": {
+    "title": "Delete project?",
+    "body": "The project “{name}” will be deleted permanently. {count, plural, =0 {It has no presentations.} one {# presentation will be deleted with it.} other {# presentations will be deleted with it.}} Its templates stay in the library. This cannot be undone.",
+    "confirm": "Delete project"
+  },
+  "cancel": "Cancel",
+  "close": "Close"
+}

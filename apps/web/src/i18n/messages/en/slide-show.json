@@ -1,0 +1,8 @@
+{
+  "label": "Slideshow",
+  "counter": "{number} / {total}",
+  "previous": "Previous slide",
+  "next": "Next slide",
+  "exit": "Exit slideshow",
+  "end": "End of slideshow. Click to exit."
+}

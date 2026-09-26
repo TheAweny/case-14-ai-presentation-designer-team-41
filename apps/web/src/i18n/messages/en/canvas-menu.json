@@ -1,0 +1,15 @@
+{
+  "cut": "Cut",
+  "copy": "Copy",
+  "paste": "Paste",
+  "duplicate": "Duplicate",
+  "front": "Bring to front",
+  "forward": "Bring forward",
+  "backward": "Send backward",
+  "back": "Send to back",
+  "selectAll": "Select all",
+  "remove": "Delete",
+  "unlockAll": "Unlock all on slide",
+  "group": "Group",
+  "ungroup": "Ungroup"
+}
