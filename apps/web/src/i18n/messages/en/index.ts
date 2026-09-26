@@ -1,5 +1,6 @@
 import type { Messages } from 'next-intl';
 import assistant from './assistant.json';
+import auth from './auth.json';
 import auditPanel from './audit-panel.json';
 import canvasMenu from './canvas-menu.json';
 import composer from './composer.json';
@@ -66,6 +67,7 @@ const messages = {
   assistant,
   splash,
   settings,
+  auth,
 } satisfies Messages;
 
 export default messages;

@@ -224,6 +224,91 @@
   }
 }
 
+/*
+ * Страница входа, «Горизонт»: снизу край планеты со светящейся кромкой, над ним мягкий луч и
+ * редкие звёзды. Цвета — из палитры проектов. Слои лежат под формой (`z-index: -1` при
+ * `isolate` у страницы) и не ловят указатель.
+ *
+ * Яркость и движение — от движка «Авроры» (`useAurora`): энергия поднимает кромку и луч, импульс
+ * от ввода вспыхивает, угол водит луч вдоль горизонта. Без движка — спокойный свет покоя.
+ */
+@keyframes horizon-breathe {
+  50% {
+    transform: translate(-50%, 50%) scale(1.08);
+  }
+}
+@layer components {
+  /*
+   * Сцена: снизу полоса под горизонт, форма центрируется над ней. Кромка планеты стоит ровно по
+   * верху полосы, поэтому на любом экране она ниже формы: не хватает высоты — растёт страница,
+   * а не горизонт наезжает на поля.
+   */
+  .horizon-scene {
+    --horizon-height: clamp(6rem, 24vh, 15rem);
+    padding-bottom: calc(var(--horizon-height) + 2rem);
+  }
+
+  .horizon-stars,
+  .horizon-beam,
+  .horizon-planet {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .horizon-stars {
+    inset: 0;
+    opacity: 0.5;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, oklch(1 0 0 / 55%), transparent),
+      radial-gradient(1px 1px at 70% 20%, oklch(1 0 0 / 40%), transparent),
+      radial-gradient(1px 1px at 40% 12%, oklch(1 0 0 / 35%), transparent),
+      radial-gradient(1px 1px at 85% 45%, oklch(1 0 0 / 30%), transparent),
+      radial-gradient(1px 1px at 12% 55%, oklch(1 0 0 / 30%), transparent),
+      radial-gradient(1px 1px at 58% 38%, oklch(1 0 0 / 20%), transparent);
+  }
+
+  .horizon-beam {
+    left: 50%;
+    bottom: var(--horizon-height);
+    width: 70vw;
+    height: 40vh;
+    transform: translate(-50%, 50%);
+    background: radial-gradient(
+      ellipse at center,
+      oklch(from var(--project-purple) l c h / 0.35),
+      transparent 65%
+    );
+    translate: calc(sin(var(--aurora-angle)) * 6vw) 0;
+    opacity: calc(0.55 + var(--aurora-energy, 0.08) * 0.45 + var(--aurora-pulse, 0) * 0.5);
+    filter: blur(30px) hue-rotate(calc(sin(var(--aurora-angle)) * 25deg));
+    animation: horizon-breathe 12s ease-in-out infinite;
+  }
+
+  .horizon-planet {
+    left: 50%;
+    top: calc(100% - var(--horizon-height));
+    width: 190vw;
+    height: 110vh;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 0%, oklch(0.26 0.02 270), var(--background) 40%);
+    --horizon-glow: calc(var(--aurora-energy, 0.08) + var(--aurora-pulse, 0));
+    box-shadow:
+      0 -1px 0 0 oklch(0.95 0.05 280 / calc(0.75 + var(--horizon-glow) * 0.25)),
+      0 -12px 50px -6px
+        oklch(from var(--project-purple) l c h / calc(0.6 + var(--horizon-glow) * 0.4)),
+      0 -50px 160px 10px
+        oklch(from var(--project-blue) l c h / calc(0.35 + var(--horizon-glow) * 0.35));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .horizon-beam {
+      animation: none;
+    }
+  }
+}
+
 /* Разговор с ассистентом: появление сообщений и слайдов, бегущий блик статуса, пульс «идёт работа». */
 @keyframes assistant-rise {
   from {

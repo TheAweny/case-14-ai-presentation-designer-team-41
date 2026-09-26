@@ -5,11 +5,18 @@
   "close": "Close settings",
   "sections": {
     "label": "Settings sections",
+    "account": "Account",
     "general": "General",
     "editor": "Editor",
     "shortcuts": "Shortcuts",
     "decks": "Decks",
     "models": "Models"
+  },
+  "account": {
+    "title": "Account",
+    "managed": "Your administrator changes the name, email and password.",
+    "signOutHint": "Sign out on this device",
+    "signOut": "Sign out"
   },
   "general": {
     "title": "General",
