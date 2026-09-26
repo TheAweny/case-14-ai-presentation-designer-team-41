@@ -1,0 +1,29 @@
+{
+  "label": "Файл и экспорт",
+  "fileMenu": "Меню файла: {title}",
+  "allDecks": "Все презентации",
+  "rename": "Переименовать",
+  "renameLabel": "Название презентации",
+  "groups": {
+    "deck": "Презентация",
+    "download": "Скачать"
+  },
+  "newDeck": "Новая презентация…",
+  "replaceTemplate": "Загрузить другой шаблон…",
+  "replaceContent": "Заменить контент…",
+  "duplicate": "Сделать копию",
+  "history": "История версий",
+  "exportPptx": "PowerPoint (.pptx)",
+  "exportPdf": "PDF",
+  "exportPng": "Слайды в PNG (.zip)",
+  "manifest": "Манифест прогона (.json)",
+  "pendingApi": "Серые пункты заработают, когда редактор подключат к серверу.",
+  "audit": "Аудит",
+  "auditPending": "Проверки аудита ещё не подключены",
+  "present": "Показ",
+  "presentPending": "Режим показа ещё не готов",
+  "export": "Экспорт",
+  "exportPending": "Экспорт ещё не подключён",
+  "exportHtml": "HTML-страница",
+  "exportRunning": "Экспорт · {percent} %"
+}

@@ -66,16 +66,17 @@ PPTX с нативными PowerPoint text boxes. Внутри endpoint нет �
 
 ### TypeScript
 
-| Проект                    | Теги                       | Зачем                                                             |
-| ------------------------- | -------------------------- | ----------------------------------------------------------------- |
-| `apps/web`                | `scope:web`, `type:app`    | Next.js: загрузка шаблона, прогресс, три варианта, аудит, экспорт |
-| `apps/api`                | `scope:api`, `type:app`    | NestJS: прогоны, файлы, SSE, Mastra внутри процесса               |
-| `apps/cli`                | `scope:api`, `type:app`    | прогон по конфигу без веба                                        |
-| `packages/contracts`      | `scope:shared`, `type:lib` | Zod-схемы — источник правды для обеих сторон                      |
-| `packages/slide-renderer` | `scope:shared`, `type:lib` | IR → React: превью и HTML-экспорт                                 |
-| `packages/pipeline`       | `scope:api`, `type:lib`    | Mastra: workflow, шаги, агенты, контекстный аудит                 |
-| `packages/registry`       | `scope:api`, `type:lib`    | загрузка агентов из `registry/`, манифест прогона                 |
-| `packages/engine-client`  | `scope:api`, `type:lib`    | типизированный клиент движка                                      |
+| Проект                    | Теги                       | Зачем                                                               |
+| ------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| `apps/web`                | `scope:web`, `type:app`    | Next.js: загрузка шаблона, прогресс, три варианта, аудит, экспорт   |
+| `apps/api`                | `scope:api`, `type:app`    | NestJS: прогоны, файлы, SSE, Mastra внутри процесса                 |
+| `apps/cli`                | `scope:api`, `type:app`    | прогон по конфигу без веба                                          |
+| `packages/contracts`      | `scope:shared`, `type:lib` | Zod-схемы — источник правды для обеих сторон                        |
+| `packages/slide-renderer` | `scope:shared`, `type:lib` | IR → React: превью и HTML-экспорт                                   |
+| `packages/deck-ops`       | `scope:shared`, `type:lib` | Журнал правок редактора (Immer) и сборка `PatchOp`; порядок слайдов |
+| `packages/pipeline`       | `scope:api`, `type:lib`    | Mastra: workflow, шаги, агенты, контекстный аудит                   |
+| `packages/registry`       | `scope:api`, `type:lib`    | загрузка агентов из `registry/`, манифест прогона                   |
+| `packages/engine-client`  | `scope:api`, `type:lib`    | типизированный клиент движка                                        |
 
 Правила зависимостей закреплены в `@nx/enforce-module-boundaries`: `scope:web` зависит только от
 `scope:web` и `scope:shared`, `scope:api` — от `scope:api` и `scope:shared`, `scope:shared` —

@@ -1,0 +1,17 @@
+{
+  "label": "Main menu",
+  "newDeck": "New presentation",
+  "navigation": "Sections",
+  "home": "Home",
+  "projects": "Projects",
+  "newProject": "New project",
+  "createProject": {
+    "title": "New project",
+    "description": "A project holds presentations and the templates they are built on.",
+    "label": "Project name",
+    "placeholder": "For example, Quarterly report",
+    "create": "Create",
+    "creating": "Creating…",
+    "failed": "Could not create the project. Please try again."
+  }
+}

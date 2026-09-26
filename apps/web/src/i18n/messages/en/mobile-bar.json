@@ -1,0 +1,7 @@
+{
+  "label": "Actions",
+  "insert": "Insert",
+  "insertHint": "Tap the slide: {tool}",
+  "cancelInsert": "Cancel insert",
+  "properties": "Properties"
+}

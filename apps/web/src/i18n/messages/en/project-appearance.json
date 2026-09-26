@@ -1,0 +1,40 @@
+{
+  "label": "Project icon and color",
+  "icons": "Icon",
+  "colors": "Color",
+  "hint": "Arrows to move, Enter or Space to apply",
+  "failed": "Could not save the icon and color. Please try again.",
+  "iconNames": {
+    "folder": "Folder",
+    "chart": "Chart",
+    "rocket": "Rocket",
+    "briefcase": "Briefcase",
+    "idea": "Light bulb",
+    "target": "Target",
+    "globe": "Globe",
+    "book": "Book",
+    "graduation": "Learning",
+    "star": "Star",
+    "flag": "Flag",
+    "megaphone": "Megaphone",
+    "shield": "Shield",
+    "heart": "Heart",
+    "code": "Code",
+    "trophy": "Trophy",
+    "money": "Money",
+    "people": "Team",
+    "palette": "Palette",
+    "leaf": "Leaf"
+  },
+  "colorNames": {
+    "gray": "Gray",
+    "red": "Red",
+    "orange": "Orange",
+    "yellow": "Yellow",
+    "green": "Green",
+    "teal": "Teal",
+    "blue": "Blue",
+    "purple": "Purple",
+    "pink": "Pink"
+  }
+}

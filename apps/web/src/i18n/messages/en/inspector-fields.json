@@ -1,0 +1,28 @@
+{
+  "mixed": "Mixed",
+  "color": {
+    "openPicker": "Pick a colour",
+    "hex": "Colour, HEX",
+    "editHex": "Enter a custom HEX colour",
+    "eyedropper": "Pick a colour from the screen",
+    "templateColors": "Template colours"
+  },
+  "font": {
+    "search": "Search fonts",
+    "list": "Fonts",
+    "templateFonts": "Template fonts",
+    "allFonts": "All fonts",
+    "showLocal": "Show fonts on this computer",
+    "loadingLocal": "Loading fonts…",
+    "localDenied": "The browser did not allow access to local fonts.",
+    "localUnavailable": "This browser does not list local fonts, so common ones are shown.",
+    "notFound": "No such font"
+  },
+  "fontStyle": {
+    "label": "Font style",
+    "regular": "Regular",
+    "italic": "Italic",
+    "bold": "Bold",
+    "boldItalic": "Bold Italic"
+  }
+}

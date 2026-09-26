@@ -1,0 +1,15 @@
+{
+  "insertRowAbove": "Вставить строку выше",
+  "insertRowBelow": "Вставить строку ниже",
+  "insertColumnLeft": "Вставить столбец слева",
+  "insertColumnRight": "Вставить столбец справа",
+  "removeRows": "{count, plural, one {Удалить строку} few {Удалить # строки} many {Удалить # строк} other {Удалить # строки}}",
+  "removeColumns": "{count, plural, one {Удалить столбец} few {Удалить # столбца} many {Удалить # столбцов} other {Удалить # столбца}}",
+  "clearCells": "Очистить ячейки",
+  "resetLook": "Сбросить оформление ячеек",
+  "fill": "Заливка ячеек",
+  "noFill": "Без заливки",
+  "resizeColumn": "Граница столбца {index}",
+  "resizeRow": "Граница строки {index}",
+  "resizeHint": "Тяните, чтобы изменить размер. Двойной щелчок — по содержимому"
+}

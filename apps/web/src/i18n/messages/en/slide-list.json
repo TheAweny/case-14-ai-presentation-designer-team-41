@@ -1,0 +1,10 @@
+{
+  "duplicateSlides": "Duplicate slides ({count})",
+  "removeSlides": "Delete slides ({count})",
+  "selected": "{count, plural, one {# slide selected} other {# slides selected}}",
+  "dragStartMany": "Moving {count, plural, one {# slide} other {# slides}}",
+  "dragEndMany": "{count, plural, one {# slide moved} other {# slides moved}}",
+  "newSlideFrom": "New slide from layout",
+  "newSlideLayouts": "Template layouts",
+  "blankSlide": "Blank slide"
+}

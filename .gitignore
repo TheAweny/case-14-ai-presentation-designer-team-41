@@ -21,6 +21,10 @@ coverage/
 .nx/cache
 .nx/workspace-data
 
+# playwright
+apps/web/test-results/
+apps/web/playwright-report/
+
 # python
 .venv/
 __pycache__/
@@ -54,3 +58,20 @@ Thumbs.db
 !.vscode/extensions.json
 .codeassistant
 .git_hidden_message
+
+# AI trash
+.claude/*
+.cursor/*
+.deepseek/*
+.gemini/*
+.grok/*
+.openai/*
+.perplexity/*
+.poe/*
+.sage/*
+.think/*
+.vllm/*
+
+# next dev writes agent notes into the app on start
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

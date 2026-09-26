@@ -1,36 +1,328 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens of the product shell. They are deliberately neutral: anything that belongs to
- * a user's template comes from the template profile at runtime, never from this stylesheet.
+ * Shell tokens only. Palette, type and grid of a user's template come from
+ * the template profile at runtime and are never hardcoded here.
  */
-@theme {
-  --color-surface: oklch(99% 0 0);
-  --color-surface-muted: oklch(96.5% 0.004 260);
-  --color-ink: oklch(21% 0.012 260);
-  --color-ink-muted: oklch(52% 0.012 260);
-  --color-accent: oklch(58% 0.17 260);
-  --color-border: oklch(90% 0.006 260);
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-surface: oklch(17% 0.01 260);
-    --color-surface-muted: oklch(22% 0.012 260);
-    --color-ink: oklch(96% 0.004 260);
-    --color-ink-muted: oklch(72% 0.01 260);
-    --color-accent: oklch(72% 0.14 260);
-    --color-border: oklch(30% 0.012 260);
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  /*
+   * Холст редактора: рамка и ручки выделения, линии прилипания с подписями расстояний. Это
+   * цвета интерфейса, одинаковые для любого шаблона, и они обязаны быть видны на листе любой
+   * палитры — поэтому не роли шаблона и не серый шкалы оболочки.
+   */
+  --canvas-selection: oklch(0.62 0.19 254);
+  --canvas-snap: oklch(0.63 0.24 22);
+  /*
+   * Цвета проектов — метка проекта в меню, как в ChatGPT. Палитра оболочки, не шаблона:
+   * иконка рисуется этим цветом на полупрозрачной подложке того же цвета.
+   */
+  --project-gray: oklch(0.55 0.01 260);
+  --project-red: oklch(0.58 0.2 25);
+  --project-orange: oklch(0.63 0.17 50);
+  --project-yellow: oklch(0.68 0.14 85);
+  --project-green: oklch(0.6 0.15 150);
+  --project-teal: oklch(0.6 0.1 195);
+  --project-blue: oklch(0.57 0.17 258);
+  --project-purple: oklch(0.56 0.2 300);
+  --project-pink: oklch(0.6 0.2 350);
+}
+
+.dark {
+  --background: oklch(0.21 0.004 260);
+  --foreground: oklch(0.96 0.004 260);
+  --card: oklch(0.25 0.005 260);
+  --card-foreground: oklch(0.96 0.004 260);
+  --popover: oklch(0.25 0.005 260);
+  --popover-foreground: oklch(0.96 0.004 260);
+  --primary: oklch(0.92 0.004 260);
+  --primary-foreground: oklch(0.22 0.004 260);
+  --secondary: oklch(0.3 0.006 260);
+  --secondary-foreground: oklch(0.96 0.004 260);
+  --muted: oklch(0.3 0.006 260);
+  --muted-foreground: oklch(0.72 0.01 260);
+  --accent: oklch(0.3 0.006 260);
+  --accent-foreground: oklch(0.96 0.004 260);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.55 0.01 260);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.18 0.004 260);
+  --sidebar-foreground: oklch(0.96 0.004 260);
+  --sidebar-primary: oklch(0.92 0.004 260);
+  --sidebar-primary-foreground: oklch(0.22 0.004 260);
+  --sidebar-accent: oklch(0.3 0.006 260);
+  --sidebar-accent-foreground: oklch(0.96 0.004 260);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.55 0.01 260);
+  /* На тёмном фоне светлее: иконка должна читаться и на подложке, и на панели. */
+  --project-gray: oklch(0.78 0.01 260);
+  --project-red: oklch(0.72 0.17 25);
+  --project-orange: oklch(0.77 0.15 55);
+  --project-yellow: oklch(0.85 0.14 92);
+  --project-green: oklch(0.78 0.15 150);
+  --project-teal: oklch(0.8 0.11 195);
+  --project-blue: oklch(0.74 0.14 258);
+  --project-purple: oklch(0.75 0.15 300);
+  --project-pink: oklch(0.77 0.15 350);
+}
+
+/* Проявление заставки загрузки; задержку ставит `PageSplash`, чтобы быстрые загрузки её не показывали. */
+@keyframes splash-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * «Аврора» — свечение окна быстрого старта: блик цвета проекта вращается по рамке. Угол и
+ * цвет ставит `useAurora` с компонентом, здесь только то, как они рисуются. Оба
+ * зарегистрированы: угол интерполируется в `conic-gradient`, а смена проекта перетекает
+ * цвет в цвет, а не щёлкает. Цвет один — переливаются его светлый и прозрачный тона.
+ */
+@property --aurora-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+@property --aurora-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@layer components {
+  .aurora {
+    /* Энергия 0…1: покой, наведение, фокус, генерация. Импульс — короткая волна от ввода. */
+    --aurora-energy: 0.08;
+    --aurora-pulse: 0;
+    --aurora-gradient: conic-gradient(
+      from var(--aurora-angle),
+      var(--aurora-color),
+      oklch(from var(--aurora-color) calc(l + 0.12) calc(c * 0.6) h),
+      oklch(from var(--aurora-color) l c h / 0.25),
+      var(--aurora-color)
+    );
+    position: relative;
+    isolation: isolate;
+    transition: --aurora-color 0.8s ease;
+  }
+
+  /*
+   * Анимируется только прозрачность и угол градиента. Размер и радиус размытия постоянны:
+   * их браузер округляет до пикселя, и ореол дёргался бы ступеньками.
+   */
+  .aurora-halo,
+  .aurora-ring {
+    position: absolute;
+    pointer-events: none;
+    border-radius: inherit;
+    background: var(--aurora-gradient);
+  }
+
+  .aurora-halo {
+    inset: -2px;
+    z-index: -1;
+    filter: blur(22px);
+    opacity: calc(var(--aurora-energy) * 0.45 + var(--aurora-pulse) * 0.25);
+    will-change: opacity;
+  }
+
+  /* Рамка в полтора пикселя поверх карточки: градиент, вырезанный маской по контуру. */
+  .aurora-ring {
+    inset: -1px;
+    z-index: 2;
+    padding: 1.25px;
+    border-radius: calc(var(--radius-xl) + 1px);
+    opacity: calc(0.25 + var(--aurora-energy) * 0.75);
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+  }
+}
+
+/* Разговор с ассистентом: появление сообщений и слайдов, бегущий блик статуса, пульс «идёт работа». */
+@keyframes assistant-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes assistant-reveal {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+@keyframes assistant-shimmer {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+@keyframes assistant-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+@keyframes assistant-ping {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--aurora-color, var(--foreground)) 60%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@layer components {
+  .assistant-rise {
+    animation: assistant-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .assistant-reveal {
+    animation: assistant-reveal 0.45s ease both;
+  }
+  .assistant-shimmer {
+    background: linear-gradient(
+        90deg,
+        var(--muted-foreground) 0%,
+        var(--foreground) 45%,
+        var(--muted-foreground) 70%
+      )
+      0 0 / 250% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: assistant-shimmer 2.2s linear infinite;
+  }
+  .assistant-ping {
+    animation: assistant-ping 1.6s ease-out infinite;
+  }
+  /* Заглушка слайда, который ещё верстается: по ней проходит мягкий блик. */
+  .assistant-skeleton {
+    position: relative;
+    overflow: hidden;
+  }
+  .assistant-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, oklch(1 0 0 / 6%) 50%, transparent 70%) 0
+      0 / 200% 100%;
+    animation: assistant-sweep 1.4s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .assistant-rise,
+    .assistant-reveal,
+    .assistant-ping,
+    .assistant-skeleton::after {
+      animation: none;
+    }
+    .assistant-shimmer {
+      animation: none;
+      background: none;
+      color: var(--foreground);
+    }
   }
 }
 
 @layer base {
   html {
-    color-scheme: light dark;
+    color-scheme: dark;
   }
 
   body {
-    background-color: var(--color-surface);
-    color: var(--color-ink);
+    @apply bg-background text-foreground antialiased;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
   }
 }

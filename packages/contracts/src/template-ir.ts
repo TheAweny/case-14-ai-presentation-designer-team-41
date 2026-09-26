@@ -55,14 +55,31 @@ export const textRunSchema = z.object({
   sizePt: z.number().nullable().describe('Size in points, or null when inherited.'),
   bold: z.boolean().nullable().describe('Null when inherited.'),
   italic: z.boolean().nullable().describe('Null when inherited.'),
+  underline: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe('Null or absent when inherited, which for almost every template means no underline.'),
   color: z
     .string()
     .describe('Six-digit hex when the run states a colour. Empty when it inherits one.'),
+  letterSpacingPt: z
+    .number()
+    .nullable()
+    .optional()
+    .describe('Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.'),
 });
+
+/** Horizontal alignment of a paragraph, as OOXML `algn` names it in full. */
+export const paragraphAlignSchema = z.enum(['left', 'center', 'right', 'justify']);
 
 /** A paragraph and its runs. The level drives bullet depth. */
 export const paragraphSchema = z.object({
   level: z.number().int().nonnegative().describe('Indent level, zero at the top.'),
+  align: paragraphAlignSchema
+    .nullable()
+    .optional()
+    .describe('Null or absent when the paragraph inherits its alignment.'),
   runs: z.array(textRunSchema).describe('Runs in reading order.'),
   lineSpacing: z
     .number()
@@ -198,6 +215,7 @@ export type Fill = z.infer<typeof fillSchema>;
 export type Stroke = z.infer<typeof strokeSchema>;
 export type Box = z.infer<typeof boxSchema>;
 export type TextRun = z.infer<typeof textRunSchema>;
+export type ParagraphAlign = z.infer<typeof paragraphAlignSchema>;
 export type Paragraph = z.infer<typeof paragraphSchema>;
 export type PlaceholderRef = z.infer<typeof placeholderRefSchema>;
 export type Shape = z.infer<typeof shapeSchema>;

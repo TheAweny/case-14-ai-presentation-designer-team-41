@@ -34,6 +34,23 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
+                    "align": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "left",
+                            "center",
+                            "right",
+                            "justify"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null or absent when the paragraph inherits its alignment."
+                    },
                     "level": {
                       "description": "Indent level, zero at the top.",
                       "maximum": 9007199254740991,
@@ -79,6 +96,13 @@
                               "null"
                             ]
                           },
+                          "letterSpacingPt": {
+                            "description": "Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
                           "sizePt": {
                             "description": "Size in points, or null when inherited.",
                             "type": [
@@ -89,6 +113,13 @@
                           "text": {
                             "description": "Literal text of the run.",
                             "type": "string"
+                          },
+                          "underline": {
+                            "description": "Null or absent when inherited, which for almost every template means no underline.",
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
