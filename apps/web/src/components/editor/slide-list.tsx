@@ -26,6 +26,8 @@ import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon, AiSparklesIcon, Note01Icon } from '@hugeicons/core-free-icons';
+import { LEVEL_ICON, LEVEL_TEXT } from '@/components/editor/audit/audit-panel';
+import type { AuditCounts } from '@/components/editor/audit/deck-audit';
 import { cn } from '@/lib/utils';
 import type { SlideLayout } from '@/lib/deck-source';
 import {
@@ -103,6 +105,7 @@ export function SlideList({
   onRemove,
   onAddToAssistant,
   highlightedSlideId = null,
+  audit,
   className,
 }: {
   slides: readonly SlideIr[];
@@ -133,6 +136,8 @@ export function SlideList({
    * целиком. Выбор при этом не меняется.
    */
   highlightedSlideId?: string | null;
+  /** Находки аудита по слайдам: значок у номера. Слайда без находок в карте нет. */
+  audit?: ReadonlyMap<string, AuditCounts>;
   className?: string;
 }) {
   const t = useTranslations('editor');
@@ -362,6 +367,8 @@ export function SlideList({
                   current={index === current}
                   selected={picked.has(slide.slideId)}
                   highlighted={slide.slideId === highlightedSlideId}
+                  errors={audit?.get(slide.slideId)?.errors ?? 0}
+                  warnings={audit?.get(slide.slideId)?.warnings ?? 0}
                   carried={
                     carried.length > 1 &&
                     draggingId !== slide.slideId &&
@@ -566,6 +573,8 @@ const SortableSlide = memo(function SortableSlide({
   current,
   selected,
   highlighted,
+  errors,
+  warnings,
   carried,
   count,
   digits,
@@ -583,6 +592,9 @@ const SortableSlide = memo(function SortableSlide({
   selected: boolean;
   /** Подсвечен чипом ассистента под курсором: рамка цветом выделения, выбор не меняется. */
   highlighted: boolean;
+  /** Находки аудита на слайде: значок у номера, как у файла с ошибками в редакторе кода. */
+  errors: number;
+  warnings: number;
   /** Едет вместе с перетаскиваемым слайдом: на своём месте он бледнеет. */
   carried: boolean;
   /** Сколько слайдов тянут вместе с этим; больше одного — значок со счётом. */
@@ -596,6 +608,11 @@ const SortableSlide = memo(function SortableSlide({
     id: slide.slideId,
   });
   const notes = useTranslations('speakerNotes');
+  const audit = useTranslations('auditPanel');
+  const flagged = errors > 0 || warnings > 0;
+  const auditLabel = flagged
+    ? audit('slideBadge', { errors, warnings, both: String(errors > 0 && warnings > 0) })
+    : '';
   // Значок заметок у номера, как в PowerPoint: видно, к каким слайдам докладчик что-то записал.
   const hasNotes = (slide.notes ?? '').trim() !== '';
 
@@ -609,7 +626,9 @@ const SortableSlide = memo(function SortableSlide({
       aria-label={label}
       aria-describedby={attributes['aria-describedby']}
       aria-roledescription={attributes['aria-roledescription']}
-      aria-description={hasNotes ? notes('has') : undefined}
+      aria-description={
+        [hasNotes ? notes('has') : '', auditLabel].filter(Boolean).join('. ') || undefined
+      }
       tabIndex={current ? 0 : -1}
       data-index={index}
       data-has-notes={hasNotes ? '' : undefined}
@@ -651,6 +670,20 @@ const SortableSlide = memo(function SortableSlide({
         {hasNotes ? (
           <span data-notes-mark="" title={notes('has')} className="grid place-items-center">
             <HugeiconsIcon icon={Note01Icon} size={11} strokeWidth={1.75} color="currentColor" />
+          </span>
+        ) : null}
+        {flagged ? (
+          <span
+            data-audit-mark={errors > 0 ? 'error' : 'warning'}
+            title={auditLabel}
+            className={cn('grid place-items-center', LEVEL_TEXT[errors > 0 ? 'error' : 'warning'])}
+          >
+            <HugeiconsIcon
+              icon={LEVEL_ICON[errors > 0 ? 'error' : 'warning']}
+              size={11}
+              strokeWidth={2}
+              color="currentColor"
+            />
           </span>
         ) : null}
       </span>

@@ -10,12 +10,15 @@ import { cn } from '@/lib/utils';
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
 import { DesignPanel, type DesignPanelProps } from '@/components/editor/inspector/design-panel';
 import { LayersPanel, type LayersPanelProps } from '@/components/editor/inspector/layers-panel';
+import { AuditPanel, type AuditPanelProps } from '@/components/editor/audit/audit-panel';
+import { countIssues } from '@/components/editor/audit/deck-audit';
 
-export type InspectorTab = 'design' | 'layers' | 'assistant';
+export type InspectorTab = 'design' | 'layers' | 'audit' | 'assistant';
 
 export const INSPECTOR_TABS = [
   'design',
   'layers',
+  'audit',
   'assistant',
 ] as const satisfies readonly InspectorTab[];
 
@@ -24,7 +27,7 @@ function isTab(value: string): value is InspectorTab {
 }
 
 /**
- * Правая панель редактора: свойства выделения, слои слайда и ассистент. Вкладки, а не
+ * Правая панель редактора: свойства выделения, слои слайда, проверка колоды и ассистент. Вкладки, а не
  * несколько панелей, — место справа одно, и человек сам решает, что там сейчас нужнее.
  */
 export function InspectorPanel({
@@ -33,6 +36,7 @@ export function InspectorPanel({
   onCollapse,
   design,
   layers,
+  audit,
   assistant,
 }: {
   tab: InspectorTab;
@@ -40,10 +44,14 @@ export function InspectorPanel({
   onCollapse: () => void;
   design: DesignPanelProps;
   layers?: LayersPanelProps;
+  /** Находки живого аудита колоды. */
+  audit?: AuditPanelProps;
   /** Разговор с ассистентом о колоде. */
   assistant: ReactNode;
 }) {
   const t = useTranslations('editor');
+  const auditText = useTranslations('auditPanel');
+  const errors = audit ? countIssues(audit.issues).errors : 0;
 
   return (
     <TooltipProvider>
@@ -59,6 +67,22 @@ export function InspectorPanel({
             <TabsList>
               <TabsTrigger value="design">{t('tabs.design')}</TabsTrigger>
               {layers ? <TabsTrigger value="layers">{t('tabs.layers')}</TabsTrigger> : null}
+              {audit ? (
+                <TabsTrigger value="audit" className="gap-1">
+                  {auditText('tab')}
+                  {errors > 0 ? (
+                    <>
+                      <span
+                        aria-hidden
+                        className="grid h-4 min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-none font-medium text-white tabular-nums"
+                      >
+                        {errors}
+                      </span>
+                      <span className="sr-only">{auditText('errors', { count: errors })}</span>
+                    </>
+                  ) : null}
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="assistant">{t('tabs.assistant')}</TabsTrigger>
             </TabsList>
             <Tooltip>
@@ -92,6 +116,11 @@ export function InspectorPanel({
           {layers ? (
             <TabsContent value="layers" className="min-h-0 overflow-y-auto">
               <LayersPanel {...layers} />
+            </TabsContent>
+          ) : null}
+          {audit ? (
+            <TabsContent value="audit" className="min-h-0 overflow-y-auto">
+              <AuditPanel {...audit} />
             </TabsContent>
           ) : null}
           <TabsContent value="assistant" className="flex min-h-0 flex-col">

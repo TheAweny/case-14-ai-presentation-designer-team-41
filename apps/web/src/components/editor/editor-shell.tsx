@@ -66,6 +66,13 @@ import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
+import type { AuditIssue } from '@lct/slide-audit';
+import type { AuditPanelProps } from '@/components/editor/audit/audit-panel';
+import { TextMeasurer, type TextHeights } from '@/components/editor/audit/text-measurer';
+import { useDeckAudit } from '@/components/editor/audit/use-deck-audit';
+import { useAuditIgnores } from '@/components/editor/audit/use-audit-ignores';
+import { AuditStatus } from '@/components/editor/audit/audit-status';
+import { countBySlide, fixCommits } from '@/components/editor/audit/deck-audit';
 import { gridForSlide, nudgeBox, type Alignment } from '@/components/editor/slide-geometry';
 import { isTypingTarget, slideTitle, stepSlide } from '@/components/editor/slide-navigation';
 import { FileBar } from '@/components/editor/file-bar';
@@ -523,6 +530,27 @@ export function EditorShell({
   );
   /** Строка панели слоёв под курсором: её объекты подсвечены на холсте. */
   const [layerHover, setLayerHover] = useState<readonly string[] | null>(null);
+  // Живой аудит: высоты текста снимает скрытый замер, находки пересчитываются после правки.
+  const [textHeights, setTextHeights] = useState<TextHeights>(() => new Map());
+  const deckIssues = useDeckAudit({
+    slides: committedSlides,
+    designSystem,
+    layouts,
+    heights: textHeights,
+  });
+  // Пропущенные находки уходят из счёта и с холста, но остаются во вкладке, чтобы их вернуть.
+  const auditIgnores = useAuditIgnores(deck.deckId);
+  const [auditIssues, ignoredIssues] = useMemo(() => {
+    const active: AuditIssue[] = [];
+    const skipped: AuditIssue[] = [];
+    for (const issue of deckIssues) {
+      (auditIgnores.ignored.has(issue.issueId) ? skipped : active).push(issue);
+    }
+    return [active, skipped] as const;
+  }, [deckIssues, auditIgnores.ignored]);
+  const auditBySlide = useMemo(() => countBySlide(auditIssues), [auditIssues]);
+  const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
+  const [issueHover, setIssueHover] = useState<AuditIssue | null>(null);
   useEffect(() => {
     setLayerHover(null);
   }, [slideId]);
@@ -1111,6 +1139,35 @@ export function EditorShell({
     onMove: moveLayer,
   };
 
+  /** Вкладка «Аудит»: находки аудита, переход к ним и исправление в один шаг отмены. */
+  const audit: AuditPanelProps = {
+    issues: auditIssues,
+    slides: committedSlides,
+    activeIssueId,
+    onOpen: (issue) => {
+      setActiveIssueId(issue.issueId);
+      reveal({
+        slideId: issue.slideId,
+        elementIds: issue.elementId ? [issue.elementId] : [],
+      });
+    },
+    onHover: setIssueHover,
+    fixOf: (issue) => {
+      const commits = fixCommits(issue, designSystem);
+      return commits ? () => run(commits) : null;
+    },
+    ignored: ignoredIssues,
+    onIgnore: (issue) => {
+      auditIgnores.ignore(issue.issueId);
+      setIssueHover(null);
+    },
+    onRestore: (issue) => auditIgnores.restore(issue.issueId),
+    onAskAssistant: (issue) => {
+      if (issue.elementId)
+        askAssistant([{ slideId: issue.slideId, elementIds: [issue.elementId] }]);
+    },
+  };
+
   /** Панель «Дизайн» — одна и та же справа и в нижней панели узкого экрана. */
   const design: DesignPanelProps = {
     // Панель считает значения без живого вида жеста: правка «каждому от своего»
@@ -1219,6 +1276,7 @@ export function EditorShell({
                     askAssistant(slideIds.map((id) => ({ slideId: id, elementIds: [] })))
                   }
                   highlightedSlideId={assistantContext.highlight.slideId}
+                  audit={auditBySlide}
                   className="min-h-0 min-w-0 flex-1"
                 />
                 {/*
@@ -1233,6 +1291,7 @@ export function EditorShell({
                   )}
                 >
                   <SettingsButton iconOnly />
+                  <AuditStatus issues={auditIssues} onOpen={() => openInspector('audit')} />
                   {saveStatus}
                   <p className="px-2 text-xs text-muted-foreground tabular-nums md:ml-auto">
                     <span className="sr-only">
@@ -1326,8 +1385,15 @@ export function EditorShell({
                         onEnterGroup={enterGroupAt}
                         hoverUnit={hoverUnit}
                         highlightIds={
-                          layerHover ?? assistantContext.highlight.elementIds ?? undefined
+                          layerHover ??
+                          (issueHover?.slideId === slide.slideId && issueHover.elementId
+                            ? [issueHover.elementId]
+                            : null) ??
+                          assistantContext.highlight.elementIds ??
+                          undefined
                         }
+                        auditIssues={auditIssues}
+                        activeIssueId={issueHover?.issueId ?? activeIssueId}
                         canGroup={grouping.canGroup}
                         canUngroup={grouping.canUngroup}
                         groupFrame={grouping.wholeGroup}
@@ -1402,6 +1468,7 @@ export function EditorShell({
                 onCollapse={closeInspector}
                 design={design}
                 layers={layers}
+                audit={audit}
                 assistant={assistant}
               />
             )}
@@ -1426,12 +1493,18 @@ export function EditorShell({
                 onCollapse={() => setSheetOpen(false)}
                 design={design}
                 layers={layers}
+                audit={audit}
                 assistant={assistant}
               />
             </div>
           </SheetContent>
         </Sheet>
         <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <TextMeasurer
+          slides={committedSlides}
+          designSystem={designSystem}
+          onChange={setTextHeights}
+        />
         {show ? (
           <SlideShow
             slides={slides}
