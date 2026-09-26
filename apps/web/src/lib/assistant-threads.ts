@@ -1,5 +1,6 @@
 import type { DesignSystem, LayoutVariant, SlideIr } from '@lct/contracts';
 import type { TemplateSummary } from './library-source';
+import type { ContextMention, SlideRefAttachment } from './slide-context';
 
 /**
  * Разговоры с ассистентом: запрос человека, ответы агента, ход генерации и вопросы с вариантами.
@@ -25,6 +26,11 @@ export type AgentText =
         | 'templateAttachFailed';
       readonly values?: Readonly<Record<string, string>>;
     }
+  /**
+   * Агент подтверждает, что видит объекты, которые человек дал как контекст. Упоминания —
+   * данными, а не строкой: «заголовок на слайде 3» собирается на языке интерфейса при показе.
+   */
+  | { readonly key: 'contextSeen'; readonly seen: readonly ContextMention[] }
   | { readonly raw: string };
 
 /** Подписи в первом сообщении: чем и сколько собирать. */
@@ -37,14 +43,18 @@ export interface RequestMeta {
 
 /**
  * Что человек приложил к сообщению. Виды одного ряда — чипы в поле и в сообщении выглядят
- * одинаково. Тип открыт для новых видов: следующим станет `slide-ref` — объекты слайда, которые
- * человек передаёт агенту как контекст.
+ * одинаково.
  */
 export type MessageAttachment =
   /** Материал контент-пака. */
   | { readonly kind: 'file'; readonly name: string; readonly size: number }
   /** Новый файл шаблона: агент сначала его разберёт. */
-  | { readonly kind: 'template'; readonly name: string; readonly size: number };
+  | { readonly kind: 'template'; readonly name: string; readonly size: number }
+  /**
+   * Объекты слайда или слайд целиком как контекст — со снимком SlideIR на момент отправки
+   * (см. `slide-context.ts`).
+   */
+  | SlideRefAttachment;
 
 /** Картинка варианта: слайд и профиль шаблона, которым он нарисован. */
 export interface OptionPreview {

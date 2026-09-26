@@ -13,6 +13,7 @@ import { useTransformEffect } from 'react-zoom-pan-pinch';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
+  AiSparklesIcon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -160,6 +161,11 @@ export type SelectionBarActions = Pick<
   readonly onCommand: (command: CanvasCommand) => void;
   /** Открыть свойства выделенного в правой панели. */
   readonly onOpenInspector: () => void;
+  /**
+   * Выделенное — в контекст ассистента: чипом в его поле, с переходом на вкладку и фокусом в
+   * поле. Нет — кнопки нет.
+   */
+  readonly onAskAssistant?: () => void;
   /** Есть ли что вставить: скопированное в этой вкладке. */
   readonly canPaste: boolean;
 };
@@ -324,6 +330,17 @@ export function SelectionBar({
           animate={{ opacity: 1 }}
           transition={FADE}
         >
+          {actions.onAskAssistant ? (
+            <>
+              <BarButton
+                icon={AiSparklesIcon}
+                label={t('askAssistant')}
+                shortcut="assistant-context"
+                onClick={actions.onAskAssistant}
+              />
+              <BarSeparator />
+            </>
+          ) : null}
           {controls}
           <BarSeparator />
           <CommonControls slide={slide} selected={selected} actions={actions} context={context} />

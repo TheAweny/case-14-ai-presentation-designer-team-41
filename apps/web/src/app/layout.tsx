@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { NavigationProgress } from '@/components/navigation-progress';
+import { SettingsHost } from '@/components/settings/settings-dialog';
 import './globals.css';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -18,7 +19,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body className="min-h-dvh font-sans">
         {/* Словарь и язык провайдер берёт из запроса сам: клиентские компоненты видят тот же. */}
         <NextIntlClientProvider>
-          <NavigationProgress>{children}</NavigationProgress>
+          <NavigationProgress>
+            {children}
+            {/* Окно настроек открывается параметром адреса на любой странице — и в редакторе. */}
+            <Suspense fallback={null}>
+              <SettingsHost />
+            </Suspense>
+          </NavigationProgress>
         </NextIntlClientProvider>
       </body>
     </html>

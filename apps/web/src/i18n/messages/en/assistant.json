@@ -17,7 +17,8 @@
     "templateImportFailed": "Could not read the “{template}” template. Check that the file opens in PowerPoint and start again — or pick one of the templates you have already uploaded.",
     "templateSaved": "The template is saved to the library — it will appear in your templates.",
     "templateAttached": "Attached to the “{project}” project.",
-    "templateAttachFailed": "Could not attach the template to the “{project}” project. I will still build the deck with it; you can attach it later on the project’s Templates tab."
+    "templateAttachFailed": "Could not attach the template to the “{project}” project. I will still build the deck with it; you can attach it later on the project’s Templates tab.",
+    "contextSeen": "I can see: {items}. I can’t edit slides on request yet — that arrives with the editor agent."
   },
   "import": {
     "running": "Reading the “{template}” template",
@@ -124,5 +125,24 @@
     "placeholderAnswer": "Or answer in your own words",
     "send": "Send",
     "stop": "Stop"
+  },
+  "context": {
+    "label": "Context for the assistant",
+    "slide": "Slide {number}",
+    "onSlide": "{what} · slide {number}",
+    "many": "{count, plural, one {# object} other {# objects}}",
+    "group": "Group",
+    "shape": "Shape",
+    "line": "Line",
+    "ghost": "Selection: {label}",
+    "ghostHint": "Goes with the message. Click to pin",
+    "ghostAction": "Selection: {label}. Goes with the message. Click to pin",
+    "show": "Show on the slide: {label}",
+    "remove": "Remove from context: {label}",
+    "stale": "deleted",
+    "staleSlide": "{label} — the slide is gone and will not be sent",
+    "staleElements": "{label} — the objects were deleted and will not be sent",
+    "mentionSlide": "slide {number}",
+    "mentionOnSlide": "{what} on slide {number}"
   }
 }

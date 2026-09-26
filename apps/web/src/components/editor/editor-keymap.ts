@@ -41,8 +41,12 @@ export type EditorCommand =
   // Tab / Shift+Tab в наборе: уровень абзацев выделения.
   | { readonly kind: 'text-indent'; readonly step: -1 | 1 }
   | { readonly kind: 'shortcuts' }
+  // Окно настроек приложения — то же, что в главном меню.
+  | { readonly kind: 'settings' }
   // Показ на весь экран: с первого слайда или с открытого.
-  | { readonly kind: 'present'; readonly from: 'start' | 'current' };
+  | { readonly kind: 'present'; readonly from: 'start' | 'current' }
+  // Выделение (без выделения — открытый слайд) в контекст ассистента.
+  | { readonly kind: 'assistant-context' };
 
 export interface KeyLike {
   readonly code: string;
@@ -67,6 +71,8 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
   switch (id) {
     case 'shortcuts':
       return { kind: 'shortcuts' };
+    case 'settings':
+      return { kind: 'settings' };
     case 'undo':
       return { kind: 'undo' };
     case 'redo':
@@ -152,6 +158,8 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
       return { kind: 'present', from: 'start' };
     case 'present-current':
       return { kind: 'present', from: 'current' };
+    case 'assistant-context':
+      return { kind: 'assistant-context' };
     case 'copy':
     case 'cut':
     case 'paste':

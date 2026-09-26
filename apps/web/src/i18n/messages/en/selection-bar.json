@@ -67,5 +67,6 @@
   "alignToSlide": "Align to slide",
   "openInspector": "Open in design panel",
   "openData": "Open data in design panel",
-  "group": "Group"
+  "group": "Group",
+  "askAssistant": "Ask the assistant"
 }

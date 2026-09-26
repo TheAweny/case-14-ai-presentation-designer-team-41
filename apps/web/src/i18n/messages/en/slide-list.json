@@ -6,5 +6,7 @@
   "dragEndMany": "{count, plural, one {# slide moved} other {# slides moved}}",
   "newSlideFrom": "New slide from layout",
   "newSlideLayouts": "Template layouts",
-  "blankSlide": "Blank slide"
+  "blankSlide": "Blank slide",
+  "addToAssistant": "Add to assistant context",
+  "addSlidesToAssistant": "Add to assistant context ({count})"
 }

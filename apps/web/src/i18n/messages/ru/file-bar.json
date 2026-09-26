@@ -25,5 +25,6 @@
   "export": "Экспорт",
   "exportPending": "Экспорт ещё не подключён",
   "exportHtml": "HTML-страница",
+  "settings": "Настройки…",
   "exportRunning": "Экспорт · {percent} %"
 }

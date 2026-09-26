@@ -6,5 +6,7 @@
   "dragEndMany": "{count, plural, one {# слайд перенесён} few {# слайда перенесены} many {# слайдов перенесены} other {# слайда перенесены}}",
   "newSlideFrom": "Новый слайд из макета",
   "newSlideLayouts": "Макеты шаблона",
-  "blankSlide": "Пустой слайд"
+  "blankSlide": "Пустой слайд",
+  "addToAssistant": "Добавить в контекст ассистента",
+  "addSlidesToAssistant": "Добавить в контекст ассистента ({count})"
 }
