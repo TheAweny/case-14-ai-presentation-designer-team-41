@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -20,13 +21,19 @@ import {
 } from '@/lib/deck-draft';
 import { createAutosave, type SaveStatus } from '@/lib/draft-autosave';
 import { browserDraftStore, createDraftStorage } from '@/lib/draft-storage';
+import { slideImageUrls } from '@/lib/asset-readiness';
 import { uploadedMedia } from '@/lib/media-registry';
 import { cn } from '@/lib/utils';
+import { PageSplash } from '@/components/page-splash';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
-import { EDITOR_LAYOUT_DEFAULT, type EditorLayout } from '@/components/editor/editor-layout';
+import type { EditorLayout } from '@/components/editor/editor-layout';
+import { AssistantPanel } from '@/components/assistant/assistant-panel';
+import { useThreadForDeck } from '@/components/assistant/session';
 import { EditorShell } from '@/components/editor/editor-shell';
+import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navigation';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
+import { useEditorAssets } from '@/components/editor/use-editor-assets';
 
 /**
  * Редактор колоды с черновиком в браузере. Пока API сохранения нет, правки после каждой паузы
@@ -40,11 +47,16 @@ export function DeckEditor({
   deck,
   media,
   layout,
+  present = false,
 }: {
   deck: Deck;
   media?: Readonly<Record<string, string>>;
   layout?: EditorLayout;
+  /** Открыть колоду сразу в показе с первого слайда: так просит пункт «Начать показ» в меню. */
+  present?: boolean;
 }) {
+  // Разговор с агентом, который собрал эту колоду: его продолжает панель «Ассистент».
+  const thread = useThreadForDeck(deck.deckId);
   const base = useMemo(() => deckFingerprint(deck.slides), [deck.slides]);
   // С этим оболочка открывает исходную колоду: такие слайды — «правок нет».
   const origin = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
@@ -90,7 +102,7 @@ export function DeckEditor({
   /*
    * Оболочка открывается, когда черновик прочитан: иначе исходная колода мелькнула бы до
    * подмены, а подмена пришлась бы на жест человека (протяжку вставки, набор) и сорвала его.
-   * Чтение — единицы миллисекунд, пока идёт — скелетон. Если база не отвечает дольше
+   * Чтение — единицы миллисекунд, пока идёт — заставка. Если база не отвечает дольше
    * `DRAFT_READ_TIMEOUT_MS`, колода открывается как есть, а поздний черновик применяется,
    * только пока человек ничего не поправил (`shouldRestoreDraft`).
    */
@@ -189,49 +201,57 @@ export function DeckEditor({
 
   const shown = useMemo(() => ({ ...deck, slides: opened.slides }), [deck, opened.slides]);
 
-  if (!ready) return <EditorSkeleton slide={deck.slides[0]} layout={layout} />;
+  /*
+   * Кадр готов, когда прочитан черновик, загружены шрифты шаблона и картинки открытого слайда.
+   * До того редактор закрыт заставкой: оболочка монтируется под ней, как только известно, какая
+   * колода откроется, и заставка уходит уже с готового кадра. Первую стадию — колоду с сервера —
+   * показывает `loading.tsx` маршрута, эта заставка продолжает её.
+   */
+  const tSplash = useTranslations('splash');
+  const searchParams = useSearchParams();
+  const [firstSlide] = useState(() =>
+    slideIndexFromParam(deck.slides, searchParams.get(SLIDE_PARAM)),
+  );
+  const fonts = useMemo(
+    () => deck.designSystem.typeFamilies.map((family) => family.font),
+    [deck.designSystem],
+  );
+  const images = useMemo(() => {
+    const slide = deck.slides[firstSlide];
+    return slide ? slideImageUrls(slide, media ?? {}) : [];
+  }, [deck.slides, firstSlide, media]);
+  const assets = useEditorAssets(fonts, images);
+  const stages = [assets.fonts, assets.images, ready];
+  const pending = !assets.fonts ? 'fonts' : !assets.images ? 'images' : !ready ? 'draft' : null;
 
   return (
     <>
-      <EditorShell
-        key={opened.generation}
-        deck={shown}
-        media={media}
-        layout={layout}
-        onSlidesChange={onSlidesChange}
-        saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
+      {ready ? (
+        <>
+          <EditorShell
+            key={opened.generation}
+            deck={shown}
+            media={media}
+            layout={layout}
+            // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
+            presentOnOpen={present && opened.generation === 0}
+            onSlidesChange={onSlidesChange}
+            saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
+            assistant={<AssistantPanel thread={thread} deckId={deck.deckId} />}
+            openAssistant={thread !== undefined}
+          />
+          {restored ? (
+            <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} />
+          ) : null}
+        </>
+      ) : null}
+      <PageSplash
+        busy={pending !== null}
+        label={tSplash(pending ?? 'ready')}
+        // Колода с сервера уже пришла: это первая из четырёх стадий.
+        progress={(1 + stages.filter(Boolean).length) / (1 + stages.length)}
       />
-      {restored ? <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} /> : null}
     </>
-  );
-}
-
-/**
- * Пока читается черновик: колонка слайдов той же ширины и лист в пропорции слайда. Ввода
- * нет — принимать его до того, как ясно, какая колода откроется, нельзя.
- */
-function EditorSkeleton({ slide, layout }: { slide?: SlideIr; layout?: EditorLayout }) {
-  const t = useTranslations('draft');
-  const ratio = slide ? `${slide.slideCx} / ${slide.slideCy}` : '16 / 9';
-  return (
-    <div
-      role="status"
-      aria-busy="true"
-      aria-label={t('loading')}
-      data-editor-loading=""
-      className="flex h-dvh overflow-hidden bg-background max-md:flex-col-reverse"
-    >
-      <div
-        style={{ width: layout?.slides ?? EDITOR_LAYOUT_DEFAULT.slides }}
-        className="shrink-0 bg-sidebar max-md:h-24 max-md:w-full!"
-      />
-      <div className="grid min-h-0 min-w-0 flex-1 place-items-center p-3 [container-type:size] md:px-6 md:py-14">
-        <div
-          style={{ aspectRatio: ratio, width: `min(100cqw, 100cqh * ${ratio})` }}
-          className="rounded-sm bg-card ring-1 ring-border animate-pulse motion-reduce:animate-none"
-        />
-      </div>
-    </div>
   );
 }
 

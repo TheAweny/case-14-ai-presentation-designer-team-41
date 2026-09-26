@@ -1,8 +1,9 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { AiSparklesIcon, PanelRightCloseIcon } from '@hugeicons/core-free-icons';
+import { PanelRightCloseIcon } from '@hugeicons/core-free-icons';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -32,12 +33,15 @@ export function InspectorPanel({
   onCollapse,
   design,
   layers,
+  assistant,
 }: {
   tab: InspectorTab;
   onTabChange: (tab: InspectorTab) => void;
   onCollapse: () => void;
   design: DesignPanelProps;
   layers?: LayersPanelProps;
+  /** Разговор с ассистентом о колоде. */
+  assistant: ReactNode;
 }) {
   const t = useTranslations('editor');
 
@@ -90,20 +94,8 @@ export function InspectorPanel({
               <LayersPanel {...layers} />
             </TabsContent>
           ) : null}
-          <TabsContent
-            value="assistant"
-            className="grid min-h-0 place-items-center overflow-y-auto p-6"
-          >
-            <div className="flex max-w-56 flex-col items-center gap-3 text-center">
-              <HugeiconsIcon
-                icon={AiSparklesIcon}
-                size={20}
-                strokeWidth={1.5}
-                color="currentColor"
-                className="text-muted-foreground"
-              />
-              <p className="text-sm text-balance text-muted-foreground">{t('assistantSoon')}</p>
-            </div>
+          <TabsContent value="assistant" className="flex min-h-0 flex-col">
+            {assistant}
           </TabsContent>
         </Tabs>
       </aside>

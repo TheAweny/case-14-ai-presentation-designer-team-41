@@ -91,6 +91,19 @@
    */
   --canvas-selection: oklch(0.62 0.19 254);
   --canvas-snap: oklch(0.63 0.24 22);
+  /*
+   * Цвета проектов — метка проекта в меню, как в ChatGPT. Палитра оболочки, не шаблона:
+   * иконка рисуется этим цветом на полупрозрачной подложке того же цвета.
+   */
+  --project-gray: oklch(0.55 0.01 260);
+  --project-red: oklch(0.58 0.2 25);
+  --project-orange: oklch(0.63 0.17 50);
+  --project-yellow: oklch(0.68 0.14 85);
+  --project-green: oklch(0.6 0.15 150);
+  --project-teal: oklch(0.6 0.1 195);
+  --project-blue: oklch(0.57 0.17 258);
+  --project-purple: oklch(0.56 0.2 300);
+  --project-pink: oklch(0.6 0.2 350);
 }
 
 .dark {
@@ -125,6 +138,179 @@
   --sidebar-accent-foreground: oklch(0.96 0.004 260);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.55 0.01 260);
+  /* На тёмном фоне светлее: иконка должна читаться и на подложке, и на панели. */
+  --project-gray: oklch(0.78 0.01 260);
+  --project-red: oklch(0.72 0.17 25);
+  --project-orange: oklch(0.77 0.15 55);
+  --project-yellow: oklch(0.85 0.14 92);
+  --project-green: oklch(0.78 0.15 150);
+  --project-teal: oklch(0.8 0.11 195);
+  --project-blue: oklch(0.74 0.14 258);
+  --project-purple: oklch(0.75 0.15 300);
+  --project-pink: oklch(0.77 0.15 350);
+}
+
+/* Проявление заставки загрузки; задержку ставит `PageSplash`, чтобы быстрые загрузки её не показывали. */
+@keyframes splash-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * «Аврора» — свечение окна быстрого старта: блик цвета проекта вращается по рамке. Угол и
+ * цвет ставит `useAurora` с компонентом, здесь только то, как они рисуются. Оба
+ * зарегистрированы: угол интерполируется в `conic-gradient`, а смена проекта перетекает
+ * цвет в цвет, а не щёлкает. Цвет один — переливаются его светлый и прозрачный тона.
+ */
+@property --aurora-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+@property --aurora-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@layer components {
+  .aurora {
+    /* Энергия 0…1: покой, наведение, фокус, генерация. Импульс — короткая волна от ввода. */
+    --aurora-energy: 0.08;
+    --aurora-pulse: 0;
+    --aurora-gradient: conic-gradient(
+      from var(--aurora-angle),
+      var(--aurora-color),
+      oklch(from var(--aurora-color) calc(l + 0.12) calc(c * 0.6) h),
+      oklch(from var(--aurora-color) l c h / 0.25),
+      var(--aurora-color)
+    );
+    position: relative;
+    isolation: isolate;
+    transition: --aurora-color 0.8s ease;
+  }
+
+  /*
+   * Анимируется только прозрачность и угол градиента. Размер и радиус размытия постоянны:
+   * их браузер округляет до пикселя, и ореол дёргался бы ступеньками.
+   */
+  .aurora-halo,
+  .aurora-ring {
+    position: absolute;
+    pointer-events: none;
+    border-radius: inherit;
+    background: var(--aurora-gradient);
+  }
+
+  .aurora-halo {
+    inset: -2px;
+    z-index: -1;
+    filter: blur(22px);
+    opacity: calc(var(--aurora-energy) * 0.45 + var(--aurora-pulse) * 0.25);
+    will-change: opacity;
+  }
+
+  /* Рамка в полтора пикселя поверх карточки: градиент, вырезанный маской по контуру. */
+  .aurora-ring {
+    inset: -1px;
+    z-index: 2;
+    padding: 1.25px;
+    border-radius: calc(var(--radius-xl) + 1px);
+    opacity: calc(0.25 + var(--aurora-energy) * 0.75);
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+  }
+}
+
+/* Разговор с ассистентом: появление сообщений и слайдов, бегущий блик статуса, пульс «идёт работа». */
+@keyframes assistant-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes assistant-reveal {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+@keyframes assistant-shimmer {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+@keyframes assistant-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+@keyframes assistant-ping {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--aurora-color, var(--foreground)) 60%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@layer components {
+  .assistant-rise {
+    animation: assistant-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .assistant-reveal {
+    animation: assistant-reveal 0.45s ease both;
+  }
+  .assistant-shimmer {
+    background: linear-gradient(
+        90deg,
+        var(--muted-foreground) 0%,
+        var(--foreground) 45%,
+        var(--muted-foreground) 70%
+      )
+      0 0 / 250% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: assistant-shimmer 2.2s linear infinite;
+  }
+  .assistant-ping {
+    animation: assistant-ping 1.6s ease-out infinite;
+  }
+  /* Заглушка слайда, который ещё верстается: по ней проходит мягкий блик. */
+  .assistant-skeleton {
+    position: relative;
+    overflow: hidden;
+  }
+  .assistant-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, oklch(1 0 0 / 6%) 50%, transparent 70%) 0
+      0 / 200% 100%;
+    animation: assistant-sweep 1.4s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .assistant-rise,
+    .assistant-reveal,
+    .assistant-ping,
+    .assistant-skeleton::after {
+      animation: none;
+    }
+    .assistant-shimmer {
+      animation: none;
+      background: none;
+      color: var(--foreground);
+    }
+  }
 }
 
 @layer base {

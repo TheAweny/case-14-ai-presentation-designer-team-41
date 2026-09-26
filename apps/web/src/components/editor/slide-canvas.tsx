@@ -47,6 +47,7 @@ import {
   type TurnedElement,
 } from '@/components/editor/slide-handles';
 import { TextEditor } from '@/components/editor/text-editor';
+import { useEmptyTextPrompt } from '@/components/editor/empty-text';
 import { typedText } from '@/components/editor/text-shortcuts';
 import { ImageCropper } from '@/components/editor/image-cropper';
 import { canHoldText, shapeAsText, shapeTextFrame } from '@/components/editor/shape-text';
@@ -230,6 +231,7 @@ export function SlideCanvas({
   /** Итог кадрирования картинки: доли срезанного и рамка кадра — одной записью журнала. */
   onCrop?: (elementId: string, crop: ImageCrop | null, box: Box) => void;
 }) {
+  const emptyText = useEmptyTextPrompt();
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const rememberHost = useCallback((node: HTMLDivElement | null) => setHost(node), []);
   const [area, setArea] = useState<HTMLDivElement | null>(null);
@@ -1003,6 +1005,7 @@ export function SlideCanvas({
                           label={label}
                           resolveMedia={resolveMedia}
                           showOutside
+                          emptyText={emptyText}
                           className="bg-card text-foreground shadow-sm"
                         />
                       </div>
@@ -1116,10 +1119,13 @@ export function SlideCanvas({
                     }}
                     onClose={() => {
                       // Пустой текст на слайде не остаётся: вставка и удаление схлопываются в
-                      // журнале, и в истории от такой рамки нет и следа.
+                      // журнале, и в истории от такой рамки нет и следа. Рамка макета шаблона
+                      // остаётся и пустой — с подсказкой, как плейсхолдер в PowerPoint.
                       const text = committedText.current ?? editing.paragraphs;
                       committedText.current = null;
-                      if (isBlank(text)) onRemoveElements([editing.elementId]);
+                      if (isBlank(text) && editing.sourceShapeId === null) {
+                        onRemoveElements([editing.elementId]);
+                      }
                       // Как в Figma: после набора текст остаётся выделенным. Если выделение уже
                       // сменил клик по другому объекту, его не перебиваем.
                       else if (latest.current.selectedIds.length === 0) {

@@ -1,0 +1,128 @@
+{
+  "name": "Assistant",
+  "log": "Conversation with the assistant",
+  "empty": "Ask for a change to the deck — the assistant answers here.",
+  "user": {
+    "slides": "{count, plural, one {# slide} other {# slides}}",
+    "slidesAuto": "slides: auto",
+    "attachments": "Attachments",
+    "settings": "Request settings"
+  },
+  "agent": {
+    "building": "Building the deck on the “{template}” template. Slides appear on the left as they are laid out.",
+    "stopped": "Stopped. What is laid out stays — you can run it again from the card above.",
+    "opened": "Kept the “{variant}” variant. The other two are in the project. What should I change?",
+    "openedNoProject": "Kept the “{variant}” variant. The other two are next to it in your presentations. What should I change?",
+    "unsupported": "For now I only build decks: edits on request arrive with the editor agent.",
+    "templateImportFailed": "Could not read the “{template}” template. Check that the file opens in PowerPoint and start again — or pick one of the templates you have already uploaded.",
+    "templateSaved": "The template is saved to the library — it will appear in your templates.",
+    "templateAttached": "Attached to the “{project}” project.",
+    "templateAttachFailed": "Could not attach the template to the “{project}” project. I will still build the deck with it; you can attach it later on the project’s Templates tab."
+  },
+  "import": {
+    "running": "Reading the “{template}” template",
+    "done": "The “{template}” template is read",
+    "failed": "Could not read “{template}”",
+    "failedUnknown": "Reading stopped without a reason. Please try again.",
+    "retry": "Read again",
+    "progress": "Reading progress"
+  },
+  "template": {
+    "layouts": "{count, plural, one {# layout} other {# layouts}}",
+    "fonts": "Headings — {heading}, text — {body}",
+    "font": "Font — {font}",
+    "demoProfile": "Demo mode does not read the file: this is a demo profile, not the profile of this template."
+  },
+  "work": {
+    "starting": "Starting",
+    "stage": "{stage}…",
+    "layingOut": "Laying out slides: {done} of {total}",
+    "done": "The deck is ready",
+    "failed": "Could not build the deck",
+    "cancelled": "Stopped",
+    "retry": "Run again",
+    "progress": "Build progress",
+    "stages": {
+      "queued": "Queue",
+      "parsing-template": "Reading the template",
+      "profiling-template": "Template profile",
+      "planning": "Deck plan",
+      "laying-out": "Laying out variants",
+      "rendering": "Previews",
+      "auditing": "Audit",
+      "exporting": "Building files"
+    },
+    "stageStates": {
+      "pending": "waiting",
+      "running": "in progress",
+      "done": "done",
+      "failed": "failed"
+    },
+    "stageCount": "{done} of {total}",
+    "failedUnknown": "The run stopped without a reason. Please try again."
+  },
+  "ask": {
+    "keys": "1–{count} and Enter",
+    "keep": "Keep “{variant}”",
+    "answer": "Answer"
+  },
+  "questions": {
+    "audience": {
+      "title": "Who is this presentation for?",
+      "note": "It sets the tone, the depth of numbers and the closing slide. You can answer in your own words.",
+      "options": {
+        "leadership": {
+          "label": "Leadership",
+          "description": "Short: numbers, conclusions, decisions"
+        },
+        "clients": {
+          "label": "Clients",
+          "description": "Benefits, examples, next step"
+        },
+        "team": {
+          "label": "Team",
+          "description": "Tasks, deadlines, owners"
+        }
+      }
+    },
+    "attachTemplate": {
+      "title": "Attach the template to the “{project}” project?",
+      "note": "This presentation is built with it either way. An attached template shows up in the template picker for the project’s new presentations.",
+      "options": {
+        "attach": {
+          "label": "Attach to “{project}”",
+          "description": "The template appears on the project’s Templates tab"
+        },
+        "deckOnly": {
+          "label": "Only for this presentation",
+          "description": "The template stays in the library; the project does not change"
+        }
+      }
+    },
+    "variant": {
+      "title": "Which layout variant should stay?",
+      "note": "Hover to see a variant on the canvas. The content is the same in all three."
+    }
+  },
+  "variants": {
+    "dense": {
+      "name": "Dense",
+      "description": "More text and data per slide"
+    },
+    "balanced": {
+      "name": "Balanced",
+      "description": "Text and white space in equal measure"
+    },
+    "airy": {
+      "name": "Airy",
+      "description": "Large headings, little text"
+    }
+  },
+  "input": {
+    "label": "Message to the assistant",
+    "placeholder": "Ask for a change to the deck",
+    "placeholderAnswer": "Or answer in your own words",
+    "send": "Send",
+    "stop": "Stop"
+  }
+}

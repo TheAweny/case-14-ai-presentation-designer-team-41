@@ -16,7 +16,8 @@ import {
   commitSlideNotes,
   commitUngroup,
 } from '@lct/deck-ops';
-import type { Deck } from '@/lib/deck-source';
+import type { Deck, SlideLayout } from '@/lib/deck-source';
+import { PRESENT_PARAM } from '@/lib/library-menu';
 import { cn } from '@/lib/utils';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import { useMediaResolver } from '@/lib/media-registry';
@@ -60,7 +61,7 @@ import { SlideCanvas, type CanvasControl } from '@/components/editor/slide-canva
 import type { LineReshape, TurnedElement } from '@/components/editor/slide-handles';
 import { flipEntries } from '@/components/editor/inspector/selection-model';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
-import { blankSlideFrom } from '@/components/editor/slide-factory';
+import { layoutOf, slideFromLayout } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
@@ -188,21 +189,30 @@ export function EditorShell({
   deck,
   media = {},
   layout: saved = EDITOR_LAYOUT_DEFAULT,
+  presentOnOpen = false,
   onSlidesChange,
   saveStatus,
   exporter: givenExporter,
+  assistant,
+  openAssistant = false,
 }: {
   deck: Deck;
   /** Адрес картинки по `mediaPart`. Нет адреса — на слайде рамка. */
   media?: Readonly<Record<string, string>>;
   /** Раскладка из cookie: сервер знает её заранее, поэтому колонки не прыгают. */
   layout?: EditorLayout;
+  /** Сразу начать показ с первого слайда и убрать `?present=` из адреса. */
+  presentOnOpen?: boolean;
   /** Записанные слайды после каждой правки (без живого вида жеста): для черновика колоды. */
   onSlidesChange?: (slides: readonly SlideIr[]) => void;
   /** Значок сохранения в подвале списка слайдов. */
   saveStatus?: ReactNode;
   /** Кто собирает файл. Пока API нет — демо: проходит те же этапы, но файла не создаёт. */
   exporter?: DeckExporter;
+  /** Панель «Ассистент»: разговор с агентом о колоде. */
+  assistant: ReactNode;
+  /** Колоду открыл разговор с агентом — показать его сразу, в правой панели. */
+  openAssistant?: boolean;
 }) {
   const t = useTranslations('editor');
   const slidesPanelRef = usePanelRef();
@@ -224,6 +234,15 @@ export function EditorShell({
   const [exportFormat, setExportFormat] = useState<ExportFormat>('pptx');
   // Оформление шаблона заблокировано с самого начала: см. `lockTemplateDecor`.
   const startSlides = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
+  // Макеты — тоже оформление шаблона: слайд на макете начинается с заблокированной подложкой.
+  const layouts = useMemo(
+    () =>
+      deck.layouts.map((layout) => ({
+        ...layout,
+        slide: lockTemplateDecor([layout.slide])[0] ?? layout.slide,
+      })),
+    [deck.layouts],
+  );
   const {
     slides,
     committedSlides,
@@ -323,6 +342,15 @@ export function EditorShell({
     setInspector('closed');
     inspectorPanelRef.current?.collapse();
   }, [inspectorPanelRef]);
+
+  // Разговор, который собрал колоду, продолжается здесь же: панель открыта на «Ассистенте».
+  // Через кадр: на узком окне панель спрятана, и развернуть её группа может, только когда
+  // уже измерила себя после монтирования.
+  useEffect(() => {
+    if (!openAssistant) return;
+    const frame = requestAnimationFrame(() => openInspector('assistant'));
+    return () => cancelAnimationFrame(frame);
+  }, [openAssistant, openInspector]);
 
   /**
    * Состояние панели — источник правды для её ширины. Тесное окно могло схлопнуть панель
@@ -528,10 +556,10 @@ export function EditorShell({
   }, [restored]);
 
   const addSlide = useCallback(
-    (after: number) => {
+    (after: number, layout: SlideLayout | null) => {
       const base = slides[after];
       if (!base) return;
-      insertSlide(after + 1, blankSlideFrom(base, crypto.randomUUID()));
+      insertSlide(after + 1, slideFromLayout(layout, base, crypto.randomUUID()));
     },
     [insertSlide, slides],
   );
@@ -602,9 +630,12 @@ export function EditorShell({
         case 'step-slide':
           select(stepSlide(index, command.step, count));
           return true;
-        case 'new-slide':
-          addSlide(index);
+        case 'new-slide': {
+          // Как в Google Slides: на макете открытого слайда.
+          const opened = slides[index];
+          addSlide(index, opened ? layoutOf(opened, layouts) : null);
           return true;
+        }
         case 'duplicate-slide':
           duplicateSlideAt(index);
           return true;
@@ -612,7 +643,7 @@ export function EditorShell({
           return false;
       }
     },
-    [addSlide, duplicateSlideAt, index, select, slides.length],
+    [addSlide, duplicateSlideAt, index, layouts, select, slides],
   );
 
   /** Клавиши над выделенными объектами, которых нет в контекстном меню. */
@@ -687,6 +718,18 @@ export function EditorShell({
     setSelectedIds([]);
     setShow({ start });
   }, []);
+
+  // Колоду открыли пунктом «Начать показ». Без жеста браузер не даст полный экран — показ
+  // идёт поверх окна. Параметр убираем, чтобы обновление страницы не начинало показ снова.
+  const presentedOnOpen = useRef(false);
+  useEffect(() => {
+    if (!presentOnOpen || presentedOnOpen.current) return;
+    presentedOnOpen.current = true;
+    startShow(0);
+    const url = new URL(window.location.href);
+    url.searchParams.delete(PRESENT_PARAM);
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [presentOnOpen, startShow]);
 
   /** Одна точка входа для клавиатуры и контекстного меню холста. */
   const runCommand = useCallback(
@@ -1095,6 +1138,7 @@ export function EditorShell({
             >
               <SlideList
                 slides={slides}
+                layouts={layouts}
                 designSystem={designSystem}
                 labels={labels}
                 current={index}
@@ -1136,6 +1180,7 @@ export function EditorShell({
               <FileBar
                 title={title}
                 onRename={setTitle}
+                onPresent={() => startShow(index)}
                 onExport={openExport}
                 exportPercent={
                   exportJob.phase === 'running' ? (exportJob.progress?.percent ?? 0) : null
@@ -1278,6 +1323,7 @@ export function EditorShell({
               onCollapse={closeInspector}
               design={design}
               layers={layers}
+              assistant={assistant}
             />
           )}
         </ResizablePanel>
@@ -1301,6 +1347,7 @@ export function EditorShell({
               onCollapse={() => setSheetOpen(false)}
               design={design}
               layers={layers}
+              assistant={assistant}
             />
           </div>
         </SheetContent>

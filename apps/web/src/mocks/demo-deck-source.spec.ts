@@ -24,6 +24,19 @@ describe('createDemoDeckSource', () => {
     expect(error).toMatchObject({ name: 'DeckNotFoundError', deckId: 'missing' });
   });
 
+  it('с поиском по хранилищу видит его текущее состояние', async () => {
+    let stored: typeof DEMO_DECK | undefined = DEMO_DECK;
+    const source = createDemoDeckSource((deckId) =>
+      stored?.deckId === deckId ? stored : undefined,
+    );
+    await expect(source.getDeck(DEMO_DECK_ID)).resolves.toEqual(DEMO_DECK);
+    stored = { ...DEMO_DECK, title: 'Новое название' };
+    expect((await source.getDeck(DEMO_DECK_ID)).title).toBe('Новое название');
+    stored = undefined;
+    const error: unknown = await source.getDeck(DEMO_DECK_ID).catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(DeckNotFoundError);
+  });
+
   it('адреса картинок не знает: слайд нарисует рамку', () => {
     const source = createDemoDeckSource();
     const parts = DEMO_DECK.slides

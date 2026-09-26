@@ -1,61 +1,78 @@
 import { describe, expect, it } from 'vitest';
-import type { SlideElement, SlideIr } from '@lct/contracts';
-import { blankSlideFrom } from './slide-factory';
+import { slideIrSchema, type SlideElement, type SlideIr } from '@lct/contracts';
+import type { SlideLayout } from '@/lib/deck-source';
+import { BLANK_PATTERN_ID, layoutOf, slideFromLayout } from './slide-factory';
 
 const box = { x: 0, y: 0, cx: 10, cy: 10 };
-const run = { text: 'x', font: '', sizePt: null, bold: null, italic: null, color: '' };
 
-function text(elementId: string, role: 'title' | 'footer' | 'page-number', source: number | null) {
+function slot(elementId: string, role: 'title' | 'body', source: number): SlideElement {
   return {
     kind: 'text',
     elementId,
     role,
     box,
     sourceShapeId: source,
-    paragraphs: [{ level: 0, runs: [run] }],
+    paragraphs: [{ level: 0, runs: [], lineSpacing: null }],
     overflow: null,
-  } as SlideElement;
+  };
 }
 
-const base: SlideIr = {
+const skeleton: SlideIr = {
   schemaVersion: 1,
-  slideId: 'a',
+  slideId: 'layout-two',
   variant: 'balanced',
   index: 0,
-  patternId: 'cover',
+  patternId: 'two',
   slideCx: 100,
   slideCy: 50,
   elements: [
-    { kind: 'decor', elementId: 'panel', role: 'decoration', box, sourceShapeId: 3 },
-    text('title', 'title', 1),
-    text('footer', 'footer', 2),
-    text('number', 'page-number', 4),
-    {
-      kind: 'decor',
-      elementId: 'drawn',
-      role: 'decoration',
-      box,
-      sourceShapeId: null,
-      shape: 'rect',
-      fill: 'accent',
-      stroke: null,
-    },
+    { kind: 'decor', elementId: 'panel', role: 'decoration', box, sourceShapeId: 3, locked: true },
+    slot('title', 'title', 1),
+    slot('body', 'body', 2),
   ],
-} as SlideIr;
+  notes: 'только для заготовки',
+};
 
-describe('blankSlideFrom', () => {
-  it('keeps the template chrome and drops content and what the editor drew', () => {
+const layout: SlideLayout = { name: 'Два блока', slide: skeleton };
+const deck = { variant: 'dense', slideCx: 100, slideCy: 50 } as const;
+
+describe('slideFromLayout', () => {
+  it('copies the layout skeleton with fresh ids and the deck variant', () => {
     let n = 0;
-    const slide = blankSlideFrom(base, 'b', () => `new-${(n += 1)}`);
+    const slide = slideFromLayout(layout, deck, 'b', () => `new-${(n += 1)}`);
     expect(slide.slideId).toBe('b');
-    expect(slide.patternId).toBe('cover');
-    expect(slide.elements.map((element) => element.role)).toEqual(['decoration', 'footer']);
-    expect(slide.elements.map((element) => element.elementId)).toEqual(['new-1', 'new-2']);
+    expect(slide.patternId).toBe('two');
+    expect(slide.variant).toBe('dense');
+    expect(slide.notes).toBeUndefined();
+    expect(slide.elements.map((element) => element.role)).toEqual(['decoration', 'title', 'body']);
+    expect(slide.elements.map((element) => element.elementId)).toEqual(['new-1', 'new-2', 'new-3']);
+    expect(slideIrSchema.safeParse(slide).success).toBe(true);
   });
 
-  it('leaves the source slide untouched', () => {
-    blankSlideFrom(base, 'b');
-    expect(base.elements).toHaveLength(5);
-    expect(base.elements[0]?.elementId).toBe('panel');
+  it('leaves the layout untouched', () => {
+    const slide = slideFromLayout(layout, deck, 'b');
+    slide.elements.pop();
+    expect(skeleton.elements).toHaveLength(3);
+    expect(skeleton.elements[0]?.elementId).toBe('panel');
+    expect(skeleton.notes).toBe('только для заготовки');
+  });
+
+  it('makes a blank slide of the deck size when there is no layout', () => {
+    const slide = slideFromLayout(null, deck, 'b');
+    expect(slide.patternId).toBe(BLANK_PATTERN_ID);
+    expect(slide.elements).toEqual([]);
+    expect([slide.slideCx, slide.slideCy]).toEqual([100, 50]);
+    expect(slideIrSchema.safeParse(slide).success).toBe(true);
+  });
+});
+
+describe('layoutOf', () => {
+  it('finds the layout by the pattern of the slide', () => {
+    expect(layoutOf({ ...skeleton, slideId: 'x' }, [layout])).toBe(layout);
+  });
+
+  it('has none for a blank slide or an unknown pattern', () => {
+    expect(layoutOf({ ...skeleton, patternId: BLANK_PATTERN_ID }, [layout])).toBeNull();
+    expect(layoutOf({ ...skeleton, patternId: 'kpi' }, [layout])).toBeNull();
   });
 });

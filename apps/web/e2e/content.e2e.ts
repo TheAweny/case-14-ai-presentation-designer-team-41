@@ -3,6 +3,7 @@ import {
   canvasArea,
   centerOf,
   drag,
+  editorReady,
   objectById,
   objects,
   openEditor,
@@ -89,6 +90,7 @@ test.describe('картинки, заметки и копии (F-12, F-31, F-60)
     await expect(page.locator('[data-save-status="saved"]')).toBeVisible();
 
     await page.reload({ waitUntil: 'networkidle' });
+    await editorReady(page);
     await expect(objectById(page, id)).toHaveCount(1);
     await expect.poll(() => drawn(page, id)).toBe(true);
     await expect.poll(() => pictureFrame(image)).toBe(cropped);

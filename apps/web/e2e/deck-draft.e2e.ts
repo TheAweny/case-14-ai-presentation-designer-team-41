@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { freeObject, objectById, openEditor } from './editor';
+import { editorReady, freeObject, objectById, openEditor } from './editor';
 
 /** Попросить у страницы `beforeunload` и узнать, стал бы браузер переспрашивать. */
 function wouldWarn(page: Page): Promise<boolean> {
@@ -23,6 +23,7 @@ test.describe('черновик колоды (F-90)', () => {
     await expect(page.locator('[data-save-status="saved"]')).toBeVisible();
 
     await page.reload({ waitUntil: 'networkidle' });
+    await editorReady(page);
     const notice = page.locator('[data-draft-restored]');
     await expect(notice).toBeVisible();
     await expect(objectById(page, id)).toHaveCount(0);
@@ -32,6 +33,7 @@ test.describe('черновик колоды (F-90)', () => {
     await expect(notice).toHaveCount(0);
 
     await page.reload({ waitUntil: 'networkidle' });
+    await editorReady(page);
     await expect(objectById(page, id)).toHaveCount(1);
     await expect(page.locator('[data-draft-restored]')).toHaveCount(0);
   });
@@ -55,6 +57,7 @@ test.describe('черновик колоды (F-90)', () => {
       }).observe(document, { childList: true, subtree: true });
     }, id);
     await page.reload({ waitUntil: 'networkidle' });
+    await editorReady(page);
     await expect(page.locator('[data-draft-restored]')).toBeVisible();
     await expect(objectById(page, id)).toHaveCount(0);
     expect(
@@ -103,6 +106,7 @@ test.describe('черновик колоды (F-90)', () => {
         }),
     );
     await page.reload({ waitUntil: 'networkidle' });
+    await editorReady(page);
     await expect(page.locator('[data-canvas-slide] [data-element-id]')).toHaveCount(count);
     await expect(page.locator('[data-draft-restored]')).toHaveCount(0);
   });

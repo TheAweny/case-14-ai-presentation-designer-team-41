@@ -27,14 +27,25 @@ import { SlideView } from '@lct/slide-renderer';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon, Note01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
+import type { SlideLayout } from '@/lib/deck-source';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { shortcutKeys, shortcutLabel } from '@/components/editor/editor-shortcuts';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import {
@@ -43,8 +54,18 @@ import {
   type ListOrientation,
 } from '@/components/editor/slide-navigation';
 import { blockDropIndex, pickSlide, type PickModifiers } from '@/components/editor/slide-picks';
+import { layoutOf, type DeckFrame } from '@/components/editor/slide-factory';
+import { useEmptyTextPrompt } from '@/components/editor/empty-text';
+import {
+  NewSlideTiles,
+  TILE_ITEM_CLASS,
+  useNewSlideChoices,
+  type NewSlideChoice,
+} from '@/components/editor/new-slide-layouts';
 
 const PLAIN: PickModifiers = { range: false, toggle: false };
+
+type EmptyText = ReturnType<typeof useEmptyTextPrompt>;
 
 /**
  * Список слайдов колоды: колонка на широком экране, горизонтальная лента на узком.
@@ -59,6 +80,10 @@ const PLAIN: PickModifiers = { range: false, toggle: false };
  * работают над всеми выбранными сразу, одной записью журнала. В порядке табуляции только
  * открытый слайд (roving tabindex), так что Tab проходит список за одно нажатие.
  *
+ * Новый слайд — на макете шаблона. Кнопка под списком открывает галерею: пустой слайд и макеты
+ * шаблона, то же — в подменю списка. Ctrl+M и пункт «Новый слайд» берут макет открытого слайда,
+ * как в Google Slides; у пустого слайда или без макета — пустой.
+ *
  * Порядок меняет dnd-kit: мышь сдвигает миниатюру после короткого пути, палец — после удержания,
  * чтобы смахивание ленты на узком экране оставалось прокруткой. Пробел берёт слайд с клавиатуры,
  * и только тогда стрелки переставляют его, а не открывают соседний. Выбранные слайды едут
@@ -66,6 +91,7 @@ const PLAIN: PickModifiers = { range: false, toggle: false };
  */
 export function SlideList({
   slides,
+  layouts,
   designSystem,
   labels,
   current,
@@ -78,6 +104,8 @@ export function SlideList({
   className,
 }: {
   slides: readonly SlideIr[];
+  /** Макеты шаблона для нового слайда. */
+  layouts: readonly SlideLayout[];
   designSystem: DesignSystem;
   /** Подписи слайдов для чтения с экрана, по одной на слайд. */
   labels: readonly string[];
@@ -90,8 +118,8 @@ export function SlideList({
    * возвращает прежний порядок.
    */
   onMove: (slideIds: readonly string[], index: number) => void;
-  /** Новый слайд после слайда с этим индексом. */
-  onAdd: (after: number) => void;
+  /** Новый слайд после слайда с этим индексом: на макете шаблона или пустой (`null`). */
+  onAdd: (after: number, layout: SlideLayout | null) => void;
   /** Копии выбранных слайдов; возвращает id копий, чтобы выбрать их. */
   onDuplicate: (slideIds: readonly string[]) => readonly string[];
   /** Последний слайд не удаляется: колода без слайдов — не колода. */
@@ -130,6 +158,26 @@ export function SlideList({
     },
     [anchor, onSelect, order, selection],
   );
+
+  const opened = slides[current];
+  const addSame = useCallback(() => {
+    onAdd(current, opened ? layoutOf(opened, layouts) : null);
+  }, [current, layouts, onAdd, opened]);
+  const addFrom = useCallback(
+    (choice: NewSlideChoice) => onAdd(current, choice.layout),
+    [current, onAdd],
+  );
+  // Размер и вариант у слайдов колоды общие: пустой слайд берёт их у первого.
+  const first = slides[0];
+  const variant = first?.variant;
+  const slideCx = first?.slideCx;
+  const slideCy = first?.slideCy;
+  const frame = useMemo<DeckFrame | undefined>(
+    () => (variant && slideCx && slideCy ? { variant, slideCx, slideCy } : undefined),
+    [slideCx, slideCy, variant],
+  );
+  const choices = useNewSlideChoices(layouts, frame);
+  const emptyText = useEmptyTextPrompt();
 
   const duplicatePicked = useCallback(() => {
     const copies = onDuplicate(selection);
@@ -276,7 +324,7 @@ export function SlideList({
                 const action = slideKeyAction(event);
                 if (action) {
                   event.preventDefault();
-                  if (action === 'add') onAdd(current);
+                  if (action === 'add') addSame();
                   if (action === 'duplicate') duplicatePicked();
                   if (action === 'remove') removePicked();
                   if (action === 'select-all') setPicks({ picked: order, anchor: currentId });
@@ -312,6 +360,7 @@ export function SlideList({
                   count={draggingId === slide.slideId ? carried.length : 0}
                   digits={digits}
                   resolveMedia={resolveMedia}
+                  emptyText={emptyText}
                   onPick={pick}
                 />
               ))}
@@ -320,24 +369,54 @@ export function SlideList({
           <SlideMenu
             count={selection.length}
             canRemove={selection.length < slides.length}
-            onAdd={() => onAdd(current)}
+            choices={choices}
+            designSystem={designSystem}
+            resolveMedia={resolveMedia}
+            onAdd={addSame}
+            onAddFrom={addFrom}
             onDuplicate={duplicatePicked}
             onRemove={removePicked}
           />
         </ContextMenu>
-        <button
-          type="button"
-          onClick={() => onAdd(current)}
-          className={cn(
-            'mx-2 mb-2 flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg text-xs',
-            'text-muted-foreground outline-none ring-1 ring-border ring-inset',
-            'transition-colors duration-100 motion-reduce:transition-none',
-            'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-          )}
-        >
-          <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={1.75} color="currentColor" />
-          {t('addSlide')}
-        </button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'mx-2 mb-2 flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg text-xs',
+                'text-muted-foreground outline-none ring-1 ring-border ring-inset',
+                'transition-colors duration-100 motion-reduce:transition-none',
+                'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                'data-[state=open]:bg-muted data-[state=open]:text-foreground',
+              )}
+            >
+              <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={1.75} color="currentColor" />
+              {t('addSlide')}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            // В колонке галерея встаёт справа от списка, над холстом; в ленте — над лентой.
+            side={orientation === 'horizontal' ? 'top' : 'right'}
+            align="end"
+            className="w-[min(22rem,calc(100vw-2rem))] p-1.5"
+          >
+            <DropdownMenuLabel>{many('newSlideLayouts')}</DropdownMenuLabel>
+            <NewSlideTiles
+              choices={choices}
+              designSystem={designSystem}
+              resolveMedia={resolveMedia}
+              item={(choice, tile) => (
+                <DropdownMenuItem
+                  key={choice.key}
+                  className={TILE_ITEM_CLASS}
+                  onSelect={() => addFrom(choice)}
+                >
+                  {tile}
+                </DropdownMenuItem>
+              )}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SortableContext>
     </DndContext>
   );
@@ -369,14 +448,23 @@ function slideKeyAction(event: {
 function SlideMenu({
   count,
   canRemove,
+  choices,
+  designSystem,
+  resolveMedia,
   onAdd,
+  onAddFrom,
   onDuplicate,
   onRemove,
 }: {
   /** Сколько слайдов выбрано: копия и удаление — над всеми. */
   count: number;
   canRemove: boolean;
+  choices: readonly NewSlideChoice[];
+  designSystem: DesignSystem;
+  resolveMedia?: (mediaPart: string) => string | null;
+  /** Новый слайд на макете открытого. */
   onAdd: () => void;
+  onAddFrom: (choice: NewSlideChoice) => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
@@ -389,6 +477,25 @@ function SlideMenu({
         {t('addSlide')}
         <ContextMenuShortcut>{shortcutLabel(shortcutKeys('slide-new'), mac)}</ContextMenuShortcut>
       </ContextMenuItem>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>{many('newSlideFrom')}</ContextMenuSubTrigger>
+        <ContextMenuSubContent className="w-[min(22rem,calc(100vw-2rem))] p-1.5">
+          <NewSlideTiles
+            choices={choices}
+            designSystem={designSystem}
+            resolveMedia={resolveMedia}
+            item={(choice, tile) => (
+              <ContextMenuItem
+                key={choice.key}
+                className={TILE_ITEM_CLASS}
+                onSelect={() => onAddFrom(choice)}
+              >
+                {tile}
+              </ContextMenuItem>
+            )}
+          />
+        </ContextMenuSubContent>
+      </ContextMenuSub>
       <ContextMenuItem onSelect={onDuplicate}>
         {count > 1 ? many('duplicateSlides', { count }) : t('duplicateSlide')}
         <ContextMenuShortcut>{shortcutLabel(['Mod', 'D'], mac)}</ContextMenuShortcut>
@@ -411,12 +518,22 @@ const Thumbnail = memo(function Thumbnail({
   slide,
   designSystem,
   resolveMedia,
+  emptyText,
 }: {
   slide: SlideIr;
   designSystem: DesignSystem;
   resolveMedia?: (mediaPart: string) => string | null;
+  emptyText: EmptyText;
 }) {
-  return <SlideView slide={slide} profile={designSystem} resolveMedia={resolveMedia} thumbnail />;
+  return (
+    <SlideView
+      slide={slide}
+      profile={designSystem}
+      resolveMedia={resolveMedia}
+      emptyText={emptyText}
+      thumbnail
+    />
+  );
 });
 
 const SortableSlide = memo(function SortableSlide({
@@ -430,6 +547,7 @@ const SortableSlide = memo(function SortableSlide({
   count,
   digits,
   resolveMedia,
+  emptyText,
   onPick,
 }: {
   slide: SlideIr;
@@ -446,6 +564,7 @@ const SortableSlide = memo(function SortableSlide({
   count: number;
   digits: number;
   resolveMedia?: (mediaPart: string) => string | null;
+  emptyText: EmptyText;
   onPick: (index: number, modifiers: PickModifiers) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -534,7 +653,12 @@ const SortableSlide = memo(function SortableSlide({
           'max-md:h-16 md:min-w-0 md:flex-1',
         )}
       >
-        <Thumbnail slide={slide} designSystem={designSystem} resolveMedia={resolveMedia} />
+        <Thumbnail
+          slide={slide}
+          designSystem={designSystem}
+          resolveMedia={resolveMedia}
+          emptyText={emptyText}
+        />
       </div>
     </div>
   );

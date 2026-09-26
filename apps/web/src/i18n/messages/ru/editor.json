@@ -4,7 +4,6 @@
   "slideLabelTitled": "Слайд {number} из {total}: {title}",
   "counter": "{number} / {total}",
   "assistant": "Ассистент",
-  "assistantSoon": "Здесь должен быть ИИ-агент, но до него ещё не дошли руки(",
   "editText": "Редактирование текста",
   "textOverflow": "Текст не помещается в рамку шаблона",
   "inspector": "Панель свойств",
@@ -35,5 +34,14 @@
   "removeSlide": "Удалить слайд",
   "editTable": "Правка таблицы",
   "tableCell": "Ячейка: строка {row}, столбец {column}",
-  "untitled": "Без названия"
+  "untitled": "Без названия",
+  "emptyText": {
+    "title": "Заголовок",
+    "subtitle": "Подзаголовок",
+    "body": "Текст",
+    "bulletList": "Список",
+    "quote": "Цитата",
+    "kpiValue": "Число",
+    "kpiCaption": "Подпись к числу"
+  }
 }

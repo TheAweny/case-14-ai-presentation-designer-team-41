@@ -34,13 +34,13 @@ import {
   ChartColumnIcon,
   DashedLine01Icon,
   EllipseIcon,
+  GridTableIcon,
   GroupItemsIcon,
   Image01Icon,
-  LockIcon,
-  LockOpenIcon,
+  LockKeyholeIcon,
+  LockKeyholeOpenIcon,
   ShapesIcon,
   SquareIcon,
-  Table01Icon,
   TextIcon,
 } from '@hugeicons/core-free-icons';
 import type { SlideElement, SlideIr } from '@lct/contracts';
@@ -75,7 +75,7 @@ function iconOf(row: LayerRow): IconSvgElement {
     case 'image':
       return Image01Icon;
     case 'table':
-      return Table01Icon;
+      return GridTableIcon;
     case 'chart':
       return ChartColumnIcon;
     case 'decor':
@@ -436,7 +436,7 @@ function LayerItem({
           )}
         >
           <HugeiconsIcon
-            icon={row.locked ? LockIcon : LockOpenIcon}
+            icon={row.locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
             size={13}
             strokeWidth={1.5}
             color="currentColor"

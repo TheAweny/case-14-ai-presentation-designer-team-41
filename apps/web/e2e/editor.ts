@@ -2,10 +2,19 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Открыть редактор и дождаться, пока он оживёт: слайд нарисован, обработчики навешены. */
 export async function openEditor(page: Page): Promise<void> {
-  await page.goto('/', { waitUntil: 'networkidle' });
-  await expect(objects(page).first()).toBeVisible();
+  await page.goto('/decks/demo', { waitUntil: 'networkidle' });
+  await editorReady(page);
   // Значок сервера разработки в углу перехватывает касания: проверкам он не нужен.
   await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+}
+
+/**
+ * Редактор на экране и принимает ввод: слайд нарисован, заставка загрузки ушла. Оболочка
+ * монтируется ещё под заставкой, так что видимость объектов сама по себе ничего не говорит.
+ */
+export async function editorReady(page: Page): Promise<void> {
+  await expect(objects(page).first()).toBeVisible();
+  await expect(page.locator('[data-page-splash]')).toHaveCount(0);
 }
 
 /** Миниатюры списка слайдов. */

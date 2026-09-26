@@ -1,0 +1,151 @@
+{
+  "title": "Project",
+  "documentTitle": "{project} — {app}",
+  "newDeck": "New presentation",
+  "header": {
+    "appearance": "Icon and color of project “{project}”",
+    "rename": "Rename",
+    "renameLabel": "Project name",
+    "renameFailed": "Could not rename the project. Please try again.",
+    "appearanceFailed": "Could not save the icon and color. Please try again.",
+    "decks": "{count, plural, =0 {no presentations} one {# presentation} other {# presentations}}",
+    "edited": "edited {time}",
+    "menuAppearance": "Icon and color",
+    "templates": "{count, plural, =0 {No template} one {# template} other {# templates}}"
+  },
+  "tabs": {
+    "label": "Project sections",
+    "decks": "Presentations",
+    "templates": "Templates"
+  },
+  "browser": {
+    "search": "Search by title",
+    "searchPlaceholder": "Find a presentation",
+    "clearSearch": "Clear search",
+    "sort": "Sort: {order}",
+    "sortLabel": "Sort",
+    "sorts": {
+      "recent": "Recently edited",
+      "title": "By title"
+    },
+    "view": "View",
+    "views": {
+      "grid": "Grid",
+      "list": "List"
+    },
+    "noResults": {
+      "title": "Nothing found",
+      "body": "No presentations with “{query}” in the title.",
+      "reset": "Reset search"
+    }
+  },
+  "template": {
+    "heading": "Template profile",
+    "imported": "Imported {date}",
+    "layouts": "Layouts",
+    "aspect": "Aspect ratio",
+    "palette": "Palette",
+    "fonts": "Fonts",
+    "typeScale": "Typography",
+    "typeScaleHint": "Sizes and weights measured in the template; samples are shown scaled down.",
+    "size": "{size} pt",
+    "bold": "bold",
+    "regular": "regular",
+    "italic": "italic",
+    "gallery": "Template layouts",
+    "galleryHint": "Every slide of a project presentation is built on one of these layouts."
+  },
+  "templates": {
+    "label": "Project templates",
+    "layouts": "{count, plural, one {# layout} other {# layouts}}",
+    "menu": "Actions for template “{name}”",
+    "detach": "Detach from project",
+    "detached": "Template “{name}” detached from the project",
+    "detachFailed": "Could not detach the template. Please try again.",
+    "attach": "Attach template",
+    "attachHint": ".pptx or .potx",
+    "upload": "Upload .pptx or .potx…",
+    "dropHint": "You can also drop a file on the card",
+    "dropHere": "Drop to upload",
+    "fromLibrary": "Already uploaded",
+    "chooseFromLibrary": "Choose from uploaded",
+    "libraryEmpty": "No other uploaded templates",
+    "attached": "Template “{name}” attached to the project",
+    "attachFailed": "Could not attach the template. Please try again.",
+    "wrongType": "“{name}” is not a template: a .pptx or .potx file is needed.",
+    "emptyFile": "The file “{name}” is empty.",
+    "demoProfile": "Demo mode: without the engine the profile isn’t extracted from the file — the template gets a demo profile.",
+    "import": {
+      "progress": "Template reading progress",
+      "starting": "Uploading the file",
+      "working": "Reading the template",
+      "attaching": "Attaching to the project",
+      "failed": "Could not read the template",
+      "retry": "Retry",
+      "dismiss": "Dismiss",
+      "stageCount": "{done} of {total}",
+      "stages": {
+        "parsing-template": "Reading the file",
+        "profiling-template": "Template profile"
+      },
+      "stageStates": {
+        "pending": "waiting",
+        "running": "in progress",
+        "done": "done",
+        "failed": "failed"
+      }
+    },
+    "empty": {
+      "title": "Attach a template",
+      "body": "Project presentations are built from its templates: the palette, fonts and layouts come from the file.",
+      "drop": "Drop a .pptx or .potx here",
+      "or": "or",
+      "choose": "Choose a file"
+    }
+  },
+  "roles": {
+    "background": "Background",
+    "surface": "Surface",
+    "text": "Text",
+    "text-muted": "Muted text",
+    "text-on-accent": "Text on accent",
+    "accent": "Accent",
+    "accent-alt": "Second accent",
+    "line": "Lines",
+    "positive": "Positive",
+    "negative": "Negative"
+  },
+  "fontRoles": {
+    "primary": "Primary",
+    "secondary": "Secondary",
+    "mono": "Monospace"
+  },
+  "typeRoles": {
+    "title": "Title",
+    "subtitle": "Subtitle",
+    "heading": "Heading",
+    "body": "Body text",
+    "bullet": "List item",
+    "caption": "Caption",
+    "kpi-value": "Key figure",
+    "kpi-caption": "Figure caption",
+    "quote": "Quote",
+    "footer": "Footer"
+  },
+  "typeSamples": {
+    "title": "Quarter in review",
+    "subtitle": "What changed and why",
+    "heading": "Three key findings",
+    "body": "Revenue grew thanks to new customers",
+    "bullet": "Launched two products",
+    "caption": "Source: sales department report",
+    "kpi-value": "+24%",
+    "kpi-caption": "revenue growth this year",
+    "quote": "“We did more than we promised”",
+    "footer": "Company · 2026"
+  },
+  "empty": {
+    "title": "No presentations in this project yet",
+    "body": "The template style is already read: build the first presentation on it."
+  }
+}

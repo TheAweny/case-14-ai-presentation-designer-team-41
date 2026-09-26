@@ -1,6 +1,7 @@
 {
   "label": "File and export",
   "fileMenu": "File menu: {title}",
+  "allDecks": "All presentations",
   "rename": "Rename",
   "renameLabel": "Presentation name",
   "groups": {

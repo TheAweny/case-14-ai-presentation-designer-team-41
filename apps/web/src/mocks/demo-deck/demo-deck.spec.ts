@@ -190,3 +190,34 @@ describe('тексты', () => {
     expect(empty).toEqual([]);
   });
 });
+
+describe('макеты шаблона', () => {
+  const { layouts } = DEMO_DECK;
+
+  it.each(layouts.map((layout) => [layout.name, layout] as const))(
+    '%s — заготовка по контракту SlideIR, в размер колоды',
+    (_name, layout) => {
+      expect(slideIrSchema.safeParse(layout.slide).success).toBe(true);
+      expect([layout.slide.slideCx, layout.slide.slideCy]).toEqual([slideSize.cx, slideSize.cy]);
+    },
+  );
+
+  it('у каждого макета свой паттерн, и он встречается в колоде', () => {
+    const patterns = layouts.map((layout) => layout.slide.patternId);
+    expect(new Set(patterns).size).toBe(patterns.length);
+    const used = new Set(slides.map((slide) => slide.patternId));
+    expect(patterns.filter((pattern) => !used.has(pattern))).toEqual([]);
+  });
+
+  it('места под содержание — пустые рамки плейсхолдеров шаблона', () => {
+    for (const layout of layouts) {
+      const slots = layout.slide.elements.filter(
+        (element) =>
+          element.kind === 'text' &&
+          element.paragraphs.every((p) => p.runs.every((r) => r.text.trim() === '')),
+      );
+      expect(slots.length, layout.name).toBeGreaterThan(0);
+      expect(slots.every((slot) => slot.sourceShapeId !== null)).toBe(true);
+    }
+  });
+});

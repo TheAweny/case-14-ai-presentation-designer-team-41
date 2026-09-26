@@ -4,7 +4,6 @@
   "slideLabelTitled": "Slide {number} of {total}: {title}",
   "counter": "{number} / {total}",
   "assistant": "Assistant",
-  "assistantSoon": "An AI agent is supposed to live here, but we haven't got round to it yet :(",
   "editText": "Edit text",
   "textOverflow": "The text doesn't fit the template box",
   "inspector": "Properties panel",
@@ -35,5 +34,14 @@
   "removeSlide": "Delete slide",
   "editTable": "Editing table",
   "tableCell": "Cell: row {row}, column {column}",
-  "untitled": "Untitled"
+  "untitled": "Untitled",
+  "emptyText": {
+    "title": "Title",
+    "subtitle": "Subtitle",
+    "body": "Text",
+    "bulletList": "List",
+    "quote": "Quote",
+    "kpiValue": "Figure",
+    "kpiCaption": "Figure caption"
+  }
 }

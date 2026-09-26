@@ -43,7 +43,7 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'z-50 flex w-max items-center gap-1.5 rounded-md bg-popover px-2 py-1',
+          'z-[5000] flex w-max items-center gap-1.5 rounded-md bg-popover px-2 py-1',
           'text-[11px] leading-none font-medium text-popover-foreground',
           'shadow-md ring-1 shadow-black/40 ring-border',
           'animate-in fade-in-0 duration-100 motion-reduce:animate-none',

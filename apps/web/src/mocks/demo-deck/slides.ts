@@ -22,10 +22,10 @@ import {
  * Вертикали — в пунктах от верхнего края слайда, горизонтали — колонками сетки.
  */
 
-const VARIANT: LayoutVariantName = 'balanced';
+export const VARIANT: LayoutVariantName = 'balanced';
 
 /** Номера фигур в макетах демо-шаблона: откуда вёрстка взяла бы каждую рамку. */
-const SHAPE = {
+export const SHAPE = {
   title: 2,
   subtitle: 3,
   body: 4,
@@ -44,8 +44,8 @@ const SHAPE = {
   kpiRule: 40,
 } as const;
 
-const LOGO_PART = 'ppt/media/image1.png';
-const FOOTER = 'Цифровой дизайнер презентаций · ЛЦТ-2026';
+export const LOGO_PART = 'ppt/media/image1.png';
+export const FOOTER = 'Цифровой дизайнер презентаций · ЛЦТ-2026';
 
 interface SlideScope {
   id(slot: string): string;

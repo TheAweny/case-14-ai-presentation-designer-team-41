@@ -3,5 +3,8 @@
   "removeSlides": "Удалить слайды ({count})",
   "selected": "{count, plural, one {Выбран # слайд} few {Выбрано # слайда} many {Выбрано # слайдов} other {Выбрано # слайда}}",
   "dragStartMany": "Перенос: {count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
-  "dragEndMany": "{count, plural, one {# слайд перенесён} few {# слайда перенесены} many {# слайдов перенесены} other {# слайда перенесены}}"
+  "dragEndMany": "{count, plural, one {# слайд перенесён} few {# слайда перенесены} many {# слайдов перенесены} other {# слайда перенесены}}",
+  "newSlideFrom": "Новый слайд из макета",
+  "newSlideLayouts": "Макеты шаблона",
+  "blankSlide": "Пустой слайд"
 }

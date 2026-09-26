@@ -1,0 +1,28 @@
+{
+  "title": "Home",
+  "subtitle": "Presentations in the style of your templates: upload a .pptx once and build as many decks on it as you like.",
+  "recent": "Recent",
+  "projects": "Projects",
+  "recentEmpty": {
+    "title": "No presentations yet",
+    "body": "Upload a template or start a new presentation, and it will show up here."
+  },
+  "projectsEmpty": {
+    "title": "No projects yet",
+    "body": "A project is a folder for presentations and their templates. Create one with the “+” next to Projects in the sidebar."
+  },
+  "deckCard": {
+    "edited": "Edited {time}",
+    "slides": "{count, plural, one {# slide} other {# slides}}",
+    "noProject": "No project",
+    "audit": {
+      "notRun": "Audit not run",
+      "clean": "No findings",
+      "findings": "{count, plural, one {# finding} other {# findings}}"
+    }
+  },
+  "projectCard": {
+    "decks": "{count, plural, =0 {No presentations} one {# presentation} other {# presentations}}",
+    "edited": "Edited {time}"
+  }
+}

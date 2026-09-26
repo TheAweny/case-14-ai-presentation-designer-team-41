@@ -26,8 +26,8 @@ import {
   LayerSendToBackIcon,
   LetterSpacingIcon,
   Link01Icon,
-  LockIcon,
-  LockOpenIcon,
+  LockKeyholeIcon,
+  LockKeyholeOpenIcon,
   MinusSignIcon,
   ParagraphSpacingIcon,
   Rotate01Icon,
@@ -365,7 +365,7 @@ function LockToggle({
   const locked = selected.every((element) => element.locked === true);
   return (
     <IconButton
-      icon={locked ? LockIcon : LockOpenIcon}
+      icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
       label={locked ? t('unlock') : t('lock')}
       pressed={locked}
       onClick={() =>

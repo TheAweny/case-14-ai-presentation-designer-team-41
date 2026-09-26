@@ -13,6 +13,13 @@ const nextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   // Левый нижний угол занят подвалом колонки слайдов, индикатор dev-сборки его закрывал.
   devIndicators: { position: 'bottom-right' },
+  async redirects() {
+    return [
+      // Мастера нового шаблона больше нет: новая презентация и новый шаблон начинаются в поле
+      // генерации на главной (`NEW_DECK_HREF` в lib/library-menu.ts). Старые закладки ведут туда.
+      { source: '/new', destination: '/?compose=1', permanent: false },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

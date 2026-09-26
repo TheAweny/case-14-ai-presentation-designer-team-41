@@ -37,8 +37,8 @@ import {
   LayerSendBackwardIcon,
   LayerSendToBackIcon,
   Layers01Icon,
-  LockIcon,
-  LockOpenIcon,
+  LockKeyholeIcon,
+  LockKeyholeOpenIcon,
   MoreHorizontalIcon,
   PanelRightIcon,
   TableIcon,
@@ -622,7 +622,7 @@ function CommonControls({
         ))}
       />
       <BarButton
-        icon={locked ? LockIcon : LockOpenIcon}
+        icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
         label={locked ? panel('unlock') : panel('lock')}
         shortcut="lock"
         pressed={locked}

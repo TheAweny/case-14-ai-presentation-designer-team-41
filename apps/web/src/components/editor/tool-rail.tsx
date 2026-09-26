@@ -21,19 +21,19 @@ import {
   ArrowTurnForwardIcon,
   ArrowUp01Icon,
   ArrowUpRight01Icon,
-  ChartLineData01Icon,
+  ChartColumnIcon,
   Cursor01Icon,
   DragDropHorizontalIcon,
   DragDropVerticalIcon,
   EllipseIcon,
-  Flowchart01Icon,
+  GridTableIcon,
   HandIcon,
+  HierarchySquare03Icon,
   Image01Icon,
   KeyboardIcon,
   MinusSignIcon,
   PlayIcon,
   SquareIcon,
-  Table01Icon,
   TextFontIcon,
 } from '@hugeicons/core-free-icons';
 import {
@@ -169,9 +169,9 @@ const TOOLS: readonly Tool[] = [
   {
     id: 'data',
     variants: [
-      { id: 'chart', icon: ChartLineData01Icon, shortcut: { key: 'G', code: 'KeyG' } },
-      { id: 'table', icon: Table01Icon, shortcut: { key: 'B', code: 'KeyB' } },
-      { id: 'diagram', icon: Flowchart01Icon, shortcut: { key: 'S', code: 'KeyS' } },
+      { id: 'chart', icon: ChartColumnIcon, shortcut: { key: 'G', code: 'KeyG' } },
+      { id: 'table', icon: GridTableIcon, shortcut: { key: 'B', code: 'KeyB' } },
+      { id: 'diagram', icon: HierarchySquare03Icon, shortcut: { key: 'S', code: 'KeyS' } },
     ],
   },
 ];
@@ -322,18 +322,24 @@ function RailSeparator({ axis }: { axis: DockAxis }) {
   );
 }
 
-/** Шеврон инструмента: по клику — список вариантов, по наведению — только подсказка. */
+/**
+ * Шеврон инструмента: по клику — список вариантов, по наведению — только подсказка. Стоит
+ * внутри одной «пилюли» с кнопкой инструмента, как в Figma: фон выбора и наведения у них общий.
+ */
 function VariantMenu({
   tool,
   current,
   axis,
   side,
+  active,
   onPick,
 }: {
   tool: Tool;
   current: Variant;
   axis: DockAxis;
   side: DockSide;
+  /** Инструмент выбран: шеврон стоит на цветной пилюле. */
+  active: boolean;
   onPick: (tool: Tool, variant: Variant) => void;
 }) {
   const t = useTranslations('toolRail');
@@ -349,10 +355,12 @@ function VariantMenu({
             {...focus.trigger}
             className={cn(
               'grid shrink-0 place-items-center rounded-full outline-none',
-              'text-muted-foreground/70 transition-colors duration-100 motion-reduce:transition-none',
-              'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-              'data-[state=open]:bg-muted data-[state=open]:text-foreground',
-              axis === 'vertical' ? 'h-3.5 w-9' : 'h-9 w-3.5',
+              'transition-colors duration-100 motion-reduce:transition-none',
+              'focus-visible:ring-2 focus-visible:ring-ring/50',
+              active
+                ? 'text-primary-foreground/75 hover:bg-primary-foreground/15 hover:text-primary-foreground data-[state=open]:bg-primary-foreground/15'
+                : 'text-muted-foreground/70 hover:bg-foreground/10 hover:text-foreground data-[state=open]:bg-foreground/10 data-[state=open]:text-foreground',
+              axis === 'vertical' ? 'h-4 w-9' : 'h-9 w-4',
             )}
           >
             <HugeiconsIcon icon={CHEVRON[side]} size={10} strokeWidth={2.5} color="currentColor" />
@@ -547,8 +555,25 @@ export const ToolRail = memo(function ToolRail({
         >
           {TOOLS.map((tool) => {
             const variant = variantOf(tool);
+            const active = activeTool?.id === tool.id;
+            const grouped = tool.variants.length > 1;
             return (
-              <div key={tool.id} className={cn('flex items-center p-0.5', along)}>
+              <div
+                key={tool.id}
+                data-tool-group={grouped ? '' : undefined}
+                className={cn(
+                  'flex items-center',
+                  along,
+                  // Кнопка с вариантами и её шеврон — одна пилюля с общим фоном.
+                  grouped && [
+                    'm-0.5 rounded-full transition-colors duration-100 motion-reduce:transition-none',
+                    active
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-muted has-data-[state=open]:bg-muted',
+                  ],
+                  !grouped && 'p-0.5',
+                )}
+              >
                 <RailTooltip
                   label={t(`variants.${variant.id}`)}
                   keys={[variant.shortcut.key]}
@@ -562,6 +587,8 @@ export const ToolRail = memo(function ToolRail({
                     className={cn(
                       BUTTON,
                       'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
+                      // Фон наведения даёт пилюля целиком, а не одна кнопка.
+                      grouped && 'hover:bg-transparent data-[state=on]:hover:bg-transparent',
                     )}
                   >
                     <HugeiconsIcon
@@ -572,12 +599,13 @@ export const ToolRail = memo(function ToolRail({
                     />
                   </ToolbarPrimitive.ToggleItem>
                 </RailTooltip>
-                {tool.variants.length > 1 && (
+                {grouped && (
                   <VariantMenu
                     tool={tool}
                     current={variant}
                     axis={axis}
                     side={side}
+                    active={active}
                     onPick={pick}
                   />
                 )}

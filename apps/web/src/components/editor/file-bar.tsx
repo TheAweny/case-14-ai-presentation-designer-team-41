@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
   ArrowDown01Icon,
+  ArrowLeft01Icon,
   Clock01Icon,
   CodeIcon,
   Copy01Icon,
@@ -32,6 +34,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ExportFormat } from '@/lib/deck-export';
+import { NEW_DECK_HREF } from '@/lib/library-menu';
 import { keepCanvasFocus, useMenuFocus } from '@/components/editor/chrome-focus';
 
 /**
@@ -43,11 +46,14 @@ import { keepCanvasFocus, useMenuFocus } from '@/components/editor/chrome-focus'
 export function FileBar({
   title,
   onRename,
+  onPresent,
   onExport,
   exportPercent = null,
 }: {
   title: string;
   onRename: (title: string) => void;
+  /** Начать показ с открытого слайда. Без него кнопка неактивна. */
+  onPresent?: () => void;
   /** Открыть экспорт, в выбранном формате или в последнем. Без него кнопка неактивна. */
   onExport?: (format?: ExportFormat) => void;
   /** Экспорт идёт: сколько процентов готово. Кнопка показывает их, пока окно свёрнуто. */
@@ -89,7 +95,12 @@ export function FileBar({
         </div>
         <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-card p-1 shadow-sm shadow-black/20 ring-1 ring-border">
           <BarButton icon={SecurityCheckIcon} label={t('audit')} pending={t('auditPending')} />
-          <BarButton icon={PlayIcon} label={t('present')} pending={t('presentPending')} />
+          <BarButton
+            icon={PlayIcon}
+            label={t('present')}
+            pending={t('presentPending')}
+            onClick={onPresent}
+          />
           <BarButton
             icon={Download04Icon}
             label={
@@ -118,6 +129,7 @@ function FileMenu({
   const focus = useMenuFocus();
   const exportAs = (format: ExportFormat) => (onExport ? () => onExport(format) : undefined);
   const renameAsked = useRef(false);
+  const router = useRouter();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -151,8 +163,14 @@ function FileMenu({
           focus.onCloseAutoFocus(event);
         }}
       >
+        <MenuItem icon={ArrowLeft01Icon} label={t('allDecks')} onSelect={() => router.push('/')} />
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>{t('groups.deck')}</DropdownMenuLabel>
-        <MenuItem icon={FileAddIcon} label={t('newDeck')} />
+        <MenuItem
+          icon={FileAddIcon}
+          label={t('newDeck')}
+          onSelect={() => router.push(NEW_DECK_HREF)}
+        />
         <MenuItem icon={FileUploadIcon} label={t('replaceTemplate')} />
         <MenuItem icon={FileUploadIcon} label={t('replaceContent')} />
         <DropdownMenuSeparator />
