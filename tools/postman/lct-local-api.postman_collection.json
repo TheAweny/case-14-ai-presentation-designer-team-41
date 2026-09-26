@@ -1,0 +1,236 @@
+{
+  "info": {
+    "_postman_id": "a0c1d85c-2a95-45bc-a9ad-1e5f6f9f3d5d",
+    "name": "LCT 2026 - Local API",
+    "description": "Local API requests for the open-source presentation generator. Start the API with yarn nx serve api before importing this collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "runId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "templateFileId",
+      "value": "not-stored",
+      "type": "string"
+    },
+    {
+      "key": "contentFileId",
+      "value": "not-stored",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "API health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Engine health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/engine",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "engine"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Runs",
+      "item": [
+        {
+          "name": "Create local run",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('run was created', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('runId', body.runId);",
+                  "console.log('Saved runId:', body.runId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/runs",
+              "host": ["{{baseUrl}}"],
+              "path": ["runs"]
+            }
+          }
+        },
+        {
+          "name": "Get run status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/runs/{{runId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["runs", "{{runId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get missing run (404 check)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/runs/run-missing",
+              "host": ["{{baseUrl}}"],
+              "path": ["runs", "run-missing"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Files (current placeholders)",
+      "item": [
+        {
+          "name": "Upload template placeholder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('template placeholder accepted', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "pm.collectionVariables.set('templateFileId', pm.response.json().fileId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/files/template",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "template"]
+            }
+          }
+        },
+        {
+          "name": "Upload content placeholder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('content placeholder accepted', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "pm.collectionVariables.set('contentFileId', pm.response.json().fileId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/files/content",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "content"]
+            }
+          }
+        },
+        {
+          "name": "List stored files",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["files"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
