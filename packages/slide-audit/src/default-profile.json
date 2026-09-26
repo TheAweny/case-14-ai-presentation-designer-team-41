@@ -1,0 +1,5 @@
+{
+  "minContrastRatio": 4.5,
+  "minMarginPt": 18,
+  "forbiddenPatterns": ["lorem ipsum", "вставьте текст"]
+}

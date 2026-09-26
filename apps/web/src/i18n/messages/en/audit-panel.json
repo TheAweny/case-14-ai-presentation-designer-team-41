@@ -1,0 +1,84 @@
+{
+  "tab": "Audit",
+  "label": "Deck audit",
+  "errors": "{count, plural, =0 {No errors} one {# error} other {# errors}}",
+  "warnings": "{count, plural, =0 {no warnings} one {# warning} other {# warnings}}",
+  "clean": "No problems found",
+  "cleanHint": "The audit runs by itself after every edit: overlaps, text past its box, slide edges, template margins, contrast, filler text and fonts.",
+  "filters": {
+    "label": "Show",
+    "all": "All",
+    "errors": "Errors",
+    "warnings": "Warnings"
+  },
+  "nothingOfKind": "Nothing of this kind",
+  "slide": "Slide {number}",
+  "deck": "Whole deck",
+  "level": {
+    "error": "Error",
+    "warning": "Warning"
+  },
+  "fix": "Fix",
+  "askAssistant": "Ask the assistant",
+  "ignore": "Ignore",
+  "ignored": "Ignored: {count}",
+  "restore": "Restore",
+  "open": "Show on slide",
+  "status": "{errors, plural, =0 {} other {Errors: #.}} {warnings, plural, =0 {} other {Warnings: #.}} Open the audit",
+  "statusClean": "No problems found. Open the audit",
+  "slideBadge": "{errors, plural, =0 {} one {# error} other {# errors}}{both, select, true {, } other {}}{warnings, plural, =0 {} one {# warning} other {# warnings}}",
+  "issues": {
+    "overflow": {
+      "title": "Text does not fit its box",
+      "detail": "“{name}” runs {overflowPt} pt past a box {boxPt} pt tall. Shorten the text or enlarge the box."
+    },
+    "overlap": {
+      "title": "Objects overlap",
+      "detail": "“{name}” lies on top of “{other}”."
+    },
+    "covered": {
+      "title": "A shape hides content",
+      "detail": "Shape “{name}” lies on top of “{other}” and hides it."
+    },
+    "pictureEdge": {
+      "title": "Object on the edge of a picture",
+      "detail": "Only part of “{name}” is on the picture. Put it wholly on the picture or beside it."
+    },
+    "pictures": {
+      "title": "Pictures overlap",
+      "detail": "“{name}” partly covers “{other}”."
+    },
+    "edge": {
+      "title": "Crosses the slide edge",
+      "detail": "“{name}” is {pastPt} pt past the edge: the show and the file cut that part off."
+    },
+    "outside": {
+      "title": "Object off the slide",
+      "detail": "“{name}” lies wholly past the edge: neither the show nor the file shows it."
+    },
+    "margin": {
+      "title": "Past the template margins",
+      "detail": "“{name}” crosses the template margin by {pastPt} pt."
+    },
+    "filler": {
+      "title": "Filler text",
+      "detail": "“{name}” still says “{pattern}”: text like that must not reach an audience."
+    },
+    "empty": {
+      "title": "Empty text box",
+      "detail": "It shows nothing in a slide show. Fill it in or delete it."
+    },
+    "contrast": {
+      "title": "Low text contrast",
+      "detail": "“{name}” contrasts with its background at {ratio}:1; it needs at least {required}:1."
+    },
+    "font": {
+      "title": "Font “{font}” is not on this computer",
+      "detail": "The slides show a stand-in; the file keeps “{font}”. Used on {slides, plural, one {# slide} other {# slides}}."
+    },
+    "other": {
+      "title": "Problem on the slide",
+      "detail": "“{name}”"
+    }
+  }
+}

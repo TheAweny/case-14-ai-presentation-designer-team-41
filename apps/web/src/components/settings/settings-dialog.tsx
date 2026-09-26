@@ -4,7 +4,15 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { AiBrain01Icon, PenTool03Icon, Settings01Icon } from '@hugeicons/core-free-icons';
+import {
+  AiBrain01Icon,
+  KeyboardIcon,
+  PenTool03Icon,
+  Presentation01Icon,
+  Settings01Icon,
+  UserCircleIcon,
+} from '@hugeicons/core-free-icons';
+import { useAccount } from '@/components/auth/account-context';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,14 +24,20 @@ import {
 } from '@/lib/settings-url';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import { cn } from '@/lib/utils';
+import { AccountSettingsPanel } from './account-settings-panel';
+import { DeckSettingsPanel } from './deck-settings-panel';
 import { EditorSettingsPanel } from './editor-settings-panel';
 import { ModelSettingsPanel } from './model-settings-panel';
+import { ShortcutSettingsPanel } from './shortcut-settings-panel';
 import { closeSettings, openSettings } from './open-settings';
 import { OWN_ESCAPE_ATTRIBUTE } from './role-row';
 
 const SECTION_ICONS: Readonly<Record<SettingsSection, IconSvgElement>> = {
+  account: UserCircleIcon,
   general: Settings01Icon,
   editor: PenTool03Icon,
+  shortcuts: KeyboardIcon,
+  decks: Presentation01Icon,
   models: AiBrain01Icon,
 };
 
@@ -58,6 +72,9 @@ export function SettingsHost() {
 function SettingsDialogContent({ section }: { section: SettingsSection }) {
   const t = useTranslations('settings');
   const narrow = useMediaQuery(NARROW_SCREEN);
+  // Без аккаунта (страница входа) раздела «Аккаунт» нет.
+  const account = useAccount();
+  const sections = SETTINGS_SECTIONS.filter((id) => id !== 'account' || account !== null);
 
   return (
     <DialogContent
@@ -91,7 +108,7 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
             aria-label={t('sections.label')}
             className="h-auto w-full justify-start bg-transparent p-0 md:flex-col md:items-stretch"
           >
-            {SETTINGS_SECTIONS.map((id) => (
+            {sections.map((id) => (
               <TabsTrigger
                 key={id}
                 value={id}
@@ -107,11 +124,22 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
           </TabsList>
         </div>
 
+        {account ? (
+          <TabsContent value="account" className="min-h-0 overflow-y-auto">
+            <AccountSettingsPanel account={account} />
+          </TabsContent>
+        ) : null}
         <TabsContent value="general" className="min-h-0 overflow-y-auto">
           <GeneralSettings />
         </TabsContent>
         <TabsContent value="editor" className="min-h-0 overflow-y-auto">
           <EditorSettingsPanel />
+        </TabsContent>
+        <TabsContent value="shortcuts" className="min-h-0 overflow-y-auto">
+          <ShortcutSettingsPanel />
+        </TabsContent>
+        <TabsContent value="decks" className="min-h-0 overflow-y-auto">
+          <DeckSettingsPanel />
         </TabsContent>
         <TabsContent value="models" className="min-h-0 overflow-y-auto">
           <ModelSettingsPanel />

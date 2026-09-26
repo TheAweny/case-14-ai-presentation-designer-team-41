@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JobEvent } from '@lct/contracts';
-import { exportProgress, plannedStages, safeFileName } from './deck-export';
+import { datedFileName, exportProgress, plannedStages, safeFileName } from './deck-export';
 
 const base = { schemaVersion: 1 as const, runId: 'r', at: '2026-09-24T00:00:00Z' };
 let seq = 0;
@@ -97,6 +97,12 @@ describe('exportProgress', () => {
       [event({ type: 'stage-progress', stage: 'rendering', done: 20, total: 12, note: '' })],
     );
     expect(progress.stages[0]?.done).toBe(12);
+  });
+});
+
+describe('datedFileName', () => {
+  it('puts the local date after the name', () => {
+    expect(datedFileName('Отчёт', new Date(2026, 8, 6))).toBe('Отчёт 2026-09-06');
   });
 });
 

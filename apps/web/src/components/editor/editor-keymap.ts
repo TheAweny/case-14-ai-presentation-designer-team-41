@@ -1,7 +1,12 @@
 import type { ArrangeTarget } from '@lct/deck-ops';
 import type { ParagraphAlign } from '@lct/contracts';
 import { arrowDirection, type ArrowDirection } from './slide-geometry';
-import { SHORTCUTS, type Chord, type ShortcutId, type ShortcutScope } from './editor-shortcuts';
+import {
+  activeShortcuts,
+  type Chord,
+  type ShortcutId,
+  type ShortcutScope,
+} from './editor-shortcuts';
 
 export { shortcutLabel } from './editor-shortcuts';
 
@@ -191,7 +196,7 @@ function matches(chord: Chord, event: KeyLike): boolean {
 }
 
 /**
- * Клавиша → команда по реестру `SHORTCUTS`. Раскладка по `code`, чтобы Ctrl+Z работал и в
+ * Клавиша → команда по реестру `SHORTCUTS` с учётом своих сочетаний человека. Раскладка по `code`, чтобы Ctrl+Z работал и в
  * русской раскладке. Ctrl и Cmd равноправны: на Mac это Cmd, на остальных — Ctrl.
  * В наборе текста (`context: 'text'`) отвечают только сочетания, которые там работают.
  */
@@ -199,7 +204,7 @@ export function editorCommand(
   event: KeyLike,
   context: KeyContext = 'canvas',
 ): EditorCommand | null {
-  for (const spec of SHORTCUTS) {
+  for (const spec of activeShortcuts()) {
     for (const chord of spec.chords) {
       if (!inScope(chord.scope ?? spec.scope, context) || !matches(chord, event)) continue;
       return commandFor(spec.id, event.code);

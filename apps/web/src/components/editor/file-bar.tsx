@@ -20,7 +20,6 @@ import {
   PencilEdit01Icon,
   PlayIcon,
   Ppt01Icon,
-  SecurityCheckIcon,
   Settings01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
@@ -42,7 +41,7 @@ import { shortcutText } from '@/components/editor/editor-shortcuts';
 import { openSettings, useIsMac } from '@/components/settings/open-settings';
 
 /**
- * Полоса над холстом: слева название колоды с меню файла, справа аудит, показ и экспорт.
+ * Полоса над холстом: слева название колоды с меню файла, справа показ и экспорт.
  *
  * Действие, которому ещё нечем работать, не прячется, а показано неактивным с объяснением:
  * место в интерфейсе у него уже есть, и человек видит, чего ждать.
@@ -98,7 +97,6 @@ export function FileBar({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-card p-1 shadow-sm shadow-black/20 ring-1 ring-border">
-          <BarButton icon={SecurityCheckIcon} label={t('audit')} pending={t('auditPending')} />
           <BarButton
             icon={PlayIcon}
             label={t('present')}

@@ -22,6 +22,8 @@ import type {
   SlideIr,
 } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
+import type { AuditIssue } from '@lct/slide-audit';
+import { AuditMarks } from '@/components/editor/audit/audit-marks';
 import { FitSlide, ZoomBasis, ZoomHud } from '@/components/editor/canvas-zoom';
 import { zoomScaleFor } from '@/components/editor/zoom-input';
 import {
@@ -156,6 +158,8 @@ export function SlideCanvas({
   groupFrame,
   onShapeTextCommit,
   onCrop,
+  auditIssues,
+  activeIssueId = null,
 }: {
   slide: SlideIr;
   designSystem: DesignSystem;
@@ -219,6 +223,10 @@ export function SlideCanvas({
   hoverUnit?: (elementId: string) => readonly string[];
   /** Подсветка объектов извне: строка панели слоёв под курсором. */
   highlightIds?: readonly string[];
+  /** Находки аудита колоды: на холсте рамки тех, что на этом слайде. */
+  auditIssues?: readonly AuditIssue[];
+  /** Находка под курсором в панели или открытая из неё: её рамка ярче. */
+  activeIssueId?: string | null;
   canGroup?: boolean;
   canUngroup?: boolean;
   /** Выделена одна группа: рамка вокруг неё, без рамок её объектов. */
@@ -1023,6 +1031,14 @@ export function SlideCanvas({
                         className="pointer-events-none absolute inset-0 z-[1]"
                         style={{ boxShadow: PASTEBOARD_VEIL }}
                       />
+                      {auditIssues ? (
+                        <AuditMarks
+                          issues={auditIssues.filter((issue) => issue.slideId === slide.slideId)}
+                          slideCx={slide.slideCx}
+                          slideCy={slide.slideCy}
+                          activeIssueId={activeIssueId}
+                        />
+                      ) : null}
                       {draft ? (
                         <div
                           aria-hidden

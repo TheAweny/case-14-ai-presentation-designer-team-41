@@ -2761,6 +2761,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@lct/slide-audit@workspace:^, @lct/slide-audit@workspace:packages/slide-audit":
+  version: 0.0.0-use.local
+  resolution: "@lct/slide-audit@workspace:packages/slide-audit"
+  dependencies:
+    "@lct/contracts": "workspace:^"
+    "@lct/slide-renderer": "workspace:^"
+    yaml: "npm:^2.8.0"
+  languageName: unknown
+  linkType: soft
+
 "@lct/slide-renderer@workspace:^, @lct/slide-renderer@workspace:packages/slide-renderer":
   version: 0.0.0-use.local
   resolution: "@lct/slide-renderer@workspace:packages/slide-renderer"
@@ -13599,6 +13609,7 @@ __metadata:
     "@hugeicons/react": "npm:1.1.10"
     "@lct/contracts": "workspace:^"
     "@lct/deck-ops": "workspace:^"
+    "@lct/slide-audit": "workspace:^"
     "@lct/slide-renderer": "workspace:^"
     "@playwright/test": "npm:1.56.1"
     "@tailwindcss/postcss": "npm:4.3.3"

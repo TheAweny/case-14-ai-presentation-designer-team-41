@@ -459,10 +459,157 @@ export const GESTURES: readonly GestureSpec[] = [
 
 const BY_ID = new Map(SHORTCUTS.map((spec) => [spec.id, spec]));
 
+/**
+ * Сочетания, которые человек назначил сам в настройках: команда → одно сочетание или null
+ * («не назначено»). Задаёт их провайдер настроек в браузере; на сервере их нет, и подписи там
+ * по реестру. Клавиатура редактора читает их в момент нажатия.
+ */
+export type ShortcutOverrides = Readonly<Partial<Record<ShortcutId, Chord | null>>>;
+
+let overrides: ShortcutOverrides = {};
+let active: readonly ShortcutSpec[] = SHORTCUTS;
+
+function withOverride(spec: ShortcutSpec): ShortcutSpec {
+  const chord = overrides[spec.id];
+  if (chord === undefined) return spec;
+  return { id: spec.id, group: spec.group, scope: spec.scope, chords: chord ? [chord] : [] };
+}
+
+export function setShortcutOverrides(next: ShortcutOverrides): void {
+  overrides = next;
+  active = SHORTCUTS.map(withOverride);
+}
+
+/** Реестр с учётом своих сочетаний человека — по нему редактор слушает клавиши. */
+export function activeShortcuts(): readonly ShortcutSpec[] {
+  return active;
+}
+
 export function shortcutSpec(id: ShortcutId): ShortcutSpec {
   const spec = BY_ID.get(id);
   if (!spec) throw new Error(`Unknown shortcut: ${id}`);
+  return withOverride(spec);
+}
+
+/** Исходная запись реестра, без своих сочетаний человека. */
+export function defaultShortcutSpec(id: ShortcutId): ShortcutSpec {
+  const spec = BY_ID.get(id);
+  if (!spec) throw new Error(`Unknown shortcut: ${id}`);
   return spec;
+}
+
+/**
+ * Какие команды можно переназначить: у которых одно понятное сочетание и которые слушает сама
+ * клавиатура редактора. Буфер обмена и зум ловят браузер и холст, стрелки и цифры — целые
+ * семейства клавиш, а Tab и Esc в наборе текста держат сам текст.
+ */
+export function isRemappable(spec: ShortcutSpec): boolean {
+  return (
+    spec.external !== true &&
+    spec.display === undefined &&
+    spec.scope !== 'text' &&
+    // Ctrl+, слушает и главное меню, а у него своих настроек клавиш нет.
+    spec.id !== 'settings'
+  );
+}
+
+export const REMAPPABLE_SHORTCUTS: readonly ShortcutSpec[] = SHORTCUTS.filter(isRemappable);
+
+const REMAPPABLE_IDS = new Set<string>(REMAPPABLE_SHORTCUTS.map((spec) => spec.id));
+
+export function isRemappableId(id: string): id is ShortcutId {
+  return REMAPPABLE_IDS.has(id);
+}
+
+/** Клавиши, которые можно назначить без Ctrl и Alt: они ничего не печатают. */
+const BARE_KEYS = /^(F([1-9]|1[0-2])|Delete|Insert|Home|End|PageUp|PageDown)$/;
+
+/** Сочетания, которые браузер страницы не отдаёт: вкладки и окна. */
+const RESERVED = new Set([
+  'Mod+KeyW',
+  'Mod+KeyT',
+  'Mod+KeyN',
+  'Mod+Shift+KeyW',
+  'Mod+Shift+KeyT',
+  'Mod+Shift+KeyN',
+  'Mod+Tab',
+  'Mod+Shift+Tab',
+]);
+
+const MODIFIER_CODES = /^(Control|Shift|Alt|Meta|OS)(Left|Right)?$/;
+
+/** Сочетание строкой для хранения: `Mod+Shift+KeyL`. */
+export function encodeChord(chord: Chord): string {
+  return [
+    chord.mod ? 'Mod' : null,
+    chord.alt ? 'Alt' : null,
+    chord.shift ? 'Shift' : null,
+    chord.code,
+  ]
+    .filter((part): part is string => part !== null)
+    .join('+');
+}
+
+export function decodeChord(value: string): Chord | null {
+  const parts = value.split('+');
+  const code = parts.pop();
+  if (!code || !/^[A-Za-z0-9]+$/.test(code)) return null;
+  const flags = new Set(parts);
+  if ([...flags].some((flag) => flag !== 'Mod' && flag !== 'Alt' && flag !== 'Shift')) return null;
+  const chord: Chord = {
+    code,
+    ...(flags.has('Mod') ? { mod: true } : {}),
+    ...(flags.has('Alt') ? { alt: true } : {}),
+    ...(flags.has('Shift') ? { shift: true } : {}),
+  };
+  return chordProblem(chord) === null ? chord : null;
+}
+
+export type ChordProblem = 'modifier' | 'needs-modifier' | 'reserved';
+
+/**
+ * Почему сочетание нельзя назначить, или null. Без Ctrl и Alt клавиша печатала бы текст или
+ * спорила с однобуквенными инструментами рейки — такие берём только среди непечатных.
+ */
+export function chordProblem(chord: Chord): ChordProblem | null {
+  if (MODIFIER_CODES.test(chord.code)) return 'modifier';
+  if (!chord.mod && !chord.alt && !BARE_KEYS.test(chord.code)) return 'needs-modifier';
+  if (RESERVED.has(encodeChord(chord))) return 'reserved';
+  return null;
+}
+
+/** Сочетание из нажатия: Ctrl и Cmd — один `Mod`, как их и слушает редактор. */
+export function chordFromEvent(event: {
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}): Chord {
+  return {
+    code: event.code,
+    ...(event.ctrlKey || event.metaKey ? { mod: true } : {}),
+    ...(event.altKey ? { alt: true } : {}),
+    ...(event.shiftKey ? { shift: true } : {}),
+  };
+}
+
+function scopesOverlap(left: ShortcutScope, right: ShortcutScope): boolean {
+  return left === 'both' || right === 'both' || left === right;
+}
+
+/** Какая команда уже слушает это сочетание там же, где будет слушать `id`. */
+export function chordOwner(chord: Chord, id: ShortcutId): ShortcutId | null {
+  const key = encodeChord(chord);
+  const scope = shortcutSpec(id).scope;
+  for (const spec of active) {
+    if (spec.id === id) continue;
+    for (const item of spec.chords) {
+      if (encodeChord({ ...item, label: undefined }) !== key) continue;
+      if (scopesOverlap(item.scope ?? spec.scope, scope)) return spec.id;
+    }
+  }
+  return null;
 }
 
 const KEY_LABELS: Readonly<Record<string, string>> = {

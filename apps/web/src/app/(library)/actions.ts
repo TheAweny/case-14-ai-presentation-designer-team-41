@@ -16,6 +16,7 @@ import {
 } from '@/lib/library-source';
 import { parseProjectAppearance, type ProjectAppearance } from '@/lib/project-appearance';
 import { librarySource } from '@/mocks/sources';
+import { requireAccount } from '../auth-session';
 
 /**
  * Итог правки проекта. Ошибку не бросаем: в сборке для продакшена Next прячет текст
@@ -34,6 +35,7 @@ export async function updateProjectAction(
   projectId: string,
   patch: { name?: string; appearance?: ProjectAppearance },
 ): Promise<ProjectUpdateResult> {
+  await requireAccount();
   if (typeof projectId !== 'string' || typeof patch !== 'object' || patch === null) {
     return { ok: false, reason: 'invalid' };
   }
@@ -70,6 +72,7 @@ export async function updateDeckAction(
   deckId: string,
   patch: { title?: string },
 ): Promise<LibraryActionResult> {
+  await requireAccount();
   if (typeof deckId !== 'string' || typeof patch !== 'object' || patch === null) {
     return { ok: false, reason: 'invalid' };
   }
@@ -91,6 +94,7 @@ export async function updateDeckAction(
  * и её нет. Страницы всё равно перерисовываются, чтобы убрать устаревшую карточку.
  */
 export async function deleteDeckAction(deckId: string): Promise<LibraryActionResult> {
+  await requireAccount();
   if (typeof deckId !== 'string') return { ok: false, reason: 'invalid' };
   try {
     await librarySource.deleteDeck(deckId);
@@ -110,6 +114,7 @@ export async function deleteProjectAction(
   projectId: string,
   options?: { leave?: boolean },
 ): Promise<LibraryActionResult> {
+  await requireAccount();
   if (typeof projectId !== 'string') return { ok: false, reason: 'invalid' };
   try {
     await librarySource.deleteProject(projectId);
@@ -134,6 +139,7 @@ export async function createProjectAction(input: {
   name: string;
   appearance: ProjectAppearance;
 }): Promise<CreateProjectResult> {
+  await requireAccount();
   if (typeof input !== 'object' || input === null || typeof input.name !== 'string') {
     return { ok: false, reason: 'invalid' };
   }
@@ -159,6 +165,7 @@ export async function attachTemplateAction(
   projectId: string,
   templateId: string,
 ): Promise<LibraryActionResult> {
+  await requireAccount();
   return changeTemplates(projectId, templateId, (project, template) =>
     librarySource.attachTemplate(project, template),
   );
@@ -172,6 +179,7 @@ export async function detachTemplateAction(
   projectId: string,
   templateId: string,
 ): Promise<LibraryActionResult> {
+  await requireAccount();
   return changeTemplates(projectId, templateId, (project, template) =>
     librarySource.detachTemplate(project, template),
   );
@@ -206,6 +214,7 @@ export async function moveDeckAction(
   deckId: string,
   projectId: string | null,
 ): Promise<LibraryActionResult> {
+  await requireAccount();
   if (typeof deckId !== 'string' || (projectId !== null && typeof projectId !== 'string')) {
     return { ok: false, reason: 'invalid' };
   }
@@ -232,6 +241,7 @@ export type ImportTemplateResult =
  * файла читает только имя и размер.
  */
 export async function importTemplateAction(formData: FormData): Promise<ImportTemplateResult> {
+  await requireAccount();
   const file = formData instanceof FormData ? formData.get('file') : null;
   if (!(file instanceof File)) return { ok: false, reason: 'invalid' };
   let template: TemplateSummary;
@@ -251,6 +261,7 @@ export async function importTemplateAction(formData: FormData): Promise<ImportTe
  * спросит шаблон у API сам.
  */
 export async function getTemplateAction(templateId: string): Promise<TemplateSummary | null> {
+  await requireAccount();
   try {
     return await librarySource.getTemplate(templateId);
   } catch (error) {

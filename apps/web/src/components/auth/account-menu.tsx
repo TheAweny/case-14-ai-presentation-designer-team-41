@@ -1,0 +1,115 @@
+'use client';
+
+import { useTransition } from 'react';
+import { useTranslations } from 'next-intl';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  Logout03Icon,
+  Settings01Icon,
+  UnfoldMoreIcon,
+  UserCircleIcon,
+} from '@hugeicons/core-free-icons';
+import { signOutAction } from '@/app/auth-actions';
+import { openSettings, useIsMac } from '@/components/settings/open-settings';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { accountColor, accountInitials, type Account } from '@/lib/auth';
+import { projectColorVar } from '@/lib/project-appearance';
+import { cn } from '@/lib/utils';
+
+/** Круг с инициалами. Цвет — из палитры проектов, у пользователя всегда один и тот же. */
+export function AccountAvatar({ account, className }: { account: Account; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'grid size-6 shrink-0 place-items-center rounded-full text-[0.625rem] font-semibold text-white',
+        className,
+      )}
+      style={{ backgroundColor: projectColorVar(accountColor(account.userId)) }}
+    >
+      {accountInitials(account)}
+    </span>
+  );
+}
+
+/**
+ * Аккаунт в подвале сайдбара: аватар и имя, по нажатию — меню с почтой, настройками и выходом,
+ * как в Claude и Linear. В мобильной шапке места мало — там один аватар (`compact`).
+ */
+export function AccountMenu({
+  account,
+  compact = false,
+  className,
+}: {
+  account: Account;
+  compact?: boolean;
+  className?: string;
+}) {
+  const t = useTranslations('auth.account');
+  const mac = useIsMac();
+  const [leaving, startLeaving] = useTransition();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={compact ? `${t('label')}: ${account.name}` : undefined}
+        title={compact ? account.name : undefined}
+        className={cn(
+          'flex items-center gap-2 rounded-md text-sm outline-none',
+          'transition-colors duration-100 motion-reduce:transition-none',
+          'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 aria-expanded:bg-muted',
+          compact ? 'size-7 justify-center' : 'h-8 min-w-0 px-1.5 text-left',
+          className,
+        )}
+      >
+        <AccountAvatar account={account} className={compact ? 'size-6' : undefined} />
+        {compact ? null : (
+          <>
+            <span className="min-w-0 flex-1 truncate">{account.name}</span>
+            <HugeiconsIcon
+              icon={UnfoldMoreIcon}
+              size={14}
+              strokeWidth={1.5}
+              className="shrink-0 text-muted-foreground"
+            />
+          </>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={compact ? 'bottom' : 'top'}
+        align={compact ? 'end' : 'start'}
+        className="w-60"
+      >
+        <DropdownMenuLabel className="flex items-center gap-2.5 py-1.5 font-normal">
+          <AccountAvatar account={account} className="size-8 text-xs" />
+          <span className="grid min-w-0">
+            <span className="truncate text-sm font-medium text-foreground">{account.name}</span>
+            <span className="truncate text-xs text-muted-foreground">{account.email}</span>
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => openSettings('account')}>
+          <HugeiconsIcon icon={UserCircleIcon} strokeWidth={1.5} />
+          {t('account')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => openSettings()}>
+          <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.5} />
+          {t('settings')}
+          <DropdownMenuShortcut>{mac ? '⌘,' : 'Ctrl+,'}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={leaving} onSelect={() => startLeaving(() => signOutAction())}>
+          <HugeiconsIcon icon={Logout03Icon} strokeWidth={1.5} />
+          {t('signOut')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

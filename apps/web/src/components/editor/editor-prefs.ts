@@ -1,12 +1,23 @@
 /**
  * Поведение редактора, которое человек настраивает под себя в окне настроек: что стоит на рейке,
- * где полоса у объекта, как ведут себя холст и оформление шаблона.
+ * где полоса у объекта и что в ней, как ведут себя холст и оформление шаблона, свои сочетания
+ * клавиш, а ещё значения по умолчанию для генерации и экспорта.
  *
  * Живёт в cookie, как и раскладка (`editor-layout.ts`): сервер читает её вместе с запросом, и
  * рейка с полосой с первого кадра такие, как человек настроил, а не прыгают после гидратации.
  *
  * Модуль без React и без `window` на верхнем уровне — его импортирует и корневой макет.
  */
+
+import { EXPORT_FORMATS, type ExportFormat } from '../../lib/deck-export';
+import { SLIDE_COUNT_RANGE } from '../../lib/deck-generator';
+import {
+  decodeChord,
+  isRemappableId,
+  type Chord,
+  type ShortcutId,
+  type ShortcutOverrides,
+} from './editor-shortcuts';
 
 export const EDITOR_PREFS_COOKIE = 'lct.editor.prefs';
 
@@ -17,9 +28,16 @@ const MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 export const RAIL_OPTIONAL = ['data', 'ai', 'shortcuts', 'present'] as const;
 export type RailOptional = (typeof RAIL_OPTIONAL)[number];
 
-/** `object` — полоса у выделенного объекта, `off` — свойства только в панели «Дизайн». */
-export const SELECTION_BAR_MODES = ['object', 'off'] as const;
+/**
+ * `object` — полоса у выделенного объекта, `pinned` — закреплена над холстом и не закрывает
+ * соседние объекты, `off` — свойства только в панели «Дизайн».
+ */
+export const SELECTION_BAR_MODES = ['object', 'pinned', 'off'] as const;
 export type SelectionBarMode = (typeof SELECTION_BAR_MODES)[number];
+
+/** Кнопки полосы, которые можно убрать в меню «⋯». */
+export const BAR_OPTIONAL = ['duplicate', 'layers', 'lock', 'remove'] as const;
+export type BarOptional = (typeof BAR_OPTIONAL)[number];
 
 /** `pan` — колесо двигает лист, Ctrl+колесо масштабирует (Figma); `zoom` — наоборот. */
 export const WHEEL_MODES = ['pan', 'zoom'] as const;
@@ -29,6 +47,10 @@ export type WheelMode = (typeof WHEEL_MODES)[number];
 export const LARGE_NUDGE_STEPS = [2, 4, 8] as const;
 export type LargeNudgeSteps = (typeof LARGE_NUDGE_STEPS)[number];
 
+/** Имя файла экспорта: название колоды или название с датой. */
+export const EXPORT_NAMES = ['title', 'title-date'] as const;
+export type ExportName = (typeof EXPORT_NAMES)[number];
+
 export type EditorPrefs = {
   /** Необязательные кнопки рейки, которые человек спрятал. Их клавиши работают по-прежнему. */
   railHidden: readonly RailOptional[];
@@ -37,12 +59,22 @@ export type EditorPrefs = {
   selectionBar: SelectionBarMode;
   /** Кнопка «Спросить ассистента» в полосе у объекта. */
   barAssistant: boolean;
+  /** Кнопки полосы, убранные в меню «⋯». */
+  barHidden: readonly BarOptional[];
   /** Прилипание к соседним объектам и краям слайда при перетаскивании. */
   snap: boolean;
   wheel: WheelMode;
   largeNudge: LargeNudgeSteps;
   /** Оформление шаблона заблокировано при открытии колоды. */
   lockTemplate: boolean;
+  /** Свои сочетания: команда → `Mod+Shift+KeyL` или null («не назначено»). */
+  shortcuts: Readonly<Partial<Record<ShortcutId, string | null>>>;
+  /** Сколько слайдов просить в новом поле генерации; null — «Авто». */
+  slideCount: number | null;
+  exportFormat: ExportFormat;
+  exportName: ExportName;
+  /** Отчёт аудита и манифест к экспорту — отмечено заранее. */
+  exportAudit: boolean;
 };
 
 export const EDITOR_PREFS_DEFAULT: EditorPrefs = {
@@ -54,6 +86,12 @@ export const EDITOR_PREFS_DEFAULT: EditorPrefs = {
   wheel: 'pan',
   largeNudge: 4,
   lockTemplate: true,
+  barHidden: [],
+  shortcuts: {},
+  slideCount: null,
+  exportFormat: 'pptx',
+  exportName: 'title',
+  exportAudit: false,
 };
 
 function oneOf<T>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -64,10 +102,37 @@ function flag(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
-/** Порядок — как на рейке, без повторов и незнакомых кнопок. */
-function railHidden(value: unknown): readonly RailOptional[] {
-  if (!Array.isArray(value)) return EDITOR_PREFS_DEFAULT.railHidden;
-  return RAIL_OPTIONAL.filter((id) => value.includes(id));
+/** Порядок — как на рейке или в полосе, без повторов и незнакомых кнопок. */
+function subset<T>(value: unknown, allowed: readonly T[]): readonly T[] {
+  if (!Array.isArray(value)) return [];
+  return allowed.filter((id) => value.includes(id));
+}
+
+/** Только команды, которые можно переназначить, и только сочетания, которые можно назначить. */
+function shortcuts(value: unknown): EditorPrefs['shortcuts'] {
+  if (typeof value !== 'object' || value === null) return {};
+  const result: Partial<Record<ShortcutId, string | null>> = {};
+  for (const [id, chord] of Object.entries(value)) {
+    if (!isRemappableId(id)) continue;
+    if (chord === null) result[id] = null;
+    else if (typeof chord === 'string' && decodeChord(chord)) result[id] = chord;
+  }
+  return result;
+}
+
+function slideCount(value: unknown): number | null {
+  if (value === null || typeof value !== 'number' || !Number.isInteger(value)) return null;
+  return value >= SLIDE_COUNT_RANGE.min && value <= SLIDE_COUNT_RANGE.max ? value : null;
+}
+
+/** Свои сочетания в виде, который понимает реестр клавиш. */
+export function shortcutOverrides(shortcuts: EditorPrefs['shortcuts']): ShortcutOverrides {
+  const result: Partial<Record<ShortcutId, Chord | null>> = {};
+  for (const [id, chord] of Object.entries(shortcuts)) {
+    if (!isRemappableId(id) || chord === undefined) continue;
+    result[id] = chord === null ? null : decodeChord(chord);
+  }
+  return result;
 }
 
 /**
@@ -86,7 +151,7 @@ export function parseEditorPrefs(raw: string | null | undefined): EditorPrefs {
   const prefs = value as Record<string, unknown>;
   const fallback = EDITOR_PREFS_DEFAULT;
   return {
-    railHidden: railHidden(prefs.railHidden),
+    railHidden: subset(prefs.railHidden, RAIL_OPTIONAL),
     keepTool: flag(prefs.keepTool, fallback.keepTool),
     selectionBar: oneOf(prefs.selectionBar, SELECTION_BAR_MODES, fallback.selectionBar),
     barAssistant: flag(prefs.barAssistant, fallback.barAssistant),
@@ -94,6 +159,12 @@ export function parseEditorPrefs(raw: string | null | undefined): EditorPrefs {
     wheel: oneOf(prefs.wheel, WHEEL_MODES, fallback.wheel),
     largeNudge: oneOf(prefs.largeNudge, LARGE_NUDGE_STEPS, fallback.largeNudge),
     lockTemplate: flag(prefs.lockTemplate, fallback.lockTemplate),
+    barHidden: subset(prefs.barHidden, BAR_OPTIONAL),
+    shortcuts: shortcuts(prefs.shortcuts),
+    slideCount: slideCount(prefs.slideCount),
+    exportFormat: oneOf(prefs.exportFormat, EXPORT_FORMATS, fallback.exportFormat),
+    exportName: oneOf(prefs.exportName, EXPORT_NAMES, fallback.exportName),
+    exportAudit: flag(prefs.exportAudit, fallback.exportAudit),
   };
 }
 

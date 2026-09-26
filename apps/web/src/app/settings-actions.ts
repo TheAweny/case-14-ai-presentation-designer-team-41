@@ -12,6 +12,7 @@ import {
   type RoleAssignment,
 } from '@/lib/model-settings';
 import { modelSettingsSource } from '@/mocks/sources';
+import { requireAccount } from './auth-session';
 
 /**
  * Действия окна настроек. Лежат вне группы `(library)`: окно открывается и в главном меню, и в
@@ -50,10 +51,12 @@ function failure(error: unknown): SettingsFailure {
 }
 
 export async function getModelSettingsAction(): Promise<ModelSettings> {
+  await requireAccount();
   return modelSettingsSource.get();
 }
 
 export async function saveConnectionAction(input: ConnectionInput): Promise<SaveConnectionResult> {
+  await requireAccount();
   try {
     const connection = await modelSettingsSource.saveConnection(input);
     return { ok: true, connection, settings: await modelSettingsSource.get() };
@@ -64,6 +67,7 @@ export async function saveConnectionAction(input: ConnectionInput): Promise<Save
 
 /** Удалить подключение. Уже удалённое — не ошибка: человек хотел, чтобы его не было. */
 export async function deleteConnectionAction(connectionId: string): Promise<SettingsResult> {
+  await requireAccount();
   if (typeof connectionId !== 'string') return { ok: false, reason: 'invalid', problems: {} };
   try {
     await modelSettingsSource.deleteConnection(connectionId);
@@ -75,6 +79,7 @@ export async function deleteConnectionAction(connectionId: string): Promise<Sett
 
 /** Проверить сохранённое подключение: итог запоминается и виден на карточке. */
 export async function checkConnectionAction(connectionId: string): Promise<SettingsResult> {
+  await requireAccount();
   if (typeof connectionId !== 'string') return { ok: false, reason: 'invalid', problems: {} };
   try {
     await modelSettingsSource.checkConnection(connectionId);
@@ -86,6 +91,7 @@ export async function checkConnectionAction(connectionId: string): Promise<Setti
 
 /** Проверить подключение из формы, ещё не сохраняя. */
 export async function probeConnectionAction(input: ProbeInput): Promise<ProbeResult> {
+  await requireAccount();
   try {
     return { ok: true, check: await modelSettingsSource.probe(input) };
   } catch (error) {
@@ -94,6 +100,7 @@ export async function probeConnectionAction(input: ProbeInput): Promise<ProbeRes
 }
 
 export async function setRoleAction(assignment: RoleAssignment): Promise<SettingsResult> {
+  await requireAccount();
   try {
     await modelSettingsSource.setRole(assignment);
     return { ok: true, settings: await modelSettingsSource.get() };

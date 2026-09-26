@@ -1,4 +1,6 @@
 import assistant from './assistant.json';
+import auth from './auth.json';
+import auditPanel from './audit-panel.json';
 import canvasMenu from './canvas-menu.json';
 import composer from './composer.json';
 import designPanel from './design-panel.json';
@@ -55,6 +57,7 @@ const messages = {
   tableMenu,
   tablePanel,
   layersPanel,
+  auditPanel,
   slideList,
   library,
   libraryMenu,
@@ -66,6 +69,7 @@ const messages = {
   assistant,
   splash,
   settings,
+  auth,
 };
 
 export default messages;
