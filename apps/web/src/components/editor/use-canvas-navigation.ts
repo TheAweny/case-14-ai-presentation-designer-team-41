@@ -14,6 +14,7 @@ import {
   type ViewRect,
 } from '@/components/editor/canvas-viewport';
 import { isTypingTarget } from '@/components/editor/slide-navigation';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 
 /** Интерфейс поверх холста: левая кнопка здесь нажимает, а не тащит лист даже рукой. */
 const CANVAS_CHROME =
@@ -187,7 +188,12 @@ export function useCanvasNavigation({
   }, []);
 
   // Колесо: зум к курсору или панорама. Слушатель на погружении и не пассивный: иначе браузер
-  // успел бы прокрутить или увеличить страницу.
+  // успел бы прокрутить или увеличить страницу. Что делает колесо без клавиш — из настроек.
+  const { wheel } = useEditorPrefs();
+  const wheelMode = useRef(wheel);
+  useEffect(() => {
+    wheelMode.current = wheel;
+  });
   useEffect(() => {
     if (!area) return;
     const onWheel = (event: WheelEvent) => {
@@ -195,7 +201,7 @@ export function useCanvasNavigation({
       if (!controls) return;
       event.preventDefault();
       event.stopPropagation();
-      const intent = wheelIntent(event);
+      const intent = wheelIntent(event, wheelMode.current);
       if (intent.kind === 'zoom') {
         const scale = controls.instance.state.scale;
         zoomCanvasAt(controls, event.clientX, event.clientY, scale * intent.factor);

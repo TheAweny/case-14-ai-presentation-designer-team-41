@@ -105,6 +105,21 @@ describe('canvas wheel', () => {
     });
   });
 
+  it('zooms with a plain wheel when the editor setting says so, and pans with Shift', () => {
+    expect(wheelIntent({ deltaX: 0, deltaY: -100 }, 'zoom').kind).toBe('zoom');
+    expect(wheelIntent({ deltaX: 0, deltaY: -100, ctrlKey: true }, 'zoom').kind).toBe('zoom');
+    expect(wheelIntent({ deltaX: 0, deltaY: 100, shiftKey: true }, 'zoom')).toEqual({
+      kind: 'pan',
+      dx: 0,
+      dy: -100,
+    });
+    expect(wheelIntent({ deltaX: 100, deltaY: 0, shiftKey: true }, 'zoom')).toEqual({
+      kind: 'pan',
+      dx: 0,
+      dy: -100,
+    });
+  });
+
   it('follows two fingers on a trackpad on both axes', () => {
     expect(wheelIntent({ deltaX: -12, deltaY: 30 })).toEqual({ kind: 'pan', dx: 12, dy: -30 });
   });

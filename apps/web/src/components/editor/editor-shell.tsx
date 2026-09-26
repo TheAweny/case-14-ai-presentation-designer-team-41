@@ -63,6 +63,7 @@ import { flipEntries } from '@/components/editor/inspector/selection-model';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { layoutOf, slideFromLayout } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
 import { gridForSlide, nudgeBox, type Alignment } from '@/components/editor/slide-geometry';
@@ -196,6 +197,7 @@ export function EditorShell({
   deck,
   media = {},
   layout: saved = EDITOR_LAYOUT_DEFAULT,
+  lockTemplateOnOpen,
   presentOnOpen = false,
   onSlidesChange,
   saveStatus,
@@ -208,6 +210,8 @@ export function EditorShell({
   media?: Readonly<Record<string, string>>;
   /** Раскладка из cookie: сервер знает её заранее, поэтому колонки не прыгают. */
   layout?: EditorLayout;
+  /** Блокировать ли оформление шаблона. Не задано — как в настройках на момент открытия. */
+  lockTemplateOnOpen?: boolean;
   /** Сразу начать показ с первого слайда и убрать `?present=` из адреса. */
   presentOnOpen?: boolean;
   /** Записанные слайды после каждой правки (без живого вида жеста): для черновика колоды. */
@@ -231,6 +235,11 @@ export function EditorShell({
   const [tab, setTab] = useState<InspectorTab>('design');
   const wide = useMediaQuery(WIDE_SCREEN, true);
   const [tool, setTool] = useState<VariantId>('select');
+  const prefs = useEditorPrefs();
+  const { keepTool, largeNudge } = prefs;
+  // Блокировку шаблона берём при открытии: переключатель в настройках действует со следующей
+  // колоды, а не переписывает блокировки посреди правки.
+  const [lockTemplate] = useState(() => lockTemplateOnOpen ?? prefs.lockTemplate);
   // Реестр знает адреса файлов, которые пользователь положил на слайд в этой вкладке.
   const resolveMedia = useMediaResolver(media);
   // Название живёт в редакторе, пока колоду некуда сохранить: API для этого ещё нет.
@@ -239,16 +248,19 @@ export function EditorShell({
   const exportJob = useDeckExport(exporter);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('pptx');
-  // Оформление шаблона заблокировано с самого начала: см. `lockTemplateDecor`.
-  const startSlides = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
+  // Оформление шаблона заблокировано с самого начала, если так в настройках: см. `lockTemplateDecor`.
+  const startSlides = useMemo(
+    () => (lockTemplate ? lockTemplateDecor(deck.slides) : deck.slides),
+    [deck.slides, lockTemplate],
+  );
   // Макеты — тоже оформление шаблона: слайд на макете начинается с заблокированной подложкой.
   const layouts = useMemo(
     () =>
       deck.layouts.map((layout) => ({
         ...layout,
-        slide: lockTemplateDecor([layout.slide])[0] ?? layout.slide,
+        slide: lockTemplate ? (lockTemplateDecor([layout.slide])[0] ?? layout.slide) : layout.slide,
       })),
-    [deck.layouts],
+    [deck.layouts, lockTemplate],
   );
   const {
     slides,
@@ -846,7 +858,7 @@ export function EditorShell({
             slide.slideId,
             selected.map((element) => ({
               elementId: element.elementId,
-              box: nudgeBox(element.box, command.direction, grid, command.large),
+              box: nudgeBox(element.box, command.direction, grid, command.large, largeNudge),
             })),
           );
           return;
@@ -860,6 +872,7 @@ export function EditorShell({
       askAssistant,
       designSystem.grid,
       duplicate,
+      largeNudge,
       nudge,
       pasteElements,
       redo,
@@ -1282,8 +1295,9 @@ export function EditorShell({
                         onInsert={(elements) => {
                           if (!slideId) return;
                           insert(slideId, elements);
-                          // Как в Figma: объект вставлен — курсор снова выбирает.
-                          setTool('select');
+                          // Как в Figma: объект вставлен — курсор снова выбирает. В настройках
+                          // можно остаться в инструменте и вставить несколько подряд.
+                          if (!keepTool) setTool('select');
                         }}
                         onReplaceImage={replaceImageOf}
                         onCommand={runCommand}

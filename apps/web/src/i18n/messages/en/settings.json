@@ -1,16 +1,67 @@
 {
   "title": "Settings",
-  "description": "Interface language and the models that power generation.",
+  "description": "Interface language, editor behavior and the models that power generation.",
   "open": "Settings",
   "close": "Close settings",
   "sections": {
     "label": "Settings sections",
     "general": "General",
+    "editor": "Editor",
     "models": "Models"
   },
   "general": {
     "title": "General",
     "language": "Interface language"
+  },
+  "editor": {
+    "title": "Editor",
+    "description": "Changes apply right away — an open editor updates as you go.",
+    "rail": {
+      "title": "Toolbar",
+      "items": {
+        "data": "Charts, tables and diagrams",
+        "ai": "Assistant",
+        "shortcuts": "Keyboard shortcuts",
+        "present": "Present"
+      },
+      "keepTool": "Keep the tool after inserting",
+      "keepToolHint": "To insert several shapes in a row. Otherwise the cursor goes back to select, as in Figma."
+    },
+    "bar": {
+      "title": "Bar above the object",
+      "mode": "Show",
+      "modes": {
+        "object": "By the object",
+        "off": "Hidden"
+      },
+      "modeHint": {
+        "object": "Properties of the selected object, right above it.",
+        "off": "Properties only in the Design panel on the right."
+      },
+      "assistant": "“Ask the assistant” button"
+    },
+    "canvas": {
+      "title": "Canvas",
+      "snap": "Snapping",
+      "snapHint": "To nearby objects and slide edges. Hold Ctrl while dragging to turn it off for the moment.",
+      "wheel": "Mouse wheel",
+      "wheelModes": {
+        "pan": "Scroll",
+        "zoom": "Zoom"
+      },
+      "wheelHint": {
+        "pan": "The wheel moves the slide, Ctrl+wheel zooms.",
+        "zoom": "The wheel zooms, Shift+wheel moves the slide."
+      },
+      "largeNudge": "Shift+arrow step",
+      "largeNudgeHint": "{steps, plural, one {Shift+arrow moves by # template grid step.} other {Shift+arrow moves by # template grid steps.}}"
+    },
+    "template": {
+      "title": "Template",
+      "lock": "Lock template design",
+      "lockHint": "Template backgrounds and decor can’t be moved by accident. Applies to decks you open afterwards."
+    },
+    "reset": "Restore defaults"
   },
   "models": {
     "title": "Models",

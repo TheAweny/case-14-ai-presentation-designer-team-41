@@ -39,6 +39,7 @@ import {
   type InsertTool,
 } from '@/components/editor/insert-element';
 import { SelectionBar, type SelectionBarActions } from '@/components/editor/selection-bar';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { EDITOR_CHROME, isEditorChrome } from '@/components/editor/chrome-focus';
 import {
   SlideHandles,
@@ -304,9 +305,10 @@ export function SlideCanvas({
       : undefined;
 
   // Клавиши и команды зума читают текущее, не пересоздавая слушателей на каждую правку.
-  const latest = useRef({ slide, selectedIds, aligned, onCommit, onNudge });
+  const { largeNudge } = useEditorPrefs();
+  const latest = useRef({ slide, selectedIds, aligned, onCommit, onNudge, largeNudge });
   useEffect(() => {
-    latest.current = { slide, selectedIds, aligned, onCommit, onNudge };
+    latest.current = { slide, selectedIds, aligned, onCommit, onNudge, largeNudge };
   });
 
   useEffect(() => {
@@ -573,7 +575,7 @@ export function SlideCanvas({
       if (!direction || isTypingTarget(event.target)) return;
       const target = event.target;
       if (target instanceof Element && target.closest(ARROW_OWNERS)) return;
-      const { slide: current, selectedIds: ids, aligned: grid } = latest.current;
+      const { slide: current, selectedIds: ids, aligned: grid, largeNudge: steps } = latest.current;
       const commit = latest.current.onNudge ?? latest.current.onCommit;
       if (ids.length === 0) return;
       event.preventDefault();
@@ -581,7 +583,9 @@ export function SlideCanvas({
         ids.flatMap((elementId) => {
           const element = current.elements.find((item) => item.elementId === elementId);
           if (!element) return [];
-          return [{ elementId, box: nudgeBox(element.box, direction, grid, event.shiftKey) }];
+          return [
+            { elementId, box: nudgeBox(element.box, direction, grid, event.shiftKey, steps) },
+          ];
         }),
       );
     };

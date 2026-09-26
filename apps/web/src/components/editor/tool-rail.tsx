@@ -60,6 +60,7 @@ import {
 } from '@/components/editor/editor-shortcuts';
 import type { ChangeKind } from '@/components/editor/use-deck-history';
 import { isInsertTool, type InsertTool } from '@/components/editor/insert-element';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 
 /**
  * Идентификаторы инструментов и вариантов — они же ключи словаря `toolRail`: подписи
@@ -468,6 +469,11 @@ export const ToolRail = memo(function ToolRail({
   const t = useTranslations('toolRail');
   const axis = dockAxis(side);
   const toward = OPEN_TOWARD[side];
+  // Спрятанные в настройках кнопки уходят с рейки, но их клавиши работают по-прежнему.
+  const { railHidden } = useEditorPrefs();
+  const tools = TOOLS.filter((tool) => !railHidden.some((id) => id === tool.id));
+  const actions = ACTIONS.filter((action) => !railHidden.some((id) => id === action.id));
+  const showPresent = !railHidden.includes('present');
   const [chosen, setChosen] = useState(DEFAULT_VARIANTS);
   const onChangeRef = useRef(onChange);
   const onActionRef = useRef(onAction);
@@ -553,7 +559,7 @@ export const ToolRail = memo(function ToolRail({
           }}
           className={cn('flex items-center', along)}
         >
-          {TOOLS.map((tool) => {
+          {tools.map((tool) => {
             const variant = variantOf(tool);
             const active = activeTool?.id === tool.id;
             const grouped = tool.variants.length > 1;
@@ -614,13 +620,13 @@ export const ToolRail = memo(function ToolRail({
           })}
         </ToolbarPrimitive.ToggleGroup>
 
-        <RailSeparator axis={axis} />
+        {actions.length > 0 && <RailSeparator axis={axis} />}
         <div
           role="group"
           aria-label={t('groups.panels')}
           className={cn('flex items-center', along)}
         >
-          {ACTIONS.map((action) => (
+          {actions.map((action) => (
             <div key={action.id} className="p-0.5">
               <RailTooltip label={t(`tools.${action.id}`)} keys={actionKeys(action)} side={toward}>
                 <ToolbarPrimitive.Button
@@ -675,29 +681,33 @@ export const ToolRail = memo(function ToolRail({
           </>
         )}
 
-        <RailSeparator axis={axis} />
-        <div role="group" aria-label={t('groups.show')} className="p-0.5">
-          <RailTooltip
-            label={t(`tools.${SHOW_ACTION.id}`)}
-            keys={actionKeys(SHOW_ACTION)}
-            side={toward}
-          >
-            <ToolbarPrimitive.Button
-              aria-label={t(`tools.${SHOW_ACTION.id}`)}
-              aria-keyshortcuts={actionAria(SHOW_ACTION)}
-              onMouseDown={keepCanvasFocus}
-              onClick={() => onActionRef.current?.(SHOW_ACTION.id)}
-              className={BUTTON}
-            >
-              <HugeiconsIcon
-                icon={SHOW_ACTION.icon}
-                size={18}
-                strokeWidth={1.5}
-                color="currentColor"
-              />
-            </ToolbarPrimitive.Button>
-          </RailTooltip>
-        </div>
+        {showPresent && (
+          <>
+            <RailSeparator axis={axis} />
+            <div role="group" aria-label={t('groups.show')} className="p-0.5">
+              <RailTooltip
+                label={t(`tools.${SHOW_ACTION.id}`)}
+                keys={actionKeys(SHOW_ACTION)}
+                side={toward}
+              >
+                <ToolbarPrimitive.Button
+                  aria-label={t(`tools.${SHOW_ACTION.id}`)}
+                  aria-keyshortcuts={actionAria(SHOW_ACTION)}
+                  onMouseDown={keepCanvasFocus}
+                  onClick={() => onActionRef.current?.(SHOW_ACTION.id)}
+                  className={BUTTON}
+                >
+                  <HugeiconsIcon
+                    icon={SHOW_ACTION.icon}
+                    size={18}
+                    strokeWidth={1.5}
+                    color="currentColor"
+                  />
+                </ToolbarPrimitive.Button>
+              </RailTooltip>
+            </div>
+          </>
+        )}
       </ToolbarPrimitive.Root>
     </TooltipProvider>
   );

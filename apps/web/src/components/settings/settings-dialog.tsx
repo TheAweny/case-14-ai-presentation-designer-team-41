@@ -4,19 +4,26 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { AiBrain01Icon, Settings01Icon } from '@hugeicons/core-free-icons';
+import { AiBrain01Icon, PenTool03Icon, Settings01Icon } from '@hugeicons/core-free-icons';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SETTINGS_PARAM, settingsSection, type SettingsSection } from '@/lib/settings-url';
+import {
+  SETTINGS_PARAM,
+  SETTINGS_SECTIONS,
+  settingsSection,
+  type SettingsSection,
+} from '@/lib/settings-url';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import { cn } from '@/lib/utils';
+import { EditorSettingsPanel } from './editor-settings-panel';
 import { ModelSettingsPanel } from './model-settings-panel';
 import { closeSettings, openSettings } from './open-settings';
 import { OWN_ESCAPE_ATTRIBUTE } from './role-row';
 
 const SECTION_ICONS: Readonly<Record<SettingsSection, IconSvgElement>> = {
   general: Settings01Icon,
+  editor: PenTool03Icon,
   models: AiBrain01Icon,
 };
 
@@ -84,7 +91,7 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
             aria-label={t('sections.label')}
             className="h-auto w-full justify-start bg-transparent p-0 md:flex-col md:items-stretch"
           >
-            {(['general', 'models'] as const).map((id) => (
+            {SETTINGS_SECTIONS.map((id) => (
               <TabsTrigger
                 key={id}
                 value={id}
@@ -102,6 +109,9 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
 
         <TabsContent value="general" className="min-h-0 overflow-y-auto">
           <GeneralSettings />
+        </TabsContent>
+        <TabsContent value="editor" className="min-h-0 overflow-y-auto">
+          <EditorSettingsPanel />
         </TabsContent>
         <TabsContent value="models" className="min-h-0 overflow-y-auto">
           <ModelSettingsPanel />

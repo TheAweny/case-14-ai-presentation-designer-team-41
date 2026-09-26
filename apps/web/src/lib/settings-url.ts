@@ -7,7 +7,7 @@
 
 export const SETTINGS_PARAM = 'settings';
 
-export const SETTINGS_SECTIONS = ['general', 'models'] as const;
+export const SETTINGS_SECTIONS = ['general', 'editor', 'models'] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 /**
