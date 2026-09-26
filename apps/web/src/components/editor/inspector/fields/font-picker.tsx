@@ -4,9 +4,12 @@ import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
+import { Alert02Icon, ArrowDown01Icon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
 import { Popover as PopoverPrimitive } from 'radix-ui';
+import { genericFamily } from '@lct/slide-renderer';
 import { cn } from '@/lib/utils';
+import { isFontMissing } from '@/lib/font-availability';
+import { useFontAvailability } from '@/components/editor/font-availability-context';
 import {
   COMMON_FONTS,
   buildFontRows,
@@ -56,6 +59,8 @@ export function FontPicker({
 }: FontPickerProps) {
   const [open, setOpen] = useState(false);
   const focus = useFocusReturn({ focusOnOpen: true });
+  const warningId = useId();
+  const warning = useMissingFontWarning(value);
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -64,6 +69,7 @@ export function FontPicker({
           type="button"
           aria-label={ariaLabel}
           title={value ?? placeholder}
+          aria-describedby={warning ? warningId : undefined}
           {...focus.trigger}
           className={cn(
             FIELD_CLASS,
@@ -80,6 +86,7 @@ export function FontPicker({
           >
             {value ?? placeholder}
           </span>
+          {warning ? <MissingFontMark id={warningId} warning={warning} size={13} /> : null}
           <HugeiconsIcon
             icon={ArrowDown01Icon}
             size={12}
@@ -308,11 +315,14 @@ function FontOption({
   onHover: () => void;
   onPick: () => void;
 }) {
+  // Шрифта нет на компьютере — строка нарисована заменой, о чём и говорит значок.
+  const warning = useMissingFontWarning(row.family);
   return (
     <div
       id={id}
       role="option"
       aria-selected={selected}
+      aria-describedby={warning ? `${id}-missing` : undefined}
       title={row.family}
       onMouseMove={onHover}
       // Строка не забирает фокус у поиска: стрелки и Enter продолжают работать.
@@ -326,6 +336,7 @@ function FontOption({
       <span className="min-w-0 flex-1 truncate" style={{ fontFamily: fontFamilyCss(row.family) }}>
         {row.family}
       </span>
+      {warning ? <MissingFontMark id={`${id}-missing`} warning={warning} size={12} /> : null}
       {selected ? (
         <HugeiconsIcon
           icon={Tick02Icon}
@@ -336,6 +347,43 @@ function FontOption({
         />
       ) : null}
     </div>
+  );
+}
+
+const FALLBACK_KEYS = { 'sans-serif': 'sans', serif: 'serif', monospace: 'mono' } as const;
+
+/**
+ * Текст предупреждения, если шрифта `family` нет на компьютере; иначе null — в том числе, когда
+ * о шрифте ещё ничего не известно. Замену называет та же логика, что строит стек в рендерере.
+ */
+function useMissingFontWarning(family: string | null): string | null {
+  const t = useTranslations('inspectorFields.font');
+  const availability = useFontAvailability();
+  if (family === null || !isFontMissing(availability, family)) return null;
+  return t('missing', {
+    font: family,
+    fallback: t(`fallback.${FALLBACK_KEYS[genericFamily(family)]}`),
+  });
+}
+
+/**
+ * Жёлтый значок «шрифт подменён» с подсказкой. Своего цвета «внимание» в теме нет — берём жёлтый
+ * из палитры проектов, как точка состояния в настройках. Для чтения с экрана значок скрыт: его
+ * текст приходит описанием поля через `aria-describedby` и не повторяется в названии.
+ */
+function MissingFontMark({ id, warning, size }: { id: string; warning: string; size: number }) {
+  return (
+    <span
+      aria-hidden
+      title={warning}
+      data-font-missing=""
+      className="flex shrink-0 text-(--project-yellow)"
+    >
+      <HugeiconsIcon icon={Alert02Icon} size={size} strokeWidth={2} color="currentColor" />
+      <span id={id} className="sr-only">
+        {warning}
+      </span>
+    </span>
   );
 }
 

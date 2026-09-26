@@ -35,6 +35,8 @@ import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navi
 import { lockTemplateDecor } from '@/components/editor/template-lock';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { useEditorAssets } from '@/components/editor/use-editor-assets';
+import { FontAvailabilityProvider } from '@/components/editor/font-availability-context';
+import { templateFonts } from '@/components/editor/inspector/text-model';
 
 /**
  * Редактор колоды с черновиком в браузере. Пока API сохранения нет, правки после каждой паузы
@@ -219,10 +221,8 @@ export function DeckEditor({
   const [firstSlide] = useState(() =>
     slideIndexFromParam(deck.slides, searchParams.get(SLIDE_PARAM)),
   );
-  const fonts = useMemo(
-    () => deck.designSystem.typeFamilies.map((family) => family.font),
-    [deck.designSystem],
-  );
+  // Все шрифты шаблона — и семейства темы, и шрифты ролей: по ним же проверяется, есть ли они.
+  const fonts = useMemo(() => templateFonts(deck.designSystem), [deck.designSystem]);
   const images = useMemo(() => {
     const slide = deck.slides[firstSlide];
     return slide ? slideImageUrls(slide, media ?? {}) : [];
@@ -234,7 +234,7 @@ export function DeckEditor({
   return (
     <>
       {ready ? (
-        <>
+        <FontAvailabilityProvider families={fonts} fontsReady={assets.fonts}>
           <EditorShell
             key={opened.generation}
             deck={shown}
@@ -251,7 +251,7 @@ export function DeckEditor({
           {restored ? (
             <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} />
           ) : null}
-        </>
+        </FontAvailabilityProvider>
       ) : null}
       <PageSplash
         busy={pending !== null}

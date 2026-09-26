@@ -16,7 +16,13 @@
     "loadingLocal": "Loading fonts…",
     "localDenied": "The browser did not allow access to local fonts.",
     "localUnavailable": "This browser does not list local fonts, so common ones are shown.",
-    "notFound": "No such font"
+    "notFound": "No such font",
+    "missing": "The font “{font}” is not installed on this computer. The slide shows a substitute ({fallback}); the file keeps “{font}”.",
+    "fallback": {
+      "sans": "sans-serif",
+      "serif": "serif",
+      "mono": "monospace"
+    }
   },
   "fontStyle": {
     "label": "Font style",
