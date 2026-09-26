@@ -20,6 +20,7 @@ import newDeckEditor from './new-deck-editor.json';
 import projectAppearance from './project-appearance.json';
 import projectPage from './project-page.json';
 import selectionBar from './selection-bar.json';
+import settings from './settings.json';
 import shortcuts from './shortcuts.json';
 import slideList from './slide-list.json';
 import slideShow from './slide-show.json';
@@ -64,6 +65,7 @@ const messages = {
   newDeckEditor,
   assistant,
   splash,
+  settings,
 };
 
 export default messages;

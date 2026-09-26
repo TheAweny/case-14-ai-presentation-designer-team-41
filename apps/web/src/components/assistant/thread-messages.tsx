@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   Alert02Icon,
@@ -29,6 +29,7 @@ import {
   useTemplateImport,
   useThread,
 } from './session';
+import { useSlideRefLabels } from './slide-ref-label';
 
 type Ask = Extract<ThreadMessage, { kind: 'ask' }>;
 
@@ -80,9 +81,14 @@ export function UserMessage({ message }: { message: Extract<ThreadMessage, { kin
 export function AgentMessage({ text }: { text: AgentText }) {
   const t = useTranslations('assistant.agent');
   const tv = useTranslations('assistant.variants');
+  const format = useFormatter();
+  const { mention } = useSlideRefLabels();
   let content: string;
   if ('raw' in text) content = text.raw;
-  else if (text.key === 'opened' || text.key === 'openedNoProject') {
+  else if (text.key === 'contextSeen') {
+    const items = text.seen.map((item) => mention(item.subject, item.slideNumber));
+    content = t('contextSeen', { items: format.list(items, { type: 'conjunction' }) });
+  } else if (text.key === 'opened' || text.key === 'openedNoProject') {
     const variant = text.values?.variant ?? 'balanced';
     content = t(text.key, {
       variant: tv(`${variant as 'dense' | 'balanced' | 'airy'}.name`),

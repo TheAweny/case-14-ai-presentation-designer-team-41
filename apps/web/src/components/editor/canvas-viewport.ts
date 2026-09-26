@@ -58,23 +58,33 @@ export type WheelIntent =
  * Ctrl) — зум. Иначе колесо двигает лист: само по себе — по вертикали, с Shift — по
  * горизонтали, два пальца тачпада — куда их повели. `dx`/`dy` — на сколько сдвинуть сам лист:
  * прокрутка вниз поднимает его вверх.
+ *
+ * `wheel: 'zoom'` (настройка редактора) — колесо без клавиш тоже масштабирует; лист тогда
+ * двигают Shift+колесо, пробел или «Рука».
  */
-export function wheelIntent(event: {
-  readonly deltaX: number;
-  readonly deltaY: number;
-  readonly deltaMode?: number;
-  readonly ctrlKey?: boolean;
-  readonly metaKey?: boolean;
-  readonly shiftKey?: boolean;
-}): WheelIntent {
+export function wheelIntent(
+  event: {
+    readonly deltaX: number;
+    readonly deltaY: number;
+    readonly deltaMode?: number;
+    readonly ctrlKey?: boolean;
+    readonly metaKey?: boolean;
+    readonly shiftKey?: boolean;
+  },
+  wheel: 'pan' | 'zoom' = 'pan',
+): WheelIntent {
   const mode = event.deltaMode ?? 0;
-  if (event.ctrlKey || event.metaKey) {
+  if (event.ctrlKey || event.metaKey || (wheel === 'zoom' && !event.shiftKey)) {
     return { kind: 'zoom', factor: wheelZoomFactor(event.deltaY, mode) };
   }
   let x = wheelPixels(event.deltaX, mode);
   let y = wheelPixels(event.deltaY, mode);
-  // Shift+колесо мыши: одни браузеры сами переносят дельту на ось X, другие — нет.
-  if (event.shiftKey && x === 0) {
+  // Shift+колесо мыши: одни браузеры сами переносят дельту на ось X, другие — нет. Когда
+  // колесо масштабирует, Shift+колесо — обычная прокрутка по вертикали.
+  if (wheel === 'zoom' && event.shiftKey && y === 0) {
+    y = x;
+    x = 0;
+  } else if (wheel === 'pan' && event.shiftKey && x === 0) {
     x = y;
     y = 0;
   }

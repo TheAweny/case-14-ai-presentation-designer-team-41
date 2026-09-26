@@ -25,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Note01Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, AiSparklesIcon, Note01Icon } from '@hugeicons/core-free-icons';
 import { cn } from '@/lib/utils';
 import type { SlideLayout } from '@/lib/deck-source';
 import {
@@ -101,6 +101,8 @@ export function SlideList({
   onAdd,
   onDuplicate,
   onRemove,
+  onAddToAssistant,
+  highlightedSlideId = null,
   className,
 }: {
   slides: readonly SlideIr[];
@@ -124,6 +126,13 @@ export function SlideList({
   onDuplicate: (slideIds: readonly string[]) => readonly string[];
   /** Последний слайд не удаляется: колода без слайдов — не колода. */
   onRemove: (slideIds: readonly string[]) => void;
+  /** Выбранные слайды целиком — в контекст ассистента. Нет — пункта в меню нет. */
+  onAddToAssistant?: (slideIds: readonly string[]) => void;
+  /**
+   * Слайд, который подсвечивает чип ассистента под курсором: объекты этого слайда или он
+   * целиком. Выбор при этом не меняется.
+   */
+  highlightedSlideId?: string | null;
   className?: string;
 }) {
   const t = useTranslations('editor');
@@ -352,6 +361,7 @@ export function SlideList({
                   index={index}
                   current={index === current}
                   selected={picked.has(slide.slideId)}
+                  highlighted={slide.slideId === highlightedSlideId}
                   carried={
                     carried.length > 1 &&
                     draggingId !== slide.slideId &&
@@ -376,6 +386,7 @@ export function SlideList({
             onAddFrom={addFrom}
             onDuplicate={duplicatePicked}
             onRemove={removePicked}
+            onAddToAssistant={onAddToAssistant ? () => onAddToAssistant(selection) : undefined}
           />
         </ContextMenu>
         <DropdownMenu modal={false}>
@@ -455,6 +466,7 @@ function SlideMenu({
   onAddFrom,
   onDuplicate,
   onRemove,
+  onAddToAssistant,
 }: {
   /** Сколько слайдов выбрано: копия и удаление — над всеми. */
   count: number;
@@ -467,12 +479,22 @@ function SlideMenu({
   onAddFrom: (choice: NewSlideChoice) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onAddToAssistant?: () => void;
 }) {
   const t = useTranslations('editor');
   const many = useTranslations('slideList');
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
     <ContextMenuContent>
+      {onAddToAssistant ? (
+        <>
+          <ContextMenuItem onSelect={onAddToAssistant}>
+            <HugeiconsIcon icon={AiSparklesIcon} strokeWidth={1.5} color="currentColor" />
+            {count > 1 ? many('addSlidesToAssistant', { count }) : many('addToAssistant')}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      ) : null}
       <ContextMenuItem onSelect={onAdd}>
         {t('addSlide')}
         <ContextMenuShortcut>{shortcutLabel(shortcutKeys('slide-new'), mac)}</ContextMenuShortcut>
@@ -543,6 +565,7 @@ const SortableSlide = memo(function SortableSlide({
   index,
   current,
   selected,
+  highlighted,
   carried,
   count,
   digits,
@@ -558,6 +581,8 @@ const SortableSlide = memo(function SortableSlide({
   current: boolean;
   /** Среди выбранных. */
   selected: boolean;
+  /** Подсвечен чипом ассистента под курсором: рамка цветом выделения, выбор не меняется. */
+  highlighted: boolean;
   /** Едет вместе с перетаскиваемым слайдом: на своём месте он бледнеет. */
   carried: boolean;
   /** Сколько слайдов тянут вместе с этим; больше одного — значок со счётом. */
@@ -590,6 +615,7 @@ const SortableSlide = memo(function SortableSlide({
       data-has-notes={hasNotes ? '' : undefined}
       data-slide-id={slide.slideId}
       data-current={current ? '' : undefined}
+      data-highlighted={highlighted ? '' : undefined}
       {...listeners}
       onClick={(event) =>
         onPick(index, { range: event.shiftKey, toggle: event.ctrlKey || event.metaKey })
@@ -649,6 +675,7 @@ const SortableSlide = memo(function SortableSlide({
           // Выбранные — рамкой потише, открытый — яркой.
           'group-aria-selected/slide:ring-2 group-aria-selected/slide:ring-primary/45',
           'group-data-current/slide:ring-2 group-data-current/slide:ring-primary',
+          'group-data-highlighted/slide:ring-2 group-data-highlighted/slide:ring-[var(--canvas-selection)]',
           'group-focus-visible/slide:ring-2 group-focus-visible/slide:ring-ring',
           'max-md:h-16 md:min-w-0 md:flex-1',
         )}

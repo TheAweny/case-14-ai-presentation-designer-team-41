@@ -16,6 +16,7 @@
   },
   "items": {
     "shortcuts": "Keyboard shortcuts",
+    "settings": "Settings",
     "undo": "Undo",
     "redo": "Redo",
     "copy": "Copy",
@@ -66,7 +67,8 @@
     "group": "Group",
     "ungroup": "Ungroup",
     "present": "Present from the beginning",
-    "present-current": "Present from current slide"
+    "present-current": "Present from current slide",
+    "assistant-context": "Add the selection or slide to assistant context"
   },
   "gestures": {
     "items": {

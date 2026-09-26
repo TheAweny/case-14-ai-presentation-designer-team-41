@@ -10,7 +10,8 @@
  * Выбор сочетаний — по привычкам Google Slides и PowerPoint там, где речь о тексте и слайдах,
  * и Figma там, где речь об объектах на холсте. Где они спорят, решает то, что в редакторе
  * слайдов нужнее: Ctrl+Shift+L — выравнивание влево (Google Slides), а блокировка — Alt+Shift+L
- * (Canva), а не Ctrl+Shift+L из Figma.
+ * (Canva), а не Ctrl+Shift+L из Figma. Ctrl+L — выделение в контекст ассистента, как «Add to
+ * chat» в Cursor: в редакторе слайдов оно ничем не занято, а браузер отдаёт его странице.
  */
 
 /** Где работает сочетание: на холсте вне набора, в открытом наборе текста или везде. */
@@ -29,6 +30,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
 
 export type ShortcutId =
   | 'shortcuts'
+  | 'settings'
   | 'undo'
   | 'redo'
   | 'copy'
@@ -79,7 +81,8 @@ export type ShortcutId =
   | 'zoom-selection'
   | 'pan'
   | 'present'
-  | 'present-current';
+  | 'present-current'
+  | 'assistant-context';
 
 /** Одно сочетание: физическая клавиша и модификаторы, которые должны быть нажаты ровно так. */
 export interface Chord {
@@ -131,6 +134,8 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
       { code: 'Slash', shift: true, scope: 'canvas', label: '?' },
     ],
   },
+  // Настройки — Ctrl+, как почти везде. Не в наборе: там запятая — часть текста.
+  { id: 'settings', group: 'general', scope: 'canvas', chords: [{ code: 'Comma', mod: true }] },
   { id: 'undo', group: 'general', scope: 'canvas', chords: [{ code: 'KeyZ', mod: true }] },
   {
     id: 'redo',
@@ -161,6 +166,12 @@ export const SHORTCUTS: readonly ShortcutSpec[] = [
     scope: 'canvas',
     external: true,
     chords: [{ code: 'KeyV', mod: true }],
+  },
+  {
+    id: 'assistant-context',
+    group: 'general',
+    scope: 'canvas',
+    chords: [{ code: 'KeyL', mod: true }],
   },
 
   // Слайды.

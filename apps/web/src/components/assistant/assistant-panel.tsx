@@ -15,8 +15,11 @@ import { AiSparklesIcon, ArrowUp02Icon, StopIcon } from '@hugeicons/core-free-ic
 import { ModelMenu } from '@/components/composer/model-menu';
 import { useAurora } from '@/components/composer/use-aurora';
 import { Button } from '@/components/ui/button';
+import { AttachmentChip } from '@/components/composer/attachment-chip';
 import type { AssistantThread } from '@/lib/assistant-threads';
+import { contextAttachments, refKey } from '@/lib/slide-context';
 import { cn } from '@/lib/utils';
+import { useAssistantDeck } from './deck-context';
 import {
   assistantThreads,
   deckConversations,
@@ -177,6 +180,8 @@ function AssistantInput({
   deckId?: string;
 }) {
   const t = useTranslations('assistant.input');
+  const tc = useTranslations('assistant.context');
+  const deck = useAssistantDeck();
   const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState('');
@@ -199,6 +204,14 @@ function AssistantInput({
     if (pending) field.current?.blur();
   }, [pending]);
 
+  // «Спросить ассистента» и Ctrl+L зовут фокус сюда. Поле могло смонтироваться уже после
+  // просьбы — вкладка только открылась, — поэтому просьбу забирают, а не ловят.
+  const focusRequest = deck?.focusRequest ?? 0;
+  const takeFocus = deck?.takeFocus;
+  useEffect(() => {
+    if (takeFocus?.()) field.current?.focus();
+  }, [focusRequest, takeFocus]);
+
   const send = () => {
     if (running && run) {
       generationRuns.cancel(run.runId);
@@ -216,7 +229,12 @@ function AssistantInput({
       threadId = assistantThreads.create('');
       if (deckId) assistantThreads.setDeck(threadId, deckId);
     }
-    deckConversations.say(threadId, message);
+    // Снимок объектов на момент отправки: закреплённое и призрак, без устаревшего.
+    const attachments = deck
+      ? contextAttachments(deck.slides, deck.ghost ? [...deck.refs, deck.ghost] : deck.refs)
+      : [];
+    deckConversations.say(threadId, message, attachments);
+    deck?.sent();
   };
 
   const onSubmit = (event: FormEvent) => {
@@ -256,6 +274,35 @@ function AssistantInput({
               'text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground',
             )}
           />
+          {deck && (deck.refs.length > 0 || deck.ghost) ? (
+            <ul aria-label={tc('label')} className="flex flex-wrap gap-1.5 px-2.5 pt-1.5 pb-0.5">
+              {deck.refs.map((ref) => (
+                <AttachmentChip
+                  key={refKey(ref)}
+                  attachment={ref}
+                  onRemove={() => {
+                    deck.unpin(refKey(ref));
+                    field.current?.focus();
+                  }}
+                />
+              ))}
+              {deck.ghost ? (
+                <AttachmentChip
+                  key={`ghost-${refKey(deck.ghost)}`}
+                  attachment={deck.ghost}
+                  ghost
+                  onPin={() => {
+                    if (deck.ghost) deck.pin(deck.ghost);
+                    field.current?.focus();
+                  }}
+                  onRemove={() => {
+                    deck.dismissGhost();
+                    field.current?.focus();
+                  }}
+                />
+              ) : null}
+            </ul>
+          ) : null}
           <div className="flex items-center justify-end gap-1 px-2 pb-2">
             <ModelMenu
               models={writerModels}

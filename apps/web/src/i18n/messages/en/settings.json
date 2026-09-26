@@ -1,0 +1,211 @@
+{
+  "title": "Settings",
+  "description": "Interface language, editor behavior and the models that power generation.",
+  "open": "Settings",
+  "close": "Close settings",
+  "sections": {
+    "label": "Settings sections",
+    "general": "General",
+    "editor": "Editor",
+    "models": "Models"
+  },
+  "general": {
+    "title": "General",
+    "language": "Interface language"
+  },
+  "editor": {
+    "title": "Editor",
+    "description": "Changes apply right away — an open editor updates as you go.",
+    "rail": {
+      "title": "Toolbar",
+      "items": {
+        "data": "Charts, tables and diagrams",
+        "ai": "Assistant",
+        "shortcuts": "Keyboard shortcuts",
+        "present": "Present"
+      },
+      "keepTool": "Keep the tool after inserting",
+      "keepToolHint": "To insert several shapes in a row. Otherwise the cursor goes back to select, as in Figma."
+    },
+    "bar": {
+      "title": "Bar above the object",
+      "mode": "Show",
+      "modes": {
+        "object": "By the object",
+        "off": "Hidden"
+      },
+      "modeHint": {
+        "object": "Properties of the selected object, right above it.",
+        "off": "Properties only in the Design panel on the right."
+      },
+      "assistant": "“Ask the assistant” button"
+    },
+    "canvas": {
+      "title": "Canvas",
+      "snap": "Snapping",
+      "snapHint": "To nearby objects and slide edges. Hold Ctrl while dragging to turn it off for the moment.",
+      "wheel": "Mouse wheel",
+      "wheelModes": {
+        "pan": "Scroll",
+        "zoom": "Zoom"
+      },
+      "wheelHint": {
+        "pan": "The wheel moves the slide, Ctrl+wheel zooms.",
+        "zoom": "The wheel zooms, Shift+wheel moves the slide."
+      },
+      "largeNudge": "Shift+arrow step",
+      "largeNudgeHint": "{steps, plural, one {Shift+arrow moves by # template grid step.} other {Shift+arrow moves by # template grid steps.}}"
+    },
+    "template": {
+      "title": "Template",
+      "lock": "Lock template design",
+      "lockHint": "Template backgrounds and decor can’t be moved by accident. Applies to decks you open afterwards."
+    },
+    "reset": "Restore defaults"
+  },
+  "models": {
+    "title": "Models",
+    "description": "Generation runs on servers with an OpenAI-compatible API — on this machine, on your local network or in the cloud. Connect a server and assign its models to roles.",
+    "loading": "Loading settings…",
+    "loadFailed": "Couldn’t load model settings.",
+    "retry": "Try again",
+    "actionFailed": "That didn’t work. Please try again.",
+    "connections": {
+      "title": "Connections",
+      "add": "Add connection",
+      "emptyTitle": "No connections yet",
+      "emptyBody": "Add the server your models run on: Ollama, LM Studio, vLLM or any other with an OpenAI-compatible API.",
+      "location": {
+        "local": "Local",
+        "cloud": "Cloud"
+      },
+      "keySet": "key …{hint}",
+      "keySetShort": "key set",
+      "status": {
+        "unchecked": "Not checked",
+        "checking": "Checking…",
+        "ok": "{count, plural, =0 {Checked · no models} one {Checked · # model} other {Checked · # models}}",
+        "failed": "Error: {reason}"
+      },
+      "menu": {
+        "label": "Actions for connection “{name}”",
+        "check": "Check",
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "delete": {
+        "title": "Delete connection?",
+        "body": "The connection “{name}” will be deleted.",
+        "roles": "{count, plural, one {The {roles} role will become unassigned.} other {The {roles} roles will become unassigned.}}",
+        "confirm": "Delete"
+      }
+    },
+    "errors": {
+      "unreachable": "server unreachable",
+      "unreachableDetail": "server unreachable ({detail})",
+      "unauthorized": "invalid key (response {status})",
+      "http": "server responded {status}",
+      "notFound": "server responded 404 — the address may be missing /v1",
+      "invalidResponse": "response is not in OpenAI format",
+      "timeout": "no response within {seconds} s"
+    },
+    "form": {
+      "newTitle": "New connection",
+      "editTitle": "Edit connection",
+      "back": "Back to connections",
+      "preset": {
+        "label": "Server",
+        "custom": "Other",
+        "customHint": "OpenAI-compatible"
+      },
+      "name": {
+        "label": "Name",
+        "placeholder": "For example, GPU server"
+      },
+      "baseUrl": {
+        "label": "API address",
+        "placeholder": "https://…/v1",
+        "hint": "The address as the app server sees it: localhost is the machine the server runs on."
+      },
+      "apiKey": {
+        "label": "API key",
+        "optional": "optional",
+        "hint": "Local servers usually don’t need a key. The key is stored on the app server and never sent back to the browser.",
+        "set": "Key set",
+        "setHint": "Key set …{hint}",
+        "replace": "Replace",
+        "keep": "Keep current"
+      },
+      "problems": {
+        "name": {
+          "empty": "Enter a name.",
+          "tooLong": "The name is longer than {max} characters."
+        },
+        "baseUrl": {
+          "empty": "Enter an address.",
+          "tooLong": "The address is too long.",
+          "invalid": "This doesn’t look like a server address.",
+          "protocol": "The address starts with http:// or https://.",
+          "credentials": "Don’t put a login and password in the address — enter the key in the field below."
+        },
+        "apiKey": {
+          "tooLong": "The key is longer than {max} characters.",
+          "whitespace": "The key contains a space or line break — make sure you copied all of it and nothing else."
+        }
+      },
+      "check": "Check connection",
+      "checking": "Checking…",
+      "checkOk": "{count, plural, =0 {The server responded, but it has no models.} one {The server responded: # model.} other {The server responded: # models.}}",
+      "checkFailed": "Couldn’t connect: {reason}.",
+      "unsavedHint": "You can save without checking.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "gone": "This connection no longer exists — it was deleted."
+    },
+    "roles": {
+      "title": "Roles",
+      "description": "Which model performs each step of generation. Models come from the connection’s last check; you can also type a model id.",
+      "needsConnection": "Add a connection first.",
+      "unassigned": "Not assigned",
+      "missing": "{count, plural, one {# required role is not assigned — generation won’t start without it.} other {# required roles are not assigned — generation won’t start without them.}}",
+      "disabled": "Don’t generate images",
+      "picker": {
+        "label": "Model for the “{role}” role",
+        "noModels": "Model list not received",
+        "manual": "Type a model id…",
+        "clear": "Clear assignment"
+      },
+      "manual": {
+        "label": "Model id on connection “{connection}”",
+        "placeholder": "e.g. qwen2.5:7b-instruct",
+        "save": "Done",
+        "cancel": "Cancel"
+      },
+      "items": {
+        "planner": {
+          "name": "Planner",
+          "description": "Plans the deck: what each slide is about and what type it is."
+        },
+        "writer": {
+          "name": "Writer",
+          "description": "Writes slide text and shortens it when it doesn’t fit the layout."
+        },
+        "critic": {
+          "name": "Critic",
+          "description": "Checks the deck’s content against the audit rules and phrases fixes."
+        },
+        "vision": {
+          "name": "Visual review",
+          "description": "Looks at rendered slides: composition, legibility, consistency with the style.",
+          "hint": "Needs a model that understands images (VLM)."
+        },
+        "image": {
+          "name": "Illustrator",
+          "description": "Draws illustrations when the materials have none.",
+          "hint": "Needs a text-to-image model with an OpenAI-compatible images API."
+        }
+      }
+    }
+  }
+}

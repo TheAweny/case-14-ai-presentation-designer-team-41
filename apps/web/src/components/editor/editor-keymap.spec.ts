@@ -14,6 +14,15 @@ function key(code: string, extra: Partial<KeyLike> = {}): KeyLike {
 }
 
 describe('editorCommand', () => {
+  it('Ctrl+, opens settings, but not while typing; Ctrl+Shift+, still shrinks text', () => {
+    expect(editorCommand(key('Comma', { key: 'б', ctrlKey: true }))).toEqual({ kind: 'settings' });
+    expect(editorCommand(key('Comma', { metaKey: true }))).toEqual({ kind: 'settings' });
+    expect(editorCommand(key('Comma', { ctrlKey: true }), 'text')).toBeNull();
+    expect(editorCommand(key('Comma', { ctrlKey: true, shiftKey: true }))).not.toEqual({
+      kind: 'settings',
+    });
+  });
+
   it('reads undo and redo by physical key, with Ctrl or Cmd', () => {
     expect(editorCommand(key('KeyZ', { key: 'я', ctrlKey: true }))).toEqual({ kind: 'undo' });
     expect(editorCommand(key('KeyZ', { metaKey: true, shiftKey: true }))).toEqual({ kind: 'redo' });
@@ -30,6 +39,18 @@ describe('editorCommand', () => {
     expect(editorCommand(key('BracketLeft', { ctrlKey: true, shiftKey: true }))).toEqual({
       kind: 'arrange',
       to: 'back',
+    });
+  });
+
+  it('Ctrl+L puts the selection into assistant context; Ctrl+Shift+L still aligns left', () => {
+    expect(editorCommand(key('KeyL', { key: 'д', ctrlKey: true }))).toEqual({
+      kind: 'assistant-context',
+    });
+    expect(editorCommand(key('KeyL', { metaKey: true }))).toEqual({ kind: 'assistant-context' });
+    expect(editorCommand(key('KeyL', { ctrlKey: true }), 'text')).toBeNull();
+    expect(editorCommand(key('KeyL', { ctrlKey: true, shiftKey: true }))).toEqual({
+      kind: 'text-align',
+      align: 'left',
     });
   });
 

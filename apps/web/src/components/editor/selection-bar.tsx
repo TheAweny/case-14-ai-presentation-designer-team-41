@@ -13,6 +13,7 @@ import { useTransformEffect } from 'react-zoom-pan-pinch';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
+  AiSparklesIcon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -88,6 +89,7 @@ import {
   type DistributeAxis,
 } from '@/components/editor/slide-geometry';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 
 /** Зазор между полосой и краем видимой области. От выделения — `SELECTION_BAR_CLEARANCE`. */
 const GAP = 8;
@@ -160,6 +162,11 @@ export type SelectionBarActions = Pick<
   readonly onCommand: (command: CanvasCommand) => void;
   /** Открыть свойства выделенного в правой панели. */
   readonly onOpenInspector: () => void;
+  /**
+   * Выделенное — в контекст ассистента: чипом в его поле, с переходом на вкладку и фокусом в
+   * поле. Нет — кнопки нет.
+   */
+  readonly onAskAssistant?: () => void;
   /** Есть ли что вставить: скопированное в этой вкладке. */
   readonly canPaste: boolean;
 };
@@ -204,6 +211,7 @@ export function SelectionBar({
   onEditTable: (elementId: string) => void;
 }) {
   const t = useTranslations('selectionBar');
+  const prefs = useEditorPrefs();
   const reduceMotion = useReducedMotion() === true;
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
@@ -266,7 +274,8 @@ export function SelectionBar({
   }, [overlay, slideRoot, bar, slide, selectedIds, hidden, resized]);
 
   const context = barContext(selected);
-  if (context === null || hidden) return null;
+  // Выключенная в настройках полоса: свойства остаются в панели «Дизайн».
+  if (context === null || hidden || prefs.selectionBar === 'off') return null;
   const ids = selected.map((element) => element.elementId);
   const side = placement?.below ? 'bottom' : 'top';
   const only = selected.length === 1 ? selected[0] : undefined;
@@ -324,6 +333,17 @@ export function SelectionBar({
           animate={{ opacity: 1 }}
           transition={FADE}
         >
+          {actions.onAskAssistant && prefs.barAssistant ? (
+            <>
+              <BarButton
+                icon={AiSparklesIcon}
+                label={t('askAssistant')}
+                shortcut="assistant-context"
+                onClick={actions.onAskAssistant}
+              />
+              <BarSeparator />
+            </>
+          ) : null}
           {controls}
           <BarSeparator />
           <CommonControls slide={slide} selected={selected} actions={actions} context={context} />

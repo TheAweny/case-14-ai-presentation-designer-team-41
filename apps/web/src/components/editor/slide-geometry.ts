@@ -144,11 +144,18 @@ export const LARGE_NUDGE_BASELINES = 4;
 
 /**
  * One arrow key: exactly one step in the arrow's direction and nowhere else. The step is the
- * baseline, the same length across as down, and `large` is the Shift step. Margins are guides,
- * not walls: a box in the margin or past the slide edge moves like any other.
+ * baseline, the same length across as down, and `large` is the Shift step of `largeSteps`
+ * baselines (the editor setting). Margins are guides, not walls: a box in the margin or past
+ * the slide edge moves like any other.
  */
-export function nudgeBox(box: Box, direction: ArrowDirection, grid: Grid, large = false): Box {
-  const step = Math.max(1, grid.baseline) * (large ? LARGE_NUDGE_BASELINES : 1);
+export function nudgeBox(
+  box: Box,
+  direction: ArrowDirection,
+  grid: Grid,
+  large = false,
+  largeSteps = LARGE_NUDGE_BASELINES,
+): Box {
+  const step = Math.max(1, grid.baseline) * (large ? largeSteps : 1);
   const next = { ...box };
   if (direction === 'left') next.x -= step;
   if (direction === 'right') next.x += step;

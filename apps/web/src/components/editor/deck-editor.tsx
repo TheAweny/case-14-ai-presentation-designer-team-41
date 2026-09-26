@@ -33,6 +33,7 @@ import { useThreadForDeck } from '@/components/assistant/session';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navigation';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { useEditorAssets } from '@/components/editor/use-editor-assets';
 
 /**
@@ -58,8 +59,14 @@ export function DeckEditor({
   // Разговор с агентом, который собрал эту колоду: его продолжает панель «Ассистент».
   const thread = useThreadForDeck(deck.deckId);
   const base = useMemo(() => deckFingerprint(deck.slides), [deck.slides]);
+  // Блокировка шаблона — как в настройках при открытии; оболочка получает то же значение.
+  const { lockTemplate: lockPref } = useEditorPrefs();
+  const [lockTemplate] = useState(lockPref);
   // С этим оболочка открывает исходную колоду: такие слайды — «правок нет».
-  const origin = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
+  const origin = useMemo(
+    () => (lockTemplate ? lockTemplateDecor(deck.slides) : deck.slides),
+    [deck.slides, lockTemplate],
+  );
   const [opened, setOpened] = useState<{ slides: readonly SlideIr[]; generation: number }>({
     slides: deck.slides,
     generation: 0,
@@ -233,6 +240,7 @@ export function DeckEditor({
             deck={shown}
             media={media}
             layout={layout}
+            lockTemplateOnOpen={lockTemplate}
             // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
             presentOnOpen={present && opened.generation === 0}
             onSlidesChange={onSlidesChange}

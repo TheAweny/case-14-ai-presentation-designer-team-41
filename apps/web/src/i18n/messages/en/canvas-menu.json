@@ -11,5 +11,6 @@
   "remove": "Delete",
   "unlockAll": "Unlock all on slide",
   "group": "Group",
-  "ungroup": "Ungroup"
+  "ungroup": "Ungroup",
+  "addToAssistant": "Add to assistant context"
 }
