@@ -4,7 +4,13 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { AiBrain01Icon, PenTool03Icon, Settings01Icon } from '@hugeicons/core-free-icons';
+import {
+  AiBrain01Icon,
+  KeyboardIcon,
+  PenTool03Icon,
+  Presentation01Icon,
+  Settings01Icon,
+} from '@hugeicons/core-free-icons';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,14 +22,18 @@ import {
 } from '@/lib/settings-url';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import { cn } from '@/lib/utils';
+import { DeckSettingsPanel } from './deck-settings-panel';
 import { EditorSettingsPanel } from './editor-settings-panel';
 import { ModelSettingsPanel } from './model-settings-panel';
+import { ShortcutSettingsPanel } from './shortcut-settings-panel';
 import { closeSettings, openSettings } from './open-settings';
 import { OWN_ESCAPE_ATTRIBUTE } from './role-row';
 
 const SECTION_ICONS: Readonly<Record<SettingsSection, IconSvgElement>> = {
   general: Settings01Icon,
   editor: PenTool03Icon,
+  shortcuts: KeyboardIcon,
+  decks: Presentation01Icon,
   models: AiBrain01Icon,
 };
 
@@ -112,6 +122,12 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
         </TabsContent>
         <TabsContent value="editor" className="min-h-0 overflow-y-auto">
           <EditorSettingsPanel />
+        </TabsContent>
+        <TabsContent value="shortcuts" className="min-h-0 overflow-y-auto">
+          <ShortcutSettingsPanel />
+        </TabsContent>
+        <TabsContent value="decks" className="min-h-0 overflow-y-auto">
+          <DeckSettingsPanel />
         </TabsContent>
         <TabsContent value="models" className="min-h-0 overflow-y-auto">
           <ModelSettingsPanel />

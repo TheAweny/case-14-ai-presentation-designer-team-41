@@ -1,12 +1,14 @@
 {
   "title": "Settings",
-  "description": "Interface language, editor behavior and the models that power generation.",
+  "description": "Interface language, editor, shortcuts, decks and generation models.",
   "open": "Settings",
   "close": "Close settings",
   "sections": {
     "label": "Settings sections",
     "general": "General",
     "editor": "Editor",
+    "shortcuts": "Shortcuts",
+    "decks": "Decks",
     "models": "Models"
   },
   "general": {
@@ -32,13 +34,22 @@
       "mode": "Show",
       "modes": {
         "object": "By the object",
-        "off": "Hidden"
+        "off": "Hidden",
+        "pinned": "Above the canvas"
       },
       "modeHint": {
         "object": "Properties of the selected object, right above it.",
-        "off": "Properties only in the Design panel on the right."
+        "off": "Properties only in the Design panel on the right.",
+        "pinned": "The bar stays centered above the canvas and doesn’t cover nearby objects."
       },
-      "assistant": "“Ask the assistant” button"
+      "assistant": "“Ask the assistant” button",
+      "items": {
+        "duplicate": "Duplicate",
+        "layers": "Layer order",
+        "lock": "Lock",
+        "remove": "Delete"
+      },
+      "itemsHint": "Buttons you turn off move to the bar’s “⋯” menu."
     },
     "canvas": {
       "title": "Canvas",
@@ -62,6 +73,45 @@
       "lockHint": "Template backgrounds and decor can’t be moved by accident. Applies to decks you open afterwards."
     },
     "reset": "Restore defaults"
+  },
+  "shortcuts": {
+    "title": "Shortcuts",
+    "description": "Click a shortcut and press a new one. A shortcut already in use moves to this command, and the other one becomes unassigned.",
+    "press": "Press keys…",
+    "none": "Unassigned",
+    "reset": "Restore the shortcut for “{command}”",
+    "resetAll": "Restore all shortcuts",
+    "moved": "Taken from “{command}”.",
+    "problems": {
+      "needs-modifier": "Use Ctrl or Alt: without them the key types text.",
+      "reserved": "The browser keeps this shortcut for itself.",
+      "modifier": "Press a key, not just a modifier."
+    }
+  },
+  "decks": {
+    "title": "Decks",
+    "description": "Where the new deck composer and the export dialog start. You can still change everything for a single deck.",
+    "generation": {
+      "title": "Generation",
+      "slideCount": "Number of slides",
+      "slideCountHint": "Auto — as many as the material needs.",
+      "auto": "Auto"
+    },
+    "export": {
+      "title": "Export",
+      "format": "Format",
+      "name": "File name",
+      "names": {
+        "title": "Title",
+        "title-date": "Title and date"
+      },
+      "nameHint": {
+        "title": "The file is named after the deck.",
+        "title-date": "The date goes after the title: “Report 2026-09-26”."
+      },
+      "audit": "Attach the audit report",
+      "auditHint": "The check report and run manifest next to the file."
+    }
   },
   "models": {
     "title": "Models",

@@ -23,6 +23,12 @@ describe('parseEditorPrefs', () => {
       wheel: 'zoom',
       largeNudge: 8,
       lockTemplate: false,
+      barHidden: ['layers', 'remove'],
+      shortcuts: { lock: 'Mod+Alt+KeyK', group: null },
+      slideCount: 12,
+      exportFormat: 'pdf',
+      exportName: 'title-date',
+      exportAudit: true,
     };
     expect(parseEditorPrefs(serializeEditorPrefs(prefs))).toEqual(prefs);
   });
@@ -34,11 +40,17 @@ describe('parseEditorPrefs', () => {
       selectionBar: 'floating',
       wheel: 'zoom',
       largeNudge: 5,
+      barHidden: 'layers',
+      // Буфер обмена не переназначается, плоская буква печатала бы текст, Ctrl+W берёт браузер.
+      shortcuts: { copy: 'Mod+KeyQ', lock: 'KeyQ', group: 'Mod+KeyW', duplicate: 'Mod+Shift+KeyD' },
+      slideCount: 99,
+      exportFormat: 'docx',
     });
     expect(parseEditorPrefs(raw)).toEqual({
       ...EDITOR_PREFS_DEFAULT,
       railHidden: ['data', 'present'],
       wheel: 'zoom',
+      shortcuts: { duplicate: 'Mod+Shift+KeyD' },
     });
   });
 });

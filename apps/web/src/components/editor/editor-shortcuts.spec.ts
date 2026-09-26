@@ -1,11 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { editorCommand, type KeyContext } from './editor-keymap';
 import en from '../../i18n/messages/en';
 import ru from '../../i18n/messages/ru';
 import {
   GESTURES,
+  REMAPPABLE_SHORTCUTS,
   SHORTCUTS,
   ariaKeyShortcuts,
+  chordOwner,
+  chordProblem,
+  decodeChord,
+  encodeChord,
+  setShortcutOverrides,
   chordKeys,
   keyLabel,
   shortcutKeys,
@@ -112,6 +118,62 @@ describe('mouse gestures', () => {
           expect(gestures.actions[variant.action], `${locale}: ${variant.action}`).toBeTruthy();
         }
       }
+    }
+  });
+});
+
+describe('own shortcuts', () => {
+  afterEach(() => setShortcutOverrides({}));
+
+  it('replaces the chord of a command and can leave it unassigned', () => {
+    setShortcutOverrides({ lock: { code: 'KeyK', mod: true, alt: true }, group: null });
+    expect(shortcutKeys('lock')).toEqual(['Mod', 'Alt', 'K']);
+    expect(shortcutKeys('group')).toEqual([]);
+    expect(
+      editorCommand({
+        code: 'KeyK',
+        key: 'k',
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false,
+        altKey: true,
+      }),
+    ).toEqual({ kind: 'lock' });
+    expect(
+      editorCommand({
+        code: 'KeyG',
+        key: 'g',
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false,
+        altKey: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('round-trips chords and refuses the ones a person cannot use', () => {
+    expect(decodeChord(encodeChord({ code: 'KeyL', mod: true, shift: true }))).toEqual({
+      code: 'KeyL',
+      mod: true,
+      shift: true,
+    });
+    expect(chordProblem({ code: 'KeyQ' })).toBe('needs-modifier');
+    expect(chordProblem({ code: 'F2' })).toBeNull();
+    expect(chordProblem({ code: 'KeyW', mod: true })).toBe('reserved');
+    expect(chordProblem({ code: 'ShiftLeft', shift: true })).toBe('modifier');
+    expect(decodeChord('Hyper+KeyA')).toBeNull();
+  });
+
+  it('finds the command that already listens to a chord', () => {
+    expect(chordOwner({ code: 'KeyD', mod: true }, 'lock')).toBe('duplicate');
+    expect(chordOwner({ code: 'KeyK', mod: true, alt: true }, 'lock')).toBeNull();
+  });
+
+  it('keeps clipboard, zoom and key families out of remapping', () => {
+    const ids = REMAPPABLE_SHORTCUTS.map((spec) => spec.id);
+    expect(ids).toContain('lock');
+    for (const id of ['copy', 'zoom-in', 'nudge', 'slide-go', 'indent', 'settings']) {
+      expect(ids).not.toContain(id);
     }
   });
 });

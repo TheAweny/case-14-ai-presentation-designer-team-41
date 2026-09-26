@@ -170,6 +170,12 @@ const FORBIDDEN_IN_FILE_NAME = '<>:"/\\|?*';
  * Имя файла из названия колоды: без символов, которые файловые системы не принимают, без
  * пробелов по краям. Пустое имя заменяется запасным.
  */
+/** Имя с датой в конце — `Отчёт 2026-09-26`: по нему файлы разных дней не путаются. */
+export function datedFileName(name: string, date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${name} ${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function safeFileName(title: string, fallback: string): string {
   const cleaned = Array.from(title, (char) =>
     char.charCodeAt(0) < 32 || FORBIDDEN_IN_FILE_NAME.includes(char) ? ' ' : char,

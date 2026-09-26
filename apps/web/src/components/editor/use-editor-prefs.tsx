@@ -1,16 +1,36 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { EDITOR_PREFS_DEFAULT, writeEditorPrefs, type EditorPrefs } from './editor-prefs';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  EDITOR_PREFS_DEFAULT,
+  shortcutOverrides,
+  writeEditorPrefs,
+  type EditorPrefs,
+} from './editor-prefs';
+import { setShortcutOverrides } from './editor-shortcuts';
 
 type EditorPrefsValue = {
   prefs: EditorPrefs;
   update: (patch: Partial<EditorPrefs>) => void;
+  /**
+   * Растёт, когда реестр клавиш принял свои сочетания. Значение контекста меняется, и все, кто
+   * читает настройки (рейка, полоса), перерисовывают подписи клавиш по новому реестру.
+   */
+  shortcutsVersion: number;
 };
 
 const EditorPrefsContext = createContext<EditorPrefsValue>({
   prefs: EDITOR_PREFS_DEFAULT,
   update: () => undefined,
+  shortcutsVersion: 0,
 });
 
 /**
@@ -33,7 +53,18 @@ export function EditorPrefsProvider({
       return next;
     });
   }, []);
-  const value = useMemo(() => ({ prefs, update }), [prefs, update]);
+  // Свои сочетания живут в реестре модуля, а он на сервере общий для всех запросов, — поэтому
+  // только в браузере и после гидратации: первый кадр совпадает с серверным.
+  const [shortcutsVersion, setShortcutsVersion] = useState(0);
+  const { shortcuts } = prefs;
+  useLayoutEffect(() => {
+    setShortcutOverrides(shortcutOverrides(shortcuts));
+    setShortcutsVersion((version) => version + 1);
+  }, [shortcuts]);
+  const value = useMemo(
+    () => ({ prefs, update, shortcutsVersion }),
+    [prefs, update, shortcutsVersion],
+  );
   return <EditorPrefsContext.Provider value={value}>{children}</EditorPrefsContext.Provider>;
 }
 

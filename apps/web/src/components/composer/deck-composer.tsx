@@ -38,6 +38,7 @@ import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
 import { SlideCountMenu } from './slide-count-menu';
 import { useAurora } from './use-aurora';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 
 const noSubscribe = () => () => undefined;
 
@@ -103,7 +104,9 @@ export function DeckComposer({
   const [files, setFiles] = useState<readonly File[]>([]);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [rejected, setRejected] = useState<readonly string[]>([]);
-  const [slideCount, setSlideCount] = useState<number | null>(null);
+  // Число слайдов по умолчанию — из настроек; null — «Авто».
+  const prefs = useEditorPrefs();
+  const [slideCount, setSlideCount] = useState<number | null>(prefs.slideCount);
   const [modelId, setModelId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);

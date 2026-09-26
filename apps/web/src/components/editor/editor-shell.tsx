@@ -71,7 +71,12 @@ import { isTypingTarget, slideTitle, stepSlide } from '@/components/editor/slide
 import { FileBar } from '@/components/editor/file-bar';
 import { ExportDialog, type ExportOptions } from '@/components/editor/export-dialog';
 import { useDeckExport } from '@/components/editor/use-deck-export';
-import { safeFileName, type DeckExporter, type ExportFormat } from '@/lib/deck-export';
+import {
+  datedFileName,
+  safeFileName,
+  type DeckExporter,
+  type ExportFormat,
+} from '@/lib/deck-export';
 import { createDemoExporter } from '@/mocks/demo-exporter';
 import {
   alignUnits,
@@ -247,7 +252,7 @@ export function EditorShell({
   const [exporter] = useState(() => givenExporter ?? createDemoExporter());
   const exportJob = useDeckExport(exporter);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>('pptx');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(prefs.exportFormat);
   // Оформление шаблона заблокировано с самого начала, если так в настройках: см. `lockTemplateDecor`.
   const startSlides = useMemo(
     () => (lockTemplate ? lockTemplateDecor(deck.slides) : deck.slides),
@@ -1257,7 +1262,12 @@ export function EditorShell({
                   onOpenChange={setExportOpen}
                   job={exportJob}
                   initialFormat={exportFormat}
-                  defaultFileName={safeFileName(title, t('untitled'))}
+                  defaultFileName={
+                    prefs.exportName === 'title-date'
+                      ? datedFileName(safeFileName(title, t('untitled')), new Date())
+                      : safeFileName(title, t('untitled'))
+                  }
+                  defaultAudit={prefs.exportAudit}
                   slideCount={slides.length}
                   currentIndex={index}
                   variant={deck.variant}
