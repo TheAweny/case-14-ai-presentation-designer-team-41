@@ -27,4 +27,18 @@ describe('RunsController', () => {
 
     expect(() => runs.validateInputs({})).toThrow(BadRequestException);
   });
+
+  it('returns an empty persisted event journal for a new run', async () => {
+    const runs = controller();
+    await runs.create();
+
+    await expect(runs.events('run-api')).resolves.toEqual([]);
+  });
+
+  it('rejects an invalid event cursor', async () => {
+    const runs = controller();
+    await runs.create();
+
+    await expect(runs.events('run-api', 'nope')).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

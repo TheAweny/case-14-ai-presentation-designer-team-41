@@ -8,9 +8,11 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { LocalInputValidationError, type ValidatedLocalInputs } from '@lct/input-validation';
 import { runConfigSchema } from '@lct/contracts';
+import type { JobEvent } from '@lct/contracts';
 import type { RunRecord } from '@lct/run-store';
 import { RunsService } from './runs.service.js';
 
@@ -44,5 +46,21 @@ export class RunsController {
       throw new NotFoundException(`Run ${runId} was not found.`);
     }
     return run;
+  }
+
+  @Get(':runId/events')
+  async events(
+    @Param('runId') runId: string,
+    @Query('after') after?: string,
+  ): Promise<readonly JobEvent[]> {
+    const run = await this.runs.get(runId);
+    if (run === null) {
+      throw new NotFoundException(`Run ${runId} was not found.`);
+    }
+    const sequence = after === undefined ? -1 : Number(after);
+    if (!Number.isInteger(sequence) || sequence < -1) {
+      throw new BadRequestException('The after sequence must be an integer >= -1.');
+    }
+    return this.runs.events(runId, sequence);
   }
 }

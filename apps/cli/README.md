@@ -11,5 +11,11 @@ The command requires `DATABASE_URL`, applies pending versioned migrations and cr
 Later pipeline stages place binary inputs and outputs under `runs/<run-id>/` and register their
 metadata in PostgreSQL; files themselves are not stored in the database.
 
+To inspect persisted progress events from the terminal:
+
+```bash
+node apps/cli/dist/main.js events <run-id> [after-sequence]
+```
+
 - Can import: `@lct/contracts`, `@lct/registry`, `@lct/run-store`, `@lct/pipeline`, Node built-ins.
 - Must not import: `apps/web`, `apps/api`, `.pptx` libraries.

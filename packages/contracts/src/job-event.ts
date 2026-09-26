@@ -67,7 +67,7 @@ export const stageFinishedEventSchema = base.extend({
 /** Something usable exists before the run is over, and the interface can already show it. */
 export const artifactReadyEventSchema = base.extend({
   type: z.literal('artifact-ready'),
-  kind: z.enum(['deck-plan', 'slide-ir', 'preview', 'pptx', 'pdf', 'html', 'manifest']),
+  kind: z.enum(['deck-plan', 'slide-ir', 'preview', 'pptx', 'pdf', 'html', 'audit', 'manifest']),
   variant: z.enum(['dense', 'balanced', 'airy']).nullable().describe('Null when not per variant.'),
   path: z.string().min(1).describe('Relative to the run directory.'),
 });

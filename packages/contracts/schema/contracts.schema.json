@@ -2943,6 +2943,7 @@
                 "pptx",
                 "pdf",
                 "html",
+                "audit",
                 "manifest"
               ],
               "type": "string"

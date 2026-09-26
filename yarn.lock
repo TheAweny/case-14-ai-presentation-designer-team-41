@@ -2401,6 +2401,7 @@ __metadata:
     "@lct/contracts": "workspace:^"
     "@lct/engine-client": "workspace:^"
     "@lct/registry": "workspace:^"
+    "@lct/run-store": "workspace:^"
     "@mastra/core": "npm:1.66.0"
     "@mastra/libsql": "npm:1.22.5"
     zod: "npm:^4.6.0"
@@ -2421,6 +2422,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@lct/run-store@workspace:packages/run-store"
   dependencies:
+    "@lct/contracts": "workspace:^"
     "@types/pg": "npm:^8.15.5"
     pg: "npm:^8.16.3"
   languageName: unknown
