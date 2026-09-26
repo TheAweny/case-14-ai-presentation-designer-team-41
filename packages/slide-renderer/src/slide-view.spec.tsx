@@ -286,6 +286,42 @@ describe('past the slide edge', () => {
   });
 });
 
+describe('prompt in an empty text box', () => {
+  const empty = text('slot', 'body', box(40, 40, 400, 80), [
+    { level: 0, runs: [], lineSpacing: null },
+  ]);
+  const blank = text('blank', 'body', box(40, 160, 400, 80), [paragraph('  ', { sizePt: 28 })]);
+  const written = text('written', 'body', box(40, 280, 400, 80), [paragraph('Выручка')]);
+  const slide = only(CONTENT, empty, blank, written);
+  const prompts = (html: string) => html.match(/data-empty-prompt/g)?.length ?? 0;
+
+  it('shows the prompt the host gives, faded and outlined, in the style of the box', () => {
+    const html = renderToStaticMarkup(
+      <SlideView slide={slide} profile={PROFILE} emptyText={() => 'Текст'} />,
+    );
+    expect(prompts(html)).toBe(2);
+    expect(markup(html, 'slot')).toContain('Текст');
+    expect(openTag(html, 'slot')).toMatch(/outline:\s*1px dashed/);
+    expect(markup(html, 'slot')).toMatch(/opacity:\s*0\.45/);
+    expect(markup(html, 'blank')).toContain('Текст');
+    expect(markup(html, 'written')).not.toContain('data-empty-prompt');
+    expect(markup(html, 'written')).toContain('Выручка');
+  });
+
+  it('draws no prompt where the host gives none, or when nobody asks for one', () => {
+    const none = renderToStaticMarkup(
+      <SlideView
+        slide={slide}
+        profile={PROFILE}
+        emptyText={(element) => (element.elementId === 'slot' ? 'Текст' : null)}
+      />,
+    );
+    expect(prompts(none)).toBe(1);
+    expect(markup(none, 'blank')).not.toContain('Текст');
+    expect(prompts(render(slide))).toBe(0);
+  });
+});
+
 describe('shapes', () => {
   const card = box(80, 80, 320, 180);
   const small = box(80, 80, 40, 20);

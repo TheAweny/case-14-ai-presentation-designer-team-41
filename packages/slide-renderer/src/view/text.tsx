@@ -33,6 +33,30 @@ function showBreaks(text: string): string {
   return text.replaceAll('\v', '\n').replaceAll('\u2028', '\n');
 }
 
+/** Nothing but whitespace in the box. */
+function isEmptyText(paragraphs: readonly Paragraph[]): boolean {
+  return paragraphs.every((paragraph) => paragraph.runs.every((run) => run.text.trim() === ''));
+}
+
+/** A run that states nothing, so the prompt takes the look of the box's type role. */
+const PLAIN_RUN: TextRun = {
+  text: '',
+  font: '',
+  sizePt: null,
+  bold: null,
+  italic: null,
+  color: '',
+};
+
+/**
+ * The prompt set as the text would be: in the first paragraph, with the style of its first run
+ * when the empty box keeps one, so it shows where and how big the words will be.
+ */
+function promptParagraphs(paragraphs: readonly Paragraph[], prompt: string): Paragraph[] {
+  const first = paragraphs[0] ?? { level: 0, runs: [], lineSpacing: null };
+  return [{ ...first, runs: [{ ...(first.runs[0] ?? PLAIN_RUN), text: prompt }] }];
+}
+
 /**
  * The copy, as the IR states it. Nothing is trimmed or rewritten: when the engine has already
  * recorded an overflow, a mark sits on the box and the words stay whole. Text that runs past a
@@ -44,12 +68,17 @@ export function TextMark({
   size,
   profile,
   thumbnail = false,
+  emptyText,
 }: {
   element: TextElement;
   size: SlideSize;
   profile: DesignSystem;
   thumbnail?: boolean;
+  /** Prompt for a box with no text; see `SlideViewProps.emptyText`. */
+  emptyText?: (element: TextElement) => string | null;
 }): JSX.Element {
+  const prompt = emptyText && isEmptyText(element.paragraphs) ? emptyText(element) : null;
+  const paragraphs = prompt ? promptParagraphs(element.paragraphs, prompt) : element.paragraphs;
   const type = createTypeResolver(profile, size.cy);
   const style = profile.typeScale.find((entry) => entry.role === typeRoleOf(element.role));
   const inherited = paint(profile.palette, style?.colorRole ?? 'text', 'text');
@@ -60,33 +89,49 @@ export function TextMark({
     profile.typeScale.find((entry) => entry.role === 'footer')?.sizePt ??
     10;
 
+  const lines = paragraphs.map((paragraph, index) => (
+    <ParagraphView
+      key={index}
+      paragraph={paragraph}
+      size={size}
+      typeSizeEmu={type.sizeEmu(element.role)}
+      styleFont={style?.font ?? ''}
+      styleBold={style?.bold ?? false}
+      styleItalic={style?.italic ?? false}
+      styleSizePt={style?.sizePt ?? null}
+      inherited={inherited}
+      lineHeight={lineHeight}
+      bulleted={bulleted}
+      first={index === 0}
+    />
+  ));
+
   return (
     <div
       {...markHooks(element, thumbnail)}
+      data-empty-prompt={prompt ? '' : undefined}
       style={{
         ...markStyle(element, size),
         overflow: 'visible',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: ANCHOR[element.verticalAlign ?? 'top'],
+        ...(prompt
+          ? {
+              outline: `1px dashed color-mix(in srgb, ${inherited} 45%, transparent)`,
+              outlineOffset: -1,
+            }
+          : null),
       }}
     >
-      {element.paragraphs.map((paragraph, index) => (
-        <ParagraphView
-          key={index}
-          paragraph={paragraph}
-          size={size}
-          typeSizeEmu={type.sizeEmu(element.role)}
-          styleFont={style?.font ?? ''}
-          styleBold={style?.bold ?? false}
-          styleItalic={style?.italic ?? false}
-          styleSizePt={style?.sizePt ?? null}
-          inherited={inherited}
-          lineHeight={lineHeight}
-          bulleted={bulleted}
-          first={index === 0}
-        />
-      ))}
+      {prompt ? (
+        // Faded as a whole, so a prompt never reads as text somebody wrote.
+        <div aria-hidden style={{ opacity: 0.45 }}>
+          {lines}
+        </div>
+      ) : (
+        lines
+      )}
       {element.overflow && !thumbnail ? (
         <span
           data-overflow="true"

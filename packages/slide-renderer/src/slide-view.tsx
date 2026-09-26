@@ -6,6 +6,7 @@ import { ChartMark } from './view/chart.js';
 import { paint, resolveColor } from './view/color.js';
 import { markStyle } from './view/mark.js';
 import { DecorMark, ImageMark, TableMark } from './view/marks.js';
+import type { TextElement } from './schematic/text-layout.js';
 import { TextMark } from './view/text.js';
 
 export interface SlideViewProps {
@@ -34,6 +35,12 @@ export interface SlideViewProps {
    * cut, and a thumbnail ignores this flag.
    */
   readonly showOutside?: boolean;
+  /**
+   * What a text box with no text says in place of it, such as a prompt in an empty placeholder of
+   * a template layout, drawn faded inside a dashed outline. Null keeps the box empty. Absent, as in
+   * a show or an export, no box shows a prompt: the renderer has no strings of its own.
+   */
+  readonly emptyText?: (element: TextElement) => string | null;
 }
 
 /** The box reaches past the slide edge, at least in part. */
@@ -53,6 +60,7 @@ export function SlideView({
   className,
   thumbnail = false,
   showOutside = false,
+  emptyText,
 }: SlideViewProps): JSX.Element {
   const size = slideSizeOf(slide);
   const background = resolveColor(
@@ -111,6 +119,7 @@ export function SlideView({
                 size={size}
                 profile={profile}
                 thumbnail={thumbnail}
+                emptyText={emptyText}
               />
             );
           case 'image':
