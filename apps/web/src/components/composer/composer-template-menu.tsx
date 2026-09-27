@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon, LayoutTemplateIcon, Upload04Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon, CloudUploadIcon, TemplateIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -78,7 +77,7 @@ export function ComposerTemplateMenu({
               className="w-7 shrink-0 ring-1 ring-border"
             />
           ) : (
-            <HugeiconsIcon icon={LayoutTemplateIcon} strokeWidth={1.75} data-icon="inline-start" />
+            <TemplateIcon data-icon="inline-start" />
           )}
           <span className="truncate">
             {pendingFile
@@ -87,7 +86,7 @@ export function ComposerTemplateMenu({
                 ? selected.fileName
                 : t('choose')}
           </span>
-          <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="opacity-70" />
+          <ChevronDownIcon className="opacity-70" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-80 max-w-[calc(100vw-2rem)]" aria-label={t('menu')}>
@@ -133,7 +132,7 @@ export function ComposerTemplateMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2.5" onSelect={onUpload}>
           <span className="grid h-6.5 w-11 shrink-0 place-items-center rounded-sm ring-1 ring-border">
-            <HugeiconsIcon icon={Upload04Icon} strokeWidth={1.75} />
+            <CloudUploadIcon />
           </span>
           <span className="flex min-w-0 flex-col">
             <span>{t('upload')}</span>

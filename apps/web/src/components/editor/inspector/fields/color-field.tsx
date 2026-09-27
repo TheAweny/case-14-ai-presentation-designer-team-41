@@ -3,8 +3,7 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { HexColorPicker } from 'react-colorful';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ColorPickerIcon } from '@hugeicons/core-free-icons';
+import { EyedropperIcon } from '@/components/ui/icons';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import type { ColorRole, ColorValue, PaletteEntry } from '@lct/contracts';
 import { cn } from '@/lib/utils';
@@ -293,12 +292,7 @@ export function ColorField({
               'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50',
             )}
           >
-            <HugeiconsIcon
-              icon={ColorPickerIcon}
-              size={14}
-              strokeWidth={1.5}
-              color="currentColor"
-            />
+            <EyedropperIcon size={14} />
             {t('color.eyedropper')}
           </button>
         ) : null}

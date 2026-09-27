@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type DragEvent, type ReactNode } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import type { Icon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 export function FileDrop({
   accept,
   multiple = false,
-  icon,
+  icon: DropIcon,
   title,
   chooseLabel,
   hint,
@@ -23,7 +23,7 @@ export function FileDrop({
 }: {
   accept: string;
   multiple?: boolean;
-  icon: IconSvgElement;
+  icon: Icon;
   title: ReactNode;
   chooseLabel: string;
   hint?: ReactNode;
@@ -68,13 +68,7 @@ export function FileDrop({
         className,
       )}
     >
-      <HugeiconsIcon
-        icon={icon}
-        size={22}
-        strokeWidth={1.5}
-        className="text-muted-foreground"
-        aria-hidden
-      />
+      <DropIcon size={22} className="text-muted-foreground" aria-hidden />
       <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-foreground">
         {title}
         <Button

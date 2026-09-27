@@ -2,8 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Layers01Icon } from '@hugeicons/core-free-icons';
+import { LayersIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
@@ -47,7 +46,7 @@ export function SlideCountMenu({
           className="shrink-0 rounded-full pr-3 pl-2.5 font-normal text-muted-foreground tabular-nums"
           aria-label={t('label')}
         >
-          <HugeiconsIcon icon={Layers01Icon} strokeWidth={1.75} />
+          <LayersIcon />
           {auto ? t('auto') : t('count', { count: value })}
         </Button>
       </PopoverTrigger>

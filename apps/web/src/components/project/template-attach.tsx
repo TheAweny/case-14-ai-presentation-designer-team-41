@@ -13,18 +13,17 @@ import {
 import { useRouter } from 'next/navigation';
 import type { JobStage } from '@lct/contracts';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  Add01Icon,
-  Alert02Icon,
-  ArrowDown01Icon,
-  FileUploadIcon,
-  LayoutTemplateIcon,
-  Loading03Icon,
-  RefreshIcon,
-  Tick02Icon,
-  Upload04Icon,
-} from '@hugeicons/core-free-icons';
+  CheckIcon,
+  ChevronDownIcon,
+  CloudUploadIcon,
+  PlusIcon,
+  RetryIcon,
+  SpinnerIcon,
+  TemplateIcon,
+  UploadIcon,
+  WarningIcon,
+} from '@/components/ui/icons';
 import { attachTemplateAction, type LibraryActionResult } from '@/app/(library)/actions';
 import {
   templateImporter,
@@ -200,18 +199,10 @@ export function ImportProgress({
     <div className={cn('flex min-w-0 flex-col gap-2.5', className)}>
       <div className="flex min-w-0 items-center gap-2">
         {failed ? (
-          <HugeiconsIcon
-            icon={Alert02Icon}
-            size={14}
-            strokeWidth={1.75}
-            aria-hidden
-            className="shrink-0 text-destructive"
-          />
+          <WarningIcon size={14} aria-hidden className="shrink-0 text-destructive" />
         ) : (
-          <HugeiconsIcon
-            icon={Loading03Icon}
+          <SpinnerIcon
             size={14}
-            strokeWidth={1.75}
             aria-hidden
             className="shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
           />
@@ -258,7 +249,7 @@ export function ImportProgress({
         <div className="flex flex-wrap gap-2">
           {item.failure?.retryable !== false ? (
             <Button type="button" variant="outline" size="sm" onClick={state.retry}>
-              <HugeiconsIcon icon={RefreshIcon} strokeWidth={1.75} data-icon="inline-start" />
+              <RetryIcon data-icon="inline-start" />
               {t('retry')}
             </Button>
           ) : null}
@@ -294,9 +285,9 @@ function StageRow({ stage }: { stage: GenerationStage }) {
     >
       <span className="grid size-3.5 shrink-0 place-items-center" aria-hidden>
         {stage.state === 'done' ? (
-          <HugeiconsIcon icon={Tick02Icon} size={13} strokeWidth={2} />
+          <CheckIcon size={13} />
         ) : stage.state === 'failed' ? (
-          <HugeiconsIcon icon={Alert02Icon} size={13} strokeWidth={1.75} />
+          <WarningIcon size={13} />
         ) : (
           <span
             className={cn(
@@ -455,19 +446,18 @@ export function AttachTemplateCard({
             )}
           >
             <span className="grid size-9 place-items-center rounded-full bg-muted">
-              <HugeiconsIcon
-                icon={drop.over ? Upload04Icon : Add01Icon}
-                size={18}
-                strokeWidth={1.75}
-                aria-hidden
-              />
+              {drop.over ? (
+                <CloudUploadIcon size={18} aria-hidden />
+              ) : (
+                <PlusIcon size={18} aria-hidden />
+              )}
             </span>
             <span className="text-sm font-medium text-foreground">
               {drop.over ? t('dropHere') : t('attach')}
             </span>
             <span className="flex items-center gap-1 text-xs">
               {t('attachHint')}
-              <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2} aria-hidden />
+              <ChevronDownIcon size={12} aria-hidden />
             </span>
           </button>
         </DropdownMenuTrigger>
@@ -496,7 +486,7 @@ function AttachMenuContent({
       {onUpload ? (
         <>
           <DropdownMenuItem onSelect={onUpload}>
-            <HugeiconsIcon icon={FileUploadIcon} strokeWidth={1.5} />
+            <UploadIcon />
             {t('upload')}
           </DropdownMenuItem>
           <div className="flex flex-col gap-1 px-2 pt-0.5 pb-1.5 text-xs text-muted-foreground">
@@ -539,7 +529,7 @@ export function TemplateEmptyState({
       className="flex flex-col items-center gap-5 rounded-xl border border-dashed border-border px-6 py-12 text-center"
     >
       <span className="grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
-        <HugeiconsIcon icon={LayoutTemplateIcon} size={22} strokeWidth={1.5} aria-hidden />
+        <TemplateIcon size={22} aria-hidden />
       </span>
       <div className="flex max-w-md flex-col gap-1.5">
         <h2 id={headingId} className="text-lg font-semibold tracking-tight">
@@ -554,7 +544,7 @@ export function TemplateEmptyState({
         ) : (
           <FileDrop
             accept={ACCEPT}
-            icon={Upload04Icon}
+            icon={CloudUploadIcon}
             title={
               <>
                 <span>{t('empty.drop')}</span>
@@ -580,7 +570,7 @@ export function TemplateEmptyState({
               className="self-center"
             >
               {t('chooseFromLibrary')}
-              <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" />
+              <ChevronDownIcon data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
           <AttachMenuContent library={library} state={state} />

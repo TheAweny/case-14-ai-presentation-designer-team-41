@@ -10,8 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ViewIcon, ViewOffSlashIcon } from '@hugeicons/core-free-icons';
+import { EyeIcon, EyeOffIcon } from '@/components/ui/icons';
 import { signInAction, type SignInState } from '@/app/auth-actions';
 import { useAurora } from '@/components/composer/use-aurora';
 import { Button } from '@/components/ui/button';
@@ -139,11 +138,7 @@ export function LoginForm({ next, hasAccounts }: { next: string; hasAccounts: bo
                     'motion-reduce:transition-none',
                   )}
                 >
-                  <HugeiconsIcon
-                    icon={shown ? ViewOffSlashIcon : ViewIcon}
-                    size={16}
-                    strokeWidth={1.5}
-                  />
+                  {shown ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                 </button>
               </div>
             )}

@@ -2,17 +2,16 @@
 
 import { useRef, useState, useTransition, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  Add01Icon,
   CloudIcon,
   ComputerIcon,
-  Delete02Icon,
-  Loading03Icon,
-  MoreHorizontalIcon,
-  PencilEdit01Icon,
-  RefreshIcon,
-} from '@hugeicons/core-free-icons';
+  DeleteIcon,
+  EditIcon,
+  MoreIcon,
+  PlusIcon,
+  RetryIcon,
+  SpinnerIcon,
+} from '@/components/ui/icons';
 import {
   checkConnectionAction,
   deleteConnectionAction,
@@ -101,11 +100,7 @@ export function ModelSettingsPanel() {
           </div>
         ) : (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <HugeiconsIcon
-              icon={Loading03Icon}
-              size={14}
-              className="animate-spin motion-reduce:animate-none"
-            />
+            <SpinnerIcon size={14} className="animate-spin motion-reduce:animate-none" />
             {t('loading')}
           </p>
         )}
@@ -150,7 +145,7 @@ export function ModelSettingsPanel() {
               variant="outline"
               onClick={() => setScreen({ kind: 'form', connectionId: null })}
             >
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+              <PlusIcon data-icon="inline-start" />
               {t('connections.add')}
             </Button>
           ) : null}
@@ -165,7 +160,7 @@ export function ModelSettingsPanel() {
               </p>
             </div>
             <Button ref={addButton} onClick={() => setScreen({ kind: 'form', connectionId: null })}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+              <PlusIcon data-icon="inline-start" />
               {t('connections.add')}
             </Button>
           </div>
@@ -287,11 +282,7 @@ function ConnectionCard({
   return (
     <div className="flex items-start gap-3 px-3 py-3">
       <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-        <HugeiconsIcon
-          icon={location === 'local' ? ComputerIcon : CloudIcon}
-          size={16}
-          strokeWidth={1.5}
-        />
+        {location === 'local' ? <ComputerIcon size={16} /> : <CloudIcon size={16} />}
       </span>
       <div className="grid min-w-0 flex-1 gap-0.5">
         <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
@@ -317,11 +308,7 @@ function ConnectionCard({
         >
           {checking ? (
             <>
-              <HugeiconsIcon
-                icon={Loading03Icon}
-                size={12}
-                className="animate-spin motion-reduce:animate-none"
-              />
+              <SpinnerIcon size={12} className="animate-spin motion-reduce:animate-none" />
               {t('status.checking')}
             </>
           ) : check === null ? (
@@ -353,21 +340,21 @@ function ConnectionCard({
             aria-label={t('menu.label', { name: connection.name })}
             className="shrink-0 text-muted-foreground"
           >
-            <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+            <MoreIcon />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem disabled={checking} onSelect={onCheck}>
-            <HugeiconsIcon icon={RefreshIcon} strokeWidth={1.5} />
+            <RetryIcon />
             {t('menu.check')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onEdit}>
-            <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={1.5} />
+            <EditIcon />
             {t('menu.edit')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
-            <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} />
+            <DeleteIcon />
             {t('menu.delete')}
           </DropdownMenuItem>
         </DropdownMenuContent>

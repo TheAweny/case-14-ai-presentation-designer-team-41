@@ -10,7 +10,6 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PROJECT_ICONS, ProjectIcon, projectTint } from '@/components/library/project-icon';
 import {
@@ -103,19 +102,22 @@ export function ProjectAppearancePicker({
             className="grid-cols-5 gap-1"
             onSelect={(icon) => onChange({ ...value, icon })}
             label={(icon) => t(`iconNames.${icon}`)}
-            render={(icon, checked) => (
-              <span
-                className={cn(
-                  'grid aspect-square w-full place-items-center rounded-md',
-                  'transition-colors duration-100 motion-reduce:transition-none',
-                  // Выбранная иконка — в цвете проекта на нейтральной подложке выбора.
-                  checked ? 'bg-muted' : 'text-muted-foreground group-hover/radio:bg-muted',
-                )}
-                style={checked ? projectTint(value.color) : undefined}
-              >
-                <HugeiconsIcon icon={PROJECT_ICONS[icon]} size={18} strokeWidth={1.75} />
-              </span>
-            )}
+            render={(icon, checked) => {
+              const Glyph = PROJECT_ICONS[icon];
+              return (
+                <span
+                  className={cn(
+                    'grid aspect-square w-full place-items-center rounded-md',
+                    'transition-colors duration-100 motion-reduce:transition-none',
+                    // Выбранная иконка — в цвете проекта на нейтральной подложке выбора.
+                    checked ? 'bg-muted' : 'text-muted-foreground group-hover/radio:bg-muted',
+                  )}
+                  style={checked ? projectTint(value.color) : undefined}
+                >
+                  <Glyph size={18} />
+                </span>
+              );
+            }}
           />
         </div>
 

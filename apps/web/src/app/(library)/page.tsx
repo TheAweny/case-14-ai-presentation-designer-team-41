@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { FolderLibraryIcon, Presentation01Icon } from '@hugeicons/core-free-icons';
+import { DeckIcon, FolderIcon } from '@/components/ui/icons';
 import { DeckComposer } from '@/components/composer/deck-composer';
 import { DeckCard } from '@/components/library/deck-card';
 import { CardGrid, EmptyState, LibraryPage, LibrarySection } from '@/components/library/page-parts';
@@ -63,7 +63,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             ))}
           </CardGrid>
         ) : (
-          <EmptyState icon={Presentation01Icon} title={t('recentEmpty.title')}>
+          <EmptyState icon={DeckIcon} title={t('recentEmpty.title')}>
             {t('recentEmpty.body')}
           </EmptyState>
         )}
@@ -79,7 +79,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             ))}
           </CardGrid>
         ) : (
-          <EmptyState icon={FolderLibraryIcon} title={t('projectsEmpty.title')}>
+          <EmptyState icon={FolderIcon} title={t('projectsEmpty.title')}>
             {t('projectsEmpty.body')}
           </EmptyState>
         )}

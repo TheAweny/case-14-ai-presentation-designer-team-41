@@ -3,8 +3,7 @@
 import * as React from 'react';
 import { cn } from 'cn';
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowRight01Icon } from '@hugeicons/core-free-icons';
+import { ChevronRightIcon } from '@/components/ui/icons';
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
@@ -86,7 +85,7 @@ function ContextMenuSubTrigger({
       {...props}
     >
       {children}
-      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="ml-auto" />
+      <ChevronRightIcon className="ml-auto" />
     </ContextMenuPrimitive.SubTrigger>
   );
 }

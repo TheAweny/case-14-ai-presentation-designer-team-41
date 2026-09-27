@@ -1,8 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon, type Icon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -65,7 +64,7 @@ export function NumberCombobox({
   disabled,
 }: {
   label?: string;
-  icon?: IconSvgElement;
+  icon?: Icon;
   value: number | null | undefined;
   presets: readonly NumberPreset[];
   onCommit: (value: number | null) => void;
@@ -111,7 +110,7 @@ export function NumberCombobox({
             'data-[state=open]:bg-foreground/10 data-[state=open]:text-foreground',
           )}
         >
-          <HugeiconsIcon icon={ArrowDown01Icon} size={12} strokeWidth={2} color="currentColor" />
+          <ChevronDownIcon size={12} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

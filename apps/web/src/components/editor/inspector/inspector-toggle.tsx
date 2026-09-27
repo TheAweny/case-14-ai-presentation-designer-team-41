@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { PanelRightOpenIcon } from '@hugeicons/core-free-icons';
+import { PanelOpenIcon } from '@/components/ui/icons';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
@@ -31,12 +30,7 @@ export function InspectorToggle({ onOpen, className }: { onOpen: () => void; cla
                 'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
               )}
             >
-              <HugeiconsIcon
-                icon={PanelRightOpenIcon}
-                size={16}
-                strokeWidth={1.5}
-                color="currentColor"
-              />
+              <PanelOpenIcon size={16} />
             </button>
           </TooltipTrigger>
           <TooltipContent side="left">{t('inspectorShow')}</TooltipContent>

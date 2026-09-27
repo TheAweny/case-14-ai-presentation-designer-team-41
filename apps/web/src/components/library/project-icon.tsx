@@ -1,27 +1,27 @@
 import type { CSSProperties } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  Book02Icon,
-  Briefcase01Icon,
-  ChampionIcon,
-  ChartLineData01Icon,
-  Coins01Icon,
-  FavouriteIcon,
-  Flag02Icon,
-  Folder01Icon,
-  GlobalIcon,
-  GraduationCapIcon,
-  Idea01Icon,
-  Leaf01Icon,
-  Megaphone02Icon,
-  PaintBoardIcon,
-  Rocket01Icon,
-  Shield01Icon,
-  SourceCodeIcon,
+  BookIcon,
+  BriefcaseIcon,
+  CodeIcon,
+  FlagIcon,
+  FolderIcon,
+  GlobeIcon,
+  GraduationIcon,
+  GrowthIcon,
+  HeartIcon,
+  IdeaIcon,
+  LeafIcon,
+  MegaphoneIcon,
+  MoneyIcon,
+  PaletteIcon,
+  PeopleIcon,
+  RocketIcon,
+  ShieldIcon,
   StarIcon,
-  Target02Icon,
-  UserGroupIcon,
-} from '@hugeicons/core-free-icons';
+  TargetIcon,
+  TrophyIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import {
   projectColorVar,
   type ProjectAppearance,
@@ -31,27 +31,27 @@ import { cn } from '@/lib/utils';
 
 /** Картинка за каждой иконкой проекта. `satisfies` не даст забыть новую иконку набора. */
 export const PROJECT_ICONS = {
-  folder: Folder01Icon,
-  chart: ChartLineData01Icon,
-  rocket: Rocket01Icon,
-  briefcase: Briefcase01Icon,
-  idea: Idea01Icon,
-  target: Target02Icon,
-  globe: GlobalIcon,
-  book: Book02Icon,
-  graduation: GraduationCapIcon,
+  folder: FolderIcon,
+  chart: GrowthIcon,
+  rocket: RocketIcon,
+  briefcase: BriefcaseIcon,
+  idea: IdeaIcon,
+  target: TargetIcon,
+  globe: GlobeIcon,
+  book: BookIcon,
+  graduation: GraduationIcon,
   star: StarIcon,
-  flag: Flag02Icon,
-  megaphone: Megaphone02Icon,
-  shield: Shield01Icon,
-  heart: FavouriteIcon,
-  code: SourceCodeIcon,
-  trophy: ChampionIcon,
-  money: Coins01Icon,
-  people: UserGroupIcon,
-  palette: PaintBoardIcon,
-  leaf: Leaf01Icon,
-} as const satisfies Record<ProjectIconId, IconSvgElement>;
+  flag: FlagIcon,
+  megaphone: MegaphoneIcon,
+  shield: ShieldIcon,
+  heart: HeartIcon,
+  code: CodeIcon,
+  trophy: TrophyIcon,
+  money: MoneyIcon,
+  people: PeopleIcon,
+  palette: PaletteIcon,
+  leaf: LeafIcon,
+} as const satisfies Record<ProjectIconId, Icon>;
 
 const SIZES = {
   sm: { box: 'size-5 rounded-[5px]', icon: 16 },
@@ -83,13 +83,14 @@ export function ProjectIcon({
   className?: string;
 }) {
   const look = SIZES[size];
+  const Glyph = PROJECT_ICONS[appearance.icon];
   return (
     <span
       aria-hidden
       className={cn('grid shrink-0 place-items-center', look.box, className)}
       style={projectTint(appearance.color)}
     >
-      <HugeiconsIcon icon={PROJECT_ICONS[appearance.icon]} size={look.icon} strokeWidth={1.75} />
+      <Glyph size={look.icon} />
     </span>
   );
 }

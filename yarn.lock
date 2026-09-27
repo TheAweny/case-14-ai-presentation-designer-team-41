@@ -5357,6 +5357,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tabler/icons-react@npm:3.48.0":
+  version: 3.48.0
+  resolution: "@tabler/icons-react@npm:3.48.0"
+  dependencies:
+    "@tabler/icons": "npm:3.48.0"
+  peerDependencies:
+    react: ">= 16"
+  checksum: 10/d563e916cd8dfcee84b0b0ec92f836a96d70f2cd7524f5ccd90e1de22cc3557af3c20211b10a6fb88ebb494965ebd07ab863d410953d36af4697d8a1b35a0b50
+  languageName: node
+  linkType: hard
+
+"@tabler/icons@npm:3.48.0":
+  version: 3.48.0
+  resolution: "@tabler/icons@npm:3.48.0"
+  checksum: 10/fac8a271bf96b97524d2cab4be87aa0de4993628c04b7e2260c790c6572abdf68a1a56b79960bc18fb132d89b0fa711df154e66762b5799a13757655fd6de08e
+  languageName: node
+  linkType: hard
+
 "@tailwindcss/node@npm:4.3.3":
   version: 4.3.3
   resolution: "@tailwindcss/node@npm:4.3.3"
@@ -13600,6 +13618,7 @@ __metadata:
     "@lct/slide-audit": "workspace:^"
     "@lct/slide-renderer": "workspace:^"
     "@playwright/test": "npm:1.56.1"
+    "@tabler/icons-react": "npm:3.48.0"
     "@tailwindcss/postcss": "npm:4.3.3"
     "@tanstack/react-virtual": "npm:3.14.13"
     "@tiptap/core": "npm:3.31.3"

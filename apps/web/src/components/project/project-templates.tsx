@@ -3,8 +3,7 @@
 import { useOptimistic, useRef, useTransition, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Unlink02Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons';
+import { DetachIcon, MoreIcon } from '@/components/ui/icons';
 import { detachTemplateAction, type LibraryActionResult } from '@/app/(library)/actions';
 import { useLibraryNotice } from '@/components/library/library-notices';
 import { PaletteStrip } from '@/components/library/template-swatch';
@@ -144,7 +143,7 @@ function TemplateCard({
   };
   const item = (
     <>
-      <HugeiconsIcon icon={Unlink02Icon} strokeWidth={1.5} />
+      <DetachIcon />
       {t('detach')}
     </>
   );
@@ -196,7 +195,7 @@ function TemplateCard({
                   'pointer-coarse:opacity-100 aria-expanded:opacity-100',
                 )}
               >
-                <HugeiconsIcon icon={MoreHorizontalIcon} size={16} strokeWidth={2} />
+                <MoreIcon size={16} />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56" onCloseAutoFocus={closeAutoFocus}>

@@ -11,39 +11,38 @@ import {
 import { motion, useReducedMotion } from 'motion/react';
 import { useTransformEffect } from 'react-zoom-pan-pinch';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  AiSparklesIcon,
+  AgentIcon,
   AlignBottomIcon,
-  AlignHorizontalCenterIcon,
+  AlignCenterIcon,
   AlignLeftIcon,
+  AlignMiddleIcon,
   AlignRightIcon,
   AlignTopIcon,
-  AlignVerticalCenterIcon,
-  ArrowLeft02Icon,
-  ArrowRight02Icon,
-  ChartBarLineIcon,
-  Copy01Icon,
-  Delete02Icon,
-  DistributeHorizontalCenterIcon,
-  DistributeVerticalCenterIcon,
-  FitToScreenIcon,
+  BackIcon,
+  BringForwardIcon,
+  BringToFrontIcon,
+  ChartIcon,
+  ContainIcon,
+  CopyIcon,
+  CropIcon,
+  DeleteIcon,
+  DistributeHorizontalIcon,
+  DistributeVerticalIcon,
   FlipHorizontalIcon,
   FlipVerticalIcon,
-  ImageCropIcon,
-  CropIcon,
-  ImageUploadIcon,
-  LayerBringForwardIcon,
-  LayerBringToFrontIcon,
-  LayerSendBackwardIcon,
-  LayerSendToBackIcon,
-  Layers01Icon,
-  LockKeyholeIcon,
-  LockKeyholeOpenIcon,
-  MoreHorizontalIcon,
-  PanelRightIcon,
+  LayersIcon,
+  LockIcon,
+  MoreIcon,
+  NextIcon,
+  PanelOpenIcon,
+  SendBackwardIcon,
+  SendToBackIcon,
   TableIcon,
-} from '@hugeicons/core-free-icons';
+  UnlockIcon,
+  UploadIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type { ColorRole, DesignSystem, ImageFit, SlideElement, SlideIr } from '@lct/contracts';
 import type { ArrangeTarget } from '@lct/deck-ops';
 import { EMU_PER_PT } from '@lct/slide-renderer';
@@ -96,25 +95,25 @@ import type { BarOptional } from '@/components/editor/editor-prefs';
 const GAP = 8;
 const FADE = { duration: 0.12, ease: 'easeOut' } as const;
 
-const ALIGNMENTS: readonly { id: Alignment; icon: IconSvgElement }[] = [
+const ALIGNMENTS: readonly { id: Alignment; icon: Icon }[] = [
   { id: 'left', icon: AlignLeftIcon },
-  { id: 'center', icon: AlignHorizontalCenterIcon },
+  { id: 'center', icon: AlignCenterIcon },
   { id: 'right', icon: AlignRightIcon },
   { id: 'top', icon: AlignTopIcon },
-  { id: 'middle', icon: AlignVerticalCenterIcon },
+  { id: 'middle', icon: AlignMiddleIcon },
   { id: 'bottom', icon: AlignBottomIcon },
 ];
 
-const LAYERS: readonly { id: ArrangeTarget; icon: IconSvgElement; shortcut: ShortcutId }[] = [
-  { id: 'front', icon: LayerBringToFrontIcon, shortcut: 'bring-front' },
-  { id: 'forward', icon: LayerBringForwardIcon, shortcut: 'bring-forward' },
-  { id: 'backward', icon: LayerSendBackwardIcon, shortcut: 'send-backward' },
-  { id: 'back', icon: LayerSendToBackIcon, shortcut: 'send-back' },
+const LAYERS: readonly { id: ArrangeTarget; icon: Icon; shortcut: ShortcutId }[] = [
+  { id: 'front', icon: BringToFrontIcon, shortcut: 'bring-front' },
+  { id: 'forward', icon: BringForwardIcon, shortcut: 'bring-forward' },
+  { id: 'backward', icon: SendBackwardIcon, shortcut: 'send-backward' },
+  { id: 'back', icon: SendToBackIcon, shortcut: 'send-back' },
 ];
 
-const FITS: readonly { id: ImageFit; icon: IconSvgElement }[] = [
-  { id: 'contain', icon: FitToScreenIcon },
-  { id: 'cover', icon: ImageCropIcon },
+const FITS: readonly { id: ImageFit; icon: Icon }[] = [
+  { id: 'contain', icon: ContainIcon },
+  { id: 'cover', icon: CropIcon },
 ];
 
 /** Частые толщины линии, в пунктах. Ввести можно любую. */
@@ -316,7 +315,7 @@ export function SelectionBar({
     );
   } else if (only?.kind === 'chart') {
     controls = (
-      <BarButton icon={ChartBarLineIcon} label={t('editChart')} onClick={actions.onOpenInspector}>
+      <BarButton icon={ChartIcon} label={t('editChart')} onClick={actions.onOpenInspector}>
         {t('editChartShort')}
       </BarButton>
     );
@@ -353,7 +352,7 @@ export function SelectionBar({
           {actions.onAskAssistant && prefs.barAssistant ? (
             <>
               <BarButton
-                icon={AiSparklesIcon}
+                icon={AgentIcon}
                 label={t('askAssistant')}
                 shortcut="assistant-context"
                 onClick={actions.onAskAssistant}
@@ -488,13 +487,13 @@ function DecorControls({
       {line ? (
         <>
           <BarButton
-            icon={ArrowLeft02Icon}
+            icon={BackIcon}
             label={panel('headArrow')}
             pressed={stroke?.head === 'arrow'}
             onClick={() => arrow('head')}
           />
           <BarButton
-            icon={ArrowRight02Icon}
+            icon={NextIcon}
             label={panel('tailArrow')}
             pressed={stroke?.tail === 'arrow'}
             onClick={() => arrow('tail')}
@@ -523,11 +522,7 @@ function ImageControls({
   };
   return (
     <>
-      <BarButton
-        icon={ImageUploadIcon}
-        label={panel('replaceImage')}
-        onClick={() => void replace()}
-      >
+      <BarButton icon={UploadIcon} label={panel('replaceImage')} onClick={() => void replace()}>
         {t('replace')}
       </BarButton>
       {actions.onStartCrop ? (
@@ -587,25 +582,17 @@ function ArrangeControls({
         />
       ))}
       <BarMenu
-        icon={DistributeHorizontalCenterIcon}
+        icon={DistributeHorizontalIcon}
         label={t('distribute')}
         disabled={units < 3}
         content={
           <>
             <DropdownMenuItem onSelect={() => distribute('horizontal')}>
-              <HugeiconsIcon
-                icon={DistributeHorizontalCenterIcon}
-                strokeWidth={1.5}
-                color="currentColor"
-              />
+              <DistributeHorizontalIcon />
               {t('distributeHorizontal')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => distribute('vertical')}>
-              <HugeiconsIcon
-                icon={DistributeVerticalCenterIcon}
-                strokeWidth={1.5}
-                color="currentColor"
-              />
+              <DistributeVerticalIcon />
               {t('distributeVertical')}
             </DropdownMenuItem>
           </>
@@ -646,7 +633,7 @@ function CommonControls({
     <>
       {shown('duplicate') && (
         <BarButton
-          icon={Copy01Icon}
+          icon={CopyIcon}
           label={menu('duplicate')}
           shortcut="duplicate"
           onClick={run({ kind: 'duplicate' })}
@@ -654,11 +641,11 @@ function CommonControls({
       )}
       {shown('layers') && (
         <BarMenu
-          icon={Layers01Icon}
+          icon={LayersIcon}
           label={t('layers')}
-          content={LAYERS.map(({ id, icon, shortcut: keys }) => (
+          content={LAYERS.map(({ id, icon: LayerIcon, shortcut: keys }) => (
             <DropdownMenuItem key={id} onSelect={run({ kind: 'arrange', to: id })}>
-              <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
+              <LayerIcon />
               {menu(id)}
               {shortcut(keys)}
             </DropdownMenuItem>
@@ -667,7 +654,7 @@ function CommonControls({
       )}
       {shown('lock') && (
         <BarButton
-          icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
+          icon={locked ? LockIcon : UnlockIcon}
           label={locked ? panel('unlock') : panel('lock')}
           shortcut="lock"
           pressed={locked}
@@ -677,7 +664,7 @@ function CommonControls({
       )}
       {shown('remove') && (
         <BarButton
-          icon={Delete02Icon}
+          icon={DeleteIcon}
           label={menu('remove')}
           shortcut="remove"
           tone="danger"
@@ -685,7 +672,7 @@ function CommonControls({
         />
       )}
       <BarMenu
-        icon={MoreHorizontalIcon}
+        icon={MoreIcon}
         label={t('more')}
         contentClassName="min-w-56"
         content={
@@ -706,7 +693,7 @@ function CommonControls({
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>{t('alignToSlide')}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent data-editor-chrome="" className="z-[4000]">
-                {ALIGNMENTS.map(({ id, icon }) => (
+                {ALIGNMENTS.map(({ id, icon: AlignIcon }) => (
                   <DropdownMenuItem
                     key={id}
                     onSelect={() => {
@@ -714,7 +701,7 @@ function CommonControls({
                       if (moves.length > 0) actions.onCommit(moves);
                     }}
                   >
-                    <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
+                    <AlignIcon />
                     {t(`align.${id}`)}
                   </DropdownMenuItem>
                 ))}
@@ -723,12 +710,12 @@ function CommonControls({
             {flippable ? (
               <>
                 <DropdownMenuItem onSelect={run({ kind: 'flip', axis: 'horizontal' })}>
-                  <HugeiconsIcon icon={FlipHorizontalIcon} strokeWidth={1.5} color="currentColor" />
+                  <FlipHorizontalIcon />
                   {panel('flipH')}
                   {shortcut('flip-horizontal')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={run({ kind: 'flip', axis: 'vertical' })}>
-                  <HugeiconsIcon icon={FlipVerticalIcon} strokeWidth={1.5} color="currentColor" />
+                  <FlipVerticalIcon />
                   {panel('flipV')}
                   {shortcut('flip-vertical')}
                 </DropdownMenuItem>
@@ -737,7 +724,7 @@ function CommonControls({
             {barHidden.length > 0 ? <DropdownMenuSeparator /> : null}
             {!shown('duplicate') && (
               <DropdownMenuItem onSelect={run({ kind: 'duplicate' })}>
-                <HugeiconsIcon icon={Copy01Icon} strokeWidth={1.5} color="currentColor" />
+                <CopyIcon />
                 {menu('duplicate')}
                 {shortcut('duplicate')}
               </DropdownMenuItem>
@@ -745,13 +732,13 @@ function CommonControls({
             {!shown('layers') && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
-                  <HugeiconsIcon icon={Layers01Icon} strokeWidth={1.5} color="currentColor" />
+                  <LayersIcon />
                   {t('layers')}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent data-editor-chrome="" className="z-[4000]">
-                  {LAYERS.map(({ id, icon, shortcut: keys }) => (
+                  {LAYERS.map(({ id, icon: LayerIcon, shortcut: keys }) => (
                     <DropdownMenuItem key={id} onSelect={run({ kind: 'arrange', to: id })}>
-                      <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
+                      <LayerIcon />
                       {menu(id)}
                       {shortcut(keys)}
                     </DropdownMenuItem>
@@ -761,25 +748,21 @@ function CommonControls({
             )}
             {!shown('lock') && (
               <DropdownMenuItem onSelect={run({ kind: 'lock' })}>
-                <HugeiconsIcon
-                  icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
-                  strokeWidth={1.5}
-                  color="currentColor"
-                />
+                {locked ? <LockIcon /> : <UnlockIcon />}
                 {locked ? panel('unlock') : panel('lock')}
                 {shortcut('lock')}
               </DropdownMenuItem>
             )}
             {!shown('remove') && (
               <DropdownMenuItem variant="destructive" onSelect={run({ kind: 'remove' })}>
-                <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} color="currentColor" />
+                <DeleteIcon />
                 {menu('remove')}
                 {shortcut('remove')}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={actions.onOpenInspector}>
-              <HugeiconsIcon icon={PanelRightIcon} strokeWidth={1.5} color="currentColor" />
+              <PanelOpenIcon />
               {context === 'chart' || context === 'table' ? t('openData') : t('openInspector')}
             </DropdownMenuItem>
           </>

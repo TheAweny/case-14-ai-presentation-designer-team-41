@@ -2,8 +2,7 @@
 
 import { useId, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowTurnBackwardIcon } from '@hugeicons/core-free-icons';
+import { UndoIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
@@ -188,7 +187,7 @@ function ShortcutRow({
             title={t('reset', { command: label })}
             onClick={onReset}
           >
-            <HugeiconsIcon icon={ArrowTurnBackwardIcon} strokeWidth={1.5} />
+            <UndoIcon />
           </Button>
         ) : null}
         <button

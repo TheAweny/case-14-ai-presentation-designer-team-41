@@ -12,23 +12,23 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  Delete02Icon,
-  FileAddIcon,
-  FileEditIcon,
-  FileUploadIcon,
-  FolderExportIcon,
-  FolderOffIcon,
-  FolderOpenIcon,
-  Link01Icon,
-  MoreHorizontalIcon,
-  PaintBoardIcon,
-  PencilEdit02Icon,
+  AddFileIcon,
+  CheckIcon,
+  DeleteIcon,
+  EditIcon,
+  LinkIcon,
+  MoreIcon,
+  MoveIcon,
+  NoFolderIcon,
+  OpenFolderIcon,
+  OpenIcon,
+  OpenInNewTabIcon,
+  PaletteIcon,
   PlayIcon,
-  SquareArrowUpRightIcon,
-  Tick02Icon,
-} from '@hugeicons/core-free-icons';
+  UploadIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import { useLibraryNotice } from '@/components/library/library-notices';
 import type { LibraryProject } from '@/components/library/library-projects';
 import { focusObject } from '@/components/library/object-focus';
@@ -73,22 +73,22 @@ export type ObjectKind = 'deck' | 'project';
  */
 export type ObjectMenuAction = 'rename' | 'appearance' | 'delete';
 
-const ICONS: Readonly<Record<LibraryMenuItem['id'], IconSvgElement>> = {
-  open: FileEditIcon,
-  openInNewTab: SquareArrowUpRightIcon,
+const ICONS: Readonly<Record<LibraryMenuItem['id'], Icon>> = {
+  open: OpenIcon,
+  openInNewTab: OpenInNewTabIcon,
   present: PlayIcon,
-  newDeck: FileAddIcon,
-  rename: PencilEdit02Icon,
-  moveToProject: FolderExportIcon,
-  appearance: PaintBoardIcon,
-  copyLink: Link01Icon,
-  attachTemplate: FileUploadIcon,
-  delete: Delete02Icon,
+  newDeck: AddFileIcon,
+  rename: EditIcon,
+  moveToProject: MoveIcon,
+  appearance: PaletteIcon,
+  copyLink: LinkIcon,
+  attachTemplate: UploadIcon,
+  delete: DeleteIcon,
 };
 
 /** Презентация открывается в редактор, проект — как папка. */
 const iconOf = (kind: ObjectKind, id: LibraryMenuItem['id']) =>
-  id === 'open' && kind === 'project' ? FolderOpenIcon : ICONS[id];
+  id === 'open' && kind === 'project' ? OpenFolderIcon : ICONS[id];
 
 /** Что нужно пункту от меню Radix: у контекстного и выпадающего меню эти свойства общие. */
 interface KitItemProps {
@@ -249,6 +249,7 @@ export function LibraryMenuItems({
             ? t(kind === 'deck' ? 'items.deleteDeck' : 'items.deleteProject')
             : t(`items.${item.id}`);
         const unavailable = item.unavailable !== undefined;
+        const ItemIcon = iconOf(kind, item.id);
         return (
           <Item
             key={item.id}
@@ -258,11 +259,7 @@ export function LibraryMenuItems({
             className={cn(unavailable && 'cursor-default items-start')}
             onSelect={(event) => onSelect(item, event)}
           >
-            <HugeiconsIcon
-              icon={iconOf(kind, item.id)}
-              strokeWidth={1.5}
-              className={cn(unavailable && 'mt-0.5 opacity-50')}
-            />
+            <ItemIcon className={cn(unavailable && 'mt-0.5 opacity-50')} />
             {item.unavailable !== undefined ? (
               <span className="flex min-w-0 flex-col">
                 <span className="opacity-50">{label}</span>
@@ -303,19 +300,17 @@ function MoveSubmenu({ kit, move }: { kit: MenuKit; move: DeckMove }) {
         // Иконка проекта — в размер остальных иконок меню.
         <ProjectIcon appearance={project.appearance} size="sm" className="size-3.5" />
       ) : (
-        <HugeiconsIcon icon={FolderOffIcon} strokeWidth={1.5} />
+        <NoFolderIcon />
       )}
       <span className="min-w-0 truncate">{project ? project.name : t('move.none')}</span>
-      {current ? (
-        <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} aria-hidden className="ml-auto" />
-      ) : null}
+      {current ? <CheckIcon aria-hidden className="ml-auto" /> : null}
     </Item>
   );
 
   return (
     <Sub>
       <SubTrigger>
-        <HugeiconsIcon icon={ICONS.moveToProject} strokeWidth={1.5} />
+        <MoveIcon />
         {t('items.moveToProject')}
       </SubTrigger>
       {/* Проектов бывает много: подменю прокручивается, а не уходит за край экрана. */}
@@ -425,7 +420,7 @@ export function ObjectMenu({
                     buttonClassName,
                   )}
                 >
-                  <HugeiconsIcon icon={MoreHorizontalIcon} size={16} strokeWidth={2} />
+                  <MoreIcon size={16} />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent

@@ -2,8 +2,7 @@
 
 import { useTransition } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Logout03Icon } from '@hugeicons/core-free-icons';
+import { LogoutIcon } from '@/components/ui/icons';
 import { signOutAction } from '@/app/auth-actions';
 import { AccountAvatar } from '@/components/auth/account-menu';
 import { Button } from '@/components/ui/button';
@@ -39,7 +38,7 @@ export function AccountSettingsPanel({ account }: { account: Account }) {
           disabled={leaving}
           onClick={() => startLeaving(() => signOutAction())}
         >
-          <HugeiconsIcon icon={Logout03Icon} strokeWidth={1.5} data-icon="inline-start" />
+          <LogoutIcon data-icon="inline-start" />
           {t('signOut')}
         </Button>
       </div>

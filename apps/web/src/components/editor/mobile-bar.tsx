@@ -2,15 +2,15 @@
 
 import { Fragment, type ReactElement } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  ArrowTurnBackwardIcon,
-  ArrowTurnForwardIcon,
-  Cancel01Icon,
+  CloseIcon,
   PlayIcon,
-  PlusSignIcon,
-  SlidersHorizontalIcon,
-} from '@hugeicons/core-free-icons';
+  PlusIcon,
+  PropertiesIcon,
+  RedoIcon,
+  UndoIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,7 +83,7 @@ export function MobileBar({
               onClick={() => onToolChange('select')}
               className={cn(TOUCH, 'size-9 rounded-full')}
             >
-              <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} color="currentColor" />
+              <CloseIcon size={14} />
             </button>
           </div>
         </div>
@@ -98,13 +98,13 @@ export function MobileBar({
       >
         <BarButton
           label={historyLabel('undo')}
-          icon={ArrowTurnBackwardIcon}
+          icon={UndoIcon}
           disabled={history.undo === null}
           onClick={history.onUndo}
         />
         <BarButton
           label={historyLabel('redo')}
-          icon={ArrowTurnForwardIcon}
+          icon={RedoIcon}
           disabled={history.redo === null}
           onClick={history.onRedo}
         />
@@ -119,12 +119,7 @@ export function MobileBar({
                 armed && 'bg-primary text-primary-foreground hover:bg-primary/90',
               )}
             >
-              <HugeiconsIcon
-                icon={PlusSignIcon}
-                size={20}
-                strokeWidth={1.75}
-                color="currentColor"
-              />
+              <PlusIcon size={20} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -142,12 +137,7 @@ export function MobileBar({
                     onSelect={() => onToolChange(variant.id)}
                     className="min-h-11"
                   >
-                    <HugeiconsIcon
-                      icon={variant.icon}
-                      size={16}
-                      strokeWidth={1.5}
-                      color="currentColor"
-                    />
+                    <variant.icon size={16} />
                     {rail(`variants.${variant.id}`)}
                   </DropdownMenuItem>
                 ))}
@@ -156,7 +146,7 @@ export function MobileBar({
           </DropdownMenuContent>
         </DropdownMenu>
         <BarButton label={rail('tools.present')} icon={PlayIcon} onClick={onPresent} />
-        <BarButton label={t('properties')} icon={SlidersHorizontalIcon} onClick={onProperties} />
+        <BarButton label={t('properties')} icon={PropertiesIcon} onClick={onProperties} />
       </div>
     </div>
   );
@@ -164,12 +154,12 @@ export function MobileBar({
 
 function BarButton({
   label,
-  icon,
+  icon: ButtonIcon,
   disabled,
   onClick,
 }: {
   label: string;
-  icon: IconSvgElement;
+  icon: Icon;
   disabled?: boolean;
   onClick: () => void;
 }): ReactElement {
@@ -183,7 +173,7 @@ function BarButton({
       onClick={onClick}
       className={TOUCH}
     >
-      <HugeiconsIcon icon={icon} size={20} strokeWidth={1.5} color="currentColor" />
+      <ButtonIcon size={20} />
     </button>
   );
 }

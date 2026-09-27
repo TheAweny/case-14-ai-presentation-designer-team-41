@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon, File01Icon, LayoutTemplateIcon } from '@hugeicons/core-free-icons';
+import { CloseIcon, FileIcon, TemplateIcon } from '@/components/ui/icons';
 import { useAssistantDeck, type AssistantDeckBridge } from '@/components/assistant/deck-context';
 import { refIcon, useSlideRefLabels } from '@/components/assistant/slide-ref-label';
 import { useFileSize } from '@/components/library/file-size';
@@ -78,16 +77,11 @@ function FileChip({
         className,
       )}
     >
-      <HugeiconsIcon
-        icon={kind === 'template' ? LayoutTemplateIcon : File01Icon}
-        size={14}
-        strokeWidth={1.5}
-        className={cn(
-          'shrink-0',
-          kind === 'template' ? 'text-foreground' : 'text-muted-foreground',
-        )}
-        aria-hidden
-      />
+      {kind === 'template' ? (
+        <TemplateIcon size={14} className="shrink-0 text-foreground" aria-hidden />
+      ) : (
+        <FileIcon size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+      )}
       <span className="max-w-48 truncate text-foreground">{name}</span>
       <span className="shrink-0 text-muted-foreground tabular-nums">
         {label ? `${label} · ` : ''}
@@ -108,7 +102,7 @@ function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void
       aria-label={label}
       onClick={onRemove}
     >
-      <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+      <CloseIcon />
     </Button>
   );
 }
@@ -171,12 +165,11 @@ function SlideRefChip({
       ? t('ghostAction', { label: text })
       : t('show', { label: text });
   const clickable = bridge !== null && stale === null && (!ghost || onPin !== undefined);
+  const RefIcon = refIcon(subject);
   const body = (
     <>
-      <HugeiconsIcon
-        icon={refIcon(subject)}
+      <RefIcon
         size={14}
-        strokeWidth={1.5}
         className={cn('shrink-0', ghost || stale ? 'text-muted-foreground' : 'text-foreground')}
         aria-hidden
       />

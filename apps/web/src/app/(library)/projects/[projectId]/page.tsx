@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getFormatter, getNow, getTranslations } from 'next-intl/server';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Presentation01Icon } from '@hugeicons/core-free-icons';
+import { DeckIcon, PlusIcon } from '@/components/ui/icons';
 import { DeckComposer } from '@/components/composer/deck-composer';
 import { Button } from '@/components/ui/button';
 import { DeckCard } from '@/components/library/deck-card';
@@ -138,12 +137,12 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
             empty={
               attachFirst ?? (
                 <EmptyState
-                  icon={Presentation01Icon}
+                  icon={DeckIcon}
                   title={t('empty.title')}
                   action={
                     <Button asChild variant="outline">
                       <Link href={newDeckHref}>
-                        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+                        <PlusIcon data-icon="inline-start" />
                         {t('newDeck')}
                       </Link>
                     </Button>

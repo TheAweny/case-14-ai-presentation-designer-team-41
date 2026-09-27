@@ -2,21 +2,21 @@
 
 import { useContext } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AlignBottomIcon,
+  AlignMiddleIcon,
   AlignTopIcon,
-  AlignVerticalCenterIcon,
-  MinusSignIcon,
-  PlusSignIcon,
+  BoldIcon,
+  ItalicIcon,
+  MinusIcon,
+  PlusIcon,
   TextAlignCenterIcon,
-  TextAlignJustifyLeftIcon,
+  TextAlignJustifyIcon,
   TextAlignLeftIcon,
   TextAlignRightIcon,
-  TextBoldIcon,
-  TextItalicIcon,
-  TextUnderlineIcon,
-} from '@hugeicons/core-free-icons';
+  UnderlineIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type {
   ColorRole,
   ColorValue,
@@ -51,14 +51,14 @@ const TEXT_ALIGNS = [
   { value: 'left', icon: TextAlignLeftIcon, shortcut: 'align-left' },
   { value: 'center', icon: TextAlignCenterIcon, shortcut: 'align-center' },
   { value: 'right', icon: TextAlignRightIcon, shortcut: 'align-right' },
-  { value: 'justify', icon: TextAlignJustifyLeftIcon, shortcut: 'align-justify' },
-] as const satisfies readonly { value: ParagraphAlign; icon: unknown; shortcut: ShortcutId }[];
+  { value: 'justify', icon: TextAlignJustifyIcon, shortcut: 'align-justify' },
+] as const satisfies readonly { value: ParagraphAlign; icon: Icon; shortcut: ShortcutId }[];
 
 const VERTICAL_ALIGNS = [
   { value: 'top', icon: AlignTopIcon },
-  { value: 'middle', icon: AlignVerticalCenterIcon },
+  { value: 'middle', icon: AlignMiddleIcon },
   { value: 'bottom', icon: AlignBottomIcon },
-] as const satisfies readonly { value: VerticalAlign; icon: unknown }[];
+] as const satisfies readonly { value: VerticalAlign; icon: Icon }[];
 
 /**
  * Что умеют текстовые контролы полосы. Одинаково для целого блока (правки в журнал) и для
@@ -115,7 +115,7 @@ export function TextBarControls({
       </BarItem>
       <div role="group" aria-label={panel('fontSize')} className="flex items-center">
         <BarButton
-          icon={MinusSignIcon}
+          icon={MinusIcon}
           label={t('smaller')}
           shortcut="size-down"
           disabled={look.sizePt === FONT_SIZE_PT.min}
@@ -140,7 +140,7 @@ export function TextBarControls({
           />
         </BarItem>
         <BarButton
-          icon={PlusSignIcon}
+          icon={PlusIcon}
           label={t('larger')}
           shortcut="size-up"
           disabled={look.sizePt === FONT_SIZE_PT.max}
@@ -149,21 +149,21 @@ export function TextBarControls({
         />
       </div>
       <BarButton
-        icon={TextBoldIcon}
+        icon={BoldIcon}
         label={t('bold')}
         shortcut="bold"
         pressed={look.bold === true}
         onClick={() => actions.toggleFlag('bold')}
       />
       <BarButton
-        icon={TextItalicIcon}
+        icon={ItalicIcon}
         label={t('italic')}
         shortcut="italic"
         pressed={look.italic === true}
         onClick={() => actions.toggleFlag('italic')}
       />
       <BarButton
-        icon={TextUnderlineIcon}
+        icon={UnderlineIcon}
         label={panel('underline')}
         shortcut="underline"
         pressed={look.underline}
@@ -210,7 +210,7 @@ export function TextBarControls({
             >
               {TEXT_ALIGNS.map((option) => (
                 <DropdownMenuRadioItem key={option.value} value={option.value}>
-                  <HugeiconsIcon icon={option.icon} strokeWidth={1.5} color="currentColor" />
+                  <option.icon />
                   {panel(`textAligns.${option.value}`)}
                   <DropdownMenuShortcut>
                     <ShortcutKeys shortcut={option.shortcut} />
@@ -231,7 +231,7 @@ export function TextBarControls({
                 >
                   {VERTICAL_ALIGNS.map((option) => (
                     <DropdownMenuRadioItem key={option.value} value={option.value}>
-                      <HugeiconsIcon icon={option.icon} strokeWidth={1.5} color="currentColor" />
+                      <option.icon />
                       {panel(`verticalAligns.${option.value}`)}
                     </DropdownMenuRadioItem>
                   ))}

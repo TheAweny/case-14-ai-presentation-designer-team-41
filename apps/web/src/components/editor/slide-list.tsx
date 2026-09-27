@@ -24,8 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, AiSparklesIcon, Note01Icon } from '@hugeicons/core-free-icons';
+import { AgentIcon, NotesIcon, PlusIcon } from '@/components/ui/icons';
 import { LEVEL_ICON, LEVEL_TEXT } from '@/components/editor/audit/audit-panel';
 import type { AuditCounts } from '@/components/editor/audit/deck-audit';
 import { cn } from '@/lib/utils';
@@ -408,7 +407,7 @@ export function SlideList({
                 'data-[state=open]:bg-muted data-[state=open]:text-foreground',
               )}
             >
-              <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={1.75} color="currentColor" />
+              <PlusIcon size={14} />
               {t('addSlide')}
             </button>
           </DropdownMenuTrigger>
@@ -496,7 +495,7 @@ function SlideMenu({
       {onAddToAssistant ? (
         <>
           <ContextMenuItem onSelect={onAddToAssistant}>
-            <HugeiconsIcon icon={AiSparklesIcon} strokeWidth={1.5} color="currentColor" />
+            <AgentIcon />
             {count > 1 ? many('addSlidesToAssistant', { count }) : many('addToAssistant')}
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -669,23 +668,26 @@ const SortableSlide = memo(function SortableSlide({
         {index + 1}
         {hasNotes ? (
           <span data-notes-mark="" title={notes('has')} className="grid place-items-center">
-            <HugeiconsIcon icon={Note01Icon} size={11} strokeWidth={1.75} color="currentColor" />
+            <NotesIcon size={11} />
           </span>
         ) : null}
-        {flagged ? (
-          <span
-            data-audit-mark={errors > 0 ? 'error' : 'warning'}
-            title={auditLabel}
-            className={cn('grid place-items-center', LEVEL_TEXT[errors > 0 ? 'error' : 'warning'])}
-          >
-            <HugeiconsIcon
-              icon={LEVEL_ICON[errors > 0 ? 'error' : 'warning']}
-              size={11}
-              strokeWidth={2}
-              color="currentColor"
-            />
-          </span>
-        ) : null}
+        {flagged
+          ? (() => {
+              const LevelIcon = LEVEL_ICON[errors > 0 ? 'error' : 'warning'];
+              return (
+                <span
+                  data-audit-mark={errors > 0 ? 'error' : 'warning'}
+                  title={auditLabel}
+                  className={cn(
+                    'grid place-items-center',
+                    LEVEL_TEXT[errors > 0 ? 'error' : 'warning'],
+                  )}
+                >
+                  <LevelIcon size={11} />
+                </span>
+              );
+            })()
+          : null}
       </span>
       {count > 1 ? (
         <span

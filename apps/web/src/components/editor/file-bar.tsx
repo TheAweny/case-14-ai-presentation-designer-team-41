@@ -3,25 +3,25 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  ArrowDown01Icon,
-  ArrowLeft01Icon,
-  Clock01Icon,
+  AddFileIcon,
+  BackIcon,
+  ChevronDownIcon,
   CodeIcon,
-  Copy01Icon,
-  Download04Icon,
-  FileAddIcon,
-  FileUploadIcon,
-  Globe02Icon,
-  Folder01Icon,
-  Image01Icon,
-  Pdf01Icon,
-  PencilEdit01Icon,
+  CopyIcon,
+  DownloadIcon,
+  EditIcon,
+  FolderIcon,
+  HistoryIcon,
+  HtmlIcon,
+  PdfIcon,
   PlayIcon,
-  Ppt01Icon,
-  Settings01Icon,
-} from '@hugeicons/core-free-icons';
+  PngIcon,
+  PptIcon,
+  SettingsIcon,
+  UploadIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -104,7 +104,7 @@ export function FileBar({
             onClick={onPresent}
           />
           <BarButton
-            icon={Download04Icon}
+            icon={DownloadIcon}
             label={
               exportPercent === null ? t('export') : t('exportRunning', { percent: exportPercent })
             }
@@ -144,12 +144,8 @@ function FileMenu({
           onMouseDown={keepCanvasFocus}
           {...focus.trigger}
         >
-          <HugeiconsIcon icon={Folder01Icon} strokeWidth={1.5} />
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            strokeWidth={1.5}
-            className="text-muted-foreground"
-          />
+          <FolderIcon />
+          <ChevronDownIcon className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -175,32 +171,32 @@ function FileMenu({
           focus.onCloseAutoFocus(event);
         }}
       >
-        <MenuItem icon={ArrowLeft01Icon} label={t('allDecks')} onSelect={() => router.push('/')} />
+        <MenuItem icon={BackIcon} label={t('allDecks')} onSelect={() => router.push('/')} />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t('groups.deck')}</DropdownMenuLabel>
         <MenuItem
-          icon={FileAddIcon}
+          icon={AddFileIcon}
           label={t('newDeck')}
           onSelect={() => router.push(NEW_DECK_HREF)}
         />
-        <MenuItem icon={FileUploadIcon} label={t('replaceTemplate')} />
-        <MenuItem icon={FileUploadIcon} label={t('replaceContent')} />
+        <MenuItem icon={UploadIcon} label={t('replaceTemplate')} />
+        <MenuItem icon={UploadIcon} label={t('replaceContent')} />
         <DropdownMenuSeparator />
         <MenuItem
-          icon={PencilEdit01Icon}
+          icon={EditIcon}
           label={t('rename')}
           onSelect={() => {
             renameAsked.current = true;
           }}
         />
-        <MenuItem icon={Copy01Icon} label={t('duplicate')} />
-        <MenuItem icon={Clock01Icon} label={t('history')} />
+        <MenuItem icon={CopyIcon} label={t('duplicate')} />
+        <MenuItem icon={HistoryIcon} label={t('history')} />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t('groups.download')}</DropdownMenuLabel>
-        <MenuItem icon={Ppt01Icon} label={t('exportPptx')} onSelect={exportAs('pptx')} />
-        <MenuItem icon={Pdf01Icon} label={t('exportPdf')} onSelect={exportAs('pdf')} />
-        <MenuItem icon={Image01Icon} label={t('exportPng')} onSelect={exportAs('png')} />
-        <MenuItem icon={Globe02Icon} label={t('exportHtml')} onSelect={exportAs('html')} />
+        <MenuItem icon={PptIcon} label={t('exportPptx')} onSelect={exportAs('pptx')} />
+        <MenuItem icon={PdfIcon} label={t('exportPdf')} onSelect={exportAs('pdf')} />
+        <MenuItem icon={PngIcon} label={t('exportPng')} onSelect={exportAs('png')} />
+        <MenuItem icon={HtmlIcon} label={t('exportHtml')} onSelect={exportAs('html')} />
         <MenuItem icon={CodeIcon} label={t('manifest')} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -208,7 +204,7 @@ function FileMenu({
             settingsAsked.current = true;
           }}
         >
-          <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.5} />
+          <SettingsIcon />
           {t('settings')}
           <DropdownMenuShortcut>{shortcutText('settings', mac)}</DropdownMenuShortcut>
         </DropdownMenuItem>
@@ -221,17 +217,17 @@ function FileMenu({
 
 /** Пункт меню. Без обработчика — неактивен: действию пока не на что опереться. */
 function MenuItem({
-  icon,
+  icon: ItemIcon,
   label,
   onSelect,
 }: {
-  icon: IconSvgElement;
+  icon: Icon;
   label: string;
   onSelect?: () => void;
 }) {
   return (
     <DropdownMenuItem disabled={!onSelect} onSelect={onSelect}>
-      <HugeiconsIcon icon={icon} strokeWidth={1.5} />
+      <ItemIcon />
       {label}
     </DropdownMenuItem>
   );
@@ -242,13 +238,13 @@ function MenuItem({
  * у `disabled` подсказка не показывается, а объяснение здесь важнее.
  */
 function BarButton({
-  icon,
+  icon: ButtonIcon,
   label,
   pending,
   onClick,
   primary,
 }: {
-  icon: IconSvgElement;
+  icon: Icon;
   label: string;
   pending: string;
   onClick?: () => void;
@@ -268,7 +264,7 @@ function BarButton({
         !available && primary && 'hover:bg-primary',
       )}
     >
-      <HugeiconsIcon icon={icon} strokeWidth={1.5} />
+      <ButtonIcon />
       <span className={cn('tabular-nums', !primary && 'max-lg:sr-only')}>{label}</span>
     </Button>
   );

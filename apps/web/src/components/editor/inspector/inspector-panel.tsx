@@ -2,8 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { PanelRightCloseIcon } from '@hugeicons/core-free-icons';
+import { PanelCloseIcon } from '@/components/ui/icons';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -98,12 +97,7 @@ export function InspectorPanel({
                     'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
                   )}
                 >
-                  <HugeiconsIcon
-                    icon={PanelRightCloseIcon}
-                    size={16}
-                    strokeWidth={1.5}
-                    color="currentColor"
-                  />
+                  <PanelCloseIcon size={16} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('inspectorHide')}</TooltipContent>

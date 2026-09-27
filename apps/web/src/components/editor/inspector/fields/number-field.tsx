@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import type { Icon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
   clampNumber,
@@ -18,7 +18,7 @@ import { useScrub } from '@/components/editor/inspector/fields/use-scrub';
 export interface NumberFieldProps {
   /** Буква слева (X, Y, W, H). Без неё нужна `icon`. */
   label?: string;
-  icon?: IconSvgElement;
+  icon?: Icon;
   /** `null` — у выделенных объектов значения разные. */
   value: number | null;
   onCommit: (value: number) => void;
@@ -63,7 +63,7 @@ export interface NumberFieldProps {
  */
 export function NumberField({
   label,
-  icon,
+  icon: FieldIcon,
   value,
   onCommit,
   onCommitEach,
@@ -168,9 +168,9 @@ export function NumberField({
       ref={fieldRef}
       className={cn(FIELD_CLASS, disabled && 'pointer-events-none opacity-50', className)}
     >
-      {icon ? (
+      {FieldIcon ? (
         <span className={cn(handleClass, 'grid h-full place-items-center')} {...scrub.handleProps}>
-          <HugeiconsIcon icon={icon} size={13} strokeWidth={1.5} color="currentColor" />
+          <FieldIcon size={13} />
         </span>
       ) : (
         <span

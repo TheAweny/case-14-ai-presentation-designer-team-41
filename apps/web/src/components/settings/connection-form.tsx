@@ -2,13 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Alert02Icon,
-  ArrowLeft01Icon,
-  CheckmarkCircle02Icon,
-  Loading03Icon,
-} from '@hugeicons/core-free-icons';
+import { BackIcon, SpinnerIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import { probeConnectionAction, saveConnectionAction } from '@/app/settings-actions';
 import { Button } from '@/components/ui/button';
 import {
@@ -209,7 +203,7 @@ export function ConnectionForm({
           className="-ml-2 text-muted-foreground"
           onClick={() => onDone(null)}
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={1.5} data-icon="inline-start" />
+          <BackIcon data-icon="inline-start" />
           {t('back')}
         </Button>
         <h2 className="text-base font-semibold md:pr-8">
@@ -392,9 +386,7 @@ export function ConnectionForm({
             onClick={runCheck}
           >
             {check.state === 'running' ? (
-              <HugeiconsIcon
-                icon={Loading03Icon}
-                strokeWidth={1.5}
+              <SpinnerIcon
                 data-icon="inline-start"
                 className="animate-spin motion-reduce:animate-none"
               />
@@ -481,7 +473,7 @@ function CheckResult({
   if (!check.ok) {
     return (
       <p className="flex items-start gap-2 text-xs text-destructive">
-        <HugeiconsIcon icon={Alert02Icon} size={14} strokeWidth={1.75} className="mt-px shrink-0" />
+        <WarningIcon size={14} className="mt-px shrink-0" />
         {t('checkFailed', { reason: errorText(check.error) })}
       </p>
     );
@@ -489,12 +481,7 @@ function CheckResult({
   return (
     <div className="flex flex-col gap-2">
       <p className="flex items-center gap-2 text-xs">
-        <HugeiconsIcon
-          icon={CheckmarkCircle02Icon}
-          size={14}
-          strokeWidth={1.75}
-          className="shrink-0 text-(--project-green)"
-        />
+        <SuccessIcon size={14} className="shrink-0 text-(--project-green)" />
         {t('checkOk', { count: check.models.length })}
       </p>
       {check.models.length > 0 ? (

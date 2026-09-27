@@ -3,15 +3,16 @@
 import { useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  Add01Icon,
-  ChartAreaIcon,
-  ChartColumnIcon,
-  ChartLineData01Icon,
-  BarChartHorizontalIcon,
-  ClipboardPasteIcon,
-  MinusSignIcon,
+  AreaChartIcon,
+  BarChartIcon,
+  ChartIcon,
+  GrowthIcon,
+  MinusIcon,
+  PasteIcon,
   PieChartIcon,
-} from '@hugeicons/core-free-icons';
+  PlusIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type { ChartType, SlideElement } from '@lct/contracts';
 import type { ElementProps } from '@lct/deck-ops';
 import { cn } from '@/lib/utils';
@@ -40,12 +41,12 @@ import {
 type ChartElement = Extract<SlideElement, { kind: 'chart' }>;
 
 const TYPES = [
-  { value: 'column', icon: ChartColumnIcon },
-  { value: 'bar', icon: BarChartHorizontalIcon },
-  { value: 'line', icon: ChartLineData01Icon },
-  { value: 'area', icon: ChartAreaIcon },
+  { value: 'column', icon: ChartIcon },
+  { value: 'bar', icon: BarChartIcon },
+  { value: 'line', icon: GrowthIcon },
+  { value: 'area', icon: AreaChartIcon },
   { value: 'pie', icon: PieChartIcon },
-] as const satisfies readonly { value: ChartType; icon: unknown }[];
+] as const satisfies readonly { value: ChartType; icon: Icon }[];
 
 /**
  * Поле таблицы данных. Значение применяется по Enter или уходу из поля, Esc возвращает прежнее.
@@ -189,18 +190,18 @@ export function ChartSection({
         actions={
           <>
             <IconButton
-              icon={ClipboardPasteIcon}
+              icon={PasteIcon}
               label={t('pasteChartData')}
               onClick={() => void pasteClipboard()}
             />
             <IconButton
-              icon={MinusSignIcon}
+              icon={MinusIcon}
               label={t('removeSeries')}
               disabled={data.series.length <= 1}
               onClick={() => apply(removeSeries(data))}
             />
             <IconButton
-              icon={Add01Icon}
+              icon={PlusIcon}
               label={t('addSeries')}
               onClick={() => apply(addSeries(data, t('seriesName', { n: data.series.length + 1 })))}
             />
@@ -267,13 +268,13 @@ export function ChartSection({
         <div className="flex items-center gap-1">
           <span className="flex-1 text-xs text-muted-foreground">{t('categories')}</span>
           <IconButton
-            icon={MinusSignIcon}
+            icon={MinusIcon}
             label={t('removeCategory')}
             disabled={data.categories.length <= 1}
             onClick={() => apply(removeCategory(data))}
           />
           <IconButton
-            icon={Add01Icon}
+            icon={PlusIcon}
             label={t('addCategory')}
             onClick={() => apply(addCategory(data, String(data.categories.length + 1)))}
           />

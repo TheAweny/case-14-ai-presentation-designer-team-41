@@ -3,8 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon } from '@/components/ui/icons';
 import { useControls, useTransformComponent, useTransformContext } from 'react-zoom-pan-pinch';
 import {
   DropdownMenu,
@@ -122,13 +121,7 @@ export function ZoomHud({
             )}
           >
             <span aria-hidden>{t('zoomPercent', { percent })}</span>
-            <HugeiconsIcon
-              icon={ArrowDown01Icon}
-              size={14}
-              strokeWidth={2}
-              color="currentColor"
-              className="text-muted-foreground"
-            />
+            <ChevronDownIcon size={14} className="text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

@@ -3,8 +3,7 @@
 import { useMemo, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons';
+import { MoreIcon, PlusIcon } from '@/components/ui/icons';
 import { InlineNameInput } from '@/components/library/inline-name-input';
 import { ConfirmDeleteDialog } from '@/components/library/object-dialogs';
 import {
@@ -151,7 +150,7 @@ export function ProjectHeader({
         <div className="flex shrink-0 items-center gap-1.5 max-sm:pl-15">
           <Button asChild size="lg">
             <Link href={newDeckHref}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+              <PlusIcon data-icon="inline-start" />
               {t('newDeck')}
             </Link>
           </Button>
@@ -217,7 +216,7 @@ function ProjectMenu({
           size="icon-lg"
           aria-label={t('projectMenu', { name: projectName })}
         >
-          <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+          <MoreIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
