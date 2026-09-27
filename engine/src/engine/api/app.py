@@ -2,11 +2,16 @@
 
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from PIL import Image, UnidentifiedImageError
 
-from engine import __version__, export, layout, parser
+from engine import __version__, checks, export, layout, parser
+from engine.api._profiles import UnknownProfileError, deterministic_profile
 from engine.contracts import (
+    AuditReport,
+    AuditRequest,
     DeckPlan,
     EditableDeckRequest,
     EditableDeckResponse,
@@ -81,3 +86,45 @@ def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
             "slideCount": len(slide_ir),
         }
     )
+
+
+def _media_sizes(slides: list[dict[str, Any]], stated: dict[str, Any]) -> dict[str, Any]:
+    """Pixel sizes of the pictures: those the caller stated, then files the engine can open."""
+    sizes = dict(stated)
+    for slide in slides:
+        for element in slide["elements"]:
+            part = element.get("mediaPart")
+            if element["kind"] != "image" or not part or part in sizes:
+                continue
+            path = Path(part)
+            if not path.is_file():
+                continue
+            try:
+                with Image.open(path) as picture:
+                    sizes[part] = {"width": picture.width, "height": picture.height}
+            except (OSError, UnidentifiedImageError):
+                continue
+    return sizes
+
+
+@app.post(
+    "/v1/audit",
+    response_model=AuditReport,
+    summary="Verify generated slides against the template and the audit profile",
+)
+def audit(request: AuditRequest) -> AuditReport:
+    """Measure every slide of a generated deck and report what breaks the requirements.
+
+    The input is whatever a generator produced, as SlideIR, with the design system of the template
+    it was asked to follow. Nothing in it is trusted: layout, template fidelity and density are
+    measured here, and each finding says what is wrong, why, and how to fix it when that can be
+    computed.
+    """
+    payload = request.model_dump(mode="json")
+    profile_name = request.profile or "default"
+    try:
+        profile = deterministic_profile(profile_name)
+    except UnknownProfileError as error:
+        raise HTTPException(status_code=422, detail=f"Unknown audit profile {error}.") from error
+    payload["mediaSizes"] = _media_sizes(payload["slides"], payload.get("mediaSizes") or {})
+    return AuditReport.model_validate(checks.audit_deck(payload, profile_name, profile))

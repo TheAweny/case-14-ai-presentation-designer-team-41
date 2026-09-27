@@ -1,0 +1,322 @@
+{
+  "contract": "AuditReport",
+  "valid": [
+    {
+      "name": "deck held back by one finding",
+      "payload": {
+        "schemaVersion": 1,
+        "deckId": "deck-1",
+        "profile": "default",
+        "passed": false,
+        "score": 88.0,
+        "slideCount": 1,
+        "counts": {
+          "blocker": 0,
+          "major": 1,
+          "minor": 0,
+          "info": 0
+        },
+        "categories": [
+          {
+            "category": "layout",
+            "checks": 7,
+            "findings": 1,
+            "passed": false
+          },
+          {
+            "category": "template",
+            "checks": 6,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "density",
+            "checks": 5,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "content",
+            "checks": 1,
+            "findings": 0,
+            "passed": true
+          }
+        ],
+        "findings": [
+          {
+            "schemaVersion": 1,
+            "findingId": "finding-1",
+            "checkId": "text-overflow",
+            "origin": "deterministic",
+            "severity": "major",
+            "confidence": 1,
+            "title": "Заголовок выходит за пределы блока",
+            "detail": "Текст длиннее блока на одну строку.",
+            "target": {
+              "slideId": "s2",
+              "variant": "dense",
+              "elementId": "s2-title",
+              "box": {
+                "x": 838200,
+                "y": 365125,
+                "cx": 10515600,
+                "cy": 1325563
+              }
+            },
+            "evidence": {
+              "measured": "1 строка сверх блока",
+              "expected": "0 строк",
+              "quote": "",
+              "sources": [],
+              "screenshot": "audit/s2-title.png"
+            },
+            "fixability": "auto",
+            "proposedPatch": {
+              "patchId": "patch-1",
+              "findingId": "finding-1",
+              "slideId": "s2",
+              "variant": "dense",
+              "ops": [
+                {
+                  "op": "set-font-size",
+                  "elementId": "s2-title",
+                  "sizePt": 36
+                }
+              ],
+              "rationale": "Заголовок не помещается в одну строку: на шаг меньше по шкале шаблона.",
+              "touchesCopy": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "clean deck",
+      "payload": {
+        "schemaVersion": 1,
+        "deckId": "deck-1",
+        "profile": "default",
+        "passed": true,
+        "score": 100,
+        "slideCount": 1,
+        "counts": {
+          "blocker": 0,
+          "major": 0,
+          "minor": 0,
+          "info": 0
+        },
+        "categories": [
+          {
+            "category": "layout",
+            "checks": 7,
+            "findings": 1,
+            "passed": false
+          },
+          {
+            "category": "template",
+            "checks": 6,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "density",
+            "checks": 5,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "content",
+            "checks": 1,
+            "findings": 0,
+            "passed": true
+          }
+        ],
+        "findings": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "score above 100",
+      "why": "The score is a percentage.",
+      "path": ["score"],
+      "payload": {
+        "schemaVersion": 1,
+        "deckId": "deck-1",
+        "profile": "default",
+        "passed": false,
+        "score": 120,
+        "slideCount": 1,
+        "counts": {
+          "blocker": 0,
+          "major": 1,
+          "minor": 0,
+          "info": 0
+        },
+        "categories": [
+          {
+            "category": "layout",
+            "checks": 7,
+            "findings": 1,
+            "passed": false
+          },
+          {
+            "category": "template",
+            "checks": 6,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "density",
+            "checks": 5,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "content",
+            "checks": 1,
+            "findings": 0,
+            "passed": true
+          }
+        ],
+        "findings": [
+          {
+            "schemaVersion": 1,
+            "findingId": "finding-1",
+            "checkId": "text-overflow",
+            "origin": "deterministic",
+            "severity": "major",
+            "confidence": 1,
+            "title": "Заголовок выходит за пределы блока",
+            "detail": "Текст длиннее блока на одну строку.",
+            "target": {
+              "slideId": "s2",
+              "variant": "dense",
+              "elementId": "s2-title",
+              "box": {
+                "x": 838200,
+                "y": 365125,
+                "cx": 10515600,
+                "cy": 1325563
+              }
+            },
+            "evidence": {
+              "measured": "1 строка сверх блока",
+              "expected": "0 строк",
+              "quote": "",
+              "sources": [],
+              "screenshot": "audit/s2-title.png"
+            },
+            "fixability": "auto",
+            "proposedPatch": {
+              "patchId": "patch-1",
+              "findingId": "finding-1",
+              "slideId": "s2",
+              "variant": "dense",
+              "ops": [
+                {
+                  "op": "set-font-size",
+                  "elementId": "s2-title",
+                  "sizePt": 36
+                }
+              ],
+              "rationale": "Заголовок не помещается в одну строку: на шаг меньше по шкале шаблона.",
+              "touchesCopy": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown category",
+      "why": "Categories follow the requirement groups.",
+      "path": ["categories", 0, "category"],
+      "payload": {
+        "schemaVersion": 1,
+        "deckId": "deck-1",
+        "profile": "default",
+        "passed": false,
+        "score": 88.0,
+        "slideCount": 1,
+        "counts": {
+          "blocker": 0,
+          "major": 1,
+          "minor": 0,
+          "info": 0
+        },
+        "categories": [
+          {
+            "category": "style",
+            "checks": 7,
+            "findings": 1,
+            "passed": false
+          },
+          {
+            "category": "template",
+            "checks": 6,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "density",
+            "checks": 5,
+            "findings": 0,
+            "passed": true
+          },
+          {
+            "category": "content",
+            "checks": 1,
+            "findings": 0,
+            "passed": true
+          }
+        ],
+        "findings": [
+          {
+            "schemaVersion": 1,
+            "findingId": "finding-1",
+            "checkId": "text-overflow",
+            "origin": "deterministic",
+            "severity": "major",
+            "confidence": 1,
+            "title": "Заголовок выходит за пределы блока",
+            "detail": "Текст длиннее блока на одну строку.",
+            "target": {
+              "slideId": "s2",
+              "variant": "dense",
+              "elementId": "s2-title",
+              "box": {
+                "x": 838200,
+                "y": 365125,
+                "cx": 10515600,
+                "cy": 1325563
+              }
+            },
+            "evidence": {
+              "measured": "1 строка сверх блока",
+              "expected": "0 строк",
+              "quote": "",
+              "sources": [],
+              "screenshot": "audit/s2-title.png"
+            },
+            "fixability": "auto",
+            "proposedPatch": {
+              "patchId": "patch-1",
+              "findingId": "finding-1",
+              "slideId": "s2",
+              "variant": "dense",
+              "ops": [
+                {
+                  "op": "set-font-size",
+                  "elementId": "s2-title",
+                  "sizePt": 36
+                }
+              ],
+              "rationale": "Заголовок не помещается в одну строку: на шаг меньше по шкале шаблона.",
+              "touchesCopy": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

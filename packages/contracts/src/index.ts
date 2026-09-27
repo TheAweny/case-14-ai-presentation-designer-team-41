@@ -164,6 +164,18 @@ export {
   type Fixability,
 } from './audit-finding.js';
 export {
+  auditRequestSchema,
+  auditReportSchema,
+  categorySummarySchema,
+  checkCategorySchema,
+  mediaSizeSchema,
+  type AuditRequest,
+  type AuditReport,
+  type CategorySummary,
+  type CheckCategory,
+  type MediaSize,
+} from './audit-report.js';
+export {
   fixPatchSchema,
   fixPatchBodySchema,
   patchOpSchema,

@@ -16,13 +16,26 @@
 
 | id | Проверка | Уровень | Что проверяет |
 | --- | --- | --- | --- |
-| `text-overflow` | Text stays inside its box | error | Measures every text frame against the box the layout gave it and reports the blocks that do not fit. The finding carries the overflow amount so an agent can shorten the copy. |
-| `bullet-count` | Bullet lists stay readable | warning | Counts bullets per slide and lines per bullet against the thresholds of the audit profile. |
-| `table-size` | Tables fit the slide | warning | Checks rows and columns against the limits of the audit profile. |
-| `contrast` | Text contrasts with its background | error | Computes the contrast ratio between each text run and the surface behind it, using the colors of the template profile. |
-| `safe-margins` | Content respects the template margins | error | Verifies that no shape crosses the safe area derived from the template's own grid. |
-| `font-usage` | Fonts come from the template | error | Checks that every font used on a slide belongs to the template profile and that the number of distinct fonts stays within the profile limit. |
-| `placeholder-text` | No placeholder text is left | error | Scans the deck for filler strings that must never reach a user, such as 'lorem ipsum' or an unfilled prompt to insert text. |
+| `slide-bounds` | Elements stay on the slide | major | Reports any picture, table, chart or shape whose box leaves the slide. Template decoration that bleeds off the edge on purpose is left alone. |
+| `text-clipped` | Text is not cut by the slide edge | blocker | Reports text whose box runs past the edge of the slide, where part of it would not be shown or printed. |
+| `overlap` | Blocks do not overlap | major | Intersects the boxes of every two content elements on a slide and reports pairs that cover a noticeable part of each other. Text inside a shape and members of one group are not pairs. |
+| `text-overflow` | Text stays inside its box | major | Uses the overflow the layout reported, or estimates the lines the text needs at its size and compares them with the height of the box. The finding proposes a smaller size from the template scale when one fits. |
+| `grid-alignment` | Blocks sit on the layout guides | minor | Checks that the left or right edge of every content block, or its centre, falls on a guide of the template: a margin, a column edge or a slot of the pattern the slide was built on. |
+| `safe-margins` | Content respects the template margins | major | Verifies that no content block crosses into the margins the template keeps free around its content area. Full-bleed pictures and template furniture are exempt. |
+| `image-aspect` | Pictures keep their proportions | major | Compares the proportions of the visible part of each picture with the proportions of its box and reports pictures that would be stretched or squeezed. |
+| `font-usage` | Fonts come from the template | major | Checks that every typeface on a slide belongs to the template and that a slide sets no more distinct typefaces than the profile allows. |
+| `type-scale` | Sizes come from the type scale | minor | Checks every stated text size against the sizes of the template type scale. |
+| `palette` | Colours come from the palette | minor | Checks every colour stated as a literal value, on text, fills, outlines, tables and backgrounds, against the palette and surfaces of the template. |
+| `template-layout` | Slides are built on template layouts | major | Checks that the pattern each slide names exists in the pattern catalogue of the template it claims to follow. |
+| `protected-zones` | Logo and footer stay in place | major | Compares logos, footers and page numbers with the zones the template reserves for them, and reports content that covers a zone the slide or most of the template uses. |
+| `contrast` | Text contrasts with its background | major | Computes the WCAG contrast ratio between each text and the fill painted behind it, using the colours of the template. |
+| `bullet-count` | Bullet lists stay short | major | Counts the bullets of each slide against the limit of the audit profile. |
+| `bullet-length` | Bullets stay brief | minor | Counts the words of each bullet against the limit of the audit profile. |
+| `table-size` | Tables fit the slide | major | Checks body rows and columns of each table against the profile limits. |
+| `chart-series` | Charts stay readable | major | Counts the series of each chart against the limit of the audit profile. |
+| `chart-labels` | Charts are labelled | minor | Reports charts with blank category labels, and charts of several series where a series has no name for the legend. |
+| `slide-fill` | Slides are neither empty nor crowded | minor | Measures the share of the slide covered by content and reports slides below or above the profile band. Title and section slides are exempt from the lower bound. |
+| `placeholder-text` | No placeholder text is left | blocker | Scans the deck for filler strings that must never reach a user, listed per profile in configs/audit.yaml, and for text boxes left empty. |
 
 ## Контекстные проверки (TypeScript, `packages/pipeline`)
 
