@@ -24,8 +24,13 @@ export interface ProviderEnv {
   readonly MODEL_PROVIDER?: string;
   readonly MODEL_API_KEY?: string;
   readonly MODEL_JSON_MODE?: string;
+  readonly MODEL_MAX_CONCURRENCY?: string;
   readonly RECORDINGS_DIR?: string;
   readonly [name: string]: string | undefined;
+}
+
+function jsonModeOf(value: string | undefined): 'schema' | 'object' | 'off' {
+  return value === 'object' || value === 'off' ? value : 'schema';
 }
 
 /**
@@ -56,7 +61,8 @@ export function createProvider(
     model: servedName ? { ...model, servedName } : model,
     baseUrl,
     apiKey: env.MODEL_API_KEY ?? '',
-    jsonMode: env.MODEL_JSON_MODE !== 'off',
+    jsonMode: jsonModeOf(env.MODEL_JSON_MODE),
+    ...(env.MODEL_MAX_CONCURRENCY ? { maxConcurrent: Number(env.MODEL_MAX_CONCURRENCY) } : {}),
   });
   if (mode === 'record') {
     return new RecordedProvider({ dir: env.RECORDINGS_DIR, mode: 'record', live });

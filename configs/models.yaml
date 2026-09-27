@@ -14,55 +14,71 @@
 #   baseUrlEnv   - environment variable holding the base URL of that runtime
 #   servedName   - name the runtime serves the model under, when it differs from repo
 #
-# Text roles share one MoE model: 30B weights with 3B active per token keep a 10-15 slide deck
-# inside the 5 minute budget on a single GPU or a hosted endpoint. Vision uses the 8B VL model for
-# the same reason; the 32B VL model is a drop-in replacement where latency allows.
+# Every role runs on one open multimodal MoE model: 35B weights with 3B active per token keep a
+# 10-15 slide deck inside the 5 minute budget, and the same model reads slide images for the
+# content validation questions. Thinking is switched off: the answers are JSON checked against a
+# schema, and reasoning tokens would only spend the budget. The team serves it from Yandex AI
+# Studio (OpenAI-compatible API); the served name there carries the cloud folder id, so it is set
+# in .env as LLM_MODEL and VLM_MODEL rather than here.
 
 models:
   - id: planner-default
-    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
-    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
+    repo: Qwen/Qwen3.6-35B-A3B
+    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
     license: Apache-2.0
-    sizeB: 30.5
+    sizeB: 35
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
+    extraBody:
+      chat_template_kwargs:
+        enable_thinking: false
 
   - id: writer-default
-    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
-    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
+    repo: Qwen/Qwen3.6-35B-A3B
+    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
     license: Apache-2.0
-    sizeB: 30.5
+    sizeB: 35
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
+    extraBody:
+      chat_template_kwargs:
+        enable_thinking: false
 
   - id: critic-default
-    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
-    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
+    repo: Qwen/Qwen3.6-35B-A3B
+    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
     license: Apache-2.0
-    sizeB: 30.5
+    sizeB: 35
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
+    extraBody:
+      chat_template_kwargs:
+        enable_thinking: false
 
   - id: vision-default
-    repo: Qwen/Qwen3-VL-8B-Instruct
-    revision: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
+    repo: Qwen/Qwen3.6-35B-A3B
+    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
     license: Apache-2.0
-    sizeB: 8.8
+    sizeB: 35
     type: vlm
     provider: openai-compatible
     baseUrlEnv: VLM_BASE_URL
+    extraBody:
+      chat_template_kwargs:
+        enable_thinking: false
 
-  - id: vision-large
-    repo: Qwen/Qwen3-VL-32B-Instruct
-    revision: 0cfaf48183f594c314753d30a4c4974bc75f3ccb
+  # A text-only fallback, if the multimodal model is not available on a runtime.
+  - id: planner-fallback
+    repo: openai/gpt-oss-20b
+    revision: 6cee5e81ee83917806bbde320786a8fb61efebee
     license: Apache-2.0
-    sizeB: 33.4
-    type: vlm
+    sizeB: 21
+    type: llm
     provider: openai-compatible
-    baseUrlEnv: VLM_BASE_URL
+    baseUrlEnv: LLM_BASE_URL
 
   - id: illustrator-default
     repo: black-forest-labs/FLUX.1-schnell

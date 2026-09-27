@@ -55,6 +55,10 @@ export const modelEntrySchema = z.object({
     .min(1)
     .optional()
     .describe('Name the runtime serves the model under. Absent: the repository name.'),
+  extraBody: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("Fields added to every chat request, such as switching a model's thinking off."),
 });
 
 export const modelCatalogSchema = z
