@@ -16,7 +16,7 @@ import { slideIrSchema } from './slide-ir.js';
  */
 
 /** Which part of the requirements a check belongs to. The report is grouped by it. */
-export const checkCategorySchema = z.enum(['layout', 'template', 'density', 'content']);
+export const checkCategorySchema = z.enum(['layout', 'template', 'density', 'integrity']);
 
 /** Pixel size of a picture, for the distortion check when the file itself is not at hand. */
 export const mediaSizeSchema = z.object({

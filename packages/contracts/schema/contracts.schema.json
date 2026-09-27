@@ -907,7 +907,7 @@
                   "layout",
                   "template",
                   "density",
-                  "content"
+                  "integrity"
                 ],
                 "type": "string"
               },

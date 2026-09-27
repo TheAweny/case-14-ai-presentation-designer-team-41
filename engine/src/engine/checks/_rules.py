@@ -39,6 +39,7 @@ class AuditContext:
     template: Template
     patterns: dict[str, dict[str, Any]] | None
     media_sizes: dict[str, dict[str, int]]
+    deck: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     params: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
 
 
@@ -802,23 +803,24 @@ def chart_labels(
     for element in slide["elements"]:
         if element["kind"] != "chart":
             continue
-        blank = sum(1 for c in element["categories"] if not c.strip())
-        nameless = sum(1 for s in element["series"] if not s["name"].strip())
-        if len(element["series"]) < 2:
-            nameless = 0
-        if not blank and not nameless:
-            continue
         problems = []
+        if element["chartType"] != "pie" and not element.get("yTitle", "").strip():
+            problems.append("нет подписи оси значений (и единиц)")
+        blank = sum(1 for c in element["categories"] if not c.strip())
         if blank:
             problems.append(f"без подписи {blank} категорий")
-        if nameless:
-            problems.append(f"без названия {nameless} серий")
+        if len(element["series"]) > 1:
+            nameless = sum(1 for series in element["series"] if not series["name"].strip())
+            if nameless:
+                problems.append(f"в легенде без названия {nameless} серий")
+        if not problems:
+            continue
         out.add(
             title="У диаграммы нет подписей",
-            detail="На диаграмме " + " и ".join(problems) + ", её нельзя прочитать без легенды.",
+            detail="На диаграмме " + "; ".join(problems) + ".",
             element=element,
-            measured=", ".join(problems),
-            expected="подписаны все категории и серии",
+            measured="; ".join(problems),
+            expected="подписаны ось значений, категории и серии легенды",
             assisted=True,
         )
     return out.findings
@@ -855,6 +857,91 @@ def slide_fill(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext)
 
 
 # Content -------------------------------------------------------------------------------------
+
+
+def empty_slide(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext) -> list[Finding]:
+    out = _Emitter(check, slide)
+    content = [
+        e
+        for e in slide["elements"]
+        if is_content(e)
+        and (e["kind"] in {"image", "table", "chart"} or any(t.strip() for t in element_texts(e)))
+    ]
+    if not content:
+        out.add(
+            title="Пустой слайд",
+            detail="На слайде нет ни текста, ни визуальных элементов.",
+            expected="на слайде есть содержание",
+            assisted=True,
+        )
+    elif all(e["role"] == "title" for e in content):
+        pattern = (ctx.patterns or {}).get(slide["patternId"])
+        # A cover or section layout is meant to be sparse, so a bare headline there is minor.
+        headline_layout = bool(
+            pattern and {"title", "section", "closing"} & set(pattern["intents"])
+        )
+        out.add(
+            title="Слайд с одним заголовком",
+            detail="Кроме заголовка на слайде ничего нет.",
+            element=content[0],
+            quote=" ".join(element_texts(content[0])),
+            expected="на слайде есть содержание, а не только заголовок",
+            assisted=True,
+            severity="minor" if headline_layout else None,
+        )
+    return out.findings
+
+
+def raster_slide(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext) -> list[Finding]:
+    out = _Emitter(check, slide)
+    area = _slide_rect(slide)
+    coverage = ctx.params[check.id]["minCoverage"]
+    content = [e for e in slide["elements"] if is_content(e)]
+    pictures = [e for e in content if e["kind"] == "image"]
+    others = [e for e in content if e["kind"] != "image"]
+    for picture in pictures:
+        common = Rect.of(picture["box"]).intersection(area)
+        if common is None or common.area < area.area * coverage or others:
+            continue
+        out.add(
+            title="Слайд оказался картинкой",
+            detail="Весь слайд занят одним изображением, на нём нет редактируемых объектов.",
+            element=picture,
+            measured=_pct(common.area / area.area),
+            expected="слайд собран из нативных объектов",
+        )
+    return out.findings
+
+
+def _word_set(slide: dict[str, Any]) -> set[str]:
+    text = " ".join(t for e in slide["elements"] if is_content(e) for t in element_texts(e))
+    return {w for w in re.findall(r"\w+", text.casefold()) if len(w) > 2}
+
+
+def duplicate_slide(
+    check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext
+) -> list[Finding]:
+    out = _Emitter(check, slide)
+    p = ctx.params[check.id]
+    mine = _word_set(slide)
+    if len(mine) < p["minWords"]:
+        return out.findings
+    for other in ctx.deck:
+        if other["variant"] != slide["variant"] or other["index"] >= slide["index"]:
+            continue
+        theirs = _word_set(other)
+        similarity = len(mine & theirs) / max(len(mine | theirs), 1)
+        if similarity >= p["minSimilarity"]:
+            out.add(
+                title="Слайд дублирует другой",
+                detail=f"Слайд почти повторяет слайд {other['index'] + 1} («{other['slideId']}»): "
+                f"совпадает {_pct(similarity)} слов.",
+                measured=_pct(similarity),
+                expected=f"меньше {_pct(p['minSimilarity'])}",
+                assisted=True,
+            )
+            break
+    return out.findings
 
 
 def placeholder_text(
@@ -909,5 +996,8 @@ RULES: dict[str, Rule] = {
     "chart-series": chart_series,
     "chart-labels": chart_labels,
     "slide-fill": slide_fill,
+    "empty-slide": empty_slide,
+    "raster-slide": raster_slide,
+    "duplicate-slide": duplicate_slide,
     "placeholder-text": placeholder_text,
 }

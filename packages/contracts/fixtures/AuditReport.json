@@ -36,7 +36,7 @@
             "passed": true
           },
           {
-            "category": "content",
+            "category": "integrity",
             "checks": 1,
             "findings": 0,
             "passed": true
@@ -125,7 +125,7 @@
             "passed": true
           },
           {
-            "category": "content",
+            "category": "integrity",
             "checks": 1,
             "findings": 0,
             "passed": true
@@ -173,7 +173,7 @@
             "passed": true
           },
           {
-            "category": "content",
+            "category": "integrity",
             "checks": 1,
             "findings": 0,
             "passed": true
@@ -264,7 +264,7 @@
             "passed": true
           },
           {
-            "category": "content",
+            "category": "integrity",
             "checks": 1,
             "findings": 0,
             "passed": true

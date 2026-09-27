@@ -62,6 +62,8 @@ profiles:
         forbiddenPatterns:
           - 'lorem ipsum'
           - 'вставьте текст'
+          - 'xxx'
+          - 'todo'
           - 'click to add'
           - 'нажмите, чтобы добавить'
           - 'заголовок слайда'

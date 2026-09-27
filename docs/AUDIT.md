@@ -33,8 +33,11 @@
 | `bullet-length` | Bullets stay brief | minor | Counts the words of each bullet against the limit of the audit profile. |
 | `table-size` | Tables fit the slide | major | Checks body rows and columns of each table against the profile limits. |
 | `chart-series` | Charts stay readable | major | Counts the series of each chart against the limit of the audit profile. |
-| `chart-labels` | Charts are labelled | minor | Reports charts with blank category labels, and charts of several series where a series has no name for the legend. |
+| `chart-labels` | Charts are labelled | minor | Reports charts without a value axis title, which is where the units go, with blank category labels, or with several series and a series that has no name for the legend. |
 | `slide-fill` | Slides are neither empty nor crowded | minor | Measures the share of the slide covered by content and reports slides below or above the profile band. Title and section slides are exempt from the lower bound. |
+| `empty-slide` | Slides carry content | major | Reports slides with no content at all, and slides that carry nothing but a headline. |
+| `raster-slide` | Slides are editable objects | blocker | Reports slides whose content is a single picture covering the slide, which is a slide exported as an image rather than as native objects. |
+| `duplicate-slide` | Slides do not repeat each other | major | Compares the words of every two slides of a variant and reports pairs that say almost the same thing. |
 | `placeholder-text` | No placeholder text is left | blocker | Scans the deck for filler strings that must never reach a user, listed per profile in configs/audit.yaml, and for text boxes left empty. |
 
 ## Контекстные проверки (TypeScript, `packages/pipeline`)

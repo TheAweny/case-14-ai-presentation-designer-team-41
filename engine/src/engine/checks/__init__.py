@@ -62,6 +62,7 @@ def run_deterministic_checks(
         template=Template(request["designSystem"]),
         patterns={p["patternId"]: p for p in catalog["patterns"]} if catalog else None,
         media_sizes=dict(request.get("mediaSizes") or {}),
+        deck=list(request["slides"]),
     )
     active: list[CheckDefinition] = []
     for check in DETERMINISTIC_CHECKS:

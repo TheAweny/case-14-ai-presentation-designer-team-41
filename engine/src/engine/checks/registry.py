@@ -14,7 +14,7 @@ from typing import Any
 __all__ = ["CATEGORIES", "DETERMINISTIC_CHECKS", "CheckDefinition", "check_by_id"]
 
 #: Requirement groups, in the order the report lists them.
-CATEGORIES: tuple[str, ...] = ("layout", "template", "density", "content")
+CATEGORIES: tuple[str, ...] = ("layout", "template", "density", "integrity")
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,11 +206,12 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
     ),
     CheckDefinition(
         id="chart-labels",
-        category="density",
+        category="integrity",
         title="Charts are labelled",
         description=(
-            "Reports charts with blank category labels, and charts of several series where a "
-            "series has no name for the legend."
+            "Reports charts without a value axis title, which is where the units go, with blank "
+            "category labels, or with several series and a series that has no name for the "
+            "legend."
         ),
         severity="minor",
     ),
@@ -226,8 +227,39 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         defaults={"minFill": 0.25, "maxFill": 0.75},
     ),
     CheckDefinition(
+        id="empty-slide",
+        category="integrity",
+        title="Slides carry content",
+        description=(
+            "Reports slides with no content at all, and slides that carry nothing but a headline."
+        ),
+        severity="major",
+    ),
+    CheckDefinition(
+        id="raster-slide",
+        category="integrity",
+        title="Slides are editable objects",
+        description=(
+            "Reports slides whose content is a single picture covering the slide, which is a "
+            "slide exported as an image rather than as native objects."
+        ),
+        severity="blocker",
+        defaults={"minCoverage": 0.9},
+    ),
+    CheckDefinition(
+        id="duplicate-slide",
+        category="integrity",
+        title="Slides do not repeat each other",
+        description=(
+            "Compares the words of every two slides of a variant and reports pairs that say "
+            "almost the same thing."
+        ),
+        severity="major",
+        defaults={"minSimilarity": 0.85, "minWords": 4},
+    ),
+    CheckDefinition(
         id="placeholder-text",
-        category="content",
+        category="integrity",
         title="No placeholder text is left",
         description=(
             "Scans the deck for filler strings that must never reach a user, listed per profile "

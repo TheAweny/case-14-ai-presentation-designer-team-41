@@ -120,7 +120,7 @@ def audit(request: AuditRequest) -> AuditReport:
     measured here, and each finding says what is wrong, why, and how to fix it when that can be
     computed.
     """
-    payload = request.model_dump(mode="json")
+    payload = request.model_dump(mode="json", exclude_unset=True)
     profile_name = request.profile or "default"
     try:
         profile = deterministic_profile(profile_name)

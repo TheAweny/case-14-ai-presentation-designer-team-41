@@ -112,19 +112,23 @@ def _catalog() -> dict[str, Any]:
     }
 
 
-def _request(slide: dict[str, Any], media: dict[str, Any] | None = None) -> dict[str, Any]:
+def _request(
+    slide: dict[str, Any], media: dict[str, Any] | None = None, *more: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "schemaVersion": 1,
         "deckId": "deck",
-        "slides": [slide],
+        "slides": [slide, *more],
         "designSystem": _DS,
         "patternCatalog": _catalog(),
         "mediaSizes": media or {},
     }
 
 
-def _fired(slide: dict[str, Any], media: dict[str, Any] | None = None) -> set[str]:
-    report = audit_deck(_request(slide, media), "default", deterministic_profile("default"))
+def _fired(
+    slide: dict[str, Any], media: dict[str, Any] | None = None, *more: dict[str, Any]
+) -> set[str]:
+    report = audit_deck(_request(slide, media, *more), "default", deterministic_profile("default"))
     return {finding["checkId"] for finding in report["findings"]}
 
 
@@ -266,12 +270,27 @@ def _slide_fill(s: dict[str, Any]) -> None:
     _element(s, "list")["paragraphs"] = _element(s, "list")["paragraphs"][:1]
 
 
+def _empty_slide(s: dict[str, Any]) -> None:
+    s["elements"] = [e for e in s["elements"] if e["role"] == "title"]
+
+
+def _raster_slide(s: dict[str, Any]) -> None:
+    whole = {"x": 0, "y": 0, "cx": _GRID["slideCx"], "cy": _GRID["slideCy"]}
+    s["elements"] = [_image(whole)]
+
+
+def _duplicate_slide(s: dict[str, Any]) -> list[dict[str, Any]]:
+    twin = copy.deepcopy(s)
+    twin["slideId"], twin["index"] = "s2", 1
+    return [twin]
+
+
 def _placeholder_text(s: dict[str, Any]) -> None:
     pattern = deterministic_profile("default")["placeholder-text"]["forbiddenPatterns"][0]
     _run(s, "list")["text"] = f"{pattern} сюда"
 
 
-_VIOLATIONS: dict[str, Callable[[dict[str, Any]], None]] = {
+_VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] = {
     "slide-bounds": _slide_bounds,
     "text-clipped": _text_clipped,
     "overlap": _overlap,
@@ -291,6 +310,9 @@ _VIOLATIONS: dict[str, Callable[[dict[str, Any]], None]] = {
     "chart-series": _chart_series,
     "chart-labels": _chart_labels,
     "slide-fill": _slide_fill,
+    "empty-slide": _empty_slide,
+    "raster-slide": _raster_slide,
+    "duplicate-slide": _duplicate_slide,
     "placeholder-text": _placeholder_text,
 }
 
@@ -310,8 +332,8 @@ def test_check_passes_a_clean_slide(check_id: str) -> None:
 @pytest.mark.parametrize("check_id", _IDS)
 def test_check_fires_on_a_slide_that_breaks_it(check_id: str) -> None:
     slide = _clean_slide()
-    _VIOLATIONS[check_id](slide)
-    assert check_id in _fired(slide, _MEDIA)
+    more = _VIOLATIONS[check_id](slide) or []
+    assert check_id in _fired(slide, _MEDIA, *more)
 
 
 def test_clean_deck_passes_with_a_full_score() -> None:
@@ -325,7 +347,7 @@ def test_clean_deck_passes_with_a_full_score() -> None:
         "layout",
         "template",
         "density",
-        "content",
+        "integrity",
     }
 
 

@@ -493,7 +493,7 @@ class Category1(StrEnum):
     layout = "layout"
     template = "template"
     density = "density"
-    content = "content"
+    integrity = "integrity"
 
 
 class Category(BaseModel):
