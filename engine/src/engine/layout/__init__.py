@@ -14,16 +14,30 @@ from typing import Any, Literal
 
 from engine.contracts import DeckPlan, PatternCatalog, SlideIR
 
-__all__ = ["Variant", "build_slide_ir", "select_pattern"]
+__all__ = [
+    "VARIANTS",
+    "Variant",
+    "build_slide_ir",
+    "build_variants",
+    "fingerprint",
+    "select_pattern",
+]
 
 Variant = Literal["dense", "balanced", "airy"]
 
+#: The three renderings of one plan, in the order they are shown.
+VARIANTS: tuple[Variant, ...] = ("dense", "balanced", "airy")
+
 EMU_PER_PT = 12_700
 
-# Average glyph width as a share of the font size, the same estimate the parser uses to state
-# slot capacity, so that a text the catalog says fits is also laid out as fitting.
-_GLYPH_WIDTH_EM = 0.5
-_DEFAULT_LINE_SPACING = 1.2
+# Text is measured the way the audit measures it (engine.checks): an average glyph of 0.55 em,
+# wrapped at word boundaries, a single line 1.2 times the size, inside the default OOXML insets.
+# The parser states slot capacity with the same glyph width. A text the layout calls fitting
+# must not come back from the audit as overflowing.
+_GLYPH_WIDTH_EM = 0.55
+_SINGLE_LINE = 1.2
+_INSET_X = 2 * 91_440
+_INSET_Y = 2 * 45_720
 
 # Type scale entries for text in each slot role, nearest first.
 _SCALE_ROLES = {
@@ -34,6 +48,19 @@ _SCALE_ROLES = {
 }
 
 _TEXT_BLOCKS = frozenset({"paragraph", "bullets", "quote"})
+
+# Slots for visuals, named as the plan blocks that fill them.
+_VISUAL_SLOTS = frozenset({"image", "chart", "table"})
+
+# Type scale steps body copy may take per variant: dense the smallest of these, airy the
+# largest that still fits.
+_DENSE_STEPS = ("body", "bullet")
+_AIRY_STEPS = ("body", "bullet", "subtitle")
+
+# Dense splits a list of at least this many lines into two columns, when its slot is at least
+# this share of the slide wide.
+_DENSE_COLUMNS_FROM = 5
+_DENSE_MIN_WIDTH = 0.5
 
 # A body slot smaller than this share of the largest one is a heading, not a column.
 _MAIN_BODY_SHARE = 0.5
@@ -63,7 +90,7 @@ def build_slide_ir(
     scale = {entry["role"]: entry for entry in design_system["typeScale"]}
     slides: list[SlideIR] = []
     for index, slide in enumerate(plan.slides):
-        pattern = select_pattern(slide, catalog, variant)
+        pattern = select_pattern(slide, catalog, variant, scale)
         slides.append(
             SlideIR.model_validate(
                 {
@@ -74,54 +101,153 @@ def build_slide_ir(
                     "patternId": pattern["patternId"],
                     "slideCx": grid["slideCx"],
                     "slideCy": grid["slideCy"],
-                    "elements": _elements(slide, pattern, scale),
+                    "elements": _elements(slide, pattern, scale, variant, grid),
                 }
             )
         )
     return slides
 
 
-def select_pattern(slide: Any, catalog: dict[str, Any], variant: Variant) -> dict[str, Any]:
+def build_variants(
+    plan: DeckPlan,
+    design_system: dict[str, Any],
+    patterns: PatternCatalog | dict[str, Any] | None = None,
+) -> dict[Variant, list[SlideIR]]:
+    """Lay one plan out three times, once per variant, on the same template profile.
+
+    The axis the variants differ on is density. Dense takes the template's fullest layouts,
+    sets copy in its smallest body step and splits long lists into two columns; airy takes its
+    sparsest layouts, the largest step that fits and centres short copy; balanced sits between.
+    Text, facts and slide order are the same in all three.
+    """
+    return {variant: build_slide_ir(plan, design_system, patterns, variant) for variant in VARIANTS}
+
+
+def fingerprint(slides: list[SlideIR]) -> tuple[tuple[Any, ...], ...]:
+    """Composition of a deck with its words left out: two decks that look alike match."""
+    result = []
+    for slide in slides:
+        parts = []
+        for element in slide.elements:
+            dumped = element.model_dump(mode="json")
+            box = dumped["box"]
+            sizes = sorted({r["sizePt"] for p in dumped.get("paragraphs") or [] for r in p["runs"]})
+            parts.append(
+                (
+                    dumped["kind"],
+                    dumped["role"],
+                    box["x"],
+                    box["y"],
+                    box["cx"],
+                    box["cy"],
+                    tuple(sizes),
+                    dumped.get("verticalAlign"),
+                )
+            )
+        result.append((slide.patternId, tuple(parts)))
+    return tuple(result)
+
+
+def select_pattern(
+    slide: Any,
+    catalog: dict[str, Any],
+    variant: Variant,
+    scale: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Pick the pattern a planned slide is built on.
 
-    Candidates are the patterns listing the slide's intent. A slide with text only takes a pattern
-    with a body slot, from the whole catalog if none of its intent has one; a slide without text
-    falls back to any pattern with a title. Among the
-    candidates, those whose text slots can hold the copy come first, then the variant decides by
-    density, and ties go to the pattern the template uses most.
+    A pattern qualifies only if it has a place for everything the slide carries: a title slot
+    for the headline, a body for text, a subtitle or a body for the subhead. Anything else would
+    drop copy without a signal. Qualifying patterns listing the slide's intent come first, then
+    any qualifying pattern; among them, those that would leave a picture, chart or table slot
+    empty give way to those that would not. Then those the copy fits come first, measured at the
+    body step of the type scale when one is given, and each variant takes its own pattern by
+    density (see `_by_variant`).
 
     Args:
         slide: A slide of the deck plan.
         catalog: Pattern catalog payload.
         variant: Rendering the slide is built for.
+        scale: Type scale by role. Without it capacity comes from the catalog's `maxChars`.
 
     Returns:
         The chosen pattern payload.
     """
     patterns = catalog["patterns"]
-    wants_text = any(block.kind in _TEXT_BLOCKS for block in slide.blocks)
     intent = _text(slide.intent)
-    candidates = [p for p in patterns if intent in p["intents"]]
-    if wants_text:
-        # Text never goes on a pattern with nowhere to put it: that would drop it silently.
-        candidates = [p for p in candidates if _has(p, "body")] or [
-            p for p in patterns if _has(p, "body")
-        ]
-    if not candidates:
-        candidates = [p for p in patterns if _has(p, "title")] or list(patterns)
+    holding = [p for p in patterns if _holds(p, slide)]
+    candidates = (
+        [p for p in holding if intent in p["intents"]]
+        or holding
+        or [p for p in patterns if intent in p["intents"]]
+        or [p for p in patterns if _has(p, "title")]
+        or list(patterns)
+    )
+    candidates = [p for p in candidates if not _leaves_empty(p, slide)] or candidates
+    fitting = [p for p in candidates if _fits(p, slide, scale)] or candidates
+    return _by_variant(fitting)[variant]
 
-    length = len(_body_text(slide))
-    fitting = [p for p in candidates if _capacity(p) >= length] or candidates
 
-    by_density = sorted(fitting, key=lambda p: (p["density"], -p["occurrences"], p["patternId"]))
-    if variant == "dense":
-        best = max(p["density"] for p in by_density)
-    elif variant == "airy":
-        best = min(p["density"] for p in by_density)
+def _holds(pattern: dict[str, Any], slide: Any) -> bool:
+    """Whether a pattern has somewhere to put each part of the slide."""
+    wants_text = any(block.kind in _TEXT_BLOCKS for block in slide.blocks)
+    if slide.headline and not _has(pattern, "title"):
+        return False
+    if wants_text and not _has(pattern, "body"):
+        return False
+    return not slide.subhead or _has(pattern, "subtitle") or _has(pattern, "body")
+
+
+def _leaves_empty(pattern: dict[str, Any], slide: Any) -> bool:
+    """Whether a pattern has a required picture, chart or table slot the slide has nothing for."""
+    kinds = {block.kind for block in slide.blocks}
+    return any(
+        slot["role"] in _VISUAL_SLOTS and not slot["optional"] and slot["role"] not in kinds
+        for slot in pattern["slots"]
+    )
+
+
+def _fits(pattern: dict[str, Any], slide: Any, scale: dict[str, dict[str, Any]] | None) -> bool:
+    """Whether the headline and the copy fit their slots without overflow."""
+    if scale is None:
+        return _capacity(pattern) >= len(_body_text(slide)) and _title_capacity(pattern) >= len(
+            slide.headline
+        )
+    title = next((slot for slot in pattern["slots"] if slot["role"] == "title"), None)
+    if title and _overflow([slide.headline], title["box"], _style(scale, "title")):
+        return False
+    bodies = _main_bodies(pattern["slots"])
+    columns = _distribute(slide, len(bodies))
+    if bodies and slide.subhead and not _has(pattern, "subtitle"):
+        columns[0] = [slide.subhead, *columns[0]]
+    style = _style(scale, "body")
+    return all(
+        _overflow(lines, slot["box"], style) is None
+        for slot, lines in zip(bodies, columns, strict=False)
+        if lines
+    )
+
+
+def _by_variant(fitting: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Give each variant its own pattern, as far as the template offers different ones.
+
+    Dense takes the densest, airy the sparsest, balanced one that is neither, nearest to the
+    middle. With fewer than three candidates balanced shares a pattern, and the variants then
+    differ in how the text sits in it. Ties go to the pattern the template uses most.
+    """
+    ranked = sorted(fitting, key=lambda p: (p["density"], -p["occurrences"], p["patternId"]))
+    by_use = sorted(ranked, key=lambda p: (-p["occurrences"], p["patternId"]))
+    densest = max(p["density"] for p in ranked)
+    sparsest = min(p["density"] for p in ranked)
+    dense = next(p for p in by_use if p["density"] == densest)
+    airy = next(p for p in by_use if p["density"] == sparsest)
+    middle = [p for p in ranked if p is not dense and p is not airy]
+    if middle:
+        target = (densest + sparsest) / 2
+        balanced = min(middle, key=lambda p: (abs(p["density"] - target), -p["occurrences"]))
     else:
-        best = by_density[(len(by_density) - 1) // 2]["density"]
-    tied = [p for p in by_density if p["density"] == best]
-    return min(tied, key=lambda p: (-p["occurrences"], p["patternId"]))
+        balanced = by_use[0]
+    return {"dense": dense, "balanced": balanced, "airy": airy}
 
 
 def _catalog(
@@ -177,6 +303,14 @@ def _has(pattern: dict[str, Any], role: str) -> bool:
     return any(slot["role"] == role for slot in pattern["slots"])
 
 
+def _title_capacity(pattern: dict[str, Any]) -> float:
+    """Characters the title slot holds; a pattern without a title, or of unknown size, any."""
+    titles = [slot["maxChars"] for slot in pattern["slots"] if slot["role"] == "title"]
+    if not titles or titles[0] is None:
+        return math.inf
+    return float(titles[0])
+
+
 def _capacity(pattern: dict[str, Any]) -> float:
     """Characters the body slots hold together; unknown capacity counts as unlimited."""
     bodies = [slot["maxChars"] for slot in pattern["slots"] if slot["role"] == "body"]
@@ -227,7 +361,11 @@ def _distribute(slide: Any, bodies: int) -> list[list[str]]:
 
 
 def _elements(
-    slide: Any, pattern: dict[str, Any], scale: dict[str, dict[str, Any]]
+    slide: Any,
+    pattern: dict[str, Any],
+    scale: dict[str, dict[str, Any]],
+    variant: Variant = "balanced",
+    grid: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     slots = pattern["slots"]
     body_slots = _main_bodies(slots)
@@ -252,19 +390,85 @@ def _elements(
         lines = [line for line in lines if line]
         if not lines:
             continue
-        style = _style(scale, role)
-        elements.append(
-            {
-                "elementId": f"{slot['slotId']}-{slide.slideId}",
-                "kind": "text",
-                "role": role,
-                "sourceShapeId": None,
-                "box": slot["box"],
-                "paragraphs": [_paragraph(line, style) for line in lines],
-                "overflow": _overflow(lines, slot["box"], style),
-            }
-        )
+        element_id = f"{slot['slotId']}-{slide.slideId}"
+        if role != "body":
+            elements.append(
+                _text_element(element_id, role, slot["box"], lines, _style(scale, role))
+            )
+            continue
+        style = _body_style(scale, variant, lines, slot["box"])
+        split = _dense_columns(variant, lines, slot["box"], len(body_slots), grid)
+        if split:
+            for n, (box, part) in enumerate(split, start=1):
+                elements.append(_text_element(f"{element_id}-col{n}", role, box, part, style))
+            continue
+        element = _text_element(element_id, role, slot["box"], lines, style)
+        if (
+            variant == "airy"
+            and element["overflow"] is None
+            and _is_short(lines, slot["box"], style)
+        ):
+            element["verticalAlign"] = "middle"
+        elements.append(element)
     return elements
+
+
+def _text_element(
+    element_id: str, role: str, box: dict[str, int], lines: list[str], style: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "elementId": element_id,
+        "kind": "text",
+        "role": role,
+        "sourceShapeId": None,
+        "box": box,
+        "paragraphs": [_paragraph(line, style) for line in lines],
+        "overflow": _overflow(lines, box, style),
+    }
+
+
+def _body_style(
+    scale: dict[str, dict[str, Any]], variant: Variant, lines: list[str], box: dict[str, int]
+) -> dict[str, Any]:
+    """Style of body copy per variant, always a step of the template's own type scale.
+
+    Dense sets copy in the smallest body step, airy in the largest step up to the subtitle that
+    still fits the box, balanced in the body step itself.
+    """
+    balanced = _style(scale, "body")
+    if variant == "dense":
+        steps = [scale[r] for r in _DENSE_STEPS if r in scale]
+        return min(steps, key=lambda s: float(s["sizePt"]), default=balanced)
+    if variant == "airy":
+        steps = [scale[r] for r in _AIRY_STEPS if r in scale]
+        fitting = [s for s in steps if _overflow(lines, box, s) is None]
+        return max(fitting, key=lambda s: float(s["sizePt"]), default=balanced)
+    return balanced
+
+
+def _dense_columns(
+    variant: Variant,
+    lines: list[str],
+    box: dict[str, int],
+    bodies: int,
+    grid: dict[str, Any] | None,
+) -> list[tuple[dict[str, int], list[str]]] | None:
+    """A long list in one wide slot, split into two columns by the grid gutter, for dense."""
+    if variant != "dense" or grid is None or bodies != 1 or len(lines) < _DENSE_COLUMNS_FROM:
+        return None
+    if box["cx"] < grid["slideCx"] * _DENSE_MIN_WIDTH:
+        return None
+    gutter = int(grid["gutter"])
+    width = (box["cx"] - gutter) // 2
+    half = math.ceil(len(lines) / 2)
+    left = {**box, "cx": width}
+    right = {**box, "x": box["x"] + width + gutter, "cx": width}
+    return [(left, lines[:half]), (right, lines[half:])]
+
+
+def _is_short(lines: list[str], box: dict[str, int], style: dict[str, Any]) -> bool:
+    needed, available = _line_budget(lines, box, style)
+    return needed * 2 <= available
 
 
 def _main_bodies(slots: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -292,19 +496,46 @@ def _style(scale: dict[str, dict[str, Any]], role: str) -> dict[str, Any]:
     return next(iter(scale.values()))
 
 
+def _line_budget(lines: list[str], box: dict[str, int], style: dict[str, Any]) -> tuple[int, int]:
+    """Lines the text needs at a style, and lines the box holds."""
+    size_pt = float(style["sizePt"])
+    line_pt = size_pt * _SINGLE_LINE * float(style.get("lineSpacing") or 1.0)
+    width_pt = max(box["cx"] - _INSET_X, 1) / EMU_PER_PT
+    height_pt = max(box["cy"] - _INSET_Y, 0) / EMU_PER_PT
+    per_line = max(1, int(width_pt / (size_pt * _GLYPH_WIDTH_EM)))
+    available = max(1, int(height_pt / line_pt))
+    needed = sum(max(1, _wrapped(line, per_line)) for line in lines)
+    return needed, available
+
+
+def _wrapped(text: str, per_line: int) -> int:
+    """Lines a text takes when wrapped at word boundaries, long words broken."""
+    count, current = 1, 0
+    for word in text.split():
+        length = len(word)
+        if current == 0:
+            current = length
+        elif current + 1 + length <= per_line:
+            current += 1 + length
+        else:
+            count += 1
+            current = length
+        while current > per_line:
+            count += 1
+            current -= per_line
+    return count
+
+
 def _overflow(
     lines: list[str], box: dict[str, int], style: dict[str, Any]
 ) -> dict[str, int] | None:
     """Lines the text needs beyond what the box holds, or None when it fits."""
-    size_pt = float(style["sizePt"])
-    spacing = float(style.get("lineSpacing") or _DEFAULT_LINE_SPACING)
-    per_line = max(1, int(box["cx"] / EMU_PER_PT / (size_pt * _GLYPH_WIDTH_EM)))
-    available = max(1, int(box["cy"] / EMU_PER_PT / (size_pt * spacing)))
-    needed = sum(max(1, math.ceil(len(line) / per_line)) for line in lines)
+    needed, available = _line_budget(lines, box, style)
     if needed <= available:
         return None
+    line_pt = float(style["sizePt"]) * _SINGLE_LINE * float(style.get("lineSpacing") or 1.0)
     extra = needed - available
-    return {"lines": extra, "emu": int(extra * size_pt * spacing * EMU_PER_PT)}
+    return {"lines": extra, "emu": int(extra * line_pt * EMU_PER_PT)}
 
 
 def _paragraph(text: str, style: dict[str, Any]) -> dict[str, Any]:

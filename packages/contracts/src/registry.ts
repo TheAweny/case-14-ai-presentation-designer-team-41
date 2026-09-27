@@ -10,6 +10,7 @@ import { deckPlanSchema } from './deck-plan.js';
 import { slideIrSchema } from './slide-ir.js';
 import { auditFindingSchema } from './audit-finding.js';
 import { auditReportSchema, auditRequestSchema } from './audit-report.js';
+import { layoutVariantsRequestSchema, layoutVariantsResponseSchema } from './layout-variants.js';
 import { fixPatchSchema } from './fix-patch.js';
 import { jobEventSchema } from './job-event.js';
 import { artifactManifestSchema } from './artifact-manifest.js';
@@ -35,6 +36,8 @@ export const contractRegistry = {
   PatternCatalog: patternCatalogSchema,
   DeckPlan: deckPlanSchema,
   SlideIR: slideIrSchema,
+  LayoutVariantsRequest: layoutVariantsRequestSchema,
+  LayoutVariantsResponse: layoutVariantsResponseSchema,
   AuditFinding: auditFindingSchema,
   AuditRequest: auditRequestSchema,
   AuditReport: auditReportSchema,
