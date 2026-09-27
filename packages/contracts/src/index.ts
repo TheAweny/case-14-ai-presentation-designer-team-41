@@ -239,3 +239,12 @@ export {
   type ReviewVerdict,
   type SlideReview,
 } from './slide-review.js';
+export {
+  deckExportRequestSchema,
+  deckExportResponseSchema,
+  exportedFileSchema,
+  exportFormatSchema,
+  type DeckExportRequest,
+  type DeckExportResponse,
+  type ExportFormat,
+} from './deck-export.js';

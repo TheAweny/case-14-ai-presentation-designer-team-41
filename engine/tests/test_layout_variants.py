@@ -217,3 +217,17 @@ def test_layouts_endpoint_returns_the_three_variants(tmp_path: Path) -> None:
 
     one = TestClient(app).post("/v1/layouts", json={**payload, "variants": ["airy"]})
     assert [v["variant"] for v in one.json()["variants"]] == ["airy"]
+
+
+def test_layouts_endpoint_leaves_unset_optional_fields_out(tmp_path: Path) -> None:
+    path = tmp_path / "t.pptx"
+    Presentation().save(str(path))
+    payload = {
+        "schemaVersion": 1,
+        "templatePath": str(path),
+        "plan": _deck().model_dump(mode="json"),
+    }
+    body = TestClient(app).post("/v1/layouts", json=payload).json()
+    element = body["variants"][0]["slides"][0]["elements"][0]
+    assert "rotation" not in element and "groupIds" not in element
+    assert "overflow" in element

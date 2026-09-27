@@ -2,6 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "audience": {
+      "description": "Who the deck is for. Absent: not stated.",
+      "type": "string"
+    },
     "auditProfile": {
       "description": "Name of the audit profile from configs/audit.yaml.",
       "minLength": 1,
@@ -10,6 +14,16 @@
     "contentPath": {
       "description": "Path to the content pack for the deck.",
       "minLength": 1,
+      "type": "string"
+    },
+    "goal": {
+      "description": "What the deck has to achieve. Absent: the first paragraph of the content file.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "language": {
+      "description": "BCP 47 tag of the deck. Absent: ru.",
+      "minLength": 2,
       "type": "string"
     },
     "layoutVariants": {

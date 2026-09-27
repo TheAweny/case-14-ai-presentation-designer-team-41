@@ -12,6 +12,8 @@ from engine.api._profiles import UnknownProfileError, deterministic_profile
 from engine.contracts import (
     AuditReport,
     AuditRequest,
+    DeckExportRequest,
+    DeckExportResponse,
     DeckPlan,
     EditableDeckRequest,
     EditableDeckResponse,
@@ -113,6 +115,8 @@ def _media_sizes(slides: list[dict[str, Any]], stated: dict[str, Any]) -> dict[s
 @app.post(
     "/v1/audit",
     response_model=AuditReport,
+    # SlideIR tells an absent field from a null one; unset optional fields must stay absent.
+    response_model_exclude_unset=True,
     summary="Verify generated slides against the template and the audit profile",
 )
 def audit(request: AuditRequest) -> AuditReport:
@@ -136,6 +140,8 @@ def audit(request: AuditRequest) -> AuditReport:
 @app.post(
     "/v1/layouts",
     response_model=LayoutVariantsResponse,
+    # SlideIR tells an absent field from a null one; unset optional fields must stay absent.
+    response_model_exclude_unset=True,
     summary="Lay one deck plan out as the three variants on a local template",
 )
 def build_layouts(request: LayoutVariantsRequest) -> LayoutVariantsResponse:
@@ -177,3 +183,42 @@ def _styled(slides: list[SlideIR], design_system: dict[str, Any]) -> list[SlideI
     """Slides with their tables and charts given the template's look by the visuals layer."""
     dumped = [slide.model_dump(mode="json", exclude_unset=True) for slide in slides]
     return [SlideIR.model_validate(s) for s in visuals.style_visuals(dumped, design_system)]
+
+
+@app.post(
+    "/v1/exports",
+    response_model=DeckExportResponse,
+    # SlideIR tells an absent field from a null one; unset optional fields must stay absent.
+    response_model_exclude_unset=True,
+    summary="Write slides onto their template as native PPTX, and PDF from it",
+)
+def export_deck(request: DeckExportRequest) -> DeckExportResponse:
+    """Write one variant's slides as files, tables and charts as native objects."""
+    template_path = Path(request.templatePath).resolve()
+    if not template_path.is_file():
+        raise HTTPException(status_code=404, detail="Template PPTX was not found.")
+    design_system, _ = parser.template_profile_of(template_path)
+    variant = str(getattr(request.variant, "value", request.variant))
+    slides = [
+        SlideIR.model_validate(slide.model_dump(mode="json", exclude_unset=True))
+        for slide in request.slides
+    ]
+    formats = [str(getattr(f, "value", f)) for f in request.formats or ["pptx", "pdf"]]
+    output_dir = Path(request.outputDir).resolve()
+    pptx_path = export.export_pptx(
+        _styled(slides, design_system),
+        design_system,
+        template_path,
+        output_dir / f"{variant}.pptx",
+        visuals.draw_visual,
+    )
+    files = [{"format": "pptx", "path": str(pptx_path)}] if "pptx" in formats else []
+    if "pdf" in formats:
+        try:
+            pdf_path = export.export_pdf(pptx_path, output_dir / f"{variant}.pdf")
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        files.append({"format": "pdf", "path": str(pdf_path)})
+    return DeckExportResponse.model_validate(
+        {"schemaVersion": 1, "variant": variant, "files": files}
+    )

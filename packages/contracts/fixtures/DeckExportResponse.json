@@ -1,0 +1,30 @@
+{
+  "contract": "DeckExportResponse",
+  "valid": [
+    {
+      "name": "one file",
+      "payload": {
+        "schemaVersion": 1,
+        "variant": "balanced",
+        "files": [
+          {
+            "format": "pptx",
+            "path": "runs/run-1/balanced.pptx"
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "no files",
+      "why": "An export that wrote nothing failed.",
+      "path": ["files"],
+      "payload": {
+        "schemaVersion": 1,
+        "variant": "balanced",
+        "files": []
+      }
+    }
+  ]
+}

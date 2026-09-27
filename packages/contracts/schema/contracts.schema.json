@@ -4276,6 +4276,1576 @@
       "title": "ContentPack",
       "type": "object"
     },
+    "DeckExportRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "formats": {
+          "description": "Absent: pptx and pdf.",
+          "items": {
+            "enum": [
+              "pptx",
+              "pdf"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "outputDir": {
+          "description": "Local directory the files are written to.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "slides": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "background": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "background",
+                          "surface",
+                          "text",
+                          "text-muted",
+                          "text-on-accent",
+                          "accent",
+                          "accent-alt",
+                          "line",
+                          "positive",
+                          "negative"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "description": "Six hex digits, no leading hash.",
+                        "pattern": "^[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "A palette role, or six hex digits without a hash when a user chose their own."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Colour the slide is filled with. Null or absent: the template background."
+              },
+              "elements": {
+                "description": "In paint order, lowest first.",
+                "items": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "box": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cx": {
+                              "description": "Width in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "cy": {
+                              "description": "Height in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "x": {
+                              "description": "Left edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "y": {
+                              "description": "Top edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "cx",
+                            "cy"
+                          ],
+                          "type": "object"
+                        },
+                        "elementId": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "groupIds": {
+                          "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "kind": {
+                          "const": "text",
+                          "type": "string"
+                        },
+                        "locked": {
+                          "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                          "type": "boolean"
+                        },
+                        "opacity": {
+                          "description": "From 0 to 1. Absent means opaque.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "overflow": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "emu": {
+                                  "description": "How far past the box the text runs.",
+                                  "maximum": 9007199254740991,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                "lines": {
+                                  "description": "Lines that do not fit.",
+                                  "maximum": 9007199254740991,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "lines",
+                                "emu"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null when the text fits. Set instead of truncating it."
+                        },
+                        "paragraphs": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "align": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right",
+                                      "justify"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Null or absent when the paragraph inherits its alignment."
+                              },
+                              "level": {
+                                "description": "Indent level, zero at the top.",
+                                "maximum": 9007199254740991,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "lineSpacing": {
+                                "anyOf": [
+                                  {
+                                    "exclusiveMinimum": 0,
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Multiple of single spacing, when stated as a percentage."
+                              },
+                              "runs": {
+                                "description": "Runs in reading order.",
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "bold": {
+                                      "description": "Null when inherited.",
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "color": {
+                                      "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                                      "type": "string"
+                                    },
+                                    "font": {
+                                      "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                                      "type": "string"
+                                    },
+                                    "italic": {
+                                      "description": "Null when inherited.",
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "letterSpacingPt": {
+                                      "description": "Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "sizePt": {
+                                      "description": "Size in points, or null when inherited.",
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "text": {
+                                      "description": "Literal text of the run.",
+                                      "type": "string"
+                                    },
+                                    "underline": {
+                                      "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "text",
+                                    "font",
+                                    "sizePt",
+                                    "bold",
+                                    "italic",
+                                    "color"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "runs",
+                              "lineSpacing"
+                            ],
+                            "type": "object"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "role": {
+                          "enum": [
+                            "title",
+                            "subtitle",
+                            "body",
+                            "bullet-list",
+                            "kpi-value",
+                            "kpi-caption",
+                            "quote",
+                            "table",
+                            "chart",
+                            "image",
+                            "logo",
+                            "footer",
+                            "page-number",
+                            "decoration"
+                          ],
+                          "type": "string"
+                        },
+                        "rotation": {
+                          "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                          "exclusiveMaximum": 360,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "sourceShapeId": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Template shape this was placed from, when it came from one."
+                        },
+                        "verticalAlign": {
+                          "description": "Absent when the element inherits it, which reads as top.",
+                          "enum": [
+                            "top",
+                            "middle",
+                            "bottom"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "elementId",
+                        "role",
+                        "box",
+                        "sourceShapeId",
+                        "paragraphs",
+                        "overflow"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "box": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cx": {
+                              "description": "Width in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "cy": {
+                              "description": "Height in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "x": {
+                              "description": "Left edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "y": {
+                              "description": "Top edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "cx",
+                            "cy"
+                          ],
+                          "type": "object"
+                        },
+                        "crop": {
+                          "additionalProperties": false,
+                          "description": "The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
+                          "properties": {
+                            "b": {
+                              "description": "Share of the height cut off at the bottom.",
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "l": {
+                              "description": "Share of the width cut off on the left.",
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "r": {
+                              "description": "Share of the width cut off on the right.",
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "t": {
+                              "description": "Share of the height cut off at the top.",
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "l",
+                            "t",
+                            "r",
+                            "b"
+                          ],
+                          "type": "object"
+                        },
+                        "elementId": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "fit": {
+                          "description": "Never stretch: the audit looks for distortion.",
+                          "enum": [
+                            "contain",
+                            "cover"
+                          ],
+                          "type": "string"
+                        },
+                        "groupIds": {
+                          "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "kind": {
+                          "const": "image",
+                          "type": "string"
+                        },
+                        "locked": {
+                          "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                          "type": "boolean"
+                        },
+                        "mediaPart": {
+                          "description": "Part name inside the template, or a path under the run directory.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "opacity": {
+                          "description": "From 0 to 1. Absent means opaque.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "role": {
+                          "enum": [
+                            "title",
+                            "subtitle",
+                            "body",
+                            "bullet-list",
+                            "kpi-value",
+                            "kpi-caption",
+                            "quote",
+                            "table",
+                            "chart",
+                            "image",
+                            "logo",
+                            "footer",
+                            "page-number",
+                            "decoration"
+                          ],
+                          "type": "string"
+                        },
+                        "rotation": {
+                          "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                          "exclusiveMaximum": 360,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "sourceShapeId": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "elementId",
+                        "role",
+                        "box",
+                        "sourceShapeId",
+                        "mediaPart",
+                        "fit"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "bandFill": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "background",
+                                "surface",
+                                "text",
+                                "text-muted",
+                                "text-on-accent",
+                                "accent",
+                                "accent-alt",
+                                "line",
+                                "positive",
+                                "negative"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "description": "Six hex digits, no leading hash.",
+                              "pattern": "^[0-9a-fA-F]{6}$",
+                              "type": "string"
+                            }
+                          ],
+                          "description": "Fill of the tinted body rows. Absent: the surface role."
+                        },
+                        "bandedRows": {
+                          "description": "Whether every other body row is tinted (OOXML bandRow). Absent means false.",
+                          "type": "boolean"
+                        },
+                        "borders": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "color": {
+                                  "anyOf": [
+                                    {
+                                      "enum": [
+                                        "background",
+                                        "surface",
+                                        "text",
+                                        "text-muted",
+                                        "text-on-accent",
+                                        "accent",
+                                        "accent-alt",
+                                        "line",
+                                        "positive",
+                                        "negative"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    {
+                                      "description": "Six hex digits, no leading hash.",
+                                      "pattern": "^[0-9a-fA-F]{6}$",
+                                      "type": "string"
+                                    }
+                                  ],
+                                  "description": "A palette role, or a hex value a user chose."
+                                },
+                                "horizontal": {
+                                  "description": "A rule under every row, the last one included.",
+                                  "type": "boolean"
+                                },
+                                "outer": {
+                                  "description": "A frame around the whole table.",
+                                  "type": "boolean"
+                                },
+                                "vertical": {
+                                  "description": "Rules between columns.",
+                                  "type": "boolean"
+                                },
+                                "widthEmu": {
+                                  "description": "Line width in EMU.",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "color",
+                                "widthEmu",
+                                "horizontal",
+                                "vertical",
+                                "outer"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for no lines. Absent: a hairline in the line role under every row."
+                        },
+                        "box": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cx": {
+                              "description": "Width in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "cy": {
+                              "description": "Height in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "x": {
+                              "description": "Left edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "y": {
+                              "description": "Top edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "cx",
+                            "cy"
+                          ],
+                          "type": "object"
+                        },
+                        "cellStyles": {
+                          "description": "Look of each cell, header row first, then by column. A missing or null entry inherits.",
+                          "items": {
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "align": {
+                                      "description": "Horizontal alignment. Absent means left.",
+                                      "enum": [
+                                        "left",
+                                        "center",
+                                        "right",
+                                        "justify"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "bold": {
+                                      "description": "Absent: bold in the header row, regular elsewhere.",
+                                      "type": "boolean"
+                                    },
+                                    "color": {
+                                      "anyOf": [
+                                        {
+                                          "enum": [
+                                            "background",
+                                            "surface",
+                                            "text",
+                                            "text-muted",
+                                            "text-on-accent",
+                                            "accent",
+                                            "accent-alt",
+                                            "line",
+                                            "positive",
+                                            "negative"
+                                          ],
+                                          "type": "string"
+                                        },
+                                        {
+                                          "description": "Six hex digits, no leading hash.",
+                                          "pattern": "^[0-9a-fA-F]{6}$",
+                                          "type": "string"
+                                        }
+                                      ],
+                                      "description": "Colour of the text. Absent: the type role."
+                                    },
+                                    "fill": {
+                                      "anyOf": [
+                                        {
+                                          "anyOf": [
+                                            {
+                                              "enum": [
+                                                "background",
+                                                "surface",
+                                                "text",
+                                                "text-muted",
+                                                "text-on-accent",
+                                                "accent",
+                                                "accent-alt",
+                                                "line",
+                                                "positive",
+                                                "negative"
+                                              ],
+                                              "type": "string"
+                                            },
+                                            {
+                                              "description": "Six hex digits, no leading hash.",
+                                              "pattern": "^[0-9a-fA-F]{6}$",
+                                              "type": "string"
+                                            }
+                                          ],
+                                          "description": "A palette role, or six hex digits without a hash when a user chose their own."
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "Background of the cell. Null for none, even in a header or banded row."
+                                    },
+                                    "italic": {
+                                      "type": "boolean"
+                                    },
+                                    "underline": {
+                                      "type": "boolean"
+                                    },
+                                    "verticalAlign": {
+                                      "description": "Absent means top.",
+                                      "enum": [
+                                        "top",
+                                        "middle",
+                                        "bottom"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "type": "array"
+                          },
+                          "type": "array"
+                        },
+                        "columnWidths": {
+                          "description": "Share of the box width each column takes, one per header, read relative to their sum. Absent: equal columns.",
+                          "items": {
+                            "exclusiveMinimum": 0,
+                            "type": "number"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "elementId": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "groupIds": {
+                          "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "headerRow": {
+                          "description": "Whether the first row looks like a header (OOXML firstRow). Absent means true.",
+                          "type": "boolean"
+                        },
+                        "headers": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "kind": {
+                          "const": "table",
+                          "type": "string"
+                        },
+                        "locked": {
+                          "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                          "type": "boolean"
+                        },
+                        "opacity": {
+                          "description": "From 0 to 1. Absent means opaque.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "role": {
+                          "enum": [
+                            "title",
+                            "subtitle",
+                            "body",
+                            "bullet-list",
+                            "kpi-value",
+                            "kpi-caption",
+                            "quote",
+                            "table",
+                            "chart",
+                            "image",
+                            "logo",
+                            "footer",
+                            "page-number",
+                            "decoration"
+                          ],
+                          "type": "string"
+                        },
+                        "rotation": {
+                          "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                          "exclusiveMaximum": 360,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "rowHeights": {
+                          "description": "Share of the box height each row takes, header first, read relative to their sum. A row still grows to fit its text, as a PowerPoint row does. Absent: the rows share the box, each growing to fit its text.",
+                          "items": {
+                            "exclusiveMinimum": 0,
+                            "type": "number"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "rows": {
+                          "items": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "sourceShapeId": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "elementId",
+                        "role",
+                        "box",
+                        "sourceShapeId",
+                        "headers",
+                        "rows"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "box": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cx": {
+                              "description": "Width in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "cy": {
+                              "description": "Height in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "x": {
+                              "description": "Left edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "y": {
+                              "description": "Top edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "cx",
+                            "cy"
+                          ],
+                          "type": "object"
+                        },
+                        "categories": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "chartType": {
+                          "enum": [
+                            "bar",
+                            "column",
+                            "line",
+                            "pie",
+                            "area"
+                          ],
+                          "type": "string"
+                        },
+                        "elementId": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "groupIds": {
+                          "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "kind": {
+                          "const": "chart",
+                          "type": "string"
+                        },
+                        "locked": {
+                          "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                          "type": "boolean"
+                        },
+                        "opacity": {
+                          "description": "From 0 to 1. Absent means opaque.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "role": {
+                          "enum": [
+                            "title",
+                            "subtitle",
+                            "body",
+                            "bullet-list",
+                            "kpi-value",
+                            "kpi-caption",
+                            "quote",
+                            "table",
+                            "chart",
+                            "image",
+                            "logo",
+                            "footer",
+                            "page-number",
+                            "decoration"
+                          ],
+                          "type": "string"
+                        },
+                        "rotation": {
+                          "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                          "exclusiveMaximum": 360,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "series": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "name": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "values": {
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "values"
+                            ],
+                            "type": "object"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "sourceShapeId": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "xTitle": {
+                          "type": "string"
+                        },
+                        "yTitle": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "elementId",
+                        "role",
+                        "box",
+                        "sourceShapeId",
+                        "chartType",
+                        "categories",
+                        "series",
+                        "xTitle",
+                        "yTitle"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "box": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cx": {
+                              "description": "Width in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "cy": {
+                              "description": "Height in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "x": {
+                              "description": "Left edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "y": {
+                              "description": "Top edge in EMU.",
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "cx",
+                            "cy"
+                          ],
+                          "type": "object"
+                        },
+                        "cornerRadius": {
+                          "description": "Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
+                          "maximum": 0.5,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "elementId": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "fill": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "enum": [
+                                    "background",
+                                    "surface",
+                                    "text",
+                                    "text-muted",
+                                    "text-on-accent",
+                                    "accent",
+                                    "accent-alt",
+                                    "line",
+                                    "positive",
+                                    "negative"
+                                  ],
+                                  "type": "string"
+                                },
+                                {
+                                  "description": "Six hex digits, no leading hash.",
+                                  "pattern": "^[0-9a-fA-F]{6}$",
+                                  "type": "string"
+                                }
+                              ],
+                              "description": "A palette role, or six hex digits without a hash when a user chose their own."
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for no fill. Absent when the template did not state one."
+                        },
+                        "flipH": {
+                          "description": "Mirrored horizontally. A line runs from the top left of its box unless flipped.",
+                          "type": "boolean"
+                        },
+                        "flipV": {
+                          "description": "Mirrored vertically.",
+                          "type": "boolean"
+                        },
+                        "groupIds": {
+                          "description": "Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "kind": {
+                          "const": "decor",
+                          "type": "string"
+                        },
+                        "locked": {
+                          "description": "True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false.",
+                          "type": "boolean"
+                        },
+                        "opacity": {
+                          "description": "From 0 to 1. Absent means opaque.",
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "paragraphs": {
+                          "description": "Text inside the shape. Absent when it has none.",
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "align": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right",
+                                      "justify"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Null or absent when the paragraph inherits its alignment."
+                              },
+                              "level": {
+                                "description": "Indent level, zero at the top.",
+                                "maximum": 9007199254740991,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "lineSpacing": {
+                                "anyOf": [
+                                  {
+                                    "exclusiveMinimum": 0,
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Multiple of single spacing, when stated as a percentage."
+                              },
+                              "runs": {
+                                "description": "Runs in reading order.",
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "bold": {
+                                      "description": "Null when inherited.",
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "color": {
+                                      "description": "Six-digit hex when the run states a colour. Empty when it inherits one.",
+                                      "type": "string"
+                                    },
+                                    "font": {
+                                      "description": "Typeface named on the run. Empty when it inherits from the theme.",
+                                      "type": "string"
+                                    },
+                                    "italic": {
+                                      "description": "Null when inherited.",
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "letterSpacingPt": {
+                                      "description": "Extra space between letters in points, as OOXML `spc`. Null or absent: inherited.",
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "sizePt": {
+                                      "description": "Size in points, or null when inherited.",
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "text": {
+                                      "description": "Literal text of the run.",
+                                      "type": "string"
+                                    },
+                                    "underline": {
+                                      "description": "Null or absent when inherited, which for almost every template means no underline.",
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "text",
+                                    "font",
+                                    "sizePt",
+                                    "bold",
+                                    "italic",
+                                    "color"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "runs",
+                              "lineSpacing"
+                            ],
+                            "type": "object"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "role": {
+                          "enum": [
+                            "title",
+                            "subtitle",
+                            "body",
+                            "bullet-list",
+                            "kpi-value",
+                            "kpi-caption",
+                            "quote",
+                            "table",
+                            "chart",
+                            "image",
+                            "logo",
+                            "footer",
+                            "page-number",
+                            "decoration"
+                          ],
+                          "type": "string"
+                        },
+                        "rotation": {
+                          "description": "Clockwise, in degrees, about the centre of the box. Absent means 0.",
+                          "exclusiveMaximum": 360,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "shape": {
+                          "description": "Absent for template decoration of a geometry the parser did not name.",
+                          "enum": [
+                            "rect",
+                            "round-rect",
+                            "ellipse",
+                            "triangle",
+                            "diamond",
+                            "line"
+                          ],
+                          "type": "string"
+                        },
+                        "sourceShapeId": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Template shape this was placed from. Null when it was drawn in the editor."
+                        },
+                        "stroke": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "color": {
+                                  "anyOf": [
+                                    {
+                                      "enum": [
+                                        "background",
+                                        "surface",
+                                        "text",
+                                        "text-muted",
+                                        "text-on-accent",
+                                        "accent",
+                                        "accent-alt",
+                                        "line",
+                                        "positive",
+                                        "negative"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    {
+                                      "description": "Six hex digits, no leading hash.",
+                                      "pattern": "^[0-9a-fA-F]{6}$",
+                                      "type": "string"
+                                    }
+                                  ],
+                                  "description": "A palette role, or a hex value a user chose."
+                                },
+                                "dash": {
+                                  "enum": [
+                                    "solid",
+                                    "dash",
+                                    "dot"
+                                  ],
+                                  "type": "string"
+                                },
+                                "head": {
+                                  "description": "Mark at the start of a line.",
+                                  "enum": [
+                                    "none",
+                                    "arrow"
+                                  ],
+                                  "type": "string"
+                                },
+                                "tail": {
+                                  "description": "Mark at the end of a line.",
+                                  "enum": [
+                                    "none",
+                                    "arrow"
+                                  ],
+                                  "type": "string"
+                                },
+                                "widthEmu": {
+                                  "description": "Line width in EMU.",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "color",
+                                "widthEmu",
+                                "dash",
+                                "head",
+                                "tail"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for no outline. Absent when the template did not state one."
+                        },
+                        "textInsets": {
+                          "additionalProperties": false,
+                          "description": "Absent: the OOXML defaults, 0.1 inch left and right and 0.05 inch top and bottom.",
+                          "properties": {
+                            "b": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "l": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "r": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "t": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "l",
+                            "t",
+                            "r",
+                            "b"
+                          ],
+                          "type": "object"
+                        },
+                        "verticalAlign": {
+                          "description": "Where the text sits in the shape (the bodyPr anchor). Absent means middle.",
+                          "enum": [
+                            "top",
+                            "middle",
+                            "bottom"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "elementId",
+                        "role",
+                        "box",
+                        "sourceShapeId"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "index": {
+                "description": "Position in the deck, from zero.",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "notes": {
+                "description": "Speaker notes as plain text, one paragraph of the notes page (`p:notes`) per line. Absent or empty: the slide has none.",
+                "type": "string"
+              },
+              "patternId": {
+                "description": "Pattern from the template profile this slide was built on.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "schemaVersion": {
+                "const": 1,
+                "description": "Incremented by any incompatible change.",
+                "type": "number"
+              },
+              "slideCx": {
+                "description": "Slide width in EMU, from the template.",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "slideCy": {
+                "description": "Slide height in EMU, from the template.",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "slideId": {
+                "description": "Matches the planned slide, across all three variants.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "variant": {
+                "enum": [
+                  "dense",
+                  "balanced",
+                  "airy"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "slideId",
+              "variant",
+              "index",
+              "patternId",
+              "slideCx",
+              "slideCy",
+              "elements"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "templatePath": {
+          "description": "Local path of the template the slides follow.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "variant": {
+          "enum": [
+            "dense",
+            "balanced",
+            "airy"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "templatePath",
+        "variant",
+        "slides",
+        "outputDir"
+      ],
+      "title": "DeckExportRequest",
+      "type": "object"
+    },
+    "DeckExportResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "enum": [
+                  "pptx",
+                  "pdf"
+                ],
+                "type": "string"
+              },
+              "path": {
+                "description": "Where the file was written.",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "format",
+              "path"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "variant": {
+          "enum": [
+            "dense",
+            "balanced",
+            "airy"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "variant",
+        "files"
+      ],
+      "title": "DeckExportResponse",
+      "type": "object"
+    },
     "DeckPlan": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -9797,6 +11367,10 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "audience": {
+          "description": "Who the deck is for. Absent: not stated.",
+          "type": "string"
+        },
         "auditProfile": {
           "description": "Name of the audit profile from configs/audit.yaml.",
           "minLength": 1,
@@ -9805,6 +11379,16 @@
         "contentPath": {
           "description": "Path to the content pack for the deck.",
           "minLength": 1,
+          "type": "string"
+        },
+        "goal": {
+          "description": "What the deck has to achieve. Absent: the first paragraph of the content file.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "language": {
+          "description": "BCP 47 tag of the deck. Absent: ru.",
+          "minLength": 2,
           "type": "string"
         },
         "layoutVariants": {
@@ -13740,6 +15324,12 @@
     },
     "ContentPack": {
       "$ref": "#/$defs/ContentPack"
+    },
+    "DeckExportRequest": {
+      "$ref": "#/$defs/DeckExportRequest"
+    },
+    "DeckExportResponse": {
+      "$ref": "#/$defs/DeckExportResponse"
     },
     "DeckPlan": {
       "$ref": "#/$defs/DeckPlan"

@@ -58,6 +58,8 @@ describe('contract registry', () => {
       'AuditReport',
       'AuditRequest',
       'ContentPack',
+      'DeckExportRequest',
+      'DeckExportResponse',
       'DeckPlan',
       'DesignSystem',
       'EditableDeckRequest',

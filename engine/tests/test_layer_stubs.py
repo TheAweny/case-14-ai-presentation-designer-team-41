@@ -8,12 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from engine import export, render
-
-
-def test_export_pdf_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        export.export_pdf(Path("runs/deck.pptx"), Path("runs/deck.pdf"))
+from engine import render
 
 
 def test_render_entry_point_is_declared() -> None:
