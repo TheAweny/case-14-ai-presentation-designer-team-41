@@ -84,8 +84,9 @@ def build_slide_ir(
 def select_pattern(slide: Any, catalog: dict[str, Any], variant: Variant) -> dict[str, Any]:
     """Pick the pattern a planned slide is built on.
 
-    Candidates are the patterns listing the slide's intent. When none does, any pattern with a
-    body slot will do for a slide with text, and any pattern with a title otherwise. Among the
+    Candidates are the patterns listing the slide's intent. A slide with text only takes a pattern
+    with a body slot, from the whole catalog if none of its intent has one; a slide without text
+    falls back to any pattern with a title. Among the
     candidates, those whose text slots can hold the copy come first, then the variant decides by
     density, and ties go to the pattern the template uses most.
 
@@ -101,8 +102,11 @@ def select_pattern(slide: Any, catalog: dict[str, Any], variant: Variant) -> dic
     wants_text = any(block.kind in _TEXT_BLOCKS for block in slide.blocks)
     intent = _text(slide.intent)
     candidates = [p for p in patterns if intent in p["intents"]]
-    if not candidates and wants_text:
-        candidates = [p for p in patterns if _has(p, "body")]
+    if wants_text:
+        # Text never goes on a pattern with nowhere to put it: that would drop it silently.
+        candidates = [p for p in candidates if _has(p, "body")] or [
+            p for p in patterns if _has(p, "body")
+        ]
     if not candidates:
         candidates = [p for p in patterns if _has(p, "title")] or list(patterns)
 

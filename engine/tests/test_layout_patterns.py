@@ -128,3 +128,28 @@ def test_layout_is_deterministic(tmp_path: Path) -> None:
     second = [s.model_dump() for s in build_slide_ir(plan, design_system, patterns)]
 
     assert first == second
+
+
+def test_text_is_placed_on_a_template_whose_layouts_only_have_titles(tmp_path: Path) -> None:
+    deck = Presentation()
+    for layout in list(deck.slide_layouts):
+        if layout.name not in {"Title Only", "Blank"}:
+            deck.slide_layouts.remove(layout)
+    path = tmp_path / "titles-only.pptx"
+    deck.save(str(path))
+    design_system, patterns = template_profile_of(path)
+    assert any(_has_body(p) for p in patterns["patterns"])
+
+    plan = _plan({"intent": "statement", "blocks": [{"kind": "paragraph", "text": "Keep me"}]})
+    (slide,) = build_slide_ir(plan, design_system, patterns)
+    texts = [
+        run["text"]
+        for element in slide.model_dump(mode="json")["elements"]
+        for paragraph in element.get("paragraphs") or []
+        for run in paragraph["runs"]
+    ]
+    assert "Keep me" in " ".join(texts)
+
+
+def _has_body(pattern: dict[str, Any]) -> bool:
+    return any(slot["role"] == "body" for slot in pattern["slots"])
