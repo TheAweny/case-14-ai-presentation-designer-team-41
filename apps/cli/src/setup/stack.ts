@@ -72,3 +72,21 @@ export function commandVersion(bin: string, args: string[] = ['--version']): str
     ? ((result.stdout || result.stderr).trim().split('\n')[0] ?? '')
     : null;
 }
+
+/** Version of the buildx plugin, or null without one. Compose needs 0.17+ to build images. */
+export function buildxVersion(): [number, number] | null {
+  const out = commandVersion('docker', ['buildx', 'version']);
+  const match = /v?(\d+)\.(\d+)/.exec(out?.split(' ')[1] ?? '');
+  return match ? [Number(match[1]), Number(match[2])] : null;
+}
+
+export const MIN_BUILDX: [number, number] = [0, 17];
+
+export function buildxOk(): boolean {
+  const version = buildxVersion();
+  return version !== null && (version[0] > MIN_BUILDX[0] || version[1] >= MIN_BUILDX[1]);
+}
+
+export const BUILDX_HINT =
+  'Нужен Docker buildx 0.17+: обновите Docker (docs.docker.com/engine/install) или положите ' +
+  'бинарник с github.com/docker/buildx/releases в ~/.docker/cli-plugins/docker-buildx';

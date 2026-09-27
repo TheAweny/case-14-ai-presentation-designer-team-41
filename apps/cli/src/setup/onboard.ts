@@ -3,7 +3,16 @@ import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import { EnvFile } from './env-file.js';
 import { aiStudio, checkModel, offline, openAiCompatible, type ModelSettings } from './models.js';
-import { compose, composeCommand, portFree, repoRoot, run, waitFor } from './stack.js';
+import {
+  BUILDX_HINT,
+  buildxOk,
+  compose,
+  composeCommand,
+  portFree,
+  repoRoot,
+  run,
+  waitFor,
+} from './stack.js';
 import {
   emailProblem,
   formatUsers,
@@ -185,6 +194,10 @@ export async function onboard(options: OnboardOptions = {}): Promise<number> {
         ));
   if (mode === 'docker' && composeCommand() === null) {
     p.log.error('Нужен Docker с Compose: https://docs.docker.com/get-docker/');
+    return 1;
+  }
+  if (mode === 'docker' && !buildxOk()) {
+    p.log.error(BUILDX_HINT);
     return 1;
   }
 

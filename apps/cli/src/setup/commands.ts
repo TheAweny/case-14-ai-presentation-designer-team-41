@@ -3,7 +3,15 @@ import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import { EnvFile } from './env-file.js';
 import { checkModel, type ModelSettings } from './models.js';
-import { compose, commandVersion, composeCommand, portFree, repoRoot } from './stack.js';
+import {
+  BUILDX_HINT,
+  buildxOk,
+  compose,
+  commandVersion,
+  composeCommand,
+  portFree,
+  repoRoot,
+} from './stack.js';
 import {
   emailProblem,
   formatUsers,
@@ -105,6 +113,7 @@ export async function doctor(): Promise<number> {
   const docker = commandVersion('docker');
   check(docker !== null, docker ?? '', 'Нет Docker: https://docs.docker.com/get-docker/');
   check(composeCommand() !== null, 'Docker Compose есть', 'Нет Docker Compose');
+  check(buildxOk(), 'Docker buildx 0.17+ есть', BUILDX_HINT);
   const uv = commandVersion('uv');
   if (uv) p.log.success(uv);
   else p.log.info('uv не найден: нужен только для локального режима');

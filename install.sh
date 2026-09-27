@@ -66,7 +66,7 @@ esac
 # The wizard reads the terminal even when this script came through a pipe.
 if [[ -t 0 ]]; then
   exec node "$ROOT/apps/cli/dist/main.js" onboard "$@"
-elif [[ -r /dev/tty ]]; then
+elif { : </dev/tty; } 2>/dev/null; then
   exec node "$ROOT/apps/cli/dist/main.js" onboard "$@" </dev/tty
 else
   exec node "$ROOT/apps/cli/dist/main.js" onboard --yes "$@"
