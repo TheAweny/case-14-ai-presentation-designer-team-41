@@ -16,6 +16,7 @@ import {
   type TemplateSummary,
 } from '@/lib/library-source';
 import { createTemplateImports, type TemplateImport } from '@/lib/template-imports';
+import { createVariantReview } from '@/lib/variant-review';
 import { createDemoGenerator } from '@/mocks/demo-generator';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
 import { deckSource, librarySource } from '@/mocks/sources';
@@ -83,10 +84,8 @@ export const deckConversations = createDeckConversations({
   imports: templateImports,
   // Серверным действием: проект, к которому прикрепили шаблон, видят серверные страницы.
   attachTemplate: attachTemplateAction,
+  review: createVariantReview(deckSource),
 });
-
-/** Модели, которыми генератор умеет писать текст. */
-export const writerModels = deckGenerator.models;
 
 const noSubscribe = () => () => undefined;
 

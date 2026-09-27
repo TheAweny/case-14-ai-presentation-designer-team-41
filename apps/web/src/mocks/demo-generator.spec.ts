@@ -19,7 +19,7 @@ const withTemplate = (templateId: string, projectId: string | null = null): Gene
   brief: 'Итоги квартала для правления',
   files: [],
   slideCount: null,
-  modelId: null,
+  model: null,
 });
 
 const WARM = 'warm-16x9';

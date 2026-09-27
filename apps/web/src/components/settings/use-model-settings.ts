@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { getModelSettingsAction } from '@/app/settings-actions';
 import { CHECK_TIMEOUT_MS } from '@/lib/model-connection-check';
 import type { CheckError, ModelSettings } from '@/lib/model-settings';
+import { publishModelSettings } from './model-settings-store';
 
 /**
  * Настройки моделей для окна: загружаются, когда открыт раздел, и заменяются целиком ответом
@@ -14,6 +15,11 @@ import type { CheckError, ModelSettings } from '@/lib/model-settings';
 export function useModelSettings() {
   const [settings, setSettings] = useState<ModelSettings | null>(null);
   const [failed, setFailed] = useState(false);
+
+  // Каждый ответ сервера — и в общий стор: выбор модели у полей ввода следует за окном.
+  useEffect(() => {
+    if (settings) publishModelSettings(settings);
+  }, [settings]);
 
   const load = useCallback(() => {
     setFailed(false);

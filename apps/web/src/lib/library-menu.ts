@@ -30,7 +30,7 @@ export const TAB_PARAM = 'tab';
 /** Шаблоны проекта: вкладка, где их прикрепляют и открепляют. */
 export const projectTemplatesHref = (projectId: string) =>
   `${projectHref(projectId)}?${TAB_PARAM}=templates`;
-/** Редактор новой колоды, пока агент её собирает: по id разговора, который её начал. */
+/** Разговор о новой колоде: агент собирает её там, по id разговора. */
 export const newDeckHref = (threadId: string) => `/decks/new/${encodeURIComponent(threadId)}`;
 
 /** Параметр адреса редактора: с ним колода открывается сразу в режиме показа. */

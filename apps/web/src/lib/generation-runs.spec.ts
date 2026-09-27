@@ -10,7 +10,7 @@ const request: GenerationRequest = {
   brief: 'Итоги квартала для правления',
   files: [new File(['Выручка,100'], 'выручка.csv')],
   slideCount: null,
-  modelId: null,
+  model: null,
 };
 
 const ids = () => {
@@ -80,7 +80,6 @@ describe('createGenerationRuns', () => {
   it('сбой генератора — ошибка, которую можно повторить', async () => {
     const broken: DeckGenerator = {
       profilesUploadedTemplates: false,
-      models: [],
       generate: () => Promise.reject(new Error('network')),
     };
     const runs = createGenerationRuns(broken, ids());

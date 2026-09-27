@@ -1,0 +1,44 @@
+{
+  "documentTitle": "New presentation — {app}",
+  "untitled": "New presentation",
+  "back": "Back",
+  "log": "Conversation about the presentation",
+  "notFound": {
+    "title": "Conversation not found",
+    "body": "A conversation lives while the tab is open: it cannot be restored after a page reload. Start again from the field on the home page or in a project.",
+    "home": "Go home"
+  },
+  "next": {
+    "title": "Rebuild it",
+    "otherTemplate": "In another template",
+    "otherTemplateTitle": "Build the same deck with",
+    "otherTemplateSaid": "Build the same deck with the “{template}” template",
+    "suggestions": {
+      "shorter": {
+        "label": "Shorter",
+        "text": "Make the deck shorter: fewer slides and less text on each."
+      },
+      "numbers": {
+        "label": "More numbers",
+        "text": "Add more numbers and facts from the materials."
+      },
+      "simpler": {
+        "label": "Plainer language",
+        "text": "Write more plainly, without jargon."
+      }
+    }
+  },
+  "input": {
+    "label": "Message to the agent",
+    "placeholder": "What should change? The agent will rebuild the deck",
+    "placeholderRunning": "Add a wish — the agent will rebuild with it",
+    "placeholderAnswer": "Or answer in your own words",
+    "send": "Send",
+    "stop": "Stop",
+    "attach": "Add materials",
+    "files": "Materials for the next build",
+    "dropHere": "Drop files to add them to the request",
+    "rejected": "Unsupported files: {names}.",
+    "hint": "Enter to send, Shift+Enter for a new line"
+  }
+}

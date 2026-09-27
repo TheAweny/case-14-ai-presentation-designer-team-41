@@ -15,10 +15,10 @@ import {
 import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowUp02Icon, Attachment01Icon, Loading03Icon } from '@hugeicons/core-free-icons';
-import { deckConversations, writerModels } from '@/components/assistant/session';
+import { deckConversations } from '@/components/assistant/session';
+import { useWriterModels } from '@/components/settings/model-settings-store';
 import { Button } from '@/components/ui/button';
+import { AttachIcon, SendIcon, SpinnerIcon } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -31,8 +31,10 @@ import {
 import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-generator';
 import { newDeckHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
+import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
 import { cn } from '@/lib/utils';
+import { effectiveModel, shortModelName } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
@@ -90,6 +92,7 @@ export function DeckComposer({
   focusRequested?: boolean;
 }) {
   const t = useTranslations('composer');
+  const tAudience = useTranslations('assistant.audience.brief');
   const router = useRouter();
   const pathname = usePathname();
   const mac = useIsMac();
@@ -107,7 +110,8 @@ export function DeckComposer({
   // Число слайдов по умолчанию — из настроек; null — «Авто».
   const prefs = useEditorPrefs();
   const [slideCount, setSlideCount] = useState<number | null>(prefs.slideCount);
-  const [modelId, setModelId] = useState<string | null>(null);
+  const [model, setModel] = useState<ModelRef | null>(null);
+  const models = useWriterModels();
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(false);
@@ -154,7 +158,8 @@ export function DeckComposer({
 
   const submit = () => {
     if (!ready || sending || !hasTemplate) return;
-    const model = writerModels.find((item) => item.modelId === modelId) ?? null;
+    // Выбор показывают, только когда моделей несколько: подписывать в сообщении есть смысл тогда же.
+    const chosen = models ? effectiveModel(models, model) : null;
     const threadId = deckConversations.start({
       request: {
         // Новый файл важнее выбора в меню: id шаблона разговор узнает, когда разберёт файл.
@@ -163,16 +168,21 @@ export function DeckComposer({
         brief: text.trim(),
         files,
         slideCount,
-        modelId: model?.modelId ?? null,
+        model: chosen,
       },
       templateFile,
       projectName: project?.name ?? null,
       meta: {
         templateName: templateFile?.name ?? selected?.fileName ?? '',
         slideCount,
-        modelName: model?.name ?? null,
+        modelName: chosen && models && models.count > 1 ? shortModelName(chosen.modelId) : null,
       },
       returnHref: pathname,
+      audienceLabels: {
+        leadership: tAudience('leadership'),
+        clients: tAudience('clients'),
+        team: tAudience('team'),
+      },
     });
     setSending(true);
     router.push(newDeckHref(threadId));
@@ -310,7 +320,7 @@ export function DeckComposer({
                   aria-label={t('attach')}
                   onClick={() => picker.current?.click()}
                 >
-                  <HugeiconsIcon icon={Attachment01Icon} strokeWidth={1.75} />
+                  <AttachIcon />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
@@ -335,50 +345,52 @@ export function DeckComposer({
               onUpload={() => templatePicker.current?.click()}
             />
             <SlideCountMenu value={slideCount} onChange={setSlideCount} />
-            <span className="flex-1" />
-            <ModelMenu models={writerModels} value={modelId} onChange={setModelId} />
-            <Tooltip>
-              {/*
-               * Подсказка висит на обёртке: у недоступной кнопки нет событий указателя, а
-               * объяснить, почему стрелка не нажимается, нужно как раз тогда.
-               */}
-              <TooltipTrigger asChild>
-                <span className="inline-flex rounded-full">
-                  <Button
-                    type="submit"
-                    size="icon-lg"
-                    disabled={!ready || !hasTemplate || sending}
-                    aria-label={sending ? t('sending') : t('submit')}
-                    aria-describedby={hasTemplate ? undefined : blockedId}
-                    aria-keyshortcuts={mac ? 'Meta+Enter' : 'Control+Enter'}
-                    className={cn(
-                      'rounded-full',
-                      // Пока идёт переход, кнопка не блёкнет: это ответ на нажатие, а не запрет.
-                      sending && 'disabled:opacity-100',
-                    )}
-                  >
-                    <HugeiconsIcon
-                      icon={sending ? Loading03Icon : ArrowUp02Icon}
-                      strokeWidth={2}
-                      className={cn(sending && 'animate-spin motion-reduce:animate-none')}
-                    />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {hasTemplate ? (
-                  <>
-                    {t('submit')}
-                    <span className="flex items-center gap-0.5">
-                      <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
-                      <Kbd>Enter</Kbd>
-                    </span>
-                  </>
-                ) : (
-                  t('needTemplate')
-                )}
-              </TooltipContent>
-            </Tooltip>
+            {/* Модель и отправка — справа и вместе, даже когда ряд переносится на узком экране. */}
+            <div className="ml-auto flex items-center gap-1.5">
+              <ModelMenu value={model} onChange={setModel} />
+              <Tooltip>
+                {/*
+                 * Подсказка висит на обёртке: у недоступной кнопки нет событий указателя, а
+                 * объяснить, почему стрелка не нажимается, нужно как раз тогда.
+                 */}
+                <TooltipTrigger asChild>
+                  <span className="inline-flex rounded-full">
+                    <Button
+                      type="submit"
+                      size="icon-lg"
+                      disabled={!ready || !hasTemplate || sending}
+                      aria-label={sending ? t('sending') : t('submit')}
+                      aria-describedby={hasTemplate ? undefined : blockedId}
+                      aria-keyshortcuts={mac ? 'Meta+Enter' : 'Control+Enter'}
+                      className={cn(
+                        'rounded-full',
+                        // Пока идёт переход, кнопка не блёкнет: это ответ на нажатие, а не запрет.
+                        sending && 'disabled:opacity-100',
+                      )}
+                    >
+                      {sending ? (
+                        <SpinnerIcon className="animate-spin motion-reduce:animate-none" />
+                      ) : (
+                        <SendIcon className="[--icon-stroke:2]" />
+                      )}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {hasTemplate ? (
+                    <>
+                      {t('submit')}
+                      <span className="flex items-center gap-0.5">
+                        <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
+                        <Kbd>Enter</Kbd>
+                      </span>
+                    </>
+                  ) : (
+                    t('needTemplate')
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </TooltipProvider>
 

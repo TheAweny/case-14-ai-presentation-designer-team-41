@@ -5,15 +5,18 @@ import { createDemoTemplateImporter } from '../mocks/demo-template-importer';
 import {
   createAssistantThreads,
   type AssistantThreads,
+  type DeckResult,
   type ThreadMessage,
 } from './assistant-threads';
 import {
   createDeckConversations,
   needsAudience,
+  recommendVariant,
   type AttachTemplate,
   type NewDeckInput,
+  type ReviewVariants,
 } from './deck-conversations';
-import type { GenerationRequest } from './deck-generator';
+import type { GeneratedVariant, GenerationRequest } from './deck-generator';
 import { createGenerationRuns, type GenerationRuns } from './generation-runs';
 import type { TemplateSummary } from './library-source';
 import { createTemplateImports } from './template-imports';
@@ -24,33 +27,58 @@ const request = (brief: string, files: File[] = []): GenerationRequest => ({
   brief,
   files,
   slideCount: null,
-  modelId: null,
+  model: null,
 });
 
 const meta = { templateName: 'Тёплый корпоративный.pptx', slideCount: null, modelName: null };
 const LONG = 'Итоги третьего квартала для совета директоров: выручка, клиенты, риски и план';
+const audienceLabels = {
+  leadership: 'Для руководства.',
+  clients: 'Для клиентов.',
+  team: 'Для команды.',
+};
+
+/** Запрос из поля: библиотечный шаблон, проект «Отдел продаж». */
+const input = (brief: string): NewDeckInput => ({
+  request: request(brief),
+  templateFile: null,
+  projectName: 'Отдел продаж',
+  meta,
+  returnHref: '/',
+  audienceLabels,
+});
 
 /** Запрос с новым файлом шаблона в проекте «Отдел продаж». */
-const withTemplateFile = (file: File): NewDeckInput => ({
-  request: { ...request(LONG), templateId: null },
+const withTemplateFile = (file: File, brief = LONG): NewDeckInput => ({
+  request: { ...request(brief), templateId: null },
   templateFile: file,
   projectName: 'Отдел продаж',
   meta: { ...meta, templateName: file.name },
   returnHref: '/projects/sales',
+  audienceLabels,
 });
 
-/** Прогон генерации разговора, если он начался. */
-function runOf(threads: AssistantThreads, runs: GenerationRuns, threadId: string) {
-  const work = threads.get(threadId)?.messages.find((message) => message.kind === 'work');
-  return work?.kind === 'work' ? runs.get(work.runId) : undefined;
+/** Прогоны разговора по порядку. */
+function runsOf(threads: AssistantThreads, runs: GenerationRuns, threadId: string) {
+  return (threads.get(threadId)?.messages ?? []).flatMap((message) => {
+    const run = message.kind === 'work' ? runs.get(message.runId) : undefined;
+    return run ? [run] : [];
+  });
+}
+
+function resultOf(threads: AssistantThreads, threadId: string): DeckResult | undefined {
+  const message = threads.get(threadId)?.messages.findLast((item) => item.kind === 'result');
+  return message?.kind === 'result' ? message.result : undefined;
 }
 
 function setup({
   register,
   attach: attachImpl,
+  review,
 }: {
   register?: (file: File) => Promise<TemplateSummary>;
   attach?: AttachTemplate;
+  review?: ReviewVariants;
 } = {}) {
   const { library, decks } = createDemoLibrary();
   let next = 0;
@@ -71,7 +99,16 @@ function setup({
         return { ok: true };
       }),
   );
-  const conversations = createDeckConversations({ threads, runs, imports, attachTemplate: attach });
+  const conversations = createDeckConversations({
+    threads,
+    runs,
+    imports,
+    attachTemplate: attach,
+    review:
+      review ??
+      (async (variants) =>
+        Object.fromEntries(variants.map((item) => [item.deckId, { errors: 0, warnings: 0 }]))),
+  });
   const kinds = (threadId: string) =>
     threads
       .get(threadId)
@@ -87,11 +124,43 @@ function setup({
   return { library, threads, runs, imports, conversations, kinds, agentKeys, attach };
 }
 
+const variant = (name: GeneratedVariant['variant']): GeneratedVariant =>
+  ({ variant: name, deckId: `deck-${name}` }) as GeneratedVariant;
+
 describe('needsAudience', () => {
-  it('спрашивает аудиторию только при коротком брифе без файлов', () => {
+  it('предполагает аудиторию только при коротком брифе без файлов', () => {
     expect(needsAudience(request('Итоги Q3'))).toBe(true);
     expect(needsAudience(request(LONG))).toBe(false);
     expect(needsAudience(request('Итоги Q3', [new File(['a'], 'a.csv')]))).toBe(false);
+  });
+});
+
+describe('recommendVariant', () => {
+  const variants = [variant('dense'), variant('balanced'), variant('airy')];
+
+  it('меньше ошибок важнее, затем меньше замечаний', () => {
+    expect(
+      recommendVariant(variants, {
+        'deck-dense': { errors: 0, warnings: 3 },
+        'deck-balanced': { errors: 1, warnings: 0 },
+        'deck-airy': { errors: 0, warnings: 1 },
+      }),
+    ).toBe('airy');
+  });
+
+  it('при равном аудите — сбалансированный', () => {
+    const clean = { errors: 0, warnings: 0 };
+    expect(
+      recommendVariant(variants, {
+        'deck-dense': clean,
+        'deck-balanced': clean,
+        'deck-airy': clean,
+      }),
+    ).toBe('balanced');
+  });
+
+  it('без аудита — сбалансированный', () => {
+    expect(recommendVariant(variants, null)).toBe('balanced');
   });
 });
 
@@ -99,75 +168,177 @@ describe('createDeckConversations', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('длинный бриф: запрос, сборка, вопрос о варианте; ответ открывает колоду', async () => {
-    const { threads, conversations, kinds, agentKeys } = setup();
-    const threadId = conversations.start({
-      request: request(LONG),
-      templateFile: null,
-      projectName: 'Отдел продаж',
-      meta,
-      returnHref: '/',
-    });
+  it('длинный бриф: запрос, сборка и итог с тремя вариантами — без вопросов', async () => {
+    const { threads, conversations, kinds } = setup();
+    const threadId = conversations.start(input(LONG));
     await vi.runAllTimersAsync();
-    expect(kinds(threadId)).toEqual(['user', 'agent', 'work', 'ask:variant']);
 
-    const ask = threads.pendingQuestion(threadId);
-    expect(ask?.question.questionId).toBe('variant');
-    if (ask?.question.questionId !== 'variant') return;
-    expect(ask.question.options.map((option) => option.optionId)).toEqual([
-      'dense',
-      'balanced',
-      'airy',
-    ]);
-    const airy = ask.question.options[2];
-    threads.answer(threadId, ask.id, { optionId: 'airy', text: 'Воздушный' });
-    await vi.runAllTimersAsync();
-    expect(threads.get(threadId)?.deckId).toBe(airy?.deckId);
-    expect(threads.forDeck(airy?.deckId ?? '')?.threadId).toBe(threadId);
-    expect(kinds(threadId)?.at(-1)).toBe('agent');
-    expect(agentKeys(threadId)?.at(-1)).toBe('opened');
+    expect(kinds(threadId)).toEqual(['user', 'agent', 'work', 'result']);
+    expect(threads.pendingQuestion(threadId)).toBeUndefined();
+    const result = resultOf(threads, threadId);
+    expect(result?.variants.map((item) => item.variant)).toEqual(['dense', 'balanced', 'airy']);
+    expect(result?.recommended).toBe('balanced');
+    expect(result?.reviews).not.toBeNull();
+    expect(result?.elapsedMs).toBeGreaterThan(0);
+    // Колоду открывает человек из итога: сам разговор её не выбирает.
+    expect(threads.get(threadId)?.deckId).toBeNull();
   });
 
-  it('короткий бриф: сначала вопрос об аудитории, ответ уходит в бриф', async () => {
-    const { threads, runs, conversations, kinds } = setup();
-    const threadId = conversations.start({
-      request: request('Итоги Q3'),
-      templateFile: null,
-      projectName: 'Отдел продаж',
-      meta,
-      returnHref: '/',
+  it('совет — по аудиту: вариант с меньшим числом ошибок', async () => {
+    const { threads, conversations } = setup({
+      review: async (variants) =>
+        Object.fromEntries(
+          variants.map((item) => [
+            item.deckId,
+            { errors: item.variant === 'airy' ? 0 : 2, warnings: 0 },
+          ]),
+        ),
     });
+    const threadId = conversations.start(input(LONG));
     await vi.runAllTimersAsync();
-    expect(kinds(threadId)).toEqual(['user', 'ask:audience']);
+    // У шаблона «Тёплый» в демо три колоды: у каждого варианта своя, и аудит у каждого свой.
+    expect(resultOf(threads, threadId)?.recommended).toBe('airy');
+  });
 
-    const ask = threads.pendingQuestion(threadId);
-    threads.answer(threadId, ask?.id ?? '', { optionId: 'leadership', text: 'Руководство' });
+  it('сбой аудита — итог без аудита, совет по умолчанию', async () => {
+    const { threads, conversations } = setup({
+      review: () => Promise.reject(new Error('no decks')),
+    });
+    const threadId = conversations.start(input(LONG));
     await vi.runAllTimersAsync();
-    const work = threads.get(threadId)?.messages.find((message) => message.kind === 'work');
-    const run = work?.kind === 'work' ? runs.get(work.runId) : undefined;
-    expect(run?.request.brief).toBe('Итоги Q3\n\nРуководство');
-    expect(kinds(threadId)?.at(-1)).toBe('ask:variant');
+    expect(resultOf(threads, threadId)).toMatchObject({ reviews: null, recommended: 'balanced' });
+  });
+
+  it('короткий бриф: допущение об аудитории вместо вопроса, оно уходит в бриф', async () => {
+    const { threads, runs, conversations, kinds } = setup();
+    const threadId = conversations.start(input('Итоги Q3'));
+    await vi.runAllTimersAsync();
+
+    expect(kinds(threadId)).toEqual(['user', 'assume', 'agent', 'work', 'result']);
+    const assume = threads.get(threadId)?.messages[1];
+    expect(assume).toMatchObject({ kind: 'assume', audience: 'leadership', changed: false });
+    expect(runsOf(threads, runs, threadId)[0]?.request.brief).toBe('Итоги Q3\n\nДля руководства.');
+  });
+
+  it('другая аудитория — карточка показывает выбор, колода пересобирается', async () => {
+    const { threads, runs, conversations, kinds } = setup();
+    const threadId = conversations.start(input('Итоги Q3'));
+    await vi.runAllTimersAsync();
+    const assumeId = threads.get(threadId)?.messages[1]?.id ?? '';
+
+    conversations.reassume(threadId, assumeId, 'clients', 'Аудитория — Клиенты');
+    await vi.runAllTimersAsync();
+
+    expect(threads.get(threadId)?.messages[1]).toMatchObject({
+      audience: 'clients',
+      changed: true,
+    });
+    expect(kinds(threadId)?.slice(5)).toEqual(['user', 'agent', 'work', 'result']);
+    expect(runsOf(threads, runs, threadId).at(-1)?.request.brief).toBe('Итоги Q3\n\nДля клиентов.');
+
+    // Та же аудитория второй раз — ничего не происходит.
+    conversations.reassume(threadId, assumeId, 'clients', 'Аудитория — Клиенты');
+    expect(kinds(threadId)).toHaveLength(9);
+  });
+
+  it('пожелание по ходу сборки — идущая сборка молча сменяется новой, с пожеланием', async () => {
+    const { threads, runs, conversations, kinds, agentKeys } = setup();
+    const threadId = conversations.start(input(LONG));
+    await vi.advanceTimersByTimeAsync(50);
+    conversations.refine(threadId, 'Добавь слайд о рисках');
+    await vi.runAllTimersAsync();
+
+    expect(kinds(threadId)).toEqual(['user', 'agent', 'work', 'user', 'agent', 'work', 'result']);
+    expect(agentKeys(threadId)).toEqual(['building', 'building']);
+    const [first, second] = runsOf(threads, runs, threadId);
+    expect(first?.phase).toBe('cancelled');
+    expect(second?.request.brief).toBe(`${LONG}\n\nДобавь слайд о рисках`);
+    expect(resultOf(threads, threadId)?.runId).toBe(second?.runId);
+  });
+
+  it('смена модели — ею пишется следующая сборка, идущую она не трогает', async () => {
+    const { threads, runs, conversations } = setup();
+    const threadId = conversations.start(input(LONG));
+    const qwen = { connectionId: 'ollama', modelId: 'qwen3:8b' };
+    expect(conversations.modelOf(threadId)).toBeNull();
+    conversations.setModel(threadId, qwen);
+    expect(conversations.modelOf(threadId)).toEqual(qwen);
+    await vi.runAllTimersAsync();
+    conversations.refine(threadId, 'Покороче');
+    await vi.runAllTimersAsync();
+
+    const [first, second] = runsOf(threads, runs, threadId);
+    expect(first?.request.model).toBeNull();
+    expect(second?.request.model).toEqual(qwen);
+  });
+
+  it('разговор без сборки (начат в панели) — модели у него нет', () => {
+    const { threads, conversations } = setup();
+    expect(conversations.modelOf(threads.create(''))).toBeUndefined();
+  });
+
+  it('пожелание, пока разбирается шаблон, — войдёт в первую сборку', async () => {
+    const { threads, runs, conversations, agentKeys } = setup();
+    const threadId = conversations.start({
+      ...withTemplateFile(new File(['pptx'], 'Бренд.pptx')),
+      request: { ...request(LONG), projectId: null, templateId: null },
+      projectName: null,
+    });
+    conversations.refine(threadId, 'Покороче');
+    expect(agentKeys(threadId)).toEqual(['refining']);
+    await vi.runAllTimersAsync();
+
+    const built = runsOf(threads, runs, threadId);
+    expect(built).toHaveLength(1);
+    expect(built[0]?.request.brief).toBe(`${LONG}\n\nПокороче`);
+  });
+
+  it('та же колода в другом шаблоне — новая сборка на нём, с прежним брифом', async () => {
+    const { library, threads, runs, conversations, kinds } = setup();
+    const threadId = conversations.start(input(LONG));
+    await vi.runAllTimersAsync();
+    const other = (await library.listTemplates()).find(
+      (template) => template.templateId !== 'warm-16x9',
+    );
+    if (!other) throw new Error('Demo library needs a second template');
+
+    conversations.rebuildWithTemplate(
+      threadId,
+      { templateId: other.templateId, name: other.fileName },
+      `Собери то же самое в шаблоне «${other.fileName}»`,
+    );
+    await vi.runAllTimersAsync();
+
+    expect(kinds(threadId)?.slice(4)).toEqual(['user', 'agent', 'work', 'result']);
+    const last = threads.get(threadId)?.messages.findLast((item) => item.kind === 'agent');
+    expect(last?.kind === 'agent' && last.text).toEqual({
+      key: 'building',
+      values: { template: other.fileName },
+    });
+    const run = runsOf(threads, runs, threadId).at(-1);
+    expect(run?.request).toMatchObject({ templateId: other.templateId, brief: LONG });
+
+    // Тот же шаблон — пересобирать нечего.
+    conversations.rebuildWithTemplate(
+      threadId,
+      { templateId: other.templateId, name: other.fileName },
+      'Ещё раз',
+    );
+    expect(kinds(threadId)).toHaveLength(8);
   });
 
   it('отмена — агент говорит, что остановился; повтор продолжает разговор', async () => {
     const { threads, runs, conversations, kinds } = setup();
-    const threadId = conversations.start({
-      request: request(LONG),
-      templateFile: null,
-      projectName: 'Отдел продаж',
-      meta,
-      returnHref: '/',
-    });
+    const threadId = conversations.start(input(LONG));
     await vi.advanceTimersByTimeAsync(50);
-    const work = threads.get(threadId)?.messages.find((message) => message.kind === 'work');
-    const runId = work?.kind === 'work' ? work.runId : '';
+    const runId = runsOf(threads, runs, threadId)[0]?.runId ?? '';
     runs.cancel(runId);
     await vi.runAllTimersAsync();
     expect(kinds(threadId)).toEqual(['user', 'agent', 'work', 'agent']);
 
     runs.retry(runId);
     await vi.runAllTimersAsync();
-    expect(kinds(threadId)?.at(-1)).toBe('ask:variant');
+    expect(kinds(threadId)?.at(-1)).toBe('result');
   });
 
   it('новый шаблон в проекте: разбор, итог, вопрос; «Прикрепить» прикрепляет и собирает им', async () => {
@@ -199,16 +370,17 @@ describe('createDeckConversations', () => {
     const project = await library.getProject('sales');
     expect(project.templates.map((item) => item.templateId)).toContain(imported?.templateId);
     expect(agentKeys(threadId)).toEqual(['templateAttached', 'building']);
-    expect(kinds(threadId)?.at(-1)).toBe('ask:variant');
+    expect(kinds(threadId)?.at(-1)).toBe('result');
 
-    const run = runOf(threads, runs, threadId);
+    const run = runsOf(threads, runs, threadId)[0];
     expect(run?.request.templateId).toBe(imported?.templateId);
-    // Колод на новом шаблоне у демо нет — генератор честно помечает подмену.
+    // Колод на новом шаблоне у демо нет — генератор честно помечает подмену, итог тоже.
     expect(run?.result?.templateSubstituted).toBe(true);
+    expect(resultOf(threads, threadId)?.templateSubstituted).toBe(true);
   });
 
   it('новый шаблон вне проекта: без вопроса, агент говорит, что шаблон в библиотеке', async () => {
-    const { threads, conversations, kinds, agentKeys, attach } = setup();
+    const { conversations, kinds, agentKeys, attach } = setup();
     const threadId = conversations.start({
       ...withTemplateFile(new File(['pptx'], 'Бренд.pptx')),
       request: { ...request(LONG), projectId: null, templateId: null },
@@ -222,16 +394,10 @@ describe('createDeckConversations', () => {
       'agent',
       'agent',
       'work',
-      'ask:variant',
+      'result',
     ]);
     expect(agentKeys(threadId)).toEqual(['templateSaved', 'building']);
     expect(attach).not.toHaveBeenCalled();
-
-    // Колода вне проектов: два других варианта не «в проекте».
-    const ask = threads.pendingQuestion(threadId);
-    threads.answer(threadId, ask?.id ?? '', { optionId: 'balanced', text: 'Сбалансированный' });
-    await vi.runAllTimersAsync();
-    expect(agentKeys(threadId)?.at(-1)).toBe('openedNoProject');
   });
 
   it('«Только для этой презентации» — шаблон не прикрепляется, колода собирается им', async () => {
@@ -247,7 +413,7 @@ describe('createDeckConversations', () => {
     const project = await library.getProject('sales');
     expect(project.templates.map((item) => item.templateId)).not.toContain(imported?.templateId);
     expect(agentKeys(threadId)).toEqual(['templateSaved', 'building']);
-    expect(runOf(threads, runs, threadId)?.request.templateId).toBe(imported?.templateId);
+    expect(runsOf(threads, runs, threadId)[0]?.request.templateId).toBe(imported?.templateId);
   });
 
   it('сбой разбора — разговор ждёт повтора из карточки и продолжается с того же места', async () => {
@@ -287,7 +453,7 @@ describe('createDeckConversations', () => {
 
     expect(attach).toHaveBeenCalledOnce();
     expect(agentKeys(threadId)).toEqual(['templateAttachFailed', 'building']);
-    expect(kinds(threadId)?.at(-1)).toBe('ask:variant');
+    expect(kinds(threadId)?.at(-1)).toBe('result');
   });
 
   it('отказ прикрепления значением (`ok: false`) — то же, что исключение', async () => {
@@ -301,15 +467,14 @@ describe('createDeckConversations', () => {
     await vi.runAllTimersAsync();
     expect(agentKeys(threadId)).toEqual(['templateAttachFailed', 'building']);
   });
+
   it('запрос без шаблона и без файла шаблона не начинается', () => {
     const { conversations } = setup();
     expect(() =>
       conversations.start({
+        ...input(LONG),
         request: { ...request(LONG), templateId: null },
-        templateFile: null,
         projectName: null,
-        meta,
-        returnHref: '/',
       }),
     ).toThrow();
   });

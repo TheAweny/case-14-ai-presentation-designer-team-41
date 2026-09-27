@@ -10,26 +10,22 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { AiSparklesIcon, ArrowUp02Icon, StopIcon } from '@hugeicons/core-free-icons';
 import { ModelMenu } from '@/components/composer/model-menu';
 import { useAurora } from '@/components/composer/use-aurora';
 import { Button } from '@/components/ui/button';
+import { AgentIcon, SendIcon, StopIcon } from '@/components/ui/icons';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import type { AssistantThread } from '@/lib/assistant-threads';
+import type { ModelRef } from '@/lib/model-settings';
 import { contextAttachments, refKey } from '@/lib/slide-context';
 import { cn } from '@/lib/utils';
 import { useAssistantDeck } from './deck-context';
-import {
-  assistantThreads,
-  deckConversations,
-  generationRuns,
-  useRun,
-  writerModels,
-} from './session';
+import { assistantThreads, deckConversations, generationRuns, useRun } from './session';
+import { ResultCard } from './result-card';
 import {
   AgentMessage,
   AskCard,
+  AssumptionCard,
   ImportCard,
   TemplateCard,
   UserMessage,
@@ -37,8 +33,8 @@ import {
 } from './thread-messages';
 
 /**
- * Панель «Ассистент»: разговор с агентом о колоде. Здесь идёт генерация новой колоды — ход,
- * вопросы с вариантами, выбор варианта вёрстки — и здесь же потом просят правки.
+ * Панель «Ассистент» редактора: разговор, который собрал колоду, продолжается здесь — с ходом
+ * сборки и итогом, из которого можно перейти на другой вариант вёрстки. Здесь же просят правки.
  *
  * Разговора может ещё не быть: колоду открыли из меню. Тогда первое сообщение его начинает и
  * привязывает к колоде.
@@ -47,20 +43,18 @@ export function AssistantPanel({
   thread,
   deckId,
   glowColor,
-  onPreviewVariant,
 }: {
   thread: AssistantThread | undefined;
   /** Колода редактора: к ней привяжется разговор, начатый в панели. */
   deckId?: string;
   /** Цвет свечения поля — цвет проекта; без него свечение нейтральное. */
   glowColor?: string;
-  /** Вариант вёрстки под указателем в вопросе о варианте; null — показать выбранный. */
-  onPreviewVariant?: (optionId: string | null) => void;
 }) {
   const t = useTranslations('assistant');
   const list = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const messages = thread?.messages ?? [];
+  const latestRun = activeRunId(thread);
 
   // Лента держится у низа, пока человек сам не прокрутил её вверх.
   useLayoutEffect(() => {
@@ -86,12 +80,7 @@ export function AssistantPanel({
       >
         {messages.length === 0 ? (
           <div className="m-auto flex max-w-56 flex-col items-center gap-2.5 text-center">
-            <HugeiconsIcon
-              icon={AiSparklesIcon}
-              size={20}
-              strokeWidth={1.5}
-              className="text-muted-foreground"
-            />
+            <AgentIcon className="size-5 text-muted-foreground" aria-hidden />
             <p className="text-sm text-balance text-muted-foreground">{t('empty')}</p>
           </div>
         ) : (
@@ -109,24 +98,25 @@ export function AssistantPanel({
                 ) : message.kind === 'agent' ? (
                   <AgentMessage text={message.text} />
                 ) : message.kind === 'work' ? (
-                  <WorkCard runId={message.runId} />
+                  <WorkCard runId={message.runId} latest={message.runId === latestRun} />
                 ) : message.kind === 'import' ? (
                   <ImportCard importId={message.importId} />
                 ) : message.kind === 'template' ? (
                   thread ? (
                     <TemplateCard template={message.template} threadId={thread.threadId} />
                   ) : null
-                ) : thread ? (
+                ) : !thread ? null : message.kind === 'assume' ? (
+                  <AssumptionCard threadId={thread.threadId} message={message} />
+                ) : message.kind === 'result' ? (
+                  <ResultCard
+                    threadId={thread.threadId}
+                    result={message.result}
+                    currentDeckId={deckId}
+                    compact
+                  />
+                ) : (
                   <>
-                    <AskCard
-                      threadId={thread.threadId}
-                      message={message}
-                      onPreview={
-                        message.question.questionId === 'variant' && message.answer === null
-                          ? onPreviewVariant
-                          : undefined
-                      }
-                    />
+                    <AskCard threadId={thread.threadId} message={message} />
                     {message.answer ? (
                       <UserMessage
                         message={{
@@ -139,7 +129,7 @@ export function AssistantPanel({
                       />
                     ) : null}
                   </>
-                ) : null}
+                )}
               </div>
             );
           })
@@ -154,13 +144,7 @@ function AgentName() {
   const t = useTranslations('assistant');
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <HugeiconsIcon
-        icon={AiSparklesIcon}
-        size={14}
-        strokeWidth={1.75}
-        className="text-[var(--aurora-color,var(--foreground))]"
-        aria-hidden
-      />
+      <AgentIcon className="size-3.5 text-[var(--aurora-color,var(--foreground))]" aria-hidden />
       {t('name')}
     </p>
   );
@@ -185,7 +169,9 @@ function AssistantInput({
   const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState('');
-  const [modelId, setModelId] = useState<string | null>(null);
+  // Модель — у разговора, который собирает колоду; разговор, начатый в панели, колод не собирает.
+  const threadModel = thread ? deckConversations.modelOf(thread.threadId) : undefined;
+  const [model, setModel] = useState<ModelRef | null>(threadModel ?? null);
   const run = useRun(activeRunId(thread));
   const running = run?.phase === 'running';
   const pending = thread ? assistantThreads.pendingQuestion(thread.threadId) : undefined;
@@ -304,11 +290,16 @@ function AssistantInput({
             </ul>
           ) : null}
           <div className="flex items-center justify-end gap-1 px-2 pb-2">
-            <ModelMenu
-              models={writerModels}
-              value={modelId}
-              onChange={(next) => setModelId(next)}
-            />
+            {thread && threadModel !== undefined ? (
+              <ModelMenu
+                compact
+                value={model}
+                onChange={(next) => {
+                  setModel(next);
+                  deckConversations.setModel(thread.threadId, next);
+                }}
+              />
+            ) : null}
             <Button
               type="submit"
               size="icon"
@@ -316,11 +307,7 @@ function AssistantInput({
               aria-label={running ? t('stop') : t('send')}
               className="rounded-full"
             >
-              <HugeiconsIcon
-                icon={running ? StopIcon : ArrowUp02Icon}
-                strokeWidth={2}
-                className={cn(running && 'fill-current')}
-              />
+              {running ? <StopIcon /> : <SendIcon className="[--icon-stroke:2]" />}
             </Button>
           </div>
         </form>
