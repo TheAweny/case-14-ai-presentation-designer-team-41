@@ -4,6 +4,7 @@ The exporter reuses the uploaded template as the base file, so masters, theme an
 from the template itself rather than from anything bundled with the service.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -16,11 +17,19 @@ from pptx.util import Emu, Pt
 
 from engine.contracts import SlideIR
 
-__all__ = ["export_pdf", "export_pptx"]
+__all__ = ["DrawVisual", "export_pdf", "export_pptx"]
+
+#: Draws one table or chart element onto a slide's shape tree. The API passes the visuals
+#: layer's drawer here, so export writes native visuals without importing another layer.
+type DrawVisual = Callable[[Any, dict[str, Any], dict[str, Any]], None]
 
 
 def export_pptx(
-    slides: list[SlideIR], design_system: dict[str, Any], template_path: Path, destination: Path
+    slides: list[SlideIR],
+    design_system: dict[str, Any],
+    template_path: Path,
+    destination: Path,
+    draw_visual: DrawVisual | None = None,
 ) -> Path:
     """Write the deck as a .pptx built on the uploaded template.
 
@@ -29,6 +38,7 @@ def export_pptx(
         design_system: Design tokens extracted from the source template.
         template_path: Source template that supplies masters, theme and layout definitions.
         destination: Where to write the resulting presentation.
+        draw_visual: Writes tables and charts. Without it they are left out.
 
     Returns:
         Path to the written file.
@@ -39,6 +49,11 @@ def export_pptx(
     for slide_ir in slides:
         slide = presentation.slides.add_slide(layout)
         for element in slide_ir.elements:
+            if element.kind in {"table", "chart"} and draw_visual is not None:
+                draw_visual(
+                    slide.shapes, element.model_dump(mode="json", exclude_unset=True), design_system
+                )
+                continue
             if element.kind != "text":
                 continue
             text = "".join(run.text for paragraph in element.paragraphs for run in paragraph.runs)

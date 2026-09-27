@@ -5,19 +5,10 @@ is pinned by ``test_parser.py`` and ``test_audit_checks.py`` instead.
 """
 
 from pathlib import Path
-from typing import cast
 
 import pytest
-from engine.contracts.provisional import TemplateProfile
 
-from engine import export, render, visuals
-
-
-def test_visuals_entry_points_are_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        visuals.build_chart({}, cast(TemplateProfile, {}))
-    with pytest.raises(NotImplementedError):
-        visuals.build_table({}, cast(TemplateProfile, {}))
+from engine import export, render
 
 
 def test_export_pdf_entry_point_is_declared() -> None:

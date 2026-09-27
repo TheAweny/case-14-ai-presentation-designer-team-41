@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from PIL import Image, UnidentifiedImageError
 
-from engine import __version__, checks, export, layout, parser
+from engine import __version__, checks, export, layout, parser, visuals
 from engine.api._profiles import UnknownProfileError, deterministic_profile
 from engine.contracts import (
     AuditReport,
@@ -18,6 +18,7 @@ from engine.contracts import (
     HealthCheck,
     LayoutVariantsRequest,
     LayoutVariantsResponse,
+    SlideIR,
     Status,
 )
 
@@ -78,8 +79,8 @@ def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
         }
     )
     output_path = Path(request.outputPath).resolve()
-    slide_ir = layout.build_slide_ir(plan, design_system, patterns)
-    export.export_pptx(slide_ir, design_system, template_path, output_path)
+    slide_ir = _styled(layout.build_slide_ir(plan, design_system, patterns), design_system)
+    export.export_pptx(slide_ir, design_system, template_path, output_path, visuals.draw_visual)
     return EditableDeckResponse.model_validate(
         {
             "schemaVersion": 1,
@@ -154,7 +155,9 @@ def build_layouts(request: LayoutVariantsRequest) -> LayoutVariantsResponse:
             "variant": variant,
             "slides": [
                 slide.model_dump(mode="json", exclude_unset=True)
-                for slide in layout.build_slide_ir(plan, design_system, patterns, variant)
+                for slide in _styled(
+                    layout.build_slide_ir(plan, design_system, patterns, variant), design_system
+                )
             ],
         }
         for variant in layout.VARIANTS
@@ -168,3 +171,9 @@ def build_layouts(request: LayoutVariantsRequest) -> LayoutVariantsResponse:
             "variants": variants,
         }
     )
+
+
+def _styled(slides: list[SlideIR], design_system: dict[str, Any]) -> list[SlideIR]:
+    """Slides with their tables and charts given the template's look by the visuals layer."""
+    dumped = [slide.model_dump(mode="json", exclude_unset=True) for slide in slides]
+    return [SlideIR.model_validate(s) for s in visuals.style_visuals(dumped, design_system)]

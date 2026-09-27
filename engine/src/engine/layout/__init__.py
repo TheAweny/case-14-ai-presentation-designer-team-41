@@ -45,12 +45,26 @@ _SCALE_ROLES = {
     "subtitle": ("subtitle", "heading", "body"),
     "body": ("body", "bullet"),
     "footer": ("footer", "caption", "body"),
+    "kpi-value": ("kpi-value", "title"),
+    "kpi-caption": ("kpi-caption", "caption", "body"),
 }
 
 _TEXT_BLOCKS = frozenset({"paragraph", "bullets", "quote"})
 
 # Slots for visuals, named as the plan blocks that fill them.
 _VISUAL_SLOTS = frozenset({"image", "chart", "table"})
+
+# Plan blocks laid out as tables, charts and figures rather than as lines of text.
+_VISUAL_BLOCKS = frozenset({"table", "chart", "kpi"})
+
+# Least size of the region a table or chart gets, as shares of the slide; a figure's value row
+# is judged by the same height over its cells.
+_MIN_VISUAL_HEIGHT = 0.25
+_MIN_VISUAL_WIDTH = 0.3
+
+# Share of a body slot its text keeps when a visual shares the slot.
+_MIN_TEXT_SHARE = 0.2
+_MAX_TEXT_SHARE = 0.5
 
 # Type scale steps body copy may take per variant: dense the smallest of these, airy the
 # largest that still fits.
@@ -90,7 +104,7 @@ def build_slide_ir(
     scale = {entry["role"]: entry for entry in design_system["typeScale"]}
     slides: list[SlideIR] = []
     for index, slide in enumerate(plan.slides):
-        pattern = select_pattern(slide, catalog, variant, scale)
+        pattern = select_pattern(slide, catalog, variant, scale, grid)
         slides.append(
             SlideIR.model_validate(
                 {
@@ -153,6 +167,7 @@ def select_pattern(
     catalog: dict[str, Any],
     variant: Variant,
     scale: dict[str, dict[str, Any]] | None = None,
+    grid: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Pick the pattern a planned slide is built on.
 
@@ -169,6 +184,8 @@ def select_pattern(
         catalog: Pattern catalog payload.
         variant: Rendering the slide is built for.
         scale: Type scale by role. Without it capacity comes from the catalog's `maxChars`.
+        grid: Grid of the template. With it a table, chart or figure must get a region big
+            enough to read.
 
     Returns:
         The chosen pattern payload.
@@ -184,7 +201,7 @@ def select_pattern(
         or list(patterns)
     )
     candidates = [p for p in candidates if not _leaves_empty(p, slide)] or candidates
-    fitting = [p for p in candidates if _fits(p, slide, scale)] or candidates
+    fitting = [p for p in candidates if _fits(p, slide, scale, grid)] or candidates
     return _by_variant(fitting)[variant]
 
 
@@ -195,7 +212,29 @@ def _holds(pattern: dict[str, Any], slide: Any) -> bool:
         return False
     if wants_text and not _has(pattern, "body"):
         return False
+    for block in slide.blocks:
+        if block.kind in _VISUAL_BLOCKS and not (
+            _has(pattern, block.kind) or _has(pattern, "body")
+        ):
+            return False
     return not slide.subhead or _has(pattern, "subtitle") or _has(pattern, "body")
+
+
+def _visuals_have_room(
+    pattern: dict[str, Any], slide: Any, scale: dict[str, dict[str, Any]], grid: dict[str, Any]
+) -> bool:
+    """Whether every table, chart or figure of the slide gets a region big enough to read."""
+    if not any(block.kind in _VISUAL_BLOCKS for block in slide.blocks):
+        return True
+    elements = _elements(slide, pattern, scale, "balanced", grid)
+    boxes = [e["box"] for e in elements if e["role"] in {"table", "chart"}]
+    boxes += [e["box"] for e in elements if e["role"] == "kpi-value"]
+    return all(
+        box["cy"] >= grid["slideCy"] * _MIN_VISUAL_HEIGHT
+        and box["cx"] >= grid["slideCx"] * _MIN_VISUAL_WIDTH / (2 if len(boxes) > 1 else 1)
+        for box in boxes
+        if box
+    ) and bool(boxes)
 
 
 def _leaves_empty(pattern: dict[str, Any], slide: Any) -> bool:
@@ -207,8 +246,19 @@ def _leaves_empty(pattern: dict[str, Any], slide: Any) -> bool:
     )
 
 
-def _fits(pattern: dict[str, Any], slide: Any, scale: dict[str, dict[str, Any]] | None) -> bool:
-    """Whether the headline and the copy fit their slots without overflow."""
+def _fits(
+    pattern: dict[str, Any],
+    slide: Any,
+    scale: dict[str, dict[str, Any]] | None,
+    grid: dict[str, Any] | None = None,
+) -> bool:
+    """Whether the headline and the copy fit their slots, and visuals get room to be read."""
+    if (
+        scale is not None
+        and grid is not None
+        and not _visuals_have_room(pattern, slide, scale, grid)
+    ):
+        return False
     if scale is None:
         return _capacity(pattern) >= len(_body_text(slide)) and _title_capacity(pattern) >= len(
             slide.headline
@@ -372,7 +422,7 @@ def _elements(
     columns = iter(_distribute(slide, len(body_slots)))
     has_subtitle = any(slot["role"] == "subtitle" for slot in slots)
 
-    elements: list[dict[str, Any]] = []
+    texts: dict[str, list[str]] = {}
     for slot in slots:
         role = slot["role"]
         if role == "title":
@@ -387,29 +437,187 @@ def _elements(
             # Footers and page numbers are the template's running chrome; a static number
             # would stop updating the moment someone reorders the slides.
             lines = []
-        lines = [line for line in lines if line]
+        texts[slot["slotId"]] = [line for line in lines if line]
+
+    boxes = {slot["slotId"]: slot["box"] for slot in slots}
+    visuals = _place_visuals(slide, slots, body_slots, texts, boxes, scale, grid)
+
+    elements: list[dict[str, Any]] = []
+    for slot in slots:
+        role, lines = slot["role"], texts[slot["slotId"]]
         if not lines:
             continue
+        box = boxes[slot["slotId"]]
         element_id = f"{slot['slotId']}-{slide.slideId}"
         if role != "body":
-            elements.append(
-                _text_element(element_id, role, slot["box"], lines, _style(scale, role))
-            )
+            elements.append(_text_element(element_id, role, box, lines, _style(scale, role)))
             continue
-        style = _body_style(scale, variant, lines, slot["box"])
-        split = _dense_columns(variant, lines, slot["box"], len(body_slots), grid)
+        style = _body_style(scale, variant, lines, box)
+        split = _dense_columns(variant, lines, box, len(body_slots), grid)
         if split:
-            for n, (box, part) in enumerate(split, start=1):
-                elements.append(_text_element(f"{element_id}-col{n}", role, box, part, style))
+            for n, (part_box, part) in enumerate(split, start=1):
+                elements.append(_text_element(f"{element_id}-col{n}", role, part_box, part, style))
             continue
-        element = _text_element(element_id, role, slot["box"], lines, style)
-        if (
-            variant == "airy"
-            and element["overflow"] is None
-            and _is_short(lines, slot["box"], style)
-        ):
+        element = _text_element(element_id, role, box, lines, style)
+        if variant == "airy" and element["overflow"] is None and _is_short(lines, box, style):
             element["verticalAlign"] = "middle"
         elements.append(element)
+    return elements + visuals
+
+
+def _place_visuals(
+    slide: Any,
+    slots: list[dict[str, Any]],
+    body_slots: list[dict[str, Any]],
+    texts: dict[str, list[str]],
+    boxes: dict[str, dict[str, int]],
+    scale: dict[str, dict[str, Any]],
+    grid: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Find room for the slide's tables, charts and figures, and lay them out as data.
+
+    A slot the template made for the kind comes first, then a body slot the text left free, and
+    otherwise the last body slot with text is shared: the text keeps the top, as tall as it
+    needs, and the visuals take the rest. Several visuals in one place sit side by side. Styling
+    them from the template and drawing them natively is the visuals layer's part.
+    """
+    blocks = [block for block in slide.blocks if block.kind in _VISUAL_BLOCKS]
+    if not blocks:
+        return []
+    gap = int(grid["gutter"]) if grid else 0
+    regions: list[tuple[dict[str, int], list[Any]]] = []
+    pending: list[Any] = []
+    for block in blocks:
+        own = next(
+            (
+                s
+                for s in slots
+                if s["role"] == block.kind and s["box"] not in (r for r, _ in regions)
+            ),
+            None,
+        )
+        if own is not None:
+            regions.append((own["box"], [block]))
+        else:
+            pending.append(block)
+    if pending:
+        free = [s for s in body_slots if not texts[s["slotId"]]]
+        if free:
+            regions.append((free[0]["box"], pending))
+        else:
+            shared = next((s for s in reversed(body_slots) if texts[s["slotId"]]), None)
+            if shared is None:
+                shared = next((s for s in slots if s["role"] == "title"), slots[0])
+                area = _below(shared["box"], grid)
+            else:
+                area = _share(shared, texts[shared["slotId"]], boxes, scale, gap)
+            regions.append((area, pending))
+
+    elements: list[dict[str, Any]] = []
+    counter = 0
+    for area, placed in regions:
+        for box, block in zip(_side_by_side(area, len(placed), gap), placed, strict=True):
+            counter += 1
+            elements.extend(_visual(block, box, f"{block.kind}-{counter}-{slide.slideId}", scale))
+    return elements
+
+
+def _share(
+    slot: dict[str, Any],
+    lines: list[str],
+    boxes: dict[str, dict[str, int]],
+    scale: dict[str, dict[str, Any]],
+    gap: int,
+) -> dict[str, int]:
+    """Split a body slot: text on top, as tall as it needs within bounds, visuals below."""
+    box = slot["box"]
+    style = _style(scale, "body")
+    needed, _ = _line_budget(lines, box, style)
+    line_emu = float(style["sizePt"]) * _SINGLE_LINE * EMU_PER_PT
+    text_cy = int(needed * line_emu + _INSET_Y)
+    text_cy = min(max(text_cy, int(box["cy"] * _MIN_TEXT_SHARE)), int(box["cy"] * _MAX_TEXT_SHARE))
+    boxes[slot["slotId"]] = {**box, "cy": text_cy}
+    top = box["y"] + text_cy + gap
+    return {**box, "y": top, "cy": box["y"] + box["cy"] - top}
+
+
+def _below(box: dict[str, int], grid: dict[str, Any] | None) -> dict[str, int]:
+    """The area under a title, inside the grid, for a slide whose layout has no body at all."""
+    if grid is None:
+        return box
+    top = box["y"] + box["cy"] + int(grid["baseline"])
+    left = int(grid["marginLeft"])
+    return {
+        "x": left,
+        "y": top,
+        "cx": int(grid["slideCx"]) - left - int(grid["marginRight"]),
+        "cy": max(int(grid["slideCy"]) - int(grid["marginBottom"]) - top, 1),
+    }
+
+
+def _side_by_side(area: dict[str, int], count: int, gap: int) -> list[dict[str, int]]:
+    width = (area["cx"] - gap * (count - 1)) // count
+    return [{**area, "x": area["x"] + i * (width + gap), "cx": width} for i in range(count)]
+
+
+def _visual(
+    block: Any, box: dict[str, int], element_id: str, scale: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    base = {"elementId": element_id, "box": box, "sourceShapeId": None}
+    if block.kind == "table":
+        return [
+            {
+                **base,
+                "kind": "table",
+                "role": "table",
+                "headers": list(block.headers),
+                "rows": [list(row) for row in block.rows],
+            }
+        ]
+    if block.kind == "chart":
+        return [
+            {
+                **base,
+                "kind": "chart",
+                "role": "chart",
+                "chartType": _text(block.chartType),
+                "categories": list(block.categories),
+                "series": [{"name": s.name, "values": list(s.values)} for s in block.series],
+                "xTitle": block.xTitle,
+                "yTitle": block.yTitle,
+            }
+        ]
+    return _kpis(block, box, element_id, scale)
+
+
+def _kpis(
+    block: Any, box: dict[str, int], element_id: str, scale: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Figures in a row: each a value over its caption, set in the template's figure styles."""
+    value_style = _style(scale, "kpi-value")
+    caption_style = _style(scale, "kpi-caption")
+    cells = _side_by_side(box, len(block.items), 0)
+    value_cy = min(
+        int(float(value_style["sizePt"]) * _SINGLE_LINE * EMU_PER_PT + _INSET_Y), box["cy"] // 2
+    )
+    elements = []
+    for n, (cell, item) in enumerate(zip(cells, block.items, strict=True), start=1):
+        value_box = {**cell, "cy": value_cy}
+        caption_box = {**cell, "y": cell["y"] + value_cy, "cy": cell["cy"] - value_cy}
+        elements.append(
+            _text_element(
+                f"{element_id}-{n}-value", "kpi-value", value_box, [item.value], value_style
+            )
+        )
+        elements.append(
+            _text_element(
+                f"{element_id}-{n}-caption",
+                "kpi-caption",
+                caption_box,
+                [item.caption],
+                caption_style,
+            )
+        )
     return elements
 
 
