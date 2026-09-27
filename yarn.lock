@@ -2042,22 +2042,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hugeicons/core-free-icons@npm:4.3.4":
-  version: 4.3.4
-  resolution: "@hugeicons/core-free-icons@npm:4.3.4"
-  checksum: 10/e181b2d6899203cf0df6155c63cdaaff9deb4b47336f4b0e9d1e4edfd7f8f8a61e5167bfe5fc95561bf6929abe9bd43d9c436154b6c0f646ad215896f61a9842
-  languageName: node
-  linkType: hard
-
-"@hugeicons/react@npm:1.1.10":
-  version: 1.1.10
-  resolution: "@hugeicons/react@npm:1.1.10"
-  peerDependencies:
-    react: ">=16.0.0"
-  checksum: 10/dbcef02505f7e30d703e8587a395938f1f407001c848eee452d5b9ef47f0d05d602883edf1d62547d8a2e5cb1ce3c8c1023d7f50885311896aae8a123a3542b9
-  languageName: node
-  linkType: hard
-
 "@humanfs/core@npm:^0.19.2":
   version: 0.19.2
   resolution: "@humanfs/core@npm:0.19.2"
@@ -13611,8 +13595,6 @@ __metadata:
     "@dnd-kit/utilities": "npm:3.2.2"
     "@floating-ui/react-dom": "npm:2.1.9"
     "@formatjs/icu-messageformat-parser": "npm:3.5.20"
-    "@hugeicons/core-free-icons": "npm:4.3.4"
-    "@hugeicons/react": "npm:1.1.10"
     "@lct/contracts": "workspace:^"
     "@lct/deck-ops": "workspace:^"
     "@lct/slide-audit": "workspace:^"
