@@ -15,10 +15,19 @@ export interface AgentManifestEntry {
   readonly instructionsSha256: string;
 }
 
+/** One model a run used, pinned to the weights that answered. */
+export interface ModelManifestEntry {
+  readonly modelId: string;
+  readonly repo: string;
+  readonly revision: string;
+  readonly provider: string;
+}
+
 /** Everything needed to explain — and repeat — a run. */
 export interface RunManifest {
   readonly runId: string;
   readonly createdAt: string;
   readonly seed: number;
   readonly agents: readonly AgentManifestEntry[];
+  readonly models: readonly ModelManifestEntry[];
 }

@@ -1,58 +1,85 @@
 # Model catalogue. A run references these entries by id; the manifest records the resolved
 # revision so a deck can be traced back to the exact weights that produced it.
+# Validated against ModelCatalog from packages/contracts: open weights under Apache-2.0 or MIT,
+# at most 35B parameters, revisions pinned to a commit.
 #
 # Fields:
 #   id           - identifier used in run configs and agent configs
 #   repo         - Hugging Face repository
-#   revision     - pinned commit or tag; never "main", so runs stay reproducible
+#   revision     - pinned commit; never "main", so runs stay reproducible
 #   license      - license of the weights
 #   sizeB        - parameter count in billions, for capacity planning
 #   type         - llm | vlm | text-to-image
-#   provider     - runtime that serves the model
+#   provider     - openai-compatible (any runtime with the OpenAI chat API) | fake (recorded)
 #   baseUrlEnv   - environment variable holding the base URL of that runtime
+#   servedName   - name the runtime serves the model under, when it differs from repo
+#
+# Text roles share one MoE model: 30B weights with 3B active per token keep a 10-15 slide deck
+# inside the 5 minute budget on a single GPU or a hosted endpoint. Vision uses the 8B VL model for
+# the same reason; the 32B VL model is a drop-in replacement where latency allows.
 
 models:
   - id: planner-default
-    repo: example-org/example-planner
-    revision: 0000000000000000000000000000000000000000
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
     license: Apache-2.0
-    sizeB: 7
+    sizeB: 30.5
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
 
   - id: writer-default
-    repo: example-org/example-writer
-    revision: 0000000000000000000000000000000000000000
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
     license: Apache-2.0
-    sizeB: 7
+    sizeB: 30.5
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
 
   - id: critic-default
-    repo: example-org/example-critic
-    revision: 0000000000000000000000000000000000000000
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
     license: Apache-2.0
-    sizeB: 7
+    sizeB: 30.5
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
 
   - id: vision-default
-    repo: example-org/example-vision
-    revision: 0000000000000000000000000000000000000000
+    repo: Qwen/Qwen3-VL-8B-Instruct
+    revision: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
     license: Apache-2.0
-    sizeB: 8
+    sizeB: 8.8
+    type: vlm
+    provider: openai-compatible
+    baseUrlEnv: VLM_BASE_URL
+
+  - id: vision-large
+    repo: Qwen/Qwen3-VL-32B-Instruct
+    revision: 0cfaf48183f594c314753d30a4c4974bc75f3ccb
+    license: Apache-2.0
+    sizeB: 33.4
     type: vlm
     provider: openai-compatible
     baseUrlEnv: VLM_BASE_URL
 
   - id: illustrator-default
-    repo: example-org/example-illustrator
-    revision: 0000000000000000000000000000000000000000
+    repo: black-forest-labs/FLUX.1-schnell
+    revision: 741f7c3ce8b383c54771c7003378a50191e9efe9
     license: Apache-2.0
-    sizeB: 2
+    sizeB: 12
     type: text-to-image
     provider: openai-compatible
     baseUrlEnv: IMAGE_BASE_URL
+
+  # Answers from recorded responses under registry/recordings/. Used by tests and by the offline
+  # demo; select it for every role with MODEL_PROVIDER=fake.
+  - id: fake
+    repo: lct26/recorded-responses
+    revision: v1
+    license: Apache-2.0
+    sizeB: 1
+    type: llm
+    provider: fake
+    baseUrlEnv: LLM_BASE_URL

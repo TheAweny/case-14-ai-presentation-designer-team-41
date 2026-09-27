@@ -10,3 +10,18 @@ export {
   CONTEXTUAL_CHECK_IDS,
   type ContextualCheck,
 } from './audit/contextual-checks.js';
+export {
+  createProvider,
+  DEFAULT_RECORDINGS_DIR,
+  extractJson,
+  InvalidModelAnswerError,
+  OpenAICompatibleProvider,
+  RecordedProvider,
+  requestKey,
+  runAgent,
+  type ModelProvider,
+  type ModelRequest,
+  type OpenAICompatibleOptions,
+  type ProviderEnv,
+  type RecordedProviderOptions,
+} from './models/index.js';
