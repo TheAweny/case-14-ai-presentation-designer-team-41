@@ -1,35 +1,233 @@
-"""Visuals layer: native charts, tables and diagrams built from shapes.
+"""Visuals layer: native charts, tables and figures, styled from the template.
 
-Visuals are drawn as native PowerPoint shapes rather than pasted images, so they stay editable
-and keep the template's colors and fonts.
+The layout places a table or a chart as data in a box. This layer gives it the template's look,
+in palette roles so a deck stays on brand when the palette is edited, and draws it into a
+presentation as native PowerPoint objects: a real table and a real chart with its data sheet,
+never a picture of one, so both stay editable.
 """
 
-from engine.contracts import ChartSpec, ShapeTree, TableSpec, TemplateProfile
+from itertools import cycle
+from typing import Any, cast
 
-__all__ = ["build_chart", "build_table"]
+from pptx.chart.data import CategoryChartData
+from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+from pptx.shapes.shapetree import SlideShapes
+from pptx.util import Emu, Pt
+
+__all__ = ["draw_visual", "style_visuals"]
+
+#: Palette roles a table takes its look from, when the template has them.
+_HEADER_FILL = "accent"
+_HEADER_TEXT = "text-on-accent"
+_BAND_FILL = "surface"
+_RULE_COLORS = ("line", "text-muted")
+
+#: Series take the palette's colours in this order, skipping the roles a template lacks.
+_SERIES_ROLES = ("accent", "accent-alt", "text", "text-muted", "line", "positive", "negative")
+
+#: Tables with more body rows than this are banded, so a row can be followed across.
+_BAND_FROM_ROWS = 3
+
+_HAIRLINE_EMU = 9_525
+
+#: WCAG contrast body text keeps against a band fill, the same floor the audit applies.
+_MIN_CONTRAST = 4.5
+
+_CHART_TYPES = {
+    "bar": XL_CHART_TYPE.BAR_CLUSTERED,
+    "column": XL_CHART_TYPE.COLUMN_CLUSTERED,
+    "line": XL_CHART_TYPE.LINE_MARKERS,
+    "pie": XL_CHART_TYPE.PIE,
+    "area": XL_CHART_TYPE.AREA,
+}
 
 
-def build_chart(spec: ChartSpec, profile: TemplateProfile) -> ShapeTree:
-    """Draw a chart with native shapes, styled from the template profile.
+def style_visuals(
+    slides: list[dict[str, Any]], design_system: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Give every table of a deck the template's look, stated in palette roles.
 
     Args:
-        spec: What to plot and how to label it.
-        profile: Template profile supplying colors, fonts and spacing.
+        slides: Slide IR in its JSON form.
+        design_system: Design system of the template the deck follows.
 
     Returns:
-        The shape tree for the chart.
+        The same slides, tables styled. Nothing else is touched, and a look a user already set
+        on a table is kept.
     """
-    raise NotImplementedError
+    roles = {entry["role"] for entry in design_system["palette"]}
+    palette = _palette(design_system)
+    text = palette.get(_body_style(design_system)["colorRole"]) or palette.get("text")
+    if _BAND_FILL in palette and text and _contrast(text, palette[_BAND_FILL]) < _MIN_CONTRAST:
+        # Banding with a fill the body text cannot be read on would hide every other row.
+        roles.discard(_BAND_FILL)
+    return [
+        {
+            **slide,
+            "elements": [
+                _style_table(element, roles) if element["kind"] == "table" else element
+                for element in slide["elements"]
+            ],
+        }
+        for slide in slides
+    ]
 
 
-def build_table(spec: TableSpec, profile: TemplateProfile) -> ShapeTree:
-    """Draw a table with native shapes, styled from the template profile.
+def _contrast(a: str, b: str) -> float:
+    def luminance(hex_colour: str) -> float:
+        channels = [int(hex_colour[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+    la, lb = luminance(a), luminance(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def _style_table(element: dict[str, Any], roles: set[str]) -> dict[str, Any]:
+    look: dict[str, Any] = {"headerRow": True}
+    if len(element["rows"]) > _BAND_FROM_ROWS and _BAND_FILL in roles:
+        look |= {"bandedRows": True, "bandFill": _BAND_FILL}
+    rule = next((role for role in _RULE_COLORS if role in roles), None)
+    if rule is not None:
+        look["borders"] = {
+            "color": rule,
+            "widthEmu": _HAIRLINE_EMU,
+            "horizontal": True,
+            "vertical": False,
+            "outer": False,
+        }
+    if {_HEADER_FILL, _HEADER_TEXT} <= roles:
+        header = {"fill": _HEADER_FILL, "color": _HEADER_TEXT, "bold": True}
+        look["cellStyles"] = [[header for _ in element["headers"]]]
+    return {**look, **element}
+
+
+def draw_visual(
+    shapes: SlideShapes, element: dict[str, Any], design_system: dict[str, Any]
+) -> None:
+    """Draw one table or chart of the slide IR onto a slide as a native object.
 
     Args:
-        spec: Table contents and column configuration.
-        profile: Template profile supplying colors, fonts and spacing.
-
-    Returns:
-        The shape tree for the table.
+        shapes: Shape tree of the slide being written.
+        element: A table or chart element in its JSON form. Other kinds are ignored.
+        design_system: Design system that resolves palette roles and supplies the body font.
     """
-    raise NotImplementedError
+    if element["kind"] == "table":
+        _draw_table(shapes, element, design_system)
+    elif element["kind"] == "chart":
+        _draw_chart(shapes, element, design_system)
+
+
+def _palette(design_system: dict[str, Any]) -> dict[str, str]:
+    return {entry["role"]: entry["hex"] for entry in design_system["palette"]}
+
+
+def _resolve(value: str | None, palette: dict[str, str]) -> RGBColor | None:
+    if not value:
+        return None
+    hex_value = palette.get(value, value)
+    try:
+        return RGBColor.from_string(hex_value)
+    except ValueError:
+        return None
+
+
+def _body_style(design_system: dict[str, Any]) -> dict[str, Any]:
+    scale = {style["role"]: style for style in design_system["typeScale"]}
+    return scale.get("body") or scale.get("bullet") or design_system["typeScale"][0]
+
+
+def _draw_table(
+    shapes: SlideShapes, element: dict[str, Any], design_system: dict[str, Any]
+) -> None:
+    box = element["box"]
+    headers, rows = element["headers"], element["rows"]
+    frame = shapes.add_table(
+        len(rows) + 1, len(headers), Emu(box["x"]), Emu(box["y"]), Emu(box["cx"]), Emu(box["cy"])
+    )
+    table = frame.table
+    # add_table applies PowerPoint's stock table style, whose own banding would paint every row
+    # we leave unfilled in a colour that is not the template's; fills are set cell by cell below.
+    table.horz_banding = False
+    table.first_row = True
+    palette = _palette(design_system)
+    style = _body_style(design_system)
+    styles = element.get("cellStyles") or []
+    header_style = styles[0][0] if styles and styles[0] and styles[0][0] else {}
+    for r, values in enumerate([headers, *rows]):
+        for c, value in enumerate(values):
+            cell = table.cell(r, c)
+            cell.text = str(value)
+            run = cell.text_frame.paragraphs[0].runs[0] if cell.text else None
+            fill = _resolve(header_style.get("fill"), palette) if r == 0 else None
+            if r > 0 and element.get("bandedRows") and r % 2 == 0:
+                fill = _resolve(element.get("bandFill"), palette)
+            if fill is not None:
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = fill
+            elif r > 0:
+                cell.fill.background()
+            if run is None:
+                continue
+            run.font.name = style["font"]
+            run.font.size = Pt(float(style["sizePt"]))
+            run.font.bold = bool(r == 0 and header_style.get("bold", True))
+            colour = _resolve(header_style.get("color") if r == 0 else style["colorRole"], palette)
+            if colour is not None:
+                run.font.color.rgb = colour
+
+
+def _draw_chart(
+    shapes: SlideShapes, element: dict[str, Any], design_system: dict[str, Any]
+) -> None:
+    box = element["box"]
+    data = CategoryChartData()
+    data.categories = element["categories"]
+    for series in element["series"]:
+        data.add_series(series["name"], series["values"])
+    kind = element["chartType"]
+    # python-pptx types add_chart as taking ChartData and returning a Chart; it takes any chart
+    # data and returns the graphic frame that holds the chart.
+    frame = cast(
+        Any,
+        shapes.add_chart(
+            _CHART_TYPES[kind],
+            Emu(box["x"]),
+            Emu(box["y"]),
+            Emu(box["cx"]),
+            Emu(box["cy"]),
+            cast(Any, data),
+        ),
+    )
+    chart = frame.chart
+    style = _body_style(design_system)
+    chart.font.name = style["font"]
+    chart.font.size = Pt(float(style["sizePt"]))
+    several = len(element["series"]) > 1
+    chart.has_legend = several or kind == "pie"
+    if chart.has_legend:
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
+    palette = _palette(design_system)
+    colours = [RGBColor.from_string(palette[role]) for role in _SERIES_ROLES if role in palette]
+    plot = chart.plots[0]
+    if kind == "pie":
+        for point, colour in zip(plot.series[0].points, cycle(colours), strict=False):
+            point.format.fill.solid()
+            point.format.fill.fore_color.rgb = colour
+        return
+    for series, colour in zip(plot.series, cycle(colours), strict=False):
+        fill = series.format.line if kind == "line" else series.format.fill
+        if kind == "line":
+            fill.color.rgb = colour
+        else:
+            fill.solid()
+            fill.fore_color.rgb = colour
+    for axis, title in (
+        (chart.category_axis, element["xTitle"]),
+        (chart.value_axis, element["yTitle"]),
+    ):
+        if title:
+            axis.has_title = True
+            axis.axis_title.text_frame.text = title
