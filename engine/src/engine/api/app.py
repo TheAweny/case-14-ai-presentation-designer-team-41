@@ -48,7 +48,7 @@ def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
     if not template_path.is_file():
         raise HTTPException(status_code=404, detail="Template PPTX was not found.")
 
-    design_system = parser.design_system_of(template_path)
+    design_system, patterns = parser.template_profile_of(template_path)
     plan = DeckPlan.model_validate(
         {
             "schemaVersion": 1,
@@ -71,7 +71,7 @@ def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
         }
     )
     output_path = Path(request.outputPath).resolve()
-    slide_ir = layout.build_slide_ir(plan, design_system)
+    slide_ir = layout.build_slide_ir(plan, design_system, patterns)
     export.export_pptx(slide_ir, design_system, template_path, output_path)
     return EditableDeckResponse.model_validate(
         {

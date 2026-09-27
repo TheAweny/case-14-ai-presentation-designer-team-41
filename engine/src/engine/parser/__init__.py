@@ -26,7 +26,7 @@ from pptx import Presentation
 from pptx.exc import PackageNotFoundError
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
-from engine.contracts import DesignSystem
+from engine.contracts import DesignSystem, PatternCatalog
 from engine.contracts.provisional import TemplateProfileDraft
 from engine.parser._design import build_design_system
 from engine.parser._errors import (
@@ -45,6 +45,7 @@ from engine.parser._model import (
     TemplateIR,
     WarningCode,
 )
+from engine.parser._patterns import build_pattern_catalog
 from engine.parser._shapes import collect_shapes
 from engine.parser._style import background_of, color_map_of
 from engine.parser._theme import read_themes
@@ -61,6 +62,8 @@ __all__ = [
     "design_system_of",
     "parse_template",
     "parse_template_ir",
+    "pattern_catalog_of",
+    "template_profile_of",
 ]
 
 _MEDIA_PREFIX = "ppt/media/"
@@ -318,7 +321,37 @@ def design_system_of(
     Returns:
         A payload matching the shared ``DesignSystem`` contract.
     """
+    return template_profile_of(template_path, available_fonts)[0]
+
+
+def pattern_catalog_of(template_path: Path) -> dict[str, Any]:
+    """Read a template and collect the reusable arrangements its layouts offer.
+
+    Returns:
+        A payload matching the shared ``PatternCatalog`` contract.
+    """
+    return template_profile_of(template_path)[1]
+
+
+def template_profile_of(
+    template_path: Path, available_fonts: Iterable[str] | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Design system and pattern catalog of a template, from a single read of the file.
+
+    Both payloads are validated against their generated contract models before they are
+    returned, and both carry the same template hash.
+
+    Args:
+        template_path: Path to the template uploaded by the user.
+        available_fonts: Fonts the renderer can draw, as for ``design_system_of``.
+
+    Returns:
+        The ``DesignSystem`` payload and the ``PatternCatalog`` payload.
+    """
     ir = parse_template_ir(Path(template_path))
-    payload = build_design_system(ir, ir_hash(ir), available_fonts)
-    DesignSystem.model_validate(payload)
-    return payload
+    digest = ir_hash(ir)
+    design_system = build_design_system(ir, digest, available_fonts)
+    DesignSystem.model_validate(design_system)
+    patterns = build_pattern_catalog(ir, digest, design_system)
+    PatternCatalog.model_validate(patterns)
+    return design_system, patterns
