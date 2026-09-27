@@ -29,7 +29,34 @@
 | uv     | 0.12+, **только uv**                                         |
 | Docker | для запуска всей связки, включая LibreOffice в образе движка |
 
-## Установка
+## Установка одной командой
+
+```bash
+./install.sh
+```
+
+Установщик спросит в терминальном диалоге, как запускать сервис (Docker Compose или локально
+для разработки) и откуда брать модель (записанные ответы без сети или OpenAI-совместимый API
+с адресом, ключом и именем модели), запишет `.env`, соберёт и поднимет сервис и дождётся
+`/health`. Без вопросов, со значениями по умолчанию (Docker и записанные ответы):
+
+```bash
+./install.sh --yes
+./install.sh --mode docker --provider api --base-url https://host/v1 --api-key KEY --yes
+```
+
+Все флаги: `./install.sh --help`.
+
+### Модель
+
+Модели перечислены в `configs/models.yaml` (подробности в [docs/MODELS.md](docs/MODELS.md)).
+Сервис говорит с любым рантаймом с OpenAI chat API: свой vLLM или llama.cpp либо внешний
+провайдер моделей с открытыми весами. В `.env` задаются `LLM_BASE_URL`, `VLM_BASE_URL`,
+`MODEL_API_KEY` и, если провайдер называет модели по-своему, `LLM_MODEL` и `VLM_MODEL`.
+`MODEL_PROVIDER=fake` отвечает записанными ответами из `registry/recordings/` без сети и GPU,
+`MODEL_PROVIDER=record` записывает ответы настоящей модели.
+
+## Установка вручную
 
 ```bash
 corepack enable
