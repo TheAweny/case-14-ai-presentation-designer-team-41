@@ -7003,6 +7003,8 @@ __metadata:
   resolution: "cli@workspace:apps/cli"
   dependencies:
     "@lct/contracts": "workspace:^"
+    "@lct/engine-client": "workspace:^"
+    "@lct/pipeline": "workspace:^"
     "@lct/registry": "workspace:^"
     "@lct/run-store": "workspace:^"
     yaml: "npm:^2.8.0"

@@ -1,6 +1,6 @@
 # Example run configuration. Validated against RunConfig from packages/contracts.
 # Copy it, point the paths at your own files and pass the copy to the CLI:
-#   node apps/cli/dist/main.js configs/run.example.yaml
+#   node apps/cli/dist/main.js generate configs/run.example.yaml
 
 # Any .pptx works: the template is read as a set of rules, never matched against a known list.
 templatePath: data/templates/example.pptx
@@ -36,3 +36,9 @@ seed: 20260918
 
 # Directory that receives artifacts: deck files, audit report, manifest, previews.
 outputDir: runs
+
+# What the deck has to achieve and for whom. Without goal the first paragraph of the content
+# file is taken as the goal.
+goal: Показать жюри, что сервис собирает презентацию в стиле любого шаблона.
+audience: Жюри хакатона
+language: ru

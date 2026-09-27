@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@lct/contracts": "workspace:^",
+    "@lct/engine-client": "workspace:^",
+    "@lct/pipeline": "workspace:^",
     "@lct/registry": "workspace:^",
     "@lct/run-store": "workspace:^",
     "yaml": "^2.8.0"

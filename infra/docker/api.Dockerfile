@@ -12,6 +12,9 @@ RUN corepack enable
 COPY package.json yarn.lock .yarnrc.yml nx.json tsconfig.base.json ./
 COPY apps apps
 COPY packages packages
+# Agent prompts, recorded answers and the model catalogue are read at run time.
+COPY registry registry
+COPY configs configs
 
 RUN yarn install --immutable
 

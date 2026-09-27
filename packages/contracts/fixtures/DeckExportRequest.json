@@ -1,0 +1,221 @@
+{
+  "contract": "DeckExportRequest",
+  "valid": [
+    {
+      "name": "both formats by default",
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "variant": "dense",
+        "slides": [
+          {
+            "schemaVersion": 1,
+            "slideId": "s2",
+            "variant": "dense",
+            "index": 1,
+            "patternId": "title-over-two-columns",
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "s2-title",
+                "role": "title",
+                "box": {
+                  "x": 838200,
+                  "y": 365125,
+                  "cx": 10515600,
+                  "cy": 1325563
+                },
+                "sourceShapeId": 2,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "Конверсия выросла на треть",
+                        "font": "Play",
+                        "sizePt": 40,
+                        "bold": true,
+                        "italic": false,
+                        "color": "1F1F1F"
+                      }
+                    ],
+                    "lineSpacing": null
+                  }
+                ],
+                "overflow": {
+                  "lines": 1,
+                  "emu": 228600
+                }
+              },
+              {
+                "kind": "decor",
+                "elementId": "s2-rule",
+                "role": "decoration",
+                "box": {
+                  "x": 838200,
+                  "y": 1790700,
+                  "cx": 10515600,
+                  "cy": 12700
+                },
+                "sourceShapeId": 7
+              }
+            ]
+          }
+        ],
+        "outputDir": "runs/run-1"
+      }
+    },
+    {
+      "name": "pptx only",
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "variant": "dense",
+        "slides": [
+          {
+            "schemaVersion": 1,
+            "slideId": "s2",
+            "variant": "dense",
+            "index": 1,
+            "patternId": "title-over-two-columns",
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "s2-title",
+                "role": "title",
+                "box": {
+                  "x": 838200,
+                  "y": 365125,
+                  "cx": 10515600,
+                  "cy": 1325563
+                },
+                "sourceShapeId": 2,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "Конверсия выросла на треть",
+                        "font": "Play",
+                        "sizePt": 40,
+                        "bold": true,
+                        "italic": false,
+                        "color": "1F1F1F"
+                      }
+                    ],
+                    "lineSpacing": null
+                  }
+                ],
+                "overflow": {
+                  "lines": 1,
+                  "emu": 228600
+                }
+              },
+              {
+                "kind": "decor",
+                "elementId": "s2-rule",
+                "role": "decoration",
+                "box": {
+                  "x": 838200,
+                  "y": 1790700,
+                  "cx": 10515600,
+                  "cy": 12700
+                },
+                "sourceShapeId": 7
+              }
+            ]
+          }
+        ],
+        "outputDir": "runs/run-1",
+        "formats": ["pptx"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown format",
+      "why": "The engine writes pptx and pdf; html is rendered on the TypeScript side.",
+      "path": ["formats", 0],
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "variant": "dense",
+        "slides": [
+          {
+            "schemaVersion": 1,
+            "slideId": "s2",
+            "variant": "dense",
+            "index": 1,
+            "patternId": "title-over-two-columns",
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "s2-title",
+                "role": "title",
+                "box": {
+                  "x": 838200,
+                  "y": 365125,
+                  "cx": 10515600,
+                  "cy": 1325563
+                },
+                "sourceShapeId": 2,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "Конверсия выросла на треть",
+                        "font": "Play",
+                        "sizePt": 40,
+                        "bold": true,
+                        "italic": false,
+                        "color": "1F1F1F"
+                      }
+                    ],
+                    "lineSpacing": null
+                  }
+                ],
+                "overflow": {
+                  "lines": 1,
+                  "emu": 228600
+                }
+              },
+              {
+                "kind": "decor",
+                "elementId": "s2-rule",
+                "role": "decoration",
+                "box": {
+                  "x": 838200,
+                  "y": 1790700,
+                  "cx": 10515600,
+                  "cy": 12700
+                },
+                "sourceShapeId": 7
+              }
+            ]
+          }
+        ],
+        "outputDir": "runs/run-1",
+        "formats": ["docx"]
+      }
+    },
+    {
+      "name": "no slides",
+      "why": "There is nothing to write.",
+      "path": ["slides"],
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "variant": "dense",
+        "slides": [],
+        "outputDir": "runs/run-1"
+      }
+    }
+  ]
+}

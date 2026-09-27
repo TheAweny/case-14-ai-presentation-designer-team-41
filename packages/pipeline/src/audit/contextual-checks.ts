@@ -4,8 +4,11 @@ import registry from './contextual-checks.json' with { type: 'json' };
 export interface ContextualCheck {
   readonly id: string;
   readonly title: string;
+  /** The content validation question of the case, phrased so that "yes" is the good answer. */
+  readonly question: string;
   readonly description: string;
   readonly severity: 'error' | 'warning';
+  readonly scope: 'slide';
 }
 
 /**

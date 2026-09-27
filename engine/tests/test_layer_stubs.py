@@ -1,35 +1,16 @@
 """Every layer still to be written exposes its entry point with the signature of the contract.
 
-The parser has since been implemented, so it left this file: its behaviour is pinned by
-``test_parser.py`` instead.
+The parser and the checks have since been implemented, so they left this file: their behaviour
+is pinned by ``test_parser.py`` and ``test_audit_checks.py`` instead.
 """
 
 from pathlib import Path
-from typing import cast
 
 import pytest
-from engine.contracts.provisional import TemplateProfile
 
-from engine import checks, export, render, visuals
-
-
-def test_visuals_entry_points_are_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        visuals.build_chart({}, cast(TemplateProfile, {}))
-    with pytest.raises(NotImplementedError):
-        visuals.build_table({}, cast(TemplateProfile, {}))
-
-
-def test_export_pdf_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        export.export_pdf(Path("runs/deck.pptx"), Path("runs/deck.pdf"))
+from engine import render
 
 
 def test_render_entry_point_is_declared() -> None:
     with pytest.raises(NotImplementedError):
         render.render_to_png(Path("runs/deck.pptx"), Path("runs/preview"))
-
-
-def test_checks_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
-        checks.run_deterministic_checks([], cast(TemplateProfile, {}), {})

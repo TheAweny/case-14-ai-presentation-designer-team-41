@@ -1,9 +1,18 @@
 import {
+  auditReportSchema,
+  deckExportResponseSchema,
   editableDeckResponseSchema,
   healthCheckSchema,
+  layoutVariantsResponseSchema,
+  type AuditReport,
+  type AuditRequest,
+  type DeckExportRequest,
+  type DeckExportResponse,
   type EditableDeckRequest,
   type EditableDeckResponse,
   type HealthCheck,
+  type LayoutVariantsRequest,
+  type LayoutVariantsResponse,
 } from '@lct/contracts';
 
 export interface EngineClientOptions {
@@ -48,6 +57,21 @@ export class EngineClient {
   /** `POST /v1/editable-decks` — build and validate one native editable PPTX. */
   async createEditableDeck(request: EditableDeckRequest): Promise<EditableDeckResponse> {
     return editableDeckResponseSchema.parse(await this.post('/v1/editable-decks', request));
+  }
+
+  /** `POST /v1/layouts` — one plan laid out as the requested variants on a template. */
+  async layouts(request: LayoutVariantsRequest): Promise<LayoutVariantsResponse> {
+    return layoutVariantsResponseSchema.parse(await this.post('/v1/layouts', request));
+  }
+
+  /** `POST /v1/audit` — the deterministic audit of a deck against its template. */
+  async audit(request: AuditRequest): Promise<AuditReport> {
+    return auditReportSchema.parse(await this.post('/v1/audit', request));
+  }
+
+  /** `POST /v1/exports` — one variant written as native PPTX, and PDF from it. */
+  async exportDeck(request: DeckExportRequest): Promise<DeckExportResponse> {
+    return deckExportResponseSchema.parse(await this.post('/v1/exports', request));
   }
 
   private async get(path: string): Promise<unknown> {

@@ -164,6 +164,18 @@ export {
   type Fixability,
 } from './audit-finding.js';
 export {
+  auditRequestSchema,
+  auditReportSchema,
+  categorySummarySchema,
+  checkCategorySchema,
+  mediaSizeSchema,
+  type AuditRequest,
+  type AuditReport,
+  type CategorySummary,
+  type CheckCategory,
+  type MediaSize,
+} from './audit-report.js';
+export {
   fixPatchSchema,
   fixPatchBodySchema,
   patchOpSchema,
@@ -198,3 +210,42 @@ export {
   type EditableDeckRequest,
   type EditableDeckResponse,
 } from './editable-deck.js';
+export {
+  layoutVariantsRequestSchema,
+  layoutVariantsResponseSchema,
+  variantLayoutSchema,
+  type LayoutVariantsRequest,
+  type LayoutVariantsResponse,
+  type VariantLayout,
+} from './layout-variants.js';
+export {
+  MAX_MODEL_SIZE_B,
+  modelCatalogSchema,
+  modelEntrySchema,
+  modelLicenseSchema,
+  modelProviderSchema,
+  modelTypeSchema,
+  type ModelCatalog,
+  type ModelEntry,
+  type ModelLicense,
+  type ModelProvider,
+  type ModelType,
+} from './model-catalog.js';
+export {
+  reviewAnswerSchema,
+  reviewVerdictSchema,
+  slideReviewSchema,
+  type ReviewAnswer,
+  type ReviewVerdict,
+  type SlideReview,
+} from './slide-review.js';
+export {
+  deckExportRequestSchema,
+  deckExportResponseSchema,
+  exportedFileSchema,
+  exportFormatSchema,
+  type DeckExportRequest,
+  type DeckExportResponse,
+  type ExportFormat,
+} from './deck-export.js';
+export { copyEditSchema, copyEditsSchema, type CopyEdit, type CopyEdits } from './copy-edits.js';

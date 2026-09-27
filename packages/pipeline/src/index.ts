@@ -10,3 +10,44 @@ export {
   CONTEXTUAL_CHECK_IDS,
   type ContextualCheck,
 } from './audit/contextual-checks.js';
+export {
+  createProvider,
+  DEFAULT_RECORDINGS_DIR,
+  extractJson,
+  InvalidModelAnswerError,
+  OpenAICompatibleProvider,
+  RecordedProvider,
+  requestKey,
+  runAgent,
+  type AgentUsage,
+  type ModelProvider,
+  type ModelRequest,
+  type OpenAICompatibleOptions,
+  type ProviderEnv,
+  type RecordedProviderOptions,
+} from './models/index.js';
+export {
+  buildContentPack,
+  checkGrounding,
+  planDeck,
+  type ContentPackInput,
+  type GroundingProblem,
+  type PlanDeckOptions,
+  type PlanDeckResult,
+  type SourceDocument,
+} from './planner/index.js';
+export {
+  findingsOf,
+  runContextualAudit,
+  type ContextualAuditOptions,
+  type ContextualAuditResult,
+} from './audit/contextual-audit.js';
+export {
+  generateDeck,
+  GenerateDeckError,
+  type BoundAgent,
+  type GenerateDeckOptions,
+  type GenerateDeckResult,
+  type VariantResult,
+} from './orchestrator/index.js';
+export { findOverflows, fitCopy, type CopyTarget, type FitCopyResult } from './writer/index.js';

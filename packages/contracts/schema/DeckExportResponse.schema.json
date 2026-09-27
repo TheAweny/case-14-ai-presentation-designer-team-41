@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "enum": [
+              "pptx",
+              "pdf"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "Where the file was written.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "path"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Incremented by any incompatible change.",
+      "type": "number"
+    },
+    "variant": {
+      "enum": [
+        "dense",
+        "balanced",
+        "airy"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "variant",
+    "files"
+  ],
+  "title": "DeckExportResponse",
+  "type": "object"
+}
