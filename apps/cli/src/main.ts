@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { PostgresRunRepository, type RunRecord } from '@lct/run-store';
 import { readRunConfig } from './config.js';
 import { generateFromConfig } from './generate.js';
@@ -114,7 +116,18 @@ async function main(argv: readonly string[]): Promise<number> {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/** Run when this file is the entry point, including through a symlink such as ~/.local/bin/lct. */
+function isEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(entry);
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   void main(process.argv).then((code) => {
     process.exitCode = code;
   });
