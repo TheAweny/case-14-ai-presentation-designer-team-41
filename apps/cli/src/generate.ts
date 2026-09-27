@@ -15,6 +15,7 @@ import { loadModelCatalog, loadRegistry, resolveModel } from '@lct/registry';
 /** Agent that plays each role of a run config. */
 const AGENT_FOR_ROLE: Partial<Record<ModelBinding['role'], string>> = {
   planner: 'deck-planner',
+  writer: 'copy-fitter',
   vision: 'slide-reviewer',
 };
 
@@ -72,6 +73,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     throw new Error('The registry has no deck-planner agent.');
   }
   const reviewer = bind('vision');
+  const writer = bind('writer');
 
   const engine = new EngineClient({
     baseUrl: env.ENGINE_URL ?? 'http://localhost:8000',
@@ -92,6 +94,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     engine,
     planner,
     ...(reviewer ? { reviewer } : {}),
+    ...(writer ? { writer } : {}),
     configFiles: [options.configPath, 'configs/models.yaml', 'configs/audit.yaml'],
     onStage: (stage, note) => log(`  ${stage}: ${note}`),
   });
@@ -103,6 +106,12 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     );
   }
   for (const warning of result.warnings) log(`  ! ${warning}`);
+  for (const call of result.manifest.modelCalls) {
+    log(
+      `  ${call.agentId}: ${call.calls} запросов, ${call.inputTokens} токенов на вход, ` +
+        `${call.outputTokens} на выход`,
+    );
+  }
   const budget = result.manifest.totalMs <= 300_000 ? 'в бюджете 5 минут' : 'ВНЕ бюджета 5 минут';
   log(`готово за ${(result.manifest.totalMs / 1000).toFixed(1)} с, ${budget}`);
   return result;

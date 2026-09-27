@@ -1,5 +1,5 @@
 import type { ModelEntry } from '@lct/contracts';
-import type { ModelProvider, ModelRequest } from './provider.js';
+import type { AgentUsage, ModelProvider, ModelRequest } from './provider.js';
 
 export interface OpenAICompatibleOptions {
   readonly model: ModelEntry;
@@ -19,6 +19,7 @@ export interface OpenAICompatibleOptions {
 }
 
 interface ChatResponse {
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
   choices?: {
     finish_reason?: string;
     message?: { content?: string | null; reasoning_content?: string | null };
@@ -76,6 +77,7 @@ const DEFAULT_TIMEOUT_MS = 120_000;
  */
 export class OpenAICompatibleProvider implements ModelProvider {
   readonly name: string;
+  readonly usage = new Map<string, AgentUsage>();
   private readonly options: OpenAICompatibleOptions;
 
   constructor(options: OpenAICompatibleOptions) {
@@ -146,6 +148,15 @@ export class OpenAICompatibleProvider implements ModelProvider {
         throw new Error(`${this.name} answered HTTP ${response.status}: ${detail}`);
       }
       const payload = (await response.json()) as ChatResponse;
+      const spent = this.usage.get(request.agent.config.id) ?? {
+        calls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      spent.calls += 1;
+      spent.inputTokens += payload.usage?.prompt_tokens ?? 0;
+      spent.outputTokens += payload.usage?.completion_tokens ?? 0;
+      this.usage.set(request.agent.config.id, spent);
       const choice = payload.choices?.[0];
       const content = choice?.message?.content;
       if (typeof content === 'string' && content.length > 0) {

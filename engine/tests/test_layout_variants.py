@@ -14,7 +14,7 @@ from engine.api import app
 from engine.api._profiles import deterministic_profile
 from engine.checks import audit_deck
 from engine.contracts import DeckPlan, LayoutVariantsResponse, SlideIR
-from engine.layout import VARIANTS, build_variants, fingerprint, select_pattern
+from engine.layout import VARIANTS, build_slide_ir, build_variants, fingerprint, select_pattern
 from engine.parser import template_profile_of
 from fastapi.testclient import TestClient
 from pptx import Presentation
@@ -231,3 +231,100 @@ def test_layouts_endpoint_leaves_unset_optional_fields_out(tmp_path: Path) -> No
     element = body["variants"][0]["slides"][0]["elements"][0]
     assert "rotation" not in element and "groupIds" not in element
     assert "overflow" in element
+
+
+def test_when_nothing_fits_the_least_overflowing_pattern_is_taken() -> None:
+    def pattern(pid: str, width: int, density: float) -> dict[str, Any]:
+        return {
+            "patternId": pid,
+            "intents": ["statement"],
+            "occurrences": 1,
+            "density": density,
+            "slots": [
+                {
+                    "slotId": "title",
+                    "role": "title",
+                    "optional": False,
+                    "maxChars": None,
+                    "box": {"x": 0, "y": 0, "cx": width, "cy": 400_000},
+                }
+            ],
+        }
+
+    narrow, wide = pattern("narrow", 1_000_000, 0.1), pattern("wide", 6_000_000, 0.9)
+    scale = {"title": {"role": "title", "font": "A", "sizePt": 44, "lineSpacing": 1.0}}
+    plan = _plan(_slide(1, "statement", []))
+    for variant in VARIANTS:
+        chosen = select_pattern(plan.slides[0], {"patterns": [narrow, wide]}, variant, scale)
+        assert chosen["patternId"] == "wide"
+
+
+def test_a_long_headline_takes_lines_from_the_body_below() -> None:
+    title = {
+        "slotId": "title",
+        "role": "title",
+        "optional": False,
+        "maxChars": None,
+        "box": {"x": 0, "y": 0, "cx": 4_000_000, "cy": 700_000},
+    }
+    body = {
+        "slotId": "body",
+        "role": "body",
+        "optional": False,
+        "maxChars": None,
+        "box": {"x": 0, "y": 800_000, "cx": 8_000_000, "cy": 4_000_000},
+    }
+    catalog = {
+        "patterns": [
+            {
+                "patternId": "p",
+                "intents": ["statement"],
+                "occurrences": 1,
+                "density": 0.5,
+                "slots": [title, body],
+            }
+        ]
+    }
+    design_system = {
+        "grid": {
+            "slideCx": 9_144_000,
+            "slideCy": 6_858_000,
+            "marginLeft": 0,
+            "marginRight": 0,
+            "marginTop": 0,
+            "marginBottom": 0,
+            "columns": 1,
+            "gutter": 0,
+            "baseline": 1,
+        },
+        "typeScale": [
+            {
+                "role": "title",
+                "font": "A",
+                "sizePt": 40,
+                "lineSpacing": 1.0,
+                "bold": False,
+                "italic": False,
+            },
+            {
+                "role": "body",
+                "font": "A",
+                "sizePt": 16,
+                "lineSpacing": 1.0,
+                "bold": False,
+                "italic": False,
+            },
+        ],
+    }
+    plan = _plan(
+        {
+            **_slide(1, "statement", [{"kind": "paragraph", "text": "Short copy."}]),
+            "headline": "A headline far too long for one line of this narrow title box",
+        }
+    )
+    (slide,) = build_slide_ir(plan, design_system, catalog)
+    elements = {e["role"]: e for e in slide.model_dump(mode="json")["elements"]}
+    assert elements["title"]["overflow"] is None
+    assert elements["title"]["box"]["cy"] > 700_000
+    top = elements["title"]["box"]["y"] + elements["title"]["box"]["cy"]
+    assert elements["body"]["box"]["y"] >= top

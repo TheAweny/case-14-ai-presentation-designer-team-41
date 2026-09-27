@@ -15,6 +15,7 @@ export {
   InvalidModelAnswerError,
   requestKey,
   runAgent,
+  type AgentUsage,
   type ModelProvider,
   type ModelRequest,
 } from './provider.js';

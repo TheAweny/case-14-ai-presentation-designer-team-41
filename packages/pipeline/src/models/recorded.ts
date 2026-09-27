@@ -25,6 +25,10 @@ interface Recording {
 /** Answers from registry/recordings/<agent>/<key>.json, which is what tests and the offline demo run on. */
 export class RecordedProvider implements ModelProvider {
   readonly name = 'fake';
+
+  get usage() {
+    return this.live?.usage;
+  }
   private readonly dir: string;
   private readonly mode: 'replay' | 'record';
   private readonly live: ModelProvider | undefined;

@@ -2144,6 +2144,29 @@ class ContentPack(BaseModel):
     )
 
 
+class Edit(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    path: constr(pattern=r"^(headline|subhead|blocks\.\d+\.(text|items\.\d+))$") = (
+        Field(..., description="Which part of the planned slide the text replaces.")
+    )
+    slideId: constr(min_length=1)
+    text: constr(min_length=1) = Field(..., description="The new wording.")
+
+
+class CopyEdits(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    edits: list[Edit] = Field(
+        ..., description="One per part asked about. Empty when nothing can be cut."
+    )
+    schemaVersion: Literal[1] = Field(
+        ..., description="Incremented by any incompatible change."
+    )
+
+
 class Format(StrEnum):
     pptx = "pptx"
     pdf = "pdf"
@@ -6509,6 +6532,7 @@ class ContractsBundle(BaseModel):
     AuditReport_1: AuditReport | None = Field(None, alias="AuditReport")
     AuditRequest_1: AuditRequest | None = Field(None, alias="AuditRequest")
     ContentPack_1: ContentPack | None = Field(None, alias="ContentPack")
+    CopyEdits_1: CopyEdits | None = Field(None, alias="CopyEdits")
     DeckExportRequest_1: DeckExportRequest | None = Field(
         None, alias="DeckExportRequest"
     )

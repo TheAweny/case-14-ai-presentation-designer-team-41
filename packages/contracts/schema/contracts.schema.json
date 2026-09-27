@@ -4276,6 +4276,52 @@
       "title": "ContentPack",
       "type": "object"
     },
+    "CopyEdits": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "edits": {
+          "description": "One per part asked about. Empty when nothing can be cut.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "Which part of the planned slide the text replaces.",
+                "pattern": "^(headline|subhead|blocks\\.\\d+\\.(text|items\\.\\d+))$",
+                "type": "string"
+              },
+              "slideId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "text": {
+                "description": "The new wording.",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "slideId",
+              "path",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "edits"
+      ],
+      "title": "CopyEdits",
+      "type": "object"
+    },
     "DeckExportRequest": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -15324,6 +15370,9 @@
     },
     "ContentPack": {
       "$ref": "#/$defs/ContentPack"
+    },
+    "CopyEdits": {
+      "$ref": "#/$defs/CopyEdits"
     },
     "DeckExportRequest": {
       "$ref": "#/$defs/DeckExportRequest"

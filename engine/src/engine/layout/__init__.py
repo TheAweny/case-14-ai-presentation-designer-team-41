@@ -54,6 +54,9 @@ _TEXT_BLOCKS = frozenset({"paragraph", "bullets", "quote"})
 # Slots for visuals, named as the plan blocks that fill them.
 _VISUAL_SLOTS = frozenset({"image", "chart", "table"})
 
+# Type scale steps a figure may be set in, largest first; the largest that fits is taken.
+_FIGURE_STEPS = ("kpi-value", "title", "heading", "subtitle", "body")
+
 # Plan blocks laid out as tables, charts and figures rather than as lines of text.
 _VISUAL_BLOCKS = frozenset({"table", "chart", "kpi"})
 
@@ -201,8 +204,29 @@ def select_pattern(
         or list(patterns)
     )
     candidates = [p for p in candidates if not _leaves_empty(p, slide)] or candidates
-    fitting = [p for p in candidates if _fits(p, slide, scale, grid)] or candidates
-    return _by_variant(fitting)[variant]
+    fitting = [p for p in candidates if _fits(p, slide, scale, grid)]
+    if not fitting and scale is not None:
+        # Nothing holds the copy: take what overflows least, so the agent that shortens it has
+        # the least to cut, rather than whatever the variant would like best.
+        least = min(_overflow_lines(p, slide, scale) for p in candidates)
+        fitting = [p for p in candidates if _overflow_lines(p, slide, scale) == least]
+    return _by_variant(fitting or candidates)[variant]
+
+
+def _overflow_lines(pattern: dict[str, Any], slide: Any, scale: dict[str, dict[str, Any]]) -> int:
+    """Lines of headline and copy a pattern cannot hold at the template's own sizes."""
+    lines = 0
+    title = next((slot for slot in pattern["slots"] if slot["role"] == "title"), None)
+    if title is not None:
+        over = _overflow([slide.headline], title["box"], _style(scale, "title"))
+        lines += over["lines"] if over else 0
+    bodies = _main_bodies(pattern["slots"])
+    columns = _distribute(slide, len(bodies))
+    style = _style(scale, "body")
+    for slot, column in zip(bodies, columns, strict=False):
+        over = _overflow(column, slot["box"], style) if column else None
+        lines += over["lines"] if over else 0
+    return lines
 
 
 def _holds(pattern: dict[str, Any], slide: Any) -> bool:
@@ -440,6 +464,7 @@ def _elements(
         texts[slot["slotId"]] = [line for line in lines if line]
 
     boxes = {slot["slotId"]: slot["box"] for slot in slots}
+    _grow_title(slots, body_slots, texts, boxes, scale, variant)
     visuals = _place_visuals(slide, slots, body_slots, texts, boxes, scale, grid)
 
     elements: list[dict[str, Any]] = []
@@ -463,6 +488,51 @@ def _elements(
             element["verticalAlign"] = "middle"
         elements.append(element)
     return elements + visuals
+
+
+def _grow_title(
+    slots: list[dict[str, Any]],
+    body_slots: list[dict[str, Any]],
+    texts: dict[str, list[str]],
+    boxes: dict[str, dict[str, int]],
+    scale: dict[str, dict[str, Any]],
+    variant: Variant,
+) -> None:
+    """Let a headline that needs more lines take them from the body below it.
+
+    A template sets headlines large and often draws the title slot one line tall. When the
+    headline needs more, the title grows downwards by the lines it lacks and every body slot it
+    would then cover starts that much lower, as a designer would set a two-line title. Only when
+    each shortened body still holds its copy; otherwise the overflow is reported as before.
+    """
+    title = next((s for s in slots if s["role"] == "title" and texts[s["slotId"]]), None)
+    if title is None:
+        return
+    style = _style(scale, "title")
+    box = boxes[title["slotId"]]
+    if _overflow(texts[title["slotId"]], box, style) is None:
+        return
+    needed, _ = _line_budget(texts[title["slotId"]], box, style)
+    line_emu = float(style["sizePt"]) * _SINGLE_LINE * float(style.get("lineSpacing") or 1.0)
+    height = int(needed * line_emu * EMU_PER_PT) + _INSET_Y + EMU_PER_PT
+    grown = {**box, "cy": max(box["cy"], height)}
+    bottom = grown["y"] + grown["cy"]
+    moved: dict[str, dict[str, int]] = {}
+    for slot in body_slots:
+        body = boxes[slot["slotId"]]
+        overlaps_x = body["x"] < grown["x"] + grown["cx"] and grown["x"] < body["x"] + body["cx"]
+        if not overlaps_x or body["y"] < box["y"] + box["cy"] or body["y"] >= bottom:
+            continue
+        shift = bottom - body["y"]
+        shorter = {**body, "y": body["y"] + shift, "cy": body["cy"] - shift}
+        lines = texts[slot["slotId"]]
+        if shorter["cy"] <= 0 or (
+            lines and _overflow(lines, shorter, _body_style(scale, variant, lines, shorter))
+        ):
+            return
+        moved[slot["slotId"]] = shorter
+    boxes[title["slotId"]] = grown
+    boxes.update(moved)
 
 
 def _place_visuals(
@@ -530,7 +600,7 @@ def _share(
     gap: int,
 ) -> dict[str, int]:
     """Split a body slot: text on top, as tall as it needs within bounds, visuals below."""
-    box = slot["box"]
+    box = boxes[slot["slotId"]]
     style = _style(scale, "body")
     needed, _ = _line_budget(lines, box, style)
     line_emu = float(style["sizePt"]) * _SINGLE_LINE * EMU_PER_PT
@@ -590,16 +660,36 @@ def _visual(
     return _kpis(block, box, element_id, scale)
 
 
+def _value_height(style: dict[str, Any], box: dict[str, int]) -> int:
+    """Height of a figure's box: one line of its style, at most half the cell."""
+    line = float(style["sizePt"]) * _SINGLE_LINE * float(style.get("lineSpacing") or 1.0)
+    return min(int(line * EMU_PER_PT) + _INSET_Y + EMU_PER_PT, box["cy"] // 2)
+
+
 def _kpis(
     block: Any, box: dict[str, int], element_id: str, scale: dict[str, dict[str, Any]]
 ) -> list[dict[str, Any]]:
     """Figures in a row: each a value over its caption, set in the template's figure styles."""
-    value_style = _style(scale, "kpi-value")
     caption_style = _style(scale, "kpi-caption")
     cells = _side_by_side(box, len(block.items), 0)
-    value_cy = min(
-        int(float(value_style["sizePt"]) * _SINGLE_LINE * EMU_PER_PT + _INSET_Y), box["cy"] // 2
+    # The largest step of the scale every figure fits in, one line each, in half its cell.
+    steps = sorted(
+        {id(s): s for s in (scale.get(r) for r in _FIGURE_STEPS) if s is not None}.values(),
+        key=lambda s: -float(s["sizePt"]),
     )
+    value_style = next(
+        (
+            s
+            for s in steps
+            if all(
+                _overflow([item.value], {**cell, "cy": _value_height(s, cell)}, s) is None
+                for cell, item in zip(cells, block.items, strict=True)
+            )
+        ),
+        steps[-1] if steps else _style(scale, "kpi-value"),
+    )
+    value_cy = _value_height(value_style, box)
+
     elements = []
     for n, (cell, item) in enumerate(zip(cells, block.items, strict=True), start=1):
         value_box = {**cell, "cy": value_cy}

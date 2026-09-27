@@ -248,3 +248,4 @@ export {
   type DeckExportResponse,
   type ExportFormat,
 } from './deck-export.js';
+export { copyEditSchema, copyEditsSchema, type CopyEdit, type CopyEdits } from './copy-edits.js';

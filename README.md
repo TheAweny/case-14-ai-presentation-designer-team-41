@@ -130,6 +130,7 @@ yarn docs:audit                                          # пересборка 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — пайплайн и границы слоёв.
 - [docs/MODELS.md](docs/MODELS.md) — какие модели используются и под какими лицензиями.
 - [docs/AUDIT.md](docs/AUDIT.md) — список проверок (генерируется утилитой из `tools`).
+- [docs/EVIDENCE.md](docs/EVIDENCE.md) — замеры: 9 колод на шаблонах организаторов, время, аудит, токены.
 - [docs/LICENSES.md](docs/LICENSES.md) — лицензии зависимостей (генерируется).
 - [docs/DECISIONS.md](docs/DECISIONS.md) — журнал архитектурных решений.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — как участвовать.

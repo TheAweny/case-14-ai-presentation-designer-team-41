@@ -183,6 +183,8 @@ describe('runContextualAudit', () => {
     expect((first?.input as { questions: unknown[] }).questions).toHaveLength(
       CONTEXTUAL_CHECKS.length,
     );
+    const sources = (first?.input as { sources: { itemId: string }[] }).sources;
+    expect(sources.map((s) => s.itemId)).toEqual(['doc1-p1']);
   });
 
   it('keeps auditing the deck when one slide cannot be reviewed', async () => {

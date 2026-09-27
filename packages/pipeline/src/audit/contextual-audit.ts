@@ -6,9 +6,7 @@ import type {
   SlideIr,
   SlideReview,
 } from '@lct/contracts';
-import { slideReviewSchema } from '@lct/contracts';
 import type { LoadedAgent } from '@lct/registry';
-import { z } from 'zod';
 import { runAgent, type ModelProvider } from '../models/provider.js';
 import { CONTEXTUAL_CHECKS, type ContextualCheck } from './contextual-checks.js';
 
@@ -35,15 +33,41 @@ export interface ContextualAuditResult {
   readonly failures: { slideId: string; error: string }[];
 }
 
-const REVIEW_SCHEMA = z.toJSONSchema(slideReviewSchema, { io: 'input' });
 const DEFAULT_MIN_CONFIDENCE = 0.6;
 const DEFAULT_CONCURRENCY = 6;
 /** Confidence at which a rewrite the model suggests is offered as a patch the user can apply. */
 const PATCH_CONFIDENCE = 0.8;
 /** Checks whose fix is new wording for the element the evidence points at. */
 const REWRITES = new Set(['headline-states-conclusion', 'no-typos', 'no-service-text']);
-/** Pack passages sent with each slide; enough to check its facts, small enough for the prompt. */
-const MAX_SOURCES = 40;
+/**
+ * Pack passages sent with each slide. The ones sharing its figures and words are enough to check
+ * its facts, and sending the whole pack with every slide is what made a run cost most.
+ */
+const MAX_SOURCES = 8;
+
+const WORD = /[\p{L}\d]{4,}/gu;
+const FIGURE = /\d+(?:[.,]\d+)?/g;
+
+/** The passages of the pack a slide most likely rests on: shared figures first, then words. */
+function relevantSources(slide: SlideIr, pack: ContentPack): { itemId: string; text: string }[] {
+  const text = textsOf(slide)
+    .map((t) => t.text)
+    .join(' ')
+    .toLowerCase();
+  const figures = new Set(text.match(FIGURE) ?? []);
+  const words = new Set(text.match(WORD) ?? []);
+  return pack.items
+    .map((item) => {
+      const own = item.text.toLowerCase();
+      const shared = (own.match(FIGURE) ?? []).filter((n) => figures.has(n));
+      const common = [...new Set(own.match(WORD) ?? [])].filter((w) => words.has(w));
+      return { item, score: shared.length * 5 + common.length };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_SOURCES)
+    .map(({ item }) => ({ itemId: item.itemId, text: item.text }));
+}
 
 interface ElementText {
   readonly elementId: string;
@@ -103,9 +127,8 @@ function inputFor(slides: readonly SlideIr[], index: number, options: Contextual
     previous: neighbour(index - 1),
     next: neighbour(index + 1),
     deckHeadlines: slides.map(headlineOf),
-    sources: options.pack.items.slice(0, MAX_SOURCES).map(({ itemId, text }) => ({ itemId, text })),
+    sources: relevantSources(slide, options.pack),
     questions: checks.map(({ id, question }) => ({ checkId: id, question })),
-    outputSchema: REVIEW_SCHEMA,
   };
 }
 
