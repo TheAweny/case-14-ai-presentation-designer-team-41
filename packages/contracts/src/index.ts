@@ -231,3 +231,11 @@ export {
   type ModelProvider,
   type ModelType,
 } from './model-catalog.js';
+export {
+  reviewAnswerSchema,
+  reviewVerdictSchema,
+  slideReviewSchema,
+  type ReviewAnswer,
+  type ReviewVerdict,
+  type SlideReview,
+} from './slide-review.js';

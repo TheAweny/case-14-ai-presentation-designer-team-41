@@ -5101,6 +5101,46 @@ class SlideIR(BaseModel):
     variant: Variant12
 
 
+class Verdict(StrEnum):
+    yes = "yes"
+    no = "no"
+    unsure = "unsure"
+
+
+class Answer(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    checkId: constr(min_length=1) = Field(
+        ..., description="Id of the contextual check the answer is to."
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="How sure the model is of the verdict."
+    )
+    evidence: str = Field(
+        ...,
+        description="The text on the slide the verdict rests on, quoted. Empty for a plain yes.",
+    )
+    suggestion: str = Field(
+        ...,
+        description='For a "no": what to write or change instead, in one sentence. Empty otherwise.',
+    )
+    verdict: Verdict
+
+
+class SlideReview(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answers: list[Answer] = Field(
+        ..., description="One per question asked.", min_length=1
+    )
+    schemaVersion: Literal[1] = Field(
+        ..., description="Incremented by any incompatible change."
+    )
+    slideId: constr(min_length=1)
+
+
 class Transform(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]):
     root: conint(ge=-9007199254740991, le=9007199254740991)
 
@@ -5993,4 +6033,5 @@ class ContractsBundle(BaseModel):
     PatternCatalog_1: PatternCatalog | None = Field(None, alias="PatternCatalog")
     RunConfig_1: RunConfig | None = Field(None, alias="RunConfig")
     SlideIR_1: SlideIR | None = Field(None, alias="SlideIR")
+    SlideReview_1: SlideReview | None = Field(None, alias="SlideReview")
     TemplateIR_1: TemplateIR | None = Field(None, alias="TemplateIR")

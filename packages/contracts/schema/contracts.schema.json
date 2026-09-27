@@ -11353,6 +11353,73 @@
       "title": "SlideIR",
       "type": "object"
     },
+    "SlideReview": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "description": "One per question asked.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "checkId": {
+                "description": "Id of the contextual check the answer is to.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "confidence": {
+                "description": "How sure the model is of the verdict.",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "evidence": {
+                "description": "The text on the slide the verdict rests on, quoted. Empty for a plain yes.",
+                "type": "string"
+              },
+              "suggestion": {
+                "description": "For a \"no\": what to write or change instead, in one sentence. Empty otherwise.",
+                "type": "string"
+              },
+              "verdict": {
+                "enum": [
+                  "yes",
+                  "no",
+                  "unsure"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "checkId",
+              "verdict",
+              "confidence",
+              "evidence",
+              "suggestion"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "slideId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "slideId",
+        "answers"
+      ],
+      "title": "SlideReview",
+      "type": "object"
+    },
     "TemplateIR": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -13709,6 +13776,9 @@
     },
     "SlideIR": {
       "$ref": "#/$defs/SlideIR"
+    },
+    "SlideReview": {
+      "$ref": "#/$defs/SlideReview"
     },
     "TemplateIR": {
       "$ref": "#/$defs/TemplateIR"

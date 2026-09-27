@@ -1,0 +1,80 @@
+{
+  "contract": "SlideReview",
+  "valid": [
+    {
+      "name": "one no, one yes",
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "answers": [
+          {
+            "checkId": "headline-states-conclusion",
+            "verdict": "no",
+            "confidence": 0.8,
+            "evidence": "Retention",
+            "suggestion": "Retention held above 90% in every segment"
+          },
+          {
+            "checkId": "no-typos",
+            "verdict": "yes",
+            "confidence": 0.95,
+            "evidence": "",
+            "suggestion": ""
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "verdict outside yes/no/unsure",
+      "why": "Every question is a yes/no question; unsure is the only other answer.",
+      "path": ["answers", 0, "verdict"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "answers": [
+          {
+            "checkId": "headline-states-conclusion",
+            "verdict": "maybe",
+            "confidence": 0.8,
+            "evidence": "Retention",
+            "suggestion": "Retention held above 90% in every segment"
+          },
+          {
+            "checkId": "no-typos",
+            "verdict": "yes",
+            "confidence": 0.95,
+            "evidence": "",
+            "suggestion": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "confidence above one",
+      "why": "Confidence is a probability.",
+      "path": ["answers", 0, "confidence"],
+      "payload": {
+        "schemaVersion": 1,
+        "slideId": "s2",
+        "answers": [
+          {
+            "checkId": "headline-states-conclusion",
+            "verdict": "no",
+            "confidence": 1.5,
+            "evidence": "Retention",
+            "suggestion": "Retention held above 90% in every segment"
+          },
+          {
+            "checkId": "no-typos",
+            "verdict": "yes",
+            "confidence": 0.95,
+            "evidence": "",
+            "suggestion": ""
+          }
+        ]
+      }
+    }
+  ]
+}

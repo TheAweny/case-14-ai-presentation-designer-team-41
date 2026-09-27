@@ -1,0 +1,15 @@
+# Answers the content validation questions of the case about one slide. Its "no" answers become
+# contextual audit findings; nothing it says changes a deck by itself.
+
+id: slide-reviewer
+version: 1.0.0
+description: Reviews one slide against the content validation questions and the source material.
+modelId: vision-default
+
+generation:
+  temperature: 0
+  topP: 1
+  maxOutputTokens: 2048
+
+outputSchema: SlideReview
+instructionsFile: instructions.md
