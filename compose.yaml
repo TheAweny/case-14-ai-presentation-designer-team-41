@@ -52,6 +52,12 @@ services:
       VLM_BASE_URL: ${VLM_BASE_URL:-}
       IMAGE_BASE_URL: ${IMAGE_BASE_URL:-}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-}
+      MODEL_JSON_MODE: ${MODEL_JSON_MODE:-on}
+      LLM_MODEL: ${LLM_MODEL:-}
+      VLM_MODEL: ${VLM_MODEL:-}
+      IMAGE_MODEL: ${IMAGE_MODEL:-}
+      RECORDINGS_DIR: /app/registry/recordings
     volumes:
       - ./data:/app/data
       - ./runs:/app/runs

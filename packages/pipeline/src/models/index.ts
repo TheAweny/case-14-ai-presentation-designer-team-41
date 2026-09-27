@@ -49,8 +49,11 @@ export function createProvider(
   if (!baseUrl) {
     throw new Error(`${model.baseUrlEnv} is not set: no runtime to serve "${model.id}".`);
   }
+  // A hosted provider names models its own way; LLM_MODEL, VLM_MODEL and IMAGE_MODEL override
+  // the served name without touching the pinned catalogue entry.
+  const servedName = env[model.baseUrlEnv.replace(/_BASE_URL$/, '_MODEL')];
   const live = new OpenAICompatibleProvider({
-    model,
+    model: servedName ? { ...model, servedName } : model,
     baseUrl,
     apiKey: env.MODEL_API_KEY ?? '',
     jsonMode: env.MODEL_JSON_MODE !== 'off',

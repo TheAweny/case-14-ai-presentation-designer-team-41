@@ -151,6 +151,25 @@ describe('createProvider', () => {
     expect(() => createProvider(catalog, 'planner-default', {})).toThrow(/LLM_BASE_URL/);
   });
 
+  it('takes the served model name from the environment when the provider names it differently', async () => {
+    let model = '';
+    const env = { LLM_BASE_URL: 'http://x/v1', LLM_MODEL: 'qwen/qwen3-30b-a3b' };
+    const provider = createProvider(catalog, 'planner-default', env);
+    const original = globalThis.fetch;
+    globalThis.fetch = (_url, init) => {
+      model = (JSON.parse(String(init?.body)) as { model: string }).model;
+      return Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] })),
+      );
+    };
+    try {
+      await provider.complete(request);
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(model).toBe('qwen/qwen3-30b-a3b');
+  });
+
   it('reaches a live runtime at the URL of its variable', () => {
     const provider = createProvider(catalog, 'planner-default', { LLM_BASE_URL: 'http://x/v1' });
     expect(provider.name).toBe('openai-compatible:planner-default');
