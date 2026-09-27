@@ -218,3 +218,16 @@ export {
   type LayoutVariantsResponse,
   type VariantLayout,
 } from './layout-variants.js';
+export {
+  MAX_MODEL_SIZE_B,
+  modelCatalogSchema,
+  modelEntrySchema,
+  modelLicenseSchema,
+  modelProviderSchema,
+  modelTypeSchema,
+  type ModelCatalog,
+  type ModelEntry,
+  type ModelLicense,
+  type ModelProvider,
+  type ModelType,
+} from './model-catalog.js';
