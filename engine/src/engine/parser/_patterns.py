@@ -63,6 +63,12 @@ _GRID_SHARE = 0.01
 # Two slots whose vertical extents overlap by at least this share sit side by side.
 _SIDE_BY_SIDE = 0.5
 
+# Confidence above which a protected zone counts as reserved on every slide.
+_RESERVED_CONFIDENCE = 0.5
+
+# Least height a body slot derived under a template title may have, as a share of the slide.
+_MIN_BODY_SHARE = 0.3
+
 # Height of the title band in the fallback arrangement, as a share of the slide.
 _FALLBACK_TITLE_SHARE = 0.15
 
@@ -248,11 +254,40 @@ def _fallback(design_system: dict[str, Any]) -> list[_Slot]:
                 x=grid["marginLeft"],
                 y=body_top,
                 cx=width,
-                cy=grid["slideCy"] - body_top - grid["marginBottom"],
+                cy=_clear_bottom(design_system, body_top) - body_top,
             ),
             size_pt=None,
         ),
     ]
+
+
+def _clear_bottom(design_system: dict[str, Any], top: int) -> int:
+    """Lowest edge a body starting at `top` may reach: the bottom margin, or the first zone the
+    template reserves on most slides below that line, whichever comes first."""
+    grid = design_system["grid"]
+    bottom = grid["slideCy"] - grid["marginBottom"]
+    for zone in design_system.get("protectedZones", []):
+        box = zone["box"]
+        if zone["meta"]["confidence"] >= _RESERVED_CONFIDENCE and box["y"] > top:
+            bottom = min(bottom, box["y"] - grid["baseline"])
+    return bottom
+
+
+def _under_title(slots: list[_Slot], design_system: dict[str, Any]) -> list[_Slot] | None:
+    """The template's own title slot with a body slot below it, or None when there is no room."""
+    grid = design_system["grid"]
+    title = next((s for s in slots if s.role == "title"), None)
+    if title is None:
+        return None
+    top = title.box.y + title.box.cy + grid["baseline"]
+    height = _clear_bottom(design_system, top) - top
+    if height < grid["slideCy"] * _MIN_BODY_SHARE:
+        return None
+    width = grid["slideCx"] - grid["marginLeft"] - grid["marginRight"]
+    body = _Slot(
+        role="body", box=Box(x=grid["marginLeft"], y=top, cx=width, cy=height), size_pt=None
+    )
+    return [title, body]
 
 
 def build_pattern_catalog(
@@ -288,6 +323,12 @@ def build_pattern_catalog(
         master_parts = [m.part for m in ir.masters] or [ir.source_name]
         slots = _fallback(design_system)
         groups[()] = {"slots": slots, "parts": master_parts[:1], "occurrences": 1}
+    elif not any(s.role == "body" for g in groups.values() for s in g["slots"]):
+        # Layouts that place a title but never body text: text goes under the title the
+        # template uses most, inside the margins of its grid.
+        top = max(groups.values(), key=lambda g: g["occurrences"])
+        slots = _under_title(top["slots"], design_system) or _fallback(design_system)
+        groups[("derived-body",)] = {"slots": slots, "parts": top["parts"], "occurrences": 1}
 
     names: Counter[str] = Counter()
     patterns = []

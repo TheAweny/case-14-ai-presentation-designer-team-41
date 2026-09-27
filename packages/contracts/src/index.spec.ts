@@ -55,6 +55,8 @@ describe('contract registry', () => {
       'AgentConfig',
       'ArtifactManifest',
       'AuditFinding',
+      'AuditReport',
+      'AuditRequest',
       'ContentPack',
       'DeckPlan',
       'DesignSystem',

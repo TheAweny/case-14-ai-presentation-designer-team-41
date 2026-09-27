@@ -1,36 +1,72 @@
 # Audit profiles. A profile switches checks on and sets their thresholds.
 # Deterministic checks run in the Python engine, contextual ones on the TypeScript side.
+# A deterministic check a profile does not mention runs with the defaults of its registry entry
+# (engine/src/engine/checks/registry.py), which are the limits of the case requirements.
 # docs/AUDIT.md is generated from the check registry, not written by hand.
 
 profiles:
   default:
-    description: Balanced profile used by every run unless a config overrides it.
+    description: Limits of the case requirements, used by every run unless a config overrides it.
 
     deterministic:
+      slide-bounds:
+        enabled: true
+      text-clipped:
+        enabled: true
+      overlap:
+        enabled: true
+        minOverlapShare: 0.05
       text-overflow:
         enabled: true
-      bullet-count:
+      grid-alignment:
         enabled: true
-        maxBulletsPerSlide: 6
-        maxLinesPerBullet: 2
-      table-size:
-        enabled: true
-        maxRows: 8
-        maxColumns: 6
-      contrast:
-        enabled: true
-        minContrastRatio: 4.5
       safe-margins:
         enabled: true
         minMarginPt: 18
+      image-aspect:
+        enabled: true
+        maxDistortion: 0.02
       font-usage:
         enabled: true
-        maxDistinctFonts: 3
+        maxDistinctFonts: 2
+      type-scale:
+        enabled: true
+      palette:
+        enabled: true
+      template-layout:
+        enabled: true
+      protected-zones:
+        enabled: true
+      contrast:
+        enabled: true
+        minContrastRatio: 4.5
+      bullet-count:
+        enabled: true
+        maxBulletsPerSlide: 6
+      bullet-length:
+        enabled: true
+        maxWordsPerBullet: 15
+      table-size:
+        enabled: true
+        maxRows: 7
+        maxColumns: 5
+      chart-series:
+        enabled: true
+        maxSeries: 5
+      slide-fill:
+        enabled: true
+        minFill: 0.25
+        maxFill: 0.75
       placeholder-text:
         enabled: true
         forbiddenPatterns:
           - 'lorem ipsum'
           - 'вставьте текст'
+          - 'xxx'
+          - 'todo'
+          - 'click to add'
+          - 'нажмите, чтобы добавить'
+          - 'заголовок слайда'
 
     contextual:
       slide-title-matches-body:

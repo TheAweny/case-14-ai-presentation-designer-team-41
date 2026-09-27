@@ -28,6 +28,7 @@ dev = [
     "import-linter>=2.15",
     "httpx>=0.28.1",
     "datamodel-code-generator>=0.82.0",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.ruff]
