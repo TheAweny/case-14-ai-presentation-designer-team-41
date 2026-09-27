@@ -1,0 +1,333 @@
+import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
+import type { EngineClient } from '@lct/engine-client';
+import { loadAgent, toManifestEntry } from '@lct/registry';
+import {
+  artifactManifestSchema,
+  type GenerationProfile,
+  type JobEvent,
+  type JobStage,
+  type StageTiming,
+  type RunArtifact,
+} from '@lct/contracts';
+import { createMastra } from '../mastra.js';
+import {
+  createGenerationWorkflow,
+  createRepairWorkflow,
+  critiqueSchema,
+  repairedSlideSchema,
+  type repairTaskSchema,
+  writtenSchema,
+} from './workflow.js';
+import { OpenAICompatibleProvider, type TextProvider } from './provider.js';
+
+type EventData = {
+  [K in JobEvent['type']]: Omit<
+    Extract<JobEvent, { type: K }>,
+    'schemaVersion' | 'runId' | 'seq' | 'at'
+  >;
+}[JobEvent['type']];
+export interface GenerateOptions {
+  runId: string;
+  templatePath: string;
+  outputDir: string;
+  brief: string;
+  slideCount: number | null;
+  profile: GenerationProfile;
+  registryDir: string;
+  engine: EngineClient;
+  provider: TextProvider;
+  seed?: number;
+  signal?: AbortSignal;
+  onEvent?: (event: JobEvent) => Promise<void>;
+}
+export async function generatePresentation(options: GenerateOptions) {
+  const started = Date.now();
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(290000),
+    ...(options.signal ? [options.signal] : []),
+  ]);
+  let seq = 0;
+  let events = Promise.resolve();
+  const timings: StageTiming[] = [];
+  let stage: JobStage = 'planning';
+  const emit = (data: EventData) => {
+    const event = {
+      ...data,
+      schemaVersion: 1 as const,
+      runId: options.runId,
+      seq: seq++,
+      at: new Date().toISOString(),
+    } as JobEvent;
+    events = events.then(() => options.onEvent?.(event));
+    return events;
+  };
+  await mkdir(options.outputDir, { recursive: true });
+  try {
+    const planner = await loadAgent(join(options.registryDir, 'deck-planner'));
+    const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
+    const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
+    const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
+    if (options.provider instanceof OpenAICompatibleProvider) {
+      for (const [role, agent] of [
+        ['planner', planner],
+        ['writer', writer],
+        ['critic', critic],
+        ['rewriter', rewriter],
+      ] as const) {
+        options.provider.setAgentGeneration(role, agent.config.generation);
+      }
+    }
+    await emit({ type: 'stage-started', stage });
+    const workflow = createGenerationWorkflow({
+      provider: options.provider,
+      plannerInstructions: planner.instructions,
+      writerInstructions: writer.instructions,
+      repairInstructions: rewriter.instructions,
+      signal,
+      concurrency: 3,
+      onProgress: async (done, total) =>
+        emit({
+          type: 'stage-progress',
+          stage: 'planning',
+          done,
+          total,
+          note: 'Подготовлено содержание слайда',
+        }),
+    });
+    const repairWorkflow = createRepairWorkflow({
+      provider: options.provider,
+      plannerInstructions: planner.instructions,
+      writerInstructions: writer.instructions,
+      repairInstructions: rewriter.instructions,
+      signal,
+      concurrency: 3,
+    });
+    const mastra = createMastra({
+      storageUrl: `file:${join(options.outputDir, 'mastra.db')}`,
+      generationWorkflow: workflow,
+      repairWorkflow,
+    });
+    const run = await mastra.getWorkflow('generation').createRun();
+    const result = await run.start({
+      inputData: { brief: options.brief, slideCount: options.slideCount, profile: options.profile },
+    });
+    if (result.status !== 'success')
+      throw new Error(
+        result.status === 'failed' ? result.error.message : `Workflow ${result.status}`,
+      );
+    signal.throwIfAborted();
+    const written = z
+      .array(writtenSchema)
+      .parse(result.result)
+      .sort((a, b) => a.index - b.index);
+    timings.push({ stage, ms: Date.now() - started });
+    await emit({ type: 'stage-finished', stage, durationMs: timings[0]?.ms ?? 0 });
+    stage = 'auditing';
+    const auditStarted = Date.now();
+    await emit({ type: 'stage-started', stage });
+    const exportRequest = () => ({
+      schemaVersion: 1 as const,
+      templatePath: options.templatePath,
+      outputPath: join(options.outputDir, 'deck.pptx'),
+      slides: written.map((s) => s.slide),
+    });
+    const auditHistory = [];
+    const reviewWarnings: string[] = [];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const [fit, critique] = await Promise.all([
+        options.engine.checkCompositions(exportRequest(), signal),
+        options.provider.generate(
+          'critic',
+          critic.instructions,
+          {
+            brief: options.brief,
+            slides: written.map((s) => ({
+              slideIndex: s.index,
+              speakerNotes: s.slide.speakerNotes,
+              texts: s.slide.texts.map((t) => ({
+                ...t,
+                maxChars: options.profile.compositions
+                  .find((p) => p.patternId === s.slide.patternId)
+                  ?.slots.find((slot) => slot.slotId === t.slotId)?.maxChars,
+              })),
+            })),
+          },
+          critiqueSchema,
+          signal,
+        ),
+      ]);
+      auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues });
+      await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
+      await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
+      const issues = [
+        ...fit.findings.map((f) => ({
+          ...f,
+          message: `${f.message} Maximum ${f.maxChars} characters, ${f.maxLines} lines.`,
+        })),
+        ...critique.issues.filter((i) => i.category !== 'style'),
+      ];
+      if (!issues.length) break;
+      if (attempt === 2) {
+        if (fit.findings.length)
+          throw new Error(`Quality gate failed: ${JSON.stringify(fit.findings)}`);
+        for (const issue of critique.issues) {
+          const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
+          reviewWarnings.push(message);
+          await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        }
+        break;
+      }
+      const tasks: z.infer<typeof repairTaskSchema>[] = [];
+      for (const current of written) {
+        const corrections = issues.filter((i) => i.slideIndex === current.index);
+        if (!corrections.length) continue;
+        const pattern = options.profile.compositions.find(
+          (p) => p.patternId === current.slide.patternId,
+        );
+        if (!pattern) throw new Error('Missing composition during repair.');
+        const composition = {
+          ...pattern,
+          slots: pattern.slots.map((slot) => {
+            const finding = fit.findings.find(
+              (f) => f.slideIndex === current.index && f.slotId === slot.slotId,
+            );
+            return finding
+              ? { ...slot, maxChars: Math.min(slot.maxChars, finding.maxChars) }
+              : slot;
+          }),
+        };
+        tasks.push({
+          index: current.index,
+          brief: options.brief,
+          composition,
+          previous: current.slide,
+          corrections,
+        });
+      }
+      if (!tasks.length) throw new Error('Critic returned invalid slide references.');
+      const repairRun = await mastra.getWorkflow('repair').createRun();
+      const repaired = await repairRun.start({ inputData: tasks });
+      if (repaired.status !== 'success') throw new Error(`Repair workflow ${repaired.status}`);
+      for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
+        const current = written.find((s) => s.index === update.index);
+        if (current) current.slide = update.slide;
+      }
+    }
+    await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
+    timings.push({ stage, ms: Date.now() - auditStarted });
+    await emit({ type: 'stage-finished', stage, durationMs: Date.now() - auditStarted });
+    const images = written
+      .filter((s) => s.imageQuery)
+      .map((s) => ({
+        slide: s.index,
+        query: s.imageQuery,
+        provider: 'mock',
+        status: 'not-generated',
+      }));
+    await emit({
+      type: 'warning',
+      stage: 'laying-out',
+      code: 'images-mocked',
+      message: 'Генерация иллюстраций пока отключена; сохранено оформление шаблона.',
+    });
+    await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
+    await writeFile(join(options.outputDir, 'images.json'), JSON.stringify(images, null, 2));
+    stage = 'exporting';
+    const exportStarted = Date.now();
+    await emit({ type: 'stage-started', stage });
+    const output = await options.engine.exportCompositions(exportRequest(), signal);
+    signal.throwIfAborted();
+    timings.push({ stage, ms: Date.now() - exportStarted });
+    await emit({ type: 'stage-finished', stage, durationMs: Date.now() - exportStarted });
+    const deck = {
+      runId: options.runId,
+      title: written[0]?.title ?? 'Презентация',
+      designSystem: options.profile.designSystem,
+      templateIr: output.templateIr,
+      warnings: [...output.warnings, ...reviewWarnings],
+      imagesMocked: true,
+    };
+    await writeFile(join(options.outputDir, 'deck.json'), JSON.stringify(deck));
+    const artifacts: RunArtifact[] = [];
+    for (const [kind, path] of [
+      ['pptx', output.outputPath],
+      ['pdf', output.pdfPath],
+      ['deck-plan', join(options.outputDir, 'plan.json')],
+      ['audit', join(options.outputDir, 'audit.json')],
+      ...output.previews.map((p) => ['preview', p]),
+    ] as const) {
+      const bytes = await readFile(path);
+      artifacts.push({
+        kind: kind as RunArtifact['kind'],
+        path: relative(options.outputDir, path),
+        variant: 'balanced',
+        bytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      });
+    }
+    const manifest = artifactManifestSchema.parse({
+      schemaVersion: 1,
+      runId: options.runId,
+      startedAt: new Date(started).toISOString(),
+      finishedAt: new Date().toISOString(),
+      templateHash: options.profile.templateHash,
+      contentPackId: createHash('sha256').update(options.brief).digest('hex'),
+      planId: options.runId,
+      seed: options.seed ?? 42,
+      revisions: [planner, writer, critic, rewriter]
+        .map((agent) => ({
+          kind: 'agent',
+          id: agent.config.id,
+          version: agent.config.version,
+          hash: toManifestEntry(agent).instructionsSha256,
+        }))
+        .concat([
+          {
+            kind: 'model',
+            id: options.provider.model,
+            version: 'hosted-revision-not-reported',
+            hash: createHash('sha256').update(options.provider.model).digest('hex'),
+          },
+        ]),
+      modelCalls:
+        options.provider instanceof OpenAICompatibleProvider
+          ? options.provider.calls.map((call) => ({
+              agentId: call.agent,
+              modelId: options.provider.model,
+              calls: 1,
+              inputTokens: call.inputTokens,
+              outputTokens: call.outputTokens,
+            }))
+          : [],
+      artifacts,
+      timings,
+      totalMs: Date.now() - started,
+      appliedPatchIds: [],
+    });
+    await writeFile(join(options.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    signal.throwIfAborted();
+    await emit({ type: 'done', totalMs: Date.now() - started, manifestPath: 'manifest.json' });
+    return { deck, output, manifest };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Generation failed.';
+    await writeFile(
+      join(options.outputDir, 'failure.json'),
+      JSON.stringify({ message, elapsedMs: Date.now() - started }),
+    );
+    await emit({
+      type: 'failed',
+      stage,
+      code: signal.aborted
+        ? 'budget-exceeded'
+        : message.includes('Model API')
+          ? 'model-unavailable'
+          : 'internal',
+      message,
+      retryable: true,
+    });
+    throw error;
+  }
+}

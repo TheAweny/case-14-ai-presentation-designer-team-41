@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "outputPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "slides": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "patternId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "speakerNotes": {
+            "type": "string"
+          },
+          "texts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "slotId": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slotId",
+                "text"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "patternId",
+          "texts",
+          "speakerNotes"
+        ],
+        "type": "object"
+      },
+      "maxItems": 15,
+      "minItems": 1,
+      "type": "array"
+    },
+    "templatePath": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "templatePath",
+    "outputPath",
+    "slides"
+  ],
+  "title": "CompositionExportRequest",
+  "type": "object"
+}

@@ -168,3 +168,19 @@ _Раздел дополняется по мере реализации: сюд�
 - Не используем бета-функции Mastra (file-based agents, Editor).
 - Не выставляем наружу собственные маршруты Mastra: публичный контракт — это API.
 - Не кладём в репозиторий датасет организаторов и чужие корпоративные шрифты.
+
+## Реализованный single-deck composition workflow (2026-09-27)
+
+Новый путь описан в `docs/GENERATION.md`. `GenerationController` использует Postgres run store,
+реальный `generatePresentation` и typed `EngineClient`. Он не подменяет старый демо-lifecycle
+фиктивными событиями. Mastra планирует одну колоду и параллелит writer/repair. Все промпты
+находятся в registry; planner, writer, critic, rewriter — роли одной модели.
+
+`engine.api` связывает независимые `parser.compositions`, `layout.text_fit`,
+`export.compositions` и `render`. `.pptx` хранит исходные layout/master/relations;
+модель выбирает композиции, но не генерирует координаты. `CompositionExportRequest` и
+`CompositionCheckResponse` валидируются с обеих сторон. Model-only Zod-схемы также экспортируются
+из contracts, но не требуют Pydantic: они не пересекают границу Python.
+
+Single-deck `CompositionPlan` пока не заменяет трёхвариантный `DeckPlan`. Изображения — mock,
+а исходный PPTX/PDF не следует путать с приблизительным редакторским SlideIR.

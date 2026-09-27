@@ -12,6 +12,17 @@
 #   baseUrlEnv   - environment variable holding the base URL of that runtime
 
 models:
+  # Hosted alias: the provider does not expose a pinned weights revision.
+  - id: qwen-yandex
+    repo: Qwen/Qwen3.6-35B-A3B
+    revision: provider-managed-latest
+    license: Apache-2.0
+    sizeB: 35.951822704
+    type: llm
+    provider: yandex-ai-studio
+    baseUrlEnv: LLM_BASE_URL
+    modelEnv: LLM_MODEL
+
   - id: planner-default
     repo: example-org/example-planner
     revision: 0000000000000000000000000000000000000000

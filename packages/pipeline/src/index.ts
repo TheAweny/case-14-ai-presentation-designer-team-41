@@ -18,3 +18,11 @@ export {
   CONTEXTUAL_CHECK_IDS,
   type ContextualCheck,
 } from './audit/contextual-checks.js';
+export { OpenAICompatibleProvider, type TextProvider } from './generation/provider.js';
+export {
+  createGenerationWorkflow,
+  validateBindings,
+  compositionPlanSchema,
+} from './generation/workflow.js';
+
+export { generatePresentation, type GenerateOptions } from './generation/runner.js';

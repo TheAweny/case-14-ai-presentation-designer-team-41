@@ -151,25 +151,34 @@ function TemplateItem({ template, meta }: { template: TemplateSummary; meta: str
   const ink = roleColor(designSystem, 'text') ?? 'currentColor';
   return (
     <DropdownMenuRadioItem value={template.templateId} className="gap-2.5">
-      <span
-        aria-hidden
-        className="relative h-6.5 w-11 shrink-0 overflow-hidden rounded-sm ring-1 ring-border"
-        style={{ backgroundColor: roleColor(designSystem, 'background') ?? undefined }}
-      >
+      {template.previewDataUrl ? (
+        <img
+          src={template.previewDataUrl}
+          alt=""
+          aria-hidden
+          className="h-6.5 w-11 shrink-0 rounded-sm object-cover ring-1 ring-border"
+        />
+      ) : (
         <span
-          className="absolute top-1.5 left-1.5 h-0.75 w-5 rounded-full"
-          style={{ backgroundColor: ink }}
-        />
-        <span
-          className="absolute top-3 left-1.5 h-0.5 w-7 rounded-full opacity-50"
-          style={{ backgroundColor: ink }}
-        />
-        <PaletteStrip
-          system={designSystem}
-          max={designSystem.palette.length}
-          className="absolute inset-x-0.75 bottom-0.75 h-1"
-        />
-      </span>
+          aria-hidden
+          className="relative h-6.5 w-11 shrink-0 overflow-hidden rounded-sm ring-1 ring-border"
+          style={{ backgroundColor: roleColor(designSystem, 'background') ?? undefined }}
+        >
+          <span
+            className="absolute top-1.5 left-1.5 h-0.75 w-5 rounded-full"
+            style={{ backgroundColor: ink }}
+          />
+          <span
+            className="absolute top-3 left-1.5 h-0.5 w-7 rounded-full opacity-50"
+            style={{ backgroundColor: ink }}
+          />
+          <PaletteStrip
+            system={designSystem}
+            max={designSystem.palette.length}
+            className="absolute inset-x-0.75 bottom-0.75 h-1"
+          />
+        </span>
+      )}
       <span className="flex min-w-0 flex-col">
         <span className="truncate">{fileName}</span>
         <span className="truncate text-muted-foreground">{meta}</span>

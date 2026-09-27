@@ -1,3 +1,4 @@
+import { GenerationController } from '../generation/generation.controller.js';
 import { Module } from '@nestjs/common';
 import { PostgresRunRepository } from '@lct/run-store';
 import { RunsController } from './runs.controller.js';
@@ -5,7 +6,7 @@ import { RunsService } from './runs.service.js';
 import { RUN_REPOSITORY } from './runs.tokens.js';
 
 @Module({
-  controllers: [RunsController],
+  controllers: [RunsController, GenerationController],
   providers: [
     {
       provide: RUN_REPOSITORY,

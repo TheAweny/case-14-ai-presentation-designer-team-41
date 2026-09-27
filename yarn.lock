@@ -6460,6 +6460,7 @@ __metadata:
     "@nestjs/platform-express": "npm:^12.0.0"
     "@nestjs/schematics": "npm:^12.0.0"
     "@nestjs/testing": "npm:^12.0.0"
+    pg: "npm:^8.16.3"
     reflect-metadata: "npm:^0.2.2"
     rxjs: "npm:^7.8.2"
     typescript: "npm:6.0.3"

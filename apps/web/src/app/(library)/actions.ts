@@ -93,6 +93,11 @@ export async function updateDeckAction(
  * Удалить презентацию. Уже удалённая — не ошибка для человека: он хотел, чтобы её не было,
  * и её нет. Страницы всё равно перерисовываются, чтобы убрать устаревшую карточку.
  */
+export async function refreshLibraryAction(): Promise<void> {
+  await requireAccount();
+  revalidatePath('/', 'layout');
+}
+
 export async function deleteDeckAction(deckId: string): Promise<LibraryActionResult> {
   await requireAccount();
   if (typeof deckId !== 'string') return { ok: false, reason: 'invalid' };

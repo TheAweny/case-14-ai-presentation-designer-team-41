@@ -33,6 +33,7 @@ import { newDeckHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import { projectColorVar } from '@/lib/project-appearance';
 import { cn } from '@/lib/utils';
+import { apiBaseUrl } from '@/lib/api';
 import { AttachmentChip } from './attachment-chip';
 import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
@@ -152,14 +153,25 @@ export function DeckComposer({
     else aurora.kick();
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!ready || sending || !hasTemplate) return;
+    setSending(true);
+    for (const file of files) {
+      const form = new FormData();
+      form.set('file', file);
+      const response = await fetch(`${apiBaseUrl}/files/content`, { method: 'POST', body: form });
+      if (!response.ok) {
+        setSending(false);
+        setRejected((current) => [...current, file.name]);
+        return;
+      }
+    }
     const model = writerModels.find((item) => item.modelId === modelId) ?? null;
     const threadId = deckConversations.start({
       request: {
         // Новый файл важнее выбора в меню: id шаблона разговор узнает, когда разберёт файл.
         templateId: templateFile ? null : (selected?.templateId ?? null),
-        projectId: project?.projectId ?? null,
+        projectId,
         brief: text.trim(),
         files,
         slideCount,
@@ -174,7 +186,6 @@ export function DeckComposer({
       },
       returnHref: pathname,
     });
-    setSending(true);
     router.push(newDeckHref(threadId));
   };
 

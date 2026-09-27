@@ -25,8 +25,8 @@ def test_export_pdf_entry_point_is_declared() -> None:
         export.export_pdf(Path("runs/deck.pptx"), Path("runs/deck.pdf"))
 
 
-def test_render_entry_point_is_declared() -> None:
-    with pytest.raises(NotImplementedError):
+def test_render_rejects_missing_input() -> None:
+    with pytest.raises(FileNotFoundError):
         render.render_to_png(Path("runs/deck.pptx"), Path("runs/preview"))
 
 

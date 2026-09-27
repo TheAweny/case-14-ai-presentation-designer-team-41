@@ -46,7 +46,16 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
         )}
       >
         <div className="flex min-w-0 items-center gap-3">
-          <FontSample system={template?.designSystem} className="size-12 text-xl" />
+          {template?.previewDataUrl ? (
+            <img
+              src={template.previewDataUrl}
+              alt=""
+              aria-hidden
+              className="size-12 rounded-md object-cover ring-1 ring-border"
+            />
+          ) : (
+            <FontSample system={template?.designSystem} className="size-12 text-xl" />
+          )}
           <div className="flex min-w-0 flex-col gap-0.5">
             <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
               <ProjectLook appearance={project.appearance} size="sm" />

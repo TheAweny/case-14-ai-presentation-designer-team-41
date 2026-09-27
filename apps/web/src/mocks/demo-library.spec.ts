@@ -12,7 +12,7 @@ import {
 } from '../lib/library-source';
 import { parseProjectAppearance } from '../lib/project-appearance';
 import { createDemoLibrary, createDemoLibrarySource } from './demo-library';
-import { deckSource, librarySource } from './sources';
+const { decks: deckSource, library: librarySource } = createDemoLibrary();
 
 const isNewestFirst = (items: readonly { readonly updatedAt: number }[]) =>
   items.every((item, index) => index === 0 || (items[index - 1]?.updatedAt ?? 0) >= item.updatedAt);

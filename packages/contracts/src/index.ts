@@ -198,3 +198,36 @@ export {
   type EditableDeckRequest,
   type EditableDeckResponse,
 } from './editable-deck.js';
+export {
+  compositionSchema,
+  compositionSlotSchema,
+  composedSlideSchema,
+  generationProfileSchema,
+  compositionExportRequestSchema,
+  compositionExportResponseSchema,
+  generationRequestSchema,
+  type GenerationProfile,
+  type Composition,
+  type ComposedSlide,
+  type CompositionExportRequest,
+  type CompositionExportResponse,
+  type GenerationRequest,
+} from './generation.js';
+
+export {
+  compositionFindingSchema,
+  compositionCheckResponseSchema,
+  type CompositionFinding,
+  type CompositionCheckResponse,
+} from './generation.js';
+
+export {
+  compositionPlanSchema,
+  compositionCritiqueSchema,
+  templateSlotCopySchema,
+  slotRewriteChoicesSchema,
+  type CompositionPlan,
+  type CompositionCritique,
+  type TemplateSlotCopy,
+  type SlotRewriteChoices,
+} from './generation.js';

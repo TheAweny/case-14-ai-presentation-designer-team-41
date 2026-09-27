@@ -103,7 +103,11 @@ export function createTemplateImports(
         // Сервер уже назвал причину событием `failed` — она важнее общей ошибки клиента.
         update(importId, ({ failure }) => ({
           phase: 'failed',
-          failure: failure ?? UNKNOWN_FAILURE,
+          failure:
+            failure ??
+            (reason instanceof Error && reason.message
+              ? { ...UNKNOWN_FAILURE, message: reason.message }
+              : UNKNOWN_FAILURE),
         }));
       });
   };

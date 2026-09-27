@@ -84,7 +84,7 @@ import {
   type DeckExporter,
   type ExportFormat,
 } from '@/lib/deck-export';
-import { createDemoExporter } from '@/mocks/demo-exporter';
+import { createHttpExporter } from '@/lib/http-generation';
 import {
   alignUnits,
   canGroup,
@@ -256,7 +256,7 @@ export function EditorShell({
   const resolveMedia = useMediaResolver(media);
   // Название живёт в редакторе, пока колоду некуда сохранить: API для этого ещё нет.
   const [title, setTitle] = useState(deck.title);
-  const [exporter] = useState(() => givenExporter ?? createDemoExporter());
+  const [exporter] = useState(() => givenExporter ?? createHttpExporter());
   const exportJob = useDeckExport(exporter);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>(prefs.exportFormat);
@@ -1316,6 +1316,19 @@ export function EditorShell({
                     exportJob.phase === 'running' ? (exportJob.progress?.percent ?? 0) : null
                   }
                 />
+                {deck.renderedPdfUrl && (
+                  <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                    {t('generatedNotice')}{' '}
+                    <a
+                      href={deck.renderedPdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {t('generatedPdf')}
+                    </a>
+                  </div>
+                )}
                 <ExportDialog
                   open={exportOpen}
                   onOpenChange={setExportOpen}

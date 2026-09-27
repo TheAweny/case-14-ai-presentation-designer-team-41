@@ -1,74 +1,75 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import {
-  attachTemplateAction,
-  getTemplateAction,
-  importTemplateAction,
-} from '@/app/(library)/actions';
+import { attachTemplateAction, refreshLibraryAction } from '@/app/(library)/actions';
 import { createAssistantThreads, type AssistantThread } from '@/lib/assistant-threads';
 import { createDeckConversations } from '@/lib/deck-conversations';
 import { createGenerationRuns, type GenerationRun } from '@/lib/generation-runs';
-import {
-  InvalidTemplateFileError,
-  TemplateNotFoundError,
-  type LibrarySource,
-  type TemplateSummary,
-} from '@/lib/library-source';
+import type { TemplateSummary } from '@/lib/library-source';
 import { createTemplateImports, type TemplateImport } from '@/lib/template-imports';
-import { createDemoGenerator } from '@/mocks/demo-generator';
+import { createHttpGenerator } from '@/lib/http-generation';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
-import { deckSource, librarySource } from '@/mocks/sources';
-
-/** Сколько байт начала файла уходит демо-серверу: хватает, чтобы файл не был пустым. */
-const DEMO_UPLOAD_HEAD_BYTES = 1024;
+import { apiBaseUrl } from '@/lib/api';
+import { designSystemSchema, templateIrSchema } from '@lct/contracts';
+import { templateLayoutsFromIr } from '@/lib/template-profile';
 
 /**
- * Зарегистрировать разобранный шаблон в библиотеке — серверным действием: библиотеку, которую
- * видят серверные страницы, держит сервер, а у вкладки своя копия демо-данных.
- *
- * Демо-сервер читает у файла только имя и размер, а тело серверного действия ограничено
- * (по умолчанию 1 МБ) — настоящий .pptx в него не пролезет. Поэтому уходит начало файла под
- * тем же именем: пустым оно не будет, а содержимое демо всё равно не разбирает. Настоящий
- * импортёр отправит файл целиком в API движка, мимо серверных действий.
+ * Зарегистрировать разобранный шаблон в библиотеке. Настоящий импортёр отправляет файл целиком
+ * в API: API сохраняет его и передаёт путь Python-движку, поэтому профиль строится по
+ * содержимому конкретного файла.
  */
 async function registerTemplate(file: File): Promise<TemplateSummary> {
   const form = new FormData();
-  form.set(
-    'file',
-    new File([file.slice(0, DEMO_UPLOAD_HEAD_BYTES)], file.name, { type: file.type }),
-  );
-  const result = await importTemplateAction(form);
-  if (result.ok) return result.template;
-  if (result.reason === 'invalid') throw new Error('Template upload rejected');
-  throw new InvalidTemplateFileError(result.reason);
+  form.set('file', file);
+  const response = await fetch(`${apiBaseUrl}/files/template`, { method: 'POST', body: form });
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const body = (await response.json()) as { detail?: unknown; message?: unknown };
+      if (typeof body.detail === 'string') detail = body.detail;
+      else if (typeof body.message === 'string') detail = body.message;
+    } catch {
+      // Keep the HTTP status when the proxy returned a non-JSON error page.
+    }
+    throw new Error(`Template upload failed (${response.status})${detail ? `: ${detail}` : ''}`);
+  }
+  const payload = (await response.json()) as {
+    fileId: string;
+    fileName: string;
+    profile?: { designSystem?: unknown; templateIr?: unknown; previewDataUrl?: unknown };
+  };
+  const designSystem = designSystemSchema.parse(payload.profile?.designSystem);
+  const templateIr = templateIrSchema.parse(payload.profile?.templateIr);
+  return {
+    templateId: payload.fileId,
+    fileName: payload.fileName,
+    importedAt: Date.now(),
+    layouts: templateLayoutsFromIr(templateIr),
+    designSystem,
+    templateIr,
+    previewDataUrl:
+      typeof payload.profile?.previewDataUrl === 'string'
+        ? payload.profile.previewDataUrl
+        : undefined,
+  };
 }
 
 /** Импорты шаблонов: карточка «Прикрепить шаблон» проекта и агент в разговоре. */
-export const templateImporter = createDemoTemplateImporter({ register: registerTemplate });
+export const templateImporter = createDemoTemplateImporter({
+  register: registerTemplate,
+  profilesFiles: true,
+});
 export const templateImports = createTemplateImports(templateImporter);
 
-/**
- * Библиотека, которой пользуется демо-генератор вкладки. У вкладки своя копия демо-данных, а
- * шаблоны импортируются на сервере: шаблона, которого копия не знает, генератор ищет там —
- * иначе на только что загруженном шаблоне (или загруженном до обновления страницы) прогон
- * отказал бы с «шаблон не найден».
- */
-const tabLibrary: LibrarySource = {
-  ...librarySource,
-  async getTemplate(templateId) {
-    try {
-      return await librarySource.getTemplate(templateId);
-    } catch (error) {
-      if (!(error instanceof TemplateNotFoundError)) throw error;
-      const template = await getTemplateAction(templateId);
-      if (template) return template;
-      throw error;
-    }
+const httpGenerator = createHttpGenerator();
+const deckGenerator: typeof httpGenerator = {
+  ...httpGenerator,
+  async generate(...args) {
+    const result = await httpGenerator.generate(...args);
+    await refreshLibraryAction();
+    return result;
   },
 };
-
-const deckGenerator = createDemoGenerator({ library: tabLibrary, decks: deckSource });
 
 /**
  * Сессия ассистента во вкладке: прогоны генерации, разговоры и агент, который их ведёт. Одна на

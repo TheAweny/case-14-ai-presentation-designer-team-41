@@ -1,0 +1,10 @@
+id: deck-critic
+version: 1.3.0
+description: Grounding and narrative audit of a single deck
+modelId: qwen-yandex
+generation:
+  temperature: 0.35
+  topP: 1
+  maxOutputTokens: 3600
+outputSchema: CompositionCritique
+instructionsFile: instructions.md

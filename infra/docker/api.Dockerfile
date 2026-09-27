@@ -25,6 +25,8 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY --from=builder /app /app
+COPY registry /app/registry
+COPY configs /app/configs
 
 RUN mkdir -p /app/runs
 

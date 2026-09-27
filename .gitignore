@@ -40,6 +40,8 @@ data/*
 !data/.gitkeep
 runs/*
 !runs/.gitkeep
+apps/*/runs/
+apps/*/data/
 *.db
 *.db-journal
 *.sqlite

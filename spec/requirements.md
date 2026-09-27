@@ -31,6 +31,17 @@ PostgreSQL is permitted only as the local run metadata store; it never stores in
 
 ## Contract traceability
 
+Faithful rendering requires the original template font families in the engine runtime.
+Redistributable Play and Inter faces ship with the image; additional fonts are mounted
+read-only via `TEMPLATE_FONTS_DIR` and indexed before the engine starts. Unknown fonts
+must not silently fall back to a different family or alter the source PPTX font names.
+
+Template upload parses all slides, but its optional thumbnail exports and rasterises only the
+first slide. Thumbnail subprocesses share a 20-second deadline; a renderer failure must not
+discard a successfully parsed profile. The full-deck export path still renders every slide.
+The API distinguishes invalid templates (422), an unavailable engine (503), and a profile
+request timeout (504), rather than returning an unexplained 500 for those failures.
+
 | Requirement                             | Contract           | Verification                  | Evidence                  |
 | --------------------------------------- | ------------------ | ----------------------------- | ------------------------- |
 | Template adapts without file-name rules | `TemplateProfile`  | valid/invalid schema fixtures | profile JSON in manifest  |
@@ -43,3 +54,21 @@ PostgreSQL is permitted only as the local run metadata store; it never stores in
 | Selected fixes preserve other findings  | `FixPatch`         | selected-fix E2E test         | re-audit and manifest     |
 | Run is reproducible                     | `ArtifactManifest` | exactly-three-variants test   | manifest JSON             |
 | Progress is factual                     | `RunEvent`         | event schema test             | local run log             |
+
+## Current single-deck model integration (2026-09-27)
+
+The current implementation milestone uses one text model for planning and slide writing:
+Yandex AI Studio Qwen3.6-35B-A3B via `LLM_BASE_URL`, `LLM_MODEL`, and `MODEL_API_KEY`.
+Thinking is disabled and output is constrained with JSON Schema and validated with Zod.
+There is no alternate-model fallback. The process-wide request limit is three, reserving
+capacity for teammates within the shared ten-request catalogue quota. This limit is not
+distributed across API replicas or CLI processes. Images remain explicitly mocked.
+Provider smoke evidence is separate from end-to-end PPTX quality and latency acceptance.
+
+## Implemented single-deck slice, 2026-09-27
+
+The current user-authorized milestone is one real-model deck in the supplied template within
+five minutes, using Mastra, a single Qwen3.6-35B-A3B Yandex endpoint and mocked image generation.
+The user explicitly accepted this named model despite its approximately 35.95B total parameter
+count. This does not relax the separate organizer acceptance gate above. Implementation,
+measured API evidence, and limitations are recorded in `docs/GENERATION.md`.

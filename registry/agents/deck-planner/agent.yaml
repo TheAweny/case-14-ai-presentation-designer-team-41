@@ -1,0 +1,10 @@
+id: deck-planner
+version: 1.5.0
+description: Template-grounded planner
+modelId: qwen-yandex
+generation:
+  temperature: 0.35
+  topP: 1
+  maxOutputTokens: 6000
+outputSchema: CompositionPlan
+instructionsFile: instructions.md
