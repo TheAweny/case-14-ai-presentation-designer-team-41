@@ -13,6 +13,7 @@ import { auditReportSchema, auditRequestSchema } from './audit-report.js';
 import { layoutVariantsRequestSchema, layoutVariantsResponseSchema } from './layout-variants.js';
 import { slideReviewSchema } from './slide-review.js';
 import { deckExportRequestSchema, deckExportResponseSchema } from './deck-export.js';
+import { copyEditsSchema } from './copy-edits.js';
 import { fixPatchSchema } from './fix-patch.js';
 import { jobEventSchema } from './job-event.js';
 import { artifactManifestSchema } from './artifact-manifest.js';
@@ -47,6 +48,7 @@ export const contractRegistry = {
   AuditReport: auditReportSchema,
   FixPatch: fixPatchSchema,
   SlideReview: slideReviewSchema,
+  CopyEdits: copyEditsSchema,
   JobEvent: jobEventSchema,
   ArtifactManifest: artifactManifestSchema,
 } satisfies Record<string, ZodType>;

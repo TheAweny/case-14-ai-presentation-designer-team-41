@@ -8,12 +8,52 @@ export interface GroundingProblem {
 
 const NUMBER = /\d+(?:[.,]\d+)?\s?%?/g;
 
-function normalise(text: string): string {
+/**
+ * Text as a quote is compared: markdown emphasis and code marks dropped, dashes, quotes and ё
+ * unified, whitespace collapsed. Models quote what a passage says, not how it was typeset.
+ */
+export function normalise(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[«»"“”]/g, '"')
+    .replace(/[*_`]+/g, '')
+    .replace(/^\s*(?:[-+]|\d+\.)\s+/gm, '')
+    .replace(/[«»"“”„]/g, '"')
+    .replace(/[—–−]/g, '-')
+    .replace(/ё/g, 'е')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * The plan with each source pointing at the passage its quote is actually in. A model that
+ * quotes a sentence word for word but names the neighbouring passage has the fact right and the
+ * reference wrong; the reference is corrected here rather than reported. A quote found nowhere
+ * is left alone, for the grounding check to report.
+ */
+export function repairSources(
+  plan: DeckPlan,
+  pack: ContentPack,
+): { plan: DeckPlan; moved: number } {
+  const items = pack.items.map((item) => ({ id: item.itemId, text: normalise(item.text) }));
+  const fixed = structuredClone(plan);
+  let moved = 0;
+  const repair = (source: { itemId: string; quote: string }) => {
+    const quote = normalise(source.quote);
+    if (items.find((item) => item.id === source.itemId)?.text.includes(quote)) return;
+    const home = items.find((item) => item.text.includes(quote));
+    if (home !== undefined) {
+      source.itemId = home.id;
+      moved += 1;
+    }
+  };
+  for (const slide of fixed.slides) {
+    slide.sources.forEach(repair);
+    for (const block of slide.blocks) {
+      if (block.kind === 'table' || block.kind === 'chart') block.sources.forEach(repair);
+      if (block.kind === 'kpi') block.items.forEach((item) => item.sources.forEach(repair));
+    }
+  }
+  return { plan: fixed, moved };
 }
 
 function numbersIn(text: string): string[] {
@@ -94,6 +134,16 @@ export function checkGrounding(
         problems.push({
           slideId: slide.slideId,
           message: `The quote from "${source.itemId}" is not in that item word for word.`,
+        });
+      }
+    }
+    for (const block of slide.blocks) {
+      if (block.kind !== 'kpi') continue;
+      const words = block.items.filter((item) => !/\d/.test(item.value)).map((item) => item.value);
+      if (words.length > 0) {
+        problems.push({
+          slideId: slide.slideId,
+          message: `KPI values must be figures, not words (${words.join(', ')}): use bullets instead.`,
         });
       }
     }

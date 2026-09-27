@@ -3,7 +3,7 @@ import type { LoadedAgent } from '@lct/registry';
 import { describe, expect, it } from 'vitest';
 import type { ModelProvider, ModelRequest } from '../models/provider.js';
 import { buildContentPack } from './content-pack.js';
-import { checkGrounding } from './grounding.js';
+import { checkGrounding, normalise, repairSources } from './grounding.js';
 import { planDeck } from './plan-deck.js';
 
 const pack = buildContentPack({
@@ -105,6 +105,19 @@ describe('checkGrounding', () => {
     expect(problems.map((p) => p.message).join()).toMatch(/97%/);
   });
 
+  it('catches a figure block that holds words', () => {
+    const wordy = plan('Retention reached 94%');
+    const block = wordy.slides[1]?.blocks[0];
+    if (block?.kind === 'kpi' && block.items[0]) {
+      block.items[0].value = 'Geometry';
+    }
+    expect(
+      checkGrounding(wordy, pack, 3)
+        .map((p) => p.message)
+        .join(),
+    ).toMatch(/figures, not words/);
+  });
+
   it('catches a quote that is not in its source', () => {
     const misquoted = plan('Retention reached 94%');
     const block = misquoted.slides[1]?.blocks[0];
@@ -112,6 +125,22 @@ describe('checkGrounding', () => {
       block.items[0].sources = [{ itemId: 'doc1-p1', quote: 'Retention doubled' }];
     }
     expect(checkGrounding(misquoted, pack, 3)).toHaveLength(1);
+  });
+
+  it('reads a quote past markdown marks, list markers, line breaks and dashes', () => {
+    const source = normalise('- **TypeScript** — продукт и\n  оркестрация: `Next.js` и ещё');
+    expect(source.includes(normalise('TypeScript - продукт и оркестрация: Next.js'))).toBe(true);
+  });
+
+  it('points a source at the passage its quote is really in', () => {
+    const moved = plan('Retention reached 94%');
+    const block = moved.slides[1]?.blocks[0];
+    if (block?.kind === 'kpi' && block.items[0]) {
+      block.items[0].sources = [{ itemId: 'doc1-p2', quote: 'Retention rose to 94%' }];
+    }
+    const repaired = repairSources(moved, pack);
+    expect(repaired.moved).toBe(1);
+    expect(checkGrounding(repaired.plan, pack, 3)).toEqual([]);
   });
 
   it('catches the wrong number of slides and a source that does not exist', () => {

@@ -18,9 +18,18 @@ export interface ModelRequest {
   readonly responseSchema?: { readonly name: string; readonly schema: Record<string, unknown> };
 }
 
+/** Tokens a provider spent for one agent, which is what a hosted model is billed by. */
+export interface AgentUsage {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /** What serves an agent: a real runtime, or recorded answers. */
 export interface ModelProvider {
   readonly name: string;
+  /** Spend so far by agent id. Recorded answers cost nothing and may leave it out. */
+  readonly usage?: Map<string, AgentUsage>;
   /** Raw text of the model's answer. Parsing and validation are the caller's. */
   complete(request: ModelRequest, feedback?: string): Promise<string>;
 }

@@ -221,3 +221,18 @@ def test_exports_endpoint_writes_pptx_and_pdf(template: Path, tmp_path: Path) ->
     written = {f["format"]: Path(f["path"]) for f in response.json()["files"]}
     assert set(written) == set(formats)
     assert all(path.is_file() and path.stat().st_size > 0 for path in written.values())
+
+
+def test_figures_step_down_the_scale_until_they_fit(profile: tuple[dict[str, Any], ...]) -> None:
+    design_system, patterns = profile
+    many = {
+        "kind": "kpi",
+        "items": [
+            {"value": f"{n} 250", "caption": "Revenue", "sources": _SOURCE} for n in range(1, 5)
+        ],
+    }
+    (slide,) = build_slide_ir(_plan(many, intent="kpi"), design_system, patterns)
+    values = [e for e in _elements(slide) if e["role"] == "kpi-value"]
+    assert values and all(v["overflow"] is None for v in values)
+    largest = max(float(s["sizePt"]) for s in design_system["typeScale"])
+    assert values[0]["paragraphs"][0]["runs"][0]["sizePt"] < largest

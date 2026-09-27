@@ -30,13 +30,15 @@ One JSON object matching `outputSchema`, and nothing else: no prose, no markdown
 
 ## Every slide
 
-- `headline` states a conclusion in one sentence of at most 12 words, not a topic.
+- `headline` states a conclusion in one sentence of at most 8 words and 60 characters, not a
+  topic. Templates set headlines large, so short headlines are what fits.
   Write "Retention held above 90% in every segment", not "Retention".
 - `subhead` adds one short supporting line, or is empty.
 - `blocks` carry the body. Pick the block that fits the content:
   - `bullets` for 3 to 6 parallel points, each at most 15 words;
   - `paragraph` for one idea in two sentences at most;
-  - `kpi` for 2 to 4 headline figures, each with a caption;
+  - `kpi` for 2 to 4 headline figures, each with a caption. A KPI value is a number with its
+    unit, such as "94%" or "23"; a word or a name is never a KPI, put it in bullets;
   - `table` for comparisons of at most 7 rows and 5 columns;
   - `chart` for figures over categories or time, at most 5 series, with `yTitle` naming the unit;
   - `quote` for a statement worth quoting from the pack.
@@ -47,6 +49,7 @@ One JSON object matching `outputSchema`, and nothing else: no prose, no markdown
 
 - Every figure on a slide must appear in the pack exactly as written there. Never compute,
   round, estimate or invent a number.
-- Tables, charts and KPIs must name their sources: an `itemId` and a `quote` copied word for word
-  from that item. List the passages a slide rests on in its `sources` the same way.
+- Tables, charts and KPIs must name their sources: an `itemId` and a `quote` of 3 to 12
+  consecutive words copied character for character from that item's text. Do not paraphrase,
+  translate, reorder or fix a quote; pick a shorter stretch of the text instead. List the passages a slide rests on in its `sources` the same way.
 - If the pack does not support a point, leave the point out.

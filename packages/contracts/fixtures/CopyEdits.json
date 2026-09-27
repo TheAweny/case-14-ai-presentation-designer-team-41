@@ -1,0 +1,52 @@
+{
+  "contract": "CopyEdits",
+  "valid": [
+    {
+      "name": "a headline and a bullet",
+      "payload": {
+        "schemaVersion": 1,
+        "edits": [
+          {
+            "slideId": "s2",
+            "path": "headline",
+            "text": "Удержание выше 90%"
+          },
+          {
+            "slideId": "s3",
+            "path": "blocks.0.items.1",
+            "text": "Новые рынки: треть роста"
+          }
+        ]
+      }
+    },
+    {
+      "name": "nothing to cut",
+      "payload": {
+        "schemaVersion": 1,
+        "edits": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a path that is not a part of a slide",
+      "why": "Only headline, subhead and block texts can be rewritten.",
+      "path": ["edits", 0, "path"],
+      "payload": {
+        "schemaVersion": 1,
+        "edits": [
+          {
+            "slideId": "s2",
+            "path": "title",
+            "text": "Удержание выше 90%"
+          },
+          {
+            "slideId": "s3",
+            "path": "blocks.0.items.1",
+            "text": "Новые рынки: треть роста"
+          }
+        ]
+      }
+    }
+  ]
+}

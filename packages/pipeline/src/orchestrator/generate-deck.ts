@@ -21,6 +21,7 @@ import type { LoadedAgent } from '@lct/registry';
 import { runContextualAudit } from '../audit/contextual-audit.js';
 import type { ModelProvider } from '../models/provider.js';
 import { planDeck } from '../planner/plan-deck.js';
+import { findOverflows, fitCopy } from '../writer/fit-copy.js';
 import type { GroundingProblem } from '../planner/grounding.js';
 
 /** An agent with the provider and the catalogue entry of the model it runs on. */
@@ -43,6 +44,8 @@ export interface GenerateDeckOptions {
   readonly planner: BoundAgent;
   /** Without it the contextual half of the audit is skipped, and the manifest says so. */
   readonly reviewer?: BoundAgent;
+  /** Shortens what overflows, once. Without it overflow is only reported. */
+  readonly writer?: BoundAgent;
   /** Configuration files the run was made from, recorded in the manifest by hash. */
   readonly configFiles?: readonly string[];
   readonly onStage?: (stage: JobStage, note: string) => void;
@@ -170,14 +173,40 @@ export async function generateDeck(options: GenerateDeckOptions): Promise<Genera
     warnings.push(`plan ${problem.slideId ?? ''}: ${problem.message}`.trim());
   }
 
-  const layouts = await stage('laying-out', 'три варианта вёрстки', () =>
+  const layOut = (deck: DeckPlan) =>
     options.engine.layouts({
       schemaVersion: 1,
       templatePath: options.templatePath,
-      plan,
+      plan: deck,
       variants: [...options.variants],
-    }),
-  );
+    });
+  let deckPlan = plan;
+  let layouts = await stage('laying-out', 'три варианта вёрстки', () => layOut(deckPlan));
+
+  const targets = findOverflows(deckPlan, layouts.variants);
+  if (options.writer && targets.length > 0) {
+    const writer = options.writer;
+    layouts = await stage(
+      'laying-out',
+      `сокращение ${targets.length} текстов и повторная вёрстка`,
+      async () => {
+        const fitted = await fitCopy({
+          plan: deckPlan,
+          targets,
+          agent: writer.agent,
+          provider: writer.provider,
+          seed: options.seed,
+        });
+        for (const reason of fitted.rejected) warnings.push(`copy ${reason}`);
+        if (fitted.applied === 0) return layouts;
+        deckPlan = fitted.plan;
+        await writeJson(join(runDir, 'plan.json'), deckPlan);
+        return layOut(deckPlan);
+      },
+    );
+  }
+  const left = findOverflows(deckPlan, layouts.variants).length;
+  if (left > 0) warnings.push(`${left} текстов всё ещё не влезают в свои рамки`);
 
   const variants = await stage('auditing', 'детерминированный и контекстный аудит', () =>
     Promise.all(
@@ -239,6 +268,7 @@ export async function generateDeck(options: GenerateDeckOptions): Promise<Genera
   const revisions: ComponentRevision[] = [
     ...agentRevisions(options.planner),
     ...(options.reviewer ? agentRevisions(options.reviewer) : []),
+    ...(options.writer ? agentRevisions(options.writer) : []),
     {
       kind: 'template',
       id: options.templatePath.split('/').at(-1) ?? options.templatePath,
@@ -257,15 +287,20 @@ export async function generateDeck(options: GenerateDeckOptions): Promise<Genera
     finishedAt: finishedAt.toISOString(),
     templateHash: layouts.designSystem.templateHash,
     contentPackId: options.pack.packId,
-    planId: plan.planId,
+    planId: deckPlan.planId,
     seed: options.seed,
     revisions,
-    modelCalls: [],
+    modelCalls: [options.planner, options.writer, options.reviewer]
+      .filter((bound): bound is BoundAgent => bound !== undefined)
+      .flatMap((bound) => {
+        const spent = bound.provider.usage?.get(bound.agent.config.id);
+        return spent ? [{ agentId: bound.agent.config.id, modelId: bound.model.id, ...spent }] : [];
+      }),
     artifacts,
     timings,
     totalMs: finishedAt.getTime() - startedAt.getTime(),
     appliedPatchIds: [],
   });
   await writeJson(join(runDir, 'manifest.json'), manifest);
-  return { plan, groundingProblems: problems, variants: exported, manifest, warnings };
+  return { plan: deckPlan, groundingProblems: problems, variants: exported, manifest, warnings };
 }

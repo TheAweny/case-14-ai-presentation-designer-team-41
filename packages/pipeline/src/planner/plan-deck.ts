@@ -2,7 +2,7 @@ import { deckPlanSchema, slideIntentSchema, type ContentPack, type DeckPlan } fr
 import type { LoadedAgent } from '@lct/registry';
 import { z } from 'zod';
 import { runAgent, type ModelProvider } from '../models/provider.js';
-import { checkGrounding, type GroundingProblem } from './grounding.js';
+import { checkGrounding, repairSources, type GroundingProblem } from './grounding.js';
 
 export interface PlanDeckOptions {
   readonly pack: ContentPack;
@@ -44,13 +44,16 @@ export async function planDeck(options: PlanDeckOptions): Promise<PlanDeckResult
     items: pack.items.map(({ itemId, kind, title, text }) => ({ itemId, kind, title, text })),
     outputSchema: PLAN_SCHEMA,
   };
-  let plan = await runAgent<DeckPlan>(provider, { agent, input, seed });
+  let plan = repairSources(await runAgent<DeckPlan>(provider, { agent, input, seed }), pack).plan;
   let problems = checkGrounding(plan, pack, slideCount);
   if (problems.length === 0) {
     return { plan, problems, calls: 1 };
   }
   const repair = { ...input, previousPlan: plan, problems: problems.map(describe) };
-  plan = await runAgent<DeckPlan>(provider, { agent, input: repair, seed });
+  plan = repairSources(
+    await runAgent<DeckPlan>(provider, { agent, input: repair, seed }),
+    pack,
+  ).plan;
   problems = checkGrounding(plan, pack, slideCount);
   return { plan, problems, calls: 2 };
 }

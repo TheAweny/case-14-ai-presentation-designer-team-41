@@ -1,0 +1,15 @@
+# Shortens the parts of a plan the layout could not fit, each to the length it was given.
+# The layout never cuts text; this agent does, and only where the layout said so.
+
+id: copy-fitter
+version: 1.0.0
+description: Rewrites overflowing headlines and bullets shorter, keeping their facts and figures.
+modelId: writer-default
+
+generation:
+  temperature: 0.2
+  topP: 0.9
+  maxOutputTokens: 2048
+
+outputSchema: CopyEdits
+instructionsFile: instructions.md

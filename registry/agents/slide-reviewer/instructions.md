@@ -13,14 +13,13 @@ A JSON object with:
 - an image of the slide, when one is attached. Judge what is visible on it;
 - `previous` and `next`: the neighbouring slides, `deckHeadlines`: every headline of the deck;
 - `goal` and `language`: what the deck is for and the language it is written in;
-- `sources`: the material the deck may draw on. A figure or a fact that is not in it is
-  unsupported;
-- `questions`: the questions to answer, each with a `checkId`;
-- `outputSchema`: the JSON Schema your answer must match.
+- `sources`: the passages of the material this slide draws on. A figure or a fact that is in
+  none of them is unsupported;
+- `questions`: the questions to answer, each with a `checkId`.
 
 ## Answer
 
-One JSON object matching `outputSchema`, and nothing else: no prose, no markdown fences.
+One JSON object with the fields below, and nothing else: no prose, no markdown fences.
 
 - `schemaVersion` is 1 and `slideId` is the one you were given.
 - One answer per question, with its `checkId`. Every question is phrased so that "yes" is good.

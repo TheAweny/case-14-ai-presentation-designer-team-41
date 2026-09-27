@@ -19,6 +19,7 @@ export {
   RecordedProvider,
   requestKey,
   runAgent,
+  type AgentUsage,
   type ModelProvider,
   type ModelRequest,
   type OpenAICompatibleOptions,
@@ -49,3 +50,4 @@ export {
   type GenerateDeckResult,
   type VariantResult,
 } from './orchestrator/index.js';
+export { findOverflows, fitCopy, type CopyTarget, type FitCopyResult } from './writer/index.js';
