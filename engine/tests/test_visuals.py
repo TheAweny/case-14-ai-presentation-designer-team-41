@@ -4,10 +4,12 @@ A chart that reaches the file as a picture does not count, so the export test re
 and reads the table cells and the chart's own data back out of it.
 """
 
+import shutil
 from pathlib import Path
 from typing import Any
 
 import pytest
+from engine.api import app
 from engine.api._profiles import deterministic_profile
 from engine.checks import audit_deck
 from engine.contracts import DeckPlan, SlideIR
@@ -15,6 +17,7 @@ from engine.export import export_pptx
 from engine.layout import VARIANTS, build_slide_ir
 from engine.parser import template_profile_of
 from engine.visuals import draw_visual, style_visuals
+from fastapi.testclient import TestClient
 from pptx import Presentation
 
 _SOURCE = [{"itemId": "brief", "quote": "Revenue grew to 15 in Q3."}]
@@ -197,3 +200,24 @@ def test_export_writes_a_native_table_and_chart(
     assert chart.value_axis.axis_title.text_frame.text == "Revenue, mln RUB"
     assert chart.has_legend
     assert not any(s.shape_type == 13 for s in shapes)  # MSO_SHAPE_TYPE.PICTURE
+
+
+def test_exports_endpoint_writes_pptx_and_pdf(template: Path, tmp_path: Path) -> None:
+    design_system, patterns = template_profile_of(template)
+    slides = build_slide_ir(_plan(_CHART, _TABLE), design_system, patterns)
+    formats = ["pptx", "pdf"] if shutil.which("soffice") else ["pptx"]
+    response = TestClient(app).post(
+        "/v1/exports",
+        json={
+            "schemaVersion": 1,
+            "templatePath": str(template),
+            "variant": "balanced",
+            "slides": [s.model_dump(mode="json", exclude_unset=True) for s in slides],
+            "outputDir": str(tmp_path),
+            "formats": formats,
+        },
+    )
+    assert response.status_code == 200, response.text
+    written = {f["format"]: Path(f["path"]) for f in response.json()["files"]}
+    assert set(written) == set(formats)
+    assert all(path.is_file() and path.stat().st_size > 0 for path in written.values())

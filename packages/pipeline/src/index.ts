@@ -41,3 +41,11 @@ export {
   type ContextualAuditOptions,
   type ContextualAuditResult,
 } from './audit/contextual-audit.js';
+export {
+  generateDeck,
+  GenerateDeckError,
+  type BoundAgent,
+  type GenerateDeckOptions,
+  type GenerateDeckResult,
+  type VariantResult,
+} from './orchestrator/index.js';

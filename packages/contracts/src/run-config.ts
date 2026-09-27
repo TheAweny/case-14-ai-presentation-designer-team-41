@@ -24,6 +24,13 @@ export const runConfigSchema = z.object({
   models: z.array(modelBindingSchema).min(1).describe('Models bound to pipeline roles.'),
   seed: z.number().int().nonnegative().describe('Seed that makes a run reproducible.'),
   outputDir: z.string().min(1).describe('Directory that receives run artifacts.'),
+  goal: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('What the deck has to achieve. Absent: the first paragraph of the content file.'),
+  audience: z.string().optional().describe('Who the deck is for. Absent: not stated.'),
+  language: z.string().min(2).optional().describe('BCP 47 tag of the deck. Absent: ru.'),
 });
 
 export type RunConfig = z.infer<typeof runConfigSchema>;
