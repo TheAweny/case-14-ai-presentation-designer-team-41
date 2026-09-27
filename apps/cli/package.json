@@ -9,6 +9,7 @@
     "lct": "dist/main.js"
   },
   "dependencies": {
+    "@clack/prompts": "1.7.0",
     "@lct/contracts": "workspace:^",
     "@lct/engine-client": "workspace:^",
     "@lct/pipeline": "workspace:^",
