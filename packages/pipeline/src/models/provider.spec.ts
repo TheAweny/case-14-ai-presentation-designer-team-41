@@ -63,6 +63,11 @@ describe('extractJson', () => {
     expect(extractJson(answer)).toEqual({ a: 1 });
   });
 
+  it('keeps a code fence that is part of a string', () => {
+    const answer = '{"text": "Run:\\n```bash\\nyarn install\\n```"}';
+    expect(extractJson(answer)).toEqual({ text: 'Run:\n```bash\nyarn install\n```' });
+  });
+
   it('refuses an answer with no JSON in it', () => {
     expect(() => extractJson('no idea')).toThrow();
   });
@@ -112,14 +117,85 @@ describe('OpenAICompatibleProvider', () => {
     });
   });
 
-  it('reports an HTTP failure with its status', async () => {
+  it('holds the model to the answer schema when the request carries one', async () => {
+    let body: Record<string, unknown> = {};
     const provider = new OpenAICompatibleProvider({
       model: planner,
       baseUrl: 'http://runtime/v1',
       apiKey: 'k',
-      fetch: () => Promise.resolve(new Response('overloaded', { status: 503 })),
+      fetch: (_url, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ choices: [{ message: { content: JSON.stringify(valid) } }] }),
+          ),
+        );
+      },
     });
-    await expect(provider.complete(request)).rejects.toThrow(/503/);
+    await expect(runAgent(provider, request)).resolves.toEqual(valid);
+    expect(body.response_format).toMatchObject({
+      type: 'json_schema',
+      json_schema: { name: 'HealthCheck', strict: true },
+    });
+  });
+
+  it("adds the model's extra request fields, such as switching thinking off", async () => {
+    let body: Record<string, unknown> = {};
+    const provider = new OpenAICompatibleProvider({
+      model: { ...planner, extraBody: { chat_template_kwargs: { enable_thinking: false } } },
+      baseUrl: 'http://runtime/v1',
+      apiKey: 'k',
+      fetch: (_url, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return Promise.resolve(
+          new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] })),
+        );
+      },
+    });
+    await provider.complete(request);
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(body.model).toBe(planner.repo);
+  });
+
+  it('reports a client error at once with its status', async () => {
+    let calls = 0;
+    const provider = new OpenAICompatibleProvider({
+      model: planner,
+      baseUrl: 'http://runtime-400/v1',
+      apiKey: 'k',
+      fetch: () => {
+        calls += 1;
+        return Promise.resolve(new Response('bad request', { status: 400 }));
+      },
+    });
+    await expect(provider.complete(request)).rejects.toThrow(/400/);
+    expect(calls).toBe(1);
+  });
+
+  it('waits out a quota answer and never runs more calls at once than allowed', async () => {
+    let active = 0;
+    let peak = 0;
+    let first = true;
+    const provider = new OpenAICompatibleProvider({
+      model: planner,
+      baseUrl: 'http://runtime-quota/v1',
+      apiKey: 'k',
+      maxConcurrent: 2,
+      fetch: async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active -= 1;
+        if (first) {
+          first = false;
+          return new Response('quota', { status: 429 });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] }));
+      },
+    });
+    const answers = await Promise.all([1, 2, 3, 4, 5].map(() => provider.complete(request)));
+    expect(answers).toEqual(['{}', '{}', '{}', '{}', '{}']);
+    expect(peak).toBeLessThanOrEqual(2);
   });
 });
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { contractRegistry, type ContractName } from '@lct/contracts';
 import type { LoadedAgent } from '@lct/registry';
-import type { ZodType } from 'zod';
+import { z, type ZodType } from 'zod';
 
 /**
  * A model call as the pipeline sees it: an agent from the registry, the JSON it is given, and
@@ -14,6 +14,8 @@ export interface ModelRequest {
   readonly seed: number;
   /** Pictures the model looks at, as data URLs, for vision agents. */
   readonly images?: readonly string[];
+  /** JSON Schema of the answer, for runtimes that can hold a model to it (structured output). */
+  readonly responseSchema?: { readonly name: string; readonly schema: Record<string, unknown> };
 }
 
 /** What serves an agent: a real runtime, or recorded answers. */
@@ -54,16 +56,28 @@ export function requestKey(request: ModelRequest): string {
  * <think> block and chat models like to fence JSON in markdown; neither is part of the answer.
  */
 export function extractJson(answer: string): unknown {
-  const withoutThinking = answer.replace(/<think>[\s\S]*?<\/think>/g, '');
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(withoutThinking);
-  const body = (fenced?.[1] ?? withoutThinking).trim();
-  const start = body.search(/[[{]/);
-  if (start < 0) {
-    throw new SyntaxError('No JSON object in the answer.');
+  const text = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  const candidates = [text];
+  // A fence is only a wrapper when the answer starts with it: fences inside JSON strings are
+  // content, such as a code block quoted from the source material.
+  const fenced = /^```(?:json)?\s*([\s\S]*?)```\s*$/.exec(text);
+  if (fenced?.[1] !== undefined) {
+    candidates.push(fenced[1].trim());
   }
-  const open = body[start];
-  const end = body.lastIndexOf(open === '{' ? '}' : ']');
-  return JSON.parse(body.slice(start, end + 1)) as unknown;
+  const start = text.search(/[[{]/);
+  if (start >= 0) {
+    const close = text[start] === '{' ? '}' : ']';
+    candidates.push(text.slice(start, text.lastIndexOf(close) + 1));
+  }
+  let error: unknown = new SyntaxError('No JSON object in the answer.');
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch (caught) {
+      error = caught;
+    }
+  }
+  throw error;
 }
 
 function outputSchema(agent: LoadedAgent): ZodType {
@@ -85,10 +99,19 @@ export async function runAgent<T = unknown>(
   request: ModelRequest,
 ): Promise<T> {
   const schema = outputSchema(request.agent);
+  const jsonSchema = z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as Record<
+    string,
+    unknown
+  >;
+  delete jsonSchema.$schema;
+  const call: ModelRequest = {
+    ...request,
+    responseSchema: { name: request.agent.config.outputSchema, schema: jsonSchema },
+  };
   let feedback: string | undefined;
   let answer = '';
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    answer = await provider.complete(request, feedback);
+    answer = await provider.complete(call, feedback);
     try {
       const parsed = schema.safeParse(extractJson(answer));
       if (parsed.success) {
