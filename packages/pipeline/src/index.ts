@@ -25,3 +25,13 @@ export {
   type ProviderEnv,
   type RecordedProviderOptions,
 } from './models/index.js';
+export {
+  buildContentPack,
+  checkGrounding,
+  planDeck,
+  type ContentPackInput,
+  type GroundingProblem,
+  type PlanDeckOptions,
+  type PlanDeckResult,
+  type SourceDocument,
+} from './planner/index.js';
