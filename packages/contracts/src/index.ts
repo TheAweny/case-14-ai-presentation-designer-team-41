@@ -210,3 +210,11 @@ export {
   type EditableDeckRequest,
   type EditableDeckResponse,
 } from './editable-deck.js';
+export {
+  layoutVariantsRequestSchema,
+  layoutVariantsResponseSchema,
+  variantLayoutSchema,
+  type LayoutVariantsRequest,
+  type LayoutVariantsResponse,
+  type VariantLayout,
+} from './layout-variants.js';

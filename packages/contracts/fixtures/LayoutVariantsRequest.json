@@ -1,0 +1,250 @@
+{
+  "contract": "LayoutVariantsRequest",
+  "valid": [
+    {
+      "name": "all three variants",
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "plan": {
+          "schemaVersion": 1,
+          "planId": "plan-1",
+          "briefId": "brief-1",
+          "title": "Итоги пилота",
+          "language": "ru",
+          "slides": [
+            {
+              "slideId": "s1",
+              "intent": "title",
+              "headline": "Пилот окупился за три месяца",
+              "subhead": "Итоги первого квартала",
+              "blocks": [],
+              "speakerNotes": "",
+              "sources": []
+            },
+            {
+              "slideId": "s2",
+              "intent": "chart",
+              "headline": "Конверсия выросла на треть",
+              "subhead": "",
+              "blocks": [
+                {
+                  "kind": "chart",
+                  "chartType": "column",
+                  "categories": ["Янв", "Фев", "Мар"],
+                  "series": [
+                    {
+                      "name": "Конверсия, %",
+                      "values": [3.1, 3.8, 4.4]
+                    }
+                  ],
+                  "xTitle": "",
+                  "yTitle": "Конверсия, %",
+                  "sources": [
+                    {
+                      "itemId": "item-metrics",
+                      "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                    }
+                  ]
+                }
+              ],
+              "speakerNotes": "Назвать базу расчёта.",
+              "sources": [
+                {
+                  "itemId": "item-metrics",
+                  "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "one variant",
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "plan": {
+          "schemaVersion": 1,
+          "planId": "plan-1",
+          "briefId": "brief-1",
+          "title": "Итоги пилота",
+          "language": "ru",
+          "slides": [
+            {
+              "slideId": "s1",
+              "intent": "title",
+              "headline": "Пилот окупился за три месяца",
+              "subhead": "Итоги первого квартала",
+              "blocks": [],
+              "speakerNotes": "",
+              "sources": []
+            },
+            {
+              "slideId": "s2",
+              "intent": "chart",
+              "headline": "Конверсия выросла на треть",
+              "subhead": "",
+              "blocks": [
+                {
+                  "kind": "chart",
+                  "chartType": "column",
+                  "categories": ["Янв", "Фев", "Мар"],
+                  "series": [
+                    {
+                      "name": "Конверсия, %",
+                      "values": [3.1, 3.8, 4.4]
+                    }
+                  ],
+                  "xTitle": "",
+                  "yTitle": "Конверсия, %",
+                  "sources": [
+                    {
+                      "itemId": "item-metrics",
+                      "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                    }
+                  ]
+                }
+              ],
+              "speakerNotes": "Назвать базу расчёта.",
+              "sources": [
+                {
+                  "itemId": "item-metrics",
+                  "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                }
+              ]
+            }
+          ]
+        },
+        "variants": ["airy"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown variant",
+      "why": "Variants are dense, balanced and airy.",
+      "path": ["variants", 0],
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "plan": {
+          "schemaVersion": 1,
+          "planId": "plan-1",
+          "briefId": "brief-1",
+          "title": "Итоги пилота",
+          "language": "ru",
+          "slides": [
+            {
+              "slideId": "s1",
+              "intent": "title",
+              "headline": "Пилот окупился за три месяца",
+              "subhead": "Итоги первого квартала",
+              "blocks": [],
+              "speakerNotes": "",
+              "sources": []
+            },
+            {
+              "slideId": "s2",
+              "intent": "chart",
+              "headline": "Конверсия выросла на треть",
+              "subhead": "",
+              "blocks": [
+                {
+                  "kind": "chart",
+                  "chartType": "column",
+                  "categories": ["Янв", "Фев", "Мар"],
+                  "series": [
+                    {
+                      "name": "Конверсия, %",
+                      "values": [3.1, 3.8, 4.4]
+                    }
+                  ],
+                  "xTitle": "",
+                  "yTitle": "Конверсия, %",
+                  "sources": [
+                    {
+                      "itemId": "item-metrics",
+                      "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                    }
+                  ]
+                }
+              ],
+              "speakerNotes": "Назвать базу расчёта.",
+              "sources": [
+                {
+                  "itemId": "item-metrics",
+                  "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                }
+              ]
+            }
+          ]
+        },
+        "variants": ["compact"]
+      }
+    },
+    {
+      "name": "no variants",
+      "why": "An empty list asks for nothing; leave the field out for all three.",
+      "path": ["variants"],
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "data/template.pptx",
+        "plan": {
+          "schemaVersion": 1,
+          "planId": "plan-1",
+          "briefId": "brief-1",
+          "title": "Итоги пилота",
+          "language": "ru",
+          "slides": [
+            {
+              "slideId": "s1",
+              "intent": "title",
+              "headline": "Пилот окупился за три месяца",
+              "subhead": "Итоги первого квартала",
+              "blocks": [],
+              "speakerNotes": "",
+              "sources": []
+            },
+            {
+              "slideId": "s2",
+              "intent": "chart",
+              "headline": "Конверсия выросла на треть",
+              "subhead": "",
+              "blocks": [
+                {
+                  "kind": "chart",
+                  "chartType": "column",
+                  "categories": ["Янв", "Фев", "Мар"],
+                  "series": [
+                    {
+                      "name": "Конверсия, %",
+                      "values": [3.1, 3.8, 4.4]
+                    }
+                  ],
+                  "xTitle": "",
+                  "yTitle": "Конверсия, %",
+                  "sources": [
+                    {
+                      "itemId": "item-metrics",
+                      "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                    }
+                  ]
+                }
+              ],
+              "speakerNotes": "Назвать базу расчёта.",
+              "sources": [
+                {
+                  "itemId": "item-metrics",
+                  "quote": "Конверсия выросла с 3.1% до 4.4% за три месяца."
+                }
+              ]
+            }
+          ]
+        },
+        "variants": []
+      }
+    }
+  ]
+}

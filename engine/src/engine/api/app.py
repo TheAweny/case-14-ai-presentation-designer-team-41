@@ -16,6 +16,8 @@ from engine.contracts import (
     EditableDeckRequest,
     EditableDeckResponse,
     HealthCheck,
+    LayoutVariantsRequest,
+    LayoutVariantsResponse,
     Status,
 )
 
@@ -128,3 +130,41 @@ def audit(request: AuditRequest) -> AuditReport:
         raise HTTPException(status_code=422, detail=f"Unknown audit profile {error}.") from error
     payload["mediaSizes"] = _media_sizes(payload["slides"], payload.get("mediaSizes") or {})
     return AuditReport.model_validate(checks.audit_deck(payload, profile_name, profile))
+
+
+@app.post(
+    "/v1/layouts",
+    response_model=LayoutVariantsResponse,
+    summary="Lay one deck plan out as the three variants on a local template",
+)
+def build_layouts(request: LayoutVariantsRequest) -> LayoutVariantsResponse:
+    """Build the requested variants of one plan against the profile of one template.
+
+    The plan is reused as it is: every variant carries the same words, and the variants differ
+    in the layouts they take from the template and in how copy sits in them.
+    """
+    template_path = Path(request.templatePath).resolve()
+    if not template_path.is_file():
+        raise HTTPException(status_code=404, detail="Template PPTX was not found.")
+    design_system, patterns = parser.template_profile_of(template_path)
+    plan = DeckPlan.model_validate(request.plan.model_dump(mode="json"))
+    wanted = [str(getattr(v, "value", v)) for v in request.variants or layout.VARIANTS]
+    variants = [
+        {
+            "variant": variant,
+            "slides": [
+                slide.model_dump(mode="json", exclude_unset=True)
+                for slide in layout.build_slide_ir(plan, design_system, patterns, variant)
+            ],
+        }
+        for variant in layout.VARIANTS
+        if variant in wanted
+    ]
+    return LayoutVariantsResponse.model_validate(
+        {
+            "schemaVersion": 1,
+            "designSystem": design_system,
+            "patternCatalog": patterns,
+            "variants": variants,
+        }
+    )

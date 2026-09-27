@@ -65,6 +65,8 @@ describe('contract registry', () => {
       'FixPatch',
       'HealthCheck',
       'JobEvent',
+      'LayoutVariantsRequest',
+      'LayoutVariantsResponse',
       'PatternCatalog',
       'RunConfig',
       'SlideIR',

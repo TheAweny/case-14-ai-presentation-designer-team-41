@@ -53,7 +53,7 @@ _SCALE_ROLES = {
 }
 
 # Average glyph width as a share of the font size, for proportional Latin and Cyrillic text.
-_GLYPH_WIDTH_EM = 0.5
+_GLYPH_WIDTH_EM = 0.55
 _DEFAULT_LINE_SPACING = 1.2
 
 # Boxes are compared on a grid of this share of the slide, so that layouts nudged by a few

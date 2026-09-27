@@ -350,11 +350,16 @@ def safe_margins(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContex
     area = _slide_rect(slide)
     safe = ctx.template.safe_area(int(p["minMarginPt"] * EMU_PER_PT))
     tolerance = p["toleranceShare"] * area.cx
+    pattern = (ctx.patterns or {}).get(slide["patternId"])
+    slots = [Rect.of(slot["box"]) for slot in pattern["slots"]] if pattern else []
     for element in slide["elements"]:
         if not is_content(element) or _full_bleed(element, area):
             continue
         rect = Rect.of(element["box"])
         if _outside(rect, area, tolerance):
+            continue
+        if any(not _outside(rect, slot, tolerance) for slot in slots):
+            # Inside a slot of its own layout: the template put it there, margins or not.
             continue
         sides = _outside(rect, safe, tolerance)
         if not sides:
