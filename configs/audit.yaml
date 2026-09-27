@@ -68,14 +68,33 @@ profiles:
           - 'нажмите, чтобы добавить'
           - 'заголовок слайда'
 
+    # Content validation questions of the case, answered by a model per slide. A "no" becomes a
+    # finding only when the model is at least this sure of it; below that it is reported as info.
     contextual:
+      minConfidence: 0.6
+      headline-states-conclusion:
+        enabled: true
       slide-title-matches-body:
+        enabled: true
+      one-sentence-summary:
         enabled: true
       claim-supported-by-content-pack:
         enabled: true
-      duplicate-message:
+      slide-has-content:
+        enabled: true
+      visuals-on-topic:
+        enabled: true
+      no-service-text:
+        enabled: true
+      no-typos:
+        enabled: true
+      single-language:
+        enabled: true
+      table-and-legend-serve-the-point:
         enabled: true
       narrative-order:
+        enabled: true
+      duplicate-message:
         enabled: true
 
   strict:

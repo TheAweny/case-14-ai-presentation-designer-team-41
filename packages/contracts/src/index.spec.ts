@@ -70,6 +70,7 @@ describe('contract registry', () => {
       'PatternCatalog',
       'RunConfig',
       'SlideIR',
+      'SlideReview',
       'TemplateIR',
     ]);
   });

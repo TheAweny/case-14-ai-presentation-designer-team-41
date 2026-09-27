@@ -35,3 +35,9 @@ export {
   type PlanDeckResult,
   type SourceDocument,
 } from './planner/index.js';
+export {
+  findingsOf,
+  runContextualAudit,
+  type ContextualAuditOptions,
+  type ContextualAuditResult,
+} from './audit/contextual-audit.js';

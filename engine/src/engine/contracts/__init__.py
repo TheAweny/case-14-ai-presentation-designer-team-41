@@ -29,6 +29,7 @@ from engine.contracts._generated import (
     Role,
     RunConfig,
     SlideIR,
+    SlideReview,
     Status,
     TemplateIR,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "RunConfig",
     "ShapeTree",
     "SlideIR",
+    "SlideReview",
     "Status",
     "TableSpec",
     "TemplateIR",
