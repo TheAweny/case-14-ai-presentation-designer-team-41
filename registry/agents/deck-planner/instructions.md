@@ -64,5 +64,6 @@ The catalog you receive is already narrowed to the compositions that suit your v
 
 When `corrections.exactSlideCount` is present, return that exact count. When it contains
 `minimumSlideCount`, return at least that number. When it contains
-`firstSlidePatternMustBeOneOf`, use one of those ids on the first slide. Apply all corrections in
-one response.
+`firstSlidePatternMustBeOneOf`, use one of those ids on the first slide. When it contains
+`overusedPatternIds`, use none of those ids more than `maximumUsesPerPattern` times and spread the
+slides over other compositions of the catalog. Apply all corrections in one response.

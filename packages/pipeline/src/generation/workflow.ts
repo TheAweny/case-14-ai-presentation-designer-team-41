@@ -189,7 +189,29 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
         });
       }
-      const corrections = { ...countCorrections(result), ...coverCorrections(result) };
+      // One layout repeated over most of the deck reads as the same slide again and again; the
+      // planner gets the overused ids and replans once.
+      const varietyCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+        const counts = new Map<string, number>();
+        for (const slide of result.slides) {
+          counts.set(slide.patternId, (counts.get(slide.patternId) ?? 0) + 1);
+        }
+        const limit = Math.max(3, Math.ceil(result.slides.length / 3));
+        const overused = [...counts].filter(([, n]) => n > limit).map(([id]) => id);
+        return overused.length && catalog.length > 1
+          ? {
+              overusedPatternIds: overused,
+              maximumUsesPerPattern: limit,
+              message:
+                'Use each composition at most maximumUsesPerPattern times; vary the layouts.',
+            }
+          : undefined;
+      };
+      const corrections = {
+        ...countCorrections(result),
+        ...coverCorrections(result),
+        ...varietyCorrections(result),
+      };
       if (Object.keys(corrections).length) result = await plan(corrections, result);
       if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
         throw new Error('Planner returned the wrong slide count.');

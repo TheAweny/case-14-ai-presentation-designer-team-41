@@ -37,6 +37,8 @@ COPY infra/fonts /usr/local/share/fonts/lct
 RUN fc-cache -f
 
 COPY engine engine
+# Audit profiles: without them every audit runs on the registry defaults, whatever it asked for.
+COPY configs configs
 
 RUN uv sync --frozen --no-dev --package engine
 
