@@ -6466,6 +6466,7 @@ __metadata:
     reflect-metadata: "npm:^0.2.2"
     rxjs: "npm:^7.8.2"
     typescript: "npm:6.0.3"
+    zod: "npm:^4.6.0"
   languageName: unknown
   linkType: soft
 

@@ -22,10 +22,18 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     expect(parseModelJson('```json\n{"ok":true}\n```', schema)).toEqual({ ok: true });
     expect(() => parseModelJson('{"ok":"yes"}', schema)).toThrow();
   });
-  it('requires all three environment settings before sending requests', () => {
-    for (const field of ['apiKey', 'baseUrl', 'model'] as const) {
+  it('requires an address and a model before sending requests', () => {
+    for (const field of ['baseUrl', 'model'] as const) {
       expect(() => new OpenAICompatibleProvider({ ...settings, [field]: '' })).toThrow();
     }
+  });
+  it('sends no authorization to a server without a key, and never follows a redirect', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());
+    const provider = new OpenAICompatibleProvider({ ...settings, apiKey: '', fetchImpl });
+    await provider.generate('writer', 'instructions', {}, schema, AbortSignal.timeout(1000));
+    const init = fetchImpl.mock.calls[0]?.[1];
+    expect(init?.headers).not.toHaveProperty('Authorization');
+    expect(init?.redirect).toBe('error');
   });
   it('uses the configured endpoint, bearer key and model without a fallback', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());

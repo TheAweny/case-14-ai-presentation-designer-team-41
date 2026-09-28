@@ -100,9 +100,9 @@ export class OpenAICompatibleProvider implements TextProvider {
   private readonly provider: string;
 
   constructor(private readonly options: Options) {
-    if (!options.apiKey.trim()) throw new Error('MODEL_API_KEY is required.');
-    if (!options.baseUrl.trim()) throw new Error('LLM_BASE_URL is required.');
-    if (!options.model.trim()) throw new Error('LLM_MODEL is required.');
+    // A key is optional: local runtimes such as Ollama take none. Address and model are not.
+    if (!options.baseUrl.trim()) throw new Error('The model server address is required.');
+    if (!options.model.trim()) throw new Error('The model name is required.');
     const url = new URL(options.baseUrl);
     if (
       !['http:', 'https:'].includes(url.protocol) ||
@@ -111,7 +111,9 @@ export class OpenAICompatibleProvider implements TextProvider {
       url.search ||
       url.hash
     ) {
-      throw new Error('LLM_BASE_URL must be an HTTP(S) base URL without credentials or query.');
+      throw new Error(
+        'The model server address must be an HTTP(S) base URL without credentials or query.',
+      );
     }
     this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     this.provider = url.hostname;
@@ -138,9 +140,13 @@ export class OpenAICompatibleProvider implements TextProvider {
         const response = await this.fetchImpl(this.endpoint, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${this.options.apiKey}`,
+            ...(this.options.apiKey.trim()
+              ? { Authorization: `Bearer ${this.options.apiKey}` }
+              : {}),
             'Content-Type': 'application/json',
           },
+          // A redirect would carry the key to wherever the server points; refuse it instead.
+          redirect: 'error',
           signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
           body: JSON.stringify({
             model: this.model,

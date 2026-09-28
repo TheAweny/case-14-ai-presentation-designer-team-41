@@ -15,9 +15,6 @@ COPY packages packages
 
 RUN yarn install --immutable
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:3001
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-
 RUN yarn nx run web:build
 
 FROM node:22.13-bookworm-slim AS runtime

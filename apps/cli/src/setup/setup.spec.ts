@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parseArgs } from './args.js';
 import { EnvFile } from './env-file.js';
 import { aiStudio, checkModel, offline } from './models.js';
+import { ensureInstallationSecrets, isUsableSecret } from './secrets.js';
 import { emailProblem, formatUsers, parseUsers, passwordProblem, upsertUser } from './users.js';
 
 describe('EnvFile', () => {
@@ -29,6 +30,35 @@ describe('EnvFile', () => {
   it('refuses a value that would break the file', () => {
     const env = EnvFile.open(join(tmpdir(), 'none.env'));
     expect(() => env.set('X', 'a\nb')).toThrow();
+  });
+});
+
+describe('installation secrets', () => {
+  it('creates each secret once and keeps it on the next run', () => {
+    const env = EnvFile.open(join(tmpdir(), 'secrets-none.env'));
+    let n = 0;
+    const generate = () => `generated-secret-${++n}-${'x'.repeat(40)}`;
+    expect(ensureInstallationSecrets(env, generate)).toEqual([
+      'AUTH_SECRET',
+      'API_SERVICE_TOKEN',
+      'MODEL_KEYS_SECRET',
+    ]);
+    const first = env.text();
+    expect(ensureInstallationSecrets(env, generate)).toEqual([]);
+    expect(env.text()).toBe(first);
+  });
+
+  it('replaces values anyone could know: empty, short or copied from the docs', () => {
+    expect(isUsableSecret('')).toBe(false);
+    expect(isUsableSecret('change-me')).toBe(false);
+    expect(isUsableSecret('lct26-local-auth-secret-change-me')).toBe(false);
+    const dir = mkdtempSync(join(tmpdir(), 'env-'));
+    writeFileSync(join(dir, '.env.example'), 'AUTH_SECRET=lct26-local-auth-secret-change-me\n');
+    const env = EnvFile.open(join(dir, '.env'), join(dir, '.env.example'));
+    ensureInstallationSecrets(env);
+    expect(env.get('AUTH_SECRET')).not.toBe('lct26-local-auth-secret-change-me');
+    expect(isUsableSecret(env.get('AUTH_SECRET'))).toBe(true);
+    expect(isUsableSecret(env.get('MODEL_KEYS_SECRET'))).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 import { createHttpDeckSource } from '../lib/http-generation';
 import { createDemoLibrary } from './demo-library';
-import { createDemoModelSettings } from './demo-model-settings';
+import { createApiModelSettings } from '../lib/api-model-settings';
 import { createPersistentLibrarySource } from '../lib/persistent-library-source';
 
 /**
@@ -20,7 +20,7 @@ export const deckSource = createHttpDeckSource();
 export const librarySource = createPersistentLibrarySource(demo.library);
 
 /**
- * Подключения к серверам моделей и роли пайплайна. Читает и меняет их только сервер — через
- * действия `app/settings-actions.ts`: ключи живут здесь и в браузер не уходят.
+ * Подключения к серверам моделей и роли пайплайна для вошедшего пользователя. Читает и меняет их
+ * только сервер — через действия `app/settings-actions.ts`; хранит API, ключи в браузер не уходят.
  */
-export const modelSettingsSource = createDemoModelSettings();
+export const modelSettingsSource = (userId: string) => createApiModelSettings(userId);

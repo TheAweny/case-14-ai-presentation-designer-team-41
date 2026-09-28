@@ -290,6 +290,14 @@ function ConnectionCard({
           <span className="shrink-0 rounded-sm px-1 text-[0.6875rem] font-normal text-muted-foreground ring-1 ring-border">
             {t(`location.${location}`)}
           </span>
+          {connection.managed ? (
+            <span
+              title={t('managedHint')}
+              className="shrink-0 rounded-sm px-1 text-[0.6875rem] font-normal text-muted-foreground ring-1 ring-border"
+            >
+              {t('managed')}
+            </span>
+          ) : null}
         </p>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <span className="truncate font-mono">{connection.baseUrl}</span>
@@ -348,15 +356,20 @@ function ConnectionCard({
             <RetryIcon />
             {t('menu.check')}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onEdit}>
-            <EditIcon />
-            {t('menu.edit')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
-            <DeleteIcon />
-            {t('menu.delete')}
-          </DropdownMenuItem>
+          {/* Подключение из .env сервера здесь только проверяют: его ключ правят в .env. */}
+          {connection.managed ? null : (
+            <>
+              <DropdownMenuItem onSelect={onEdit}>
+                <EditIcon />
+                {t('menu.edit')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
+                <DeleteIcon />
+                {t('menu.delete')}
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

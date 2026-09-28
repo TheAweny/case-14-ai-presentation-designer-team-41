@@ -5,8 +5,9 @@
 
 ## Запуск
 
-Нужны Node 22.13+, Yarn, Python 3.12/uv, LibreOffice (`soffice`), Poppler (`pdftoppm`),
-fontconfig (`fc-match`) и шрифты выбранного шаблона. Dockerfile движка устанавливает
+Нужны Node 22.13+, Yarn, Python 3.12/uv, LibreOffice (`soffice`), Poppler (`pdftoppm`)
+и fontconfig (`fc-match`). Шрифты выбранного шаблона нужны, чтобы превью совпало с
+файлом; без них колода всё равно собирается. Dockerfile движка устанавливает
 инструменты и Play с SIL OFL. На macOS шрифты из `infra/fonts/Play` нужно установить в
 `~/Library/Fonts`; движок создаёт отдельный fontconfig для headless LibreOffice.
 
@@ -36,8 +37,10 @@ Docker-движок содержит оригинальные Play и Inter (в�
 игнорируемый `data/fonts`. На текущем macOS-хосте четыре начертания Arial скопированы
 из системного каталога в `data/fonts`; они исключены из Git и Docker build context.
 Прямой mount `/System` запрещён настройками Docker Desktop. После изменения каталога:
-`docker compose up -d --force-recreate engine`. Отсутствующая исходная гарнитура по-прежнему
-блокирует точный экспорт; подробнее — `infra/fonts/README.md`.
+`docker compose up -d --force-recreate engine`. Если исходной гарнитуры нет, сборка
+продолжается: в `.pptx` остаётся её имя, превью LibreOffice рисует заменой, а ответ
+движка (`missingFonts` и `warnings`) и ход прогона сообщают об этом. Подробнее —
+`infra/fonts/README.md`.
 
 Временный каталог рендера создаётся внутри каталога результата. Поэтому публикация
 PDF/PNG через атомарный rename не пересекает файловые системы контейнера и bind mount
@@ -99,15 +102,21 @@ Python извлекает композиции реальных слайдов �
 
 1. `POST /files/template` с multipart `file`: сохранение и исходный разбор.
 2. `POST /generation/prepare` с `{templateId}`: актуальный generation profile в Postgres.
-3. `POST /generation` с `{templateId, brief, slideCount, contentIds?, projectId?, seed?}`.
+3. `POST /generation` с `{templateId, brief, slideCount, contentIds?, projectId?, seed?, model?}`;
+   `model` — `{connectionId, modelId}` из настроек моделей, без него — модель роли writer или
+   подключение из `.env`.
 4. `GET /runs/:id` и `GET /runs/:id/events?after=N`: сохранённое состояние/прогресс.
 5. `GET /generation/:id/deck`, `/previews`, `/artifacts/deck.pptx`, `/artifacts/deck.pdf`.
 6. `GET /generation`: завершённые колоды после повторного открытия.
 
+Все маршруты, кроме `GET /health`, требуют заголовок `x-lct-service-token` со значением
+`API_SERVICE_TOKEN`: API отвечает только веб-серверу. Браузер ходит через `/api/backend/...`
+веб-сервера, который проверяет сессию и добавляет токен.
+
 Повторяемый live smoke для уже загруженного шаблона:
 
 ```bash
-API_URL=http://localhost:3001 node --import tsx scripts/smoke-generation-api.mts \
+API_URL=http://localhost:3001 API_SERVICE_TOKEN=... node --import tsx scripts/smoke-generation-api.mts \
   TEMPLATE_UUID /absolute/path/brief.md 10
 ```
 
@@ -150,7 +159,7 @@ pytest, Ruff, Pyright, import-linter, воспроизводимость codegen
 - один вариант; не конкурсные три;
 - вход для генерации — brief и txt/md/csv/tsv, не полноценный PDF/DOCX/XLSX content adapter;
 - charts/tables и ряд reference/неизменяемых растровых страниц не предлагаются planner;
-- требуется установленный шрифт, embedded font installation не реализована;
+- если шрифта шаблона нет на сервере, `.pptx` сохраняет его имя, а превью рисуется заменой и помечается предупреждением; установка шрифта внутрь файла не реализована;
 - контекстный аудит — предварительная помощь, окончательное качество оценивает ML-команда;
 - редакторский веб-холст пока приблизительный: исходные PPTX/PDF точнее; изменение текста
   в PowerPoint возможно, экспорт правок веб-редактора пока явно отклоняется;

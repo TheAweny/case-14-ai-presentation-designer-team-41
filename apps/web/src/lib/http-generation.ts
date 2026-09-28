@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { designSystemSchema, templateIrSchema, jobEventSchema } from '@lct/contracts';
-import { apiBaseUrl } from './api';
+import { apiFetch, publicApiUrl } from './api';
 import type { DeckGenerator } from './deck-generator';
 import { DeckNotFoundError, type Deck, type DeckSource } from './deck-source';
 import type { DeckExporter } from './deck-export';
@@ -12,10 +12,8 @@ const storedDeckSchema = z.object({
   designSystem: designSystemSchema,
   templateIr: templateIrSchema,
 });
-const base = () =>
-  typeof window === 'undefined' ? (process.env.API_INTERNAL_URL ?? apiBaseUrl) : apiBaseUrl;
 async function request(path: string, init?: RequestInit) {
-  const response = await fetch(`${base()}${path}`, { ...init, cache: 'no-store' });
+  const response = await apiFetch(path, init);
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
     throw new Error(payload.message ?? `Generation API: HTTP ${response.status}`);
@@ -29,7 +27,9 @@ export function decodeGeneratedDeck(data: unknown): Deck {
     .filter((slide) => slide !== null);
   return {
     deckId: parsed.runId,
-    renderedPdfUrl: `${apiBaseUrl}/generation/${encodeURIComponent(parsed.runId)}/artifacts/deck.pdf`,
+    renderedPdfUrl: publicApiUrl(
+      `/generation/${encodeURIComponent(parsed.runId)}/artifacts/deck.pdf`,
+    ),
     title: parsed.title,
     variant: 'balanced',
     slideSize: { cx: parsed.templateIr.slideCx, cy: parsed.templateIr.slideCy },
@@ -41,15 +41,15 @@ export function decodeGeneratedDeck(data: unknown): Deck {
 export function createHttpDeckSource(): DeckSource {
   return {
     async getDeck(id) {
-      const response = await fetch(`${base()}/generation/${encodeURIComponent(id)}/deck`, {
-        cache: 'no-store',
-      });
+      const response = await apiFetch(`/generation/${encodeURIComponent(id)}/deck`);
       if (response.status === 404) throw new DeckNotFoundError(id);
       if (!response.ok) throw new Error(`Deck API: ${response.status}`);
       return decodeGeneratedDeck(await response.json());
     },
     mediaUrl(id, part) {
-      return `${apiBaseUrl}/generation/${encodeURIComponent(id)}/media/${encodeURIComponent(part.split('/').pop() ?? '')}`;
+      return publicApiUrl(
+        `/generation/${encodeURIComponent(id)}/media/${encodeURIComponent(part.split('/').pop() ?? '')}`,
+      );
     },
   };
 }
@@ -95,6 +95,7 @@ export function createHttpGenerator(): DeckGenerator {
           slideCount: input.slideCount,
           projectId: input.projectId,
           contentIds,
+          model: input.model,
         }),
         signal,
       })) as { runId: string };
@@ -183,7 +184,9 @@ export function createHttpExporter(): DeckExporter {
         fail('Экспорт правок редактора пока не подключён. Доступен исходный сгенерированный файл.');
       return {
         fileName: `${input.fileName}.${input.format}`,
-        url: `${apiBaseUrl}/generation/${encodeURIComponent(input.deckId)}/artifacts/deck.${input.format}`,
+        url: publicApiUrl(
+          `/generation/${encodeURIComponent(input.deckId)}/artifacts/deck.${input.format}`,
+        ),
       };
     },
   };

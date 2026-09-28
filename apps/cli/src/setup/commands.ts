@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import { EnvFile } from './env-file.js';
 import { checkModel, type ModelSettings } from './models.js';
+import { INSTALLATION_SECRETS, isUsableSecret } from './secrets.js';
 import {
   BUILDX_HINT,
   buildxOk,
@@ -146,11 +147,13 @@ export async function doctor(): Promise<number> {
     'Демо-аккаунта из примера нет',
     'Остался demo@example.com из .env.example: lct user remove demo@example.com',
   );
-  check(
-    Boolean(file.get('AUTH_SECRET')),
-    'AUTH_SECRET задан',
-    'AUTH_SECRET пуст: lct onboard его создаст',
-  );
+  for (const name of INSTALLATION_SECRETS) {
+    check(
+      isUsableSecret(file.get(name)),
+      `${name} задан`,
+      `${name} пуст, короткий или взят из примера: lct onboard создаст новый`,
+    );
+  }
 
   const settings = {
     MODEL_PROVIDER: file.get('MODEL_PROVIDER') ?? '',

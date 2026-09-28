@@ -19,8 +19,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Всё, кроме страницы входа, служебных файлов Next и статики из `public/`.
+  // Всё, кроме страницы входа, служебных файлов Next и статики из `public/`. И кроме прокси к API
+  // (`app/api/backend`): через proxy Next пропускает только первые 10 МБ тела, а шаблон бывает
+  // больше. Вход там проверяет сам маршрут и отвечает 401, а не уводом на страницу входа.
   matcher: [
-    '/((?!login|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpe?g|webp|ico|woff2?|ttf)$).*)',
+    '/((?!login|api/backend/|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpe?g|webp|ico|woff2?|ttf)$).*)',
   ],
 };

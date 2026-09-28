@@ -107,10 +107,16 @@ export function createGenerationRuns(
         if (!current()) return;
         controllers.delete(runId);
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
-        // Сервер уже назвал причину событием `failed` — она важнее общей ошибки клиента.
+        // Сервер уже назвал причину событием `failed` — она важнее общей ошибки клиента. Нет
+        // события — берём текст ошибки: например, API не запустил прогон, потому что модель не
+        // настроена, и сказал это в ответе.
         update(runId, ({ failure, finishedAt }) => ({
           phase: 'failed',
-          failure: failure ?? UNKNOWN_FAILURE,
+          failure:
+            failure ??
+            (reason instanceof Error && reason.message
+              ? { ...UNKNOWN_FAILURE, message: reason.message }
+              : UNKNOWN_FAILURE),
           finishedAt: finishedAt ?? now(),
         }));
       });

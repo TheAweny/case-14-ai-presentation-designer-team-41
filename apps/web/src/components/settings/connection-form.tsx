@@ -145,7 +145,13 @@ export function ConnectionForm({
           return;
         }
         setCheck(IDLE);
-        setFailure(result.reason === 'notFound' ? t('gone') : null);
+        setFailure(
+          result.reason === 'notFound'
+            ? t('gone')
+            : result.reason === 'keysUnavailable'
+              ? t('keysUnavailable')
+              : null,
+        );
         if (result.reason === 'invalid') setShowProblems(true);
       })
       .catch(() => {
@@ -186,6 +192,7 @@ export function ConnectionForm({
         }
         setSaving(false);
         if (result.reason === 'notFound') setFailure(t('gone'));
+        else if (result.reason === 'keysUnavailable') setFailure(t('keysUnavailable'));
         else setShowProblems(true);
       })
       .catch(() => {
@@ -327,7 +334,8 @@ export function ConnectionForm({
               type="password"
               value={apiKey}
               maxLength={API_KEY_MAX_LENGTH * 2}
-              autoComplete="off"
+              // Не «off»: его браузеры для паролей не слушают и подставили бы сюда пароль входа.
+              autoComplete="new-password"
               spellCheck={false}
               aria-invalid={visible.apiKey ? true : undefined}
               aria-describedby={`${ids.key}-hint${visible.apiKey ? ` ${ids.key}-problem` : ''}`}

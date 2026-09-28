@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { designSystemSchema } from './design-system.js';
 import { boxSchema, templateIrSchema } from './template-ir.js';
+import { modelRefSchema } from './model-settings.js';
 
 export const compositionSlotSchema = z.object({
   slotId: z.string().min(1),
@@ -61,6 +62,11 @@ export const generationRequestSchema = z.object({
   projectId: z.string().nullable().default(null),
   contentIds: z.array(z.string().uuid()).max(10).default([]),
   seed: z.number().int().default(42),
+  /**
+   * The model to write the deck with, as the interface picked it. Null: the model of the writer
+   * role, or the one the server is configured with. Never a key: the API resolves the connection.
+   */
+  model: modelRefSchema.nullable().default(null),
 });
 export type GenerationProfile = z.infer<typeof generationProfileSchema>;
 export type Composition = z.infer<typeof compositionSchema>;

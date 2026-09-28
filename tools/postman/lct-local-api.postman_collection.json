@@ -5,10 +5,35 @@
     "description": "Local API requests for the open-source presentation generator. Start the API with yarn nx serve api before importing this collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-lct-service-token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{serviceToken}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "serviceToken",
+      "value": "",
       "type": "string"
     },
     {

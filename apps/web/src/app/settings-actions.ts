@@ -3,6 +3,7 @@
 import {
   ConnectionNotFoundError,
   InvalidModelSettingsError,
+  ModelKeysUnavailableError,
   type ConnectionCheck,
   type ConnectionInput,
   type ConnectionProblems,
@@ -26,6 +27,7 @@ import { requireAccount } from './auth-session';
 
 export type SettingsFailure =
   | { readonly ok: false; readonly reason: 'notFound' }
+  | { readonly ok: false; readonly reason: 'keysUnavailable' }
   | { readonly ok: false; readonly reason: 'invalid'; readonly problems: ConnectionProblems };
 
 export type SettingsResult =
@@ -44,6 +46,7 @@ export type ProbeResult = { readonly ok: true; readonly check: ConnectionCheck }
 /** Ошибки источника → значение; всё остальное — настоящая поломка, пусть летит дальше. */
 function failure(error: unknown): SettingsFailure {
   if (error instanceof ConnectionNotFoundError) return { ok: false, reason: 'notFound' };
+  if (error instanceof ModelKeysUnavailableError) return { ok: false, reason: 'keysUnavailable' };
   if (error instanceof InvalidModelSettingsError) {
     return { ok: false, reason: 'invalid', problems: error.problems };
   }
@@ -51,15 +54,15 @@ function failure(error: unknown): SettingsFailure {
 }
 
 export async function getModelSettingsAction(): Promise<ModelSettings> {
-  await requireAccount();
-  return modelSettingsSource.get();
+  const account = await requireAccount();
+  return modelSettingsSource(account.userId).get();
 }
 
 export async function saveConnectionAction(input: ConnectionInput): Promise<SaveConnectionResult> {
-  await requireAccount();
+  const source = modelSettingsSource((await requireAccount()).userId);
   try {
-    const connection = await modelSettingsSource.saveConnection(input);
-    return { ok: true, connection, settings: await modelSettingsSource.get() };
+    const connection = await source.saveConnection(input);
+    return { ok: true, connection, settings: await source.get() };
   } catch (error) {
     return failure(error);
   }
@@ -67,23 +70,23 @@ export async function saveConnectionAction(input: ConnectionInput): Promise<Save
 
 /** Удалить подключение. Уже удалённое — не ошибка: человек хотел, чтобы его не было. */
 export async function deleteConnectionAction(connectionId: string): Promise<SettingsResult> {
-  await requireAccount();
+  const source = modelSettingsSource((await requireAccount()).userId);
   if (typeof connectionId !== 'string') return { ok: false, reason: 'invalid', problems: {} };
   try {
-    await modelSettingsSource.deleteConnection(connectionId);
+    await source.deleteConnection(connectionId);
   } catch (error) {
     if (!(error instanceof ConnectionNotFoundError)) throw error;
   }
-  return { ok: true, settings: await modelSettingsSource.get() };
+  return { ok: true, settings: await source.get() };
 }
 
 /** Проверить сохранённое подключение: итог запоминается и виден на карточке. */
 export async function checkConnectionAction(connectionId: string): Promise<SettingsResult> {
-  await requireAccount();
+  const source = modelSettingsSource((await requireAccount()).userId);
   if (typeof connectionId !== 'string') return { ok: false, reason: 'invalid', problems: {} };
   try {
-    await modelSettingsSource.checkConnection(connectionId);
-    return { ok: true, settings: await modelSettingsSource.get() };
+    await source.checkConnection(connectionId);
+    return { ok: true, settings: await source.get() };
   } catch (error) {
     return failure(error);
   }
@@ -91,19 +94,19 @@ export async function checkConnectionAction(connectionId: string): Promise<Setti
 
 /** Проверить подключение из формы, ещё не сохраняя. */
 export async function probeConnectionAction(input: ProbeInput): Promise<ProbeResult> {
-  await requireAccount();
+  const source = modelSettingsSource((await requireAccount()).userId);
   try {
-    return { ok: true, check: await modelSettingsSource.probe(input) };
+    return { ok: true, check: await source.probe(input) };
   } catch (error) {
     return failure(error);
   }
 }
 
 export async function setRoleAction(assignment: RoleAssignment): Promise<SettingsResult> {
-  await requireAccount();
+  const source = modelSettingsSource((await requireAccount()).userId);
   try {
-    await modelSettingsSource.setRole(assignment);
-    return { ok: true, settings: await modelSettingsSource.get() };
+    await source.setRole(assignment);
+    return { ok: true, settings: await source.get() };
   } catch (error) {
     return failure(error);
   }

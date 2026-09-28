@@ -8,17 +8,21 @@ if (!templateId || !briefPath)
     'Usage: yarn tsx scripts/smoke-generation-api.mts templateId brief.md [slideCount]',
   );
 const api = process.env.API_URL ?? 'http://localhost:3001';
+// The API answers only holders of the installation's service token (see .env).
+const token = process.env.API_SERVICE_TOKEN;
+if (!token) throw new Error('Set API_SERVICE_TOKEN: the API refuses requests without it.');
+const auth = { 'x-lct-service-token': token };
 const request = async (path: string, body?: unknown) => {
   const response = await fetch(
     `${api}${path}`,
     body
       ? {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { ...auth, 'content-type': 'application/json' },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(300000),
         }
-      : {},
+      : { headers: auth },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   return response.json();
@@ -43,7 +47,9 @@ const finished = Date.now();
 const manifest = await request(`/generation/${run.runId}/artifacts/manifest.json`);
 const artifacts = [];
 for (const name of ['deck.pptx', 'deck.pdf']) {
-  const response = await fetch(`${api}/generation/${run.runId}/artifacts/${name}`);
+  const response = await fetch(`${api}/generation/${run.runId}/artifacts/${name}`, {
+    headers: auth,
+  });
   if (!response.ok) throw new Error(`Artifact ${name}: HTTP ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());
   const hash = createHash('sha256').update(bytes).digest('hex');

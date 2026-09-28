@@ -11,8 +11,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lct26-local}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Loopback only: for the API and CLI run on the host. The password in .env.example is public.
     ports:
-      - '${POSTGRES_PORT:-5433}:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-5433}:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-lct26} -d ${POSTGRES_DB:-lct26}']
       interval: 5s
@@ -46,10 +47,14 @@ services:
     environment:
       # Accounts written by `lct onboard` and `lct user`; the API loads them into app_users at start.
       AUTH_USERS: ${AUTH_USERS:-}
+      # The API answers only requests carrying this token, which only the web server has.
+      API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:-}
+      # Encrypts model keys stored from the interface. Only the API holds it.
+      MODEL_KEYS_SECRET: ${MODEL_KEYS_SECRET:-}
+      MODEL_ALLOW_PRIVATE_HOSTS: ${MODEL_ALLOW_PRIVATE_HOSTS:-false}
       API_PORT: '3001'
       DATABASE_URL: postgresql://${POSTGRES_USER:-lct26}:${POSTGRES_PASSWORD:-lct26-local}@postgres:5432/${POSTGRES_DB:-lct26}
       ENGINE_URL: http://engine:8000
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       MASTRA_STORAGE_URL: ${MASTRA_STORAGE_URL:-file:/app/runs/mastra.db}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -64,24 +69,25 @@ services:
     volumes:
       - ./data:/app/data
       - ./runs:/app/runs
+    # Published on the loopback only, for `next dev` and the installer's health check. Browsers
+    # never reach it: they go through the web server, which adds the service token.
     ports:
-      - '3001:3001'
+      - '127.0.0.1:3001:3001'
     restart: unless-stopped
 
   web:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
     depends_on:
       api:
         condition: service_healthy
     environment:
       PORT: '3000'
-      # Address of the API as the web server sees it. Inside compose this is the api service;
-      # NEXT_PUBLIC_API_URL stays the browser-facing localhost:3001 baked into the build.
+      # Address of the API as the web server sees it. Browsers talk only to the web server, whose
+      # /api/backend route forwards their requests here with the service token.
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3001}
+      API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:-}
       # Accounts of the interface and the key that signs their sessions; `lct onboard` and
       # `lct user` write both into .env.
       AUTH_SECRET: ${AUTH_SECRET:-}

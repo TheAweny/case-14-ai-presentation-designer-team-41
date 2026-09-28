@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  ServiceUnavailableException,
   StreamableFile,
 } from '@nestjs/common';
 import type { OnApplicationShutdown } from '@nestjs/common';
@@ -22,6 +23,7 @@ import type { GenerationProfile } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import { generatePresentation, GenerationProvider } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
+import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 
@@ -35,7 +37,10 @@ export class GenerationController implements OnApplicationShutdown {
   });
   private readonly active = new Map<string, AbortController>();
   private readonly library = new LibraryMetadata(this.root);
-  constructor(@Inject(RUN_REPOSITORY) private readonly repository: RunRepository) {}
+  constructor(
+    @Inject(RUN_REPOSITORY) private readonly repository: RunRepository,
+    @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
+  ) {}
 
   private directory(id: string): string {
     if (!/^[a-zA-Z0-9-]{1,80}$/.test(id)) throw new BadRequestException('Invalid run id.');
@@ -90,10 +95,20 @@ export class GenerationController implements OnApplicationShutdown {
       brief += `\n\nSource ${id}:\n${content}`;
     }
     if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
+    // The model is settled before a run exists: without one there is nothing to start, and the
+    // person gets the reason in the answer rather than a run that fails without one.
+    const resolved = await this.models.resolve(input.model).catch((error: unknown) => {
+      if (error instanceof ModelNotConfiguredError)
+        throw new ServiceUnavailableException({
+          code: 'model-not-configured',
+          message: error.message,
+        });
+      throw error;
+    });
     const provider = new GenerationProvider({
-      apiKey: process.env.MODEL_API_KEY ?? '',
-      baseUrl: process.env.LLM_BASE_URL ?? '',
-      model: process.env.LLM_MODEL ?? '',
+      apiKey: resolved.apiKey,
+      baseUrl: resolved.baseUrl,
+      model: resolved.model,
       seed: input.seed,
     });
     const run = await this.repository.create();

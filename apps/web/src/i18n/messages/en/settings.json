@@ -155,7 +155,9 @@
         "body": "The connection “{name}” will be deleted.",
         "roles": "{count, plural, one {The {roles} role will become unassigned.} other {The {roles} roles will become unassigned.}}",
         "confirm": "Delete"
-      }
+      },
+      "managed": "server .env",
+      "managedHint": "Set at installation in the server .env: it can only be checked here."
     },
     "errors": {
       "unreachable": "server unreachable",
@@ -164,7 +166,8 @@
       "http": "server responded {status}",
       "notFound": "server responded 404 — the address may be missing /v1",
       "invalidResponse": "response is not in OpenAI format",
-      "timeout": "no response within {seconds} s"
+      "timeout": "no response within {seconds} s",
+      "blocked": "the address points into a private network, which the server does not allow (MODEL_ALLOW_PRIVATE_HOSTS)"
     },
     "form": {
       "newTitle": "New connection",
@@ -187,7 +190,7 @@
       "apiKey": {
         "label": "API key",
         "optional": "optional",
-        "hint": "Local servers usually don’t need a key. The key is stored on the app server and never sent back to the browser.",
+        "hint": "Local servers usually don’t need a key. The key is stored encrypted on the server and never sent back to the browser.",
         "set": "Key set",
         "setHint": "Key set …{hint}",
         "replace": "Replace",
@@ -218,7 +221,8 @@
       "cancel": "Cancel",
       "save": "Save",
       "saving": "Saving…",
-      "gone": "This connection no longer exists — it was deleted."
+      "gone": "This connection no longer exists — it was deleted.",
+      "keysUnavailable": "The key cannot be saved: the server has no MODEL_KEYS_SECRET to encrypt keys with. Run lct onboard or set it in .env."
     },
     "roles": {
       "title": "Roles",

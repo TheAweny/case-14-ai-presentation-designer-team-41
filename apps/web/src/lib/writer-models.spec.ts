@@ -22,6 +22,7 @@ function connection(connectionId: string, models: readonly string[] | null): Mod
       models === null
         ? { ok: false, at: AT, error: { kind: 'timeout' } }
         : { ok: true, at: AT, models: [...models] },
+    managed: false,
   };
 }
 

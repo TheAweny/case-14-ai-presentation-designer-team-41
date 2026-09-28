@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getModelSettingsAction } from '@/app/settings-actions';
-import { CHECK_TIMEOUT_MS } from '@/lib/model-connection-check';
+import { MODEL_CHECK_TIMEOUT_MS } from '@lct/contracts';
 import type { CheckError, ModelSettings } from '@/lib/model-settings';
 import { publishModelSettings } from './model-settings-store';
 
@@ -51,7 +51,9 @@ export function useCheckErrorText(): (error: CheckError) => string {
         case 'invalid-response':
           return t('invalidResponse');
         case 'timeout':
-          return t('timeout', { seconds: Math.round(CHECK_TIMEOUT_MS / 1000) });
+          return t('timeout', { seconds: Math.round(MODEL_CHECK_TIMEOUT_MS / 1000) });
+        case 'blocked':
+          return t('blocked');
       }
     },
     [t],

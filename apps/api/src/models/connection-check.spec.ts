@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   checkModelConnection,
+  isPrivateAddress,
+  isPrivateHost,
   parseModelsResponse,
+  privateHostsAllowed,
   unreachableDetail,
-} from './model-connection-check';
+} from './connection-check.js';
 
 const NOW = new Date('2026-09-26T10:00:00.000Z');
 const now = () => NOW;
+/** A public address for every name, so tests of public servers need no DNS. */
+const resolve = async () => ['203.0.113.10'];
 
 function respond(status: number, body: unknown): typeof fetch {
   return vi.fn(async () =>
@@ -58,7 +63,7 @@ describe('checkModelConnection', () => {
     const fetchMock = respond(200, { object: 'list', data: [{ id: 'm1' }, { id: 'm2' }] });
     const check = await checkModelConnection(
       { baseUrl: 'http://localhost:11434/v1/', apiKey: 'sk-test' },
-      { fetch: fetchMock, now },
+      { fetch: fetchMock, now, allowPrivateHosts: true },
     );
     expect(check).toEqual({ ok: true, at: NOW.toISOString(), models: ['m1', 'm2'] });
     const [url, init] = vi.mocked(fetchMock).mock.calls[0] ?? [];
@@ -68,7 +73,10 @@ describe('checkModelConnection', () => {
 
   it('sends no authorization header without a key', async () => {
     const fetchMock = respond(200, { data: [] });
-    await checkModelConnection({ baseUrl: 'http://x/v1', apiKey: null }, { fetch: fetchMock, now });
+    await checkModelConnection(
+      { baseUrl: 'http://x/v1', apiKey: null },
+      { fetch: fetchMock, now, allowPrivateHosts: true },
+    );
     const init = vi.mocked(fetchMock).mock.calls[0]?.[1];
     expect(init?.headers).not.toHaveProperty('authorization');
   });
@@ -76,26 +84,34 @@ describe('checkModelConnection', () => {
   it('tells a wrong key from other HTTP errors', async () => {
     const target = { baseUrl: 'https://llm.example.com/v1', apiKey: 'bad' };
     for (const status of [401, 403]) {
-      const check = await checkModelConnection(target, { fetch: respond(status, {}), now });
+      const check = await checkModelConnection(target, {
+        fetch: respond(status, {}),
+        now,
+        resolve,
+      });
       expect(check).toEqual({
         ok: false,
         at: NOW.toISOString(),
         error: { kind: 'unauthorized', status },
       });
     }
-    const missing = await checkModelConnection(target, { fetch: respond(404, 'nope'), now });
+    const missing = await checkModelConnection(target, {
+      fetch: respond(404, 'nope'),
+      now,
+      resolve,
+    });
     expect(missing.ok === false && missing.error).toEqual({ kind: 'http', status: 404 });
   });
 
   it('reports a response that is not an OpenAI model list', async () => {
     const html = await checkModelConnection(
       { baseUrl: 'http://x/v1', apiKey: null },
-      { fetch: respond(200, '<!doctype html><title>Router</title>'), now },
+      { fetch: respond(200, '<!doctype html><title>Router</title>'), now, allowPrivateHosts: true },
     );
     expect(html.ok === false && html.error).toEqual({ kind: 'invalid-response' });
     const other = await checkModelConnection(
       { baseUrl: 'http://x/v1', apiKey: null },
-      { fetch: respond(200, { models: [] }), now },
+      { fetch: respond(200, { models: [] }), now, allowPrivateHosts: true },
     );
     expect(other.ok === false && other.error).toEqual({ kind: 'invalid-response' });
   });
@@ -106,7 +122,7 @@ describe('checkModelConnection', () => {
     }) as unknown as typeof fetch;
     const check = await checkModelConnection(
       { baseUrl: 'http://localhost:11434/v1', apiKey: null },
-      { fetch: fetchMock, now },
+      { fetch: fetchMock, now, allowPrivateHosts: true },
     );
     expect(check.ok === false && check.error).toEqual({
       kind: 'unreachable',
@@ -120,9 +136,42 @@ describe('checkModelConnection', () => {
     ) as unknown as typeof fetch;
     const check = await checkModelConnection(
       { baseUrl: 'http://10.0.0.9/v1', apiKey: null },
-      { fetch: fetchMock, now, timeoutMs: 10 },
+      { fetch: fetchMock, now, timeoutMs: 10, allowPrivateHosts: true },
     );
     expect(check.ok === false && check.error).toEqual({ kind: 'timeout' });
+  });
+
+  it('refuses to follow redirects, so the key cannot be bounced to another host', async () => {
+    const fetchMock = respond(200, { data: [] });
+    await checkModelConnection(
+      { baseUrl: 'https://llm.example.com/v1', apiKey: 'sk-test' },
+      { fetch: fetchMock, now, resolve },
+    );
+    expect(vi.mocked(fetchMock).mock.calls[0]?.[1]?.redirect).toBe('error');
+  });
+
+  it('blocks private addresses unless they are allowed, and sends nothing there', async () => {
+    const fetchMock = respond(200, { data: [] });
+    for (const baseUrl of [
+      'http://localhost:11434/v1',
+      'http://127.0.0.1:8000/v1',
+      'http://169.254.169.254/latest',
+      'http://[::1]:1234/v1',
+      'http://192.168.1.5:11434/v1',
+    ]) {
+      const check = await checkModelConnection(
+        { baseUrl, apiKey: 'sk-test' },
+        { fetch: fetchMock, now, resolve },
+      );
+      expect(check.ok === false && check.error).toEqual({ kind: 'blocked' });
+    }
+    // A public name that resolves to a private address is caught as well.
+    const rebound = await checkModelConnection(
+      { baseUrl: 'https://llm.example.com/v1', apiKey: 'sk-test' },
+      { fetch: fetchMock, now, resolve: async () => ['10.0.0.7'] },
+    );
+    expect(rebound.ok === false && rebound.error).toEqual({ kind: 'blocked' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('counts an aborted request as a timeout', async () => {
@@ -136,8 +185,45 @@ describe('checkModelConnection', () => {
     ) as unknown as typeof fetch;
     const check = await checkModelConnection(
       { baseUrl: 'http://10.0.0.9/v1', apiKey: null },
-      { fetch: fetchMock, now, timeoutMs: 10 },
+      { fetch: fetchMock, now, timeoutMs: 10, allowPrivateHosts: true },
     );
     expect(check.ok === false && check.error).toEqual({ kind: 'timeout' });
+  });
+});
+
+describe('private hosts', () => {
+  it('knows loopback, private, link-local and unique-local ranges', () => {
+    for (const address of [
+      '127.0.0.1',
+      '10.1.2.3',
+      '172.20.0.1',
+      '192.168.0.1',
+      '169.254.169.254',
+      '100.64.0.1',
+      '0.0.0.0',
+      '::1',
+      'fd12::1',
+      'fe80::1',
+      '::ffff:10.0.0.1',
+    ]) {
+      expect(isPrivateAddress(address)).toBe(true);
+    }
+    for (const address of ['8.8.8.8', '172.32.0.1', '203.0.113.10', '2001:db8::1']) {
+      expect(isPrivateAddress(address)).toBe(false);
+    }
+  });
+
+  it('calls a name private when any of its addresses is', async () => {
+    expect(await isPrivateHost('https://a.example/v1', async () => ['8.8.8.8', '10.0.0.1'])).toBe(
+      true,
+    );
+    expect(await isPrivateHost('https://a.example/v1', async () => ['8.8.8.8'])).toBe(false);
+    expect(await isPrivateHost('http://app.localhost/v1', async () => [])).toBe(true);
+  });
+
+  it('are allowed only by an explicit setting', () => {
+    expect(privateHostsAllowed({})).toBe(false);
+    expect(privateHostsAllowed({ MODEL_ALLOW_PRIVATE_HOSTS: 'false' })).toBe(false);
+    expect(privateHostsAllowed({ MODEL_ALLOW_PRIVATE_HOSTS: 'true' })).toBe(true);
   });
 });

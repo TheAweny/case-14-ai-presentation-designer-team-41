@@ -1,3 +1,4 @@
+import { apiFetch } from './api';
 import { decodeGeneratedDeck } from './http-generation';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
 import type { LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
@@ -24,10 +25,8 @@ interface StoredProject {
   readonly templateIds?: readonly string[];
   readonly updatedAt?: string;
   readonly deckCount?: number;
+  readonly pinnedAt?: string | null;
 }
-
-const apiUrl = () =>
-  process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 function templateOf(row: StoredTemplate): TemplateSummary {
   const ir = templateIrSchema.parse(row.profile?.templateIr);
@@ -45,7 +44,7 @@ function templateOf(row: StoredTemplate): TemplateSummary {
 
 export function createPersistentLibrarySource(fallback: LibrarySource): LibrarySource {
   const request = async (path: string, init?: RequestInit) => {
-    const response = await fetch(`${apiUrl()}${path}`, { ...init, cache: 'no-store' });
+    const response = await apiFetch(path, init);
     if (!response.ok) throw new Error(`Library API failed: ${response.status}`);
     return response.status === 204 ? undefined : response.json();
   };
@@ -127,6 +126,8 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
         ),
         deckCount: row.deckCount ?? 0,
         updatedAt: Date.parse(String(row.updatedAt)) || Date.now(),
+        pinned: row.pinnedAt != null,
+        pinnedAt: row.pinnedAt == null ? null : Date.parse(row.pinnedAt),
       }));
     },
     async getProject(projectId) {

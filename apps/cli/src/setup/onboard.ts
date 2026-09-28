@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import { EnvFile } from './env-file.js';
@@ -21,6 +20,7 @@ import {
   passwordProblem,
   upsertUser,
 } from './users.js';
+import { ensureInstallationSecrets } from './secrets.js';
 
 /** Answers that can come from flags, so the same setup runs without a terminal. */
 export interface OnboardOptions {
@@ -117,7 +117,12 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
 }
 
 async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<string> {
-  const users = parseUsers(env.get('AUTH_USERS')).filter((u) => u.email !== 'demo@example.com');
+  // Accounts from the example file are known to everyone who read it: they never survive setup.
+  const users = parseUsers(env.get('AUTH_USERS')).filter(
+    (u) =>
+      u.email !== 'demo@example.com' &&
+      !(u.email === 'admin@example.com' && u.password === '123123'),
+  );
   if (options.yes && options.adminEmail === undefined) {
     if (users.length > 0) return users[0]?.email ?? '';
     throw new Error('Для установки без вопросов укажите --admin-email и --admin-password.');
@@ -157,7 +162,6 @@ async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<strin
   const problem = emailProblem(email) ?? passwordProblem(password) ?? nameProblem(name);
   if (problem) throw new Error(problem);
   env.set('AUTH_USERS', formatUsers(upsertUser(users, { email, password, name })));
-  if (!env.get('AUTH_SECRET')) env.set('AUTH_SECRET', randomBytes(32).toString('base64'));
   return email;
 }
 
@@ -225,6 +229,8 @@ export async function onboard(options: OnboardOptions = {}): Promise<number> {
     if (!(await portFree(port)))
       p.log.warn(`Порт ${port} (${key}) занят: освободите его перед запуском`);
   }
+  const created = ensureInstallationSecrets(env);
+  if (created.length > 0) p.log.success(`Созданы секреты этой установки: ${created.join(', ')}`);
   env.save();
   p.log.success('Настройки записаны в .env (доступен только вам)');
 

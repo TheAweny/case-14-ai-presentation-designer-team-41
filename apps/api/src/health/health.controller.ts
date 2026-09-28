@@ -1,6 +1,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { healthCheckSchema, type HealthCheck } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
+import { PublicRoute } from '../auth/service-token.guard.js';
 import { RunsService } from '../runs/runs.service.js';
 
 const API_VERSION = '0.1.0';
@@ -11,8 +12,9 @@ export class HealthController {
 
   constructor(@Inject(RunsService) private readonly runs: RunsService) {}
 
-  /** Liveness of the API itself. */
+  /** Liveness of the API itself. The only route open without the service token. */
   @Get()
+  @PublicRoute()
   check(): HealthCheck {
     return healthCheckSchema.parse({
       status: 'ok',

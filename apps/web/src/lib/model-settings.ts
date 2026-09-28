@@ -1,4 +1,17 @@
-import { z } from 'zod';
+import {
+  CONNECTION_NAME_MAX_LENGTH,
+  PIPELINE_ROLES,
+  isRoleOptional,
+  type ConnectionCheck,
+  type ConnectionInput,
+  type ConnectionPreset,
+  type ConnectionProblems,
+  type ModelConnection,
+  type ModelSettings,
+  type PipelineRole,
+  type ProbeInput,
+  type RoleAssignment,
+} from '@lct/contracts';
 
 /**
  * Настройки моделей: подключения к OpenAI-совместимым серверам и то, какая модель выполняет
@@ -9,16 +22,55 @@ import { z } from 'zod';
  * Все обращения к моделям идут с сервера приложения, поэтому и настройки живут там: браузер
  * видит только, задан ли ключ, и его последние символы (`hasKey`, `keyHint`), но не сам ключ.
  *
- * Схемы лежат здесь, пока API не описывает настройки. Когда опишет, они переедут в
- * `packages/contracts`, как остальные контракты, а этот модуль оставит себе только проверки ввода.
+ * Схемы и проверки ввода — общий контракт с API (`packages/contracts/src/model-settings.ts`):
+ * API по ним хранит настройки, интерфейс по ним же проверяет форму. Здесь они переэкспортированы
+ * под прежними именами, а рядом — то, что нужно только интерфейсу.
  *
  * Модуль без React и DOM: правила ввода и классификация адресов проверяются тестами.
  */
 
-/** Роли пайплайна из `docs/MODELS.md`, в порядке, в котором они работают над колодой. */
-export const PIPELINE_ROLES = ['planner', 'writer', 'critic', 'vision', 'image'] as const;
-export const PipelineRoleSchema = z.enum(PIPELINE_ROLES);
-export type PipelineRole = z.infer<typeof PipelineRoleSchema>;
+export {
+  API_KEY_MAX_LENGTH,
+  BASE_URL_MAX_LENGTH,
+  CONNECTION_NAME_MAX_LENGTH,
+  CONNECTION_PRESETS,
+  MODEL_ID_MAX_LENGTH,
+  MODEL_LIST_MAX_LENGTH,
+  PIPELINE_ROLES,
+  SERVER_CONNECTION_ID,
+  apiKeyProblem,
+  baseUrlProblem,
+  checkErrorSchema as CheckErrorSchema,
+  connectionCheckSchema as ConnectionCheckSchema,
+  connectionInputProblems,
+  connectionInputSchema as ConnectionInputSchema,
+  connectionNameProblem,
+  connectionPresetSchema as ConnectionPresetSchema,
+  hasProblems,
+  isRoleOptional,
+  keyHint,
+  modelConnectionSchema as ModelConnectionSchema,
+  modelsEndpoint,
+  modelSettingsSchema as ModelSettingsSchema,
+  normalizeBaseUrl,
+  pipelineRoleSchema as PipelineRoleSchema,
+  probeInputSchema as ProbeInputSchema,
+  roleAssignmentSchema as RoleAssignmentSchema,
+  type ApiKeyProblem,
+  type BaseUrlProblem,
+  type CheckError,
+  type ConnectionCheck,
+  type ConnectionInput,
+  type ConnectionNameProblem,
+  type ConnectionPreset,
+  type ConnectionProblems,
+  type ModelConnection,
+  type ModelRef,
+  type ModelSettings,
+  type PipelineRole,
+  type ProbeInput,
+  type RoleAssignment,
+} from '@lct/contracts';
 
 /**
  * Какая модель нужна роли. По ответу `/models` тип не определить — сервер отдаёт только id, —
@@ -33,23 +85,6 @@ export const ROLE_MODEL_KIND: Readonly<Record<PipelineRole, ModelKind>> = {
   vision: 'vlm',
   image: 'text-to-image',
 };
-
-/**
- * Можно ли роль выключить. Без иллюстратора колода собирается — картинки берутся из контент-пака
- * или не рисуются; без плана, текстов, аудита и визуальной проверки — нет.
- */
-export function isRoleOptional(role: PipelineRole): boolean {
-  return role === 'image';
-}
-
-/**
- * Откуда начали подключение. Пресет только подставляет адрес и имя: дальше это обычный
- * OpenAI-совместимый сервер. Облачных адресов среди пресетов нет — облако подключают как
- * `custom`, со своим адресом.
- */
-export const CONNECTION_PRESETS = ['ollama', 'lm-studio', 'vllm', 'custom'] as const;
-export const ConnectionPresetSchema = z.enum(CONNECTION_PRESETS);
-export type ConnectionPreset = z.infer<typeof ConnectionPresetSchema>;
 
 /** Адрес по умолчанию: стандартный порт каждого рантайма и его OpenAI-совместимый префикс. */
 export const PRESET_BASE_URLS: Readonly<Record<ConnectionPreset, string>> = {
@@ -66,221 +101,6 @@ export const PRESET_NAMES: Readonly<Record<ConnectionPreset, string>> = {
   vllm: 'vLLM',
   custom: '',
 };
-
-export const CONNECTION_NAME_MAX_LENGTH = 60;
-export const BASE_URL_MAX_LENGTH = 2048;
-export const API_KEY_MAX_LENGTH = 512;
-export const MODEL_ID_MAX_LENGTH = 256;
-/** Сколько моделей из ответа сервера запоминаем: больше в меню роли всё равно не выбрать. */
-export const MODEL_LIST_MAX_LENGTH = 500;
-
-/**
- * Почему проверка не прошла. Каждый вид человек чинит по-своему: недоступен — запустить сервер или
- * поправить адрес, 401/403 — ключ, чужой формат — адрес указывает не на OpenAI-совместимый API.
- */
-export const CheckErrorSchema = z.discriminatedUnion('kind', [
-  /** Соединение не установилось: сервер не запущен, не тот порт или имя не разрешилось. */
-  z.object({ kind: z.literal('unreachable'), detail: z.string().max(200).nullable() }),
-  /** Сервер отказал в доступе: ключ неверный или не задан. */
-  z.object({ kind: z.literal('unauthorized'), status: z.number().int() }),
-  /** Сервер ответил другой ошибкой: 404 — обычно в адресе не хватает `/v1`. */
-  z.object({ kind: z.literal('http'), status: z.number().int() }),
-  /** Ответ пришёл, но это не список моделей в формате OpenAI. */
-  z.object({ kind: z.literal('invalid-response') }),
-  /** Сервер не ответил за отведённое время. */
-  z.object({ kind: z.literal('timeout') }),
-]);
-export type CheckError = z.infer<typeof CheckErrorSchema>;
-
-const ModelIdSchema = z.string().trim().min(1).max(MODEL_ID_MAX_LENGTH);
-
-/** Итог последней проверки: когда, и либо найденные модели, либо причина отказа. */
-export const ConnectionCheckSchema = z.discriminatedUnion('ok', [
-  z.object({
-    ok: z.literal(true),
-    at: z.iso.datetime(),
-    models: z.array(ModelIdSchema).max(MODEL_LIST_MAX_LENGTH),
-  }),
-  z.object({ ok: z.literal(false), at: z.iso.datetime(), error: CheckErrorSchema }),
-]);
-export type ConnectionCheck = z.infer<typeof ConnectionCheckSchema>;
-
-/** Подключение, каким его видит браузер: без ключа, только признак и последние символы. */
-export const ModelConnectionSchema = z.object({
-  connectionId: z.string().min(1),
-  name: z.string(),
-  preset: ConnectionPresetSchema,
-  baseUrl: z.string(),
-  hasKey: z.boolean(),
-  /** Последние символы ключа, чтобы отличить один ключ от другого; у короткого ключа — null. */
-  keyHint: z.string().nullable(),
-  /** null — подключение ещё не проверяли. */
-  lastCheck: ConnectionCheckSchema.nullable(),
-});
-export type ModelConnection = z.infer<typeof ModelConnectionSchema>;
-
-/**
- * Кто выполняет роль: модель на подключении, никто (роль выключена — только у необязательных) или
- * пока не назначено.
- */
-export const RoleAssignmentSchema = z.discriminatedUnion('kind', [
-  z.object({
-    role: PipelineRoleSchema,
-    kind: z.literal('model'),
-    connectionId: z.string().min(1),
-    modelId: ModelIdSchema,
-  }),
-  z.object({ role: PipelineRoleSchema, kind: z.literal('disabled') }),
-  z.object({ role: PipelineRoleSchema, kind: z.literal('unassigned') }),
-]);
-export type RoleAssignment = z.infer<typeof RoleAssignmentSchema>;
-
-/** Модель на подключении: так прогон называет модель, которой выполнить роль. */
-export interface ModelRef {
-  readonly connectionId: string;
-  readonly modelId: string;
-}
-
-/** Все настройки моделей. В `roles` каждая роль ровно один раз, в порядке `PIPELINE_ROLES`. */
-export const ModelSettingsSchema = z.object({
-  connections: z.array(ModelConnectionSchema),
-  roles: z.array(RoleAssignmentSchema),
-});
-export type ModelSettings = z.infer<typeof ModelSettingsSchema>;
-
-/**
- * Что человек ввёл в форме подключения. Без `connectionId` — новое подключение, с ним — правка.
- * Пустой `apiKey` при правке ключ не стирает: поле ключа в форме всегда пустое, сам ключ в
- * браузер не приходит.
- *
- * `lastCheck` — проверка, которую форма сделала перед сохранением, для тех же адреса и ключа:
- * так список моделей появляется в ролях сразу, без второго запроса к серверу.
- */
-export const ConnectionInputSchema = z.object({
-  connectionId: z.string().min(1).optional(),
-  name: z.string().max(CONNECTION_NAME_MAX_LENGTH * 4),
-  preset: ConnectionPresetSchema,
-  baseUrl: z.string().max(BASE_URL_MAX_LENGTH * 2),
-  apiKey: z
-    .string()
-    .max(API_KEY_MAX_LENGTH * 2)
-    .optional(),
-  lastCheck: ConnectionCheckSchema.nullable().optional(),
-});
-export type ConnectionInput = z.infer<typeof ConnectionInputSchema>;
-
-/**
- * Проверка ещё не сохранённого подключения. `connectionId` — при правке: если ключ в форме не
- * вводили, берётся сохранённый.
- */
-export const ProbeInputSchema = z.object({
-  connectionId: z.string().min(1).optional(),
-  baseUrl: z.string().max(BASE_URL_MAX_LENGTH * 2),
-  apiKey: z
-    .string()
-    .max(API_KEY_MAX_LENGTH * 2)
-    .optional(),
-});
-export type ProbeInput = z.infer<typeof ProbeInputSchema>;
-
-// Проверки ввода. Каждая возвращает причину, а не текст: слова живут в словаре интерфейса.
-
-export type ConnectionNameProblem = 'empty' | 'tooLong';
-
-export function connectionNameProblem(name: string): ConnectionNameProblem | null {
-  const trimmed = name.trim();
-  if (trimmed === '') return 'empty';
-  if (trimmed.length > CONNECTION_NAME_MAX_LENGTH) return 'tooLong';
-  return null;
-}
-
-/**
- * `credentials` — логин и пароль в самом адресе (`https://user:pass@host`): так их увидел бы
- * каждый, кто видит адрес, а ключу место в поле ключа.
- */
-export type BaseUrlProblem = 'empty' | 'tooLong' | 'invalid' | 'protocol' | 'credentials';
-
-export function baseUrlProblem(value: string): BaseUrlProblem | null {
-  const trimmed = value.trim();
-  if (trimmed === '') return 'empty';
-  if (trimmed.length > BASE_URL_MAX_LENGTH) return 'tooLong';
-  // «localhost:11434/v1» без схемы — самая частая ошибка: говорим о схеме, а не «неверный адрес».
-  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)) return 'protocol';
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return 'invalid';
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'protocol';
-  if (url.hostname === '') return 'invalid';
-  if (url.username !== '' || url.password !== '') return 'credentials';
-  return null;
-}
-
-/** `whitespace` — пробел или перенос внутри ключа: так бывает, когда ключ скопировали с лишним. */
-export type ApiKeyProblem = 'tooLong' | 'whitespace';
-
-export function apiKeyProblem(key: string): ApiKeyProblem | null {
-  const trimmed = key.trim();
-  if (trimmed.length > API_KEY_MAX_LENGTH) return 'tooLong';
-  if (/\s/.test(trimmed)) return 'whitespace';
-  return null;
-}
-
-export interface ConnectionProblems {
-  readonly name?: ConnectionNameProblem;
-  readonly baseUrl?: BaseUrlProblem;
-  readonly apiKey?: ApiKeyProblem;
-}
-
-/** Все проблемы формы разом: пустой объект — можно сохранять. */
-export function connectionInputProblems(input: {
-  name: string;
-  baseUrl: string;
-  apiKey?: string;
-}): ConnectionProblems {
-  const name = connectionNameProblem(input.name);
-  const baseUrl = baseUrlProblem(input.baseUrl);
-  const apiKey = input.apiKey === undefined ? null : apiKeyProblem(input.apiKey);
-  return {
-    ...(name ? { name } : {}),
-    ...(baseUrl ? { baseUrl } : {}),
-    ...(apiKey ? { apiKey } : {}),
-  };
-}
-
-export function hasProblems(problems: ConnectionProblems): boolean {
-  return Object.keys(problems).length > 0;
-}
-
-/**
- * Адрес в том виде, в каком его хранят: без пробелов по краям и без завершающих `/` — к нему
- * дописывают `/models`, и двойная косая черта ломает часть серверов.
- */
-export function normalizeBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, '');
-}
-
-/** Адрес списка моделей OpenAI-совместимого сервера. */
-export function modelsEndpoint(baseUrl: string): string {
-  return `${normalizeBaseUrl(baseUrl)}/models`;
-}
-
-/** Короче этого ключ не подписываем даже частично: четыре символа выдали бы его заметную долю. */
-const KEY_HINT_MIN_LENGTH = 12;
-const KEY_HINT_LENGTH = 4;
-
-/**
- * Что показать о ключе в браузере: последние четыре символа, как делают облачные консоли. У
- * короткого ключа — ничего, только признак, что ключ задан.
- */
-export function keyHint(key: string | null): string | null {
-  if (key === null) return null;
-  const trimmed = key.trim();
-  if (trimmed.length < KEY_HINT_MIN_LENGTH) return null;
-  return trimmed.slice(-KEY_HINT_LENGTH);
-}
 
 export type ConnectionLocation = 'local' | 'cloud';
 
@@ -376,8 +196,20 @@ export class InvalidModelSettingsError extends Error {
 }
 
 /**
- * Хранилище настроек моделей. Сейчас — демо в памяти сервера (`mocks/demo-model-settings.ts`);
- * API встанет на это место, не трогая интерфейса.
+ * Ключи нельзя сохранить: на сервере не задан `MODEL_KEYS_SECRET`, которым они шифруются. Ключ
+ * тогда не сохраняется вовсе, а не ложится в базу открытым текстом.
+ */
+export class ModelKeysUnavailableError extends Error {
+  override readonly name = 'ModelKeysUnavailableError';
+
+  constructor() {
+    super('Model keys cannot be stored: MODEL_KEYS_SECRET is not set on the server');
+  }
+}
+
+/**
+ * Хранилище настроек моделей. Настройки хранит API (`lib/api-model-settings.ts`): ключи там
+ * зашифрованы, а подключение из `.env` сервера видно как встроенное, только для чтения.
  *
  * Ключ принимает только `saveConnection` и отдаёт только сервер — моделям. Наружу из методов он
  * не выходит ни в каком виде, кроме `keyHint`.
