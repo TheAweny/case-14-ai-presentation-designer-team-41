@@ -6990,6 +6990,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "cli@workspace:apps/cli"
   dependencies:
+    "@clack/prompts": "npm:1.7.0"
     "@lct/contracts": "workspace:^"
     "@lct/engine-client": "workspace:^"
     "@lct/pipeline": "workspace:^"

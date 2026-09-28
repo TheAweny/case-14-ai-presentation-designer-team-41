@@ -76,6 +76,10 @@ services:
         condition: service_healthy
     environment:
       PORT: '3000'
+      # Accounts of the interface and the key that signs their sessions; `lct onboard` and
+      # `lct user` write both into .env.
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_USERS: ${AUTH_USERS:-}
     ports:
       - '3000:3000'
     restart: unless-stopped
