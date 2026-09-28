@@ -315,7 +315,7 @@ function StageRow({ stage }: { stage: StageProgress }) {
     >
       <span className="grid size-4 place-items-center" aria-hidden>
         {stage.state === 'done' ? (
-          <CheckIcon size={14} className="[--icon-stroke:2]" />
+          <CheckIcon size={14} />
         ) : stage.state === 'running' ? (
           <SpinnerIcon size={14} className="animate-spin motion-reduce:animate-none" />
         ) : (

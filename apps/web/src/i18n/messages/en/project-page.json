@@ -8,6 +8,7 @@
     "renameLabel": "Project name",
     "renameFailed": "Could not rename the project. Please try again.",
     "appearanceFailed": "Could not save the icon and color. Please try again.",
+    "pinFailed": "Could not update the pin. Please try again.",
     "decks": "{count, plural, =0 {no presentations} one {# presentation} other {# presentations}}",
     "edited": "edited {time}",
     "menuAppearance": "Icon and color",

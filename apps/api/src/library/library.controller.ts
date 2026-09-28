@@ -17,6 +17,7 @@ import { LibraryMetadata } from '../generation/library-metadata.js';
 interface ProjectInput {
   readonly name?: unknown;
   readonly appearance?: unknown;
+  readonly pinned?: unknown;
 }
 
 @Controller('library')
@@ -30,6 +31,7 @@ export class LibraryController {
   async listProjects(): Promise<readonly unknown[]> {
     const result = await this.pool.query(
       `SELECT p.id AS "projectId", p.name, p.appearance, p.created_at AS "createdAt", p.updated_at AS "updatedAt",
+              p.pinned_at AS "pinnedAt",
               COALESCE(array_agg(pt.template_id) FILTER (WHERE pt.template_id IS NOT NULL), '{}') AS "templateIds"
        FROM library_projects p LEFT JOIN library_project_templates pt ON pt.project_id = p.id
        GROUP BY p.id ORDER BY p.updated_at DESC`,
@@ -59,7 +61,8 @@ export class LibraryController {
     const projectId = randomUUID();
     const result = await this.pool.query(
       `INSERT INTO library_projects(id, name, appearance) VALUES ($1, $2, $3::jsonb)
-       RETURNING id AS "projectId", name, appearance, created_at AS "createdAt", updated_at AS "updatedAt"`,
+       RETURNING id AS "projectId", name, appearance, created_at AS "createdAt", updated_at AS "updatedAt",
+                 pinned_at AS "pinnedAt"`,
       [
         projectId,
         body.name.trim(),
@@ -71,15 +74,24 @@ export class LibraryController {
 
   @Patch('projects/:id')
   async updateProject(@Param('id') id: string, @Body() body: ProjectInput): Promise<unknown> {
+    if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
+      throw new BadRequestException('pinned must be a boolean.');
+    }
+    // Pinning keeps the moment of the first pin and does not count as an edit of the project.
     const result = await this.pool.query(
       `UPDATE library_projects SET
-         name = COALESCE($2, name), appearance = COALESCE($3::jsonb, appearance), updated_at = now()
+         name = COALESCE($2, name), appearance = COALESCE($3::jsonb, appearance),
+         pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at
+                          WHEN $4::boolean THEN COALESCE(pinned_at, now()) ELSE NULL END,
+         updated_at = CASE WHEN $2::text IS NULL AND $3::jsonb IS NULL THEN updated_at ELSE now() END
        WHERE id = $1
-       RETURNING id AS "projectId", name, appearance, created_at AS "createdAt", updated_at AS "updatedAt"`,
+       RETURNING id AS "projectId", name, appearance, created_at AS "createdAt", updated_at AS "updatedAt",
+                 pinned_at AS "pinnedAt"`,
       [
         id,
         typeof body.name === 'string' ? body.name.trim() : null,
         body.appearance ? JSON.stringify(body.appearance) : null,
+        typeof body.pinned === 'boolean' ? body.pinned : null,
       ],
     );
     if (result.rowCount === 0) throw new NotFoundException('Project not found.');

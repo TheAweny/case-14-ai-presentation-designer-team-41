@@ -24,6 +24,7 @@ import { focusObject, removalFocusTarget } from '@/components/library/object-foc
 import { ObjectMenu, type ObjectMenuAction } from '@/components/library/object-menu';
 import { ProjectAppearancePicker } from '@/components/library/project-appearance-picker';
 import { ProjectIcon, type ProjectIconSize } from '@/components/library/project-icon';
+import { PinIcon } from '@/components/ui/icons';
 import type { InlineNameEnd } from '@/components/library/inline-name-input';
 import { projectHref, projectMenu } from '@/lib/library-menu';
 import { PROJECT_NAME_MAX_LENGTH, type ProjectSummary } from '@/lib/library-source';
@@ -32,21 +33,23 @@ import type { ProjectAppearance } from '@/lib/project-appearance';
 /** Что меню проекта знает о нём. Шаблон и его профиль сюда не нужны — и на клиент не едут. */
 export type ProjectMenuTarget = Pick<
   ProjectSummary,
-  'projectId' | 'name' | 'appearance' | 'deckCount'
+  'projectId' | 'name' | 'appearance' | 'deckCount' | 'pinned'
 >;
 
 interface Shown {
   readonly name: string;
   readonly appearance: ProjectAppearance;
+  readonly pinned: boolean;
   readonly removed: boolean;
 }
 
 /** Что не удалось сохранить: от этого зависит текст ошибки. */
-export type ProjectFailure = 'rename' | 'appearance' | 'delete';
+export type ProjectFailure = 'rename' | 'appearance' | 'pin' | 'delete';
 
 const FAILURE_TEXT = {
   rename: 'renameProjectFailed',
   appearance: 'appearanceFailed',
+  pin: 'pinFailed',
   delete: 'deleteProjectFailed',
 } as const satisfies Record<ProjectFailure, string>;
 
@@ -59,14 +62,19 @@ const FAILED: LibraryActionResult = { ok: false, reason: 'invalid' };
  * местом (шапка проекта пишет под заголовком) и получает null, когда начинается новая правка.
  */
 export function useProjectEditing(
-  { projectId, name, appearance }: Pick<ProjectMenuTarget, 'projectId' | 'name' | 'appearance'>,
+  {
+    projectId,
+    name,
+    appearance,
+    pinned,
+  }: Pick<ProjectMenuTarget, 'projectId' | 'name' | 'appearance' | 'pinned'>,
   report?: (failure: ProjectFailure | null) => void,
 ) {
   const t = useTranslations('libraryMenu.notices');
   const notice = useLibraryNotice();
   const [, startTransition] = useTransition();
   const [shown, show] = useOptimistic<Shown, Partial<Shown>>(
-    { name, appearance, removed: false },
+    { name, appearance, pinned, removed: false },
     (current, patch) => ({ ...current, ...patch }),
   );
 
@@ -93,6 +101,15 @@ export function useProjectEditing(
       if (next.icon === shown.appearance.icon && next.color === shown.appearance.color) return;
       save({ appearance: next }, 'appearance');
     },
+    setPinned(next: boolean) {
+      if (next === shown.pinned) return;
+      report?.(null);
+      startTransition(async () => {
+        show({ pinned: next });
+        const result = await updateProjectAction(projectId, { pinned: next }).catch(() => FAILED);
+        if (!result.ok) fail('pin');
+      });
+    },
     /** `leave` — человек на странице этого проекта: действие уведёт его на главную. */
     remove({ leave }: { leave: boolean }) {
       const removedName = shown.name;
@@ -113,7 +130,7 @@ export function useProjectEditing(
   };
 }
 
-const ShownContext = createContext<Pick<Shown, 'name' | 'appearance'> | null>(null);
+const ShownContext = createContext<Pick<Shown, 'name' | 'appearance' | 'pinned'> | null>(null);
 
 /** Имя проекта в карточке, которую рисует сервер: новое имя известно только на клиенте. */
 export function ProjectName({ children }: { children: string }) {
@@ -121,6 +138,19 @@ export function ProjectName({ children }: { children: string }) {
 }
 
 /** Иконка проекта в карточке: после смены иконки — новая, ещё до ответа сервера. */
+/** Значок закрепления на карточке: после закрепления виден сразу, ещё до ответа сервера. */
+export function ProjectPinMark({ pinned }: { pinned: boolean }) {
+  const t = useTranslations('library');
+  const shown = useContext(ShownContext);
+  if (!(shown?.pinned ?? pinned)) return null;
+  return (
+    <span title={t('pinnedMark')} className="inline-flex shrink-0 text-muted-foreground">
+      <PinIcon size={12} aria-hidden />
+      <span className="sr-only">{t('pinnedMark')}</span>
+    </span>
+  );
+}
+
 export function ProjectLook({
   appearance,
   size,
@@ -172,7 +202,10 @@ export function ProjectActions({
   const focusNext = useRef<HTMLElement | null>(null);
   /** Поле имени закрыли с клавиатуры: когда вернётся ссылка, фокус — на неё. */
   const refocus = useRef(false);
-  const menu = useMemo(() => projectMenu(project.projectId), [project.projectId]);
+  const menu = useMemo(
+    () => projectMenu(project.projectId, { pinned: shown.pinned }),
+    [project.projectId, shown.pinned],
+  );
 
   useEffect(() => {
     if (renaming || !refocus.current) return;
@@ -182,8 +215,10 @@ export function ProjectActions({
 
   const onAction = (action: ObjectMenuAction) => {
     if (action === 'appearance') setPickerOpen(true);
+    else if (action === 'pin') editing.setPinned(true);
+    else if (action === 'unpin') editing.setPinned(false);
     else if (action === 'rename' && renameMode === 'inline') setRenaming(true);
-    else setDialog(action);
+    else if (action === 'rename' || action === 'delete') setDialog(action);
   };
 
   const remove = () => {
@@ -210,7 +245,7 @@ export function ProjectActions({
   };
 
   return (
-    <ShownContext value={shown}>
+    <ShownContext value={{ name: shown.name, appearance: shown.appearance, pinned: shown.pinned }}>
       <ObjectMenu
         kind="project"
         menu={menu}

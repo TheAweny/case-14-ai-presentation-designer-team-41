@@ -49,6 +49,7 @@ export function ProjectHeader({
   name,
   appearance,
   deckCount,
+  pinned,
   meta,
   newDeckHref,
 }: {
@@ -57,13 +58,14 @@ export function ProjectHeader({
   appearance: ProjectAppearance;
   /** Сколько презентаций удалится вместе с проектом: это говорит подтверждение. */
   deckCount: number;
+  pinned: boolean;
   meta: ProjectHeaderMeta;
   newDeckHref: string;
 }) {
   const t = useTranslations('projectPage');
   const tMenu = useTranslations('libraryMenu');
   const [failure, setFailure] = useState<ProjectFailure | null>(null);
-  const editing = useProjectEditing({ projectId, name, appearance }, setFailure);
+  const editing = useProjectEditing({ projectId, name, appearance, pinned }, setFailure);
   const { shown } = editing;
   const [renaming, setRenaming] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -73,8 +75,17 @@ export function ProjectHeader({
   const onAction = (action: ObjectMenuAction) => {
     if (action === 'rename') setRenaming(true);
     else if (action === 'appearance') setPickerOpen(true);
-    else setDeleting(true);
+    else if (action === 'pin') editing.setPinned(true);
+    else if (action === 'unpin') editing.setPinned(false);
+    else if (action === 'delete') setDeleting(true);
   };
+
+  const failureMessage = {
+    rename: t('header.renameFailed'),
+    appearance: t('header.appearanceFailed'),
+    pin: t('header.pinFailed'),
+    delete: tMenu('notices.deleteProjectFailed'),
+  } satisfies Record<ProjectFailure, string>;
 
   return (
     <TooltipProvider>
@@ -157,6 +168,7 @@ export function ProjectHeader({
           <ProjectMenu
             projectId={projectId}
             projectName={shown.name}
+            pinned={shown.pinned}
             buttonRef={menuButton}
             onAction={onAction}
           />
@@ -164,11 +176,7 @@ export function ProjectHeader({
       </header>
       {failure ? (
         <p role="alert" className="-mt-2 text-sm text-destructive">
-          {failure === 'rename'
-            ? t('header.renameFailed')
-            : failure === 'appearance'
-              ? t('header.appearanceFailed')
-              : tMenu('notices.deleteProjectFailed')}
+          {failureMessage[failure]}
         </p>
       ) : null}
       <ConfirmDeleteDialog
@@ -196,16 +204,21 @@ export function ProjectHeader({
 function ProjectMenu({
   projectId,
   projectName,
+  pinned,
   buttonRef,
   onAction,
 }: {
   projectId: string;
   projectName: string;
+  pinned: boolean;
   buttonRef: RefObject<HTMLButtonElement | null>;
   onAction: (action: ObjectMenuAction) => void;
 }) {
   const t = useTranslations('libraryMenu');
-  const menu = useMemo(() => projectMenu(projectId, { current: true }), [projectId]);
+  const menu = useMemo(
+    () => projectMenu(projectId, { current: true, pinned }),
+    [projectId, pinned],
+  );
   const { select, closeAutoFocus } = useLibraryMenuSelect(onAction);
   return (
     <DropdownMenu>

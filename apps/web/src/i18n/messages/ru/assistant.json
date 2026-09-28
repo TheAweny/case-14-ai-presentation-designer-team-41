@@ -1,5 +1,4 @@
 {
-  "name": "Ассистент",
   "log": "Разговор с ассистентом",
   "empty": "Попросите что-нибудь изменить в колоде — ассистент ответит здесь.",
   "user": {
@@ -35,6 +34,7 @@
   },
   "work": {
     "starting": "Начинаю",
+    "finishing": "Завершаю",
     "stage": "{stage}…",
     "layingOut": "Верстаю слайды: {done} из {total}",
     "done": "Колода готова",
@@ -64,14 +64,13 @@
   },
   "build": {
     "elapsed": "{time} из {budget}",
-    "doneIn": "за {time}",
     "stages": "Этапы сборки",
     "slides": "Слайды по мере вёрстки",
     "slide": "Слайд {number}",
-    "planning": "Агент строит план колоды…",
     "variantNote": "Вариант «{variant}» · {count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
     "galleryTitle": "Слайды по мере вёрстки",
-    "galleryNote": "Вариант «{variant}». Два других собираются из того же плана."
+    "galleryNote": "Вариант «{variant}». Два других собираются из того же плана.",
+    "doneTitle": "Собрал колоду за {time}"
   },
   "ask": {
     "keys": "1–{count} и Enter",
@@ -142,21 +141,20 @@
     "leadTimed": "Готово за {time}. Все три собраны из одного плана — советую «{variant}».",
     "reasonClean": "Аудит у него чистый.",
     "reasonFewest": "У него меньше всего замечаний аудита.",
-    "recommended": "Советую",
     "recommendedInline": "советую",
     "current": "открыт",
     "auditClean": "Аудит чистый",
     "errors": "{count, plural, one {# ошибка} few {# ошибки} many {# ошибок} other {# ошибки}}",
     "warnings": "{count, plural, one {# замечание} few {# замечания} many {# замечаний} other {# замечания}}",
     "slides": "{count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
-    "open": "Открыть «{variant}» в редакторе",
     "switchTo": "Открыть «{variant}»",
     "download": "Скачать",
     "present": "Показ",
     "browse": "Все слайды",
     "galleryNote": "Вариант «{variant}» · {count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
     "loadFailed": "Не удалось открыть вариант. Попробуйте выбрать его снова.",
-    "substituted": "Демо-режим не собирает колоды сам: варианты взяты из готовых демо-колод, а не свёрстаны выбранным шаблоном."
+    "substituted": "Демо-режим не собирает колоды сам: варианты взяты из готовых демо-колод, а не свёрстаны выбранным шаблоном.",
+    "edit": "В редакторе"
   },
   "slides": {
     "close": "Закрыть",
@@ -191,5 +189,11 @@
     "staleElements": "{label} — объекты удалены, в сообщение не попадёт",
     "mentionSlide": "слайд {number}",
     "mentionOnSlide": "{what} на слайде {number}"
+  },
+  "actions": {
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "edit": "Изменить и отправить заново",
+    "thinking": "Думаю…"
   }
 }

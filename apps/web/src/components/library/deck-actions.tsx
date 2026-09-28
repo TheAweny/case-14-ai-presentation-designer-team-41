@@ -40,10 +40,15 @@ const FAILED: LibraryActionResult = { ok: false, reason: 'invalid' };
 
 type Dialog = 'rename' | 'delete' | null;
 
-/** Где стоит кнопка «⋯»: на карточке — в углу обложки, в строке — справа по центру. */
+/**
+ * Где стоит кнопка «⋯»: на карточке — в углу обложки, в строке — справа по центру,
+ * в боковой панели — компактная, без своей плашки: строка и так высотой в одну строку.
+ */
 const BUTTON_PLACE = {
   card: 'top-3 right-3',
   row: 'top-1/2 right-2 -translate-y-1/2 sm:right-3',
+  sidebar:
+    'top-1/2 right-0.5 size-6 -translate-y-1/2 bg-transparent shadow-none ring-0 backdrop-blur-none',
 } as const;
 
 /**

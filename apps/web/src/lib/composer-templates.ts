@@ -67,6 +67,15 @@ export function chosenTemplate(
 }
 
 /** Файл шаблона: .pptx и .potx в контент-пак не идут — это всегда шаблон. */
+/**
+ * Название шаблона для интерфейса: имя файла без расширения. В кнопке и в строке под сообщением
+ * это название, а не файл; полное имя остаётся в подсказке.
+ */
+export function templateTitle(fileName: string): string {
+  const title = fileName.replace(/\.(pptx|potx)$/i, '');
+  return title === '' ? fileName : title;
+}
+
 export function isTemplateFile(fileName: string): boolean {
   return (TEMPLATE_EXTENSIONS as readonly string[]).includes(extensionOf(fileName));
 }

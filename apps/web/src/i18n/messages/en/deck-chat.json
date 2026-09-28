@@ -26,7 +26,9 @@
         "label": "Plainer language",
         "text": "Write more plainly, without jargon."
       }
-    }
+    },
+    "again": "Build again",
+    "againSaid": "Build this deck again"
   },
   "input": {
     "label": "Message to the agent",
@@ -38,7 +40,7 @@
     "attach": "Add materials",
     "files": "Materials for the next build",
     "dropHere": "Drop files to add them to the request",
-    "rejected": "Unsupported files: {names}.",
-    "hint": "Enter to send, Shift+Enter for a new line"
-  }
+    "rejected": "Unsupported files: {names}."
+  },
+  "toBottom": "Jump to latest"
 }

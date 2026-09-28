@@ -92,6 +92,11 @@ export interface DeckConversations {
     template: { readonly templateId: string; readonly name: string },
     text: string,
   ): void;
+  /**
+   * Собрать ту же колоду ещё раз: тот же бриф, те же пожелания, новая сборка. `text` — реплика
+   * человека на языке интерфейса. До первой сборки собирать заново нечего.
+   */
+  again(threadId: string, text: string): void;
   /** Где начат разговор. */
   returnHref(threadId: string): string | undefined;
   /**
@@ -516,6 +521,12 @@ export function createDeckConversations({
       if (!state || state.runId === null || state.templateId === template.templateId) return;
       state.templateId = template.templateId;
       state.templateName = template.name;
+      threads.append(threadId, { kind: 'user', text, attachments: [], meta: null });
+      rebuild(threadId, state);
+    },
+    again(threadId, text) {
+      const state = states.get(threadId);
+      if (!state || state.runId === null) return;
       threads.append(threadId, { kind: 'user', text, attachments: [], meta: null });
       rebuild(threadId, state);
     },

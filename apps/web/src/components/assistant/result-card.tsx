@@ -4,7 +4,6 @@ import { useId, useState, type KeyboardEvent } from 'react';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import {
-  AgentIcon,
   DownloadIcon,
   EditIcon,
   ErrorIcon,
@@ -157,16 +156,6 @@ export function ResultCard({
                 )}
               >
                 <SlideView slide={item.cover} profile={item.designSystem} thumbnail />
-                {item.variant === result.recommended && !compact ? (
-                  <span className="absolute top-1 left-1 hidden items-center sm:inline-flex gap-1 rounded-full bg-background/90 px-1.5 py-0.5 text-[0.625rem] font-medium text-foreground shadow-sm ring-1 ring-border backdrop-blur-sm">
-                    <AgentIcon
-                      size={10}
-                      aria-hidden
-                      className="text-[var(--aurora-color,var(--foreground))]"
-                    />
-                    {t('recommended')}
-                  </span>
-                ) : null}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5 pb-0.5">
                 <span className="truncate font-medium text-foreground">
@@ -174,9 +163,7 @@ export function ResultCard({
                   {item.deckId === currentDeckId ? (
                     <span className="font-normal text-muted-foreground"> · {t('current')}</span>
                   ) : item.variant === result.recommended ? (
-                    <span
-                      className={cn('font-normal text-muted-foreground', !compact && 'sm:hidden')}
-                    >
+                    <span className="font-normal text-muted-foreground">
                       {' '}
                       · {t('recommendedInline')}
                     </span>
@@ -200,22 +187,23 @@ export function ResultCard({
           compact ? 'px-3 py-2.5' : 'px-4 py-3',
         )}
       >
-        <Button
-          type="button"
-          size={compact ? 'default' : 'lg'}
-          disabled={chosen.deckId === currentDeckId}
-          onClick={() => open(chosen.deckId)}
-        >
-          <EditIcon data-icon="inline-start" />
-          {compact
-            ? t('switchTo', { variant: tv(`${chosen.variant}.name`) })
-            : t('open', { variant: tv(`${chosen.variant}.name`) })}
-        </Button>
-        {compact ? null : (
+        {compact ? (
+          <Button
+            type="button"
+            disabled={chosen.deckId === currentDeckId}
+            onClick={() => open(chosen.deckId)}
+          >
+            <EditIcon data-icon="inline-start" />
+            {t('switchTo', { variant: tv(`${chosen.variant}.name`) })}
+          </Button>
+        ) : (
           <>
+            {/*
+             * Главное — забрать готовую колоду: итог не требует правки руками. Показ и просмотр —
+             * рядом, редактор — тихо справа, как одно из действий, а не обязательный шаг.
+             */}
             <Button
               type="button"
-              variant="outline"
               size="lg"
               disabled={!variantDeck}
               onClick={() => setExportOpen(true)}
@@ -246,6 +234,16 @@ export function ResultCard({
             {loaded.status === 'failed' ? (
               <span className="text-xs text-destructive">{t('loadFailed')}</span>
             ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="lg"
+              className="ml-auto text-muted-foreground"
+              onClick={() => open(chosen.deckId)}
+            >
+              <EditIcon data-icon="inline-start" />
+              {t('edit')}
+            </Button>
           </>
         )}
       </div>

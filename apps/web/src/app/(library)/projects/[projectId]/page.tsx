@@ -99,6 +99,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
           name={project.name}
           appearance={project.appearance}
           deckCount={project.deckCount}
+          pinned={project.pinned}
           meta={{
             templates: t('header.templates', { count: project.templates.length }),
             decks: t('header.decks', { count: project.deckCount }),

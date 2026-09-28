@@ -24,6 +24,14 @@ describe('createDemoLibrarySource', () => {
     expect(isNewestFirst(projects)).toBe(true);
   });
 
+  it('в демо закреплён хакатон, отдел продаж — нет', async () => {
+    const source = createDemoLibrarySource();
+    const hackathon = await source.getProject('hackathon');
+    expect(hackathon.pinned).toBe(true);
+    expect(hackathon.pinnedAt).toEqual(expect.any(Number));
+    expect(await source.getProject('sales')).toMatchObject({ pinned: false, pinnedAt: null });
+  });
+
   it('отдаёт все колоды, недавно изменённые первыми', async () => {
     const decks = await createDemoLibrarySource().listDecks();
     expect(decks.length).toBeGreaterThan(1);
@@ -181,6 +189,31 @@ describe('updateProject', () => {
       expect(error).toBeInstanceOf(InvalidProjectPatchError);
       expect(error).toMatchObject({ field: 'name' });
     }
+    expect(await source.getProject('sales')).toEqual(before);
+  });
+
+  it('закрепляет проект, не двигая время правки, и открепляет', async () => {
+    const source = createDemoLibrarySource();
+    const before = await source.getProject('sales');
+    expect(before.pinned).toBe(false);
+    const pinned = await source.updateProject('sales', { pinned: true });
+    expect(pinned.pinned).toBe(true);
+    expect(pinned.pinnedAt).toEqual(expect.any(Number));
+    expect(pinned.updatedAt).toBe(before.updatedAt);
+    expect(pinned.name).toBe(before.name);
+    expect((await source.getProject('sales')).pinnedAt).toBe(pinned.pinnedAt);
+    const unpinned = await source.updateProject('sales', { pinned: false });
+    expect(unpinned).toMatchObject({ pinned: false, pinnedAt: null, updatedAt: before.updatedAt });
+  });
+
+  it('небулево закрепление отклоняет и ничего не меняет', async () => {
+    const source = createDemoLibrarySource();
+    const before = await source.getProject('sales');
+    const error: unknown = await source
+      .updateProject('sales', { pinned: 'yes' } as unknown as { pinned: boolean })
+      .catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(InvalidProjectPatchError);
+    expect(error).toMatchObject({ field: 'pinned' });
     expect(await source.getProject('sales')).toEqual(before);
   });
 
@@ -362,6 +395,8 @@ describe('createProject', () => {
       appearance: { icon: 'star', color: 'teal' },
       templates: [],
       deckCount: 0,
+      pinned: false,
+      pinnedAt: null,
     });
     await expect(source.getProject(project.projectId)).resolves.toEqual(project);
     expect((await source.listProjects()).some((p) => p.projectId === project.projectId)).toBe(true);

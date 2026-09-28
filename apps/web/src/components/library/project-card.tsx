@@ -7,7 +7,12 @@ import {
   primaryFontOf,
   roleColor,
 } from '@/components/library/template-swatch';
-import { ProjectActions, ProjectLook, ProjectName } from '@/components/library/project-actions';
+import {
+  ProjectActions,
+  ProjectLook,
+  ProjectName,
+  ProjectPinMark,
+} from '@/components/library/project-actions';
 import { projectHref } from '@/lib/library-menu';
 import type { ProjectSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
@@ -33,6 +38,7 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
         name: project.name,
         appearance: project.appearance,
         deckCount: project.deckCount,
+        pinned: project.pinned,
       }}
       rename="dialog"
       buttonClassName="right-2 bottom-2"
@@ -62,6 +68,7 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
               <span className="truncate">
                 <ProjectName>{project.name}</ProjectName>
               </span>
+              <ProjectPinMark pinned={project.pinned} />
             </h3>
             {template ? (
               <p className="truncate text-xs text-muted-foreground">{template.fileName}</p>

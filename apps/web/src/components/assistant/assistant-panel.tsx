@@ -1,24 +1,22 @@
 'use client';
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-  type KeyboardEvent,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
 import { ModelMenu } from '@/components/composer/model-menu';
-import { useAurora } from '@/components/composer/use-aurora';
-import { Button } from '@/components/ui/button';
-import { AgentIcon, SendIcon, StopIcon } from '@/components/ui/icons';
+import {
+  PromptBox,
+  PromptChips,
+  PromptField,
+  PromptSubmit,
+  PromptToolbar,
+  usePromptBox,
+} from '@/components/composer/prompt-box';
+import { promptAction } from '@/components/composer/prompt-keys';
+import { AgentIcon } from '@/components/ui/icons';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import type { AssistantThread } from '@/lib/assistant-threads';
 import type { ModelRef } from '@/lib/model-settings';
 import { contextAttachments, refKey } from '@/lib/slide-context';
-import { cn } from '@/lib/utils';
 import { useAssistantDeck } from './deck-context';
 import { assistantThreads, deckConversations, generationRuns, useRun } from './session';
 import { ResultCard } from './result-card';
@@ -28,6 +26,7 @@ import {
   AssumptionCard,
   ImportCard,
   TemplateCard,
+  ThinkingLine,
   UserMessage,
   WorkCard,
 } from './thread-messages';
@@ -55,6 +54,9 @@ export function AssistantPanel({
   const stick = useRef(true);
   const messages = thread?.messages ?? [];
   const latestRun = activeRunId(thread);
+  // «Изменить» у реплики: текст возвращается в поле. `key` различает два нажатия на одну реплику.
+  const [edit, setEdit] = useState<{ text: string; key: number } | null>(null);
+  const onEdit = (text: string) => setEdit({ text, key: Date.now() });
 
   // Лента держится у низа, пока человек сам не прокрутил её вверх.
   useLayoutEffect(() => {
@@ -84,17 +86,14 @@ export function AssistantPanel({
             <p className="text-sm text-balance text-muted-foreground">{t('empty')}</p>
           </div>
         ) : (
-          messages.map((message, index) => {
-            const agentStarts =
-              message.kind !== 'user' && (index === 0 || messages[index - 1]?.kind === 'user');
+          messages.map((message) => {
             return (
               <div
                 key={message.id}
                 className="assistant-rise flex flex-col gap-2 motion-reduce:animate-none"
               >
-                {agentStarts ? <AgentName /> : null}
                 {message.kind === 'user' ? (
-                  <UserMessage message={message} />
+                  <UserMessage message={message} onEdit={onEdit} />
                 ) : message.kind === 'agent' ? (
                   <AgentMessage text={message.text} />
                 ) : message.kind === 'work' ? (
@@ -134,19 +133,10 @@ export function AssistantPanel({
             );
           })
         )}
+        {messages.at(-1)?.kind === 'user' ? <ThinkingLine /> : null}
       </div>
-      <AssistantInput thread={thread} deckId={deckId} />
+      <AssistantInput thread={thread} deckId={deckId} edit={edit} />
     </div>
-  );
-}
-
-function AgentName() {
-  const t = useTranslations('assistant');
-  return (
-    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <AgentIcon className="size-3.5 text-[var(--aurora-color,var(--foreground))]" aria-hidden />
-      {t('name')}
-    </p>
   );
 }
 
@@ -159,14 +149,16 @@ function activeRunId(thread: AssistantThread | undefined): string | null {
 function AssistantInput({
   thread,
   deckId,
+  edit,
 }: {
   thread: AssistantThread | undefined;
   deckId?: string;
+  /** Реплика, которую вернули в поле кнопкой «Изменить». */
+  edit: { text: string; key: number } | null;
 }) {
   const t = useTranslations('assistant.input');
   const tc = useTranslations('assistant.context');
   const deck = useAssistantDeck();
-  const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState('');
   // Модель — у разговора, который собирает колоду; разговор, начатый в панели, колод не собирает.
@@ -175,15 +167,19 @@ function AssistantInput({
   const run = useRun(activeRunId(thread));
   const running = run?.phase === 'running';
   const pending = thread ? assistantThreads.pendingQuestion(thread.threadId) : undefined;
-  const ready = text.trim() !== '';
-  const aurora = useAurora(root, { ready, sending: running });
+  const hasInput = text.trim() !== '';
+  const action = promptAction({ hasInput, running });
+  const box = usePromptBox({ ready: hasInput, busy: running });
 
-  useLayoutEffect(() => {
+  // «Изменить»: текст реплики — в поле, курсор — в конец, чтобы сразу дописать.
+  useEffect(() => {
+    if (!edit) return;
+    setText(edit.text);
     const element = field.current;
     if (!element) return;
-    element.style.height = 'auto';
-    element.style.height = `${element.scrollHeight}px`;
-  }, [text]);
+    element.focus();
+    requestAnimationFrame(() => element.setSelectionRange(edit.text.length, edit.text.length));
+  }, [edit]);
 
   // Агент задал вопрос — фокус на ленте, а не в поле: так работают цифры выбора.
   useEffect(() => {
@@ -199,8 +195,8 @@ function AssistantInput({
   }, [focusRequest, takeFocus]);
 
   const send = () => {
-    if (running && run) {
-      generationRuns.cancel(run.runId);
+    if (action.action === 'stop') {
+      if (run) generationRuns.cancel(run.runId);
       return;
     }
     const message = text.trim();
@@ -223,95 +219,63 @@ function AssistantInput({
     deck?.sent();
   };
 
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    send();
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      send();
-    }
-  };
-
   return (
     <div className="shrink-0 px-3 pt-1 pb-3">
-      <div ref={root} {...aurora.handlers} className="aurora rounded-xl">
-        <div aria-hidden className="aurora-halo" />
-        <div aria-hidden className="aurora-ring" />
-        <form
-          onSubmit={onSubmit}
-          className="relative z-1 flex flex-col rounded-[inherit] bg-card ring-1 ring-border"
-        >
-          <textarea
-            ref={field}
-            value={text}
-            rows={1}
-            aria-label={t('label')}
-            placeholder={pending ? t('placeholderAnswer') : t('placeholder')}
-            onChange={(event) => {
-              setText(event.currentTarget.value);
-              aurora.kick();
-            }}
-            onKeyDown={onKeyDown}
-            className={cn(
-              'max-h-48 min-h-11 w-full resize-none overflow-y-auto bg-transparent px-3.5 pt-3 pb-0.5',
-              'text-[0.8125rem] text-foreground outline-none placeholder:text-muted-foreground',
-            )}
-          />
-          {deck && (deck.refs.length > 0 || deck.ghost) ? (
-            <ul aria-label={tc('label')} className="flex flex-wrap gap-1.5 px-2.5 pt-1.5 pb-0.5">
-              {deck.refs.map((ref) => (
-                <AttachmentChip
-                  key={refKey(ref)}
-                  attachment={ref}
-                  onRemove={() => {
-                    deck.unpin(refKey(ref));
-                    field.current?.focus();
-                  }}
-                />
-              ))}
-              {deck.ghost ? (
-                <AttachmentChip
-                  key={`ghost-${refKey(deck.ghost)}`}
-                  attachment={deck.ghost}
-                  ghost
-                  onPin={() => {
-                    if (deck.ghost) deck.pin(deck.ghost);
-                    field.current?.focus();
-                  }}
-                  onRemove={() => {
-                    deck.dismissGhost();
-                    field.current?.focus();
-                  }}
-                />
-              ) : null}
-            </ul>
-          ) : null}
-          <div className="flex items-center justify-end gap-1 px-2 pb-2">
-            {thread && threadModel !== undefined ? (
-              <ModelMenu
-                compact
-                value={model}
-                onChange={(next) => {
-                  setModel(next);
-                  deckConversations.setModel(thread.threadId, next);
+      <PromptBox box={box} size="compact" onSubmit={send}>
+        {deck && (deck.refs.length > 0 || deck.ghost) ? (
+          <PromptChips label={tc('label')}>
+            {deck.refs.map((ref) => (
+              <AttachmentChip
+                key={refKey(ref)}
+                attachment={ref}
+                onRemove={() => {
+                  deck.unpin(refKey(ref));
+                  field.current?.focus();
+                }}
+              />
+            ))}
+            {deck.ghost ? (
+              <AttachmentChip
+                key={`ghost-${refKey(deck.ghost)}`}
+                attachment={deck.ghost}
+                ghost
+                onPin={() => {
+                  if (deck.ghost) deck.pin(deck.ghost);
+                  field.current?.focus();
+                }}
+                onRemove={() => {
+                  deck.dismissGhost();
+                  field.current?.focus();
                 }}
               />
             ) : null}
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!running && !ready}
-              aria-label={running ? t('stop') : t('send')}
-              className="rounded-full"
-            >
-              {running ? <StopIcon /> : <SendIcon className="[--icon-stroke:2]" />}
-            </Button>
-          </div>
-        </form>
-      </div>
+          </PromptChips>
+        ) : null}
+        <PromptField
+          value={text}
+          onValueChange={setText}
+          label={t('label')}
+          placeholder={pending ? t('placeholderAnswer') : t('placeholder')}
+          fieldRef={field}
+        />
+        <PromptToolbar
+          end={
+            <>
+              {thread && threadModel !== undefined ? (
+                <ModelMenu
+                  compact
+                  value={model}
+                  onChange={(next) => {
+                    setModel(next);
+                    deckConversations.setModel(thread.threadId, next);
+                  }}
+                />
+              ) : null}
+              <PromptSubmit state={action} label={t('send')} stopLabel={t('stop')} />
+            </>
+          }
+        />
+      </PromptBox>
     </div>
   );
 }

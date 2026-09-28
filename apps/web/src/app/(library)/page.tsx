@@ -1,18 +1,18 @@
 import { getTranslations } from 'next-intl/server';
-import { DeckIcon, FolderIcon } from '@/components/ui/icons';
+import { DeckIcon } from '@/components/ui/icons';
 import { DeckComposer } from '@/components/composer/deck-composer';
 import { DeckCard } from '@/components/library/deck-card';
 import { CardGrid, EmptyState, LibraryPage, LibrarySection } from '@/components/library/page-parts';
-import { ProjectCard } from '@/components/library/project-card';
 import { COMPOSE_PARAM, isComposeRequested } from '@/lib/library-menu';
 import { librarySource } from '@/mocks/sources';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 /**
- * Главная: поле генерации, недавние презентации всех проектов и сами проекты. С `?compose=1`
- * (кнопка «Новая презентация») поле сразу в фокусе. Презентация, начатая здесь, живёт вне
- * проектов; шаблон для неё — любой из библиотеки или новый файл прямо в поле.
+ * Главная: поле генерации и недавние презентации с обложками. История чатов и закреплённые
+ * проекты — в боковой панели, все проекты — на своей странице. С `?compose=1` (кнопка
+ * «Новая презентация») поле сразу в фокусе. Презентация, начатая здесь, живёт вне проектов;
+ * шаблон для неё — любой из библиотеки или новый файл прямо в поле.
  */
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
   const [query, t, projects, decks, templates] = await Promise.all([
@@ -65,22 +65,6 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         ) : (
           <EmptyState icon={DeckIcon} title={t('recentEmpty.title')}>
             {t('recentEmpty.body')}
-          </EmptyState>
-        )}
-      </LibrarySection>
-
-      <LibrarySection id="home-projects" title={t('projects')} count={projects.length}>
-        {projects.length > 0 ? (
-          <CardGrid>
-            {projects.map((project) => (
-              <li key={project.projectId} className="min-w-0">
-                <ProjectCard project={project} />
-              </li>
-            ))}
-          </CardGrid>
-        ) : (
-          <EmptyState icon={FolderIcon} title={t('projectsEmpty.title')}>
-            {t('projectsEmpty.body')}
           </EmptyState>
         )}
       </LibrarySection>

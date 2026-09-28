@@ -272,6 +272,24 @@ describe('createDeckConversations', () => {
     expect(second?.request.model).toEqual(qwen);
   });
 
+  it('«Собрать заново» — новая сборка с тем же брифом; до первой сборки — ничего', async () => {
+    const { threads, runs, conversations, kinds } = setup();
+    const threadId = conversations.start(input(LONG));
+    await vi.runAllTimersAsync();
+    const before = kinds(threadId)?.length ?? 0;
+    conversations.again(threadId, 'Собери заново');
+    await vi.runAllTimersAsync();
+
+    const built = runsOf(threads, runs, threadId);
+    expect(built).toHaveLength(2);
+    expect(built[1]?.request.brief).toBe(LONG);
+    expect(kinds(threadId)?.slice(before)).toEqual(['user', 'agent', 'work', 'result']);
+
+    const fresh = threads.create('');
+    conversations.again(fresh, 'Собери заново');
+    expect(threads.get(fresh)?.messages).toEqual([]);
+  });
+
   it('разговор без сборки (начат в панели) — модели у него нет', () => {
     const { threads, conversations } = setup();
     expect(conversations.modelOf(threads.create(''))).toBeUndefined();

@@ -1,5 +1,4 @@
 {
-  "name": "Assistant",
   "log": "Conversation with the assistant",
   "empty": "Ask for a change to the deck — the assistant answers here.",
   "user": {
@@ -35,6 +34,7 @@
   },
   "work": {
     "starting": "Starting",
+    "finishing": "Finishing",
     "stage": "{stage}…",
     "layingOut": "Laying out slides: {done} of {total}",
     "done": "The deck is ready",
@@ -64,14 +64,13 @@
   },
   "build": {
     "elapsed": "{time} of {budget}",
-    "doneIn": "in {time}",
     "stages": "Build stages",
     "slides": "Slides as they are laid out",
     "slide": "Slide {number}",
-    "planning": "The agent is planning the deck…",
     "variantNote": "“{variant}” variant · {count, plural, one {# slide} other {# slides}}",
     "galleryTitle": "Slides as they are laid out",
-    "galleryNote": "The “{variant}” variant. The other two are built from the same plan."
+    "galleryNote": "The “{variant}” variant. The other two are built from the same plan.",
+    "doneTitle": "Built the deck in {time}"
   },
   "ask": {
     "keys": "1–{count} and Enter",
@@ -142,21 +141,20 @@
     "leadTimed": "Done in {time}. All three come from one plan — I recommend “{variant}”.",
     "reasonClean": "Its audit is clean.",
     "reasonFewest": "It has the fewest audit findings.",
-    "recommended": "Recommended",
     "recommendedInline": "recommended",
     "current": "open",
     "auditClean": "Audit is clean",
     "errors": "{count, plural, one {# error} other {# errors}}",
     "warnings": "{count, plural, one {# warning} other {# warnings}}",
     "slides": "{count, plural, one {# slide} other {# slides}}",
-    "open": "Open “{variant}” in the editor",
     "switchTo": "Open “{variant}”",
     "download": "Download",
     "present": "Present",
     "browse": "All slides",
     "galleryNote": "“{variant}” variant · {count, plural, one {# slide} other {# slides}}",
     "loadFailed": "Could not open the variant. Try selecting it again.",
-    "substituted": "Demo mode doesn’t build decks itself: the variants are ready-made demo decks, not laid out with the chosen template."
+    "substituted": "Demo mode doesn’t build decks itself: the variants are ready-made demo decks, not laid out with the chosen template.",
+    "edit": "Open in editor"
   },
   "slides": {
     "close": "Close",
@@ -191,5 +189,11 @@
     "staleElements": "{label} — the objects were deleted and will not be sent",
     "mentionSlide": "slide {number}",
     "mentionOnSlide": "{what} on slide {number}"
+  },
+  "actions": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "edit": "Edit and send again",
+    "thinking": "Thinking…"
   }
 }

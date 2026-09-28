@@ -11,7 +11,7 @@ import { createVariantReview } from '@/lib/variant-review';
 import { createHttpGenerator } from '@/lib/http-generation';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
 import { deckSource } from '@/mocks/sources';
-import { apiBaseUrl } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
 import { templateLayoutsFromIr } from '@/lib/template-profile';
 
@@ -23,7 +23,7 @@ import { templateLayoutsFromIr } from '@/lib/template-profile';
 async function registerTemplate(file: File): Promise<TemplateSummary> {
   const form = new FormData();
   form.set('file', file);
-  const response = await fetch(`${apiBaseUrl}/files/template`, { method: 'POST', body: form });
+  const response = await apiFetch('/files/template', { method: 'POST', body: form });
   if (!response.ok) {
     let detail = '';
     try {

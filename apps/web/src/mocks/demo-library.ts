@@ -25,7 +25,8 @@ import { createDemoDeckSource } from './demo-deck-source';
  * Демо-библиотека: три шаблона, два проекта и несколько презентаций, часть — вне проектов.
  * Второй и третий шаблоны — тот же демо-профиль в другой палитре: настоящих .pptx за ними нет, а
  * меню нужно показать, что шаблоны различаются стилем. У «Отдела продаж» два шаблона; третий не
- * прикреплён ни к одному проекту — им свёрстана презентация вне проектов.
+ * прикреплён ни к одному проекту — им свёрстана презентация вне проектов. «ЛЦТ-2026» закреплён,
+ * чтобы боковая панель сразу показывала и закреплённый проект, и историю остальных.
  */
 
 const HOUR = 60 * 60 * 1000;
@@ -205,6 +206,8 @@ interface DemoProject {
   readonly templateIds: readonly string[];
   /** Когда проект создан: это время его правки, пока в нём нет презентаций. */
   readonly createdAt: number;
+  readonly pinned: boolean;
+  readonly pinnedAt: number | null;
 }
 
 /** Разные иконки и цвета, чтобы в меню было видно, как проекты различаются. */
@@ -215,6 +218,8 @@ const PROJECTS: readonly DemoProject[] = [
     appearance: { icon: 'rocket', color: 'purple' },
     templateIds: [NEUTRAL.templateId],
     createdAt: NOW - 12 * DAY,
+    pinned: true,
+    pinnedAt: NOW - 6 * DAY,
   },
   {
     projectId: 'sales',
@@ -222,6 +227,8 @@ const PROJECTS: readonly DemoProject[] = [
     appearance: { icon: 'chart', color: 'orange' },
     templateIds: [WARM.templateId, NEUTRAL.templateId],
     createdAt: NOW - 20 * DAY,
+    pinned: false,
+    pinnedAt: null,
   },
 ];
 
@@ -259,6 +266,8 @@ function summaryOfProject(
     ),
     deckCount: own.length,
     updatedAt: Math.max(project.createdAt, ...own.map((entry) => entry.updatedAt)),
+    pinned: project.pinned,
+    pinnedAt: project.pinnedAt,
   };
 }
 
@@ -274,13 +283,25 @@ function checkedName(name: string): string {
   return trimmed;
 }
 
-/** Проект после правки. Правка проверяется целиком до того, как что-то поменяется. */
+/**
+ * Проект после правки. Правка проверяется целиком до того, как что-то поменяется.
+ * Время правки проекта — время правки его презентаций: имя, иконка и закрепление его не двигают.
+ */
 function patched(project: DemoProject, patch: ProjectPatch): DemoProject {
-  let { name, appearance } = project;
+  if (patch.pinned !== undefined && typeof patch.pinned !== 'boolean') {
+    throw new InvalidProjectPatchError('pinned');
+  }
+  let { name, appearance, pinned, pinnedAt } = project;
   if (patch.name !== undefined) name = checkedName(patch.name);
   if (patch.appearance !== undefined) appearance = parseProjectAppearance(patch.appearance);
-  // Время правки проекта — время правки его презентаций: имя и иконка его не двигают.
-  return { ...project, name, appearance };
+  if (patch.pinned === true) {
+    pinned = true;
+    pinnedAt = Date.now();
+  } else if (patch.pinned === false) {
+    pinned = false;
+    pinnedAt = null;
+  }
+  return { ...project, name, appearance, pinned, pinnedAt };
 }
 
 /**
@@ -359,6 +380,8 @@ export function createDemoLibrary({ seedDemo = true }: { seedDemo?: boolean } = 
         appearance: parseProjectAppearance(input.appearance),
         templateIds: [],
         createdAt: Date.now(),
+        pinned: false,
+        pinnedAt: null,
       };
       projects = [...projects, project];
       return structuredClone(summary(project));

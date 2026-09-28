@@ -2,7 +2,6 @@
   "label": "What is the new presentation about?",
   "placeholder": "What is the presentation about? Who is it for and what should it achieve",
   "submit": "Generate",
-  "sending": "Starting generation",
   "needTemplate": "Choose a template first: the presentation takes its style",
   "attach": "Attach material or a template",
   "attachHint": "Text: {text}. Tables: {table}. Template: {template}",
@@ -54,5 +53,9 @@
     "search": "Find a model",
     "notFound": "Nothing found",
     "pinned": "Selected and default"
+  },
+  "prompt": {
+    "stop": "Stop",
+    "sending": "Sending…"
   }
 }

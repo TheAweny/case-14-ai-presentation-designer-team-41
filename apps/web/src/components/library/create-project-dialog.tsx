@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { createProjectAction, type CreateProjectResult } from '@/app/(library)/actions';
 import { ProjectAppearancePicker } from '@/components/library/project-appearance-picker';
 import { ProjectIcon } from '@/components/library/project-icon';
+import { PlusIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +21,21 @@ import { DEFAULT_PROJECT_APPEARANCE, type ProjectAppearance } from '@/lib/projec
 import { cn } from '@/lib/utils';
 
 const FAILED: CreateProjectResult = { ok: false, reason: 'invalid' };
+
+/** Кнопка с диалогом. Проект создают на странице проектов, а не из боковой панели. */
+export function CreateProjectButton({ className }: { className?: string }) {
+  const t = useTranslations('library');
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button type="button" size="lg" className={className} onClick={() => setOpen(true)}>
+        <PlusIcon data-icon="inline-start" />
+        {t('newProject')}
+      </Button>
+      <CreateProjectDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
 
 /**
  * Новый проект, как в ChatGPT: имя и слева от него иконка — щелчок по ней открывает выбор иконки

@@ -5,6 +5,7 @@ import {
   chosenTemplate,
   defaultTemplate,
   templateGroups,
+  templateTitle,
   type ComposerAttachments,
 } from './composer-templates';
 
@@ -112,5 +113,14 @@ describe('addComposerFiles', () => {
   it('файлы без шаблона чип не трогают', () => {
     const update = addComposerFiles(none, [file('data.csv')]);
     expect(update.templateFile).toBeNull();
+  });
+});
+
+describe('templateTitle', () => {
+  it('drops the template extension, keeping the name', () => {
+    expect(templateTitle('Изумрудный минимал.potx')).toBe('Изумрудный минимал');
+    expect(templateTitle('Brand.PPTX')).toBe('Brand');
+    expect(templateTitle('notes.pptx.txt')).toBe('notes.pptx.txt');
+    expect(templateTitle('.pptx')).toBe('.pptx');
   });
 });

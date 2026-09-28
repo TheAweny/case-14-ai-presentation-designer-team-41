@@ -9,6 +9,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { SLIDE_COUNT_RANGE } from '@/lib/deck-generator';
 import { cn } from '@/lib/utils';
+import { PROMPT_CHIP } from './prompt-box';
 
 const TICKS = Array.from(
   { length: SLIDE_COUNT_RANGE.max - SLIDE_COUNT_RANGE.min + 1 },
@@ -41,9 +42,9 @@ export function SlideCountMenu({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="lg"
-          className="shrink-0 rounded-full pr-3 pl-2.5 font-normal text-muted-foreground tabular-nums"
+          className={cn(PROMPT_CHIP, 'shrink-0 tabular-nums')}
           aria-label={t('label')}
         >
           <LayersIcon />

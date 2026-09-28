@@ -6,15 +6,23 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type DragEvent,
-  type FormEvent,
-  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
 } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import { ModelMenu } from '@/components/composer/model-menu';
-import { useAurora } from '@/components/composer/use-aurora';
+import {
+  PromptBox,
+  PromptChips,
+  PromptField,
+  PromptNote,
+  PromptSubmit,
+  PromptToolbar,
+  usePromptBox,
+} from '@/components/composer/prompt-box';
+import { promptAction } from '@/components/composer/prompt-keys';
 import { ProjectIcon } from '@/components/library/project-icon';
 import { useLibraryProjects } from '@/components/library/library-projects';
 import { PaletteStrip } from '@/components/library/template-swatch';
@@ -28,10 +36,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   AgentIcon,
-  AttachIcon,
+  PlusIcon,
   BackIcon,
-  SendIcon,
-  StopIcon,
+  RetryIcon,
+  ScrollDownIcon,
   TemplateIcon,
 } from '@/components/ui/icons';
 import type { AssistantThread, ThreadMessage } from '@/lib/assistant-threads';
@@ -39,7 +47,6 @@ import { addContentFiles, CONTENT_FILE_ACCEPT } from '@/lib/deck-generator';
 import type { TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
-import { cn } from '@/lib/utils';
 import { BuildCard } from './build-card';
 import { ResultCard } from './result-card';
 import {
@@ -56,6 +63,7 @@ import {
   AssumptionCard,
   ImportCard,
   TemplateCard,
+  ThinkingLine,
   ThreadDensityContext,
   UserMessage,
 } from './thread-messages';
@@ -64,6 +72,20 @@ import {
 const SUGGESTIONS = ['shorter', 'numbers', 'simpler'] as const;
 
 /** Первая строка брифа — название разговора. */
+/**
+ * Название разговора: колода, которую агент собрал (название советованного варианта), а пока её
+ * нет — первая строка брифа.
+ */
+function conversationTitle(thread: AssistantThread): string | null {
+  const done = thread.messages.findLast((message) => message.kind === 'result');
+  if (done?.kind === 'result') {
+    const { variants, recommended } = done.result;
+    const title = (variants.find((item) => item.variant === recommended) ?? variants[0])?.title;
+    if (title) return title;
+  }
+  return workingTitle(thread);
+}
+
 function workingTitle(thread: AssistantThread): string | null {
   const first = thread.messages[0];
   if (first?.kind !== 'user') return null;
@@ -101,6 +123,11 @@ export function DeckChat({
   const hydrated = useHydrated();
   const thread = useThread(threadId);
   const projects = useLibraryProjects();
+  // «Изменить» у реплики: текст возвращается в поле. `key` различает два нажатия на одну реплику.
+  const [edit, setEdit] = useState<EditRequest | null>(null);
+  // Ленту прокрутили вверх — над полем кнопка «К последнему». Прокручивает ленту она сама.
+  const [away, setAway] = useState(false);
+  const jump = useRef<() => void>(() => undefined);
 
   if (!hydrated) return <div className="min-h-dvh md:h-full md:min-h-0" />;
   if (!thread) {
@@ -139,7 +166,7 @@ export function DeckChat({
           </Link>
         </Button>
         <h1 className="min-w-0 truncate text-sm font-medium">
-          {workingTitle(thread) ?? t('untitled')}
+          {conversationTitle(thread) ?? t('untitled')}
         </h1>
         {project ? (
           <span className="flex shrink-0 items-center gap-1 rounded-full py-0.5 pr-2 pl-1 text-xs text-muted-foreground ring-1 ring-border">
@@ -148,28 +175,67 @@ export function DeckChat({
           </span>
         ) : null}
       </header>
-      <ChatLog thread={thread} templates={templates} />
-      <ChatComposer thread={thread} />
+      <ChatLog
+        thread={thread}
+        templates={templates}
+        onEdit={(text) => setEdit({ text, key: Date.now() })}
+        onAwayChange={setAway}
+        jumpRef={jump}
+      />
+      <ChatComposer
+        thread={thread}
+        edit={edit}
+        above={away ? <JumpToLatest onJump={() => jump.current()} /> : null}
+      />
     </div>
   );
+}
+
+/** Текст реплики, который вернули в поле кнопкой «Изменить». */
+interface EditRequest {
+  readonly text: string;
+  readonly key: number;
 }
 
 function ChatLog({
   thread,
   templates,
+  onEdit,
+  onAwayChange,
+  jumpRef,
 }: {
   thread: AssistantThread;
   templates: readonly TemplateSummary[];
+  onEdit: (text: string) => void;
+  /** Ленту увели от низа или вернули к нему. */
+  onAwayChange: (away: boolean) => void;
+  /** Сюда лента кладёт «прокрутить к последнему» — для кнопки над полем. */
+  jumpRef: RefObject<() => void>;
 }) {
   const t = useTranslations('deckChat');
   const list = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const follow = (atBottom: boolean) => {
+    stick.current = atBottom;
+    onAwayChange(!atBottom);
+  };
+  const toBottom = () => {
+    follow(true);
+    const element = list.current;
+    if (element && scrollsItself(element)) {
+      element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+    } else end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  };
   const { messages, threadId } = thread;
   const runId = latestRunId(thread);
   const last = messages.at(-1);
   const lastUserId = messages.findLast((message) => message.kind === 'user')?.id;
   const seenUserId = useRef(lastUserId);
+
+  useEffect(() => {
+    jumpRef.current = toBottom;
+  });
 
   // Лента держится у низа, пока человек сам не прокрутил её вверх. Его новая реплика — из поля,
   // из карточки допущения или подсказок — возвращает ленту вниз: ответ на неё будет там.
@@ -178,6 +244,7 @@ function ChatLog({
     if (lastUserId !== seenUserId.current) {
       seenUserId.current = lastUserId;
       stick.current = true;
+      onAwayChange(false);
     }
     if (!element || !stick.current) return;
     if (scrollsItself(element)) element.scrollTop = element.scrollHeight;
@@ -190,7 +257,7 @@ function ChatLog({
       const element = list.current;
       const page = document.scrollingElement;
       if (!element || !page || scrollsItself(element)) return;
-      stick.current = page.scrollHeight - page.scrollTop - window.innerHeight < 160;
+      follow(page.scrollHeight - page.scrollTop - window.innerHeight < 160);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -204,25 +271,26 @@ function ChatLog({
       aria-live="polite"
       onScroll={(event) => {
         const element = event.currentTarget;
-        stick.current = element.scrollHeight - element.scrollTop - element.clientHeight < 64;
+        follow(element.scrollHeight - element.scrollTop - element.clientHeight < 64);
       }}
       className="flex-1 md:min-h-0 md:overflow-y-auto"
     >
       <ThreadDensityContext.Provider value="comfortable">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-8 pb-6">
-          {messages.map((message, index) => {
-            const agentStarts =
-              message.kind !== 'user' && (index === 0 || messages[index - 1]?.kind === 'user');
-            return (
-              <div
-                key={message.id}
-                className="assistant-rise flex flex-col gap-2.5 motion-reduce:animate-none"
-              >
-                {agentStarts ? <AgentName /> : null}
-                <ChatMessage threadId={threadId} message={message} latestRunId={runId} />
-              </div>
-            );
-          })}
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className="assistant-rise flex flex-col gap-2.5 motion-reduce:animate-none"
+            >
+              <ChatMessage
+                threadId={threadId}
+                message={message}
+                latestRunId={runId}
+                onEdit={onEdit}
+              />
+            </div>
+          ))}
+          {last?.kind === 'user' ? <ThinkingLine /> : null}
           {last?.kind === 'result' ? (
             <NextSteps threadId={threadId} templates={templates} runId={last.result.runId} />
           ) : null}
@@ -243,14 +311,16 @@ function ChatMessage({
   threadId,
   message,
   latestRunId: latest,
+  onEdit,
 }: {
   threadId: string;
   message: ThreadMessage;
   latestRunId: string | null;
+  onEdit: (text: string) => void;
 }) {
   switch (message.kind) {
     case 'user':
-      return <UserMessage message={message} />;
+      return <UserMessage message={message} onEdit={onEdit} />;
     case 'agent':
       return <AgentMessage text={message.text} />;
     case 'work':
@@ -281,16 +351,6 @@ function ChatMessage({
         </>
       );
   }
-}
-
-function AgentName() {
-  const t = useTranslations('assistant');
-  return (
-    <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-      <AgentIcon className="size-4 text-[var(--aurora-color,var(--foreground))]" aria-hidden />
-      {t('name')}
-    </p>
-  );
 }
 
 /**
@@ -356,6 +416,16 @@ function NextSteps({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          className="rounded-full font-normal"
+          onClick={() => deckConversations.again(threadId, t('againSaid'))}
+        >
+          <RetryIcon data-icon="inline-start" />
+          {t('again')}
+        </Button>
         {SUGGESTIONS.map((id) => (
           <Button
             key={id}
@@ -375,17 +445,56 @@ function NextSteps({
 
 /**
  * Поле разговора. Вопрос агента ждёт ответа — текст уходит ответом. Иначе это пожелание к колоде:
- * агент пересоберёт её с ним. Пока сборка идёт, кнопка отправки пустого поля — «Стоп».
+ * агент пересоберёт её с ним, и идущую сборку сменит новая. Пока сборка идёт и поле пустое,
+ * кнопка — «Стоп»; начали печатать — снова «Отправить», набранное не пропадает.
  */
-function ChatComposer({ thread }: { thread: AssistantThread }) {
+/** Кнопка «К последнему сообщению»: висит над полем по центру, не занимая места. */
+function JumpToLatest({ onJump }: { onJump: () => void }) {
+  const t = useTranslations('deckChat');
+  return (
+    <div className="pointer-events-none absolute inset-x-0 -top-12 flex justify-center">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-lg"
+        onClick={onJump}
+        aria-label={t('toBottom')}
+        title={t('toBottom')}
+        className="assistant-rise pointer-events-auto rounded-full bg-background shadow-sm motion-reduce:animate-none"
+      >
+        <ScrollDownIcon />
+      </Button>
+    </div>
+  );
+}
+
+function ChatComposer({
+  thread,
+  edit,
+  above,
+}: {
+  thread: AssistantThread;
+  /** Реплика, которую вернули в поле кнопкой «Изменить». */
+  edit: EditRequest | null;
+  /** Что висит над полем: кнопка «К последнему». */
+  above: ReactNode;
+}) {
   const t = useTranslations('deckChat.input');
-  const root = useRef<HTMLDivElement>(null);
-  const field = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState('');
+
+  // «Изменить»: текст реплики — в поле, курсор — в конец, чтобы сразу дописать.
+  useEffect(() => {
+    if (!edit) return;
+    setText(edit.text);
+    const element = field.current;
+    if (!element) return;
+    element.focus();
+    requestAnimationFrame(() => element.setSelectionRange(edit.text.length, edit.text.length));
+  }, [edit]);
   const [files, setFiles] = useState<readonly File[]>([]);
   const [rejected, setRejected] = useState<readonly string[]>([]);
-  const [dragging, setDragging] = useState(false);
   // Модель следующей сборки: сначала та, что выбрали у поля на главной.
   const [model, setModel] = useState<ModelRef | null>(
     () => deckConversations.modelOf(thread.threadId) ?? null,
@@ -394,31 +503,23 @@ function ChatComposer({ thread }: { thread: AssistantThread }) {
   const run = useRun(latestRunId(thread));
   const running = run?.phase === 'running';
   const pending = assistantThreads.pendingQuestion(thread.threadId);
-  const ready = text.trim() !== '' || files.length > 0;
-  const stop = running && !ready;
-  const aurora = useAurora(root, { ready, sending: running });
-
-  useLayoutEffect(() => {
-    const element = field.current;
-    if (!element) return;
-    element.style.height = 'auto';
-    element.style.height = `${element.scrollHeight}px`;
-  }, [text]);
+  // На вопрос отвечают словами: файлы к ответу не прикладывают.
+  const hasInput = text.trim() !== '' || (!pending && files.length > 0);
+  const action = promptAction({ hasInput, running });
+  const box = usePromptBox({ ready: hasInput, busy: running });
 
   const send = () => {
-    if (stop && run) {
-      generationRuns.cancel(run.runId);
+    if (action.action === 'stop') {
+      if (run) generationRuns.cancel(run.runId);
       return;
     }
+    if (!hasInput) return;
     const message = text.trim();
-    if (message === '' && files.length === 0) return;
+    setText('');
     if (pending) {
-      if (message === '') return;
-      setText('');
       assistantThreads.answer(thread.threadId, pending.id, { optionId: null, text: message });
       return;
     }
-    setText('');
     const attached = files;
     setFiles([]);
     setRejected([]);
@@ -429,88 +530,59 @@ function ChatComposer({ thread }: { thread: AssistantThread }) {
     const update = addContentFiles(files, added);
     setFiles(update.files);
     setRejected(update.rejected);
-    if (update.files.length > files.length) aurora.kick();
-  };
-
-  const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files');
-  const onDragOver = (event: DragEvent) => {
-    if (!carriesFiles(event) || pending) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-    setDragging(true);
-  };
-  const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
-  };
-  const onDrop = (event: DragEvent) => {
-    if (!carriesFiles(event) || pending) return;
-    event.preventDefault();
-    setDragging(false);
-    addFiles(Array.from(event.dataTransfer.files));
-  };
-
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    send();
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      send();
-    }
+    if (update.files.length > files.length) box.aurora.kick();
   };
 
   return (
     <div className="sticky bottom-0 z-10 shrink-0 bg-background px-4 pt-2 pb-4 md:static md:bg-transparent md:pt-0">
-      <div className="mx-auto w-full max-w-3xl">
-        <div
-          ref={root}
-          {...aurora.handlers}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          className="aurora rounded-2xl"
+      <div className="relative mx-auto w-full max-w-3xl">
+        {above}
+        <PromptBox
+          box={box}
+          onSubmit={send}
+          onFiles={pending ? undefined : addFiles}
+          dropLabel={t('dropHere')}
         >
-          <div aria-hidden className="aurora-halo" />
-          <div aria-hidden className="aurora-ring" />
-          <form
-            onSubmit={onSubmit}
-            className="relative z-1 flex flex-wrap items-end gap-2 rounded-[inherit] bg-card p-2 pl-4 ring-1 ring-border"
-          >
-            <textarea
-              ref={field}
-              value={text}
-              rows={1}
-              aria-label={t('label')}
-              placeholder={
-                pending
-                  ? t('placeholderAnswer')
-                  : running
-                    ? t('placeholderRunning')
-                    : t('placeholder')
-              }
-              onChange={(event) => {
-                setText(event.currentTarget.value);
-                aurora.kick();
-              }}
-              onKeyDown={onKeyDown}
-              className={cn(
-                'max-h-48 min-h-9 flex-1 resize-none overflow-y-auto bg-transparent py-2',
-                'text-[0.9375rem] text-foreground outline-none placeholder:text-muted-foreground',
-              )}
-            />
-            {files.length > 0 ? (
-              <ul aria-label={t('files')} className="order-first flex basis-full flex-wrap gap-1.5">
-                {files.map((file, index) => (
-                  <AttachmentChip
-                    key={`${file.name}-${file.size}-${file.lastModified}`}
-                    attachment={{ kind: 'file', name: file.name, size: file.size }}
-                    onRemove={() => setFiles((current) => current.filter((_, at) => at !== index))}
+          {files.length > 0 ? (
+            <PromptChips label={t('files')}>
+              {files.map((file, index) => (
+                <AttachmentChip
+                  key={`${file.name}-${file.size}-${file.lastModified}`}
+                  attachment={{ kind: 'file', name: file.name, size: file.size }}
+                  onRemove={() => setFiles((current) => current.filter((_, at) => at !== index))}
+                />
+              ))}
+            </PromptChips>
+          ) : null}
+          <PromptField
+            value={text}
+            onValueChange={setText}
+            fieldRef={field}
+            label={t('label')}
+            placeholder={
+              pending
+                ? t('placeholderAnswer')
+                : running
+                  ? t('placeholderRunning')
+                  : t('placeholder')
+            }
+          />
+          <PromptToolbar
+            end={
+              <>
+                {buildsDecks ? (
+                  <ModelMenu
+                    value={model}
+                    onChange={(next) => {
+                      setModel(next);
+                      deckConversations.setModel(thread.threadId, next);
+                    }}
                   />
-                ))}
-              </ul>
-            ) : null}
+                ) : null}
+                <PromptSubmit state={action} label={t('send')} stopLabel={t('stop')} />
+              </>
+            }
+          >
             <Button
               type="button"
               variant="ghost"
@@ -520,7 +592,7 @@ function ChatComposer({ thread }: { thread: AssistantThread }) {
               onClick={() => picker.current?.click()}
               className="rounded-full text-muted-foreground"
             >
-              <AttachIcon />
+              <PlusIcon />
             </Button>
             <input
               ref={picker}
@@ -535,41 +607,11 @@ function ChatComposer({ thread }: { thread: AssistantThread }) {
                 event.currentTarget.value = '';
               }}
             />
-            {buildsDecks ? (
-              <ModelMenu
-                value={model}
-                onChange={(next) => {
-                  setModel(next);
-                  deckConversations.setModel(thread.threadId, next);
-                }}
-              />
-            ) : null}
-            <Button
-              type="submit"
-              size="icon-lg"
-              disabled={!stop && !ready}
-              aria-label={stop ? t('stop') : t('send')}
-              className="rounded-full"
-            >
-              {stop ? (
-                <StopIcon />
-              ) : (
-                <SendIcon className={cn('[--icon-stroke:2]', running && 'animate-pulse')} />
-              )}
-            </Button>
-          </form>
-          {dragging ? (
-            <div className="pointer-events-none absolute inset-0 z-3 grid place-items-center rounded-[inherit] border border-dashed border-foreground/40 bg-card/90 text-sm text-foreground">
-              {t('dropHere')}
-            </div>
-          ) : null}
-        </div>
+          </PromptToolbar>
+        </PromptBox>
         {rejected.length > 0 ? (
-          <p role="alert" className="mt-1 px-1 text-xs text-destructive">
-            {t('rejected', { names: rejected.join(', ') })}
-          </p>
+          <PromptNote>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
         ) : null}
-        <p className="mt-2 text-center text-[0.6875rem] text-muted-foreground">{t('hint')}</p>
       </div>
     </div>
   );

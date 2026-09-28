@@ -44,6 +44,13 @@ export interface ProjectSummary {
   readonly deckCount: number;
   /** Последняя правка любой презентации проекта, а без них — создание проекта, мс с эпохи. */
   readonly updatedAt: number;
+  /** Закреплён в боковой панели. Закрепление не двигает `updatedAt`. */
+  readonly pinned: boolean;
+  /**
+   * Когда проект закрепили, мс с эпохи. null — не закреплён. В панели недавно
+   * закреплённые стоят сверху: отдельного порядка перетаскиванием нет.
+   */
+  readonly pinnedAt: number | null;
 }
 
 export interface DeckSummary {
@@ -112,6 +119,8 @@ export interface NewProject {
 export interface ProjectPatch {
   readonly name?: string;
   readonly appearance?: ProjectAppearance;
+  /** Закрепить или открепить в боковой панели. */
+  readonly pinned?: boolean;
 }
 
 /** Правка проекта не принята: например, пустое имя. Поле — какое именно значение не подошло. */
@@ -161,9 +170,9 @@ export interface LibrarySource {
   /** Шаблон по id. Шаблона нет — `TemplateNotFoundError`. */
   getTemplate(templateId: string): Promise<TemplateSummary>;
   /**
-   * Создать пустой проект: без шаблонов и презентаций. Имя обрезается по краям; пустое или
-   * длиннее `PROJECT_NAME_MAX_LENGTH` — `InvalidProjectPatchError`. Незнакомые иконка и цвет
-   * сводятся к значениям по умолчанию.
+   * Создать пустой проект: без шаблонов, презентаций и без закрепления. Имя обрезается по
+   * краям; пустое или длиннее `PROJECT_NAME_MAX_LENGTH` — `InvalidProjectPatchError`.
+   * Незнакомые иконка и цвет сводятся к значениям по умолчанию.
    */
   createProject(input: NewProject): Promise<ProjectSummary>;
   /**
@@ -183,8 +192,10 @@ export interface LibrarySource {
    */
   importTemplate(file: { readonly name: string; readonly size: number }): Promise<TemplateSummary>;
   /**
-   * Переименовать проект или сменить его иконку и цвет. Отдаёт проект после правки. Имя
-   * обрезается по краям; пустое или длиннее `PROJECT_NAME_MAX_LENGTH` — `InvalidProjectPatchError`, проекта нет — `ProjectNotFoundError`.
+   * Переименовать проект, сменить его иконку и цвет или закрепить в боковой панели. Отдаёт
+   * проект после правки. Имя обрезается по краям; пустое или длиннее `PROJECT_NAME_MAX_LENGTH`
+   * — `InvalidProjectPatchError`, небулево `pinned` — тоже. Проекта нет —
+   * `ProjectNotFoundError`. Ни имя, ни иконка, ни закрепление не двигают время правки.
    */
   updateProject(projectId: string, patch: ProjectPatch): Promise<ProjectSummary>;
   /**

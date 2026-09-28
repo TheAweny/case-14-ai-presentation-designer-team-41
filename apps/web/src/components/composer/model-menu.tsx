@@ -12,6 +12,7 @@ import {
   SettingsIcon,
 } from '@/components/ui/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
 import type { ModelRef } from '@/lib/model-settings';
@@ -25,6 +26,7 @@ import {
   type ModelRow,
   type WriterModels,
 } from '@/lib/writer-models';
+import { PROMPT_PILL } from './prompt-box';
 
 /**
  * Какой моделью писать текст. Стоит у кнопки отправки, как в чатах. Список — модели подключений
@@ -57,6 +59,26 @@ export function ModelMenu({
   );
 
   if (models.count === 0) {
+    // В узкой панели подпись не помещается — значок с подсказкой.
+    if (compact) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="rounded-full text-muted-foreground"
+              aria-label={t('connect')}
+              onClick={() => openSettings('models')}
+            >
+              <ConnectIcon />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('connect')}</TooltipContent>
+        </Tooltip>
+      );
+    }
     return (
       <Button
         type="button"
@@ -81,7 +103,7 @@ export function ModelMenu({
           type="button"
           variant="ghost"
           size={compact ? 'default' : 'lg'}
-          className={cn(trigger, 'data-[state=open]:bg-muted')}
+          className={cn(PROMPT_PILL, compact ? 'max-w-36 px-2.5' : 'max-w-44')}
           aria-label={selected ? t('change', { model: selected.modelId }) : t('menu')}
           title={selected?.modelId}
         >

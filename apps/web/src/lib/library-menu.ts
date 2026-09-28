@@ -7,6 +7,8 @@
  */
 
 export const deckHref = (deckId: string) => `/decks/${encodeURIComponent(deckId)}`;
+/** Все проекты. Страница одного проекта — `projectHref`. */
+export const PROJECTS_HREF = '/projects';
 export const projectHref = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
 /**
  * Параметр адреса главной и страницы проекта: с ним страница открывается с полем генерации в
@@ -47,6 +49,8 @@ export type LibraryMenuActionId =
   | 'openInNewTab'
   | 'present'
   | 'newDeck'
+  | 'pin'
+  | 'unpin'
   | 'rename'
   | 'moveToProject'
   | 'appearance'
@@ -103,7 +107,7 @@ export interface MoveTarget<P> {
 }
 
 /**
- * Подменю «Переместить в проект»: проекты в порядке сайдбара, «Без проекта» — последней
+ * Подменю «Переместить в проект»: проекты в переданном порядке, «Без проекта» — последней
  * строкой. Отмечено ровно то место, где презентация сейчас. Если её проекта в списке нет
  * (его только что удалили), не отмечено ничего: перенести можно куда угодно.
  */
@@ -123,7 +127,7 @@ export function moveTargets<P extends { readonly projectId: string }>(
  */
 export function projectMenu(
   projectId: string,
-  { current = false }: { current?: boolean } = {},
+  { current = false, pinned = false }: { current?: boolean; pinned?: boolean } = {},
 ): LibraryMenu {
   const href = projectHref(projectId);
   const key = (value: LibraryObjectKey): Pick<LibraryMenuItem, 'key'> =>
@@ -135,7 +139,12 @@ export function projectMenu(
       { id: 'openInNewTab', href },
       { id: 'newDeck', href: newDeckInProjectHref(projectId) },
     ],
-    [{ id: 'rename', ...key('F2') }, { id: 'appearance' }, { id: 'copyLink', href }],
+    [
+      { id: pinned ? 'unpin' : 'pin' },
+      { id: 'rename', ...key('F2') },
+      { id: 'appearance' },
+      { id: 'copyLink', href },
+    ],
     // Прикрепляют шаблон на вкладке «Шаблоны»: там и загрузка файла, и выбор из загруженных.
     [{ id: 'attachTemplate', href: projectTemplatesHref(projectId) }],
     [{ id: 'delete', destructive: true, ...key('Delete') }],

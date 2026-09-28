@@ -1,26 +1,14 @@
 'use client';
 
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type CSSProperties,
-  type DragEvent,
-  type FormEvent,
-  type KeyboardEvent,
-} from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import { deckConversations } from '@/components/assistant/session';
 import { useWriterModels } from '@/components/settings/model-settings-store';
 import { Button } from '@/components/ui/button';
-import { AttachIcon, SendIcon, SpinnerIcon } from '@/components/ui/icons';
-import { Kbd } from '@/components/ui/kbd';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PlusIcon } from '@/components/ui/icons';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   COMPOSER_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
@@ -28,31 +16,28 @@ import {
   chosenTemplate,
   templateGroups,
 } from '@/lib/composer-templates';
+import { apiFetch } from '@/lib/api';
 import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-generator';
 import { newDeckHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
-import { effectiveModel, shortModelName } from '@/lib/writer-models';
 import { projectColorVar } from '@/lib/project-appearance';
-import { cn } from '@/lib/utils';
-import { apiBaseUrl } from '@/lib/api';
+import { effectiveModel, shortModelName } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
+import {
+  PromptBox,
+  PromptChips,
+  PromptField,
+  PromptNote,
+  PromptSubmit,
+  PromptToolbar,
+  usePromptBox,
+} from './prompt-box';
+import { promptAction } from './prompt-keys';
 import { SlideCountMenu } from './slide-count-menu';
-import { useAurora } from './use-aurora';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
-
-const noSubscribe = () => () => undefined;
-
-/** На Mac сочетание — ⌘, у остальных — Ctrl. На сервере платформы не знаем и пишем Ctrl. */
-function useIsMac(): boolean {
-  return useSyncExternalStore(
-    noSubscribe,
-    () => /Mac|iPhone|iPad/.test(navigator.platform),
-    () => false,
-  );
-}
 
 /** Расширения одного вида контента через запятую — для подсказки у скрепки. */
 function extensionsOf(kind: string): string {
@@ -71,8 +56,9 @@ function extensionsOf(kind: string): string {
  * файл: .pptx и .potx через скрепку, перетаскивание или «Загрузить шаблон…» становятся чипом
  * шаблона и заменяют выбор, пока чип не убрали. Разбирает новый файл агент в разговоре.
  *
- * Стрелка начинает разговор с агентом (`deckConversations`) и сразу открывает редактор новой
- * колоды: дальше разговор идёт в его панели «Ассистент», а слайды появляются по мере вёрстки.
+ * Стрелка (или Enter) начинает разговор с агентом (`deckConversations`) и открывает его страницу:
+ * там агент собирает колоду и отдаёт три варианта. Поле собрано из частей `prompt-box.tsx` — тех
+ * же, что в чате и в панели редактора, поэтому ведёт себя везде одинаково.
  * Файлы едут вместе с разговором, а не через адрес или хранилище. Презентация появится там, где
  * стоит поле: в проекте страницы или, на главной, вне проектов. «Аврора» светится цветом этого
  * проекта, а на главной — нейтральным серым, как панель ассистента у колоды вне проектов.
@@ -96,11 +82,7 @@ export function DeckComposer({
   const tAudience = useTranslations('assistant.audience.brief');
   const router = useRouter();
   const pathname = usePathname();
-  const mac = useIsMac();
-  const fieldId = useId();
   const rejectedId = useId();
-  const blockedId = useId();
-  const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const templatePicker = useRef<HTMLInputElement>(null);
@@ -114,7 +96,6 @@ export function DeckComposer({
   const [model, setModel] = useState<ModelRef | null>(null);
   const models = useWriterModels();
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(false);
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
@@ -123,7 +104,7 @@ export function DeckComposer({
   const selected = chosenTemplate(templates, project, pickedId);
   const hasTemplate = templateFile !== null || selected !== null;
   const ready = hasContent(text, files);
-  const aurora = useAurora(root, { ready: ready && hasTemplate, sending });
+  const box = usePromptBox({ ready: ready && hasTemplate, busy: sending });
   const glowStyle = {
     '--aurora-color': projectColorVar(project?.appearance.color ?? 'gray'),
   } as CSSProperties;
@@ -139,22 +120,14 @@ export function DeckComposer({
     nextRouter.replace(pathname, { scroll: false });
   }, [focusRequested, nextRouter, pathname]);
 
-  // Поле растёт по содержимому до своего max-height, дальше прокручивается.
-  useLayoutEffect(() => {
-    const element = field.current;
-    if (!element) return;
-    element.style.height = 'auto';
-    element.style.height = `${element.scrollHeight}px`;
-  }, [text]);
-
   const addFiles = (added: readonly File[]) => {
     if (added.length === 0) return;
     const update = addComposerFiles({ files, templateFile }, added);
     setFiles(update.files);
     setTemplateFile(update.templateFile);
     setRejected(update.rejected);
-    if (update.templateFile !== templateFile) aurora.flash();
-    else aurora.kick();
+    if (update.templateFile !== templateFile) box.aurora.flash();
+    else box.aurora.kick();
   };
 
   const submit = async () => {
@@ -163,14 +136,14 @@ export function DeckComposer({
     for (const file of files) {
       const form = new FormData();
       form.set('file', file);
-      const response = await fetch(`${apiBaseUrl}/files/content`, { method: 'POST', body: form });
+      const response = await apiFetch('/files/content', { method: 'POST', body: form });
       if (!response.ok) {
         setSending(false);
         setRejected((current) => [...current, file.name]);
         return;
       }
     }
-    // Модель подписывается в сообщении, только когда выбор показывают, т.е. моделей несколько.
+    // Выбор показывают, только когда моделей несколько: подписывать в сообщении есть смысл тогда же.
     const chosen = models ? effectiveModel(models, model) : null;
     const threadId = deckConversations.start({
       request: {
@@ -199,76 +172,19 @@ export function DeckComposer({
     router.push(newDeckHref(threadId));
   };
 
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    submit();
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      submit();
-    }
-  };
-
-  // Перетаскивание файлов на поле: подсветка, пока файлы над ним, и прикрепление при отпускании.
-  const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files');
-  const onDragOver = (event: DragEvent) => {
-    if (!carriesFiles(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-    if (!dragging) setDragging(true);
-  };
-  const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
-  };
-  const onDrop = (event: DragEvent) => {
-    if (!carriesFiles(event)) return;
-    event.preventDefault();
-    setDragging(false);
-    addFiles(Array.from(event.dataTransfer.files));
-  };
-
   return (
-    <div
-      ref={root}
-      {...aurora.handlers}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className="aurora rounded-xl"
-      style={glowStyle}
-    >
-      <div aria-hidden className="aurora-halo" />
-      <div aria-hidden className="aurora-ring" />
-      <form
-        onSubmit={onSubmit}
-        aria-busy={sending}
-        className="relative z-1 flex flex-col rounded-[inherit] bg-card ring-1 ring-border"
+    <div>
+      <PromptBox
+        box={box}
+        size="large"
+        busy={sending}
+        onSubmit={submit}
+        onFiles={addFiles}
+        dropLabel={t('dropHere')}
+        style={glowStyle}
       >
-        <label htmlFor={fieldId} className="sr-only">
-          {t('label')}
-        </label>
-        <textarea
-          ref={field}
-          id={fieldId}
-          value={text}
-          rows={2}
-          placeholder={t('placeholder')}
-          aria-describedby={rejected.length > 0 ? rejectedId : undefined}
-          onChange={(event) => {
-            setText(event.currentTarget.value);
-            aurora.kick();
-          }}
-          onKeyDown={onKeyDown}
-          className={cn(
-            'max-h-64 min-h-16 w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1',
-            'text-sm text-foreground outline-none placeholder:text-muted-foreground',
-          )}
-        />
-
         {templateFile || files.length > 0 ? (
-          <ul aria-label={t('files')} className="flex flex-wrap gap-1.5 px-3 pt-1 pb-1.5">
+          <PromptChips label={t('files')}>
             {/* Шаблон — первым: он меняет всю презентацию, а не добавляет материал. */}
             {templateFile ? (
               <AttachmentChip
@@ -276,7 +192,7 @@ export function DeckComposer({
                 onRemove={() => {
                   setRejected([]);
                   setTemplateFile(null);
-                  aurora.flash();
+                  box.aurora.flash();
                 }}
               />
             ) : null}
@@ -290,140 +206,93 @@ export function DeckComposer({
                 }}
               />
             ))}
-          </ul>
+          </PromptChips>
         ) : null}
-
-        <TooltipProvider>
-          <div className="flex flex-wrap items-center gap-1.5 px-2.5 pt-1 pb-2.5">
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              accept={COMPOSER_FILE_ACCEPT}
-              tabIndex={-1}
-              aria-hidden
-              className="sr-only"
-              onChange={(event) => {
-                addFiles(Array.from(event.currentTarget.files ?? []));
-                // Тот же файл можно выбрать снова, если его убрали.
-                event.currentTarget.value = '';
-              }}
-            />
-            <input
-              ref={templatePicker}
-              type="file"
-              accept={TEMPLATE_FILE_ACCEPT}
-              tabIndex={-1}
-              aria-hidden
-              className="sr-only"
-              onChange={(event) => {
-                addFiles(Array.from(event.currentTarget.files ?? []));
-                event.currentTarget.value = '';
-              }}
-            />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-lg"
-                  className="rounded-full text-muted-foreground"
-                  aria-label={t('attach')}
-                  onClick={() => picker.current?.click()}
-                >
-                  <AttachIcon />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {t('attachHint', {
-                  text: extensionsOf('text'),
-                  table: extensionsOf('table'),
-                  template: TEMPLATE_EXTENSIONS.join(', '),
-                })}
-              </TooltipContent>
-            </Tooltip>
-            <ComposerTemplateMenu
-              groups={groups}
-              inProject={project !== null}
-              selected={selected}
-              pendingFile={templateFile}
-              onSelect={(next) => {
-                // Шаблон из библиотеки выбран осознанно: новый файл больше не нужен.
-                setPickedId(next);
-                setTemplateFile(null);
-                aurora.flash();
-              }}
-              onUpload={() => templatePicker.current?.click()}
-            />
-            <SlideCountMenu value={slideCount} onChange={setSlideCount} />
-            {/* Модель и отправка — справа и вместе, даже когда ряд переносится на узком экране. */}
-            <div className="ml-auto flex items-center gap-1.5">
+        <PromptField
+          value={text}
+          onValueChange={setText}
+          label={t('label')}
+          placeholder={t('placeholder')}
+          fieldRef={field}
+          describedBy={rejected.length > 0 ? rejectedId : undefined}
+        />
+        <PromptToolbar
+          end={
+            <>
               <ModelMenu value={model} onChange={setModel} />
-              <Tooltip>
-                {/*
-                 * Подсказка висит на обёртке: у недоступной кнопки нет событий указателя, а
-                 * объяснить, почему стрелка не нажимается, нужно как раз тогда.
-                 */}
-                <TooltipTrigger asChild>
-                  <span className="inline-flex rounded-full">
-                    <Button
-                      type="submit"
-                      size="icon-lg"
-                      disabled={!ready || !hasTemplate || sending}
-                      aria-label={sending ? t('sending') : t('submit')}
-                      aria-describedby={hasTemplate ? undefined : blockedId}
-                      aria-keyshortcuts={mac ? 'Meta+Enter' : 'Control+Enter'}
-                      className={cn(
-                        'rounded-full',
-                        // Пока идёт переход, кнопка не блёкнет: это ответ на нажатие, а не запрет.
-                        sending && 'disabled:opacity-100',
-                      )}
-                    >
-                      {sending ? (
-                        <SpinnerIcon className="animate-spin motion-reduce:animate-none" />
-                      ) : (
-                        <SendIcon className="[--icon-stroke:2]" />
-                      )}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {hasTemplate ? (
-                    <>
-                      {t('submit')}
-                      <span className="flex items-center gap-0.5">
-                        <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
-                        <Kbd>Enter</Kbd>
-                      </span>
-                    </>
-                  ) : (
-                    t('needTemplate')
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        </TooltipProvider>
-
-        {hasTemplate ? null : (
-          <p id={blockedId} className="sr-only">
-            {t('needTemplate')}
-          </p>
-        )}
-        {rejected.length > 0 ? (
-          <p id={rejectedId} role="alert" className="px-4 pb-3 text-xs text-destructive">
-            {t('rejected', { names: rejected.join(', ') })}
-          </p>
-        ) : null}
-      </form>
-
-      {dragging ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-3 grid place-items-center rounded-[inherit] border border-dashed border-foreground/40 bg-card/90 text-sm text-foreground"
+              <PromptSubmit
+                state={promptAction({ hasInput: ready, sending, blocked: !hasTemplate })}
+                label={t('submit')}
+                blockedHint={t('needTemplate')}
+              />
+            </>
+          }
         >
-          {t('dropHere')}
-        </div>
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            accept={COMPOSER_FILE_ACCEPT}
+            tabIndex={-1}
+            aria-hidden
+            className="sr-only"
+            onChange={(event) => {
+              addFiles(Array.from(event.currentTarget.files ?? []));
+              // Тот же файл можно выбрать снова, если его убрали.
+              event.currentTarget.value = '';
+            }}
+          />
+          <input
+            ref={templatePicker}
+            type="file"
+            accept={TEMPLATE_FILE_ACCEPT}
+            tabIndex={-1}
+            aria-hidden
+            className="sr-only"
+            onChange={(event) => {
+              addFiles(Array.from(event.currentTarget.files ?? []));
+              event.currentTarget.value = '';
+            }}
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                className="rounded-full text-muted-foreground"
+                aria-label={t('attach')}
+                onClick={() => picker.current?.click()}
+              >
+                <PlusIcon />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {t('attachHint', {
+                text: extensionsOf('text'),
+                table: extensionsOf('table'),
+                template: TEMPLATE_EXTENSIONS.join(', '),
+              })}
+            </TooltipContent>
+          </Tooltip>
+          <ComposerTemplateMenu
+            groups={groups}
+            inProject={project !== null}
+            selected={selected}
+            pendingFile={templateFile}
+            onSelect={(next) => {
+              // Шаблон из библиотеки выбран осознанно: новый файл больше не нужен.
+              setPickedId(next);
+              setTemplateFile(null);
+              box.aurora.flash();
+            }}
+            onUpload={() => templatePicker.current?.click()}
+          />
+          <SlideCountMenu value={slideCount} onChange={setSlideCount} />
+        </PromptToolbar>
+      </PromptBox>
+      {rejected.length > 0 ? (
+        <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
     </div>
   );

@@ -9,6 +9,7 @@ import {
 } from '../lib/deck-generator';
 import type { DeckSource } from '../lib/deck-source';
 import type { DeckSummary, LibrarySource } from '../lib/library-source';
+import { slideTitle } from '../components/editor/slide-navigation';
 import { createDemoLibrarySource } from './demo-library';
 
 /** Шаг сценария: событие прогона или свёрстанный слайд. */
@@ -188,11 +189,19 @@ function scriptFor(
     return 1;
   };
 
+  // Чем этап занят: план и вёрстка идут по слайдам — заметка называет слайд, как назвал бы
+  // настоящий пайплайн. Заголовок берётся из самого слайда, без выдуманного текста.
+  const noteFor = (stage: JobStage, done: number) => {
+    if (stage !== 'planning' && stage !== 'laying-out') return '';
+    const slide = slides[done - 1]?.slide;
+    return slide ? (slideTitle(slide) ?? '') : '';
+  };
+
   for (const stage of plannedStages()) {
     push({ type: 'stage-started', stage });
     const total = unitsOf(stage);
     for (let done = 1; done <= total; done += 1) {
-      push({ type: 'stage-progress', stage, done, total, note: '' });
+      push({ type: 'stage-progress', stage, done, total, note: noteFor(stage, done) });
       const slide = stage === 'laying-out' ? slides[done - 1] : undefined;
       if (slide) steps.push({ slide });
       const variant = stage === 'rendering' ? variants[done - 1]?.variant : undefined;

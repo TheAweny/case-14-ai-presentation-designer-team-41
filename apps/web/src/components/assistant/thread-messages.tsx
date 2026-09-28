@@ -14,6 +14,8 @@ import { useFormatter, useTranslations } from 'next-intl';
 import {
   CheckIcon,
   ChevronDownIcon,
+  CopyIcon,
+  EditIcon,
   PeopleIcon,
   RetryIcon,
   SpinnerIcon,
@@ -39,6 +41,7 @@ import {
   type ThreadMessage,
 } from '@/lib/assistant-threads';
 import type { GenerationProgress, GenerationStage } from '@/lib/deck-generator';
+import { templateTitle } from '@/lib/composer-templates';
 import type { TemplateSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
 import {
@@ -51,6 +54,7 @@ import {
   useTemplateImport,
   useThread,
 } from './session';
+import { runStatus, type RunStatus } from './run-status';
 import { useSlideRefLabels } from './slide-ref-label';
 
 type Ask = Extract<ThreadMessage, { kind: 'ask' }>;
@@ -72,21 +76,29 @@ function useMessageText(): string {
 
 /**
  * Реплика человека: вложения чипами, как они лежали в поле, текст пузырём справа и под ним то,
- * чем собирать.
+ * чем собирать. При наведении — «Копировать» и «Изменить»: второе возвращает текст в поле, чтобы
+ * поправить и отправить заново.
  */
-export function UserMessage({ message }: { message: Extract<ThreadMessage, { kind: 'user' }> }) {
+export function UserMessage({
+  message,
+  onEdit,
+}: {
+  message: Extract<ThreadMessage, { kind: 'user' }>;
+  /** Вернуть текст в поле; без обработчика «Изменить» нет. */
+  onEdit?: (text: string) => void;
+}) {
   const t = useTranslations('assistant.user');
   const text = useMessageText();
   const { meta } = message;
   const tags = meta
     ? [
-        meta.templateName,
+        templateTitle(meta.templateName),
         meta.slideCount === null ? t('slidesAuto') : t('slides', { count: meta.slideCount }),
         ...(meta.modelName ? [meta.modelName] : []),
       ]
     : [];
   return (
-    <div className="flex max-w-[88%] flex-col items-end gap-1.5 self-end">
+    <div className="group/message flex max-w-[88%] flex-col items-end gap-1.5 self-end">
       {message.attachments.length > 0 ? (
         <ul className="flex flex-wrap justify-end gap-1.5" aria-label={t('attachments')}>
           {message.attachments.map((attachment, index) => (
@@ -105,18 +117,89 @@ export function UserMessage({ message }: { message: Extract<ThreadMessage, { kin
         </p>
       ) : null}
       {tags.length > 0 ? (
-        <ul className="flex flex-wrap justify-end gap-1" aria-label={t('settings')}>
-          {tags.map((tag) => (
-            <li
-              key={tag}
-              className="rounded-full px-2 py-px text-[0.6875rem] text-muted-foreground ring-1 ring-border"
-            >
-              {tag}
-            </li>
-          ))}
-        </ul>
+        // Чем собирали — тихой строкой, а не чипами: нажимать тут нечего.
+        <p className="px-1 text-right text-[0.6875rem] text-muted-foreground">
+          <span className="sr-only">{t('settings')}: </span>
+          {tags.filter(Boolean).join(' · ')}
+        </p>
+      ) : null}
+      {message.text ? (
+        <MessageActions
+          text={message.text}
+          onEdit={onEdit ? () => onEdit(message.text) : undefined}
+        />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Действия у реплики: видны при наведении и фокусе с клавиатуры, а на сенсорных экранах, где
+ * наведения нет, — всегда.
+ */
+function MessageActions({ text, onEdit }: { text: string; onEdit?: () => void }) {
+  const t = useTranslations('assistant.actions');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(
+      () => setCopied(true),
+      () => undefined,
+    );
+  };
+
+  const button =
+    'grid size-7 place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50';
+  return (
+    <div
+      className={cn(
+        '-mt-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 motion-reduce:transition-none',
+        'group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100',
+      )}
+    >
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={t('copy')}
+        title={t('copy')}
+        className={button}
+      >
+        {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+      </button>
+      {onEdit ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={t('edit')}
+          title={t('edit')}
+          className={button}
+        >
+          <EditIcon className="size-3.5" />
+        </button>
+      ) : null}
+      <span role="status" className="sr-only">
+        {copied ? t('copied') : ''}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Агент принял реплику и ещё не ответил. У демо ответ приходит сразу, у настоящего агента пауза
+ * заметна — без знака кажется, что сообщение потерялось.
+ */
+export function ThinkingLine() {
+  const t = useTranslations('assistant.actions');
+  return (
+    <p role="status" className="assistant-shimmer text-[0.8125rem] motion-reduce:animate-none">
+      {t('thinking')}
+    </p>
   );
 }
 
@@ -139,31 +222,35 @@ export function AgentMessage({ text }: { text: AgentText }) {
   return <p className={cn('text-foreground', size)}>{content}</p>;
 }
 
+/** Заголовок хода сборки словами интерфейса — для обеих карточек хода. */
+export function useRunStatusText(): (status: RunStatus) => string {
+  const t = useTranslations('assistant.work');
+  return (status) => {
+    switch (status.key) {
+      case 'layingOut':
+        return t('layingOut', { done: status.done, total: status.total });
+      case 'stage':
+        return t('stage', { stage: t(`stages.${status.stage}`) });
+      default:
+        return t(status.key);
+    }
+  };
+}
+
 /**
  * Ход генерации одной строкой: что происходит сейчас и сколько готово. Этапы раскрываются по
  * нажатию. Сбой и остановка — здесь же, с повтором.
  */
 export function WorkCard({ runId, latest }: { runId: string; latest: boolean }) {
   const t = useTranslations('assistant.work');
+  const statusText = useRunStatusText();
   const run = useRun(runId);
   if (!run) return null;
 
   const { progress, phase } = run;
   // Отменённую сборку сменила новая: запускать её снова незачем.
   const superseded = phase === 'cancelled' && !latest;
-  const current = progress.stages.find((stage) => stage.state === 'running');
-  const status =
-    phase === 'done'
-      ? t('done')
-      : phase === 'failed'
-        ? t('failed')
-        : phase === 'cancelled'
-          ? t(superseded ? 'superseded' : 'cancelled')
-          : current?.stage === 'laying-out' && current.total !== null
-            ? t('layingOut', { done: current.done ?? 0, total: current.total })
-            : current
-              ? t('stage', { stage: t(`stages.${current.stage}`) })
-              : t('starting');
+  const status = statusText(runStatus(run, latest));
 
   return (
     <ProgressCard
@@ -352,7 +439,7 @@ function StageRow({ stage }: { stage: GenerationStage }) {
     >
       <span className="grid size-3.5 shrink-0 place-items-center" aria-hidden>
         {stage.state === 'done' ? (
-          <CheckIcon size={13} className="[--icon-stroke:2]" />
+          <CheckIcon size={13} />
         ) : stage.state === 'running' ? (
           <SpinnerIcon size={13} className="animate-spin motion-reduce:animate-none" />
         ) : (

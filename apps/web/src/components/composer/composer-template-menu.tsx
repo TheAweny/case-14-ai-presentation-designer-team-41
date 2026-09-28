@@ -14,9 +14,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PaletteStrip, roleColor } from '@/components/library/template-swatch';
-import type { TemplateGroups } from '@/lib/composer-templates';
+import { templateTitle, type TemplateGroups } from '@/lib/composer-templates';
 import type { TemplateSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
+import { PROMPT_CHIP } from './prompt-box';
 
 /**
  * Выбор шаблона в поле генерации. Шаблоны — библиотека: на странице проекта первыми идут
@@ -55,10 +56,10 @@ export function ComposerTemplateMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="lg"
           className={cn(
-            'min-w-0 rounded-full pr-2 pl-2.5 font-normal text-muted-foreground',
+            PROMPT_CHIP,
             // Без шаблона собирать не из чего: кнопка — первое, что нужно сделать, и выглядит
             // пустым местом, которое ждёт выбора.
             empty && 'border-dashed border-foreground/40 text-foreground',
@@ -83,10 +84,10 @@ export function ComposerTemplateMenu({
             {pendingFile
               ? t('newFile', { file: pendingFile.name })
               : selected
-                ? selected.fileName
+                ? templateTitle(selected.fileName)
                 : t('choose')}
           </span>
-          <ChevronDownIcon className="opacity-70" />
+          <ChevronDownIcon className="opacity-60" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-80 max-w-[calc(100vw-2rem)]" aria-label={t('menu')}>

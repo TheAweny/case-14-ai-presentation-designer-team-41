@@ -203,7 +203,7 @@ function ShowButton({
         'pointer-coarse:size-11',
       )}
     >
-      <ButtonIcon size={16} className="[--icon-stroke:2]" />
+      <ButtonIcon size={16} />
     </button>
   );
 }

@@ -126,10 +126,16 @@ describe('projectMenu', () => {
   it('в сайдбаре и на карточке: открыть, новая презентация, правки, ссылка, шаблон, удаление', () => {
     expect(ids(projectMenu('sales'))).toEqual([
       ['open', 'openInNewTab', 'newDeck'],
-      ['rename', 'appearance', 'copyLink'],
+      ['pin', 'rename', 'appearance', 'copyLink'],
       ['attachTemplate'],
       ['delete'],
     ]);
+  });
+
+  it('у закреплённого проекта пункт снимает закрепление, а не ставит его ещё раз', () => {
+    expect(item(projectMenu('sales', { pinned: true }), 'unpin')).toBeDefined();
+    expect(item(projectMenu('sales', { pinned: true }), 'pin')).toBeUndefined();
+    expect(item(projectMenu('sales', { current: true, pinned: true }), 'open')).toBeUndefined();
   });
 
   it('«Прикрепить шаблон» ведёт на вкладку шаблонов проекта; неактивных пунктов нет', () => {

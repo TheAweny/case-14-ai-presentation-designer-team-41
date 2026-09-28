@@ -25,7 +25,9 @@ import {
   OpenIcon,
   OpenInNewTabIcon,
   PaletteIcon,
+  PinIcon,
   PlayIcon,
+  UnpinIcon,
   UploadIcon,
   type Icon,
 } from '@/components/ui/icons';
@@ -71,13 +73,15 @@ export type ObjectKind = 'deck' | 'project';
  * владелец объекта, и только когда меню уже закрылось: иначе меню, возвращая фокус, отняло бы
  * его у поля или диалога.
  */
-export type ObjectMenuAction = 'rename' | 'appearance' | 'delete';
+export type ObjectMenuAction = 'rename' | 'appearance' | 'delete' | 'pin' | 'unpin';
 
 const ICONS: Readonly<Record<LibraryMenuItem['id'], Icon>> = {
   open: OpenIcon,
   openInNewTab: OpenInNewTabIcon,
   present: PlayIcon,
   newDeck: AddFileIcon,
+  pin: PinIcon,
+  unpin: UnpinIcon,
   rename: EditIcon,
   moveToProject: MoveIcon,
   appearance: PaletteIcon,
@@ -186,6 +190,8 @@ export function useLibraryMenuSelect(onAction: (action: ObjectMenuAction) => voi
       case 'rename':
       case 'appearance':
       case 'delete':
+      case 'pin':
+      case 'unpin':
         pending.current = item.id;
         return;
       case 'moveToProject':

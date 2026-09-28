@@ -26,26 +26,35 @@ export type ProjectUpdateResult =
   { readonly ok: true } | { readonly ok: false; readonly reason: 'notFound' | 'invalid' };
 
 /**
- * Переименовать проект или сменить его иконку и цвет. После правки перерисовываются все
- * страницы меню: имя и иконка проекта видны и в сайдбаре, и на главной.
+ * Переименовать проект, сменить его иконку и цвет или закрепить в боковой панели. После правки
+ * перерисовываются все страницы меню: имя, иконка и закрепление видны и в сайдбаре, и в списке
+ * проектов.
  *
  * Серверное действие — публичная точка входа, поэтому аргументы проверяем, несмотря на типы.
  */
 export async function updateProjectAction(
   projectId: string,
-  patch: { name?: string; appearance?: ProjectAppearance },
+  patch: { name?: string; appearance?: ProjectAppearance; pinned?: boolean },
 ): Promise<ProjectUpdateResult> {
   await requireAccount();
   if (typeof projectId !== 'string' || typeof patch !== 'object' || patch === null) {
     return { ok: false, reason: 'invalid' };
   }
-  const checked: { name?: string; appearance?: ProjectAppearance } = {};
+  const checked: { name?: string; appearance?: ProjectAppearance; pinned?: boolean } = {};
   if (patch.name !== undefined) {
     if (typeof patch.name !== 'string') return { ok: false, reason: 'invalid' };
     checked.name = patch.name;
   }
   if (patch.appearance !== undefined) checked.appearance = parseProjectAppearance(patch.appearance);
-  if (checked.name === undefined && checked.appearance === undefined) {
+  if (patch.pinned !== undefined) {
+    if (typeof patch.pinned !== 'boolean') return { ok: false, reason: 'invalid' };
+    checked.pinned = patch.pinned;
+  }
+  if (
+    checked.name === undefined &&
+    checked.appearance === undefined &&
+    checked.pinned === undefined
+  ) {
     return { ok: false, reason: 'invalid' };
   }
 
