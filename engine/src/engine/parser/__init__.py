@@ -21,7 +21,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageStat, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
 from pptx.exc import PackageNotFoundError
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -35,6 +35,7 @@ from engine.parser._errors import (
     NotAPresentationError,
     TemplateParseError,
 )
+from engine.parser._media import mean_color as _mean_color
 from engine.parser._model import (
     EMU_PER_INCH,
     EMU_PER_PT,
@@ -49,6 +50,7 @@ from engine.parser._patterns import build_pattern_catalog
 from engine.parser._shapes import collect_shapes
 from engine.parser._style import background_of, color_map_of
 from engine.parser._theme import read_themes
+from engine.parser.slides import read_deck
 
 __all__ = [
     "EMU_PER_INCH",
@@ -60,6 +62,7 @@ __all__ = [
     "TemplateIR",
     "TemplateParseError",
     "design_system_of",
+    "import_deck",
     "parse_template",
     "parse_template_ir",
     "pattern_catalog_of",
@@ -70,8 +73,6 @@ _MEDIA_PREFIX = "ppt/media/"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 _P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 _R_EMBED = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
-#: A picture is averaged at this size at most: enough for a mean colour, cheap on a 4K photo.
-_MEAN_COLOR_SIDE = 256
 
 
 def _open_package(path: Path) -> zipfile.ZipFile:
@@ -230,23 +231,6 @@ def _slide_likes(
         )
 
     return tuple(masters), tuple(layouts), tuple(slides)
-
-
-def _mean_color(blob: bytes) -> str | None:
-    """Mean colour of a raster picture as hex, or None when it is not one Pillow can read."""
-    try:
-        with Image.open(BytesIO(blob)) as image:
-            # JPEG decodes straight at a reduced scale; other formats ignore the hint.
-            image.draft("RGB", (_MEAN_COLOR_SIDE, _MEAN_COLOR_SIDE))
-            picture = image.convert("RGBA")
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
-        return None
-    picture.thumbnail((_MEAN_COLOR_SIDE, _MEAN_COLOR_SIDE), Image.Resampling.BOX)
-    # Where the picture is transparent, the white of an empty slide shows through.
-    canvas = Image.new("RGBA", picture.size, (255, 255, 255, 255))
-    canvas.alpha_composite(picture)
-    red, green, blue = (round(c) for c in ImageStat.Stat(canvas.convert("RGB")).mean)
-    return f"{red:02X}{green:02X}{blue:02X}"
 
 
 def _background_image_colors(presentation: Any) -> dict[str, str]:
@@ -415,3 +399,25 @@ def template_profile_of(
     patterns = build_pattern_catalog(ir, digest, design_system)
     PatternCatalog.model_validate(patterns)
     return design_system, patterns
+
+
+def import_deck(pptx_path: Path, media_dir: Path | None = None) -> list[dict[str, Any]]:
+    """Read a finished deck back as SlideIR: every slide as it is drawn, as editable elements.
+
+    Colours that equal an entry of the deck's own palette are named by its role, so the result
+    reads against the design system ``template_profile_of`` derives from the same file.
+
+    Args:
+        pptx_path: The deck to read.
+        media_dir: When given, every picture the slides draw is written there under the file
+            name of its part (``image5.png`` for ``/ppt/media/image5.png``), overwriting.
+
+    Returns:
+        SlideIR payloads in presentation order, each validated against the contract.
+
+    Raises:
+        TemplateParseError: The file is not a presentation we can read.
+    """
+    path = Path(pptx_path)
+    design_system, _ = template_profile_of(path)
+    return read_deck(path, design_system["palette"], Path(media_dir) if media_dir else None)

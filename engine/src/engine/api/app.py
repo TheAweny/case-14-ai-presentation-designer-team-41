@@ -20,6 +20,8 @@ from engine.contracts import (
     AuditRequest,
     DeckExportRequest,
     DeckExportResponse,
+    DeckImportRequest,
+    DeckImportResponse,
     DeckPlan,
     EditableDeckRequest,
     EditableDeckResponse,
@@ -112,6 +114,31 @@ def template_profile(request: TemplateProfileRequest) -> dict:
         "templateIr": template_ir,
         "previewDataUrl": preview_data_url,
     }
+
+
+@app.post(
+    "/v1/deck-import",
+    response_model=DeckImportResponse,
+    # SlideIR tells an absent field from a null one; unset optional fields must stay absent.
+    response_model_exclude_unset=True,
+    summary="Read a finished PPTX back as SlideIR, the way its slides are drawn",
+)
+def deck_import(request: DeckImportRequest) -> DeckImportResponse:
+    """Every slide of a deck as editable elements, with the pictures it draws written out.
+
+    The editor opens a generated deck from this, so it shows what the file and its PDF show:
+    what the master and layout put on each slide, text in the size, colour and typeface it is
+    drawn in, the picture behind it and the outline of every shape.
+    """
+    path = Path(request.pptxPath).resolve()
+    if not path.is_file():
+        raise HTTPException(status_code=422, detail=f"PPTX was not found: {request.pptxPath}")
+    media_dir = Path(request.mediaDir).resolve() if request.mediaDir else None
+    try:
+        slides = parser.import_deck(path, media_dir)
+    except TemplateParseError as error:
+        raise HTTPException(status_code=422, detail=f"PPTX cannot be read: {error}") from error
+    return DeckImportResponse.model_validate({"schemaVersion": 1, "slides": slides})
 
 
 @app.post(
