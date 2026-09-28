@@ -48,6 +48,11 @@ export const compositionExportResponseSchema = z.object({
   previews: z.array(z.string()),
   pdfPath: z.string(),
   warnings: z.array(z.string()),
+  /**
+   * Template families the render server could not resolve. Empty when every selected family is
+   * installed. The pptx keeps these names; previews may draw substitutes.
+   */
+  missingFonts: z.array(z.string()),
 });
 export const generationRequestSchema = z.object({
   templateId: z.string().uuid(),

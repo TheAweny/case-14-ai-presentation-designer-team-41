@@ -3003,6 +3003,7 @@ class CompositionExportResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    missingFonts: list[str]
     outputPath: constr(min_length=1)
     pdfPath: str
     previews: list[str]

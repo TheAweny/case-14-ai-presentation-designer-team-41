@@ -184,16 +184,21 @@ def composition_check(request: CompositionExportRequest) -> dict:
 
 @app.post("/v1/composition-decks", response_model=CompositionExportResponse)
 def composition_deck(request: CompositionExportRequest) -> dict:
-    """Join independent document layers for a template-faithful editable export."""
+    """Join independent document layers for a template-faithful editable export.
+
+    A template family that is not installed does not stop the export. The file keeps that
+    family name; the preview may draw a substitute, and the response names the gap.
+    """
     source = Path(request.templatePath).resolve()
     output = Path(request.outputPath).resolve()
     findings = composition_check(request)["findings"]
     if findings:
         raise HTTPException(status_code=422, detail=findings)
+    missing: list[str] = []
     try:
         patterns = extract_compositions(source)
         selected = {slide.patternId for slide in request.slides}
-        render.require_fonts(
+        missing = render.missing_fonts(
             {
                 slot["font"]
                 for pattern in patterns
@@ -214,13 +219,21 @@ def composition_deck(request: CompositionExportRequest) -> dict:
                     (media_dir / Path(entry).name).write_bytes(archive.read(entry))
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    warnings = ["Image generation is mocked; existing template artwork is preserved."]
+    if missing:
+        warnings.append(
+            "Fonts not installed on the render server: "
+            f"{', '.join(missing)}. "
+            "The .pptx keeps the template fonts; previews use substitutes."
+        )
     return {
         "schemaVersion": 1,
         "outputPath": str(output),
         "templateIr": ir,
         "previews": [str(p) for p in previews],
         "pdfPath": str(output.parent / "previews" / f"{output.stem}.pdf"),
-        "warnings": ["Image generation is mocked; existing template artwork is preserved."],
+        "warnings": warnings,
+        "missingFonts": missing,
     }
 
 

@@ -240,6 +240,17 @@ export async function generatePresentation(options: GenerateOptions) {
     await emit({ type: 'stage-started', stage });
     const output = await options.engine.exportCompositions(exportRequest(), signal);
     signal.throwIfAborted();
+    if (output.missingFonts.length > 0) {
+      const fonts = output.missingFonts.join(', ');
+      await emit({
+        type: 'warning',
+        stage: 'exporting',
+        code: 'fonts-substituted',
+        message:
+          `Шрифтов шаблона нет на сервере: ${fonts}. ` +
+          'В .pptx они сохранены, превью нарисованы запасным шрифтом.',
+      });
+    }
     timings.push({ stage, ms: Date.now() - exportStarted });
     await emit({ type: 'stage-finished', stage, durationMs: Date.now() - exportStarted });
     const deck = {

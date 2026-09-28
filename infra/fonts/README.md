@@ -25,5 +25,5 @@ files are excluded from Git and Docker build context, not distributed with the i
 Restart the engine after changing mounted fonts so its index and cached metrics refresh.
 
 For a local non-Docker macOS engine, install bundled TTFs in `~/Library/Fonts`.
-Missing original families still block faithful export instead of silently substituting
-a different font. Family names remain unchanged in exported PPTX.
+A family that is not installed is named in the export response. The PPTX keeps that
+family name, and the LibreOffice preview draws a substitute.

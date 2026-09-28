@@ -4331,6 +4331,12 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "missingFonts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "outputPath": {
           "minLength": 1,
           "type": "string"
@@ -6657,7 +6663,8 @@
         "templateIr",
         "previews",
         "pdfPath",
-        "warnings"
+        "warnings",
+        "missingFonts"
       ],
       "title": "CompositionExportResponse",
       "type": "object"

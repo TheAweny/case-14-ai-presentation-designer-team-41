@@ -8,10 +8,12 @@ fixtures, which stand in for a template nobody tuned the extractor on.
 from __future__ import annotations
 
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import pytest
+from engine.contracts import DesignSystem
 from engine.parser import EMU_PER_INCH, design_system_of
 from engine.parser._design import build_design_system
 from engine.parser._model import (
@@ -28,6 +30,11 @@ from engine.parser._model import (
     ThemeFonts,
 )
 from lct_tools.fixtures import FIXTURE_BUILDERS, build_all_fixtures
+from PIL import Image
+from pptx import Presentation
+from pptx.oxml import parse_xml
+from pptx.oxml.ns import nsdecls, qn
+from pptx.parts.slide import SlideMasterPart
 
 _W, _H = 12_192_000, 6_858_000
 _MARGIN = EMU_PER_INCH // 2
@@ -266,6 +273,23 @@ def test_observed_font_overrides_the_theme_and_says_so() -> None:
     assert "observed-overrides-theme" in _codes(ds, "type.primary")
 
 
+def test_a_theme_font_reference_counts_as_the_font_it_names() -> None:
+    # Most text points at the theme's fonts, a little names a face outright.
+    layouts = [(_title(font="+mj-lt"), _body(font="+mn-lt")) for _ in range(6)]
+    fonts = ThemeFonts(major_latin="Montserrat", minor_latin="Montserrat")
+    ds = build_design_system(_template(layouts, fonts=fonts), _HASH)
+    assert all(not f["font"].startswith("+") for f in ds["typeFamilies"])
+    assert ds["typeFamilies"][0]["font"] == "Montserrat"
+    assert "observed-overrides-theme" not in _codes(ds, "type.primary")
+
+
+def test_a_font_named_outright_is_kept_as_named() -> None:
+    fonts = ThemeFonts(major_latin="Montserrat", minor_latin="Montserrat")
+    ds = build_design_system(_template(_content(6), fonts=fonts), _HASH)
+    assert ds["typeFamilies"][0]["font"] == "Inter"
+    assert "observed-overrides-theme" in _codes(ds, "type.primary")
+
+
 def test_text_with_no_stated_colour_falls_back_to_the_theme_with_a_warning() -> None:
     # A dark master, and runs that inherit their colour: the extractor has to look it up.
     layouts = [(_title(color=""), _body(color="")) for _ in range(6)]
@@ -307,6 +331,53 @@ def test_thin_evidence_is_visible_as_low_confidence() -> None:
     accent = next(p for p in ds["palette"] if p["role"] == "accent")
     assert accent["meta"]["confidence"] < 0.5
     assert "low-confidence" in _codes(ds, "palette.accent")
+
+
+def test_a_picture_background_counts_by_its_mean_colour_and_says_so() -> None:
+    layouts = [(_title(color="FFFFFF"), _body(color="FFFFFF")) for _ in range(6)]
+    ir = _template(layouts, master_background=Fill(kind="image"))
+    ds = build_design_system(ir, _HASH, background_images={_MASTER: "201040"})
+    DesignSystem.model_validate(ds)
+    surface = next(s for s in ds["surfaces"] if s["tone"] == "dark")
+    assert (surface["background"], surface["text"]) == ("201040", "FFFFFF")
+    assert "low-confidence" in _codes(ds, "surfaces.dark.background")
+
+
+def test_backgrounds_with_no_readable_colour_still_give_one_marked_surface() -> None:
+    # Every part inherits a picture the parser could not read: there is no colour to observe.
+    ir = _template(_content(6), master_background=Fill(kind="image"))
+    ds = build_design_system(ir, _HASH)
+    DesignSystem.model_validate(ds)
+    assert [(s["tone"], s["background"]) for s in ds["surfaces"]] == [("light", "FFFFFF")]
+    assert ds["surfaces"][0]["meta"]["source"] == "theme"
+    assert "missing-surface" in _codes(ds, "surfaces")
+
+
+def test_a_picture_on_the_master_background_is_read_from_the_file(tmp_path: Path) -> None:
+    picture = BytesIO()
+    Image.new("RGB", (64, 36), (0x20, 0x10, 0x40)).save(picture, format="PNG")
+    presentation = Presentation()
+    master = presentation.slide_master
+    master_part = master.part
+    assert isinstance(master_part, SlideMasterPart)
+    _, r_id = master_part.get_or_add_image_part(picture)
+    common = master._element.find(qn("p:cSld"))
+    for stated in common.findall(qn("p:bg")):
+        common.remove(stated)
+    common.insert(
+        0,
+        parse_xml(
+            f'<p:bg {nsdecls("p", "a", "r")}><p:bgPr><a:blipFill><a:blip r:embed="{r_id}"/>'
+            "<a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>"
+        ),
+    )
+    presentation.slides.add_slide(presentation.slide_layouts[1])
+    path = tmp_path / "picture-background.pptx"
+    presentation.save(str(path))
+
+    ds = design_system_of(path)
+    assert ("dark", "201040") in {(s["tone"], s["background"]) for s in ds["surfaces"]}
+    assert "low-confidence" in _codes(ds, "surfaces.dark.background")
 
 
 _PARSEABLE = tuple(n for n in FIXTURE_BUILDERS if n not in {"malformed-xml", "not-a-package"})

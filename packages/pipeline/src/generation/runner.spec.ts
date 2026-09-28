@@ -19,7 +19,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((p) => rm(p, { recursive: true, force: true })));
 });
 
-async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel') {
+async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'missing-font') {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
   const pattern = profile.compositions[0];
@@ -28,6 +28,7 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel') {
   let exports = 0;
   let repairs = 0;
   const events: string[] = [];
+  const warnings: { stage: string; code: string; message: string }[] = [];
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
   const provider: TextProvider = {
@@ -88,11 +89,19 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel') {
       const outputPath = join(outputDir, 'deck.pptx');
       const pdfPath = join(outputDir, 'deck.pdf');
       await Promise.all([writeFile(outputPath, 'fixture-pptx'), writeFile(pdfPath, 'fixture-pdf')]);
+      const missingFonts = mode === 'missing-font' ? ['Template Face'] : [];
       return Response.json({
         ...fixture('CompositionExportResponse'),
         outputPath,
         pdfPath,
         previews: [],
+        missingFonts,
+        warnings:
+          missingFonts.length > 0
+            ? [
+                'Fonts not installed on the render server: Template Face. The .pptx keeps the template fonts; previews use substitutes.',
+              ]
+            : fixture('CompositionExportResponse').warnings,
       });
     },
   });
@@ -109,9 +118,12 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel') {
     signal: controller.signal,
     onEvent: async (e) => {
       events.push(e.type);
+      if (e.type === 'warning') {
+        warnings.push({ stage: e.stage, code: e.code, message: e.message });
+      }
     },
   });
-  return { result, outputDir, events, counters: () => ({ checks, exports, repairs }) };
+  return { result, outputDir, events, warnings, counters: () => ({ checks, exports, repairs }) };
 }
 
 describe('real generation orchestration with offline dependencies', () => {
@@ -138,5 +150,25 @@ describe('real generation orchestration with offline dependencies', () => {
     const run = await exercise('cancel');
     await expect(run.result).rejects.toThrow();
     expect(run.counters().exports).toBe(0);
+  });
+  it('turns a missing template font into an export warning and still finishes', async () => {
+    const run = await exercise('missing-font');
+    await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.warnings).toContainEqual({
+      stage: 'exporting',
+      code: 'fonts-substituted',
+      message:
+        'Шрифтов шаблона нет на сервере: Template Face. В .pptx они сохранены, превью нарисованы запасным шрифтом.',
+    });
+    const deck = JSON.parse(await readFile(join(run.outputDir, 'deck.json'), 'utf8')) as {
+      warnings: string[];
+    };
+    expect(deck.warnings.some((warning) => warning.includes('Template Face'))).toBe(true);
+  });
+  it('does not warn about fonts when the server has every selected family', async () => {
+    const run = await exercise('clean');
+    await run.result;
+    expect(run.warnings.some((warning) => warning.code === 'fonts-substituted')).toBe(false);
   });
 });

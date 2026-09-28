@@ -140,13 +140,14 @@ def test_missing_template_font_is_reported(monkeypatch) -> None:
     import subprocess
 
     import pytest
-    from engine.render import require_fonts
+    from engine.render import missing_fonts, require_fonts
 
     monkeypatch.setattr(
         subprocess,
         "run",
         lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "Fallback Serif"),
     )
+    assert missing_fonts({"OriginalFont"}) == ["OriginalFont"]
     with pytest.raises(ValueError, match="OriginalFont"):
         require_fonts({"OriginalFont"})
 
@@ -154,11 +155,12 @@ def test_missing_template_font_is_reported(monkeypatch) -> None:
 def test_available_template_font_is_accepted(monkeypatch) -> None:
     import subprocess
 
-    from engine.render import require_fonts
+    from engine.render import missing_fonts, require_fonts
 
     monkeypatch.setattr(
         subprocess,
         "run",
         lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "OriginalFont"),
     )
+    assert missing_fonts({"OriginalFont"}) == []
     require_fonts({"OriginalFont"})

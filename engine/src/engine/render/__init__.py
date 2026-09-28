@@ -1,8 +1,10 @@
 """Render layer: rasterises a presentation to PNG with LibreOffice.
 
 Renders feed the visual part of the audit and the preview in the web client. LibreOffice is
-called as an external process; the fonts available to it must be installed in the image or
-host. I reject absent selected families instead of claiming a faithful fallback render.
+called as an external process; the fonts it can draw are the ones installed in the image or
+on the host. An absent template family is drawn with a substitute in the preview and reported
+by the caller. The presentation file keeps the template family names. ``require_fonts`` fails
+when a requested family is absent, so the image build can prove its bundled faces are present.
 """
 
 import os
@@ -13,11 +15,11 @@ import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-__all__ = ["render_to_png"]
+__all__ = ["missing_fonts", "render_to_png", "require_fonts"]
 
 
-def require_fonts(families: set[str]) -> None:
-    """I reject missing families rather than silently substituting template typography."""
+def missing_fonts(families: set[str]) -> list[str]:
+    """Return families Fontconfig would draw with another face, in sorted order."""
     missing = []
     for family in sorted(families):
         if not family:
@@ -29,8 +31,20 @@ def require_fonts(families: set[str]) -> None:
             check=True,
             timeout=3,
         )
-        if family.casefold() not in {name.strip().casefold() for name in result.stdout.split(",")}:
+        matched = {name.strip().casefold() for name in result.stdout.split(",")}
+        if family.casefold() not in matched:
             missing.append(family)
+    return missing
+
+
+def require_fonts(families: set[str]) -> None:
+    """Fail when a requested family is not installed.
+
+    The image build calls this for the faces shipped with the engine. Deck export asks
+    ``missing_fonts`` and continues, so a template face that is absent on the server does
+    not stop the file.
+    """
+    missing = missing_fonts(families)
     if missing:
         raise ValueError(
             f"Install the original template fonts before rendering: {', '.join(missing)}"

@@ -21,7 +21,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageStat, UnidentifiedImageError
 from pptx import Presentation
 from pptx.exc import PackageNotFoundError
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -67,6 +67,11 @@ __all__ = [
 ]
 
 _MEDIA_PREFIX = "ppt/media/"
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+_R_EMBED = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+#: A picture is averaged at this size at most: enough for a mean colour, cheap on a 4K photo.
+_MEAN_COLOR_SIDE = 256
 
 
 def _open_package(path: Path) -> zipfile.ZipFile:
@@ -227,6 +232,55 @@ def _slide_likes(
     return tuple(masters), tuple(layouts), tuple(slides)
 
 
+def _mean_color(blob: bytes) -> str | None:
+    """Mean colour of a raster picture as hex, or None when it is not one Pillow can read."""
+    try:
+        with Image.open(BytesIO(blob)) as image:
+            # JPEG decodes straight at a reduced scale; other formats ignore the hint.
+            image.draft("RGB", (_MEAN_COLOR_SIDE, _MEAN_COLOR_SIDE))
+            picture = image.convert("RGBA")
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return None
+    picture.thumbnail((_MEAN_COLOR_SIDE, _MEAN_COLOR_SIDE), Image.Resampling.BOX)
+    # Where the picture is transparent, the white of an empty slide shows through.
+    canvas = Image.new("RGBA", picture.size, (255, 255, 255, 255))
+    canvas.alpha_composite(picture)
+    red, green, blue = (round(c) for c in ImageStat.Stat(canvas.convert("RGB")).mean)
+    return f"{red:02X}{green:02X}{blue:02X}"
+
+
+def _background_image_colors(presentation: Any) -> dict[str, str]:
+    """Mean colour of every background painted with a picture, keyed by the part stating it.
+
+    The IR only records that such a background is a picture. Its colour decides which surface
+    the part belongs to and what text reads on it, so the design system needs it; it is read
+    here, where the package is open, rather than carried through the shared IR contract.
+    """
+    containers: list[Any] = []
+    for master in presentation.slide_masters:
+        containers.append(master)
+        containers.extend(master.slide_layouts)
+    containers.extend(presentation.slides)
+
+    colors: dict[str, str] = {}
+    by_media: dict[str, str | None] = {}
+    for container in containers:
+        blip = container._element.find(f"{_P}cSld/{_P}bg/{_P}bgPr/{_A}blipFill/{_A}blip")
+        if blip is None:
+            continue
+        try:
+            media = container.part.related_part(blip.get(_R_EMBED))
+        except (KeyError, AttributeError):
+            continue
+        name = str(media.partname)
+        if name not in by_media:
+            by_media[name] = _mean_color(media.blob)
+        color = by_media[name]
+        if color is not None:
+            colors[str(container.part.partname)] = color
+    return colors
+
+
 def _theme_part_of(master: Any) -> str:
     """Name of the theme part a master draws its colours and fonts from.
 
@@ -252,7 +306,11 @@ def parse_template_ir(template_path: Path) -> TemplateIR:
     Raises:
         TemplateParseError: The file is not a template we can read at all.
     """
-    path = Path(template_path)
+    return _read_template(Path(template_path))[0]
+
+
+def _read_template(path: Path) -> tuple[TemplateIR, Any]:
+    """The intermediate representation and the open presentation it was read from."""
     warnings: list[ParseWarning] = []
 
     with _open_package(path) as archive:
@@ -282,7 +340,7 @@ def parse_template_ir(template_path: Path) -> TemplateIR:
         slides=slides,
         media=media,
         warnings=tuple(warnings),
-    )
+    ), presentation
 
 
 def ir_hash(ir: TemplateIR) -> str:
@@ -348,9 +406,11 @@ def template_profile_of(
     Returns:
         The ``DesignSystem`` payload and the ``PatternCatalog`` payload.
     """
-    ir = parse_template_ir(Path(template_path))
+    ir, presentation = _read_template(Path(template_path))
     digest = ir_hash(ir)
-    design_system = build_design_system(ir, digest, available_fonts)
+    design_system = build_design_system(
+        ir, digest, available_fonts, _background_image_colors(presentation)
+    )
     DesignSystem.model_validate(design_system)
     patterns = build_pattern_catalog(ir, digest, design_system)
     PatternCatalog.model_validate(patterns)

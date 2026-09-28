@@ -1,4 +1,4 @@
-"""I verify the renderer's font supply without allowing silent family substitutions."""
+"""I verify which families the renderer can draw, and that require_fonts still rejects the rest."""
 
 import os
 import shutil
@@ -7,7 +7,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 import pytest
-from engine.render import require_fonts
+from engine.render import missing_fonts, require_fonts
 from PIL import ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +47,16 @@ def test_isolated_fontconfig_resolves_inter_and_semibold_without_substitution(
         text=True,
     )
     assert Path(result.stdout).name == "Inter-SemiBold.ttf"
+
+
+def test_missing_fonts_lists_only_unresolved_families(monkeypatch):
+    def run(command, **kwargs):
+        family = command[-1]
+        stdout = family if family == "Kept" else "Noto Sans"
+        return subprocess.CompletedProcess(command, 0, stdout)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert missing_fonts({"", "Kept", "Absent"}) == ["Absent"]
 
 
 def test_real_fallback_still_rejects_missing_template_family(monkeypatch):

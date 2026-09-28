@@ -112,6 +112,7 @@
         "previews": [],
         "pdfPath": "",
         "warnings": [],
+        "missingFonts": [],
         "schemaVersion": 1
       }
     }

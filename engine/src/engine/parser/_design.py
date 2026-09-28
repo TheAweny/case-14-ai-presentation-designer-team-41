@@ -22,7 +22,7 @@ from __future__ import annotations
 import colorsys
 import re
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
@@ -267,9 +267,15 @@ class _Warnings:
 class _Template:
     """The IR with inheritance made navigable and colours made resolvable."""
 
-    def __init__(self, ir: TemplateIR, warnings: _Warnings) -> None:
+    def __init__(
+        self,
+        ir: TemplateIR,
+        warnings: _Warnings,
+        background_images: Mapping[str, str] | None = None,
+    ) -> None:
         self.ir = ir
         self.warnings = warnings
+        self.background_images = dict(background_images or {})
         self.masters = {c.part: c for c in ir.masters}
         self.by_part: dict[str, SlideLike] = {
             c.part: c for group in (ir.masters, ir.layouts, ir.slides) for c in group
@@ -367,12 +373,34 @@ class _Template:
             return self.resolve(fill.stops[0], part)
         return None
 
+    def typeface(self, font: str) -> str:
+        """The typeface a run is set in, with a theme reference resolved to the name it stands for.
+
+        PowerPoint writes +mj-lt and +mn-lt (and their -ea and -cs twins) for "the theme's heading
+        font" and "the theme's body font". They are pointers, not names: a renderer asked for
+        +mj-lt draws its own default. The theme records Latin faces only, so every script of a
+        reference resolves to the Latin face of its kind. Empty when the theme names neither.
+        """
+        if not font.startswith("+"):
+            return font
+        fonts = self.ir.theme_fonts
+        wanted = fonts.major_latin if font.startswith("+mj") else fonts.minor_latin
+        return wanted or fonts.minor_latin or fonts.major_latin
+
+    def stated_background(self, part: str) -> SlideLike | None:
+        """The nearest part in the chain that states a background, or None when none does."""
+        return next((c for c in self.chain(part) if c.background is not None), None)
+
     def background(self, part: str) -> str | None:
         """Effective background colour of a part, following inheritance up to the master."""
         for container in self.chain(part):
             if container.background is None:
                 continue
-            if container.background.kind in ("image", "pattern", "none"):
+            if container.background.kind == "image":
+                # A picture has no single colour. Its mean colour, when the parser could read
+                # the picture, is what text on it has to stand out against.
+                return self.background_images.get(container.part)
+            if container.background.kind in ("pattern", "none"):
                 return None
             resolved = self.resolve_fill(container.background, part)
             return resolved[0] if resolved else None
@@ -550,6 +578,21 @@ def _surfaces(
             }
         )
 
+    for surface in surfaces:
+        parts = backgrounds[surface["tone"]].parts_of(surface["background"])
+        if parts and all(_is_picture_background(t, part) for part in parts):
+            warnings.add(
+                "low-confidence",
+                f"surfaces.{surface['tone']}.background",
+                f"the {surface['tone']} surface is a picture; its mean colour "
+                f"{surface['background']} stands in",
+            )
+
+    if not surfaces:
+        surface, meta = _stand_in_surface(t, warnings)
+        surfaces.append(surface)
+        text_meta[surface["tone"]] = meta
+
     tones = {s["tone"] for s in surfaces}
     for missing in ("light", "dark"):
         if surfaces and missing not in tones:
@@ -559,6 +602,44 @@ def _surfaces(
                 f"the template has no {missing} slides; a layout that needs one must derive it",
             )
     return surfaces, text_meta
+
+
+def _is_picture_background(t: _Template, part: str) -> bool:
+    stated = t.stated_background(part)
+    return (
+        stated is not None and stated.background is not None and stated.background.kind == "image"
+    )
+
+
+def _stand_in_surface(t: _Template, warnings: _Warnings) -> tuple[dict[str, Any], dict[str, Any]]:
+    """One surface for a template whose backgrounds give no colour at all.
+
+    Every layout and slide paints a pattern, nothing, or a picture the parser could not read. The
+    theme's bg1 is what PowerPoint falls back to, and white is what it shows without a theme. A
+    layout still needs something to set text against, so the guess is made and said out loud.
+    """
+    parts = t.usable_parts() or t.all_parts()
+    part = parts[0].part if parts else ""
+    resolved = t.resolve(ColorRef(scheme="bg1"), part) if part else None
+    if resolved is not None:
+        background, source, origin = resolved[0], "theme", f"the theme's bg1 ({resolved[0]})"
+    else:
+        background, source, origin = "FFFFFF", "fallback", "white"
+    tone = "light" if _luminance(background) >= _LIGHT_LUMINANCE else "dark"
+    text_hex, text_meta, _ = _text_on(t, background, part)
+    warnings.add(
+        "missing-surface",
+        "surfaces",
+        f"no layout or slide shows a background colour that can be read; {origin} stands in",
+    )
+    surface = {
+        "tone": tone,
+        "background": background,
+        "text": text_hex,
+        "accent": None,
+        "meta": _meta(source, 0, 0, [part] if part else []),
+    }
+    return surface, text_meta
 
 
 # --------------------------------------------------------------------------------------- palette
@@ -761,8 +842,9 @@ def _families(
     fonts = _Tally()
     for container in t.all_parts():
         for _, _, run in _runs(container):
-            if run.font:
-                fonts.add(run.font, len(run.text.strip()), container.part)
+            typeface = t.typeface(run.font or "")
+            if typeface:
+                fonts.add(typeface, len(run.text.strip()), container.part)
 
     declared = t.ir.theme_fonts.minor_latin or t.ir.theme_fonts.major_latin
     families: list[dict[str, Any]] = []
@@ -1310,6 +1392,7 @@ def build_design_system(
     ir: TemplateIR,
     template_hash: str,
     available_fonts: Iterable[str] | None = None,
+    background_images: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Derive the design system of a template from its IR.
 
@@ -1318,6 +1401,8 @@ def build_design_system(
         template_hash: Hash of the IR, so the pair can be checked downstream.
         available_fonts: Fonts the renderer can draw. When given, a font outside it is replaced
             by the theme's font or a common fallback, and the substitution is reported.
+        background_images: Mean colour of each background picture, keyed by the part that
+            states it. Without it a picture background counts as no colour at all.
 
     Returns:
         A payload matching the shared ``DesignSystem`` contract.
@@ -1326,7 +1411,7 @@ def build_design_system(
     available = (
         frozenset(f.casefold() for f in available_fonts) if available_fonts is not None else None
     )
-    template = _Template(ir, warnings)
+    template = _Template(ir, warnings, background_images)
 
     if not ir.theme_colors:
         warnings.add("theme-missing", "palette", "the package carries no colour scheme")
