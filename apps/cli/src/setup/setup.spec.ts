@@ -99,7 +99,9 @@ describe('parseArgs', () => {
 describe('models', () => {
   it('fills the AI Studio preset from a key and a folder id', () => {
     const settings = aiStudio(' key ', 'b1gaaaaaaaaaaaaaaaaa');
-    expect(settings.LLM_MODEL).toBe('gpt://b1gaaaaaaaaaaaaaaaaa/qwen3.6-35b-a3b/latest');
+    expect(settings.LLM_MODEL).toBe(
+      'gpt://b1gaaaaaaaaaaaaaaaaa/qwen3-30b-a3b-instruct-2507/latest',
+    );
     expect(settings.MODEL_API_KEY).toBe('key');
     expect(settings.VLM_BASE_URL).toBe(settings.LLM_BASE_URL);
   });

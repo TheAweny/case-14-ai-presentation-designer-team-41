@@ -144,7 +144,15 @@ export const compositionCritiqueSchema = z.object({
       z.object({
         slideIndex: z.number().int().nonnegative(),
         slotId: z.string(),
-        category: z.enum(['factual-error', 'incomplete-text', 'instruction-leftover', 'style']),
+        category: z.enum([
+          'factual-error',
+          'incomplete-text',
+          'instruction-leftover',
+          'label-title',
+          'duplicate-text',
+          'meta-narration',
+          'style',
+        ]),
         message: z.string(),
       }),
     )

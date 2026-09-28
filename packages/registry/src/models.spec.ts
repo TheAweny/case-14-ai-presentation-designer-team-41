@@ -21,7 +21,13 @@ const entry = {
 describe('model catalogue', () => {
   it('loads the catalogue the repository ships', async () => {
     const catalog = await loadModelCatalog(catalogPath);
-    expect(resolveModel(catalog, 'planner-default').type).toBe('llm');
+    expect(resolveModel(catalog, 'planner-default')).toMatchObject({
+      type: 'llm',
+      repo: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
+      sizeB: 30.5,
+    });
+    expect(resolveModel(catalog, 'vision-default').sizeB).toBeLessThanOrEqual(35);
+    expect(catalog.models.every((model) => model.sizeB <= 35)).toBe(true);
     expect(catalog.models.some((model) => model.provider === 'fake')).toBe(true);
   });
 

@@ -12,7 +12,9 @@ export interface ModelSettings {
 }
 
 export const AI_STUDIO_URL = 'https://llm.api.cloud.yandex.net/v1';
-export const AI_STUDIO_MODEL = 'qwen3.6-35b-a3b';
+// The case cap is 35B. Yandex's hosted qwen3.6-35b-a3b is about 35.95B, so the preset names the
+// catalogue model. A folder that does not serve it needs another OpenAI-compatible runtime.
+export const AI_STUDIO_MODEL = 'qwen3-30b-a3b-instruct-2507';
 
 /** Yandex AI Studio: the served name carries the cloud folder id. */
 export function aiStudio(apiKey: string, folderId: string): ModelSettings {

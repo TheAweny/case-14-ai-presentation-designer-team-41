@@ -58,7 +58,7 @@ request timeout (504), rather than returning an unexplained 500 for those failur
 ## Current single-deck model integration (2026-09-27)
 
 The current implementation milestone uses one text model for planning and slide writing:
-Yandex AI Studio Qwen3.6-35B-A3B via `LLM_BASE_URL`, `LLM_MODEL`, and `MODEL_API_KEY`.
+Qwen3-30B-A3B-Instruct-2507 (30.5B) via `LLM_BASE_URL`, `LLM_MODEL`, and `MODEL_API_KEY`.
 Thinking is disabled and output is constrained with JSON Schema and validated with Zod.
 There is no alternate-model fallback. The process-wide request limit is three, reserving
 capacity for teammates within the shared ten-request catalogue quota. This limit is not
@@ -67,8 +67,7 @@ Provider smoke evidence is separate from end-to-end PPTX quality and latency acc
 
 ## Implemented single-deck slice, 2026-09-27
 
-The current user-authorized milestone is one real-model deck in the supplied template within
-five minutes, using Mastra, a single Qwen3.6-35B-A3B Yandex endpoint and mocked image generation.
-The user explicitly accepted this named model despite its approximately 35.95B total parameter
-count. This does not relax the separate organizer acceptance gate above. Implementation,
+The current milestone is one real-model deck in the supplied template within five minutes, using
+Mastra, Qwen3-30B-A3B-Instruct-2507 (30.5B parameters, under the 35B case cap) and mocked image
+generation. Qwen3.6-35B-A3B is about 35.95B and is not the catalogue model. Implementation,
 measured API evidence, and limitations are recorded in `docs/GENERATION.md`.

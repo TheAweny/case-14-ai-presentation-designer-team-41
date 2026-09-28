@@ -14,19 +14,18 @@
 #   baseUrlEnv   - environment variable holding the base URL of that runtime
 #   servedName   - name the runtime serves the model under, when it differs from repo
 #
-# Every role runs on one open multimodal MoE model: 35B weights with 3B active per token keep a
-# 10-15 slide deck inside the 5 minute budget, and the same model reads slide images for the
-# content validation questions. Thinking is switched off: the answers are JSON checked against a
-# schema, and reasoning tokens would only spend the budget. The team serves it from Yandex AI
-# Studio (OpenAI-compatible API); the served name there carries the cloud folder id, so it is set
-# in .env as LLM_MODEL and VLM_MODEL rather than here.
+# Text roles share one open MoE under the case cap of 35B: 30.5B weights, 3.3B active per token,
+# so a 10-15 slide deck stays inside the 5 minute budget. Qwen3.6-35B-A3B is about 35.95B and is
+# not eligible. Slide images are read by a separate 8.8B vision-language model. Thinking is
+# switched off: the answers are JSON checked against a schema, and reasoning tokens would only
+# spend the budget. The served name is LLM_MODEL / VLM_MODEL in .env, not this file.
 
 models:
   - id: planner-default
-    repo: Qwen/Qwen3.6-35B-A3B
-    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
     license: Apache-2.0
-    sizeB: 35
+    sizeB: 30.5
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
@@ -35,10 +34,10 @@ models:
         enable_thinking: false
 
   - id: writer-default
-    repo: Qwen/Qwen3.6-35B-A3B
-    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
     license: Apache-2.0
-    sizeB: 35
+    sizeB: 30.5
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
@@ -47,10 +46,10 @@ models:
         enable_thinking: false
 
   - id: critic-default
-    repo: Qwen/Qwen3.6-35B-A3B
-    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
     license: Apache-2.0
-    sizeB: 35
+    sizeB: 30.5
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
@@ -59,16 +58,13 @@ models:
         enable_thinking: false
 
   - id: vision-default
-    repo: Qwen/Qwen3.6-35B-A3B
-    revision: 995ad96eacd98c81ed38be0c5b274b04031597b0
+    repo: Qwen/Qwen3-VL-8B-Instruct
+    revision: 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b
     license: Apache-2.0
-    sizeB: 35
+    sizeB: 8.8
     type: vlm
     provider: openai-compatible
     baseUrlEnv: VLM_BASE_URL
-    extraBody:
-      chat_template_kwargs:
-        enable_thinking: false
 
   # A text-only fallback, if the multimodal model is not available on a runtime.
   - id: planner-fallback

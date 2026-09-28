@@ -39,3 +39,8 @@ One JSON object with the fields below, and nothing else: no prose, no markdown f
   JSON, placeholders, "as an AI".
 - Product names and technical terms in another language do not make a slide multilingual.
 - Figures must match the sources exactly; a rounded or computed figure is unsupported.
+- When an image of the slide is attached, judge the picture, not your memory of the outline. Say
+  "no" when text is cut off by a shape, two texts occupy the same place, light text sits on a
+  light ground, a diagram label does not belong to its own step, or the lower half of the slide
+  is empty while the text is crowded at the top. The suggestion names the slot text to shorten or
+  the assertion to use. Do not ask for a new color, a new font, or a new coordinate.

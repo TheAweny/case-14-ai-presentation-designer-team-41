@@ -62,7 +62,7 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
               {
                 value: 'ai-studio',
                 label: 'Yandex AI Studio',
-                hint: 'Qwen3.6-35B-A3B, ключ и ID каталога',
+                hint: 'Qwen3-30B-A3B (30.5B), ключ и ID каталога',
               },
               {
                 value: 'openai',
@@ -111,7 +111,10 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
   const model =
     options.model ??
     (await ask(() =>
-      p.text({ message: 'Имя модели, как его называет API', placeholder: 'Qwen/Qwen3.6-35B-A3B' }),
+      p.text({
+        message: 'Имя модели, как его называет API',
+        placeholder: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
+      }),
     ));
   return openAiCompatible(baseUrl, apiKey ?? '', model);
 }

@@ -4,7 +4,10 @@ import type { z } from 'zod';
 import { generationProfileSchema } from '@lct/contracts';
 import {
   createGenerationWorkflow,
+  fitChars,
   groundedVisual,
+  patternUseLimit,
+  slotBriefs,
   validateBindings,
   variantCatalog,
 } from './workflow.js';
@@ -288,6 +291,75 @@ describe('variantCatalog', () => {
 
   it('gives balanced the whole catalog', () => {
     expect(variantCatalog(catalog, 'balanced')).toHaveLength(catalog.length);
+  });
+});
+
+describe('slot fit and reading order', () => {
+  it('keeps a title near a short template sample instead of the metric ceiling', () => {
+    expect(fitChars({ role: 'title', sample: 'Logic', maxChars: 200 })).toBe(36);
+    expect(fitChars({ role: 'body', sample: 'Context', maxChars: 400 })).toBe(9);
+    expect(fitChars({ role: 'title', sample: '', maxChars: 80 })).toBe(80);
+  });
+
+  it('puts slots that share a vertical band on one row', () => {
+    const briefs = slotBriefs([
+      {
+        slotId: 'a',
+        role: 'title',
+        sample: 'A',
+        maxChars: 40,
+        maxLines: 1,
+        font: 'F',
+        fontSize: 28,
+        box: { x: 0, y: 0, cx: 100, cy: 40 },
+      },
+      {
+        slotId: 'b',
+        role: 'body',
+        sample: 'B',
+        maxChars: 80,
+        maxLines: 2,
+        font: 'F',
+        fontSize: 16,
+        box: { x: 200, y: 10, cx: 100, cy: 40 },
+      },
+      {
+        slotId: 'c',
+        role: 'body',
+        sample: 'C',
+        maxChars: 80,
+        maxLines: 2,
+        font: 'F',
+        fontSize: 16,
+        box: { x: 0, y: 200, cx: 100, cy: 40 },
+      },
+    ]);
+    const byId = Object.fromEntries(briefs.map((slot) => [slot.slotId, slot]));
+    expect(byId.a?.row).toBe(byId.b?.row);
+    expect(byId.c?.row).not.toBe(byId.a?.row);
+    expect(byId.b?.column).toBe(1);
+  });
+
+  it('caps repeats only when the template offers more than two compositions', () => {
+    expect(patternUseLimit(6, 10)).toBe(2);
+    expect(patternUseLimit(2, 10)).toBe(5);
+    expect(patternUseLimit(1, 10)).toBe(10);
+  });
+
+  it('rejects a title inside the metric ceiling but past the visible budget', () => {
+    const slot = composition.slots[0];
+    if (!slot) throw new Error('Fixture slot missing');
+    const pattern = { ...composition, slots: [{ ...slot, sample: 'Logic', maxChars: 80 }] };
+    expect(
+      validateBindings(
+        {
+          patternId: pattern.patternId,
+          texts: [{ slotId: slot.slotId, text: 'S'.repeat(50) }],
+          speakerNotes: '',
+        },
+        pattern,
+      ).some((error) => error.includes('36')),
+    ).toBe(true);
   });
 });
 

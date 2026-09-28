@@ -55,6 +55,66 @@ export const writtenSchema = z.object({
 /** Body slots roomy enough to hold a table or a chart instead of their text. */
 const VISUAL_MIN_CHARS = 120;
 
+/**
+ * How many characters already fitted this slot in the template.
+ * `maxChars` is a font-metric ceiling and is often wider than the visible shape, so a title
+ * written to that ceiling is clipped by a pill or runs into the next card. The sample is the
+ * phrase the template itself set in the box. Stay near it, and let a title grow only as far as
+ * a short assertion.
+ */
+export function fitChars(slot: { role: string; sample: string; maxChars: number }): number {
+  const sampleLen = slot.sample.trim().length;
+  if (sampleLen === 0) return slot.maxChars;
+  const scaled = Math.ceil(sampleLen * 1.25);
+  const floor = Math.min(slot.maxChars, slot.role === 'title' ? 36 : 8);
+  return Math.max(4, Math.min(slot.maxChars, Math.max(scaled, floor)));
+}
+
+/**
+ * How often one template composition may be reused. Two compositions cannot cover ten slides
+ * without repetition. A richer catalog must not be cloned into the same diagram five times.
+ */
+export function patternUseLimit(patternCount: number, slideCount: number): number {
+  if (patternCount <= 2) return Math.max(3, Math.ceil(slideCount / Math.max(1, patternCount)));
+  return 2;
+}
+
+/** Reading order of a composition's slots. Row and column are indexes, not coordinates. */
+export function slotBriefs(slots: GenerationProfile['compositions'][number]['slots']) {
+  const heights = slots
+    .map((slot) => slot.box?.cy ?? 0)
+    .filter((height) => height > 0)
+    .sort((a, b) => a - b);
+  const median = heights[Math.floor(heights.length / 2)] ?? 0;
+  const gap = median > 0 ? median * 0.5 : Number.POSITIVE_INFINITY;
+  const ordered = [...slots].sort(
+    (a, b) => (a.box?.y ?? 0) - (b.box?.y ?? 0) || (a.box?.x ?? 0) - (b.box?.x ?? 0),
+  );
+  let row = 0;
+  let rowTop = ordered[0]?.box?.y ?? 0;
+  const nextColumn = new Map<number, number>();
+  return ordered.map((slot) => {
+    const y = slot.box?.y ?? rowTop;
+    if (y - rowTop > gap) {
+      row += 1;
+      rowTop = y;
+    }
+    const column = nextColumn.get(row) ?? 0;
+    nextColumn.set(row, column + 1);
+    return {
+      slotId: slot.slotId,
+      role: slot.role,
+      sample: slot.sample,
+      maxChars: slot.maxChars,
+      maxLines: slot.maxLines,
+      fontSize: slot.fontSize,
+      fitChars: fitChars(slot),
+      row,
+      column,
+    };
+  });
+}
+
 export function visualSlots(pattern: GenerationProfile['compositions'][number]): string[] {
   return pattern.slots
     .filter((slot) => slot.role === 'body' && slot.maxChars >= VISUAL_MIN_CHARS)
@@ -116,7 +176,9 @@ export function groundedVisual(
 function writingComposition(pattern: GenerationProfile['compositions'][number]) {
   return {
     patternId: pattern.patternId,
-    slots: pattern.slots.map(({ sample: _sample, ...slot }) => slot),
+    name: pattern.name,
+    imageCount: pattern.imageCount,
+    slots: slotBriefs(pattern.slots),
   };
 }
 
@@ -196,7 +258,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         for (const slide of result.slides) {
           counts.set(slide.patternId, (counts.get(slide.patternId) ?? 0) + 1);
         }
-        const limit = Math.max(3, Math.ceil(result.slides.length / 3));
+        const limit = patternUseLimit(catalog.length, result.slides.length);
         const overused = [...counts].filter(([, n]) => n > limit).map(([id]) => id);
         return overused.length && catalog.length > 1
           ? {
@@ -275,6 +337,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             .filter((slot) => {
               const text = slide?.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
               return (
+                text.length > fitChars(slot) ||
                 text.length > slot.maxChars ||
                 text.split('\n').length > slot.maxLines ||
                 (slot.role === 'title' && !text.trim())
@@ -282,7 +345,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             })
             .map((slot) => ({
               slotId: slot.slotId,
-              message: `Maximum ${slot.maxChars} characters and ${slot.maxLines} lines.`,
+              message: `Maximum ${fitChars(slot)} characters and ${slot.maxLines} lines. The template sample was ${slot.sample.length} characters.`,
             })),
         });
         problems = validateBindings(slide, inputData.composition);
@@ -345,9 +408,13 @@ export function validateBindings(
     if (!binding) errors.push(`Missing slot ${slot.slotId}`);
     else if (slot.role === 'title' && !binding.text.trim())
       errors.push(`Title ${slot.slotId} must not be empty`);
-    else if (binding.text.length > slot.maxChars || binding.text.split('\n').length > slot.maxLines)
+    else if (
+      binding.text.length > fitChars(slot) ||
+      binding.text.length > slot.maxChars ||
+      binding.text.split('\n').length > slot.maxLines
+    )
       errors.push(
-        `Shorten slot ${slot.slotId} to <= ${slot.maxChars} chars and ${slot.maxLines} lines`,
+        `Shorten slot ${slot.slotId} to <= ${fitChars(slot)} chars and ${slot.maxLines} lines`,
       );
   }
   return errors;
@@ -411,7 +478,9 @@ async function rewriteSlide(
       slots: slots.map((s) => ({
         slotId: s.slotId,
         role: s.role,
+        sample: s.sample,
         maxChars: s.maxChars,
+        fitChars: fitChars(s),
         maxLines: s.maxLines,
         text: task.previous.texts.find((t) => t.slotId === s.slotId)?.text,
         correction: task.corrections
@@ -429,6 +498,7 @@ async function rewriteSlide(
     const text = alternatives
       .filter(
         (t) =>
+          t.length <= fitChars(slot) &&
           t.length <= slot.maxChars &&
           t.split('\n').length <= slot.maxLines &&
           (slot.role !== 'title' || t.trim()),
@@ -436,7 +506,7 @@ async function rewriteSlide(
       .sort((a, b) => b.length - a.length)[0];
     if (text === undefined)
       throw new Error(
-        `No complete rewrite fits slot ${slot.slotId} (${slot.maxChars} chars; alternatives: ${alternatives.map((t) => t.length).join(',')}).`,
+        `No complete rewrite fits slot ${slot.slotId} (${fitChars(slot)} chars; alternatives: ${alternatives.map((t) => t.length).join(',')}).`,
       );
     const binding = slide.texts.find((t) => t.slotId === slot.slotId);
     if (binding) binding.text = text;

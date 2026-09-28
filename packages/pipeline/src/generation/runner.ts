@@ -18,6 +18,7 @@ import {
   createRepairWorkflow,
   critiqueSchema,
   type DeckVariant,
+  fitChars,
   repairedSlideSchema,
   type repairTaskSchema,
   writtenSchema,
@@ -155,21 +156,31 @@ export async function generatePresentation(options: GenerateOptions) {
           critic.instructions,
           {
             brief: options.brief,
-            slides: written.map((s) => ({
-              slideIndex: s.index,
-              speakerNotes: s.slide.speakerNotes,
-              // The slot a table or chart replaced has no text on purpose; the critic sees the
-              // visual instead.
-              visual: s.slide.visual ?? null,
-              texts: s.slide.texts
-                .filter((t) => t.slotId !== s.slide.visual?.slotId)
-                .map((t) => ({
-                  ...t,
-                  maxChars: options.profile.compositions
-                    .find((p) => p.patternId === s.slide.patternId)
-                    ?.slots.find((slot) => slot.slotId === t.slotId)?.maxChars,
-                })),
-            })),
+            slides: written.map((s) => {
+              const pattern = options.profile.compositions.find(
+                (p) => p.patternId === s.slide.patternId,
+              );
+              return {
+                slideIndex: s.index,
+                patternId: s.slide.patternId,
+                speakerNotes: s.slide.speakerNotes,
+                // The slot a table or chart replaced has no text on purpose; the critic sees the
+                // visual instead.
+                visual: s.slide.visual ?? null,
+                texts: s.slide.texts
+                  .filter((t) => t.slotId !== s.slide.visual?.slotId)
+                  .map((t) => {
+                    const slot = pattern?.slots.find((item) => item.slotId === t.slotId);
+                    return {
+                      ...t,
+                      role: slot?.role,
+                      sample: slot?.sample,
+                      maxChars: slot?.maxChars,
+                      fitChars: slot ? fitChars(slot) : undefined,
+                    };
+                  }),
+              };
+            }),
           },
           critiqueSchema,
           signal,
