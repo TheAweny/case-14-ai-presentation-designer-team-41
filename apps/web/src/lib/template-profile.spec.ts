@@ -68,8 +68,11 @@ const ir = {
 } as TemplateIr;
 
 describe('templateLayoutsFromIr', () => {
-  it('preserves every parsed layout and its text elements', () => {
-    const layouts = templateLayoutsFromIr(ir);
+  it('preserves every parsed layout and the text of its non-placeholder shapes', () => {
+    const layout = ir.layouts[0];
+    if (!layout?.shapes[0]) throw new Error('fixture layout is missing');
+    const caption = { ...layout.shapes[0], placeholder: null };
+    const layouts = templateLayoutsFromIr({ ...ir, layouts: [{ ...layout, shapes: [caption] }] });
     expect(layouts).toHaveLength(1);
     expect(layouts[0]?.name).toBe('Титульный');
     expect(layouts[0]?.slide.elements[0]).toMatchObject({
@@ -82,7 +85,13 @@ describe('templateLayoutsFromIr', () => {
   it('does not silently discard shapes without text', () => {
     const layout = ir.layouts[0];
     if (!layout?.shapes[0]) throw new Error('fixture layout is missing');
-    const shape = { ...layout.shapes[0], shapeId: 2, paragraphs: [], mediaPart: '' };
+    const shape = {
+      ...layout.shapes[0],
+      shapeId: 2,
+      placeholder: null,
+      paragraphs: [],
+      mediaPart: '',
+    };
     const layouts = templateLayoutsFromIr({ ...ir, layouts: [{ ...layout, shapes: [shape] }] });
     expect(layouts[0]?.slide.elements).toHaveLength(1);
     expect(layouts[0]?.slide.elements[0]).toMatchObject({ kind: 'decor', sourceShapeId: 2 });
@@ -95,7 +104,9 @@ describe('templateLayoutsFromIr', () => {
       ...layout,
       part: '/ppt/slideMasters/slideMaster1.xml',
       name: 'Master',
-      shapes: [{ ...layout.shapes[0], shapeId: 9, paragraphs: [], mediaPart: '' }],
+      shapes: [
+        { ...layout.shapes[0], shapeId: 9, placeholder: null, paragraphs: [], mediaPart: '' },
+      ],
     };
     const layouts = templateLayoutsFromIr({
       ...ir,
@@ -217,10 +228,16 @@ describe('templateLayoutsFromIr', () => {
     expect(rendered?.background).toBe('123456');
   });
 
-  it('retains layout placeholders for the new-slide gallery', () => {
+  it('keeps a layout placeholder as an empty frame with its formatting', () => {
     const layouts = templateLayoutsFromIr(ir);
     expect(layouts[0]?.slide.elements).toMatchObject([
-      { kind: 'text', sourceShapeId: 1, paragraphs: [{ runs: [{ text: 'Заголовок' }] }] },
+      {
+        kind: 'text',
+        role: 'title',
+        sourceShapeId: 1,
+        box: { x: 10, y: 20, cx: 500, cy: 100 },
+        paragraphs: [{ runs: [{ text: '', font: 'Play', sizePt: 30, bold: true }] }],
+      },
     ]);
   });
 
@@ -372,5 +389,117 @@ describe('templateLayoutsFromIr', () => {
     expect(rendered?.elements).toMatchObject([
       { kind: 'decor', sourceShapeId: 4, shape: 'ellipse', fill: 'FF3885' },
     ]);
+  });
+});
+
+describe('templateLayoutsFromIr on a template with prompt texts', () => {
+  const base = ir.layouts[0]?.shapes[0];
+  if (!base) throw new Error('fixture layout is missing');
+  type FixtureShape = typeof base;
+
+  const run = (text: string, stated: Partial<FixtureShape['paragraphs'][0]['runs'][0]> = {}) => ({
+    text,
+    font: '',
+    sizePt: null,
+    bold: null,
+    italic: null,
+    color: '',
+    ...stated,
+  });
+  const placeholder = (
+    shapeId: number,
+    type: string,
+    idx: number | null,
+    box: FixtureShape['box'],
+    lines: readonly string[],
+    stated: Partial<FixtureShape['paragraphs'][0]['runs'][0]> = {},
+  ): FixtureShape => ({
+    ...base,
+    shapeId,
+    name: `${type} ${shapeId}`,
+    z: shapeId,
+    box,
+    placeholder: { type, idx },
+    paragraphs: lines.map((line, level) => ({
+      level,
+      align: null,
+      lineSpacing: null,
+      runs: line ? [run(line, stated)] : [],
+    })),
+  });
+
+  // Shaped after what the parser reads out of a real template: the master and its layouts carry
+  // the prompts of the authoring tool, the layout title states no position of its own.
+  const masterBox = { x: 100, y: 50, cx: 800, cy: 90 };
+  const master = {
+    ...ir.layouts[0],
+    part: '/ppt/slideMasters/slideMaster1.xml',
+    name: 'Master',
+    follows: '',
+    shapes: [
+      { ...base, shapeId: 20, z: 0, placeholder: null, paragraphs: [], geometry: 'ellipse' },
+      placeholder(2, 'title', 0, masterBox, ['ОБРАЗЕЦ ЗАГОЛОВКА'], {
+        font: 'Unbounded',
+        sizePt: 40,
+      }),
+      placeholder(3, 'body', 1, { x: 100, y: 160, cx: 800, cy: 380 }, [
+        'Образец текста',
+        'Второй уровень',
+        'Третий уровень',
+        'Четвертый уровень',
+        'Пятый уровень',
+      ]),
+      placeholder(4, 'date', 2, { x: 100, y: 560, cx: 200, cy: 30 }, ['']),
+      placeholder(5, 'footer', 3, { x: 350, y: 560, cx: 300, cy: 30 }, ['']),
+      placeholder(6, 'slide-number', 4, { x: 700, y: 560, cx: 200, cy: 30 }, ['']),
+    ],
+  };
+  const layout = {
+    ...ir.layouts[0],
+    part: '/ppt/slideLayouts/slideLayout2.xml',
+    name: 'Две колонки',
+    follows: master.part,
+    shapes: [
+      placeholder(2, 'title', 0, null, ['Образец заголовка'], { sizePt: 36 }),
+      placeholder(7, 'title', 0, { x: 100, y: 50, cx: 800, cy: 90 }, ['Образец заголовка']),
+      placeholder(3, 'body', 1, { x: 100, y: 160, cx: 380, cy: 380 }, ['Образец текста']),
+      placeholder(8, 'body', 2, { x: 520, y: 160, cx: 380, cy: 380 }, ['Образец текста']),
+      placeholder(4, 'date', 10, { x: 100, y: 560, cx: 200, cy: 30 }, ['']),
+      placeholder(5, 'footer', 11, { x: 350, y: 560, cx: 300, cy: 30 }, ['']),
+      placeholder(6, 'slide-number', 12, { x: 700, y: 560, cx: 200, cy: 30 }, ['']),
+    ],
+  };
+  const template = { ...ir, masters: [master], layouts: [layout] } as TemplateIr;
+  const slide = templateLayoutsFromIr(template)[0]?.slide;
+  const texts = slide?.elements.filter((element) => element.kind === 'text') ?? [];
+
+  it('shows no prompt text of the master or the layout', () => {
+    const words = texts.flatMap((element) =>
+      element.paragraphs.flatMap((paragraph) => paragraph.runs.map((run) => run.text)),
+    );
+    expect(words.every((text) => text === '')).toBe(true);
+  });
+
+  it('draws one frame per layout slot and none for master placeholders', () => {
+    expect(texts.filter((element) => element.role === 'title')).toHaveLength(1);
+    expect(texts.map((element) => element.sourceShapeId)).toEqual([2, 3, 8]);
+  });
+
+  it('leaves out the header and footer placeholders', () => {
+    expect(slide?.elements.some((element) => [4, 5, 6].includes(element.sourceShapeId ?? 0))).toBe(
+      false,
+    );
+  });
+
+  it('keeps master graphics under the layout frames', () => {
+    expect(slide?.elements[0]).toMatchObject({ kind: 'decor', sourceShapeId: 20 });
+  });
+
+  it('takes position and unstated formatting of a frame from the master placeholder', () => {
+    expect(texts[0]).toMatchObject({
+      role: 'title',
+      box: masterBox,
+      paragraphs: [{ runs: [{ text: '', font: 'Unbounded', sizePt: 36 }] }],
+    });
   });
 });
