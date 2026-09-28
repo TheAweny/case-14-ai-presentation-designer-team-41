@@ -1,0 +1,149 @@
+{
+  "contract": "DeckImportResponse",
+  "valid": [
+    {
+      "name": "one slide read back",
+      "payload": {
+        "schemaVersion": 1,
+        "slides": [
+          {
+            "schemaVersion": 1,
+            "slideId": "imported-1",
+            "variant": "balanced",
+            "index": 0,
+            "patternId": "/ppt/slideLayouts/slideLayout4.xml",
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "background": "background",
+            "backgroundImage": "/ppt/media/image1.png",
+            "elements": [
+              {
+                "kind": "decor",
+                "elementId": "imported-1-shape-20",
+                "role": "decoration",
+                "box": {
+                  "x": 6096000,
+                  "y": 1308100,
+                  "cx": 1079500,
+                  "cy": 749300
+                },
+                "sourceShapeId": 20,
+                "fill": null,
+                "stroke": {
+                  "color": "accent",
+                  "widthEmu": 12700,
+                  "dash": "solid",
+                  "head": "none",
+                  "tail": "none"
+                },
+                "geometry": {
+                  "width": 1079500,
+                  "height": 749300,
+                  "paths": [
+                    {
+                      "d": "M0 0 L700000 0 L1079500 374650 L700000 749300 L0 749300 L379500 374650 Z",
+                      "filled": true,
+                      "stroked": true
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "text",
+                "elementId": "imported-1-shape-3",
+                "role": "body",
+                "box": {
+                  "x": 584200,
+                  "y": 1917700,
+                  "cx": 4927600,
+                  "cy": 3860800
+                },
+                "sourceShapeId": 3,
+                "overflow": null,
+                "verticalAlign": "top",
+                "textInsets": {
+                  "l": 91440,
+                  "t": 45720,
+                  "r": 91440,
+                  "b": 45720
+                },
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "align": "left",
+                    "bullet": "•",
+                    "marginEmu": 228600,
+                    "indentEmu": -228600,
+                    "spaceBeforePt": 6,
+                    "lineSpacing": null,
+                    "runs": [
+                      {
+                        "text": "Оставляем только ключевые факты.",
+                        "font": "Open Sans",
+                        "sizePt": 14,
+                        "bold": false,
+                        "italic": false,
+                        "underline": false,
+                        "color": "2B0A4F"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "an outline without paths",
+      "why": "a geometry draws at least one path",
+      "path": ["slides", 0, "elements", 0, "geometry", "paths"],
+      "payload": {
+        "schemaVersion": 1,
+        "slides": [
+          {
+            "schemaVersion": 1,
+            "slideId": "imported-1",
+            "variant": "balanced",
+            "index": 0,
+            "patternId": "/ppt/slideLayouts/slideLayout4.xml",
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "background": "background",
+            "backgroundImage": "/ppt/media/image1.png",
+            "elements": [
+              {
+                "kind": "decor",
+                "elementId": "imported-1-shape-20",
+                "role": "decoration",
+                "box": {
+                  "x": 6096000,
+                  "y": 1308100,
+                  "cx": 1079500,
+                  "cy": 749300
+                },
+                "sourceShapeId": 20,
+                "fill": null,
+                "stroke": {
+                  "color": "accent",
+                  "widthEmu": 12700,
+                  "dash": "solid",
+                  "head": "none",
+                  "tail": "none"
+                },
+                "geometry": {
+                  "width": 1,
+                  "height": 1,
+                  "paths": []
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

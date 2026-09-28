@@ -73,6 +73,17 @@ const elementLook = {
     ),
 };
 
+/**
+ * Space between the edge of a shape and its text, in EMU: `lIns`, `tIns`, `rIns` and `bIns` of
+ * OOXML `a:bodyPr`.
+ */
+export const textInsetsSchema = z.object({
+  l: z.number().int().nonnegative(),
+  t: z.number().int().nonnegative(),
+  r: z.number().int().nonnegative(),
+  b: z.number().int().nonnegative(),
+});
+
 /** Where the lines of a text element sit when they are shorter than its box. */
 export const verticalAlignSchema = z.enum(['top', 'middle', 'bottom']);
 
@@ -98,6 +109,9 @@ export const textElementSchema = z.object({
   verticalAlign: verticalAlignSchema
     .optional()
     .describe('Absent when the element inherits it, which reads as top.'),
+  textInsets: textInsetsSchema
+    .optional()
+    .describe('Space between the box and its text (`a:bodyPr` insets). Absent: none.'),
 });
 
 /** How a picture meets its box. */
@@ -263,14 +277,23 @@ export const elementStrokeSchema = z.object({
 });
 
 /**
- * Space between the edge of a shape and its text, in EMU: `lIns`, `tIns`, `rIns` and `bIns` of
- * OOXML `a:bodyPr`.
+ * The outline of a shape no named `shape` describes: a freeform (`a:custGeom`) or a preset such as
+ * a chevron, as SVG path data. `d` is drawn in a `width` by `height` space stretched over the box,
+ * so resizing the element reshapes the outline the way PowerPoint does. A path OOXML marks
+ * `fill="none"` or `stroke="0"` keeps that here, as an arrow's open line does.
  */
-export const textInsetsSchema = z.object({
-  l: z.number().int().nonnegative(),
-  t: z.number().int().nonnegative(),
-  r: z.number().int().nonnegative(),
-  b: z.number().int().nonnegative(),
+export const decorGeometrySchema = z.object({
+  width: z.number().positive().describe('Width of the space the paths are drawn in.'),
+  height: z.number().positive().describe('Height of the space the paths are drawn in.'),
+  paths: z
+    .array(
+      z.object({
+        d: z.string().min(1).describe('SVG path data.'),
+        filled: z.boolean().describe('False for a path OOXML draws without its fill.'),
+        stroked: z.boolean().describe('False for a path OOXML draws without its outline.'),
+      }),
+    )
+    .min(1),
 });
 
 /**
@@ -299,6 +322,9 @@ export const decorElementSchema = z.object({
   shape: decorShapeSchema
     .optional()
     .describe('Absent for template decoration of a geometry the parser did not name.'),
+  geometry: decorGeometrySchema
+    .optional()
+    .describe('Outline of a geometry `shape` cannot name. When present it is drawn instead.'),
   fill: colorValueSchema
     .nullable()
     .optional()
@@ -355,6 +381,14 @@ export const slideIrSchema = z.object({
     .nullable()
     .optional()
     .describe('Colour the slide is filled with. Null or absent: the template background.'),
+  backgroundImage: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Picture the slide is painted with, stretched over it and drawn above `background`: a part ' +
+        'name inside the template or a path under the run directory, as an image `mediaPart`.',
+    ),
   notes: z
     .string()
     .optional()
@@ -374,6 +408,7 @@ export type ElementStroke = z.infer<typeof elementStrokeSchema>;
 export type ImageFit = z.infer<typeof imageFitSchema>;
 export type ImageCrop = z.infer<typeof imageCropSchema>;
 export type TextInsets = z.infer<typeof textInsetsSchema>;
+export type DecorGeometry = z.infer<typeof decorGeometrySchema>;
 export type ChartType = z.infer<typeof chartTypeSchema>;
 export type TableCellStyle = z.infer<typeof tableCellStyleSchema>;
 export type TableBorders = z.infer<typeof tableBordersSchema>;

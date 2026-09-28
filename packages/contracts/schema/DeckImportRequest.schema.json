@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "mediaDir": {
+      "description": "Directory the pictures the slides draw are written into, each under the file name of its part, so a server can hand them out by that name. Absent: nothing is written.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "pptxPath": {
+      "description": "The .pptx to read, on the engine filesystem.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "pptxPath"
+  ],
+  "title": "DeckImportRequest",
+  "type": "object"
+}

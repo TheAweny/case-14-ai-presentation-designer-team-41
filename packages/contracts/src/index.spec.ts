@@ -65,6 +65,8 @@ describe('contract registry', () => {
       'CopyEdits',
       'DeckExportRequest',
       'DeckExportResponse',
+      'DeckImportRequest',
+      'DeckImportResponse',
       'DeckPlan',
       'DesignSystem',
       'EditableDeckRequest',

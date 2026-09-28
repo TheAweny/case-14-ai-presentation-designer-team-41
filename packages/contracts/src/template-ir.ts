@@ -86,6 +86,34 @@ export const paragraphSchema = z.object({
     .positive()
     .nullable()
     .describe('Multiple of single spacing, when stated as a percentage.'),
+  bullet: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Character the paragraph is bulleted with (`a:buChar`). Absent: no bullet.'),
+  marginEmu: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Left margin of the paragraph (`marL`). Absent: inherited, which reads as 0.'),
+  indentEmu: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      'First-line indent against the margin (`indent`); negative hangs the bullet. Absent: 0.',
+    ),
+  spaceBeforePt: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe('Space above the paragraph in points (`spcBef`). Absent: none.'),
+  spaceAfterPt: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe('Space below the paragraph in points (`spcAft`). Absent: none.'),
 });
 
 /** Placeholder identity, present only on shapes that inherit from a layout. */

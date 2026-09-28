@@ -431,6 +431,17 @@
                             ],
                             "description": "Null or absent when the paragraph inherits its alignment."
                           },
+                          "bullet": {
+                            "description": "Character the paragraph is bulleted with (`a:buChar`). Absent: no bullet.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "indentEmu": {
+                            "description": "First-line indent against the margin (`indent`); negative hangs the bullet. Absent: 0.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
                           "level": {
                             "description": "Indent level, zero at the top.",
                             "maximum": 9007199254740991,
@@ -448,6 +459,12 @@
                               }
                             ],
                             "description": "Multiple of single spacing, when stated as a percentage."
+                          },
+                          "marginEmu": {
+                            "description": "Left margin of the paragraph (`marL`). Absent: inherited, which reads as 0.",
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
                           },
                           "runs": {
                             "description": "Runs in reading order.",
@@ -513,6 +530,16 @@
                               "type": "object"
                             },
                             "type": "array"
+                          },
+                          "spaceAfterPt": {
+                            "description": "Space below the paragraph in points (`spcAft`). Absent: none.",
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "spaceBeforePt": {
+                            "description": "Space above the paragraph in points (`spcBef`). Absent: none.",
+                            "minimum": 0,
+                            "type": "number"
                           }
                         },
                         "required": [
@@ -1128,6 +1155,17 @@
                             ],
                             "description": "Null or absent when the paragraph inherits its alignment."
                           },
+                          "bullet": {
+                            "description": "Character the paragraph is bulleted with (`a:buChar`). Absent: no bullet.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "indentEmu": {
+                            "description": "First-line indent against the margin (`indent`); negative hangs the bullet. Absent: 0.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
                           "level": {
                             "description": "Indent level, zero at the top.",
                             "maximum": 9007199254740991,
@@ -1145,6 +1183,12 @@
                               }
                             ],
                             "description": "Multiple of single spacing, when stated as a percentage."
+                          },
+                          "marginEmu": {
+                            "description": "Left margin of the paragraph (`marL`). Absent: inherited, which reads as 0.",
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
                           },
                           "runs": {
                             "description": "Runs in reading order.",
@@ -1210,6 +1254,16 @@
                               "type": "object"
                             },
                             "type": "array"
+                          },
+                          "spaceAfterPt": {
+                            "description": "Space below the paragraph in points (`spcAft`). Absent: none.",
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "spaceBeforePt": {
+                            "description": "Space above the paragraph in points (`spcBef`). Absent: none.",
+                            "minimum": 0,
+                            "type": "number"
                           }
                         },
                         "required": [
@@ -1900,6 +1954,17 @@
                             ],
                             "description": "Null or absent when the paragraph inherits its alignment."
                           },
+                          "bullet": {
+                            "description": "Character the paragraph is bulleted with (`a:buChar`). Absent: no bullet.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "indentEmu": {
+                            "description": "First-line indent against the margin (`indent`); negative hangs the bullet. Absent: 0.",
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
                           "level": {
                             "description": "Indent level, zero at the top.",
                             "maximum": 9007199254740991,
@@ -1917,6 +1982,12 @@
                               }
                             ],
                             "description": "Multiple of single spacing, when stated as a percentage."
+                          },
+                          "marginEmu": {
+                            "description": "Left margin of the paragraph (`marL`). Absent: inherited, which reads as 0.",
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
                           },
                           "runs": {
                             "description": "Runs in reading order.",
@@ -1982,6 +2053,16 @@
                               "type": "object"
                             },
                             "type": "array"
+                          },
+                          "spaceAfterPt": {
+                            "description": "Space below the paragraph in points (`spcAft`). Absent: none.",
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "spaceBeforePt": {
+                            "description": "Space above the paragraph in points (`spcBef`). Absent: none.",
+                            "minimum": 0,
+                            "type": "number"
                           }
                         },
                         "required": [

@@ -126,6 +126,7 @@ export {
   textInsetsSchema,
   chartTypeSchema,
   decorShapeSchema,
+  decorGeometrySchema,
   strokeDashSchema,
   lineEndSchema,
   elementStrokeSchema,
@@ -140,6 +141,7 @@ export {
   type ImageFit,
   type ImageCrop,
   type TextInsets,
+  type DecorGeometry,
   type ChartType,
   type DecorShape,
   type StrokeDash,
@@ -203,6 +205,12 @@ export {
   type StageTiming,
   type ModelCallSummary,
 } from './artifact-manifest.js';
+export {
+  deckImportRequestSchema,
+  deckImportResponseSchema,
+  type DeckImportRequest,
+  type DeckImportResponse,
+} from './deck-import.js';
 export { contractRegistry, type ContractName } from './registry.js';
 export {
   editableDeckRequestSchema,

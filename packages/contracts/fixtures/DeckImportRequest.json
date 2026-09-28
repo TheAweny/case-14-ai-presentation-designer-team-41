@@ -1,0 +1,31 @@
+{
+  "contract": "DeckImportRequest",
+  "valid": [
+    {
+      "name": "a generated deck on the engine filesystem",
+      "payload": {
+        "schemaVersion": 1,
+        "pptxPath": "/app/runs/run-1/deck.pptx"
+      }
+    },
+    {
+      "name": "pictures written next to the run for the API to serve",
+      "payload": {
+        "schemaVersion": 1,
+        "pptxPath": "/app/runs/run-1/deck.pptx",
+        "mediaDir": "/app/runs/run-1/media"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "no path",
+      "why": "the engine has nothing to read",
+      "path": ["pptxPath"],
+      "payload": {
+        "schemaVersion": 1,
+        "pptxPath": ""
+      }
+    }
+  ]
+}
