@@ -92,9 +92,25 @@ export function ModelMenu({
       </Button>
     );
   }
-  if (models.count < 2) return null;
-
   const selected = effectiveModel(models, value);
+
+  // Единственную модель выбирать не нужно, но её имя нельзя скрывать: человек должен видеть,
+  // какой provider будет вызван до запуска генерации.
+  if (models.count === 1 && selected) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size={compact ? 'default' : 'lg'}
+        className={trigger}
+        title={selected.modelId}
+        onClick={() => openSettings('models')}
+      >
+        <ServerIcon data-icon="inline-start" />
+        <span className="truncate">{shortModelName(selected.modelId)}</span>
+      </Button>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

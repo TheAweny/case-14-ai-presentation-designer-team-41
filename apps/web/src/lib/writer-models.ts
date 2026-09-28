@@ -23,6 +23,11 @@ export interface WriterModels {
   readonly count: number;
 }
 
+/** Генерацию можно начинать только после загрузки настроек и наличия проверенной модели writer. */
+export function writerModelReady(models: WriterModels | null): models is WriterModels {
+  return models !== null && models.count > 0;
+}
+
 export function sameModel(a: ModelRef | null, b: ModelRef | null): boolean {
   return a !== null && b !== null && a.connectionId === b.connectionId && a.modelId === b.modelId;
 }

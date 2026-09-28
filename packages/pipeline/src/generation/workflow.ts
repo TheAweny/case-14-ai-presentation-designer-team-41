@@ -24,7 +24,7 @@ export interface GenerationDependencies {
 }
 const inputSchema = z.object({
   brief: z.string(),
-  slideCount: z.number().int().min(1).max(15).nullable(),
+  slideCount: z.number().int().min(10).max(15).nullable(),
   profile: generationProfileSchema,
 });
 const taskSchema = z.object({
@@ -85,41 +85,53 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           p.slots.length <= 3 &&
           p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
       );
-      let result = await deps.provider.generate(
-        'planner',
-        deps.plannerInstructions,
-        {
-          brief: inputData.brief,
-          slideCount: inputData.slideCount,
-          catalog,
-          coverPatternIds: covers.map((p) => p.patternId),
-        },
-        compositionPlanSchema,
-        deps.signal,
-      );
-      if (
-        result.slides.length > 1 &&
-        covers.length &&
-        !covers.some((p) => p.patternId === result.slides[0]?.patternId)
-      ) {
-        result = await deps.provider.generate(
+      const plan = (
+        corrections?: Record<string, unknown>,
+        previous?: z.infer<typeof compositionPlanSchema>,
+      ) =>
+        deps.provider.generate(
           'planner',
           deps.plannerInstructions,
           {
             brief: inputData.brief,
             slideCount: inputData.slideCount,
             catalog,
-            previous: result,
-            corrections: { firstSlidePatternMustBeOneOf: covers.map((p) => p.patternId) },
+            coverPatternIds: covers.map((p) => p.patternId),
+            ...(previous ? { previous } : {}),
+            ...(corrections ? { corrections } : {}),
           },
           compositionPlanSchema,
           deps.signal,
         );
-        if (!covers.some((p) => p.patternId === result.slides[0]?.patternId))
-          throw new Error('Planner did not select a cover composition.');
+      const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
+        inputData.slideCount === null || result.slides.length === inputData.slideCount
+          ? undefined
+          : {
+              exactSlideCount: inputData.slideCount,
+              returnedSlideCount: result.slides.length,
+              message: 'Return exactly exactSlideCount slides.',
+            };
+      const coverCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
+        result.slides.length > 1 &&
+        covers.length &&
+        !covers.some((p) => p.patternId === result.slides[0]?.patternId)
+          ? { firstSlidePatternMustBeOneOf: covers.map((p) => p.patternId) }
+          : undefined;
+      let result: z.infer<typeof compositionPlanSchema>;
+      try {
+        result = await plan();
+      } catch {
+        result = await plan({
+          minimumSlideCount: 10,
+          exactSlideCount: inputData.slideCount,
+          message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
+        });
       }
+      const corrections = { ...countCorrections(result), ...coverCorrections(result) };
+      if (Object.keys(corrections).length) result = await plan(corrections, result);
       if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
         throw new Error('Planner returned the wrong slide count.');
+      if (coverCorrections(result)) throw new Error('Planner did not select a cover composition.');
       return result.slides.map((slide, index) => {
         const composition = inputData.profile.compositions.find(
           (p) => p.patternId === slide.patternId,

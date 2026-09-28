@@ -44,7 +44,11 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
       if (agent === 'planner')
         return schema.parse({
           title: 'Pilot',
-          slides: [{ patternId: pattern.patternId, purpose: 'Pilot', imageQuery: '' }],
+          slides: Array.from({ length: 10 }, (_, index) => ({
+            patternId: pattern.patternId,
+            purpose: `Pilot ${index + 1}`,
+            imageQuery: '',
+          })),
         });
       if (agent === 'rewriter') {
         repairs++;
@@ -110,7 +114,7 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
     templatePath: '/fixture.pptx',
     outputDir,
     brief: 'Pilot',
-    slideCount: 1,
+    slideCount: 10,
     profile,
     registryDir: resolve('../../registry/agents'),
     engine,

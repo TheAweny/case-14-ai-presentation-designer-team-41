@@ -2137,7 +2137,7 @@ class CompositionExportRequest(BaseModel):
     )
     outputPath: constr(min_length=1)
     schemaVersion: Literal[1]
-    slides: list[Slide1] = Field(..., max_length=15, min_length=1)
+    slides: list[Slide1] = Field(..., max_length=60, min_length=1)
     templatePath: constr(min_length=1)
 
 

@@ -2,8 +2,8 @@
 # The plan is made once per run and every layout variant is built from it.
 
 id: deck-planner
-version: 1.2.0
-description: Turns a brief and its content pack into one DeckPlan of 10-15 grounded slides.
+version: 1.4.0
+description: 'Plans a CompositionPlan: an exact requested 10-15 slides or an automatic 10-60 slides.'
 modelId: planner-default
 
 generation:
@@ -11,5 +11,5 @@ generation:
   topP: 0.9
   maxOutputTokens: 8192
 
-outputSchema: DeckPlan
+outputSchema: CompositionPlan
 instructionsFile: instructions.md

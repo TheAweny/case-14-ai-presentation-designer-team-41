@@ -7,6 +7,7 @@ import {
   agentConfigSchema,
   contractRegistry,
   deckPlanSchema,
+  generationRequestSchema,
   healthCheckSchema,
   runConfigSchema,
   templateIrSchema,
@@ -88,6 +89,22 @@ describe('contract registry', () => {
       .map((entry) => entry.replace(/\.json$/, ''))
       .sort();
     expect(onDisk).toEqual([...contractNames].sort());
+  });
+});
+
+describe('generation request limits', () => {
+  const base = {
+    templateId: '00000000-0000-4000-8000-000000000000',
+    brief: 'A sufficiently detailed generation brief.',
+  };
+
+  it.each([10, 12, 15])('accepts a manual request for %i slides', (slideCount) => {
+    expect(generationRequestSchema.safeParse({ ...base, slideCount }).success).toBe(true);
+  });
+
+  it('rejects a manual request outside the 10-15 UI range', () => {
+    expect(generationRequestSchema.safeParse({ ...base, slideCount: 9 }).success).toBe(false);
+    expect(generationRequestSchema.safeParse({ ...base, slideCount: 16 }).success).toBe(false);
   });
 });
 

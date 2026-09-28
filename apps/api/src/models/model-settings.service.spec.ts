@@ -276,6 +276,15 @@ describe('resolve', () => {
     });
   });
 
+  it('gives each role its own model, and nothing for a role left without one', async () => {
+    const { service } = setup();
+    expect(await service.resolveRole('planner')).toBeNull();
+    const { connectionId } = await service.saveConnection(cloud(KEY), null);
+    await service.setRole({ role: 'critic', kind: 'model', connectionId, modelId: 'c' }, null);
+    expect(await service.resolveRole('critic')).toMatchObject({ connectionId, model: 'c' });
+    expect(await service.resolveRole('planner')).toBeNull();
+  });
+
   it('says clearly that no model is configured', async () => {
     await expect(setup().service.resolve(null)).rejects.toBeInstanceOf(ModelNotConfiguredError);
     await expect(setup().service.resolve(null)).rejects.toThrow(/Модель не настроена/);

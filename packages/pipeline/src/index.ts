@@ -61,6 +61,7 @@ export {
 export { findOverflows, fitCopy, type CopyTarget, type FitCopyResult } from './writer/index.js';
 export {
   OpenAICompatibleProvider as GenerationProvider,
+  RoutedTextProvider,
   type TextProvider,
 } from './generation/provider.js';
 export {

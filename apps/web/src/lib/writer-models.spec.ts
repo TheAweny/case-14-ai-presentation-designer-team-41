@@ -5,6 +5,7 @@ import {
   modelRows,
   sameModel,
   shortModelName,
+  writerModelReady,
   writerModels,
 } from './writer-models';
 
@@ -93,6 +94,20 @@ describe('effectiveModel', () => {
 
   it('gives nothing when there are no models', () => {
     expect(effectiveModel(writerModels(settings([])), null)).toBeNull();
+  });
+});
+
+describe('writerModelReady', () => {
+  it('does not allow generation while settings are loading', () => {
+    expect(writerModelReady(null)).toBe(false);
+  });
+
+  it('does not allow generation without a checked model', () => {
+    expect(writerModelReady(writerModels(settings([])))).toBe(false);
+  });
+
+  it('allows generation when at least one checked model is available', () => {
+    expect(writerModelReady(writerModels(settings([connection('local', ['qwen3'])])))).toBe(true);
   });
 });
 

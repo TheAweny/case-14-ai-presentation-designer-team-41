@@ -5,9 +5,18 @@ import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import { deckConversations } from '@/components/assistant/session';
+import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
 import { Button } from '@/components/ui/button';
-import { PlusIcon } from '@/components/ui/icons';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ConnectIcon, PlusIcon, WarningIcon } from '@/components/ui/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   COMPOSER_FILE_ACCEPT,
@@ -22,7 +31,7 @@ import { newDeckHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
-import { effectiveModel, shortModelName } from '@/lib/writer-models';
+import { effectiveModel, shortModelName, writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
@@ -97,6 +106,7 @@ export function DeckComposer({
   const models = useWriterModels();
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
   const groups = templateGroups(templates, project);
@@ -104,7 +114,8 @@ export function DeckComposer({
   const selected = chosenTemplate(templates, project, pickedId);
   const hasTemplate = templateFile !== null || selected !== null;
   const ready = hasContent(text, files);
-  const box = usePromptBox({ ready: ready && hasTemplate, busy: sending });
+  // Пока настройки моделей не загрузились, неизвестно, есть ли чем писать: отправку придерживаем.
+  const box = usePromptBox({ ready: ready && hasTemplate && models !== null, busy: sending });
   const glowStyle = {
     '--aurora-color': projectColorVar(project?.appearance.color ?? 'gray'),
   } as CSSProperties;
@@ -132,6 +143,10 @@ export function DeckComposer({
 
   const submit = async () => {
     if (!ready || sending || !hasTemplate) return;
+    if (!writerModelReady(models)) {
+      if (models !== null) setModelRequiredOpen(true);
+      return;
+    }
     setSending(true);
     for (const file of files) {
       const form = new FormData();
@@ -174,6 +189,34 @@ export function DeckComposer({
 
   return (
     <div>
+      <Dialog open={modelRequiredOpen} onOpenChange={setModelRequiredOpen}>
+        <DialogContent closeLabel={t('modelRequired.close')} className="max-w-md">
+          <DialogHeader className="pr-8">
+            <span className="mb-1 grid size-10 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <WarningIcon size={20} aria-hidden />
+            </span>
+            <DialogTitle>{t('modelRequired.title')}</DialogTitle>
+            <DialogDescription>{t('modelRequired.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2 border-0 px-0 pb-0">
+            <Button type="button" variant="ghost" onClick={() => setModelRequiredOpen(false)}>
+              {t('modelRequired.later')}
+            </Button>
+            <Button
+              type="button"
+              autoFocus
+              onClick={() => {
+                setModelRequiredOpen(false);
+                openSettings('models');
+              }}
+              className="ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
+            >
+              <ConnectIcon data-icon="inline-start" />
+              {t('modelRequired.connect')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PromptBox
         box={box}
         size="large"
@@ -221,9 +264,13 @@ export function DeckComposer({
             <>
               <ModelMenu value={model} onChange={setModel} />
               <PromptSubmit
-                state={promptAction({ hasInput: ready, sending, blocked: !hasTemplate })}
+                state={promptAction({
+                  hasInput: ready,
+                  sending,
+                  blocked: !hasTemplate || models === null,
+                })}
                 label={t('submit')}
-                blockedHint={t('needTemplate')}
+                blockedHint={hasTemplate ? t('modelRequired.loading') : t('needTemplate')}
               />
             </>
           }

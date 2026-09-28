@@ -50,7 +50,7 @@
         ],
         "type": "object"
       },
-      "maxItems": 15,
+      "maxItems": 60,
       "minItems": 1,
       "type": "array"
     },

@@ -315,6 +315,20 @@ export class ModelSettingsService {
           'LLM_MODEL и MODEL_API_KEY в .env и перезапустите API.',
       );
     }
+    return this.resolveRef(ref);
+  }
+
+  /**
+   * The model assigned to a role, or null when the role has none and the run falls back to the
+   * writer's model. Like `resolve`, the result holds the key.
+   */
+  async resolveRole(role: PipelineRole): Promise<ResolvedModel | null> {
+    const assigned = (await this.get()).roles.find((item) => item.role === role);
+    if (assigned?.kind !== 'model') return null;
+    return this.resolveRef({ connectionId: assigned.connectionId, modelId: assigned.modelId });
+  }
+
+  private async resolveRef(ref: ModelRef): Promise<ResolvedModel> {
     if (ref.connectionId === SERVER_CONNECTION_ID) {
       const server = this.server();
       if (!server) {

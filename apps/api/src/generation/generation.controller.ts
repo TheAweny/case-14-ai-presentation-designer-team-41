@@ -18,10 +18,15 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { Pool } from 'pg';
-import { generationProfileSchema, generationRequestSchema } from '@lct/contracts';
+import {
+  designSystemSchema,
+  generationProfileSchema,
+  generationRequestSchema,
+  templateIrSchema,
+} from '@lct/contracts';
 import type { GenerationProfile } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
-import { generatePresentation, GenerationProvider } from '@lct/pipeline';
+import { generatePresentation, GenerationProvider, RoutedTextProvider } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
@@ -95,22 +100,40 @@ export class GenerationController implements OnApplicationShutdown {
       brief += `\n\nSource ${id}:\n${content}`;
     }
     if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
-    // The model is settled before a run exists: without one there is nothing to start, and the
+    // The models are settled before a run exists: without one there is nothing to start, and the
     // person gets the reason in the answer rather than a run that fails without one.
-    const resolved = await this.models.resolve(input.model).catch((error: unknown) => {
-      if (error instanceof ModelNotConfiguredError)
-        throw new ServiceUnavailableException({
-          code: 'model-not-configured',
-          message: error.message,
-        });
-      throw error;
-    });
-    const provider = new GenerationProvider({
-      apiKey: resolved.apiKey,
-      baseUrl: resolved.baseUrl,
-      model: resolved.model,
-      seed: input.seed,
-    });
+    const settle = <T>(pending: Promise<T>): Promise<T> =>
+      pending.catch((error: unknown) => {
+        if (error instanceof ModelNotConfiguredError)
+          throw new ServiceUnavailableException({
+            code: 'model-not-configured',
+            message: error.message,
+          });
+        throw error;
+      });
+    const writer = await settle(this.models.resolve(input.model));
+    // Planner and critic run on the models of their roles; a role without one writes with the
+    // writer's model, and the slot rewriter always does.
+    const [planner, critic] = await settle(
+      Promise.all([this.models.resolveRole('planner'), this.models.resolveRole('critic')]),
+    );
+    const providerOf = (model: { apiKey: string; baseUrl: string; model: string }) =>
+      new GenerationProvider({
+        apiKey: model.apiKey,
+        baseUrl: model.baseUrl,
+        model: model.model,
+        seed: input.seed,
+      });
+    const fallback = providerOf(writer);
+    const provider = new RoutedTextProvider(
+      fallback,
+      new Map([
+        ['writer', fallback],
+        ['rewriter', fallback],
+        ...(planner ? [['planner', providerOf(planner)] as const] : []),
+        ...(critic ? [['critic', providerOf(critic)] as const] : []),
+      ]),
+    );
     const run = await this.repository.create();
     await mkdir(this.directory(run.runId), { recursive: true });
     await writeFile(
@@ -209,7 +232,14 @@ export class GenerationController implements OnApplicationShutdown {
   async deck(@Param('id') id: string): Promise<unknown> {
     const metadata = await this.completed(id);
     const deck = JSON.parse(await readFile(join(this.directory(id), 'deck.json'), 'utf8'));
-    return { ...deck, title: metadata.title ?? deck.title };
+    const current = await this.engine
+      .parseTemplateProfile(join(this.directory(id), 'deck.pptx'))
+      .then((profile) => ({
+        designSystem: designSystemSchema.parse(profile.designSystem),
+        templateIr: templateIrSchema.parse(profile.templateIr),
+      }))
+      .catch(() => null);
+    return { ...deck, ...current, title: metadata.title ?? deck.title };
   }
 
   @Get(':id/artifacts/:name')
@@ -227,13 +257,16 @@ export class GenerationController implements OnApplicationShutdown {
     } else if (name === 'manifest.json') {
       path = join(root, name);
       type = 'application/json';
+    } else if (name === 'slides.zip') {
+      path = join(root, name);
+      type = 'application/zip';
     } else if (/^slide-\d+\.png$/.test(name)) {
       path = join(root, 'previews', name);
       type = 'image/png';
     } else throw new NotFoundException('Artifact not found.');
     return new StreamableFile(await readFile(path), {
       type,
-      disposition: `inline; filename="${basename(path)}"`,
+      disposition: `attachment; filename="${basename(path)}"`,
     });
   }
 

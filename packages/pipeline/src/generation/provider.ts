@@ -204,3 +204,32 @@ export class OpenAICompatibleProvider implements TextProvider {
     throw new Error('Model retry budget exhausted.');
   }
 }
+
+/** Routes each pipeline role to its saved OpenAI-compatible connection. */
+export class RoutedTextProvider implements TextProvider {
+  readonly model: string;
+  constructor(
+    private readonly fallback: OpenAICompatibleProvider,
+    private readonly providers: ReadonlyMap<string, OpenAICompatibleProvider>,
+  ) {
+    this.model = fallback.model;
+  }
+  setAgentGeneration(agent: string, generation: AgentGeneration): void {
+    (this.providers.get(agent) ?? this.fallback).setAgentGeneration(agent, generation);
+  }
+  generate<T>(
+    agent: string,
+    instructions: string,
+    input: unknown,
+    schema: z.ZodType<T>,
+    signal: AbortSignal,
+  ): Promise<T> {
+    return (this.providers.get(agent) ?? this.fallback).generate(
+      agent,
+      instructions,
+      input,
+      schema,
+      signal,
+    );
+  }
+}

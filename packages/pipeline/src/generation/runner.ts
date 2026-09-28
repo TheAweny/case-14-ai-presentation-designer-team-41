@@ -21,7 +21,7 @@ import {
   type repairTaskSchema,
   writtenSchema,
 } from './workflow.js';
-import { OpenAICompatibleProvider, type TextProvider } from './provider.js';
+import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 
 type EventData = {
   [K in JobEvent['type']]: Omit<
@@ -70,7 +70,10 @@ export async function generatePresentation(options: GenerateOptions) {
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
-    if (options.provider instanceof OpenAICompatibleProvider) {
+    if (
+      options.provider instanceof OpenAICompatibleProvider ||
+      options.provider instanceof RoutedTextProvider
+    ) {
       for (const [role, agent] of [
         ['planner', planner],
         ['writer', writer],

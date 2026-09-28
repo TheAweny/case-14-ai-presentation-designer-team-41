@@ -164,3 +164,28 @@ def test_available_template_font_is_accepted(monkeypatch) -> None:
     )
     assert missing_fonts({"OriginalFont"}) == []
     require_fonts({"OriginalFont"})
+
+
+def test_rendered_previews_are_packaged_as_a_png_archive(tmp_path: Path) -> None:
+    import zipfile
+
+    from engine.api.app import bundle_previews
+
+    previews = []
+    for name, content in [("slide-1.png", b"first"), ("slide-2.png", b"second")]:
+        preview = tmp_path / name
+        preview.write_bytes(content)
+        previews.append(preview)
+
+    archive = bundle_previews(previews, tmp_path / "slides.zip")
+    with zipfile.ZipFile(archive) as zipped:
+        assert zipped.namelist() == ["slide-1.png", "slide-2.png"]
+        assert zipped.read("slide-2.png") == b"second"
+
+
+def test_png_archive_requires_at_least_one_rendered_slide(tmp_path: Path) -> None:
+    import pytest
+    from engine.api.app import bundle_previews
+
+    with pytest.raises(ValueError, match="without rendered slides"):
+        bundle_previews([], tmp_path / "slides.zip")
