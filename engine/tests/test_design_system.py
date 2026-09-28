@@ -214,6 +214,20 @@ def test_grid_margins_are_where_the_placeholders_sit() -> None:
     assert grid["baseline"] == round(18 * 1.1 * 12_700)
 
 
+def test_the_second_column_of_a_layout_does_not_pass_for_the_left_margin() -> None:
+    # Two-column layouts outnumber the rest, and each has more boxes in its right column than
+    # in its left: the left margin is where the leftmost box of each layout starts.
+    half = _W // 2
+    column = Box(x=_MARGIN, y=2 * EMU_PER_INCH, cx=half - 2 * _MARGIN, cy=EMU_PER_INCH)
+    right_boxes = [
+        replace(_body(), shape_id=10 + i, box=replace(column, x=half + _MARGIN, y=column.y + i))
+        for i in range(3)
+    ]
+    layouts = [(_title(), replace(_body(), box=column), *right_boxes) for _ in range(6)]
+    ds = build_design_system(_template(layouts), _HASH)
+    assert ds["grid"]["marginLeft"] == _MARGIN
+
+
 def test_a_narrow_body_does_not_pass_for_the_right_margin() -> None:
     # Title and body both stop at 60 % of the width, leaving the rest to a picture.
     title = replace(_title(), box=Box(x=_MARGIN, y=_MARGIN, cx=_W * 6 // 10, cy=EMU_PER_INCH))

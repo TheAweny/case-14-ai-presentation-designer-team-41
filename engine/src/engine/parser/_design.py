@@ -1082,7 +1082,14 @@ def _grid(t: _Template, body_pt: float, body_spacing: float, warnings: _Warnings
     bottom: list[int] = []
     parts: set[str] = set()
 
+    # Each layout states its margins with its outermost placeholders: the second column of a
+    # two-column layout starts at the middle of the slide, which is no margin. So a part gives
+    # one value per side, the one nearest its edge, and the mode is taken across parts.
     for container in (*t.ir.masters, *t.ir.layouts):
+        own_left: list[int] = []
+        own_right: list[int] = []
+        own_top: list[int] = []
+        own_bottom: list[int] = []
         for shape in container.shapes:
             kind = _placeholder_type(shape)
             if shape.box is None or kind not in (_TITLE_TYPES | _BODY_TYPES):
@@ -1090,16 +1097,24 @@ def _grid(t: _Template, body_pt: float, body_spacing: float, warnings: _Warnings
             box = shape.box
             if box.cx <= 0 or box.cy <= 0 or not t.on_slide(shape):
                 continue
-            left.append(box.x)
+            own_left.append(box.x)
             # Only a wide placeholder says where the right margin is. A title box that spans
             # half the slide ends where its text is expected to end, not at the margin.
             if box.cx >= width * 0.5:
-                right.append(width - (box.x + box.cx))
+                own_right.append(width - (box.x + box.cx))
             parts.add(container.part)
             if kind in _TITLE_TYPES:
-                top.append(box.y)
+                own_top.append(box.y)
             else:
-                bottom.append(height - (box.y + box.cy))
+                own_bottom.append(height - (box.y + box.cy))
+        for values, own in (
+            (left, own_left),
+            (right, own_right),
+            (top, own_top),
+            (bottom, own_bottom),
+        ):
+            if own:
+                values.append(min(own))
 
     margins = {
         name: _mode(values)
