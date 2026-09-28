@@ -278,6 +278,20 @@ describe('past the slide edge', () => {
     expect(render(outside)).not.toContain('data-outside-backdrop');
   });
 
+  it('lays the patch under a background picture, which hides it inside the slide', () => {
+    const html = renderToStaticMarkup(
+      <SlideView
+        slide={{ ...outside, backgroundImage: '/ppt/media/image1.png' }}
+        profile={PROFILE}
+        resolveMedia={() => '/media/1.png'}
+        showOutside
+      />,
+    );
+    expect(html.indexOf('data-outside-backdrop')).toBeLessThan(
+      html.indexOf('data-slide-background'),
+    );
+  });
+
   it('keeps a thumbnail cut even when asked to show the outside', () => {
     const html = renderToStaticMarkup(
       <SlideView slide={outside} profile={PROFILE} thumbnail showOutside />,
@@ -638,8 +652,9 @@ describe('text spacing and face', () => {
       paragraph('Как у роли'),
     ]);
     const html = render(only(COVER, element));
-    expect(html.match(/line-height:2[;"]/g)).toHaveLength(1);
-    expect(html.match(/line-height:1.3[;"]/g)).toHaveLength(1);
+    // Multiples of single spacing, which PowerPoint sets at 1.2 of the size: 2 and the role's 1.3.
+    expect(html.match(/line-height:2.4[;"]/g)).toHaveLength(1);
+    expect(html.match(/line-height:1.56[;"]/g)).toHaveLength(1);
   });
 
   it('tracks a run in cqw of the slide width, as its size, and leaves the rest alone', () => {
@@ -673,6 +688,209 @@ describe('text spacing and face', () => {
     const html = render(only(COVER, element));
     expect(html).toContain('font-family:&quot;PT Serif&quot;, serif');
     expect(html).toContain('font-family:&quot;Deck Face&quot;, sans-serif');
+  });
+});
+
+describe('a slide read back from its .pptx', () => {
+  const card = box(80, 80, 320, 180);
+  /** A chevron in the space of its own box, 1000 by 500, as the engine answers a preset. */
+  const chevron = {
+    width: 1000,
+    height: 500,
+    paths: [{ d: 'M0 0 L700 0 L1000 250 L700 500 L0 500 L300 250 Z', filled: true, stroked: true }],
+  };
+
+  it('paints the slide with its picture over the colour and under every element', () => {
+    const painted = only(COVER, text('t', 'title', card, [paragraph('Заголовок')]));
+    const withPicture: SlideIr = {
+      ...painted,
+      background: 'accent',
+      backgroundImage: '/ppt/media/image5.png',
+    };
+    const html = render(withPicture, (part) =>
+      part.endsWith('image5.png') ? '/media/5.png' : null,
+    );
+    expect(html).toContain('background:#3355E0');
+    const picture = /<img\b[^>]*data-slide-background[^>]*>/.exec(html)?.[0] ?? '';
+    expect(picture).toContain('src="/media/5.png"');
+    expect(picture).toContain('object-fit:fill');
+    expect(picture).toContain('inset:0');
+    expect(picture).toContain('pointer-events:none');
+    expect(html.indexOf('data-slide-background')).toBeLessThan(html.indexOf('data-element-id'));
+
+    // The same picture in a miniature, without the hook; and no picture without an address.
+    const thumbnail = render(withPicture, () => '/media/5.png', true);
+    expect(thumbnail).toMatch(/<img\b[^>]*src="\/media\/5.png"/);
+    expect(thumbnail).not.toContain('data-slide-background');
+    expect(render(withPicture, () => null)).not.toContain('<img');
+    expect(render(painted, () => '/media/5.png')).not.toContain('<img');
+  });
+
+  it('draws an outline no shape names, stretched over the box with a true line width', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('arrow', card, {
+          geometry: chevron,
+          fill: null,
+          stroke: { ...STROKE, dash: 'dash' },
+        }),
+        shape('panel', card, { geometry: chevron, fill: 'accent', stroke: null, flipH: true }),
+      ),
+    );
+    const arrow = markup(html, 'arrow');
+    expect(openTag(html, 'arrow')).toContain('data-shape="custom"');
+    expect(arrow).toContain('viewBox="0 0 1000 500"');
+    expect(arrow).toContain('preserveAspectRatio="none"');
+    expect(arrow).toContain('d="M0 0 L700 0 L1000 250 L700 500 L0 500 L300 250 Z"');
+    expect(arrow).toContain('fill="none"');
+    expect(arrow).toContain('stroke:#3355E0');
+    // 2 pt of a 960 pt slide, whatever the stretch of the drawing; dashed 4:3 of that width.
+    expect(arrow).toContain('stroke-width:0.2083cqw');
+    expect(arrow).toContain('vector-effect:non-scaling-stroke');
+    expect(arrow).toContain('stroke-dasharray:0.8333cqw 0.625cqw');
+    expect(arrow).not.toContain('<rect');
+
+    const panel = markup(html, 'panel');
+    expect(panel).toContain('fill="#3355E0"');
+    expect(panel).not.toContain('stroke:');
+    expect(panel).toContain('transform="translate(1000 0) scale(-1 1)"');
+  });
+
+  it('keeps a path OOXML draws without its fill or without its outline that way', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('open', card, {
+          geometry: {
+            width: 10,
+            height: 10,
+            paths: [
+              { d: 'M0 0 L10 0 L10 10 Z', filled: true, stroked: false },
+              { d: 'M0 10 L10 0', filled: false, stroked: true },
+            ],
+          },
+          fill: 'surface',
+          stroke: STROKE,
+        }),
+      ),
+    );
+    const paths = markup(html, 'open').match(/<path\b[^>]*>/g) ?? [];
+    expect(paths).toHaveLength(2);
+    expect(paths[0]).toContain('fill="#EEEEEE"');
+    expect(paths[0]).not.toContain('stroke');
+    expect(paths[1]).toContain('fill="none"');
+    expect(paths[1]).toContain('stroke:#3355E0');
+  });
+
+  it('writes the words of an outline in what their runs state over the profile', () => {
+    const html = render(
+      only(
+        COVER,
+        shape('label', card, {
+          geometry: chevron,
+          fill: 'accent',
+          paragraphs: [
+            {
+              level: 0,
+              align: 'left',
+              lineSpacing: null,
+              runs: [
+                {
+                  text: 'Факты',
+                  font: 'Open Sans',
+                  sizePt: 24,
+                  bold: true,
+                  italic: null,
+                  underline: true,
+                  color: 'E6007E',
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    const label = markup(html, 'label');
+    expect(label).toContain('data-shape-text');
+    expect(label).toContain('text-align:left');
+    expect(label).toMatch(/<span style="[^"]*font-family:&quot;Open Sans&quot;/);
+    expect(label).toContain('font-size:2.5cqw');
+    expect(label).toContain('font-weight:700');
+    expect(label).toContain('text-decoration:underline');
+    // The run's own pink, not the white that reads on the accent.
+    expect(label).toContain('color:#E6007E');
+  });
+
+  it('pads a text box by its insets and leaves one that states none alone', () => {
+    const html = render(
+      only(
+        COVER,
+        {
+          ...text('inset', 'body', card, [paragraph('С отступом')]),
+          textInsets: { l: 91_440, t: 45_720, r: 91_440, b: 0 },
+        },
+        text('flush', 'body', box(80, 300, 320, 100), [paragraph('Без отступа')]),
+      ),
+    );
+    const inset = openTag(html, 'inset');
+    expect(inset).toContain('box-sizing:border-box');
+    expect(inset).toContain('padding-left:0.75cqw');
+    expect(inset).toContain('padding-top:0.375cqw');
+    expect(inset).toContain('padding-right:0.75cqw');
+    expect(inset).toContain('padding-bottom:0cqw');
+    expect(openTag(html, 'flush')).not.toContain('padding');
+  });
+
+  it('hangs a stated bullet in the indent and spaces paragraphs as they say', () => {
+    const bulleted = {
+      ...paragraph('Оставляем только ключевые факты'),
+      bullet: '•',
+      marginEmu: 228_600,
+      indentEmu: -228_600,
+      spaceBeforePt: 6,
+      spaceAfterPt: 12,
+    };
+    const pink = paragraph('И выводы').runs.map((run) => ({ ...run, color: 'E6007E' }));
+    const html = render(
+      only(
+        COVER,
+        text('list', 'body', card, [
+          bulleted,
+          { ...bulleted, runs: pink },
+          { ...paragraph('Без маркера'), indentEmu: 127_000 },
+        ]),
+      ),
+    );
+    const list = markup(html, 'list');
+    const bullets = list.match(/<span[^>]*data-bullet=""[^>]*>[^<]*<\/span>/g) ?? [];
+    expect(bullets).toHaveLength(2);
+    // The bullet starts 18 pt left of the margin and takes that space; the text starts at it.
+    expect(bullets[0]).toContain('margin-left:-1.875cqw');
+    expect(bullets[0]).toContain('width:1.875cqw');
+    expect(bullets[0]).toContain('>•<');
+    expect(bullets[1]).toContain('color:#E6007E');
+    expect(list.match(/padding-left:1.875cqw/g)).toHaveLength(2);
+    // No space before the first paragraph, as PowerPoint draws it; 6 pt before the second.
+    expect(list).toContain('margin-top:0;margin-bottom:1.25cqw');
+    expect(list).toContain('margin-top:0.625cqw;margin-bottom:1.25cqw');
+    // A paragraph without a bullet indents its first line, with no bullet and no gap of its own.
+    expect(list).toContain('text-indent:1.0417cqw');
+    expect(list).toContain('margin-top:0;margin-bottom:0');
+  });
+
+  it('keeps its own gaps and dots for text that states no paragraph layout', () => {
+    const html = render(
+      only(
+        COVER,
+        text('plain', 'bullet-list', card, [paragraph('Один'), paragraph('Два', { level: 1 })]),
+      ),
+    );
+    const plain = markup(html, 'plain');
+    expect(plain).not.toContain('data-bullet');
+    expect(plain).toContain('border-radius:50%');
+    expect(plain).toContain('margin-top:0.35em');
+    expect(plain).toContain('padding-left:1.5em');
   });
 });
 

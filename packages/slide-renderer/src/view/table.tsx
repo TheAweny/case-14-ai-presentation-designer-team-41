@@ -8,7 +8,7 @@ import type {
   VerticalAlign,
 } from '@lct/contracts';
 import { cqw, emuToCqw, percent, type SlideSize } from '../geometry.js';
-import { createTypeResolver, typeRoleOf } from '../schematic/text-layout.js';
+import { createTypeResolver, lineHeightOf, typeRoleOf } from '../schematic/text-layout.js';
 import { fontFamily, paint, resolveColor } from './color.js';
 import { markHooks, markStyle } from './mark.js';
 
@@ -162,7 +162,7 @@ export function tableView(
       fontFamily: fontFamily(style?.font ?? ''),
       fontSize: cqw(emuToCqw(type.sizeEmu(element.role), size)),
       color: paint(palette, style?.colorRole ?? 'text', 'text'),
-      lineHeight: style?.lineSpacing ?? 1.2,
+      lineHeight: lineHeightOf(style?.lineSpacing ?? 1),
       ...(borders?.outer ? { border: rule } : null),
     },
     columns,

@@ -176,6 +176,42 @@ describe('element properties', () => {
     ]);
   });
 
+  it('drops the outline read from the file when a shape is named', () => {
+    const outline = {
+      width: 10,
+      height: 10,
+      paths: [{ d: 'M0 0 L10 5 L0 10 Z', filled: true, stroked: true }],
+    };
+    const freeform: SlideElement = {
+      kind: 'decor',
+      elementId: 'panel',
+      role: 'decoration',
+      box: { ...ORIGIN },
+      sourceShapeId: 20,
+      geometry: outline,
+      fill: 'accent',
+      stroke: null,
+    };
+    const slides = [slide('opening', 0, [freeform])];
+    const commit = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['panel'],
+      props: { shape: 'ellipse' },
+    });
+    expectReversible(slides, commit);
+    const panel = elementOf(commit.slides, 'opening', 'panel');
+    expect(panel).toMatchObject({ shape: 'ellipse' });
+    expect(panel).not.toHaveProperty('geometry');
+
+    // Any other change keeps the outline.
+    const filled = commitElementProps(slides, {
+      slideId: 'opening',
+      elementIds: ['panel'],
+      props: { fill: 'surface' },
+    });
+    expect(elementOf(filled.slides, 'opening', 'panel')).toMatchObject({ geometry: outline });
+  });
+
   it('merges a stroke over the one a shape already has', () => {
     const slides = [
       slide('opening', 0, [

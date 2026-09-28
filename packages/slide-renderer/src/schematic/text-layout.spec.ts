@@ -96,7 +96,8 @@ describe('layoutText', () => {
     const resolved = layoutText(element, createTypeResolver(TYPE_SCALE, WIDE.cy));
     const [first, second] = [nth(resolved.bars, 0), nth(resolved.bars, 1)];
     expect(first.thickness).toBeCloseTo(20 * EMU_PER_PT * 0.5, 6);
-    expect(second.y - first.y).toBeCloseTo(20 * EMU_PER_PT * 1.5, 6);
+    // 1.5 times single spacing, which is 1.2 of the size.
+    expect(second.y - first.y).toBeCloseTo(20 * EMU_PER_PT * 1.5 * 1.2, 6);
   });
 
   it('takes the line spacing a paragraph states over the one of its type role', () => {
@@ -105,7 +106,7 @@ describe('layoutText', () => {
     const stated = { ...paragraph(LONG, { sizePt: null }), lineSpacing: 3 };
     const layout = layoutText(text('spaced', 'body', frame, [stated]), resolver);
     const [first, second] = [nth(layout.bars, 0), nth(layout.bars, 1)];
-    expect(second.y - first.y).toBeCloseTo(20 * EMU_PER_PT * 3, 6);
+    expect(second.y - first.y).toBeCloseTo(20 * EMU_PER_PT * 3 * 1.2, 6);
   });
 
   it('lets a wider line spacing push lines out of the box', () => {

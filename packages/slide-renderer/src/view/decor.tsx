@@ -1,5 +1,12 @@
-import type { JSX, SVGProps } from 'react';
-import type { Box, DesignSystem, SlideElement, ElementStroke, StrokeDash } from '@lct/contracts';
+import type { CSSProperties, JSX, SVGProps } from 'react';
+import type {
+  Box,
+  DecorGeometry,
+  DesignSystem,
+  SlideElement,
+  ElementStroke,
+  StrokeDash,
+} from '@lct/contracts';
 import { EMU_PER_PT, cqw, emuToCqw, round, type SlideSize } from '../geometry.js';
 import { paint, resolveColor } from './color.js';
 import { markHooks, markStyle } from './mark.js';
@@ -29,7 +36,12 @@ function guessedPaint(box: Box, size: SlideSize, profile: DesignSystem): string 
 
 /** Whether the element says how it looks, rather than leaving it to the geometry. */
 function statesItsLook(element: DecorElement): boolean {
-  return element.shape !== undefined || element.fill !== undefined || element.stroke !== undefined;
+  return (
+    element.shape !== undefined ||
+    element.geometry !== undefined ||
+    element.fill !== undefined ||
+    element.stroke !== undefined
+  );
 }
 
 /**
@@ -242,6 +254,74 @@ function ClosedShape({
 }
 
 /**
+ * An outline no named shape describes, as the file draws it: its paths in their own space,
+ * stretched over the box the way PowerPoint stretches a freeform. The stretch must not reach the
+ * line, so the stroke does not scale with the drawing (`non-scaling-stroke`) and its width is
+ * stated in `cqw`: the same share of the slide as `widthEmu` at any size and in any box.
+ */
+function GeometryShape({
+  element,
+  geometry,
+  size,
+  fill,
+  stroke,
+  strokeColor,
+}: {
+  element: DecorElement;
+  geometry: DecorGeometry;
+  size: SlideSize;
+  fill: string | null;
+  stroke: ElementStroke | null;
+  strokeColor: string;
+}): JSX.Element {
+  const { width: w, height: h } = geometry;
+  const dash = stroke ? DASH[stroke.dash] : null;
+  const line: CSSProperties | null = stroke
+    ? {
+        stroke: strokeColor,
+        strokeWidth: cqw(emuToCqw(stroke.widthEmu, size)),
+        vectorEffect: 'non-scaling-stroke',
+        strokeLinejoin: 'miter',
+        strokeLinecap: 'butt',
+        ...(dash
+          ? {
+              strokeDasharray: dash
+                .map((step) => cqw(emuToCqw(step * stroke.widthEmu, size)))
+                .join(' '),
+            }
+          : null),
+      }
+    : null;
+  const flip = [
+    element.flipH ? `translate(${round(w)} 0) scale(-1 1)` : '',
+    element.flipV ? `translate(0 ${round(h)}) scale(1 -1)` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${round(w)} ${round(h)}`}
+      preserveAspectRatio="none"
+      width="100%"
+      height="100%"
+      style={{ position: 'absolute', inset: 0, display: 'block', overflow: 'visible' }}
+    >
+      <g transform={flip || undefined}>
+        {geometry.paths.map((path, index) => (
+          <path
+            key={index}
+            d={path.d}
+            fill={path.filled && fill ? fill : 'none'}
+            style={path.stroked && line ? line : undefined}
+          />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+/**
  * Decoration: a panel, a rule, a card, or a shape drawn in the editor.
  *
  * The box is the drag target. When the element states its look, an SVG inside the box draws the
@@ -281,6 +361,28 @@ export function DecorMark({
         }}
       >
         <ShapeText element={element} size={size} profile={profile} fill={background} />
+      </div>
+    );
+  }
+
+  if (element.geometry) {
+    const fill = decorFill(element, size, profile);
+    const stroke = element.stroke ?? null;
+    return (
+      <div
+        {...hooks}
+        {...(thumbnail ? null : { 'data-shape': 'custom' })}
+        style={{ ...markStyle(element, size), ...zeroAxis }}
+      >
+        <GeometryShape
+          element={element}
+          geometry={element.geometry}
+          size={size}
+          fill={fill}
+          stroke={stroke}
+          strokeColor={stroke ? resolveColor(profile.palette, stroke.color, 'line') : 'none'}
+        />
+        <ShapeText element={element} size={size} profile={profile} fill={fill} />
       </div>
     );
   }

@@ -8,9 +8,9 @@ import type {
   VerticalAlign,
 } from '@lct/contracts';
 import { cqw, emuToCqw, type SlideSize } from '../geometry.js';
-import { createTypeResolver, typeRoleOf } from '../schematic/text-layout.js';
+import { createTypeResolver, lineHeightOf, typeRoleOf } from '../schematic/text-layout.js';
 import { fontFamily, paint } from './color.js';
-import { ParagraphView } from './text.js';
+import { ParagraphView, statesParagraphLayout } from './text.js';
 
 type DecorElement = Extract<SlideElement, { kind: 'decor' }>;
 
@@ -81,7 +81,7 @@ export function shapeTextLook(profile: DesignSystem, slideCy: number, fill: stri
     sizePt: style?.sizePt ?? null,
     bold: type.bold(SHAPE_TEXT_ROLE),
     italic: type.italic(SHAPE_TEXT_ROLE),
-    lineHeight: type.lineSpacing(SHAPE_TEXT_ROLE),
+    lineHeight: lineHeightOf(type.lineSpacing(SHAPE_TEXT_ROLE)),
     color: shapeTextColor(profile.palette, fill),
   };
 }
@@ -120,6 +120,7 @@ export function ShapeText({
   const paragraphs = element.paragraphs;
   if (!paragraphs || paragraphs.length === 0 || !holdsText(element)) return null;
   const look = shapeTextLook(profile, size.cy, fill);
+  const stated = statesParagraphLayout(paragraphs);
   return (
     <div
       data-shape-text=""
@@ -148,6 +149,7 @@ export function ShapeText({
           inherited={look.color}
           lineHeight={look.lineHeight}
           bulleted={false}
+          stated={stated}
           first={index === 0}
         />
       ))}

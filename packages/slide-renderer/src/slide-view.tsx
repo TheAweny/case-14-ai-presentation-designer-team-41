@@ -17,8 +17,9 @@ export interface SlideViewProps {
   /** What the slide shows, for the host's language. The renderer has no strings of its own. */
   readonly label?: string;
   /**
-   * Address of a picture by its `mediaPart`. Missing or null, the box is a frame: the renderer
-   * does not invent a picture.
+   * Address of a picture by its `mediaPart`, and of the slide's `backgroundImage`. Missing or null,
+   * the box is a frame and the slide shows its background colour: the renderer does not invent a
+   * picture.
    */
   readonly resolveMedia?: (mediaPart: string) => string | null;
   /** Host chrome on the frame, such as the canvas corner radius. */
@@ -70,6 +71,9 @@ export function SlideView({
     'surface',
   );
   const outside = showOutside && !thumbnail;
+  const backgroundImage = slide.backgroundImage
+    ? (resolveMedia?.(slide.backgroundImage) ?? null)
+    : null;
   const hooks = thumbnail
     ? { 'aria-hidden': true }
     : { 'data-slide-root': 'true', 'data-slide-id': slide.slideId, 'aria-label': label };
@@ -88,8 +92,8 @@ export function SlideView({
       {/*
        * Past the edge, an element keeps a patch of the slide background behind it: text written
        * for this slide stays readable over the host's canvas, whatever colour that is. Inside the
-       * slide the patch matches the slide and cannot be seen. All patches go first, under every
-       * element.
+       * slide the patch matches the slide and cannot be seen; a background picture, drawn after
+       * the patches, covers it there. All patches go first, under every element.
        */}
       {outside
         ? slide.elements
@@ -107,6 +111,29 @@ export function SlideView({
               />
             ))
         : null}
+      {/*
+       * The picture the slide is painted with lies over its background colour and under every
+       * element, stretched over the slide as OOXML `a:stretch` does. Without an address the
+       * colour alone shows.
+       */}
+      {backgroundImage ? (
+        <img
+          alt=""
+          aria-hidden
+          src={backgroundImage}
+          draggable={false}
+          {...(thumbnail ? null : { 'data-slide-background': '' })}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            objectFit: 'fill',
+            pointerEvents: 'none',
+          }}
+        />
+      ) : null}
       {slide.elements.map((element) => {
         // Keyed by id, not by position: inserting or removing one element keeps the DOM of the rest.
         const key = element.elementId;

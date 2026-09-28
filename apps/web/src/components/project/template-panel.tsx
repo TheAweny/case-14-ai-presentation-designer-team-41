@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import type { DesignSystem, TypeStyle } from '@lct/contracts';
-import { SlideView } from '@lct/slide-renderer';
+import { SlideView, lineHeightOf } from '@lct/slide-renderer';
 import { useEmptyTextPrompt } from '@/components/editor/empty-text';
 import { FontSample } from '@/components/library/project-card';
 import { fontStackOf, roleColor } from '@/components/library/template-swatch';
@@ -144,7 +144,7 @@ function sampleStyle(system: DesignSystem, style: TypeStyle): CSSProperties {
     fontSize: `${Math.max(SAMPLE_MIN_PX, style.sizePt * SAMPLE_SCALE)}px`,
     fontWeight: style.bold ? 700 : 400,
     fontStyle: style.italic ? 'italic' : 'normal',
-    lineHeight: style.lineSpacing,
+    lineHeight: lineHeightOf(style.lineSpacing),
     color: roleColor(system, style.colorRole) ?? undefined,
     backgroundColor: roleColor(system, onAccent ? 'accent' : 'background') ?? undefined,
   };

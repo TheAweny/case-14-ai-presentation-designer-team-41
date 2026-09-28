@@ -274,7 +274,8 @@ describe('font, letter spacing and line spacing survive the editor', () => {
 
     const paragraphStyle = (node: typeof first) =>
       styleIn(schema.nodes.paragraph?.spec.toDOM?.(node));
-    expect(paragraphStyle(first)).toContain('line-height: 0.9');
+    // 0.9 of single spacing, which PowerPoint sets at 1.2 of the size.
+    expect(paragraphStyle(first)).toContain('line-height: 1.08');
     expect(paragraphStyle(second)).not.toContain('line-height');
 
     const styleOf = (index: number) => {
@@ -530,5 +531,57 @@ describe('paragraph style in the open editor', () => {
     const resized = paragraphStyle(larger, METRICS);
     expect(resized).not.toBe(inherited);
     expect(resized).toContain('padding-left: 1.5em');
+  });
+});
+
+describe('paragraph layout read from the file survives the editor', () => {
+  const run = { text: 'Ключевые факты', font: '', sizePt: 16, bold: null, italic: null, color: '' };
+  const STATED: Paragraph[] = [
+    {
+      level: 0,
+      lineSpacing: null,
+      runs: [run],
+      bullet: '•',
+      marginEmu: 228_600,
+      indentEmu: -228_600,
+      spaceBeforePt: 6,
+      spaceAfterPt: 3,
+    },
+    { level: 0, lineSpacing: null, runs: [{ ...run, text: 'Со сдвигом' }], indentEmu: 127_000 },
+    { level: 1, lineSpacing: null, runs: [{ ...run, text: 'Как было' }] },
+  ];
+
+  it('gives back the bullet, margin, indent and spacing each paragraph came with', () => {
+    expect(throughSchema(STATED)).toEqual(STATED);
+  });
+
+  it('draws the paragraph at its margin with its own bullet in the indent', () => {
+    const schema = getSchema(textExtensions({ ...METRICS, bullets: true }));
+    const doc = Node.fromJSON(schema, paragraphsToDoc(STATED));
+    const spec = (index: number) => schema.nodes.paragraph?.spec.toDOM?.(doc.child(index));
+    const attrsOf = (index: number): unknown => {
+      const output = spec(index);
+      return Array.isArray(output) ? output[1] : null;
+    };
+
+    // 1 pt on a 100 pt wide slide is 1 cqw: an 18 pt margin, the bullet hanging at its left.
+    const bulleted = styleIn(spec(0));
+    expect(bulleted).toContain('padding-left: 18cqw');
+    expect(bulleted).toContain('--bullet-x: 0cqw');
+    expect(bulleted).toContain('margin-top: 6cqw');
+    expect(bulleted).toContain('margin-bottom: 3cqw');
+    expect(attrsOf(0)).toMatchObject({ 'data-stated': '', 'data-bullet': '•' });
+
+    const indented = styleIn(spec(1));
+    expect(indented).toContain('text-indent: 10cqw');
+    expect(indented).not.toContain('--bullet-x');
+    expect(attrsOf(1)).toHaveProperty('data-stated');
+    expect(attrsOf(1)).not.toHaveProperty('data-bullet');
+
+    // A paragraph that states no layout keeps the editor's own step and role bullet.
+    const plain = styleIn(spec(2));
+    expect(plain).toContain('padding-left: 2.65em');
+    expect(plain).not.toContain('margin-top');
+    expect(attrsOf(2)).not.toHaveProperty('data-stated');
   });
 });

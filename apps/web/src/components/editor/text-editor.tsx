@@ -17,6 +17,7 @@ import {
   createTypeResolver,
   EMU_PER_PT,
   fontFamily,
+  lineHeightOf,
   paint,
   ptToCqw,
   typeRoleOf,
@@ -86,6 +87,28 @@ const EDITOR_CSS = `
   border-radius: 50%;
   background: currentColor;
 }
+/* Абзац из файла ставит себе поля и интервалы сам; перед первым абзацем интервала нет, как на
+   слайде. Маркер — его собственный символ в висячем отступе, а не точка роли. */
+[data-text-editor] .ProseMirror p:first-child {
+  margin-top: 0 !important;
+}
+[data-text-editor] .ProseMirror p[data-stated] {
+  position: relative;
+}
+[data-text-editor] .ProseMirror p[data-stated]::before {
+  content: none;
+}
+[data-text-editor] .ProseMirror p[data-stated][data-bullet]::before {
+  content: attr(data-bullet);
+  position: absolute;
+  left: var(--bullet-x, 0em);
+  top: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  text-indent: 0;
+}
 `;
 
 function inheritedLook(profile: DesignSystem, element: TextElement, slideCy: number) {
@@ -97,7 +120,7 @@ function inheritedLook(profile: DesignSystem, element: TextElement, slideCy: num
     sizePt: type.sizeEmu(element.role) / EMU_PER_PT,
     bold: type.bold(element.role),
     italic: type.italic(element.role),
-    lineHeight: type.lineSpacing(element.role),
+    lineHeight: lineHeightOf(type.lineSpacing(element.role)),
     color: paint(profile.palette, style?.colorRole ?? 'text', 'text'),
   };
 }

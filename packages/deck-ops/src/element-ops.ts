@@ -197,6 +197,8 @@ function applyDecor(target: Draft<Extract<SlideElement, { kind: 'decor' }>>, pro
   const decor = target as unknown as Mutable;
   if (props.shape !== undefined && decorShapeSchema.safeParse(props.shape).success) {
     if (target.shape !== props.shape) target.shape = props.shape;
+    // A named shape replaces the outline read from the file, which would otherwise be drawn.
+    if (target.geometry !== undefined) delete decor.geometry;
   }
   if (props.fill !== undefined) {
     if (props.fill === null) {

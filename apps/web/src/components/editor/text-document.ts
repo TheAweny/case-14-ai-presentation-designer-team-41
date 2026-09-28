@@ -12,7 +12,14 @@ import { Text } from '@tiptap/extension-text';
 import { FontSize, TextStyle } from '@tiptap/extension-text-style';
 import { Fragment, Slice, type Mark, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState, Transaction } from '@tiptap/pm/state';
-import { cqw, fontFamily, ptToCqw, type SlideSize } from '@lct/slide-renderer';
+import {
+  cqw,
+  emuToCqw,
+  fontFamily,
+  lineHeightOf,
+  ptToCqw,
+  type SlideSize,
+} from '@lct/slide-renderer';
 
 /**
  * What the open editor needs from the slide, besides the runs themselves.
@@ -72,6 +79,30 @@ export function colorOf(value: unknown): string {
   if (typeof value !== 'string') return '';
   const match = /^#?([0-9a-fA-F]{6})$/.exec(value.trim());
   return match?.[1] ?? '';
+}
+
+/**
+ * Paragraph layout a deck read back from its .pptx states: bullet, margin, indent and spacing.
+ * The editor does not change it, it carries it: text typed into such a paragraph keeps its bullet
+ * and its place, and a paragraph split off it by Enter takes the same layout, as in PowerPoint.
+ */
+type ParagraphLayout = Pick<
+  Paragraph,
+  'bullet' | 'marginEmu' | 'indentEmu' | 'spaceBeforePt' | 'spaceAfterPt'
+>;
+
+const LAYOUT_KEYS = ['bullet', 'marginEmu', 'indentEmu', 'spaceBeforePt', 'spaceAfterPt'] as const;
+
+/** The layout a paragraph states, or null when it states none. */
+export function layoutOf(value: unknown): ParagraphLayout | null {
+  if (!isRecord(value)) return null;
+  const layout: Record<string, unknown> = {};
+  if (typeof value.bullet === 'string' && value.bullet !== '') layout.bullet = value.bullet;
+  for (const key of LAYOUT_KEYS.slice(1)) {
+    const number = value[key];
+    if (typeof number === 'number' && Number.isFinite(number)) layout[key] = number;
+  }
+  return Object.keys(layout).length > 0 ? (layout as ParagraphLayout) : null;
 }
 
 const ALIGNS: readonly ParagraphAlign[] = ['left', 'center', 'right', 'justify'];
@@ -172,6 +203,7 @@ export function paragraphsToDoc(paragraphs: readonly Paragraph[]): JSONContent {
         level: levelOf(paragraph.level),
         align: paragraph.align === null ? INHERIT : alignOf(paragraph.align),
         lineSpacing: spacingOf(paragraph.lineSpacing),
+        layout: layoutOf(paragraph),
       },
     };
     if (runs.length > 0) node.content = runs;
@@ -225,6 +257,7 @@ export function documentToParagraphs(doc: JSONContent): Paragraph[] {
       level: levelOf(attrs.level),
       runs,
       lineSpacing: spacingOf(attrs.lineSpacing),
+      ...layoutOf(attrs.layout),
     };
     if (attrs.align === INHERIT) return [{ ...paragraph, align: null }];
     const align = alignOf(attrs.align);
@@ -626,6 +659,19 @@ function slideParagraph(metrics: TextEditorMetrics) {
           parseHTML: () => null,
           renderHTML: () => ({}),
         },
+        // Bullet, margin, indent and spacing read from the file; see `layoutOf`.
+        layout: {
+          default: null,
+          parseHTML: () => null,
+          renderHTML: (attributes: { layout?: unknown }) => {
+            const layout = layoutOf(attributes.layout);
+            if (!layout) return {};
+            return {
+              'data-stated': '',
+              ...(layout.bullet ? { 'data-bullet': layout.bullet } : null),
+            };
+          },
+        },
       };
     },
     renderHTML({ node, HTMLAttributes }) {
@@ -678,16 +724,30 @@ function slideParagraph(metrics: TextEditorMetrics) {
 export function paragraphStyle(node: ProseMirrorNode, metrics: TextEditorMetrics): string {
   const level = levelOf(node.attrs.level);
   const points = leadSize(node, metrics.inheritedSizePt);
-  const indent = level * 1.5;
-  const padding = metrics.bullets ? indent + 1.15 : indent;
   const style = [`font-size: ${cqw(ptToCqw(points, metrics.slide))}`];
-  if (padding > 0) style.push(`padding-left: ${padding}em`);
-  if (metrics.bullets) style.push(`--bullet-x: ${indent}em`);
+  const layout = layoutOf(node.attrs.layout);
+  if (layout) {
+    // As on the slide: text at the margin, the first line or the bullet at margin plus indent,
+    // and the stated space around the paragraph (the stylesheet drops it before the first one).
+    const margin = layout.marginEmu ?? 0;
+    const indent = layout.indentEmu ?? 0;
+    const emu = (value: number) => cqw(emuToCqw(value, metrics.slide));
+    style.push(`padding-left: ${emu(margin)}`);
+    if (layout.bullet) style.push(`--bullet-x: ${emu(margin + indent)}`);
+    else if (indent !== 0) style.push(`text-indent: ${emu(indent)}`);
+    style.push(`margin-top: ${cqw(ptToCqw(layout.spaceBeforePt ?? 0, metrics.slide))}`);
+    style.push(`margin-bottom: ${cqw(ptToCqw(layout.spaceAfterPt ?? 0, metrics.slide))}`);
+  } else {
+    const indent = level * 1.5;
+    const padding = metrics.bullets ? indent + 1.15 : indent;
+    if (padding > 0) style.push(`padding-left: ${padding}em`);
+    if (metrics.bullets) style.push(`--bullet-x: ${indent}em`);
+  }
   const align = alignOf(node.attrs.align);
   if (align) style.push(`text-align: ${align}`);
   // The paragraph's own spacing wins over the role's, as on the slide.
   const lineSpacing = spacingOf(node.attrs.lineSpacing);
-  if (lineSpacing != null) style.push(`line-height: ${lineSpacing}`);
+  if (lineSpacing != null) style.push(`line-height: ${lineHeightOf(lineSpacing)}`);
   return style.join('; ');
 }
 

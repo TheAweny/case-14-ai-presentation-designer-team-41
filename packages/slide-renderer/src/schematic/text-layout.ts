@@ -65,15 +65,27 @@ const FALLBACK_SIZE: Record<TypeRole, number> = {
 const FALLBACK_BOLD: ReadonlySet<TypeRole> = new Set(['title', 'heading', 'kpi-value']);
 const FALLBACK_ITALIC: ReadonlySet<TypeRole> = new Set(['quote']);
 
-/** Single spacing, the line pitch of a paragraph that states none. */
-const FALLBACK_LINE_SPACING = 1.2;
+/**
+ * Line pitch of single spacing as a multiple of the type size. OOXML spacing (`spcPct`) and the
+ * profile's `lineSpacing` are multiples of single spacing, which PowerPoint sets at about 1.2 of
+ * the size, as the engine's layout measures it. CSS `line-height` is a multiple of the size.
+ */
+export const SINGLE_LINE = 1.2;
+
+/** A line spacing stated as a multiple of single spacing, as CSS `line-height`. */
+export function lineHeightOf(lineSpacing: number): number {
+  return Math.round(lineSpacing * SINGLE_LINE * 10_000) / 10_000;
+}
+
+/** Single spacing, for a role the profile has no style for. */
+const FALLBACK_LINE_SPACING = 1;
 
 /** What a text element inherits when its runs do not say. */
 export interface TypeResolver {
   sizeEmu(role: ElementRole): number;
   bold(role: ElementRole): boolean;
   italic(role: ElementRole): boolean;
-  /** Line pitch as a multiple of the type size. */
+  /** Line spacing as a multiple of single spacing; `lineHeightOf` turns it into a pitch. */
   lineSpacing(role: ElementRole): number;
 }
 
@@ -299,7 +311,7 @@ export function layoutText(element: TextElement, type: TypeResolver): TextLayout
     const bold = majority(paragraph, (run) => boldOf(run.bold));
     const italic = majority(paragraph, (run) => run.italic ?? type.italic(role));
     // A paragraph that states its own spacing wins over the one its type role gives.
-    const pitch = size * (paragraph.lineSpacing ?? type.lineSpacing(role));
+    const pitch = size * lineHeightOf(paragraph.lineSpacing ?? type.lineSpacing(role));
     const thickness = size * (setInCaps(paragraph) ? BAR_CAPS : bold ? BAR_BOLD : BAR);
     const indent = paragraph.level * INDENT_PER_LEVEL * size;
     const textX = indent + (bulleted ? BULLET_HANG * size : 0);

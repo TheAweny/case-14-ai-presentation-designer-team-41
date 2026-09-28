@@ -6,8 +6,13 @@ import type {
   TextRun,
   VerticalAlign,
 } from '@lct/contracts';
-import { EMU_PER_PT, cqw, ptToCqw, type SlideSize } from '../geometry.js';
-import { createTypeResolver, typeRoleOf, type TextElement } from '../schematic/text-layout.js';
+import { EMU_PER_PT, cqw, emuToCqw, ptToCqw, type SlideSize } from '../geometry.js';
+import {
+  createTypeResolver,
+  lineHeightOf,
+  typeRoleOf,
+  type TextElement,
+} from '../schematic/text-layout.js';
 import { fontFamily, paint } from './color.js';
 import { markHooks, markStyle } from './mark.js';
 
@@ -31,6 +36,35 @@ const ALIGN: Record<ParagraphAlign, CSSProperties['textAlign']> = {
 
 function showBreaks(text: string): string {
   return text.replaceAll('\v', '\n').replaceAll('\u2028', '\n');
+}
+
+/**
+ * Whether the paragraphs state their own layout: a bullet, a margin, an indent or spacing, as a
+ * deck read back from its .pptx does. Such text is laid out as stated, and what a paragraph leaves
+ * out reads as OOXML's default, none; text that states none of it keeps the renderer's own gaps.
+ */
+export function statesParagraphLayout(paragraphs: readonly Paragraph[]): boolean {
+  return paragraphs.some(
+    (paragraph) =>
+      paragraph.bullet !== undefined ||
+      paragraph.marginEmu !== undefined ||
+      paragraph.indentEmu !== undefined ||
+      paragraph.spaceBeforePt !== undefined ||
+      paragraph.spaceAfterPt !== undefined,
+  );
+}
+
+/** Insets of a text box as CSS padding, in `cqw` so they scale with the slide. Absent: none. */
+function insetPadding(element: TextElement, size: SlideSize): CSSProperties | null {
+  const insets = element.textInsets;
+  if (!insets) return null;
+  return {
+    boxSizing: 'border-box',
+    paddingLeft: cqw(emuToCqw(insets.l, size)),
+    paddingTop: cqw(emuToCqw(insets.t, size)),
+    paddingRight: cqw(emuToCqw(insets.r, size)),
+    paddingBottom: cqw(emuToCqw(insets.b, size)),
+  };
 }
 
 /** Nothing but whitespace in the box. */
@@ -82,8 +116,9 @@ export function TextMark({
   const type = createTypeResolver(profile, size.cy);
   const style = profile.typeScale.find((entry) => entry.role === typeRoleOf(element.role));
   const inherited = paint(profile.palette, style?.colorRole ?? 'text', 'text');
-  const lineHeight = style?.lineSpacing ?? 1.2;
+  const lineHeight = lineHeightOf(style?.lineSpacing ?? 1);
   const bulleted = element.role === 'bullet-list';
+  const stated = statesParagraphLayout(paragraphs);
   const markPt =
     profile.typeScale.find((entry) => entry.role === 'caption')?.sizePt ??
     profile.typeScale.find((entry) => entry.role === 'footer')?.sizePt ??
@@ -102,6 +137,7 @@ export function TextMark({
       inherited={inherited}
       lineHeight={lineHeight}
       bulleted={bulleted}
+      stated={stated}
       first={index === 0}
     />
   ));
@@ -116,6 +152,7 @@ export function TextMark({
         display: 'flex',
         flexDirection: 'column',
         justifyContent: ANCHOR[element.verticalAlign ?? 'top'],
+        ...insetPadding(element, size),
         ...(prompt
           ? {
               outline: `1px dashed color-mix(in srgb, ${inherited} 45%, transparent)`,
@@ -150,6 +187,12 @@ export function TextMark({
   );
 }
 
+/**
+ * One paragraph. When the text states its layout (`stated`), the paragraph sits at its margin, its
+ * first line starts at the indent, a bullet hangs in the indent as PowerPoint draws it, and the
+ * space before and after is as written. Otherwise levels step in by a fixed amount, a bulleted
+ * role gets a dot, and paragraphs keep a small gap.
+ */
 export function ParagraphView({
   paragraph,
   size,
@@ -161,6 +204,7 @@ export function ParagraphView({
   inherited,
   lineHeight,
   bulleted,
+  stated = false,
   first,
 }: {
   paragraph: Paragraph;
@@ -173,25 +217,96 @@ export function ParagraphView({
   inherited: string;
   lineHeight: number;
   bulleted: boolean;
+  /** The text states its paragraph layout; see `statesParagraphLayout`. */
+  stated?: boolean;
   first: boolean;
 }): JSX.Element {
   const lead = paragraph.runs[0];
   const align = paragraph.align ? ALIGN[paragraph.align] : undefined;
   const leadSize = lead?.sizePt ?? styleSizePt ?? (typeSizeEmu > 0 ? typeSizeEmu / EMU_PER_PT : 16);
   const marker = runColor(lead?.color ?? '', inherited);
+  const runs = paragraph.runs.map((run, index) => (
+    <span
+      key={index}
+      style={runStyle(
+        run,
+        size,
+        styleFont,
+        styleBold,
+        styleItalic,
+        styleSizePt,
+        typeSizeEmu,
+        inherited,
+      )}
+    >
+      {showBreaks(run.text)}
+    </span>
+  ));
+  const common: CSSProperties = {
+    // A paragraph that states its own spacing wins over the one its type role gives.
+    // Both are multiples of single spacing; `lineHeight` is the role's, already as CSS.
+    lineHeight: paragraph.lineSpacing != null ? lineHeightOf(paragraph.lineSpacing) : lineHeight,
+    fontSize: cqw(ptToCqw(leadSize, size)),
+  };
+
+  if (stated) {
+    const indent = paragraph.indentEmu ?? 0;
+    // PowerPoint leaves out the space before the first paragraph of a box.
+    const before = first ? 0 : (paragraph.spaceBeforePt ?? 0);
+    const spacing: CSSProperties = {
+      margin: 0,
+      marginTop: before > 0 ? cqw(ptToCqw(before, size)) : 0,
+      marginBottom: paragraph.spaceAfterPt ? cqw(ptToCqw(paragraph.spaceAfterPt, size)) : 0,
+      paddingLeft: cqw(emuToCqw(paragraph.marginEmu ?? 0, size)),
+    };
+    if (!paragraph.bullet) {
+      return (
+        <div
+          style={{
+            ...common,
+            ...spacing,
+            textAlign: align,
+            ...(indent !== 0 ? { textIndent: cqw(emuToCqw(indent, size)) } : null),
+          }}
+        >
+          {runs}
+        </div>
+      );
+    }
+    // The bullet starts where the first line would, at margin plus indent. A negative indent is
+    // the hanging space the bullet sits in, and the text of every line starts at the margin.
+    const hanging = indent < 0;
+    return (
+      <div style={{ ...common, ...spacing, display: 'flex', alignItems: 'baseline' }}>
+        <span
+          aria-hidden
+          data-bullet=""
+          style={{
+            flex: '0 0 auto',
+            marginLeft: cqw(emuToCqw(indent, size)),
+            ...(hanging ? { width: cqw(emuToCqw(-indent, size)) } : { paddingRight: '0.5em' }),
+            color: marker,
+            fontFamily: fontFamily(lead?.font || styleFont),
+            whiteSpace: 'pre',
+          }}
+        >
+          {paragraph.bullet}
+        </span>
+        <span style={{ minWidth: 0, flex: '1 1 0%', textAlign: align }}>{runs}</span>
+      </div>
+    );
+  }
 
   return (
     <div
       style={{
+        ...common,
         display: 'flex',
         alignItems: 'flex-start',
         gap: '0.55em',
         margin: 0,
         marginTop: first ? 0 : '0.35em',
         paddingLeft: `${paragraph.level * 1.5}em`,
-        // A paragraph that states its own spacing wins over the one its type role gives.
-        lineHeight: paragraph.lineSpacing ?? lineHeight,
-        fontSize: cqw(ptToCqw(leadSize, size)),
       }}
     >
       {bulleted ? (
@@ -207,25 +322,7 @@ export function ParagraphView({
           }}
         />
       ) : null}
-      <span style={{ minWidth: 0, flex: '1 1 0%', textAlign: align }}>
-        {paragraph.runs.map((run, index) => (
-          <span
-            key={index}
-            style={runStyle(
-              run,
-              size,
-              styleFont,
-              styleBold,
-              styleItalic,
-              styleSizePt,
-              typeSizeEmu,
-              inherited,
-            )}
-          >
-            {showBreaks(run.text)}
-          </span>
-        ))}
-      </span>
+      <span style={{ minWidth: 0, flex: '1 1 0%', textAlign: align }}>{runs}</span>
     </div>
   );
 }
