@@ -17,6 +17,7 @@ import {
   createGenerationWorkflow,
   createRepairWorkflow,
   critiqueSchema,
+  type DeckVariant,
   repairedSlideSchema,
   type repairTaskSchema,
   writtenSchema,
@@ -29,6 +30,9 @@ type EventData = {
     'schemaVersion' | 'runId' | 'seq' | 'at'
   >;
 }[JobEvent['type']];
+/** Checks of the deterministic audit whose findings a rewrite of the slot's copy can fix. */
+const REWRITABLE = new Set(['placeholder-text', 'bullet-length', 'bullet-count', 'text-clipped']);
+
 export interface GenerateOptions {
   runId: string;
   templatePath: string;
@@ -40,6 +44,8 @@ export interface GenerateOptions {
   engine: EngineClient;
   provider: TextProvider;
   seed?: number;
+  /** Which of the three renderings this run produces. Absent: balanced. */
+  variant?: DeckVariant;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
 }
@@ -89,6 +95,7 @@ export async function generatePresentation(options: GenerateOptions) {
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      variant: options.variant ?? 'balanced',
       signal,
       concurrency: 3,
       onProgress: async (done, total) =>
@@ -105,6 +112,7 @@ export async function generatePresentation(options: GenerateOptions) {
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      variant: options.variant ?? 'balanced',
       signal,
       concurrency: 3,
     });
@@ -150,12 +158,17 @@ export async function generatePresentation(options: GenerateOptions) {
             slides: written.map((s) => ({
               slideIndex: s.index,
               speakerNotes: s.slide.speakerNotes,
-              texts: s.slide.texts.map((t) => ({
-                ...t,
-                maxChars: options.profile.compositions
-                  .find((p) => p.patternId === s.slide.patternId)
-                  ?.slots.find((slot) => slot.slotId === t.slotId)?.maxChars,
-              })),
+              // The slot a table or chart replaced has no text on purpose; the critic sees the
+              // visual instead.
+              visual: s.slide.visual ?? null,
+              texts: s.slide.texts
+                .filter((t) => t.slotId !== s.slide.visual?.slotId)
+                .map((t) => ({
+                  ...t,
+                  maxChars: options.profile.compositions
+                    .find((p) => p.patternId === s.slide.patternId)
+                    ?.slots.find((slot) => slot.slotId === t.slotId)?.maxChars,
+                })),
             })),
           },
           critiqueSchema,
@@ -241,12 +254,72 @@ export async function generatePresentation(options: GenerateOptions) {
     stage = 'exporting';
     const exportStarted = Date.now();
     await emit({ type: 'stage-started', stage });
-    const output = await options.engine.exportCompositions(exportRequest(), signal);
+    let output = await options.engine.exportCompositions(exportRequest(), signal);
+    signal.throwIfAborted();
+    // The written file goes through the deterministic audit. Problems in a slot's copy that a
+    // rewrite can fix (filler text, overlong bullets, too many points) go back to the slot
+    // rewriter once, then the deck is written and audited again. The report is kept either way.
+    let report = await options.engine.auditCompositions(exportRequest(), signal);
+    const fixable = (r: typeof report) =>
+      r.findings.filter(
+        (f) =>
+          REWRITABLE.has(f.checkId) &&
+          (f.severity === 'blocker' || f.severity === 'major') &&
+          f.target.elementId?.startsWith('slot-'),
+      );
+    if (fixable(report).length > 0) {
+      const tasks: z.infer<typeof repairTaskSchema>[] = [];
+      for (const current of written) {
+        const slideId = `s${current.index + 1}`;
+        const corrections = fixable(report)
+          .filter((f) => f.target.slideId === slideId)
+          .map((f) => ({
+            slotId: (f.target.elementId ?? '').slice('slot-'.length),
+            message: `${f.title}: ${f.detail} (${f.evidence.measured}; ${f.evidence.expected})`,
+          }));
+        const pattern = options.profile.compositions.find(
+          (p) => p.patternId === current.slide.patternId,
+        );
+        if (corrections.length && pattern) {
+          tasks.push({
+            index: current.index,
+            brief: options.brief,
+            composition: pattern,
+            previous: current.slide,
+            corrections,
+          });
+        }
+      }
+      if (tasks.length) {
+        const repairRun = await mastra.getWorkflow('repair').createRun();
+        const repaired = await repairRun.start({ inputData: tasks });
+        if (repaired.status === 'success') {
+          for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
+            const current = written.find((s) => s.index === update.index);
+            if (current) current.slide = update.slide;
+          }
+          output = await options.engine.exportCompositions(exportRequest(), signal);
+          report = await options.engine.auditCompositions(exportRequest(), signal);
+        }
+      }
+    }
+    for (const finding of report.findings.filter(
+      (f) => f.severity === 'blocker' || f.severity === 'major',
+    )) {
+      const message = `Аудит, слайд ${finding.target.slideId.slice(1)}: ${finding.title}`;
+      reviewWarnings.push(message);
+      await emit({ type: 'warning', stage, code: 'content-review-required', message });
+    }
+    await writeFile(
+      join(options.outputDir, 'audit-deterministic.json'),
+      JSON.stringify(report, null, 2),
+    );
     signal.throwIfAborted();
     timings.push({ stage, ms: Date.now() - exportStarted });
     await emit({ type: 'stage-finished', stage, durationMs: Date.now() - exportStarted });
     const deck = {
       runId: options.runId,
+      variant: options.variant ?? 'balanced',
       title: written[0]?.title ?? 'Презентация',
       designSystem: options.profile.designSystem,
       templateIr: output.templateIr,
@@ -260,13 +333,14 @@ export async function generatePresentation(options: GenerateOptions) {
       ['pdf', output.pdfPath],
       ['deck-plan', join(options.outputDir, 'plan.json')],
       ['audit', join(options.outputDir, 'audit.json')],
+      ['audit', join(options.outputDir, 'audit-deterministic.json')],
       ...output.previews.map((p) => ['preview', p]),
     ] as const) {
       const bytes = await readFile(path);
       artifacts.push({
         kind: kind as RunArtifact['kind'],
         path: relative(options.outputDir, path),
-        variant: 'balanced',
+        variant: options.variant ?? 'balanced',
         bytes: bytes.length,
         sha256: createHash('sha256').update(bytes).digest('hex'),
       });

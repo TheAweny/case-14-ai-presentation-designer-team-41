@@ -31,6 +31,9 @@ import type { RunRepository } from '@lct/run-store';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 
+/** The renderings of every brief, generated in parallel. */
+const VARIANTS = ['dense', 'balanced', 'airy'] as const;
+
 @Controller('generation')
 export class GenerationController implements OnApplicationShutdown {
   private readonly root = resolve(process.env.RUNS_DIR ?? join(process.cwd(), 'runs'));
@@ -74,7 +77,8 @@ export class GenerationController implements OnApplicationShutdown {
   async create(@Body() body: unknown) {
     const parsed = generationRequestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.message);
-    if (this.active.size >= 2)
+    // Every generation runs three variants, each counted as one active run.
+    if (this.active.size >= 2 * VARIANTS.length)
       throw new BadRequestException('Two generations are already running.');
     const input = parsed.data;
     if (input.projectId !== null) await this.requireProject(input.projectId);
@@ -116,27 +120,33 @@ export class GenerationController implements OnApplicationShutdown {
         }),
       ),
     );
-    const run = await this.repository.create();
-    await mkdir(this.directory(run.runId), { recursive: true });
-    await writeFile(
-      join(this.directory(run.runId), 'metadata.json'),
-      JSON.stringify({
-        templateId: input.templateId,
-        projectId: input.projectId,
-        updatedAt: Date.now(),
-      }),
-    );
-    const controller = new AbortController();
-    this.active.set(run.runId, controller);
     const registryDir =
       process.env.REGISTRY_DIR ||
       [resolve('registry/agents'), resolve('../../registry/agents')].find(existsSync);
-    if (!registryDir) {
-      this.active.delete(run.runId);
-      await this.repository.transition(run.runId, 'failed');
-      throw new BadRequestException('REGISTRY_DIR is not configured.');
+    if (!registryDir) throw new BadRequestException('REGISTRY_DIR is not configured.');
+    // The three variants of one brief are separate runs, so every deck endpoint serves each of
+    // them as it is, and they share one cancellation.
+    const controller = new AbortController();
+    const runs: {
+      run: Awaited<ReturnType<RunRepository['create']>>;
+      variant: (typeof VARIANTS)[number];
+    }[] = [];
+    for (const variant of VARIANTS) {
+      const run = await this.repository.create();
+      await mkdir(this.directory(run.runId), { recursive: true });
+      await writeFile(
+        join(this.directory(run.runId), 'metadata.json'),
+        JSON.stringify({
+          templateId: input.templateId,
+          projectId: input.projectId,
+          variant,
+          updatedAt: Date.now(),
+        }),
+      );
+      this.active.set(run.runId, controller);
+      runs.push({ run, variant });
     }
-    const work = async () => {
+    const work = async ({ run, variant }: (typeof runs)[number]) => {
       try {
         await this.repository.transition(run.runId, 'running');
         await generatePresentation({
@@ -150,6 +160,7 @@ export class GenerationController implements OnApplicationShutdown {
           engine: this.engine,
           provider,
           seed: input.seed,
+          variant,
           signal: controller.signal,
           onEvent: (event) => this.repository.appendEvent(run.runId, event),
         });
@@ -167,8 +178,13 @@ export class GenerationController implements OnApplicationShutdown {
         this.active.delete(run.runId);
       }
     };
-    void work().catch(() => undefined);
-    return run;
+    for (const entry of runs) void work(entry).catch(() => undefined);
+    const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
+    if (!primary) throw new BadRequestException('No variant could be started.');
+    return {
+      ...primary.run,
+      variants: runs.map(({ run, variant }) => ({ variant, runId: run.runId })),
+    };
   }
 
   @Post(':id/cancel')

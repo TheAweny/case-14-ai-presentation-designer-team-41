@@ -41,6 +41,132 @@
             },
             "minItems": 1,
             "type": "array"
+          },
+          "visual": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "headers": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 5,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "kind": {
+                        "const": "table",
+                        "type": "string"
+                      },
+                      "rows": {
+                        "items": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "maxItems": 7,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "slotId": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slotId",
+                      "headers",
+                      "rows"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "categories": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "maxItems": 8,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "chartType": {
+                        "enum": [
+                          "bar",
+                          "column",
+                          "line",
+                          "pie"
+                        ],
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "chart",
+                        "type": "string"
+                      },
+                      "series": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "name": {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "values": {
+                              "items": {
+                                "type": "number"
+                              },
+                              "maxItems": 8,
+                              "minItems": 2,
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "values"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 5,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "slotId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "xTitle": {
+                        "type": "string"
+                      },
+                      "yTitle": {
+                        "description": "The value axis title with its unit.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slotId",
+                      "chartType",
+                      "categories",
+                      "series",
+                      "xTitle",
+                      "yTitle"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A table or chart replacing one text slot. Absent or null: text only."
           }
         },
         "required": [

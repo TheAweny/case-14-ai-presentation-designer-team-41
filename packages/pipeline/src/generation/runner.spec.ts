@@ -88,6 +88,19 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel') {
             : [];
         return Response.json({ schemaVersion: 1, findings });
       }
+      if (String(url).endsWith('/composition-audit')) {
+        return Response.json({
+          schemaVersion: 1,
+          deckId: 'test',
+          profile: 'composition',
+          passed: true,
+          score: 100,
+          slideCount: 10,
+          counts: { blocker: 0, major: 0, minor: 0, info: 0 },
+          categories: [],
+          findings: [],
+        });
+      }
       exports++;
       const outputPath = join(outputDir, 'deck.pptx');
       const pdfPath = join(outputDir, 'deck.pdf');

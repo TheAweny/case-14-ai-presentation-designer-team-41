@@ -112,7 +112,7 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     ).rejects.toThrow();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
-  it('limits combined traffic from separate runs to three requests', async () => {
+  it('limits combined traffic from separate runs to the shared slots', async () => {
     let active = 0;
     let peak = 0;
     const fetchImpl = vi.fn<typeof fetch>(async () => {
@@ -128,13 +128,13 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     );
     await Promise.all(
       providers.flatMap((provider) =>
-        Array.from({ length: 4 }, () =>
+        Array.from({ length: 6 }, () =>
           provider.generate('writer', '', {}, schema, AbortSignal.timeout(1000)),
         ),
       ),
     );
-    expect(peak).toBe(3);
-    expect(fetchImpl).toHaveBeenCalledTimes(8);
+    expect(peak).toBe(8);
+    expect(fetchImpl).toHaveBeenCalledTimes(12);
   });
   it('cancels queued requests without using an HTTP slot', async () => {
     const releases: (() => void)[] = [];
@@ -143,10 +143,10 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       return answer();
     });
     const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
-    const running = Array.from({ length: 3 }, () =>
+    const running = Array.from({ length: 8 }, () =>
       provider.generate('writer', '', {}, schema, AbortSignal.timeout(1000)),
     );
-    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(8));
     const abort = new AbortController();
     const queued = provider.generate('writer', '', {}, schema, abort.signal);
     const rejection = expect(queued).rejects.toThrow();
@@ -154,7 +154,7 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     await rejection;
     releases.forEach((release) => release());
     await Promise.all(running);
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(8);
   });
   it('retries 429 with backoff but never changes model', async () => {
     vi.useFakeTimers();

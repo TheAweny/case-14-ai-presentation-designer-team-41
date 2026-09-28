@@ -30,6 +30,13 @@ interface Completion {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
+/**
+ * Model requests at once for the whole process. Three variants of a deck are written in parallel,
+ * so three slots made them three times slower; eight stays under the ten parallel requests Yandex
+ * AI Studio allows, and MODEL_MAX_CONCURRENCY tunes it for another provider.
+ */
+const MAX_CONCURRENT = Math.max(1, Number(process.env.MODEL_MAX_CONCURRENCY) || 8);
+
 class RequestLimiter {
   private active = 0;
   private readonly waiting: (() => void)[] = [];
@@ -47,7 +54,7 @@ class RequestLimiter {
         if (index >= 0) this.waiting.splice(index, 1);
         reject(signal.reason);
       };
-      if (this.active < 3) grant();
+      if (this.active < MAX_CONCURRENT) grant();
       else {
         this.waiting.push(grant);
         signal.addEventListener('abort', abort, { once: true });
@@ -63,7 +70,7 @@ class RequestLimiter {
   }
 }
 
-// I share three HTTP slots across all runs in this process, not three per deck.
+// I share the HTTP slots across all runs and variants in this process, not per deck.
 const requests = new RequestLimiter();
 
 function backoff(ms: number, signal: AbortSignal): Promise<void> {

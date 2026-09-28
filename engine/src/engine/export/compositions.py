@@ -1,5 +1,6 @@
 """I preserve template objects and replace only the content assigned to their text slots."""
 
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -50,13 +51,56 @@ def _all_shapes(shapes: Any) -> Any:
             yield shape
 
 
+#: Draws one table or chart element onto a slide's shape tree; the API passes the visuals layer's.
+type DrawVisual = Callable[[Any, dict[str, Any]], None]
+
+
+def _replace_with_visual(slide: Any, visual: dict[str, Any], draw: DrawVisual) -> None:
+    """Swap the text shape of a slot for a native table or chart drawn in the same box."""
+    shape = next(
+        (s for s in _all_shapes(slide.shapes) if str(s.shape_id) == str(visual["slotId"])), None
+    )
+    if shape is None:
+        return
+    box = {
+        "x": int(shape.left),
+        "y": int(shape.top),
+        "cx": int(shape.width),
+        "cy": int(shape.height),
+    }
+    shape._element.getparent().remove(shape._element)
+    element: dict[str, Any] = {
+        "elementId": f"visual-{visual['slotId']}",
+        "role": visual["kind"],
+        "box": box,
+        "sourceShapeId": None,
+    }
+    if visual["kind"] == "table":
+        element |= {"kind": "table", "headers": visual["headers"], "rows": visual["rows"]}
+    else:
+        element |= {
+            "kind": "chart",
+            "chartType": visual["chartType"],
+            "categories": visual["categories"],
+            "series": visual["series"],
+            "xTitle": visual.get("xTitle", ""),
+            "yTitle": visual.get("yTitle", ""),
+        }
+    draw(slide.shapes, element)
+
+
 def export_compositions(
     source: Path,
     output: Path,
     slides: list[dict[str, Any]],
     patterns: list[dict[str, Any]],
+    draw_visual: DrawVisual | None = None,
 ) -> Path:
-    """I clone chosen slides inside their original package, preserving masters and relationships."""
+    """I clone chosen slides inside their original package, preserving masters and relationships.
+
+    A slide that carries a visual gets it drawn natively in place of the slot it names, when a
+    drawer is given.
+    """
     presentation = Presentation(str(source))
     originals = list(presentation.slides)
     catalog = {p["patternId"]: p for p in patterns}
@@ -100,6 +144,8 @@ def export_compositions(
         for shape in _all_shapes(slide.shapes):
             if str(shape.shape_id) in texts:
                 _replace_text(shape, texts[str(shape.shape_id)])
+        if item.get("visual") and draw_visual is not None:
+            _replace_with_visual(slide, item["visual"], draw_visual)
         notes = slide.notes_slide.notes_text_frame
         if notes is not None:
             notes.text = item.get("speakerNotes", "")

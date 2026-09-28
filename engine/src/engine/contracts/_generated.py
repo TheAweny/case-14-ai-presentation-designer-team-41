@@ -2122,6 +2122,56 @@ class Text(BaseModel):
     text: str
 
 
+class Visual(BaseModel):
+    """
+    A table or chart replacing one text slot. Absent or null: text only.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    headers: list[str] = Field(..., max_length=5, min_length=2)
+    kind: Literal["table"]
+    rows: list[list[str]] = Field(..., max_length=7, min_length=1)
+    slotId: constr(min_length=1)
+
+
+class Category2(RootModel[constr(min_length=1)]):
+    root: constr(min_length=1)
+
+
+class ChartType1(StrEnum):
+    bar = "bar"
+    column = "column"
+    line = "line"
+    pie = "pie"
+
+
+class Series1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: constr(min_length=1)
+    values: list[float] = Field(..., max_length=8, min_length=2)
+
+
+class Visual1(BaseModel):
+    """
+    A table or chart replacing one text slot. Absent or null: text only.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    categories: list[Category2] = Field(..., max_length=8, min_length=2)
+    chartType: ChartType1
+    kind: Literal["chart"]
+    series: list[Series1] = Field(..., max_length=5, min_length=1)
+    slotId: constr(min_length=1)
+    xTitle: str
+    yTitle: str = Field(..., description="The value axis title with its unit.")
+
+
 class Slide1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2129,6 +2179,10 @@ class Slide1(BaseModel):
     patternId: constr(min_length=1)
     speakerNotes: str
     texts: list[Text] = Field(..., min_length=1)
+    visual: Visual | Visual1 | None = Field(
+        None,
+        description="A table or chart replacing one text slot. Absent or null: text only.",
+    )
 
 
 class CompositionExportRequest(BaseModel):
@@ -3402,13 +3456,29 @@ class Elements7(BaseModel):
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
+class ChartType2(StrEnum):
+    bar = "bar"
+    column = "column"
+    line = "line"
+    pie = "pie"
+    area = "area"
+
+
+class Series2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: constr(min_length=1)
+    values: list[float] = Field(..., min_length=1)
+
+
 class Elements8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     box: Box14
     categories: list[str] = Field(..., min_length=1)
-    chartType: ChartType
+    chartType: ChartType2
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -3428,7 +3498,7 @@ class Elements8(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
-    series: list[Series] = Field(..., min_length=1)
+    series: list[Series2] = Field(..., min_length=1)
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -3719,7 +3789,7 @@ class Blocks3(BaseModel):
     )
 
 
-class Series2(BaseModel):
+class Series3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -3734,9 +3804,9 @@ class Blocks4(BaseModel):
         extra="forbid",
     )
     categories: list[str] = Field(..., min_length=1)
-    chartType: ChartType
+    chartType: ChartType2
     kind: Literal["chart"]
-    series: list[Series2] = Field(..., min_length=1)
+    series: list[Series3] = Field(..., min_length=1)
     sources: list[Source11] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
@@ -5290,9 +5360,9 @@ class Blocks11(BaseModel):
         extra="forbid",
     )
     categories: list[str] = Field(..., min_length=1)
-    chartType: ChartType
+    chartType: ChartType2
     kind: Literal["chart"]
-    series: list[Series2] = Field(..., min_length=1)
+    series: list[Series3] = Field(..., min_length=1)
     sources: list[Source33] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
@@ -6246,7 +6316,7 @@ class Elements12(BaseModel):
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
-class Series4(BaseModel):
+class Series5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6260,7 +6330,7 @@ class Elements13(BaseModel):
     )
     box: Box25
     categories: list[str] = Field(..., min_length=1)
-    chartType: ChartType
+    chartType: ChartType2
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -6280,7 +6350,7 @@ class Elements13(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
-    series: list[Series4] = Field(..., min_length=1)
+    series: list[Series5] = Field(..., min_length=1)
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -6936,7 +7006,7 @@ class Elements18(BaseModel):
     )
     box: Box31
     categories: list[str] = Field(..., min_length=1)
-    chartType: ChartType
+    chartType: ChartType2
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -6956,7 +7026,7 @@ class Elements18(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
-    series: list[Series4] = Field(..., min_length=1)
+    series: list[Series5] = Field(..., min_length=1)
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
