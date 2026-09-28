@@ -2,12 +2,14 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { JobEvent } from '@lct/contracts';
 import {
+  createHttpDeckSource,
   createHttpExporter,
   createHttpGenerator,
   decodeGeneratedDeck,
   zipPreviews,
 } from './http-generation';
 import type { ExportRequest } from './deck-export';
+import { mediaUrls } from './deck-source';
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -185,5 +187,33 @@ describe('generated artifact download', () => {
     await expect(
       createHttpExporter().export({ ...input(), slides: [] }, vi.fn(), AbortSignal.timeout(1000)),
     ).rejects.toThrow();
+  });
+});
+
+describe('a generated deck read back from its .pptx', () => {
+  const imported = fixture('DeckImportResponse').slides;
+
+  it('opens the slides the engine read from the file as they are', () => {
+    const opened = decodeGeneratedDeck({ ...stored, slides: imported });
+    expect(opened.slides).toEqual(imported);
+    expect(opened.slides[0]?.backgroundImage).toBe('/ppt/media/image1.png');
+  });
+
+  it('rebuilds the slides from the template IR when the engine could not read the file', () => {
+    expect(decodeGeneratedDeck({ ...stored, slides: [] }).slides).toEqual(deck.slides);
+    expect(deck.slides.length).toBeGreaterThan(0);
+  });
+
+  it('resolves the picture a slide is painted with', () => {
+    const opened = decodeGeneratedDeck({ ...stored, slides: imported });
+    expect(mediaUrls(createHttpDeckSource(), opened)['/ppt/media/image1.png']).toBe(
+      '/api/backend/generation/run-test/media/image1.png',
+    );
+  });
+
+  it('serves a picture part by the name of its file', () => {
+    expect(createHttpDeckSource().mediaUrl?.('run-test', '/ppt/media/image5.png')).toBe(
+      '/api/backend/generation/run-test/media/image5.png',
+    );
   });
 });

@@ -63,18 +63,11 @@ function fillColor(
   return fill?.kind === 'solid' ? resolve(fill.color) : null;
 }
 
-function isDark(hex: string | null): boolean {
-  if (!hex) return false;
-  const [red, green, blue] = rgbOf(hex);
-  return red * 0.299 + green * 0.587 + blue * 0.114 < 150;
-}
-
 function shapeOf(
   shape: Shape,
   owner: string,
   index: number,
   resolveColor: (color: ColorRef | null | undefined) => string | null,
-  lightText: boolean,
   showEmptyPlaceholder: boolean,
 ): SlideElement | null {
   if (!shape.box) return null;
@@ -93,12 +86,7 @@ function shapeOf(
       role,
       box: shape.box,
       sourceShapeId: shape.shapeId,
-      paragraphs: lightText
-        ? shape.paragraphs.map((paragraph) => ({
-            ...paragraph,
-            runs: paragraph.runs.map((run) => (run.color ? run : { ...run, color: 'FFFFFF' })),
-          }))
-        : shape.paragraphs,
+      paragraphs: shape.paragraphs,
       overflow: null,
     };
   }
@@ -180,14 +168,7 @@ function slideOf(
           shape.kind !== 'group',
       )
       .map(({ shape, owner }, shapeIndex) =>
-        shapeOf(
-          shape,
-          owner,
-          shapeIndex,
-          resolveColor,
-          isDark(background),
-          includeInheritedPlaceholders,
-        ),
+        shapeOf(shape, owner, shapeIndex, resolveColor, includeInheritedPlaceholders),
       )
       .filter((element): element is SlideElement => element !== null),
     background,

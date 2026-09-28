@@ -9,6 +9,7 @@ import {
 import {
   auditReportSchema,
   deckExportResponseSchema,
+  deckImportResponseSchema,
   editableDeckResponseSchema,
   healthCheckSchema,
   layoutVariantsResponseSchema,
@@ -16,6 +17,8 @@ import {
   type AuditRequest,
   type DeckExportRequest,
   type DeckExportResponse,
+  type DeckImportRequest,
+  type DeckImportResponse,
   type EditableDeckRequest,
   type EditableDeckResponse,
   type HealthCheck,
@@ -121,6 +124,14 @@ export class EngineClient {
   /** `POST /v1/exports` — one variant written as native PPTX, and PDF from it. */
   async exportDeck(request: DeckExportRequest): Promise<DeckExportResponse> {
     return deckExportResponseSchema.parse(await this.post('/v1/exports', request));
+  }
+
+  /**
+   * `POST /v1/deck-import` — a finished .pptx read back as SlideIR, the way its slides are drawn,
+   * with the pictures they reference written into `mediaDir`.
+   */
+  async importDeck(request: DeckImportRequest, signal?: AbortSignal): Promise<DeckImportResponse> {
+    return deckImportResponseSchema.parse(await this.post('/v1/deck-import', request, signal));
   }
 
   private async get(path: string): Promise<unknown> {

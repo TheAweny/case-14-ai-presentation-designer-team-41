@@ -261,7 +261,7 @@ describe('templateLayoutsFromIr', () => {
     expect(rendered?.background).toBe('0077FF');
   });
 
-  it('uses white inherited text on a dark themed slide', () => {
+  it('leaves the colour of inherited text to the renderer on a dark slide', () => {
     const layout = ir.layouts[0];
     if (!layout?.shapes[0]) throw new Error('fixture layout is missing');
     const master = {
@@ -308,8 +308,9 @@ describe('templateLayoutsFromIr', () => {
       layouts: [{ ...layout, follows: master.part }],
       slides: [slide],
     });
+    // A card on a dark slide keeps dark text: painting every run white would lose it on the card.
     expect(rendered?.elements).toMatchObject([
-      { kind: 'text', sourceShapeId: 2, paragraphs: [{ runs: [{ color: 'FFFFFF' }] }] },
+      { kind: 'text', sourceShapeId: 2, paragraphs: [{ runs: [{ color: '' }] }] },
     ]);
   });
 

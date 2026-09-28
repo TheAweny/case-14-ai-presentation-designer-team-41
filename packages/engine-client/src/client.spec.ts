@@ -60,4 +60,52 @@ describe('EngineClient', () => {
       }),
     ).resolves.toMatchObject({ slideCount: 1 });
   });
+
+  it('reads a finished deck back as SlideIR and posts where its pictures go', async () => {
+    let posted: { url: string; body: unknown } | undefined;
+    const answer = {
+      schemaVersion: 1,
+      slides: [
+        {
+          schemaVersion: 1,
+          slideId: 'imported-1',
+          variant: 'balanced',
+          index: 0,
+          patternId: '/ppt/slideLayouts/slideLayout1.xml',
+          slideCx: 12192000,
+          slideCy: 6858000,
+          backgroundImage: '/ppt/media/image1.png',
+          elements: [],
+        },
+      ],
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      posted = { url: String(url), body: JSON.parse(String(init?.body)) };
+      return new Response(JSON.stringify(answer), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    const client = new EngineClient({ baseUrl: 'http://engine:8000', fetchImpl });
+    const request = {
+      schemaVersion: 1 as const,
+      pptxPath: '/app/runs/run-1/deck.pptx',
+      mediaDir: '/app/runs/run-1/media',
+    };
+
+    const imported = await client.importDeck(request);
+
+    expect(posted).toEqual({ url: 'http://engine:8000/v1/deck-import', body: request });
+    expect(imported.slides[0]?.backgroundImage).toBe('/ppt/media/image1.png');
+  });
+
+  it('rejects an imported deck whose slides break the SlideIR contract', async () => {
+    const client = new EngineClient({
+      baseUrl: 'http://engine:8000',
+      fetchImpl: fakeFetch(200, { schemaVersion: 1, slides: [{ slideId: 'no-box' }] }),
+    });
+    await expect(
+      client.importDeck({ schemaVersion: 1, pptxPath: '/app/runs/run-1/deck.pptx' }),
+    ).rejects.toThrowError();
+  });
 });

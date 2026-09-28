@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { designSystemSchema, templateIrSchema, jobEventSchema } from '@lct/contracts';
+import {
+  designSystemSchema,
+  jobEventSchema,
+  slideIrSchema,
+  templateIrSchema,
+} from '@lct/contracts';
 import { apiFetch, publicApiUrl } from './api';
 import type { DeckGenerator } from './deck-generator';
 import { DeckNotFoundError, type Deck, type DeckSource } from './deck-source';
@@ -11,6 +16,11 @@ const storedDeckSchema = z.object({
   title: z.string(),
   designSystem: designSystemSchema,
   templateIr: templateIrSchema,
+  /**
+   * The finished .pptx read back by the engine, the way its slides are drawn. Absent when the
+   * engine could not read it; the slides are then rebuilt from the parser's template IR.
+   */
+  slides: z.array(slideIrSchema).optional(),
 });
 async function request(path: string, init?: RequestInit) {
   const response = await apiFetch(path, init);
@@ -22,9 +32,11 @@ async function request(path: string, init?: RequestInit) {
 }
 export function decodeGeneratedDeck(data: unknown): Deck {
   const parsed = storedDeckSchema.parse(data);
-  const slides = parsed.templateIr.slides
-    .map((_, i) => templateSlideFromIr(parsed.templateIr, i))
-    .filter((slide) => slide !== null);
+  const slides = parsed.slides?.length
+    ? parsed.slides
+    : parsed.templateIr.slides
+        .map((_, i) => templateSlideFromIr(parsed.templateIr, i))
+        .filter((slide) => slide !== null);
   return {
     deckId: parsed.runId,
     renderedPdfUrl: publicApiUrl(

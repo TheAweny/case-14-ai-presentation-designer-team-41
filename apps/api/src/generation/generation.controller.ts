@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Logger,
   ServiceUnavailableException,
   StreamableFile,
 } from '@nestjs/common';
@@ -42,6 +43,7 @@ export class GenerationController implements OnApplicationShutdown {
   });
   private readonly active = new Map<string, AbortController>();
   private readonly library = new LibraryMetadata(this.root);
+  private readonly logger = new Logger(GenerationController.name);
   constructor(
     @Inject(RUN_REPOSITORY) private readonly repository: RunRepository,
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
@@ -228,18 +230,37 @@ export class GenerationController implements OnApplicationShutdown {
     return new StreamableFile(await readFile(join(this.directory(id), 'media', name)), { type });
   }
 
+  /**
+   * The finished deck for the editor: its design system and template IR, and its slides read back
+   * from the .pptx the way they are drawn, with their pictures written next to the run's media.
+   * The engine sees the run directory at the same path as the API. When it cannot read the file
+   * the answer comes without slides and the editor rebuilds them from the template IR.
+   */
   @Get(':id/deck')
   async deck(@Param('id') id: string): Promise<unknown> {
     const metadata = await this.completed(id);
-    const deck = JSON.parse(await readFile(join(this.directory(id), 'deck.json'), 'utf8'));
-    const current = await this.engine
-      .parseTemplateProfile(join(this.directory(id), 'deck.pptx'))
-      .then((profile) => ({
-        designSystem: designSystemSchema.parse(profile.designSystem),
-        templateIr: templateIrSchema.parse(profile.templateIr),
-      }))
-      .catch(() => null);
-    return { ...deck, ...current, title: metadata.title ?? deck.title };
+    const directory = this.directory(id);
+    const deck = JSON.parse(await readFile(join(directory, 'deck.json'), 'utf8'));
+    const pptxPath = join(directory, 'deck.pptx');
+    const [current, imported] = await Promise.all([
+      this.engine
+        .parseTemplateProfile(pptxPath)
+        .then((profile) => ({
+          designSystem: designSystemSchema.parse(profile.designSystem),
+          templateIr: templateIrSchema.parse(profile.templateIr),
+        }))
+        .catch(() => null),
+      this.engine
+        .importDeck({ schemaVersion: 1, pptxPath, mediaDir: join(directory, 'media') })
+        .then(({ slides }) => ({ slides }))
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `Deck ${id} could not be read back as slides: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return null;
+        }),
+    ]);
+    return { ...deck, ...current, ...imported, title: metadata.title ?? deck.title };
   }
 
   @Get(':id/artifacts/:name')

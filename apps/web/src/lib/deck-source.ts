@@ -56,17 +56,19 @@ export class DeckNotFoundError extends Error {
 }
 
 /**
- * Адреса картинок колоды и её макетов, которые источник смог отдать. Остальные части на слайде —
- * рамка.
+ * Адреса картинок колоды и её макетов, которые источник смог отдать: картинок-элементов и
+ * картинок фона. Остальные части на слайде — рамка.
  */
 export function mediaUrls(source: DeckSource, deck: Deck): Record<string, string> {
   const urls: Record<string, string> = {};
+  const add = (part: string) => {
+    if (urls[part]) return;
+    const url = source.mediaUrl(deck.deckId, part);
+    if (url) urls[part] = url;
+  };
   for (const slide of [...deck.slides, ...deck.layouts.map((layout) => layout.slide)]) {
-    for (const element of slide.elements) {
-      if (element.kind !== 'image' || urls[element.mediaPart]) continue;
-      const url = source.mediaUrl(deck.deckId, element.mediaPart);
-      if (url) urls[element.mediaPart] = url;
-    }
+    if (slide.backgroundImage) add(slide.backgroundImage);
+    for (const element of slide.elements) if (element.kind === 'image') add(element.mediaPart);
   }
   return urls;
 }

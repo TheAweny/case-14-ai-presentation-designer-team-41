@@ -17,6 +17,20 @@ const slide = {
     { kind: 'decor', elementId: 'open', role: 'decoration', box, sourceShapeId: 2, locked: false },
     {
       kind: 'decor',
+      elementId: 'labelled',
+      role: 'decoration',
+      box,
+      sourceShapeId: 3,
+      paragraphs: [
+        {
+          level: 0,
+          lineSpacing: null,
+          runs: [{ text: 'Facts', font: '', sizePt: null, bold: null, italic: null, color: '' }],
+        },
+      ],
+    },
+    {
+      kind: 'decor',
       elementId: 'drawn',
       role: 'decoration',
       box,
@@ -31,11 +45,16 @@ const slide = {
 describe('lockTemplateDecor', () => {
   it('locks template decoration that states no lock, and nothing else', () => {
     const [next] = lockTemplateDecor([slide]);
-    expect(next?.elements.map((element) => element.locked)).toEqual([true, false, undefined]);
+    expect(next?.elements.map((element) => element.locked)).toEqual([
+      true,
+      false,
+      undefined,
+      undefined,
+    ]);
   });
 
   it('returns a slide with nothing to lock as it was', () => {
-    const plain = { ...slide, elements: [slide.elements[2]] } as SlideIr;
+    const plain = { ...slide, elements: [slide.elements[2], slide.elements[3]] } as SlideIr;
     expect(lockTemplateDecor([plain])[0]).toBe(plain);
   });
 });
