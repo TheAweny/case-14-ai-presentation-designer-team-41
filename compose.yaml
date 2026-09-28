@@ -77,6 +77,9 @@ services:
         condition: service_healthy
     environment:
       PORT: '3000'
+      # Address of the API as the web server sees it. Inside compose this is the api service;
+      # NEXT_PUBLIC_API_URL stays the browser-facing localhost:3001 baked into the build.
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3001}
       # Accounts of the interface and the key that signs their sessions; `lct onboard` and
       # `lct user` write both into .env.
       AUTH_SECRET: ${AUTH_SECRET:-}
