@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { generationProfileSchema } from '@lct/contracts';
-import { createGenerationWorkflow, validateBindings } from './workflow.js';
+import {
+  createGenerationWorkflow,
+  groundedVisual,
+  validateBindings,
+  variantCatalog,
+} from './workflow.js';
 import type { TextProvider } from './provider.js';
 
 const fixture = JSON.parse(
@@ -230,5 +235,87 @@ describe('template generation workflow', () => {
     const run = await workflow.createRun();
     const result = await run.start({ inputData: { brief: 'Test', slideCount: 10, profile } });
     expect(result.status).toBe('failed');
+  });
+});
+
+describe('variantCatalog', () => {
+  const composition = (patternId: string, body: number) => ({
+    patternId,
+    sourceIndex: 0,
+    name: patternId,
+    imageCount: 0,
+    slots: [
+      {
+        slotId: 't',
+        role: 'title' as const,
+        sample: '',
+        maxChars: 40,
+        maxLines: 2,
+        font: 'A',
+        fontSize: 30,
+      },
+      ...(body
+        ? [
+            {
+              slotId: 'b',
+              role: 'body' as const,
+              sample: '',
+              maxChars: body,
+              maxLines: 8,
+              font: 'A',
+              fontSize: 16,
+            },
+          ]
+        : []),
+    ],
+  });
+  const catalog = [
+    composition('cover', 0),
+    ...[100, 200, 300, 400, 500, 900].map((body) => composition(`b${body}`, body)),
+  ];
+
+  it('gives dense the roomiest layouts and airy the lightest, keeping covers in both', () => {
+    const cover = catalog[0] ?? composition('cover', 0);
+    const dense = variantCatalog(catalog, 'dense', [cover]).map((p) => p.patternId);
+    const airy = variantCatalog(catalog, 'airy', [cover]).map((p) => p.patternId);
+    expect(dense).toContain('b900');
+    expect(dense).not.toContain('b100');
+    expect(airy).toContain('b100');
+    expect(airy).not.toContain('b900');
+    expect(dense).toContain('cover');
+    expect(airy).toContain('cover');
+  });
+
+  it('gives balanced the whole catalog', () => {
+    expect(variantCatalog(catalog, 'balanced')).toHaveLength(catalog.length);
+  });
+});
+
+describe('groundedVisual', () => {
+  const brief = 'Выручка: Q1 10, Q2 12, Q3 15 млн ₽. Удержание 94%.';
+  const chart = {
+    kind: 'chart' as const,
+    slotId: '5',
+    chartType: 'column' as const,
+    categories: ['Q1', 'Q2', 'Q3'],
+    series: [{ name: 'Выручка', values: [10, 12, 15] }],
+    xTitle: 'Квартал',
+    yTitle: 'млн ₽',
+  };
+
+  it('keeps a chart whose figures are all in the brief', () => {
+    expect(groundedVisual(chart, brief)).toEqual(chart);
+  });
+
+  it('drops a chart with a figure the brief does not have', () => {
+    expect(
+      groundedVisual({ ...chart, series: [{ name: 'Выручка', values: [10, 12, 17] }] }, brief),
+    ).toBeNull();
+  });
+
+  it('drops a table whose rows do not match its header', () => {
+    expect(
+      groundedVisual({ kind: 'table', slotId: '5', headers: ['A', 'B'], rows: [['94%']] }, brief),
+    ).toBeNull();
   });
 });

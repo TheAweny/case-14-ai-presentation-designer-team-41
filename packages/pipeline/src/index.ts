@@ -70,5 +70,7 @@ export {
   compositionPlanSchema,
   critiqueSchema,
   type GenerationDependencies,
+  variantCatalog,
+  type DeckVariant,
 } from './generation/workflow.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';

@@ -13,6 +13,7 @@ import { templateLayoutsFromIr, templateSlideFromIr } from './template-profile';
 
 const storedDeckSchema = z.object({
   runId: z.string(),
+  variant: z.enum(['dense', 'balanced', 'airy']).default('balanced'),
   title: z.string(),
   designSystem: designSystemSchema,
   templateIr: templateIrSchema,
@@ -42,8 +43,11 @@ export function decodeGeneratedDeck(data: unknown): Deck {
     renderedPdfUrl: publicApiUrl(
       `/generation/${encodeURIComponent(parsed.runId)}/artifacts/deck.pdf`,
     ),
+    coverPreviewUrl: publicApiUrl(
+      `/generation/${encodeURIComponent(parsed.runId)}/artifacts/slide-1.png`,
+    ),
     title: parsed.title,
-    variant: 'balanced',
+    variant: parsed.variant,
     slideSize: { cx: parsed.templateIr.slideCx, cy: parsed.templateIr.slideCy },
     designSystem: parsed.designSystem,
     slides,
@@ -110,7 +114,7 @@ export function createHttpGenerator(): DeckGenerator {
           model: input.model,
         }),
         signal,
-      })) as { runId: string };
+      })) as { runId: string; variants?: { variant: string; runId: string }[] };
       const cancel = () => {
         void request(`/generation/${run.runId}/cancel`, { method: 'POST' }).catch(() => undefined);
       };
@@ -132,25 +136,60 @@ export function createHttpGenerator(): DeckGenerator {
           if (status.state === 'done') break;
           await wait(signal);
         }
-        const deck = await createHttpDeckSource().getDeck(run.runId);
-        deck.slides.forEach((slide, index) =>
-          onSlide?.({ index, total: deck.slides.length, slide, designSystem: deck.designSystem }),
+        // The API writes three variants of the brief as separate runs. Progress follows the
+        // balanced one; the others are awaited here, and a variant that failed is left out
+        // rather than failing the two that succeeded.
+        const others = (run.variants ?? []).filter((v) => v.runId !== run.runId);
+        const settled = await Promise.all(
+          others.map(async (other) => {
+            for (;;) {
+              signal.throwIfAborted();
+              const state = (await request(`/runs/${other.runId}`, { signal })) as {
+                state: string;
+              };
+              if (state.state === 'done') return other.runId;
+              if (state.state === 'failed') return null;
+              await wait(signal);
+            }
+          }),
         );
-        const cover = deck.slides[0];
-        if (!cover) throw new Error('The generated deck has no slides.');
-        return {
-          templateSubstituted: false,
-          variants: [
-            {
-              variant: 'balanced',
-              deckId: deck.deckId,
-              title: deck.title,
-              slideCount: deck.slides.length,
-              cover,
-              designSystem: deck.designSystem,
-            },
-          ],
-        };
+        const source = createHttpDeckSource();
+        const decks = await Promise.all(
+          [run.runId, ...settled.filter((id): id is string => id !== null)].map((id) =>
+            source.getDeck(id),
+          ),
+        );
+        const primary = decks[0];
+        if (!primary) throw new Error('The generated deck has no slides.');
+        primary.slides.forEach((slide, index) =>
+          onSlide?.({
+            index,
+            total: primary.slides.length,
+            slide,
+            designSystem: primary.designSystem,
+          }),
+        );
+        const order = ['dense', 'balanced', 'airy'];
+        const variants = decks
+          .flatMap((deck) => {
+            const cover = deck.slides[0];
+            return cover
+              ? [
+                  {
+                    variant: deck.variant,
+                    deckId: deck.deckId,
+                    title: deck.title,
+                    slideCount: deck.slides.length,
+                    cover,
+                    coverPreviewUrl: deck.coverPreviewUrl,
+                    designSystem: deck.designSystem,
+                  },
+                ]
+              : [];
+          })
+          .sort((a, b) => order.indexOf(a.variant) - order.indexOf(b.variant));
+        if (!variants.length) throw new Error('The generated deck has no slides.');
+        return { templateSubstituted: false, variants };
       } finally {
         signal.removeEventListener('abort', cancel);
       }

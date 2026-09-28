@@ -14,6 +14,7 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from engine import __version__, checks, export, layout, parser, render, visuals
+from engine.api._composition_audit import composition_slides
 from engine.api._profiles import UnknownProfileError, deterministic_profile
 from engine.contracts import (
     AuditReport,
@@ -244,7 +245,15 @@ def composition_deck(request: CompositionExportRequest) -> dict:
                 for slot in pattern["slots"]
             }
         )
-        export_compositions(source, output, [s.model_dump() for s in request.slides], patterns)
+        design_system = parser.design_system_of(source)
+
+        def draw(shapes: Any, element: dict[str, Any]) -> None:
+            styled = visuals.style_visuals([{"elements": [element]}], design_system)
+            visuals.draw_visual(shapes, styled[0]["elements"][0], design_system)
+
+        export_compositions(
+            source, output, [s.model_dump(mode="json") for s in request.slides], patterns, draw
+        )
         previews = render.render_to_png(output, output.parent / "previews", dpi=110)
         ir = parser.parse_template(output)
         with zipfile.ZipFile(output) as archive:
@@ -403,3 +412,38 @@ def export_deck(request: DeckExportRequest) -> DeckExportResponse:
     return DeckExportResponse.model_validate(
         {"schemaVersion": 1, "variant": variant, "files": files}
     )
+
+
+@app.post(
+    "/v1/composition-audit",
+    response_model=AuditReport,
+    # SlideIR tells an absent field from a null one; unset optional fields must stay absent.
+    response_model_exclude_unset=True,
+)
+def composition_audit(request: CompositionExportRequest) -> AuditReport:
+    """Audit a deck exported from compositions, measuring the written file.
+
+    Only the slots are judged: the rest of each slide is the template's own design. The
+    `composition` profile leaves out what the typographic fit check already covers exactly and
+    what would flag the template's own geometry.
+    """
+    source = Path(request.templatePath).resolve()
+    output = Path(request.outputPath).resolve()
+    if not source.is_file() or not output.is_file():
+        raise HTTPException(status_code=404, detail="Template or exported deck not found.")
+    patterns = {p["patternId"]: p for p in extract_compositions(source)}
+    slides = composition_slides(
+        parser.parse_template(output), [s.model_dump(mode="json") for s in request.slides], patterns
+    )
+    payload = {
+        "schemaVersion": 1,
+        "deckId": output.parent.name,
+        "slides": slides,
+        "designSystem": parser.design_system_of(source),
+        "patternCatalog": None,
+    }
+    try:
+        profile = deterministic_profile("composition")
+    except UnknownProfileError:
+        profile = {}
+    return AuditReport.model_validate(checks.audit_deck(payload, "composition", profile))

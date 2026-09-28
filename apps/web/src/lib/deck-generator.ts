@@ -73,6 +73,8 @@ export interface GeneratedVariant {
   readonly slideCount: number;
   /** Первый слайд: по нему рисуется обложка карточки. */
   readonly cover: SlideIr;
+  /** Реальный PNG первого слайда из движка, если его сохранил API. */
+  readonly coverPreviewUrl?: string;
   /** Профиль шаблона, которым нарисована обложка. */
   readonly designSystem: DesignSystem;
 }

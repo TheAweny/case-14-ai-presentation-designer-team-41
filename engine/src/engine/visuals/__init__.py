@@ -153,6 +153,11 @@ def _draw_table(
     table.first_row = True
     palette = _palette(design_system)
     style = _body_style(design_system)
+    # Rows as tall as two lines of body text rather than stretched over the whole box: a short
+    # table in a tall slot reads as a table, not as a grid of empty cells.
+    row_height = min(box["cy"] // (len(rows) + 1), int(float(style["sizePt"]) * 2.4 * 12_700))
+    for row in table.rows:
+        row.height = Emu(row_height)
     styles = element.get("cellStyles") or []
     header_style = styles[0][0] if styles and styles[0] and styles[0][0] else {}
     for r, values in enumerate([headers, *rows]):

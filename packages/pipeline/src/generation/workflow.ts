@@ -4,7 +4,10 @@ import {
   composedSlideSchema,
   compositionPlanSchema,
   templateSlotCopySchema,
+  slotChartSchema,
   slotRewriteChoicesSchema,
+  slotTableSchema,
+  type SlotVisual,
   compositionSchema,
   generationProfileSchema,
   type ComposedSlide,
@@ -13,8 +16,13 @@ import {
 import type { TextProvider } from './provider.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
+/** The three renderings of one brief. They differ in composition and density, not in facts. */
+export type DeckVariant = 'dense' | 'balanced' | 'airy';
+
 export interface GenerationDependencies {
   provider: TextProvider;
+  /** Which rendering to plan and write. Absent: balanced. */
+  variant?: DeckVariant;
   plannerInstructions: string;
   writerInstructions: string;
   repairInstructions?: string;
@@ -44,7 +52,26 @@ export const writtenSchema = z.object({
   imageQuery: z.string(),
 });
 
+/** Body slots roomy enough to hold a table or a chart instead of their text. */
+const VISUAL_MIN_CHARS = 120;
+
+export function visualSlots(pattern: GenerationProfile['compositions'][number]): string[] {
+  return pattern.slots
+    .filter((slot) => slot.role === 'body' && slot.maxChars >= VISUAL_MIN_CHARS)
+    .map((slot) => slot.slotId);
+}
+
 function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) {
+  const slots = visualSlots(pattern);
+  const visual = slots.length
+    ? z
+        .union([
+          slotTableSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
+          slotChartSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
+        ])
+        .nullable()
+        .default(null)
+    : z.null().default(null);
   return templateSlotCopySchema.extend({
     patternId: z.literal(pattern.patternId),
     textsBySlot: z.object(
@@ -53,7 +80,37 @@ function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) 
       ),
     ),
     speakerNotes: z.string(),
+    visual,
   });
+}
+
+const FIGURE = /\d+(?:[.,]\d+)?/g;
+
+/**
+ * A visual only when every figure in it is in the brief: a chart is where an invented number
+ * would do most harm, so a visual that cannot be traced to the source is dropped and the slot
+ * keeps its text.
+ */
+export function groundedVisual(
+  visual: SlotVisual | null | undefined,
+  brief: string,
+): SlotVisual | null {
+  if (!visual) return null;
+  const known = new Set((brief.match(FIGURE) ?? []).map((n) => Number(n.replace(',', '.'))));
+  const figures =
+    visual.kind === 'chart'
+      ? visual.series.flatMap((series) => series.values)
+      : visual.rows
+          .flat()
+          .flatMap((cell) => (cell.match(FIGURE) ?? []).map((n) => Number(n.replace(',', '.'))));
+  if (
+    visual.kind === 'chart' &&
+    visual.series.some((s) => s.values.length !== visual.categories.length)
+  )
+    return null;
+  if (visual.kind === 'table' && visual.rows.some((row) => row.length !== visual.headers.length))
+    return null;
+  return figures.length > 0 && figures.every((n) => known.has(n)) ? visual : null;
 }
 
 function writingComposition(pattern: GenerationProfile['compositions'][number]) {
@@ -75,16 +132,20 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           p.slots.some((s) => s.role === 'title' && s.maxChars >= 25) &&
           p.slots.every((s) => s.maxChars >= 12),
       );
-      const catalog = spacious.length ? spacious : inputData.profile.compositions;
-      const titleSizes = catalog
+      const full = spacious.length ? spacious : inputData.profile.compositions;
+      const variant = deps.variant ?? 'balanced';
+      const titleSizes = full
         .flatMap((p) => p.slots.filter((s) => s.role === 'title').map((s) => s.fontSize))
         .sort((a, b) => a - b);
       const typicalTitle = titleSizes[Math.floor(titleSizes.length / 2)] ?? 24;
-      const covers = catalog.filter(
-        (p) =>
-          p.slots.length <= 3 &&
-          p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
-      );
+      const coversOf = (list: typeof full) =>
+        list.filter(
+          (p) =>
+            p.slots.length <= 3 &&
+            p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
+        );
+      const covers = coversOf(full);
+      const catalog = variantCatalog(full, variant, covers);
       const plan = (
         corrections?: Record<string, unknown>,
         previous?: z.infer<typeof compositionPlanSchema>,
@@ -95,6 +156,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           {
             brief: inputData.brief,
             slideCount: inputData.slideCount,
+            variant,
             catalog,
             coverPatternIds: covers.map((p) => p.patternId),
             ...(previous ? { previous } : {}),
@@ -127,7 +189,29 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
         });
       }
-      const corrections = { ...countCorrections(result), ...coverCorrections(result) };
+      // One layout repeated over most of the deck reads as the same slide again and again; the
+      // planner gets the overused ids and replans once.
+      const varietyCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+        const counts = new Map<string, number>();
+        for (const slide of result.slides) {
+          counts.set(slide.patternId, (counts.get(slide.patternId) ?? 0) + 1);
+        }
+        const limit = Math.max(3, Math.ceil(result.slides.length / 3));
+        const overused = [...counts].filter(([, n]) => n > limit).map(([id]) => id);
+        return overused.length && catalog.length > 1
+          ? {
+              overusedPatternIds: overused,
+              maximumUsesPerPattern: limit,
+              message:
+                'Use each composition at most maximumUsesPerPattern times; vary the layouts.',
+            }
+          : undefined;
+      };
+      const corrections = {
+        ...countCorrections(result),
+        ...coverCorrections(result),
+        ...varietyCorrections(result),
+      };
       if (Object.keys(corrections).length) result = await plan(corrections, result);
       if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
         throw new Error('Planner returned the wrong slide count.');
@@ -161,15 +245,23 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         deps.writerInstructions,
         {
           ...inputData,
+          variant: deps.variant ?? 'balanced',
           composition: writingComposition(inputData.composition),
+          visualSlots: visualSlots(inputData.composition),
         },
         boundedSlideSchema(inputData.composition),
         deps.signal,
       );
+      const visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
       slide = {
         patternId: raw.patternId,
         speakerNotes: raw.speakerNotes,
-        texts: Object.entries(raw.textsBySlot).map(([slotId, text]) => ({ slotId, text })),
+        // The slot a visual replaces carries no text: the export removes it.
+        texts: Object.entries(raw.textsBySlot).map(([slotId, text]) => ({
+          slotId,
+          text: visual?.slotId === slotId ? '' : text,
+        })),
+        visual,
       };
       for (let attempt = 0; attempt < 2; attempt++) {
         problems = validateBindings(slide, inputData.composition);
@@ -216,6 +308,27 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     .foreach(write, { concurrency: Math.max(1, Math.min(6, deps.concurrency ?? 3)) })
     .commit();
 }
+/**
+ * The compositions a variant plans with. Dense takes the two thirds of the template's layouts
+ * that hold the most text, airy the two thirds that hold the least, balanced all of them; covers
+ * stay in every set. The catalog differs, so the three decks differ in layout even where the
+ * model would pick the same one, and every layout still comes from the template.
+ */
+export function variantCatalog<T extends GenerationProfile['compositions'][number]>(
+  catalog: readonly T[],
+  variant: DeckVariant,
+  covers: readonly T[] = [],
+): T[] {
+  if (variant === 'balanced' || catalog.length < 3) return [...catalog];
+  const capacity = (p: T) =>
+    p.slots.filter((s) => s.role === 'body').reduce((sum, s) => sum + s.maxChars, 0);
+  const ranked = [...catalog].sort((a, b) => capacity(b) - capacity(a));
+  const keep = Math.ceil((ranked.length * 2) / 3);
+  const chosen = variant === 'dense' ? ranked.slice(0, keep) : ranked.slice(-keep);
+  for (const cover of covers) if (!chosen.includes(cover)) chosen.push(cover);
+  return chosen;
+}
+
 export function validateBindings(
   slide: ComposedSlide,
   pattern: GenerationProfile['compositions'][number],

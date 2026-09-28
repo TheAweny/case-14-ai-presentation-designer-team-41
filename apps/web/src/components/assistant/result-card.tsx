@@ -13,7 +13,7 @@ import {
   WarningIcon,
 } from '@/components/ui/icons';
 import type { LayoutVariant } from '@lct/contracts';
-import { SlideView } from '@lct/slide-renderer';
+import { SlidePreview } from '@/components/library/slide-preview';
 import { ExportDialog, type ExportOptions } from '@/components/editor/export-dialog';
 import { SlideShow } from '@/components/editor/slide-show';
 import { useDeckExport } from '@/components/editor/use-deck-export';
@@ -155,7 +155,11 @@ export function ResultCard({
                   compact ? 'w-20' : 'w-24 sm:w-auto',
                 )}
               >
-                <SlideView slide={item.cover} profile={item.designSystem} thumbnail />
+                <SlidePreview
+                  slide={item.cover}
+                  profile={item.designSystem}
+                  previewUrl={item.coverPreviewUrl}
+                />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5 pb-0.5">
                 <span className="truncate font-medium text-foreground">

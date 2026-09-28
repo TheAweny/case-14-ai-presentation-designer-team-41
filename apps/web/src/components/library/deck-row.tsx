@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import type { DesignSystem } from '@lct/contracts';
-import { SlideView } from '@lct/slide-renderer';
+import { SlidePreview } from '@/components/library/slide-preview';
 import { DeckActions, DeckTitle } from '@/components/library/deck-actions';
 import { AuditBadge } from '@/components/library/deck-card';
 import { deckHref } from '@/lib/library-menu';
@@ -39,7 +39,11 @@ export function DeckRow({ deck, designSystem }: { deck: DeckSummary; designSyste
           className="w-20 shrink-0 overflow-hidden rounded-sm bg-card ring-1 ring-border sm:w-24"
           style={{ aspectRatio: `${deck.cover.slideCx} / ${deck.cover.slideCy}` }}
         >
-          <SlideView slide={deck.cover} profile={designSystem} thumbnail />
+          <SlidePreview
+            slide={deck.cover}
+            profile={designSystem}
+            previewUrl={deck.coverPreviewUrl}
+          />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
           <h3 className="min-w-0 truncate text-sm font-medium sm:flex-1">

@@ -112,6 +112,14 @@ export class EngineClient {
   }
 
   /** `POST /v1/layouts` — one plan laid out as the requested variants on a template. */
+  /** `POST /v1/composition-audit` — the deterministic audit of an exported composition deck. */
+  async auditCompositions(
+    request: CompositionExportRequest,
+    signal?: AbortSignal,
+  ): Promise<AuditReport> {
+    return auditReportSchema.parse(await this.post('/v1/composition-audit', request, signal));
+  }
+
   async layouts(request: LayoutVariantsRequest): Promise<LayoutVariantsResponse> {
     return layoutVariantsResponseSchema.parse(await this.post('/v1/layouts', request));
   }

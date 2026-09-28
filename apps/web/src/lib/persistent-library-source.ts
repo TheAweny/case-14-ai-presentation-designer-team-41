@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiFetch, publicApiUrl } from './api';
 import { decodeGeneratedDeck } from './http-generation';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
 import type { LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
@@ -100,6 +100,9 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
             slideCount: deck.slides.length,
             slideSize: deck.slideSize,
             cover,
+            coverPreviewUrl:
+              deck.coverPreviewUrl ??
+              publicApiUrl(`/generation/${encodeURIComponent(deck.deckId)}/artifacts/slide-1.png`),
             auditFindings: null,
           },
         ];

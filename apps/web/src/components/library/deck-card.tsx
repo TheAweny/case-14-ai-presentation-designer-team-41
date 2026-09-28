@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { AuditIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import type { DesignSystem } from '@lct/contracts';
-import { SlideView } from '@lct/slide-renderer';
+import { SlidePreview } from '@/components/library/slide-preview';
 import { auditStatusOf } from '@/components/library/audit-status';
 import { DeckActions, DeckTitle } from '@/components/library/deck-actions';
 import { deckHref } from '@/lib/library-menu';
@@ -57,7 +57,11 @@ export function DeckCard({
           )}
           style={{ aspectRatio: `${deck.cover.slideCx} / ${deck.cover.slideCy}` }}
         >
-          <SlideView slide={deck.cover} profile={designSystem} thumbnail />
+          <SlidePreview
+            slide={deck.cover}
+            profile={designSystem}
+            previewUrl={deck.coverPreviewUrl}
+          />
         </div>
 
         <div className="flex min-w-0 flex-col gap-1 px-0.5">

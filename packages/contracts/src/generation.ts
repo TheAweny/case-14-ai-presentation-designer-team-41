@@ -31,10 +31,41 @@ export const generationProfileSchema = z.object({
   designSystem: designSystemSchema,
   compositions: z.array(compositionSchema).min(1),
 });
+/**
+ * A native table or chart drawn in place of one text slot of a composition. The slot's box is
+ * kept and its text shape replaced, so the visual sits where the template put content. Figures
+ * come from the brief only; the pipeline drops a visual whose numbers it cannot find there.
+ */
+export const slotTableSchema = z.object({
+  kind: z.literal('table'),
+  slotId: z.string().min(1),
+  headers: z.array(z.string()).min(2).max(5),
+  rows: z.array(z.array(z.string())).min(1).max(7),
+});
+
+export const slotChartSchema = z.object({
+  kind: z.literal('chart'),
+  slotId: z.string().min(1),
+  chartType: z.enum(['bar', 'column', 'line', 'pie']),
+  categories: z.array(z.string().min(1)).min(2).max(8),
+  series: z
+    .array(z.object({ name: z.string().min(1), values: z.array(z.number()).min(2).max(8) }))
+    .min(1)
+    .max(5),
+  xTitle: z.string(),
+  yTitle: z.string().describe('The value axis title with its unit.'),
+});
+
+export const slotVisualSchema = z.discriminatedUnion('kind', [slotTableSchema, slotChartSchema]);
+
 export const composedSlideSchema = z.object({
   patternId: z.string().min(1),
   texts: z.array(z.object({ slotId: z.string().min(1), text: z.string() })).min(1),
   speakerNotes: z.string(),
+  visual: slotVisualSchema
+    .nullable()
+    .optional()
+    .describe('A table or chart replacing one text slot. Absent or null: text only.'),
 });
 export const compositionExportRequestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -71,6 +102,7 @@ export const generationRequestSchema = z.object({
 export type GenerationProfile = z.infer<typeof generationProfileSchema>;
 export type Composition = z.infer<typeof compositionSchema>;
 export type ComposedSlide = z.infer<typeof composedSlideSchema>;
+export type SlotVisual = z.infer<typeof slotVisualSchema>;
 export type CompositionExportRequest = z.infer<typeof compositionExportRequestSchema>;
 export type CompositionExportResponse = z.infer<typeof compositionExportResponseSchema>;
 export type GenerationRequest = z.infer<typeof generationRequestSchema>;

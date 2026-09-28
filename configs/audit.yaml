@@ -97,6 +97,25 @@ profiles:
       duplicate-message:
         enabled: true
 
+  composition:
+    description: >-
+      Decks built from the template's own slides. Text fit is checked exactly by the composition
+      typography, and geometry is the template's, so those checks are off here.
+    inherits: default
+    deterministic:
+      text-overflow:
+        enabled: false
+      grid-alignment:
+        enabled: false
+      safe-margins:
+        enabled: false
+      protected-zones:
+        enabled: false
+      template-layout:
+        enabled: false
+      image-aspect:
+        enabled: false
+
   strict:
     description: Tighter thresholds used when checking the result on an unfamiliar template.
     inherits: default
