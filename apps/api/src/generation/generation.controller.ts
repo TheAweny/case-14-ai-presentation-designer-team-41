@@ -36,6 +36,7 @@ import {
   GenerationProvider,
   indexTemplateWithAgent,
   RoutedTextProvider,
+  SharedPlan,
 } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
@@ -217,6 +218,8 @@ export class GenerationController implements OnApplicationShutdown {
     // The three variants of one brief are separate runs, so every deck endpoint serves each of
     // them as it is, and they share one cancellation.
     const controller = new AbortController();
+    // One plan for the three variants: the story is decided once, the layouts per variant.
+    const sharedPlan = new SharedPlan();
     const runs: {
       run: Awaited<ReturnType<RunRepository['create']>>;
       variant: (typeof VARIANTS)[number];
@@ -252,6 +255,7 @@ export class GenerationController implements OnApplicationShutdown {
           provider,
           seed: input.seed,
           variant,
+          sharedPlan,
           signal: controller.signal,
           onEvent: (event) => this.repository.appendEvent(run.runId, event),
         });

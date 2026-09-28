@@ -18,6 +18,29 @@ export const dynamic = 'force-dynamic';
 /** Answer headers worth passing on; hop-by-hop and server details stay behind. */
 const PASSED_HEADERS = ['content-type', 'content-length', 'content-disposition', 'cache-control'];
 
+/** Same-site check that survives Docker/reverse-proxy host rewriting and local loopback aliases. */
+function isSameSiteOrigin(request: NextRequest, origin: string): boolean {
+  let candidate: URL;
+  try {
+    candidate = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (candidate.origin === request.nextUrl.origin) return true;
+
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const host = forwardedHost ?? request.headers.get('host');
+  if (host && candidate.host === host) return true;
+
+  const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+  const requestHost = request.nextUrl.hostname;
+  return (
+    localHosts.has(candidate.hostname) &&
+    localHosts.has(requestHost) &&
+    candidate.port === request.nextUrl.port
+  );
+}
+
 async function forward(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -27,7 +50,7 @@ async function forward(
 
   // Cookies are SameSite=Lax, and a changing request from another site is refused on top of it.
   const origin = request.headers.get('origin');
-  if (request.method !== 'GET' && origin !== null && origin !== request.nextUrl.origin) {
+  if (request.method !== 'GET' && origin !== null && !isSameSiteOrigin(request, origin)) {
     return NextResponse.json({ message: 'Cross-site request refused.' }, { status: 403 });
   }
 

@@ -13,6 +13,8 @@ import {
   patternUseLimit,
   writerSlots,
   slotBriefs,
+  remapPlan,
+  SharedPlan,
   validateBindings,
   variantCatalog,
 } from './workflow.js';
@@ -599,5 +601,89 @@ describe('copyDefects', () => {
     const pattern = { ...composition, slots: [slot('a', 99, 9)] };
     expect(copyDefects(slide({ a: 'Корпоративные программы' }), pattern).has('a')).toBe(true);
     expect(copyDefects(slide({ a: 'Программы для команды' }), pattern).size).toBe(0);
+  });
+});
+
+describe('one plan, three layouts', () => {
+  const composition = (patternId: string, bodies: number[]) => ({
+    patternId,
+    sourceIndex: 0,
+    name: patternId,
+    imageCount: 0,
+    slots: [
+      {
+        slotId: 't',
+        role: 'title' as const,
+        sample: '',
+        maxChars: 40,
+        maxLines: 2,
+        font: 'A',
+        fontSize: 30,
+      },
+      ...bodies.map((maxChars, i) => ({
+        slotId: `b${i}`,
+        role: 'body' as const,
+        sample: '',
+        maxChars,
+        maxLines: 8,
+        font: 'A',
+        fontSize: 16,
+      })),
+    ],
+  });
+  const cover = composition('cover', []);
+  const full = [
+    cover,
+    ...[150, 300, 450, 600, 900, 1200].map((n) => composition(`one-${n}`, [n])),
+    ...[200, 800].map((n) => composition(`two-${n}`, [n, n])),
+  ];
+  const planned = ['cover', 'one-450', 'one-450', 'one-450', 'two-200', 'one-600'];
+
+  it('computes a shared plan once for every variant', async () => {
+    const shared = new SharedPlan();
+    let calls = 0;
+    const plan = { audience: '', goal: '', title: 'T', slides: [] };
+    const compute = () => {
+      calls += 1;
+      return Promise.resolve(plan);
+    };
+    const results = await Promise.all([
+      shared.once(compute),
+      shared.once(compute),
+      shared.once(compute),
+    ]);
+    expect(calls).toBe(1);
+    expect(results.every((r) => r === plan)).toBe(true);
+  });
+
+  it('keeps the planner layouts for balanced and the cover everywhere', () => {
+    expect(remapPlan(planned, full, full, 'balanced', [cover])).toEqual(planned);
+    for (const variant of ['dense', 'airy'] as const) {
+      const catalog = variantCatalog(full, variant, [cover]);
+      expect(remapPlan(planned, full, catalog, variant, [cover])[0]).toBe('cover');
+    }
+  });
+
+  it('gives dense roomier and airy lighter layouts with the same number of text blocks', () => {
+    const dense = remapPlan(planned, full, variantCatalog(full, 'dense', [cover]), 'dense', [
+      cover,
+    ]);
+    const airy = remapPlan(planned, full, variantCatalog(full, 'airy', [cover]), 'airy', [cover]);
+    const capacity = (id: string) =>
+      full
+        .find((p) => p.patternId === id)
+        ?.slots.reduce((sum, s) => sum + (s.role === 'body' ? s.maxChars : 0), 0) ?? 0;
+    for (let i = 1; i < planned.length; i += 1) {
+      expect(capacity(dense[i] ?? '')).toBeGreaterThan(capacity(airy[i] ?? ''));
+    }
+    expect(dense[4]?.startsWith('two-')).toBe(true);
+    expect(airy[4]?.startsWith('two-')).toBe(true);
+  });
+
+  it('spreads repeated slides over several layouts', () => {
+    const dense = remapPlan(planned, full, variantCatalog(full, 'dense', [cover]), 'dense', [
+      cover,
+    ]);
+    expect(new Set(dense.slice(1, 4)).size).toBe(3);
   });
 });

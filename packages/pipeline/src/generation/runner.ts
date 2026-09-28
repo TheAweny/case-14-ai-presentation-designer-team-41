@@ -20,6 +20,7 @@ import {
   critiqueSchema,
   type DeckVariant,
   fitChars,
+  type SharedPlan,
   repairedSlideSchema,
   type repairTaskSchema,
   writtenSchema,
@@ -50,6 +51,8 @@ export interface GenerateOptions {
   seed?: number;
   /** Which of the three renderings this run produces. Absent: balanced. */
   variant?: DeckVariant;
+  /** The plan shared by the variants of one brief, so it is made once. */
+  sharedPlan?: SharedPlan;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
 }
@@ -100,6 +103,7 @@ export async function generatePresentation(options: GenerateOptions) {
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
       variant: options.variant ?? 'balanced',
+      ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
       signal,
       concurrency: 3,
       ...(options.notes ? { notes: options.notes } : {}),
