@@ -20,7 +20,7 @@ import { Pool } from 'pg';
 import { generationProfileSchema, generationRequestSchema } from '@lct/contracts';
 import type { GenerationProfile } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
-import { generatePresentation, OpenAICompatibleProvider } from '@lct/pipeline';
+import { generatePresentation, GenerationProvider } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
@@ -90,7 +90,7 @@ export class GenerationController implements OnApplicationShutdown {
       brief += `\n\nSource ${id}:\n${content}`;
     }
     if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
-    const provider = new OpenAICompatibleProvider({
+    const provider = new GenerationProvider({
       apiKey: process.env.MODEL_API_KEY ?? '',
       baseUrl: process.env.LLM_BASE_URL ?? '',
       model: process.env.LLM_MODEL ?? '',

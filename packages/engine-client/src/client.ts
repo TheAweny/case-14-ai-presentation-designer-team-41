@@ -72,6 +72,42 @@ export class EngineClient {
     return editableDeckResponseSchema.parse(await this.post('/v1/editable-decks', request));
   }
 
+  /** `POST /v1/template-profile` — parse a saved PPTX without generating a deck. */
+  async parseTemplateProfile(templatePath: string): Promise<TemplateProfileResponse> {
+    const response = await this.post('/v1/template-profile', { template_path: templatePath });
+    if (typeof response !== 'object' || response === null) {
+      throw new Error('Engine returned an invalid template profile.');
+    }
+    return response as TemplateProfileResponse;
+  }
+
+  /** `POST /v1/generation-profile` — exact reusable compositions before a run. */
+  async generationProfile(templatePath: string): Promise<GenerationProfile> {
+    return generationProfileSchema.parse(
+      await this.post('/v1/generation-profile', { template_path: templatePath }),
+    );
+  }
+
+  /** `POST /v1/composition-decks` — one template-faithful editable export of a deck. */
+  async exportCompositions(
+    request: CompositionExportRequest,
+    signal?: AbortSignal,
+  ): Promise<CompositionExportResponse> {
+    return compositionExportResponseSchema.parse(
+      await this.post('/v1/composition-decks', request, signal),
+    );
+  }
+
+  /** `POST /v1/composition-check` — typography overflow check of slot bindings. */
+  async checkCompositions(
+    request: CompositionExportRequest,
+    signal?: AbortSignal,
+  ): Promise<CompositionCheckResponse> {
+    return compositionCheckResponseSchema.parse(
+      await this.post('/v1/composition-check', request, signal),
+    );
+  }
+
   /** `POST /v1/layouts` — one plan laid out as the requested variants on a template. */
   async layouts(request: LayoutVariantsRequest): Promise<LayoutVariantsResponse> {
     return layoutVariantsResponseSchema.parse(await this.post('/v1/layouts', request));

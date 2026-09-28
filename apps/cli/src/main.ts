@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import type { JobEvent } from '@lct/contracts';
 import { PostgresRunRepository, type RunRecord } from '@lct/run-store';
 import { validateLocalRunInputs } from '@lct/input-validation';
 import { readRunConfig } from './config.js';

@@ -59,3 +59,15 @@ export {
   type VariantResult,
 } from './orchestrator/index.js';
 export { findOverflows, fitCopy, type CopyTarget, type FitCopyResult } from './writer/index.js';
+export {
+  OpenAICompatibleProvider as GenerationProvider,
+  type TextProvider,
+} from './generation/provider.js';
+export {
+  createGenerationWorkflow,
+  validateBindings,
+  compositionPlanSchema,
+  critiqueSchema,
+  type GenerationDependencies,
+} from './generation/workflow.js';
+export { generatePresentation, type GenerateOptions } from './generation/runner.js';
