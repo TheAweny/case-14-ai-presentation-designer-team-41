@@ -74,3 +74,9 @@ export {
   type DeckVariant,
 } from './generation/workflow.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
+export {
+  currentTemplateIndexRevision,
+  indexTemplate,
+  indexTemplateWithAgent,
+  templateIndexRevision,
+} from './generation/indexer.js';

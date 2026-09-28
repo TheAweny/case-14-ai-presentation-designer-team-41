@@ -90,7 +90,8 @@ export function createHttpGenerator(): DeckGenerator {
       await request('/generation/prepare', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ templateId: input.templateId }),
+        // The model also reads the template once, if it has not been read yet.
+        body: JSON.stringify({ templateId: input.templateId, model: input.model }),
         signal,
       });
       const contentIds: string[] = [];

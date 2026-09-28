@@ -19,15 +19,24 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { Pool } from 'pg';
+import type { z } from 'zod';
 import {
   designSystemSchema,
   generationProfileSchema,
   generationRequestSchema,
+  modelRefSchema,
+  storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
-import type { GenerationProfile } from '@lct/contracts';
+import type { GenerationProfile, StoredTemplateIndex } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
-import { generatePresentation, GenerationProvider, RoutedTextProvider } from '@lct/pipeline';
+import {
+  currentTemplateIndexRevision,
+  generatePresentation,
+  GenerationProvider,
+  indexTemplateWithAgent,
+  RoutedTextProvider,
+} from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
@@ -58,21 +67,79 @@ export class GenerationController implements OnApplicationShutdown {
   }
 
   @Post('prepare')
-  async prepare(@Body() body: { templateId?: string }): Promise<{ ready: true }> {
+  async prepare(@Body() body: { templateId?: string; model?: unknown }): Promise<{ ready: true }> {
     const row = await this.template(body.templateId ?? '');
     const profile = await this.engine.generationProfile(row.storage_path);
     await this.pool.query(
       "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
       [body.templateId, JSON.stringify(profile)],
     );
+    const model = modelRefSchema
+      .nullable()
+      .catch(null)
+      .parse(body.model ?? null);
+    await this.indexTemplate(body.templateId ?? '', profile, row.profile?.index, model);
     return { ready: true };
+  }
+
+  /**
+   * Describe the template's compositions once per template and indexer revision. Preparation is
+   * outside the timed generation stage; a failure only leaves the planner without the notes, so
+   * it is logged and never blocks the deck.
+   */
+  private async indexTemplate(
+    templateId: string,
+    profile: GenerationProfile,
+    stored: unknown,
+    model: z.infer<typeof modelRefSchema> | null,
+  ): Promise<void> {
+    try {
+      const registryDir = this.registryDir();
+      const revision = await currentTemplateIndexRevision(registryDir);
+      const previous = storedTemplateIndexSchema.safeParse(stored);
+      if (
+        previous.success &&
+        previous.data.templateHash === profile.templateHash &&
+        previous.data.revision === revision
+      )
+        return;
+      const resolved =
+        (await this.models.resolveRole('planner')) ?? (await this.models.resolve(model));
+      const provider = new GenerationProvider({
+        apiKey: resolved.apiKey,
+        baseUrl: resolved.baseUrl,
+        model: resolved.model,
+      });
+      const index: StoredTemplateIndex = await indexTemplateWithAgent({
+        provider,
+        registryDir,
+        profile,
+        signal: AbortSignal.timeout(180000),
+      });
+      await this.pool.query(
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('index', $2::jsonb) WHERE id = $1",
+        [templateId, JSON.stringify(index)],
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Template ${templateId} was not indexed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  private registryDir(): string {
+    const found =
+      process.env.REGISTRY_DIR ||
+      [resolve('registry/agents'), resolve('../../registry/agents')].find(existsSync);
+    if (!found) throw new BadRequestException('REGISTRY_DIR is not configured.');
+    return found;
   }
 
   private async template(id: string) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Invalid template id.');
     const result = await this.pool.query<{
       storage_path: string;
-      profile: { generation?: GenerationProfile };
+      profile: { generation?: GenerationProfile; index?: unknown };
     }>("SELECT storage_path, profile FROM stored_files WHERE id = $1 AND kind = 'template'", [id]);
     const row = result.rows[0];
     if (!row) throw new NotFoundException('Template not found.');
@@ -140,10 +207,13 @@ export class GenerationController implements OnApplicationShutdown {
         ...(critic ? [['critic', providerOf(critic)] as const] : []),
       ]),
     );
-    const registryDir =
-      process.env.REGISTRY_DIR ||
-      [resolve('registry/agents'), resolve('../../registry/agents')].find(existsSync);
-    if (!registryDir) throw new BadRequestException('REGISTRY_DIR is not configured.');
+    const registryDir = this.registryDir();
+    const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
+    // Notes describe the profile they were made from; a re-parsed template drops stale ones.
+    const notes =
+      index.success && index.data.templateHash === prepared.data.templateHash
+        ? index.data.notes
+        : undefined;
     // The three variants of one brief are separate runs, so every deck endpoint serves each of
     // them as it is, and they share one cancellation.
     const controller = new AbortController();
@@ -176,6 +246,7 @@ export class GenerationController implements OnApplicationShutdown {
           brief,
           slideCount: input.slideCount,
           profile: prepared.data,
+          ...(notes ? { notes } : {}),
           registryDir,
           engine: this.engine,
           provider,
