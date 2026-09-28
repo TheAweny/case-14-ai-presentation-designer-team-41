@@ -1,6 +1,5 @@
 import type { LayoutVariant } from '@lct/contracts';
 import {
-  DEFAULT_AUDIENCE,
   type AssistantThreads,
   type AudienceOption,
   type MessageAttachment,
@@ -21,17 +20,14 @@ import type { TemplateImport, TemplateImports } from './template-imports';
  * посоветовать один.
  *
  * Готовый результат не должен ждать человека. Поэтому агент спрашивает, только когда без ответа
- * дальше нельзя (куда деть новый шаблон). Остальное он предполагает сам и говорит об этом
- * карточкой допущения. Вариант вёрстки он тоже не спрашивает: три готовых варианта и совет лежат
- * в итоге, открыть можно любой.
+ * дальше нельзя (куда деть новый шаблон). Для кого колода, решает планировщик по брифу. Вариант
+ * вёрстки агент тоже не спрашивает: три готовых варианта и совет лежат в итоге, открыть можно
+ * любой.
  *
  * Сам агент ничего не пишет и не разбирает: шаблон импортирует `TemplateImports`, генерацию
  * делает `DeckGenerator`, аудит — `review`. Допущение об аудитории и пожелания человека уходят в
  * бриф текстом — так их увидит модель, которая пишет слайды.
  */
-
-/** Бриф короче этого, без файлов, — повод предположить, для кого презентация. */
-export const SHORT_BRIEF_WORDS = 8;
 
 /**
  * Запрос из поля генерации. Шаблон приходит одним из двух путей: `templateId` — шаблон
@@ -143,11 +139,6 @@ export function recommendVariant(
   const best = sorted[0];
   if (!best) throw new Error('No variants to recommend');
   return best.variant;
-}
-
-export function needsAudience(request: Pick<GenerationRequest, 'brief' | 'files'>): boolean {
-  const words = request.brief.split(/\s+/).filter(Boolean).length;
-  return request.files.length === 0 && words < SHORT_BRIEF_WORDS;
 }
 
 /** Что человек приложил к первому сообщению: шаблон первым, как чип в поле. */
@@ -436,10 +427,8 @@ export function createDeckConversations({
     }
     if (state.templateId === null) throw new Error('Deck request without a template');
 
-    if (needsAudience(input.request)) {
-      state.audience = DEFAULT_AUDIENCE;
-      threads.append(threadId, { kind: 'assume', audience: DEFAULT_AUDIENCE, changed: false });
-    }
+    // Аудиторию не предполагаем здесь: планировщик читает её из брифа и материалов сам, а
+    // человек может назвать её пожеланием в любой момент.
     await build(threadId, state);
   };
 

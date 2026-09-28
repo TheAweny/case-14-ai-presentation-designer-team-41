@@ -10,7 +10,6 @@ import {
 } from './assistant-threads';
 import {
   createDeckConversations,
-  needsAudience,
   recommendVariant,
   type AttachTemplate,
   type NewDeckInput,
@@ -127,14 +126,6 @@ function setup({
 const variant = (name: GeneratedVariant['variant']): GeneratedVariant =>
   ({ variant: name, deckId: `deck-${name}` }) as GeneratedVariant;
 
-describe('needsAudience', () => {
-  it('предполагает аудиторию только при коротком брифе без файлов', () => {
-    expect(needsAudience(request('Итоги Q3'))).toBe(true);
-    expect(needsAudience(request(LONG))).toBe(false);
-    expect(needsAudience(request('Итоги Q3', [new File(['a'], 'a.csv')]))).toBe(false);
-  });
-});
-
 describe('recommendVariant', () => {
   const variants = [variant('dense'), variant('balanced'), variant('airy')];
 
@@ -209,36 +200,13 @@ describe('createDeckConversations', () => {
     expect(resultOf(threads, threadId)).toMatchObject({ reviews: null, recommended: 'balanced' });
   });
 
-  it('короткий бриф: допущение об аудитории вместо вопроса, оно уходит в бриф', async () => {
+  it('короткий бриф уходит как есть: аудиторию определяет планировщик, а не допущение', async () => {
     const { threads, runs, conversations, kinds } = setup();
     const threadId = conversations.start(input('Итоги Q3'));
     await vi.runAllTimersAsync();
 
-    expect(kinds(threadId)).toEqual(['user', 'assume', 'agent', 'work', 'result']);
-    const assume = threads.get(threadId)?.messages[1];
-    expect(assume).toMatchObject({ kind: 'assume', audience: 'leadership', changed: false });
-    expect(runsOf(threads, runs, threadId)[0]?.request.brief).toBe('Итоги Q3\n\nДля руководства.');
-  });
-
-  it('другая аудитория — карточка показывает выбор, колода пересобирается', async () => {
-    const { threads, runs, conversations, kinds } = setup();
-    const threadId = conversations.start(input('Итоги Q3'));
-    await vi.runAllTimersAsync();
-    const assumeId = threads.get(threadId)?.messages[1]?.id ?? '';
-
-    conversations.reassume(threadId, assumeId, 'clients', 'Аудитория — Клиенты');
-    await vi.runAllTimersAsync();
-
-    expect(threads.get(threadId)?.messages[1]).toMatchObject({
-      audience: 'clients',
-      changed: true,
-    });
-    expect(kinds(threadId)?.slice(5)).toEqual(['user', 'agent', 'work', 'result']);
-    expect(runsOf(threads, runs, threadId).at(-1)?.request.brief).toBe('Итоги Q3\n\nДля клиентов.');
-
-    // Та же аудитория второй раз — ничего не происходит.
-    conversations.reassume(threadId, assumeId, 'clients', 'Аудитория — Клиенты');
-    expect(kinds(threadId)).toHaveLength(9);
+    expect(kinds(threadId)).toEqual(['user', 'agent', 'work', 'result']);
+    expect(runsOf(threads, runs, threadId)[0]?.request.brief).toBe('Итоги Q3');
   });
 
   it('пожелание по ходу сборки — идущая сборка молча сменяется новой, с пожеланием', async () => {
