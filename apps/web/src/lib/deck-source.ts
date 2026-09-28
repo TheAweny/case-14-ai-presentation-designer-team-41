@@ -34,6 +34,8 @@ export interface SlideLayout {
 export interface Deck {
   readonly deckId: string;
   readonly renderedPdfUrl?: string;
+  /** Public URL of the engine-rendered first slide, without editor-only marks. */
+  readonly coverPreviewUrl?: string;
   readonly title: string;
   readonly variant: LayoutVariantName;
   readonly slideSize: SlideSize;

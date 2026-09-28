@@ -17,6 +17,21 @@ const deck = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe('persistent library mutations', () => {
+  it('publishes the real first-slide preview for a persisted deck', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url) =>
+        String(url).endsWith('/files/templates')
+          ? Response.json([])
+          : Response.json([{ deck, metadata: { projectId: null, templateId: 't', updatedAt: 1 } }]),
+      ),
+    );
+    const [summary] = await createPersistentLibrarySource(createDemoLibrary().library).listDecks();
+    expect(summary?.coverPreviewUrl).toBe(
+      'http://localhost:3001/generation/run-live/artifacts/slide-1.png',
+    );
+  });
+
   it('deletes through the API instead of the demo fallback', async () => {
     const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetcher);

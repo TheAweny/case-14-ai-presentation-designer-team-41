@@ -23,6 +23,11 @@ const stored = {
   templateIr: fixture('CompositionExportResponse').templateIr,
 };
 const deck = decodeGeneratedDeck(stored);
+it('uses the engine-rendered first slide for the cover preview', () => {
+  expect(deck.coverPreviewUrl).toBe(
+    'http://localhost:3001/generation/run-test/artifacts/slide-1.png',
+  );
+});
 function input(): ExportRequest {
   return {
     deckId: deck.deckId,

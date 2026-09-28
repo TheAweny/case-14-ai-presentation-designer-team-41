@@ -57,6 +57,8 @@ export interface DeckSummary {
   readonly slideSize: SlideSize;
   /** Первый слайд: по нему рисуется обложка карточки. */
   readonly cover: SlideIr;
+  /** Реальный PNG первого слайда из движка, если он доступен. */
+  readonly coverPreviewUrl?: string;
   /** Последняя правка, мс с эпохи. */
   readonly updatedAt: number;
   /** Замечаний последнего аудита; null — аудит ещё не запускали. */

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { designSystemSchema, templateIrSchema, jobEventSchema } from '@lct/contracts';
-import { apiBaseUrl } from './api';
+import { apiBaseUrl, apiUrl } from './api';
 import type { DeckGenerator } from './deck-generator';
 import { DeckNotFoundError, type Deck, type DeckSource } from './deck-source';
 import type { DeckExporter } from './deck-export';
@@ -31,6 +31,9 @@ export function decodeGeneratedDeck(data: unknown): Deck {
   return {
     deckId: parsed.runId,
     renderedPdfUrl: `${apiBaseUrl}/generation/${encodeURIComponent(parsed.runId)}/artifacts/deck.pdf`,
+    coverPreviewUrl: apiUrl(
+      `/generation/${encodeURIComponent(parsed.runId)}/artifacts/slide-1.png`,
+    ),
     title: parsed.title,
     variant: parsed.variant,
     slideSize: { cx: parsed.templateIr.slideCx, cy: parsed.templateIr.slideCy },
@@ -167,6 +170,7 @@ export function createHttpGenerator(): DeckGenerator {
                     title: deck.title,
                     slideCount: deck.slides.length,
                     cover,
+                    coverPreviewUrl: deck.coverPreviewUrl,
                     designSystem: deck.designSystem,
                   },
                 ]

@@ -14,7 +14,7 @@ import {
   WarningIcon,
 } from '@/components/ui/icons';
 import type { LayoutVariant } from '@lct/contracts';
-import { SlideView } from '@lct/slide-renderer';
+import { SlidePreview } from '@/components/library/slide-preview';
 import { ExportDialog, type ExportOptions } from '@/components/editor/export-dialog';
 import { SlideShow } from '@/components/editor/slide-show';
 import { useDeckExport } from '@/components/editor/use-deck-export';
@@ -156,7 +156,11 @@ export function ResultCard({
                   compact ? 'w-20' : 'w-24 sm:w-auto',
                 )}
               >
-                <SlideView slide={item.cover} profile={item.designSystem} thumbnail />
+                <SlidePreview
+                  slide={item.cover}
+                  profile={item.designSystem}
+                  previewUrl={item.coverPreviewUrl}
+                />
                 {item.variant === result.recommended && !compact ? (
                   <span className="absolute top-1 left-1 hidden items-center sm:inline-flex gap-1 rounded-full bg-background/90 px-1.5 py-0.5 text-[0.625rem] font-medium text-foreground shadow-sm ring-1 ring-border backdrop-blur-sm">
                     <AgentIcon
