@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons';
+import { SuccessIcon } from '@/components/ui/icons';
 import type { AuditIssue } from '@lct/slide-audit';
 import { cn } from '@/lib/utils';
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
@@ -40,25 +39,15 @@ export function AuditStatus({
       )}
     >
       {clean ? (
-        <HugeiconsIcon
-          icon={CheckmarkCircle02Icon}
-          size={14}
-          strokeWidth={1.75}
-          color="currentColor"
-        />
+        <SuccessIcon size={14} />
       ) : (
         (['error', 'warning'] as const).map((level) => {
           const count = level === 'error' ? errors : warnings;
           if (count === 0) return null;
+          const LevelIcon = LEVEL_ICON[level];
           return (
             <span key={level} className="flex items-center gap-0.5">
-              <HugeiconsIcon
-                icon={LEVEL_ICON[level]}
-                size={14}
-                strokeWidth={1.75}
-                color="currentColor"
-                className={LEVEL_TEXT[level]}
-              />
+              <LevelIcon size={14} className={LEVEL_TEXT[level]} />
               {count}
             </span>
           );

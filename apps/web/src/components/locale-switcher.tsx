@@ -2,8 +2,7 @@
 
 import { useTransition } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { LanguageSkillIcon } from '@hugeicons/core-free-icons';
+import { LanguageIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -36,12 +35,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
           disabled={pending}
           className={className}
         >
-          <HugeiconsIcon
-            icon={LanguageSkillIcon}
-            strokeWidth={1.5}
-            color="currentColor"
-            data-icon="inline-start"
-          />
+          <LanguageIcon data-icon="inline-start" />
           <span className="sr-only">{t('label')}</span>
           <span aria-hidden lang={locale}>
             {isLocale(locale) ? LOCALE_NAMES[locale] : locale}

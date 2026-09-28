@@ -2,8 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -74,13 +73,7 @@ export function SelectField<T extends string>({
           >
             {current?.label ?? placeholder}
           </span>
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            size={12}
-            strokeWidth={2}
-            color="currentColor"
-            className="shrink-0 text-muted-foreground"
-          />
+          <ChevronDownIcon size={12} className="shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

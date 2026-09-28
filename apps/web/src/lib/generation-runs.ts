@@ -33,6 +33,10 @@ export interface GenerationRun {
   readonly slides: readonly StreamedSlide[];
   readonly result: GenerationResult | null;
   readonly failure: GenerationFailure | null;
+  /** Когда прогон запущен (или запущен снова), мс эпохи: по нему идут часы в карточке хода. */
+  readonly startedAt: number;
+  /** Когда прогон закончился — готово, сбой или отмена; null — ещё идёт. */
+  readonly finishedAt: number | null;
 }
 
 export interface GenerationRuns {
@@ -57,6 +61,7 @@ const UNKNOWN_FAILURE: GenerationFailure = {
 export function createGenerationRuns(
   generator: DeckGenerator,
   newRunId: () => string = () => crypto.randomUUID(),
+  now: () => number = () => Date.now(),
 ): GenerationRuns {
   const runs = new Map<string, GenerationRun>();
   const controllers = new Map<string, AbortController>();
@@ -83,7 +88,7 @@ export function createGenerationRuns(
           update(runId, ({ progress }) => {
             const next = applyEvent(progress, event);
             return next.failure
-              ? { progress: next, phase: 'failed', failure: next.failure }
+              ? { progress: next, phase: 'failed', failure: next.failure, finishedAt: now() }
               : { progress: next };
           });
         },
@@ -96,14 +101,18 @@ export function createGenerationRuns(
       .then((result) => {
         if (!current()) return;
         controllers.delete(runId);
-        update(runId, () => ({ phase: 'done', result }));
+        update(runId, () => ({ phase: 'done', result, finishedAt: now() }));
       })
       .catch((reason: unknown) => {
         if (!current()) return;
         controllers.delete(runId);
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
         // Сервер уже назвал причину событием `failed` — она важнее общей ошибки клиента.
-        update(runId, ({ failure }) => ({ phase: 'failed', failure: failure ?? UNKNOWN_FAILURE }));
+        update(runId, ({ failure, finishedAt }) => ({
+          phase: 'failed',
+          failure: failure ?? UNKNOWN_FAILURE,
+          finishedAt: finishedAt ?? now(),
+        }));
       });
   };
 
@@ -124,6 +133,8 @@ export function createGenerationRuns(
         slides: [],
         result: null,
         failure: null,
+        startedAt: now(),
+        finishedAt: null,
       });
       for (const listener of listeners) listener();
       launch(runId);
@@ -137,7 +148,7 @@ export function createGenerationRuns(
     cancel(runId) {
       if (runs.get(runId)?.phase !== 'running') return;
       stop(runId);
-      update(runId, () => ({ phase: 'cancelled' }));
+      update(runId, () => ({ phase: 'cancelled', finishedAt: now() }));
     },
     retry(runId) {
       stop(runId);
@@ -147,6 +158,8 @@ export function createGenerationRuns(
         slides: [],
         result: null,
         failure: null,
+        startedAt: now(),
+        finishedAt: null,
       }));
       launch(runId);
     },

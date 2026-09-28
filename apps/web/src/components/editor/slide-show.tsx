@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { BackIcon, CloseIcon, NextIcon, type Icon } from '@/components/ui/icons';
 import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import { cn } from '@/lib/utils';
@@ -171,12 +170,12 @@ export function SlideShow({
           idle ? 'pointer-events-none opacity-0' : 'opacity-100',
         )}
       >
-        <ShowButton label={t('previous')} icon={ArrowLeft01Icon} onClick={() => go('previous')} />
+        <ShowButton label={t('previous')} icon={BackIcon} onClick={() => go('previous')} />
         <span aria-hidden className="min-w-12 px-1 text-center text-xs tabular-nums text-white/80">
           {t('counter', { number: Math.min(position + 1, count), total: count })}
         </span>
-        <ShowButton label={t('next')} icon={ArrowRight01Icon} onClick={() => go('next')} />
-        <ShowButton label={t('exit')} icon={Cancel01Icon} onClick={exit} />
+        <ShowButton label={t('next')} icon={NextIcon} onClick={() => go('next')} />
+        <ShowButton label={t('exit')} icon={CloseIcon} onClick={exit} />
       </div>
     </div>,
     document.body,
@@ -185,11 +184,11 @@ export function SlideShow({
 
 function ShowButton({
   label,
-  icon,
+  icon: ButtonIcon,
   onClick,
 }: {
   label: string;
-  icon: IconSvgElement;
+  icon: Icon;
   onClick: () => void;
 }) {
   return (
@@ -204,7 +203,7 @@ function ShowButton({
         'pointer-coarse:size-11',
       )}
     >
-      <HugeiconsIcon icon={icon} size={16} strokeWidth={2} color="currentColor" />
+      <ButtonIcon size={16} className="[--icon-stroke:2]" />
     </button>
   );
 }

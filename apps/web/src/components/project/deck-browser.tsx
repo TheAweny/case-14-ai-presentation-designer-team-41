@@ -2,14 +2,7 @@
 
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Cancel01Icon,
-  GridViewIcon,
-  ListViewIcon,
-  Search01Icon,
-  Sorting01Icon,
-} from '@hugeicons/core-free-icons';
+import { CloseIcon, GridIcon, ListIcon, SearchIcon, SortIcon } from '@/components/ui/icons';
 import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 import { CardGrid, EmptyState, HIDE_REMOVED_ITEMS } from '@/components/library/page-parts';
 import { Button } from '@/components/ui/button';
@@ -79,10 +72,8 @@ export function DeckBrowser({
           <label htmlFor={searchId} className="sr-only">
             {t('search')}
           </label>
-          <HugeiconsIcon
-            icon={Search01Icon}
+          <SearchIcon
             size={16}
-            strokeWidth={1.75}
             aria-hidden
             className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
           />
@@ -114,7 +105,7 @@ export function DeckBrowser({
               onClick={() => setQuery('')}
               className="absolute top-1/2 right-1 -translate-y-1/2"
             >
-              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+              <CloseIcon />
             </Button>
           ) : null}
         </div>
@@ -127,7 +118,7 @@ export function DeckBrowser({
                 size="lg"
                 aria-label={t('sort', { order: t(`sorts.${sort}`) })}
               >
-                <HugeiconsIcon icon={Sorting01Icon} strokeWidth={1.75} data-icon="inline-start" />
+                <SortIcon data-icon="inline-start" />
                 <span className="max-sm:sr-only">{t(`sorts.${sort}`)}</span>
               </Button>
             </DropdownMenuTrigger>
@@ -171,11 +162,7 @@ export function DeckBrowser({
                   'data-[state=on]:bg-foreground/15 data-[state=on]:text-foreground',
                 )}
               >
-                <HugeiconsIcon
-                  icon={option === 'grid' ? GridViewIcon : ListViewIcon}
-                  size={16}
-                  strokeWidth={1.75}
-                />
+                {option === 'grid' ? <GridIcon size={16} /> : <ListIcon size={16} />}
               </ToggleGroupPrimitive.Item>
             ))}
           </ToggleGroupPrimitive.Root>
@@ -184,7 +171,7 @@ export function DeckBrowser({
 
       {shown.length === 0 ? (
         <EmptyState
-          icon={Search01Icon}
+          icon={SearchIcon}
           title={t('noResults.title')}
           action={
             <Button variant="outline" onClick={() => setQuery('')}>

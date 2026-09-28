@@ -10,8 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon, ChevronUpIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import {
   NOTES_COMMIT_DELAY_MS,
@@ -187,12 +186,7 @@ export function SpeakerNotesPanel({
             'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
           )}
         >
-          <HugeiconsIcon
-            icon={open ? ArrowDown01Icon : ArrowUp01Icon}
-            size={14}
-            strokeWidth={1.5}
-            color="currentColor"
-          />
+          {open ? <ChevronDownIcon size={14} /> : <ChevronUpIcon size={14} />}
           {t('label')}
         </button>
         {!open && preview ? (

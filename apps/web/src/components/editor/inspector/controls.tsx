@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import type { Icon } from '@/components/ui/icons';
 import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 
@@ -56,7 +56,7 @@ export function Segmented<T extends string>({
   ariaLabel,
 }: {
   value: T | null;
-  options: readonly { value: T; label: string; icon: IconSvgElement }[];
+  options: readonly { value: T; label: string; icon: Icon }[];
   onChange: (value: T) => void;
   ariaLabel: string;
 }) {
@@ -85,7 +85,7 @@ export function Segmented<T extends string>({
             'data-[state=on]:bg-foreground/15 data-[state=on]:text-foreground',
           )}
         >
-          <HugeiconsIcon icon={option.icon} size={14} strokeWidth={1.5} color="currentColor" />
+          <option.icon size={14} />
         </ToggleGroupPrimitive.Item>
       ))}
     </ToggleGroupPrimitive.Root>
@@ -94,13 +94,13 @@ export function Segmented<T extends string>({
 
 /** Квадратная кнопка-иконка для действий секции (слои, выравнивание, B/I/U). */
 export function IconButton({
-  icon,
+  icon: ButtonIcon,
   label,
   onClick,
   pressed,
   disabled,
 }: {
-  icon: IconSvgElement;
+  icon: Icon;
   label: string;
   onClick: () => void;
   pressed?: boolean;
@@ -122,7 +122,7 @@ export function IconButton({
         pressed && 'bg-foreground/15 text-foreground hover:bg-foreground/20',
       )}
     >
-      <HugeiconsIcon icon={icon} size={15} strokeWidth={1.5} color="currentColor" />
+      <ButtonIcon size={15} />
     </button>
   );
 }

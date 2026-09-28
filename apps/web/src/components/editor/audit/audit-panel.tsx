@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  AiSparklesIcon,
-  Alert02Icon,
-  AlertCircleIcon,
-  CheckmarkCircle02Icon,
-  MagicWand01Icon,
-} from '@hugeicons/core-free-icons';
+  AgentIcon,
+  ErrorIcon,
+  FixIcon,
+  SuccessIcon,
+  WarningIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type { SlideElement, SlideIr } from '@lct/contracts';
 import type { AuditIssue, AuditLevel } from '@lct/slide-audit';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ function messageOf(issue: AuditIssue): MessageKey {
 
 type Filter = 'all' | AuditLevel;
 
-export const LEVEL_ICON = { error: AlertCircleIcon, warning: Alert02Icon } as const;
+export const LEVEL_ICON: Record<AuditLevel, Icon> = { error: ErrorIcon, warning: WarningIcon };
 
 /** Цвет уровня: ошибка — цветом разрушительного действия, предупреждение — жёлтым проекта. */
 export const LEVEL_TEXT: Record<AuditLevel, string> = {
@@ -119,27 +119,24 @@ export function AuditPanel({
           {t('ignored', { count: ignored.length })}
         </summary>
         <ul className="flex flex-col pt-1">
-          {ignored.map((issue) => (
-            <li
-              key={issue.issueId}
-              data-ignored-issue-id={issue.issueId}
-              className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted"
-            >
-              <HugeiconsIcon
-                icon={LEVEL_ICON[issue.level]}
-                size={12}
-                strokeWidth={1.75}
-                color="currentColor"
-                className="shrink-0 text-muted-foreground"
-              />
-              <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-                {t(`issues.${messageOf(issue)}.title`, valuesOf(issue))}
-              </span>
-              <Button size="xs" variant="ghost" onClick={() => onRestore(issue)}>
-                {t('restore')}
-              </Button>
-            </li>
-          ))}
+          {ignored.map((issue) => {
+            const LevelIcon = LEVEL_ICON[issue.level];
+            return (
+              <li
+                key={issue.issueId}
+                data-ignored-issue-id={issue.issueId}
+                className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted"
+              >
+                <LevelIcon size={12} className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                  {t(`issues.${messageOf(issue)}.title`, valuesOf(issue))}
+                </span>
+                <Button size="xs" variant="ghost" onClick={() => onRestore(issue)}>
+                  {t('restore')}
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       </details>
     ) : null;
@@ -168,13 +165,7 @@ export function AuditPanel({
   if (issues.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-        <HugeiconsIcon
-          icon={CheckmarkCircle02Icon}
-          size={28}
-          strokeWidth={1.5}
-          color="currentColor"
-          className="text-muted-foreground"
-        />
+        <SuccessIcon size={28} className="text-muted-foreground" />
         <p className="text-sm font-medium text-foreground">{t('clean')}</p>
         <p className="text-xs text-balance text-muted-foreground">{t('cleanHint')}</p>
         {skipped ? <div className="w-full text-left">{skipped}</div> : null}
@@ -225,6 +216,7 @@ export function AuditPanel({
                 const key = messageOf(issue);
                 const values = valuesOf(issue);
                 const fix = fixOf(issue);
+                const LevelIcon = LEVEL_ICON[issue.level];
                 const ask =
                   onAskAssistant && issue.fixability === 'assisted' && issue.elementId
                     ? () => onAskAssistant(issue)
@@ -246,11 +238,8 @@ export function AuditPanel({
                       aria-label={`${t(`level.${issue.level}`)}: ${t(`issues.${key}.title`, values)}`}
                       className="flex items-start gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     >
-                      <HugeiconsIcon
-                        icon={LEVEL_ICON[issue.level]}
+                      <LevelIcon
                         size={14}
-                        strokeWidth={1.75}
-                        color="currentColor"
                         className={cn('mt-px shrink-0', LEVEL_TEXT[issue.level])}
                       />
                       <span className="flex min-w-0 flex-col gap-0.5">
@@ -265,21 +254,13 @@ export function AuditPanel({
                     <div className="flex gap-1 pl-5">
                       {fix ? (
                         <Button size="xs" variant="outline" onClick={fix}>
-                          <HugeiconsIcon
-                            icon={MagicWand01Icon}
-                            strokeWidth={1.75}
-                            color="currentColor"
-                          />
+                          <FixIcon />
                           {t('fix')}
                         </Button>
                       ) : null}
                       {ask ? (
                         <Button size="xs" variant="ghost" onClick={ask}>
-                          <HugeiconsIcon
-                            icon={AiSparklesIcon}
-                            strokeWidth={1.75}
-                            color="currentColor"
-                          />
+                          <AgentIcon />
                           {t('askAssistant')}
                         </Button>
                       ) : null}

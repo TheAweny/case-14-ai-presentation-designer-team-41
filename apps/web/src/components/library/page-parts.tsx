@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
+import type { Icon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 /** Поля страницы главного меню: одни на главной и на странице проекта. */
@@ -63,12 +63,12 @@ export function CardGrid({ className, children }: { className?: string; children
 
 /** Пустая секция: что здесь будет и как это получить. */
 export function EmptyState({
-  icon,
+  icon: StateIcon,
   title,
   children,
   action,
 }: {
-  icon: IconSvgElement;
+  icon: Icon;
   title: string;
   children: ReactNode;
   action?: ReactNode;
@@ -76,7 +76,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-10 text-center">
       <span className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
-        <HugeiconsIcon icon={icon} size={20} strokeWidth={1.5} aria-hidden />
+        <StateIcon size={20} aria-hidden />
       </span>
       <div className="flex max-w-sm flex-col gap-1">
         <p className="text-sm font-medium">{title}</p>

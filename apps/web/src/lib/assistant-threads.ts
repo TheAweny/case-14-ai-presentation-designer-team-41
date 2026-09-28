@@ -1,4 +1,5 @@
-import type { DesignSystem, LayoutVariant, SlideIr } from '@lct/contracts';
+import type { LayoutVariant } from '@lct/contracts';
+import type { GeneratedVariant } from './deck-generator';
 import type { TemplateSummary } from './library-source';
 import type { ContextMention, SlideRefAttachment } from './slide-context';
 
@@ -17,8 +18,7 @@ export type AgentText =
       readonly key:
         | 'building'
         | 'stopped'
-        | 'opened'
-        | 'openedNoProject'
+        | 'refining'
         | 'unsupported'
         | 'templateImportFailed'
         | 'templateSaved'
@@ -56,13 +56,12 @@ export type MessageAttachment =
    */
   | SlideRefAttachment;
 
-/** Картинка варианта: слайд и профиль шаблона, которым он нарисован. */
-export interface OptionPreview {
-  readonly slide: SlideIr;
-  readonly designSystem: DesignSystem;
-}
-
 export type AudienceOption = 'leadership' | 'clients' | 'team';
+
+/** Для кого колода, если бриф этого не сказал: агент берёт это, пока человек не поправит. */
+export const DEFAULT_AUDIENCE: AudienceOption = 'leadership';
+
+export const AUDIENCE_OPTIONS: readonly AudienceOption[] = ['leadership', 'clients', 'team'];
 
 /** Что делать с только что разобранным шаблоном, если колода собирается в проекте. */
 export type AttachTemplateOption = 'attach' | 'deckOnly';
@@ -71,29 +70,38 @@ export type AttachTemplateOption = 'attach' | 'deckOnly';
  * Вопрос агента с вариантами ответа, как `AskUserQuestion`. Подписи — в словаре по id, а то, что
  * в них подставляется (имя проекта), лежит в вопросе данными: подпись собирается на языке
  * интерфейса в момент показа.
+ *
+ * Вопрос останавливает разговор, поэтому агент задаёт его, только когда без ответа нельзя
+ * двигаться дальше. Там, где можно разумно предположить, он предполагает (`assume`).
  */
-export type AssistantQuestion =
-  | {
-      readonly questionId: 'audience';
-      readonly options: readonly { readonly optionId: AudienceOption }[];
-    }
-  | {
-      readonly questionId: 'attachTemplate';
-      /** Проект, к которому агент предлагает прикрепить шаблон: его имя — в заголовке и подписи. */
-      readonly projectName: string;
-      readonly options: readonly { readonly optionId: AttachTemplateOption }[];
-      readonly defaultOptionId: AttachTemplateOption;
-    }
-  | {
-      readonly questionId: 'variant';
-      readonly options: readonly {
-        readonly optionId: LayoutVariant;
-        readonly deckId: string;
-        readonly slideCount: number;
-        readonly preview: OptionPreview;
-      }[];
-      readonly defaultOptionId: LayoutVariant;
-    };
+export type AssistantQuestion = {
+  readonly questionId: 'attachTemplate';
+  /** Проект, к которому агент предлагает прикрепить шаблон: его имя — в заголовке и подписи. */
+  readonly projectName: string;
+  readonly options: readonly { readonly optionId: AttachTemplateOption }[];
+  readonly defaultOptionId: AttachTemplateOption;
+};
+
+/** Итог аудита одного варианта: сколько ошибок и замечаний нашла проверка слайдов. */
+export interface VariantReview {
+  readonly errors: number;
+  readonly warnings: number;
+}
+
+/** Итог сборки: три варианта вёрстки одного плана, аудит каждого и выбор агента. */
+export interface DeckResult {
+  readonly runId: string;
+  /** В порядке `LAYOUT_VARIANTS`. */
+  readonly variants: readonly GeneratedVariant[];
+  /** Аудит по `deckId` варианта; null — проверить не удалось, и агент выбрал без него. */
+  readonly reviews: Readonly<Record<string, VariantReview>> | null;
+  /** Вариант, который агент советует: меньше всего ошибок, при равенстве — сбалансированный. */
+  readonly recommended: LayoutVariant;
+  /** Колоды собраны не на выбранном шаблоне — так честно отвечает демо-генератор. */
+  readonly templateSubstituted: boolean;
+  /** От запуска прогона до готовности; null — неизвестно. */
+  readonly elapsedMs: number | null;
+}
 
 /**
  * Ответ на вопрос. `text` — что увидит собеседник: подпись варианта или свои слова; `optionId`
@@ -126,7 +134,19 @@ export type ThreadMessage =
       readonly id: string;
       readonly question: AssistantQuestion;
       readonly answer: AssistantAnswer | null;
-    };
+    }
+  /**
+   * Допущение вместо вопроса: агент выбрал сам и говорит, что выбрал, а сборка идёт дальше.
+   * Поменять можно в любой момент — карточка покажет новый выбор, колода пересоберётся.
+   */
+  | {
+      readonly kind: 'assume';
+      readonly id: string;
+      readonly audience: AudienceOption;
+      /** Выбор человека, а не агента. */
+      readonly changed: boolean;
+    }
+  | { readonly kind: 'result'; readonly id: string; readonly result: DeckResult };
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -151,6 +171,8 @@ export interface AssistantThreads {
   append(threadId: string, message: NewThreadMessage): string;
   /** Ответить на вопрос. Отвеченный вопрос второй раз не отвечается. */
   answer(threadId: string, messageId: string, answer: AssistantAnswer): void;
+  /** Человек поменял допущение агента: карточка показывает его выбор. */
+  reassume(threadId: string, messageId: string, audience: AudienceOption): void;
   setDeck(threadId: string, deckId: string): void;
   /** Вопрос, который ждёт ответа, — на него отвечает и поле панели. */
   pendingQuestion(threadId: string): Extract<ThreadMessage, { kind: 'ask' }> | undefined;
@@ -207,6 +229,15 @@ export function createAssistantThreads(
         messages: messages.map((message) =>
           message.id === messageId && message.kind === 'ask' && message.answer === null
             ? { ...message, answer }
+            : message,
+        ),
+      }));
+    },
+    reassume(threadId, messageId, audience) {
+      update(threadId, ({ messages }) => ({
+        messages: messages.map((message) =>
+          message.id === messageId && message.kind === 'assume'
+            ? { ...message, audience, changed: true }
             : message,
         ),
       }));

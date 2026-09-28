@@ -2042,22 +2042,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hugeicons/core-free-icons@npm:4.3.4":
-  version: 4.3.4
-  resolution: "@hugeicons/core-free-icons@npm:4.3.4"
-  checksum: 10/e181b2d6899203cf0df6155c63cdaaff9deb4b47336f4b0e9d1e4edfd7f8f8a61e5167bfe5fc95561bf6929abe9bd43d9c436154b6c0f646ad215896f61a9842
-  languageName: node
-  linkType: hard
-
-"@hugeicons/react@npm:1.1.10":
-  version: 1.1.10
-  resolution: "@hugeicons/react@npm:1.1.10"
-  peerDependencies:
-    react: ">=16.0.0"
-  checksum: 10/dbcef02505f7e30d703e8587a395938f1f407001c848eee452d5b9ef47f0d05d602883edf1d62547d8a2e5cb1ce3c8c1023d7f50885311896aae8a123a3542b9
-  languageName: node
-  linkType: hard
-
 "@humanfs/core@npm:^0.19.2":
   version: 0.19.2
   resolution: "@humanfs/core@npm:0.19.2"
@@ -5364,6 +5348,24 @@ __metadata:
   dependencies:
     "@swc/counter": "npm:^0.1.3"
   checksum: 10/9cd2b13a640c36d28235a30567dc38330e01dc54ba0ca6ff4000fc56f0be27252b91c3df4989a9ef019b9df9eb722e73fb273913675f8b891428981fb9cc9a0f
+  languageName: node
+  linkType: hard
+
+"@tabler/icons-react@npm:3.48.0":
+  version: 3.48.0
+  resolution: "@tabler/icons-react@npm:3.48.0"
+  dependencies:
+    "@tabler/icons": "npm:3.48.0"
+  peerDependencies:
+    react: ">= 16"
+  checksum: 10/d563e916cd8dfcee84b0b0ec92f836a96d70f2cd7524f5ccd90e1de22cc3557af3c20211b10a6fb88ebb494965ebd07ab863d410953d36af4697d8a1b35a0b50
+  languageName: node
+  linkType: hard
+
+"@tabler/icons@npm:3.48.0":
+  version: 3.48.0
+  resolution: "@tabler/icons@npm:3.48.0"
+  checksum: 10/fac8a271bf96b97524d2cab4be87aa0de4993628c04b7e2260c790c6572abdf68a1a56b79960bc18fb132d89b0fa711df154e66762b5799a13757655fd6de08e
   languageName: node
   linkType: hard
 
@@ -13608,13 +13610,12 @@ __metadata:
     "@dnd-kit/utilities": "npm:3.2.2"
     "@floating-ui/react-dom": "npm:2.1.9"
     "@formatjs/icu-messageformat-parser": "npm:3.5.20"
-    "@hugeicons/core-free-icons": "npm:4.3.4"
-    "@hugeicons/react": "npm:1.1.10"
     "@lct/contracts": "workspace:^"
     "@lct/deck-ops": "workspace:^"
     "@lct/slide-audit": "workspace:^"
     "@lct/slide-renderer": "workspace:^"
     "@playwright/test": "npm:1.56.1"
+    "@tabler/icons-react": "npm:3.48.0"
     "@tailwindcss/postcss": "npm:4.3.3"
     "@tanstack/react-virtual": "npm:3.14.13"
     "@tiptap/core": "npm:3.31.3"

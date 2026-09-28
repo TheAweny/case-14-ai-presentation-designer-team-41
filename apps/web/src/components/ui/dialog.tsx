@@ -3,8 +3,7 @@
 import * as React from 'react';
 import { cn } from 'cn';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon } from '@hugeicons/core-free-icons';
+import { CloseIcon } from '@/components/ui/icons';
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -67,7 +66,7 @@ function DialogContent({
             'focus-visible:ring-2 focus-visible:ring-ring/50',
           )}
         >
-          <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} color="currentColor" />
+          <CloseIcon size={14} />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

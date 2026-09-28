@@ -2,8 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Search01Icon } from '@hugeicons/core-free-icons';
+import { SearchIcon } from '@/components/ui/icons';
 import {
   Dialog,
   DialogContent,
@@ -127,13 +126,7 @@ export function ShortcutsDialog({
             'focus-within:ring-2 focus-within:ring-ring/50',
           )}
         >
-          <HugeiconsIcon
-            icon={Search01Icon}
-            size={14}
-            strokeWidth={1.75}
-            color="currentColor"
-            className="shrink-0 text-muted-foreground"
-          />
+          <SearchIcon size={14} className="shrink-0 text-muted-foreground" />
           <input
             type="search"
             value={query}

@@ -410,4 +410,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  /*
+   * Одна толщина линии у всех иконок (`components/ui/icons.ts`). Свойство CSS сильнее атрибута,
+   * который ставит компонент Tabler. Где нужна другая толщина — `[--icon-stroke:2]` на иконке
+   * или на её контейнере.
+   */
+  .tabler-icon {
+    stroke-width: var(--icon-stroke, 1.5);
+  }
 }

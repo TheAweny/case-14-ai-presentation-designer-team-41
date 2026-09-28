@@ -12,8 +12,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon, type Icon } from '@/components/ui/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,7 +101,7 @@ export const BAR_BUTTON_CLASS = cn(
  * `asChild` меню Radix, и тот повесит на неё свои обработчики. Без этого меню не открывалось бы.
  */
 export function BarButton({
-  icon,
+  icon: ButtonIcon,
   label,
   shortcut,
   pressed,
@@ -111,7 +110,7 @@ export function BarButton({
   children,
   ...rest
 }: Omit<ComponentProps<'button'>, 'children'> & {
-  icon?: IconSvgElement;
+  icon?: Icon;
   label: string;
   shortcut?: ShortcutId;
   /** Переключатель: `aria-pressed` и подсветка включённого. */
@@ -134,9 +133,7 @@ export function BarButton({
           className,
         )}
       >
-        {icon ? (
-          <HugeiconsIcon icon={icon} size={16} strokeWidth={1.5} color="currentColor" />
-        ) : null}
+        {ButtonIcon ? <ButtonIcon size={16} /> : null}
         {children}
       </button>
     </BarTooltip>
@@ -156,7 +153,7 @@ export function BarMenu({
   disabled,
   contentClassName,
 }: {
-  icon?: IconSvgElement;
+  icon?: Icon;
   label: string;
   shortcut?: ShortcutId;
   /** Что нарисовать в кнопке рядом с иконкой. */
@@ -173,13 +170,7 @@ export function BarMenu({
       <DropdownMenuTrigger asChild disabled={disabled} {...focus.trigger}>
         <BarButton icon={icon} label={label} shortcut={shortcut} aria-haspopup="menu">
           {children}
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            size={10}
-            strokeWidth={2}
-            color="currentColor"
-            className="-ml-0.5 opacity-70"
-          />
+          <ChevronDownIcon size={10} className="-ml-0.5 opacity-70" />
         </BarButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent

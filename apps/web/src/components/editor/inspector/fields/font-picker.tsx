@@ -3,8 +3,7 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Alert02Icon, ArrowDown01Icon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons';
+import { CheckIcon, ChevronDownIcon, SearchIcon, WarningIcon } from '@/components/ui/icons';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { genericFamily } from '@lct/slide-renderer';
 import { cn } from '@/lib/utils';
@@ -87,13 +86,7 @@ export function FontPicker({
             {value ?? placeholder}
           </span>
           {warning ? <MissingFontMark id={warningId} warning={warning} size={13} /> : null}
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            size={12}
-            strokeWidth={2}
-            color="currentColor"
-            className="shrink-0 text-muted-foreground"
-          />
+          <ChevronDownIcon size={12} className="shrink-0 text-muted-foreground" />
         </button>
       </PopoverPrimitive.Trigger>
       <FieldPopoverContent
@@ -192,13 +185,7 @@ function FontSearch({
   return (
     <>
       <div className="flex items-center gap-2 border-b border-border px-2.5">
-        <HugeiconsIcon
-          icon={Search01Icon}
-          size={13}
-          strokeWidth={1.5}
-          color="currentColor"
-          className="shrink-0 text-muted-foreground"
-        />
+        <SearchIcon size={13} className="shrink-0 text-muted-foreground" />
         <input
           type="text"
           role="combobox"
@@ -337,15 +324,7 @@ function FontOption({
         {row.family}
       </span>
       {warning ? <MissingFontMark id={`${id}-missing`} warning={warning} size={12} /> : null}
-      {selected ? (
-        <HugeiconsIcon
-          icon={Tick02Icon}
-          size={13}
-          strokeWidth={2}
-          color="currentColor"
-          className="shrink-0"
-        />
-      ) : null}
+      {selected ? <CheckIcon size={13} className="shrink-0" /> : null}
     </div>
   );
 }
@@ -379,7 +358,7 @@ function MissingFontMark({ id, warning, size }: { id: string; warning: string; s
       data-font-missing=""
       className="flex shrink-0 text-(--project-yellow)"
     >
-      <HugeiconsIcon icon={Alert02Icon} size={size} strokeWidth={2} color="currentColor" />
+      <WarningIcon size={size} />
       <span id={id} className="sr-only">
         {warning}
       </span>

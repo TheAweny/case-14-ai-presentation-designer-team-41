@@ -19,7 +19,7 @@ import libraryMenu from './library-menu.json';
 import localeSwitcher from './locale-switcher.json';
 import metadata from './metadata.json';
 import mobileBar from './mobile-bar.json';
-import newDeckEditor from './new-deck-editor.json';
+import deckChat from './deck-chat.json';
 import projectAppearance from './project-appearance.json';
 import projectPage from './project-page.json';
 import selectionBar from './selection-bar.json';
@@ -63,7 +63,7 @@ const messages = {
   projectPage,
   projectAppearance,
   composer,
-  newDeckEditor,
+  deckChat,
   assistant,
   splash,
   settings,

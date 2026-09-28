@@ -135,6 +135,12 @@ export const RoleAssignmentSchema = z.discriminatedUnion('kind', [
 ]);
 export type RoleAssignment = z.infer<typeof RoleAssignmentSchema>;
 
+/** Модель на подключении: так прогон называет модель, которой выполнить роль. */
+export interface ModelRef {
+  readonly connectionId: string;
+  readonly modelId: string;
+}
+
 /** Все настройки моделей. В `roles` каждая роль ровно один раз, в порядке `PIPELINE_ROLES`. */
 export const ModelSettingsSchema = z.object({
   connections: z.array(ModelConnectionSchema),

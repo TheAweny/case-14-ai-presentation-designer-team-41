@@ -11,31 +11,31 @@ import {
 } from 'react';
 import { useTranslations } from 'next-intl';
 import { Toolbar as ToolbarPrimitive } from 'radix-ui';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  AiSparklesIcon,
-  ArrowDown01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  ArrowTurnBackwardIcon,
-  ArrowTurnForwardIcon,
-  ArrowUp01Icon,
-  ArrowUpRight01Icon,
-  ChartColumnIcon,
-  Cursor01Icon,
-  DragDropHorizontalIcon,
-  DragDropVerticalIcon,
-  EllipseIcon,
-  GridTableIcon,
-  HandIcon,
-  HierarchySquare03Icon,
-  Image01Icon,
+  AgentIcon,
+  ArrowShapeIcon,
+  BackIcon,
+  ChartIcon,
+  CircleIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  DiagramIcon,
+  GripHorizontalIcon,
+  GripVerticalIcon,
+  ImageIcon,
   KeyboardIcon,
-  MinusSignIcon,
+  LineIcon,
+  NextIcon,
+  PanIcon,
   PlayIcon,
+  RedoIcon,
+  SelectIcon,
   SquareIcon,
-  TextFontIcon,
-} from '@hugeicons/core-free-icons';
+  TableIcon,
+  TextIcon,
+  UndoIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,9 +107,9 @@ const HISTORY_KEYS: Record<
   redo: { pc: ['Ctrl', 'Shift', 'Z'], mac: ['⌘', '⇧', 'Z'], aria: 'Control+Shift+Z Meta+Shift+Z' },
 };
 
-const HISTORY_ICONS: Record<HistoryId, IconSvgElement> = {
-  undo: ArrowTurnBackwardIcon,
-  redo: ArrowTurnForwardIcon,
+const HISTORY_ICONS: Record<HistoryId, Icon> = {
+  undo: UndoIcon,
+  redo: RedoIcon,
 };
 
 function historyKeys(id: HistoryId): readonly string[] {
@@ -123,7 +123,7 @@ function historyKeys(id: HistoryId): readonly string[] {
  */
 type Shortcut = { key: string; code: string };
 
-type Variant = { id: VariantId; icon: IconSvgElement; shortcut: Shortcut };
+type Variant = { id: VariantId; icon: Icon; shortcut: Shortcut };
 
 /**
  * Кнопка панели. Если вариантов несколько, рядом с ней шеврон: он открывает список, а сама
@@ -137,7 +137,7 @@ type Tool = { id: ToolId; variants: readonly [Variant, ...Variant[]] };
  */
 type Action = {
   id: RailActionId;
-  icon: IconSvgElement;
+  icon: Icon;
   shortcut: Shortcut | null;
   registry?: ShortcutId;
 };
@@ -146,39 +146,39 @@ const TOOLS: readonly Tool[] = [
   {
     id: 'pointer',
     variants: [
-      { id: 'select', icon: Cursor01Icon, shortcut: { key: 'V', code: 'KeyV' } },
-      { id: 'hand', icon: HandIcon, shortcut: { key: 'H', code: 'KeyH' } },
+      { id: 'select', icon: SelectIcon, shortcut: { key: 'V', code: 'KeyV' } },
+      { id: 'hand', icon: PanIcon, shortcut: { key: 'H', code: 'KeyH' } },
     ],
   },
   {
     id: 'text',
-    variants: [{ id: 'text', icon: TextFontIcon, shortcut: { key: 'T', code: 'KeyT' } }],
+    variants: [{ id: 'text', icon: TextIcon, shortcut: { key: 'T', code: 'KeyT' } }],
   },
   {
     id: 'image',
-    variants: [{ id: 'image', icon: Image01Icon, shortcut: { key: 'I', code: 'KeyI' } }],
+    variants: [{ id: 'image', icon: ImageIcon, shortcut: { key: 'I', code: 'KeyI' } }],
   },
   {
     id: 'shape',
     variants: [
       { id: 'rectangle', icon: SquareIcon, shortcut: { key: 'R', code: 'KeyR' } },
-      { id: 'ellipse', icon: EllipseIcon, shortcut: { key: 'O', code: 'KeyO' } },
-      { id: 'line', icon: MinusSignIcon, shortcut: { key: 'L', code: 'KeyL' } },
-      { id: 'arrow', icon: ArrowUpRight01Icon, shortcut: { key: 'A', code: 'KeyA' } },
+      { id: 'ellipse', icon: CircleIcon, shortcut: { key: 'O', code: 'KeyO' } },
+      { id: 'line', icon: LineIcon, shortcut: { key: 'L', code: 'KeyL' } },
+      { id: 'arrow', icon: ArrowShapeIcon, shortcut: { key: 'A', code: 'KeyA' } },
     ],
   },
   {
     id: 'data',
     variants: [
-      { id: 'chart', icon: ChartColumnIcon, shortcut: { key: 'G', code: 'KeyG' } },
-      { id: 'table', icon: GridTableIcon, shortcut: { key: 'B', code: 'KeyB' } },
-      { id: 'diagram', icon: HierarchySquare03Icon, shortcut: { key: 'S', code: 'KeyS' } },
+      { id: 'chart', icon: ChartIcon, shortcut: { key: 'G', code: 'KeyG' } },
+      { id: 'table', icon: TableIcon, shortcut: { key: 'B', code: 'KeyB' } },
+      { id: 'diagram', icon: DiagramIcon, shortcut: { key: 'S', code: 'KeyS' } },
     ],
   },
 ];
 
 const ACTIONS: readonly Action[] = [
-  { id: 'ai', icon: AiSparklesIcon, shortcut: { key: 'J', code: 'KeyJ' } },
+  { id: 'ai', icon: AgentIcon, shortcut: { key: 'J', code: 'KeyJ' } },
   { id: 'shortcuts', icon: KeyboardIcon, shortcut: null, registry: 'shortcuts' },
 ];
 
@@ -224,12 +224,12 @@ export const RAIL_SHORTCUTS: readonly (
  * Что можно вставить, по кнопкам рейки: текст, картинка, фигуры, данные. Нижняя панель узкого
  * экрана строит из этого своё меню — подписи и значки те же, что на рейке.
  */
-export const INSERT_GROUPS: readonly (readonly { id: InsertTool; icon: IconSvgElement }[])[] =
-  TOOLS.map((tool) =>
+export const INSERT_GROUPS: readonly (readonly { id: InsertTool; icon: Icon }[])[] = TOOLS.map(
+  (tool) =>
     tool.variants.flatMap((variant) =>
       isInsertTool(variant.id) ? [{ id: variant.id, icon: variant.icon }] : [],
     ),
-  ).filter((group) => group.length > 0);
+).filter((group) => group.length > 0);
 
 const TOOL_BY_ID = new Map(TOOLS.map((tool) => [tool.id, tool]));
 
@@ -263,11 +263,11 @@ const OPEN_TOWARD: Record<DockSide, DockSide> = {
   bottom: 'top',
 };
 
-const CHEVRON: Record<DockSide, IconSvgElement> = {
-  left: ArrowRight01Icon,
-  right: ArrowLeft01Icon,
-  top: ArrowDown01Icon,
-  bottom: ArrowUp01Icon,
+const CHEVRON: Record<DockSide, Icon> = {
+  left: NextIcon,
+  right: BackIcon,
+  top: ChevronDownIcon,
+  bottom: ChevronUpIcon,
 };
 
 const BUTTON = cn(
@@ -346,6 +346,7 @@ function VariantMenu({
   const t = useTranslations('toolRail');
   const focus = useMenuFocus();
   const toward = OPEN_TOWARD[side];
+  const ChevronIcon = CHEVRON[side];
 
   return (
     <DropdownMenu>
@@ -364,7 +365,7 @@ function VariantMenu({
               axis === 'vertical' ? 'h-4 w-9' : 'h-9 w-4',
             )}
           >
-            <HugeiconsIcon icon={CHEVRON[side]} size={10} strokeWidth={2.5} color="currentColor" />
+            <ChevronIcon size={10} className="[--icon-stroke:2.5]" />
           </ToolbarPrimitive.Button>
         </DropdownMenuTrigger>
       </RailTooltip>
@@ -385,7 +386,7 @@ function VariantMenu({
         >
           {tool.variants.map((variant) => (
             <DropdownMenuRadioItem key={variant.id} value={variant.id}>
-              <HugeiconsIcon icon={variant.icon} size={14} strokeWidth={1.5} color="currentColor" />
+              <variant.icon size={14} />
               {t(`variants.${variant.id}`)}
               <DropdownMenuShortcut>
                 <Kbd>{variant.shortcut.key}</Kbd>
@@ -426,12 +427,7 @@ export function RailGrip({
       {...props}
       title={props.title ?? t('gripHint')}
     >
-      <HugeiconsIcon
-        icon={axis === 'vertical' ? DragDropHorizontalIcon : DragDropVerticalIcon}
-        size={16}
-        strokeWidth={2}
-        color="currentColor"
-      />
+      {axis === 'vertical' ? <GripHorizontalIcon size={16} /> : <GripVerticalIcon size={16} />}
     </button>
   );
 }
@@ -597,12 +593,7 @@ export const ToolRail = memo(function ToolRail({
                       grouped && 'hover:bg-transparent data-[state=on]:hover:bg-transparent',
                     )}
                   >
-                    <HugeiconsIcon
-                      icon={variant.icon}
-                      size={18}
-                      strokeWidth={1.5}
-                      color="currentColor"
-                    />
+                    <variant.icon size={18} />
                   </ToolbarPrimitive.ToggleItem>
                 </RailTooltip>
                 {grouped && (
@@ -636,12 +627,7 @@ export const ToolRail = memo(function ToolRail({
                   onClick={() => onActionRef.current?.(action.id)}
                   className={BUTTON}
                 >
-                  <HugeiconsIcon
-                    icon={action.icon}
-                    size={18}
-                    strokeWidth={1.5}
-                    color="currentColor"
-                  />
+                  <action.icon size={18} />
                 </ToolbarPrimitive.Button>
               </RailTooltip>
             </div>
@@ -656,27 +642,25 @@ export const ToolRail = memo(function ToolRail({
               aria-label={t('groups.history')}
               className={cn('flex items-center', along)}
             >
-              {(['undo', 'redo'] as const).map((id) => (
-                <div key={id} className="p-0.5">
-                  <RailTooltip label={historyLabel(id)} keys={historyKeys(id)} side={toward}>
-                    <ToolbarPrimitive.Button
-                      aria-label={historyLabel(id)}
-                      aria-keyshortcuts={HISTORY_KEYS[id].aria}
-                      disabled={history[id] === null}
-                      onMouseDown={keepCanvasFocus}
-                      onClick={id === 'undo' ? history.onUndo : history.onRedo}
-                      className={BUTTON}
-                    >
-                      <HugeiconsIcon
-                        icon={HISTORY_ICONS[id]}
-                        size={18}
-                        strokeWidth={1.5}
-                        color="currentColor"
-                      />
-                    </ToolbarPrimitive.Button>
-                  </RailTooltip>
-                </div>
-              ))}
+              {(['undo', 'redo'] as const).map((id) => {
+                const HistoryIcon = HISTORY_ICONS[id];
+                return (
+                  <div key={id} className="p-0.5">
+                    <RailTooltip label={historyLabel(id)} keys={historyKeys(id)} side={toward}>
+                      <ToolbarPrimitive.Button
+                        aria-label={historyLabel(id)}
+                        aria-keyshortcuts={HISTORY_KEYS[id].aria}
+                        disabled={history[id] === null}
+                        onMouseDown={keepCanvasFocus}
+                        onClick={id === 'undo' ? history.onUndo : history.onRedo}
+                        className={BUTTON}
+                      >
+                        <HistoryIcon size={18} />
+                      </ToolbarPrimitive.Button>
+                    </RailTooltip>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
@@ -697,12 +681,7 @@ export const ToolRail = memo(function ToolRail({
                   onClick={() => onActionRef.current?.(SHOW_ACTION.id)}
                   className={BUTTON}
                 >
-                  <HugeiconsIcon
-                    icon={SHOW_ACTION.icon}
-                    size={18}
-                    strokeWidth={1.5}
-                    color="currentColor"
-                  />
+                  <SHOW_ACTION.icon size={18} />
                 </ToolbarPrimitive.Button>
               </RailTooltip>
             </div>

@@ -4,48 +4,47 @@ import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   AlignBottomIcon,
-  AlignHorizontalCenterIcon,
+  AlignCenterIcon,
   AlignLeftIcon,
+  AlignMiddleIcon,
   AlignRightIcon,
   AlignTopIcon,
-  AlignVerticalCenterIcon,
-  ArrowRight01Icon,
+  BringForwardIcon,
+  BringToFrontIcon,
   CircleIcon,
-  DashedLine01Icon,
-  DashedLine02Icon,
+  ContainIcon,
+  CropIcon,
+  DashIcon,
+  DetachIcon,
   DiamondIcon,
-  FitToScreenIcon,
+  DotIcon,
   FlipHorizontalIcon,
   FlipVerticalIcon,
-  ImageCropIcon,
-  ImageUploadIcon,
-  CropIcon,
-  LayerBringForwardIcon,
-  LayerBringToFrontIcon,
-  LayerSendBackwardIcon,
-  LayerSendToBackIcon,
+  FontSizeIcon,
   LetterSpacingIcon,
-  Link01Icon,
-  LockKeyholeIcon,
-  LockKeyholeOpenIcon,
-  MinusSignIcon,
-  ParagraphSpacingIcon,
-  Rotate01Icon,
+  LineHeightIcon,
+  LinkIcon,
+  LockIcon,
+  MinusIcon,
+  NextIcon,
+  OpacityIcon,
   RotateClockwiseIcon,
+  RotateIcon,
+  RoundedCornerIcon,
+  SendBackwardIcon,
+  SendToBackIcon,
   SquareIcon,
-  SquareRoundCornerIcon,
   TextAlignCenterIcon,
-  TextAlignJustifyLeftIcon,
+  TextAlignJustifyIcon,
   TextAlignLeftIcon,
   TextAlignRightIcon,
-  TextFontIcon,
-  TextUnderlineIcon,
-  TransparencyIcon,
   TriangleIcon,
+  UnderlineIcon,
   UndoIcon,
-  Unlink01Icon,
-} from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
+  UnlockIcon,
+  UploadIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type {
   ColorRole,
   ColorValue,
@@ -189,55 +188,55 @@ export type { TableAction } from '@/components/editor/inspector/table-section';
 
 const ALIGN_X = [
   { id: 'left', icon: AlignLeftIcon },
-  { id: 'center', icon: AlignHorizontalCenterIcon },
+  { id: 'center', icon: AlignCenterIcon },
   { id: 'right', icon: AlignRightIcon },
-] as const satisfies readonly { id: Alignment; icon: unknown }[];
+] as const satisfies readonly { id: Alignment; icon: Icon }[];
 
 const ALIGN_Y = [
   { id: 'top', icon: AlignTopIcon },
-  { id: 'middle', icon: AlignVerticalCenterIcon },
+  { id: 'middle', icon: AlignMiddleIcon },
   { id: 'bottom', icon: AlignBottomIcon },
-] as const satisfies readonly { id: Alignment; icon: unknown }[];
+] as const satisfies readonly { id: Alignment; icon: Icon }[];
 
 const ARRANGE = [
-  { id: 'back', icon: LayerSendToBackIcon },
-  { id: 'backward', icon: LayerSendBackwardIcon },
-  { id: 'forward', icon: LayerBringForwardIcon },
-  { id: 'front', icon: LayerBringToFrontIcon },
-] as const satisfies readonly { id: ArrangeTarget; icon: unknown }[];
+  { id: 'back', icon: SendToBackIcon },
+  { id: 'backward', icon: SendBackwardIcon },
+  { id: 'forward', icon: BringForwardIcon },
+  { id: 'front', icon: BringToFrontIcon },
+] as const satisfies readonly { id: ArrangeTarget; icon: Icon }[];
 
 /** Формы, между которыми можно переключить фигуру. Линия — отдельный инструмент. */
 const SHAPES = [
   { value: 'rect', icon: SquareIcon },
-  { value: 'round-rect', icon: SquareRoundCornerIcon },
+  { value: 'round-rect', icon: RoundedCornerIcon },
   { value: 'ellipse', icon: CircleIcon },
   { value: 'triangle', icon: TriangleIcon },
   { value: 'diamond', icon: DiamondIcon },
-] as const satisfies readonly { value: DecorShape; icon: unknown }[];
+] as const satisfies readonly { value: DecorShape; icon: Icon }[];
 
 const DASHES = [
-  { value: 'solid', icon: MinusSignIcon },
-  { value: 'dash', icon: DashedLine01Icon },
-  { value: 'dot', icon: DashedLine02Icon },
-] as const satisfies readonly { value: StrokeDash; icon: unknown }[];
+  { value: 'solid', icon: MinusIcon },
+  { value: 'dash', icon: DashIcon },
+  { value: 'dot', icon: DotIcon },
+] as const satisfies readonly { value: StrokeDash; icon: Icon }[];
 
 const FITS = [
-  { value: 'contain', icon: FitToScreenIcon },
-  { value: 'cover', icon: ImageCropIcon },
-] as const satisfies readonly { value: ImageFit; icon: unknown }[];
+  { value: 'contain', icon: ContainIcon },
+  { value: 'cover', icon: CropIcon },
+] as const satisfies readonly { value: ImageFit; icon: Icon }[];
 
 const TEXT_ALIGNS = [
   { value: 'left', icon: TextAlignLeftIcon },
   { value: 'center', icon: TextAlignCenterIcon },
   { value: 'right', icon: TextAlignRightIcon },
-  { value: 'justify', icon: TextAlignJustifyLeftIcon },
-] as const satisfies readonly { value: ParagraphAlign; icon: unknown }[];
+  { value: 'justify', icon: TextAlignJustifyIcon },
+] as const satisfies readonly { value: ParagraphAlign; icon: Icon }[];
 
 const VERTICAL_ALIGNS = [
   { value: 'top', icon: AlignTopIcon },
-  { value: 'middle', icon: AlignVerticalCenterIcon },
+  { value: 'middle', icon: AlignMiddleIcon },
   { value: 'bottom', icon: AlignBottomIcon },
-] as const satisfies readonly { value: VerticalAlign; icon: unknown }[];
+] as const satisfies readonly { value: VerticalAlign; icon: Icon }[];
 
 /** Частые межстрочные интервалы, в процентах одинарного. */
 const LINE_HEIGHTS = [100, 120, 150, 200] as const;
@@ -365,7 +364,7 @@ function LockToggle({
   const locked = selected.every((element) => element.locked === true);
   return (
     <IconButton
-      icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
+      icon={locked ? LockIcon : UnlockIcon}
       label={locked ? t('unlock') : t('lock')}
       pressed={locked}
       onClick={() =>
@@ -473,7 +472,7 @@ function PositionSection({
       mode,
     );
   const flip = (axis: 'flipH' | 'flipV') => onPropsEach(flipEntries(decors, axis));
-  const alignButton = ({ id, icon }: { id: Alignment; icon: typeof AlignLeftIcon }) => (
+  const alignButton = ({ id, icon }: { id: Alignment; icon: Icon }) => (
     <IconButton key={id} icon={icon} label={aligns(id)} onClick={() => align(id)} />
   );
 
@@ -501,7 +500,7 @@ function PositionSection({
       </FieldRow>
       <FieldRow>
         <NumberField
-          icon={Rotate01Icon}
+          icon={RotateIcon}
           ariaLabel={t('rotation')}
           mixedLabel={mixed}
           value={rotation}
@@ -589,7 +588,7 @@ function LayoutSection({
           {...size('cy')}
         />
         <IconButton
-          icon={constrained ? Link01Icon : Unlink01Icon}
+          icon={constrained ? LinkIcon : DetachIcon}
           label={t('constrainProportions')}
           pressed={constrained}
           onClick={() => setConstrained(!constrained)}
@@ -649,7 +648,7 @@ function AppearanceSection({
       ) : null}
       <FieldRow>
         <NumberField
-          icon={TransparencyIcon}
+          icon={OpacityIcon}
           ariaLabel={t('opacity')}
           mixedLabel={mixed}
           value={opacity === null ? null : Math.round(opacity * 100)}
@@ -672,7 +671,7 @@ function AppearanceSection({
         />
         {radii.length > 0 ? (
           <NumberField
-            icon={SquareRoundCornerIcon}
+            icon={RoundedCornerIcon}
             ariaLabel={t('radius')}
             mixedLabel={mixed}
             value={radius}
@@ -936,7 +935,7 @@ function TextControls({
         title={t('typography')}
         actions={
           <IconButton
-            icon={TextUnderlineIcon}
+            icon={UnderlineIcon}
             label={t('underline')}
             pressed={look.underline}
             onClick={() => actions.setUnderline(!look.underline)}
@@ -965,7 +964,7 @@ function TextControls({
             onChange={actions.setStyle}
           />
           <NumberCombobox
-            icon={TextFontIcon}
+            icon={FontSizeIcon}
             ariaLabel={t('fontSize')}
             presetsLabel={t('fontSizePresets')}
             mixedLabel={mixed}
@@ -981,7 +980,7 @@ function TextControls({
         </FieldRow>
         <FieldRow>
           <NumberCombobox
-            icon={ParagraphSpacingIcon}
+            icon={LineHeightIcon}
             ariaLabel={t('lineHeight')}
             presetsLabel={t('lineHeightPresets')}
             mixedLabel={mixed}
@@ -1083,7 +1082,7 @@ function ImageSection({
             'focus-visible:ring-ring',
           )}
         >
-          <HugeiconsIcon icon={ImageUploadIcon} size={14} strokeWidth={1.5} color="currentColor" />
+          <UploadIcon size={14} />
           {t('replaceImage')}
         </button>
       ) : null}
@@ -1099,7 +1098,7 @@ function ImageSection({
                 'focus-visible:ring-ring',
               )}
             >
-              <HugeiconsIcon icon={CropIcon} size={14} strokeWidth={1.5} color="currentColor" />
+              <CropIcon size={14} />
               {t('cropImage')}
             </button>
           ) : null}
@@ -1193,7 +1192,7 @@ function DecorSections({
         {stroked.length > 0 ? (
           <FieldRow>
             <NumberField
-              icon={MinusSignIcon}
+              icon={MinusIcon}
               ariaLabel={t('strokeWidth')}
               mixedLabel={t('mixed')}
               value={strokeWidth}
@@ -1257,14 +1256,14 @@ function LineEnds({
       <span className="flex-1 text-xs text-muted-foreground">{t('ends')}</span>
       <span className="rotate-180">
         <IconButton
-          icon={ArrowRight01Icon}
+          icon={NextIcon}
           label={t('headArrow')}
           pressed={head}
           onClick={() => toggle('head', !head)}
         />
       </span>
       <IconButton
-        icon={ArrowRight01Icon}
+        icon={NextIcon}
         label={t('tailArrow')}
         pressed={tail}
         onClick={() => toggle('tail', !tail)}

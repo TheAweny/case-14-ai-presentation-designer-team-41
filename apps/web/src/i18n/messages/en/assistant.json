@@ -9,10 +9,9 @@
     "settings": "Request settings"
   },
   "agent": {
-    "building": "Building the deck on the “{template}” template. Slides appear on the left as they are laid out.",
+    "building": "Building the deck on the “{template}” template.",
     "stopped": "Stopped. What is laid out stays — you can run it again from the card above.",
-    "opened": "Kept the “{variant}” variant. The other two are in the project. What should I change?",
-    "openedNoProject": "Kept the “{variant}” variant. The other two are next to it in your presentations. What should I change?",
+    "refining": "I’ll take this into account when I start building the deck.",
     "unsupported": "For now I only build decks: edits on request arrive with the editor agent.",
     "templateImportFailed": "Could not read the “{template}” template. Check that the file opens in PowerPoint and start again — or pick one of the templates you have already uploaded.",
     "templateSaved": "The template is saved to the library — it will appear in your templates.",
@@ -41,6 +40,7 @@
     "done": "The deck is ready",
     "failed": "Could not build the deck",
     "cancelled": "Stopped",
+    "superseded": "Replaced by a new build",
     "retry": "Run again",
     "progress": "Build progress",
     "stages": {
@@ -62,30 +62,22 @@
     "stageCount": "{done} of {total}",
     "failedUnknown": "The run stopped without a reason. Please try again."
   },
+  "build": {
+    "elapsed": "{time} of {budget}",
+    "doneIn": "in {time}",
+    "stages": "Build stages",
+    "slides": "Slides as they are laid out",
+    "slide": "Slide {number}",
+    "planning": "The agent is planning the deck…",
+    "variantNote": "“{variant}” variant · {count, plural, one {# slide} other {# slides}}",
+    "galleryTitle": "Slides as they are laid out",
+    "galleryNote": "The “{variant}” variant. The other two are built from the same plan."
+  },
   "ask": {
     "keys": "1–{count} and Enter",
-    "keep": "Keep “{variant}”",
     "answer": "Answer"
   },
   "questions": {
-    "audience": {
-      "title": "Who is this presentation for?",
-      "note": "It sets the tone, the depth of numbers and the closing slide. You can answer in your own words.",
-      "options": {
-        "leadership": {
-          "label": "Leadership",
-          "description": "Short: numbers, conclusions, decisions"
-        },
-        "clients": {
-          "label": "Clients",
-          "description": "Benefits, examples, next step"
-        },
-        "team": {
-          "label": "Team",
-          "description": "Tasks, deadlines, owners"
-        }
-      }
-    },
     "attachTemplate": {
       "title": "Attach the template to the “{project}” project?",
       "note": "This presentation is built with it either way. An attached template shows up in the template picker for the project’s new presentations.",
@@ -99,10 +91,35 @@
           "description": "The template stays in the library; the project does not change"
         }
       }
+    }
+  },
+  "audience": {
+    "title": "Assumption",
+    "titleChanged": "Audience",
+    "lead": "The brief doesn’t say who the presentation is for — building it for “{audience}”. You can change this at any time.",
+    "leadChanged": "Building for “{audience}”.",
+    "change": "Change",
+    "changeLabel": "Change the audience",
+    "menuTitle": "Who is it for",
+    "said": "Audience: {audience}",
+    "options": {
+      "leadership": {
+        "label": "Leadership",
+        "description": "Short: numbers, conclusions, decisions"
+      },
+      "clients": {
+        "label": "Clients",
+        "description": "Benefits, examples, next step"
+      },
+      "team": {
+        "label": "Team",
+        "description": "Tasks, deadlines, owners"
+      }
     },
-    "variant": {
-      "title": "Which layout variant should stay?",
-      "note": "Hover to see a variant on the canvas. The content is the same in all three."
+    "brief": {
+      "leadership": "Audience: leadership — short, with numbers, conclusions and decisions.",
+      "clients": "Audience: clients — benefits, examples and the next step.",
+      "team": "Audience: the team — tasks, deadlines and owners."
     }
   },
   "variants": {
@@ -118,6 +135,36 @@
       "name": "Airy",
       "description": "Large headings, little text"
     }
+  },
+  "result": {
+    "title": "Three layout variants",
+    "lead": "All three come from one plan — I recommend “{variant}”.",
+    "leadTimed": "Done in {time}. All three come from one plan — I recommend “{variant}”.",
+    "reasonClean": "Its audit is clean.",
+    "reasonFewest": "It has the fewest audit findings.",
+    "recommended": "Recommended",
+    "recommendedInline": "recommended",
+    "current": "open",
+    "auditClean": "Audit is clean",
+    "errors": "{count, plural, one {# error} other {# errors}}",
+    "warnings": "{count, plural, one {# warning} other {# warnings}}",
+    "slides": "{count, plural, one {# slide} other {# slides}}",
+    "open": "Open “{variant}” in the editor",
+    "switchTo": "Open “{variant}”",
+    "download": "Download",
+    "present": "Present",
+    "browse": "All slides",
+    "galleryNote": "“{variant}” variant · {count, plural, one {# slide} other {# slides}}",
+    "loadFailed": "Could not open the variant. Try selecting it again.",
+    "substituted": "Demo mode doesn’t build decks itself: the variants are ready-made demo decks, not laid out with the chosen template."
+  },
+  "slides": {
+    "close": "Close",
+    "previous": "Previous slide",
+    "next": "Next slide",
+    "list": "All slides",
+    "slide": "Slide {number}",
+    "counter": "{number} / {total}"
   },
   "input": {
     "label": "Message to the assistant",

@@ -28,21 +28,21 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS as DndCss } from '@dnd-kit/utilities';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  ArrowRight01Icon,
-  ChartColumnIcon,
-  DashedLine01Icon,
-  EllipseIcon,
-  GridTableIcon,
-  GroupItemsIcon,
-  Image01Icon,
-  LockKeyholeIcon,
-  LockKeyholeOpenIcon,
-  ShapesIcon,
+  ChartIcon,
+  ChevronRightIcon,
+  CircleIcon,
+  GroupIcon,
+  ImageIcon,
+  LineIcon,
+  LockIcon,
+  ShapeIcon,
   SquareIcon,
+  TableIcon,
   TextIcon,
-} from '@hugeicons/core-free-icons';
+  UnlockIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type { SlideElement, SlideIr } from '@lct/contracts';
 import { cn } from '@/lib/utils';
 import {
@@ -65,24 +65,24 @@ export interface LayersPanelProps {
   onMove: (layerId: string, overId: string) => void;
 }
 
-function iconOf(row: LayerRow): IconSvgElement {
+function iconOf(row: LayerRow): Icon {
   const { node } = row;
-  if (node.kind === 'group') return GroupItemsIcon;
+  if (node.kind === 'group') return GroupIcon;
   const element = node.element;
   switch (element.kind) {
     case 'text':
       return TextIcon;
     case 'image':
-      return Image01Icon;
+      return ImageIcon;
     case 'table':
-      return GridTableIcon;
+      return TableIcon;
     case 'chart':
-      return ChartColumnIcon;
+      return ChartIcon;
     case 'decor':
-      if (element.shape === 'line') return DashedLine01Icon;
-      if (element.shape === 'ellipse') return EllipseIcon;
+      if (element.shape === 'line') return LineIcon;
+      if (element.shape === 'ellipse') return CircleIcon;
       if (element.shape === 'rect' || element.shape === 'round-rect') return SquareIcon;
-      return ShapesIcon;
+      return ShapeIcon;
   }
 }
 
@@ -309,7 +309,7 @@ export function LayersPanel({
 function LayerItem({
   row,
   name,
-  icon,
+  icon: RowIcon,
   selected,
   expanded,
   focusable,
@@ -322,7 +322,7 @@ function LayerItem({
 }: {
   row: LayerRow;
   name: string;
-  icon: IconSvgElement;
+  icon: Icon;
   selected: boolean;
   expanded: boolean;
   focusable: boolean;
@@ -389,11 +389,8 @@ function LayerItem({
             }}
             className="grid size-4 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground"
           >
-            <HugeiconsIcon
-              icon={ArrowRight01Icon}
+            <ChevronRightIcon
               size={12}
-              strokeWidth={2}
-              color="currentColor"
               className={cn(
                 'transition-transform duration-100 motion-reduce:transition-none',
                 expanded && 'rotate-90',
@@ -403,13 +400,7 @@ function LayerItem({
         ) : (
           <span aria-hidden className="size-4 shrink-0" />
         )}
-        <HugeiconsIcon
-          icon={icon}
-          size={14}
-          strokeWidth={1.5}
-          color="currentColor"
-          className="shrink-0 text-muted-foreground"
-        />
+        <RowIcon size={14} className="shrink-0 text-muted-foreground" />
         <span className={cn('min-w-0 flex-1 truncate', row.locked && 'text-muted-foreground')}>
           {name}
         </span>
@@ -435,12 +426,7 @@ function LayerItem({
             row.locked ? 'opacity-100' : 'opacity-0 group-hover/layer:opacity-100',
           )}
         >
-          <HugeiconsIcon
-            icon={row.locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
-            size={13}
-            strokeWidth={1.5}
-            color="currentColor"
-          />
+          {row.locked ? <LockIcon size={13} /> : <UnlockIcon size={13} />}
         </button>
       </div>
       {children}

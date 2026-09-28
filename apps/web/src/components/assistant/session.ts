@@ -84,10 +84,8 @@ export const deckConversations = createDeckConversations({
   imports: templateImports,
   // Серверным действием: проект, к которому прикрепили шаблон, видят серверные страницы.
   attachTemplate: attachTemplateAction,
+  review: createVariantReview(deckSource),
 });
-
-/** Модели, которыми генератор умеет писать текст. */
-export const writerModels = deckGenerator.models;
 
 const noSubscribe = () => () => undefined;
 

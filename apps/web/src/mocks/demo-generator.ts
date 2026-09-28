@@ -5,20 +5,11 @@ import {
   type DeckGenerator,
   type GeneratedVariant,
   type GenerationRequest,
-  type ModelOption,
   type StreamedSlide,
 } from '../lib/deck-generator';
 import type { DeckSource } from '../lib/deck-source';
 import type { DeckSummary, LibrarySource } from '../lib/library-source';
 import { createDemoLibrarySource } from './demo-library';
-
-/**
- * Модели демо — те, что в каталоге `configs/models.yaml` пишут текст. Там одна, поэтому выбора
- * модели в интерфейсе нет; вторая строка каталога — и он появится.
- */
-export const DEMO_MODELS: readonly ModelOption[] = [
-  { modelId: 'writer-default', name: 'writer-default' },
-];
 
 /** Шаг сценария: событие прогона или свёрстанный слайд. */
 type ScriptStep = { readonly event: JobEvent } | { readonly slide: StreamedSlide };
@@ -44,7 +35,6 @@ export function createDemoGenerator({
   let runs = 0;
   return {
     profilesUploadedTemplates: false,
-    models: DEMO_MODELS,
     async generate(request, onEvent, signal, onSlide) {
       runs += 1;
       const runId = `demo-generate-${runs}`;

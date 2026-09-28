@@ -2,46 +2,46 @@
 
 import { useCallback } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { IconSvgElement } from '@hugeicons/react';
 import {
-  ChartColumnIcon,
-  DashedLine01Icon,
-  EllipseIcon,
-  GridTableIcon,
-  GroupItemsIcon,
-  Image01Icon,
-  Layers01Icon,
-  ShapesIcon,
+  ChartIcon,
+  CircleIcon,
+  GroupIcon,
+  ImageIcon,
+  LayersIcon,
+  LineIcon,
+  ShapeIcon,
   SlideIcon,
   SquareIcon,
+  TableIcon,
   TextIcon,
-} from '@hugeicons/core-free-icons';
+  type Icon,
+} from '@/components/ui/icons';
 import type { RefSubject } from '@/lib/slide-context';
 
 /** Иконка ссылки по типу: слайд, объект своего вида, группа или несколько объектов. */
-export function refIcon(subject: RefSubject): IconSvgElement {
+export function refIcon(subject: RefSubject): Icon {
   switch (subject.kind) {
     case 'slide':
       return SlideIcon;
     case 'group':
-      return GroupItemsIcon;
+      return GroupIcon;
     case 'many':
-      return Layers01Icon;
+      return LayersIcon;
     case 'element':
       switch (subject.elementKind) {
         case 'text':
           return TextIcon;
         case 'image':
-          return Image01Icon;
+          return ImageIcon;
         case 'table':
-          return GridTableIcon;
+          return TableIcon;
         case 'chart':
-          return ChartColumnIcon;
+          return ChartIcon;
         case 'decor':
-          if (subject.shape === 'line') return DashedLine01Icon;
-          if (subject.shape === 'ellipse') return EllipseIcon;
+          if (subject.shape === 'line') return LineIcon;
+          if (subject.shape === 'ellipse') return CircleIcon;
           if (subject.shape === 'rect' || subject.shape === 'round-rect') return SquareIcon;
-          return ShapesIcon;
+          return ShapeIcon;
       }
   }
 }

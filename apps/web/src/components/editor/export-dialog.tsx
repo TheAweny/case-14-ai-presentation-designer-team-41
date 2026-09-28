@@ -2,13 +2,7 @@
 
 import { useId, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Alert02Icon,
-  CheckmarkCircle02Icon,
-  Loading03Icon,
-  Tick02Icon,
-} from '@hugeicons/core-free-icons';
+import { CheckIcon, SpinnerIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import { RadioGroup as RadioGroupPrimitive, ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 import type { LayoutVariantName } from '@lct/contracts';
 import { Button } from '@/components/ui/button';
@@ -321,14 +315,9 @@ function StageRow({ stage }: { stage: StageProgress }) {
     >
       <span className="grid size-4 place-items-center" aria-hidden>
         {stage.state === 'done' ? (
-          <HugeiconsIcon icon={Tick02Icon} size={14} strokeWidth={2} />
+          <CheckIcon size={14} className="[--icon-stroke:2]" />
         ) : stage.state === 'running' ? (
-          <HugeiconsIcon
-            icon={Loading03Icon}
-            size={14}
-            strokeWidth={1.5}
-            className="animate-spin motion-reduce:animate-none"
-          />
+          <SpinnerIcon size={14} className="animate-spin motion-reduce:animate-none" />
         ) : (
           <span className="size-1.5 rounded-full bg-muted-foreground/60" />
         )}
@@ -347,7 +336,7 @@ function Done({ job, onClose }: { job: DeckExportJob; onClose: () => void }) {
     <>
       <div className="flex flex-col gap-3 px-5 pt-4 pb-5">
         <p className="flex items-center gap-2 text-sm text-foreground">
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} size={18} strokeWidth={1.5} />
+          <SuccessIcon size={18} />
           {t('done', { file: result?.fileName ?? '' })}
         </p>
         <ol className="flex flex-col gap-1.5">
@@ -386,12 +375,7 @@ function Failed({ job, onClose }: { job: DeckExportJob; onClose: () => void }) {
     <>
       <div className="flex flex-col gap-2 px-5 pt-4 pb-5">
         <p className="flex items-center gap-2 text-sm text-foreground">
-          <HugeiconsIcon
-            icon={Alert02Icon}
-            size={18}
-            strokeWidth={1.5}
-            className="text-destructive"
-          />
+          <WarningIcon size={18} className="text-destructive" />
           {t('failed')}
         </p>
         <p className="text-xs text-balance text-muted-foreground">

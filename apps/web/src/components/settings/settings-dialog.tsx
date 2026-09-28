@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
-  AiBrain01Icon,
+  DeckIcon,
+  EditorIcon,
   KeyboardIcon,
-  PenTool03Icon,
-  Presentation01Icon,
-  Settings01Icon,
-  UserCircleIcon,
-} from '@hugeicons/core-free-icons';
+  ModelsIcon,
+  SettingsIcon,
+  UserIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import { useAccount } from '@/components/auth/account-context';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -32,13 +32,13 @@ import { ShortcutSettingsPanel } from './shortcut-settings-panel';
 import { closeSettings, openSettings } from './open-settings';
 import { OWN_ESCAPE_ATTRIBUTE } from './role-row';
 
-const SECTION_ICONS: Readonly<Record<SettingsSection, IconSvgElement>> = {
-  account: UserCircleIcon,
-  general: Settings01Icon,
-  editor: PenTool03Icon,
+const SECTION_ICONS: Readonly<Record<SettingsSection, Icon>> = {
+  account: UserIcon,
+  general: SettingsIcon,
+  editor: EditorIcon,
   shortcuts: KeyboardIcon,
-  decks: Presentation01Icon,
-  models: AiBrain01Icon,
+  decks: DeckIcon,
+  models: ModelsIcon,
 };
 
 /**
@@ -79,7 +79,7 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
   return (
     <DialogContent
       closeLabel={t('close')}
-      className="flex h-[min(42rem,calc(100dvh-2rem))] max-w-3xl flex-col gap-0 overflow-hidden p-0"
+      className="flex h-[min(46rem,calc(100dvh-2rem))] max-w-5xl flex-col gap-0 overflow-hidden p-0"
       onEscapeKeyDown={(event) => {
         // Поле, которое Esc отменяет само (id модели вручную), окно не закрывает.
         const focused = document.activeElement;
@@ -108,19 +108,22 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
             aria-label={t('sections.label')}
             className="h-auto w-full justify-start bg-transparent p-0 md:flex-col md:items-stretch"
           >
-            {sections.map((id) => (
-              <TabsTrigger
-                key={id}
-                value={id}
-                className={cn(
-                  'h-8 justify-start gap-2 px-2 text-sm font-normal text-muted-foreground',
-                  'hover:bg-muted data-[state=active]:bg-muted data-[state=active]:shadow-none',
-                )}
-              >
-                <HugeiconsIcon icon={SECTION_ICONS[id]} size={16} strokeWidth={1.5} />
-                {t(`sections.${id}`)}
-              </TabsTrigger>
-            ))}
+            {sections.map((id) => {
+              const SectionIcon = SECTION_ICONS[id];
+              return (
+                <TabsTrigger
+                  key={id}
+                  value={id}
+                  className={cn(
+                    'h-8 justify-start gap-2 px-2 text-sm font-normal text-muted-foreground',
+                    'hover:bg-muted data-[state=active]:bg-muted data-[state=active]:shadow-none',
+                  )}
+                >
+                  <SectionIcon size={16} />
+                  {t(`sections.${id}`)}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
         </div>
 

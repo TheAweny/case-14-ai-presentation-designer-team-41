@@ -61,5 +61,30 @@ export default [
       ],
     },
   },
+  {
+    // Иконки веб-приложения — только через реестр со смысловыми именами: смена набора или глифа
+    // правит один файл, а толщина линии одна на всё приложение.
+    files: ['apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx'],
+    ignores: ['apps/web/src/components/ui/icons.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@tabler/icons-react',
+              message: 'Импортируйте иконки из @/components/ui/icons.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@hugeicons/*'],
+              message: 'Набор иконок — Tabler через @/components/ui/icons.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettier,
 ];

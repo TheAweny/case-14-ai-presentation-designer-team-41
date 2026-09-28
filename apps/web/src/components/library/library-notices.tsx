@@ -11,8 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Alert02Icon, Cancel01Icon, CheckmarkCircle02Icon } from '@hugeicons/core-free-icons';
+import { CloseIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 /** Сколько живёт уведомление. Об ошибке — дольше: её нужно успеть прочитать. */
@@ -78,13 +77,11 @@ export function LibraryNotices({ children }: { children: ReactNode }) {
           'animate-in duration-150 fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none',
         )}
       >
-        <HugeiconsIcon
-          icon={kind === 'alert' ? Alert02Icon : CheckmarkCircle02Icon}
-          size={16}
-          strokeWidth={1.75}
-          aria-hidden
-          className={cn('shrink-0', kind === 'alert' ? 'text-destructive' : 'text-primary')}
-        />
+        {kind === 'alert' ? (
+          <WarningIcon size={16} aria-hidden className="shrink-0 text-destructive" />
+        ) : (
+          <SuccessIcon size={16} aria-hidden className="shrink-0 text-primary" />
+        )}
         <span className="min-w-0 text-pretty">{notice.text}</span>
         <button
           type="button"
@@ -95,7 +92,7 @@ export function LibraryNotices({ children }: { children: ReactNode }) {
             'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
           )}
         >
-          <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={2} />
+          <CloseIcon size={12} />
         </button>
       </p>
     ) : null;

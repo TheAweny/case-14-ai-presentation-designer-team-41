@@ -9,6 +9,7 @@ import {
   type LayoutVariant,
   type SlideIr,
 } from '@lct/contracts';
+import type { ModelRef } from './model-settings';
 
 /**
  * Генерация новой презентации. Интерфейс знает только `DeckGenerator`: сейчас за ним
@@ -45,17 +46,11 @@ export interface GenerationRequest {
   readonly files: readonly File[];
   /** Желаемое число слайдов; null — сколько потребует материал. */
   readonly slideCount: number | null;
-  /** Модель, которая пишет текст, из `DeckGenerator.models`; null — модель по умолчанию. */
-  readonly modelId: string | null;
-}
-
-/**
- * Модель, которую можно выбрать для прогона: id из каталога `configs/models.yaml` и подпись.
- * Выбор показывается, только когда моделей больше одной.
- */
-export interface ModelOption {
-  readonly modelId: string;
-  readonly name: string;
+  /**
+   * Модель, которая пишет текст, — из подключений в настройках. null — какую назначили роли
+   * `writer`; моделей нет вовсе — решает сервер.
+   */
+  readonly model: ModelRef | null;
 }
 
 /**
@@ -98,8 +93,6 @@ export interface DeckGenerator {
    * предупреждает об этом до запуска, а не после.
    */
   readonly profilesUploadedTemplates: boolean;
-  /** Модели, которыми источник умеет писать текст. Первая — модель по умолчанию. */
-  readonly models: readonly ModelOption[];
   /**
    * Запустить генерацию. События приходят в `onEvent` по порядку `seq`. Отмена через `signal`
    * отклоняет обещание ошибкой `AbortError`; сбой сообщает событие `failed`, а затем отказ.

@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Settings01Icon } from '@hugeicons/core-free-icons';
+import { SettingsIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -35,11 +34,7 @@ export function SettingsButton({
             className={cn('text-muted-foreground', !iconOnly && 'justify-start', className)}
             onClick={() => openSettings()}
           >
-            <HugeiconsIcon
-              icon={Settings01Icon}
-              strokeWidth={1.5}
-              data-icon={iconOnly ? undefined : 'inline-start'}
-            />
+            <SettingsIcon data-icon={iconOnly ? undefined : 'inline-start'} />
             {iconOnly ? null : t('open')}
           </Button>
         </TooltipTrigger>

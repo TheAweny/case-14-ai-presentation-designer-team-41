@@ -2,24 +2,25 @@
 
 import { useTranslations } from 'next-intl';
 import {
-  Add01Icon,
   AlignBottomIcon,
+  AlignMiddleIcon,
   AlignTopIcon,
-  AlignVerticalCenterIcon,
-  BorderFullIcon,
+  BoldIcon,
+  BorderAllIcon,
   BorderHorizontalIcon,
   BorderVerticalIcon,
-  DistributeHorizontalCenterIcon,
-  DistributeVerticalCenterIcon,
-  Eraser01Icon,
-  MinusSignIcon,
+  DistributeHorizontalIcon,
+  DistributeVerticalIcon,
+  EraserIcon,
+  ItalicIcon,
+  MinusIcon,
+  PlusIcon,
   TextAlignCenterIcon,
   TextAlignLeftIcon,
   TextAlignRightIcon,
-  TextBoldIcon,
-  TextItalicIcon,
-  TextUnderlineIcon,
-} from '@hugeicons/core-free-icons';
+  UnderlineIcon,
+  type Icon,
+} from '@/components/ui/icons';
 import type {
   ColorRole,
   ColorValue,
@@ -63,24 +64,24 @@ const ALIGNS = [
   { value: 'left', icon: TextAlignLeftIcon },
   { value: 'center', icon: TextAlignCenterIcon },
   { value: 'right', icon: TextAlignRightIcon },
-] as const satisfies readonly { value: ParagraphAlign; icon: unknown }[];
+] as const satisfies readonly { value: ParagraphAlign; icon: Icon }[];
 
 const VERTICAL_ALIGNS = [
   { value: 'top', icon: AlignTopIcon },
-  { value: 'middle', icon: AlignVerticalCenterIcon },
+  { value: 'middle', icon: AlignMiddleIcon },
   { value: 'bottom', icon: AlignBottomIcon },
-] as const satisfies readonly { value: VerticalAlign; icon: unknown }[];
+] as const satisfies readonly { value: VerticalAlign; icon: Icon }[];
 
 const FLAGS = [
-  { flag: 'bold', icon: TextBoldIcon },
-  { flag: 'italic', icon: TextItalicIcon },
-  { flag: 'underline', icon: TextUnderlineIcon },
-] as const satisfies readonly { flag: StyleFlag; icon: unknown }[];
+  { flag: 'bold', icon: BoldIcon },
+  { flag: 'italic', icon: ItalicIcon },
+  { flag: 'underline', icon: UnderlineIcon },
+] as const satisfies readonly { flag: StyleFlag; icon: Icon }[];
 
 const RULES = [
   { key: 'horizontal', icon: BorderHorizontalIcon, label: 'bordersHorizontal' },
   { key: 'vertical', icon: BorderVerticalIcon, label: 'bordersVertical' },
-  { key: 'outer', icon: BorderFullIcon, label: 'bordersOuter' },
+  { key: 'outer', icon: BorderAllIcon, label: 'bordersOuter' },
 ] as const;
 
 const ALL_LOOK: readonly (keyof TableCellStyle)[] = [
@@ -174,13 +175,13 @@ export function TableSection({
     <div className="flex items-center gap-1">
       <span className="flex-1 text-xs text-muted-foreground">{label}</span>
       <IconButton
-        icon={MinusSignIcon}
+        icon={MinusIcon}
         label={removeLabel}
         disabled={value <= 1}
         onClick={() => onTable(id, remove)}
       />
       <span className="w-6 text-center text-xs text-foreground tabular-nums">{value}</span>
-      <IconButton icon={Add01Icon} label={addLabel} onClick={() => onTable(id, add)} />
+      <IconButton icon={PlusIcon} label={addLabel} onClick={() => onTable(id, add)} />
     </div>
   );
 
@@ -191,13 +192,13 @@ export function TableSection({
         ops ? (
           <>
             <IconButton
-              icon={DistributeHorizontalCenterIcon}
+              icon={DistributeHorizontalIcon}
               label={own('distributeColumns')}
               disabled={!table.columnWidths}
               onClick={() => ops.distribute(id, 'columns')}
             />
             <IconButton
-              icon={DistributeVerticalCenterIcon}
+              icon={DistributeVerticalIcon}
               label={own('distributeRows')}
               onClick={() => ops.distribute(id, 'rows')}
             />
@@ -249,7 +250,7 @@ export function TableSection({
         title={own('cells')}
         actions={
           <IconButton
-            icon={Eraser01Icon}
+            icon={EraserIcon}
             label={own('resetLook')}
             disabled={!hasOwnLook(table, range)}
             onClick={() => ops.style(id, range, { reset: ALL_LOOK })}
@@ -373,7 +374,7 @@ export function TableSection({
             />
             <FieldRow>
               <NumberField
-                icon={MinusSignIcon}
+                icon={MinusIcon}
                 ariaLabel={own('borderWidth')}
                 mixedLabel={t('mixed')}
                 value={Math.round((borders.widthEmu / EMU_PER_PT) * 100) / 100}

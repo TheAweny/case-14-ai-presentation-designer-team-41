@@ -4,13 +4,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import {
-  Add01Icon,
-  Home01Icon,
-  PresentationBarChart01Icon,
-  Settings01Icon,
-} from '@hugeicons/core-free-icons';
+import { BrandIcon, HomeIcon, PlusIcon, SettingsIcon, type Icon } from '@/components/ui/icons';
 import { AccountMenu } from '@/components/auth/account-menu';
 import { openSettings, useSettingsShortcut } from '@/components/settings/open-settings';
 import { SettingsButton } from '@/components/settings/settings-button';
@@ -67,11 +61,11 @@ export function LibrarySidebar({
           className="text-muted-foreground"
           onClick={() => openSettings()}
         >
-          <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.5} />
+          <SettingsIcon />
         </Button>
         <Button asChild size="sm">
           <Link href={NEW_DECK_HREF}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+            <PlusIcon data-icon="inline-start" />
             {t('newDeck')}
           </Link>
         </Button>
@@ -85,13 +79,13 @@ export function LibrarySidebar({
 
         <Button asChild size="lg" className="justify-start">
           <Link href={NEW_DECK_HREF}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+            <PlusIcon data-icon="inline-start" />
             {t('newDeck')}
           </Link>
         </Button>
 
         <nav aria-label={t('navigation')} className="flex flex-col gap-0.5">
-          <NavLink href="/" icon={Home01Icon} active={pathname === '/'}>
+          <NavLink href="/" icon={HomeIcon} active={pathname === '/'}>
             {t('home')}
           </NavLink>
         </nav>
@@ -220,7 +214,7 @@ function NewProjectButton({
                 'opacity-0 group-hover/projects:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100',
             )}
           >
-            <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={2} />
+            <PlusIcon size={14} />
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">{label}</TooltipContent>
@@ -248,20 +242,20 @@ function Brand({ className }: { className?: string }) {
         className,
       )}
     >
-      <HugeiconsIcon icon={PresentationBarChart01Icon} size={20} strokeWidth={1.75} />
+      <BrandIcon size={20} />
     </Link>
   );
 }
 
 function NavLink({
   href,
-  icon,
+  icon: LinkIcon,
   active,
   className,
   children,
 }: {
   href: string;
-  icon?: IconSvgElement;
+  icon?: Icon;
   active: boolean;
   className?: string;
   children: ReactNode;
@@ -278,7 +272,7 @@ function NavLink({
         className,
       )}
     >
-      {icon ? <HugeiconsIcon icon={icon} size={16} strokeWidth={1.5} /> : null}
+      {LinkIcon ? <LinkIcon size={16} /> : null}
       {children}
     </Link>
   );

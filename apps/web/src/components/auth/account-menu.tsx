@@ -2,13 +2,7 @@
 
 import { useTransition } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Logout03Icon,
-  Settings01Icon,
-  UnfoldMoreIcon,
-  UserCircleIcon,
-} from '@hugeicons/core-free-icons';
+import { LogoutIcon, SelectorIcon, SettingsIcon, UserIcon } from '@/components/ui/icons';
 import { signOutAction } from '@/app/auth-actions';
 import { openSettings, useIsMac } from '@/components/settings/open-settings';
 import {
@@ -74,12 +68,7 @@ export function AccountMenu({
         {compact ? null : (
           <>
             <span className="min-w-0 flex-1 truncate">{account.name}</span>
-            <HugeiconsIcon
-              icon={UnfoldMoreIcon}
-              size={14}
-              strokeWidth={1.5}
-              className="shrink-0 text-muted-foreground"
-            />
+            <SelectorIcon size={14} className="shrink-0 text-muted-foreground" />
           </>
         )}
       </DropdownMenuTrigger>
@@ -97,16 +86,16 @@ export function AccountMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => openSettings('account')}>
-          <HugeiconsIcon icon={UserCircleIcon} strokeWidth={1.5} />
+          <UserIcon />
           {t('account')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => openSettings()}>
-          <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.5} />
+          <SettingsIcon />
           {t('settings')}
           <DropdownMenuShortcut>{mac ? '⌘,' : 'Ctrl+,'}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem disabled={leaving} onSelect={() => startLeaving(() => signOutAction())}>
-          <HugeiconsIcon icon={Logout03Icon} strokeWidth={1.5} />
+          <LogoutIcon />
           {t('signOut')}
         </DropdownMenuItem>
       </DropdownMenuContent>

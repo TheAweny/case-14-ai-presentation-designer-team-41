@@ -3,13 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Alert02Icon,
-  Cancel01Icon,
-  CloudSavingDone01Icon,
-  CloudUploadIcon,
-} from '@hugeicons/core-free-icons';
+import { CloseIcon, CloudUploadIcon, SavedIcon, WarningIcon } from '@/components/ui/icons';
 import type { SlideIr } from '@lct/contracts';
 import type { Deck } from '@/lib/deck-source';
 import {
@@ -272,7 +266,7 @@ function SaveIndicator({ status, hasDraft }: { status: SaveStatus; hasDraft: boo
   const busy = status === 'pending' || status === 'saving';
   if (!busy && status !== 'error' && !(status === 'saved' && hasDraft)) return null;
   const label = status === 'error' ? t('error') : busy ? t('saving') : t('saved');
-  const icon = status === 'error' ? Alert02Icon : busy ? CloudUploadIcon : CloudSavingDone01Icon;
+  const StatusIcon = status === 'error' ? WarningIcon : busy ? CloudUploadIcon : SavedIcon;
   return (
     <TooltipProvider>
       <Tooltip>
@@ -288,7 +282,7 @@ function SaveIndicator({ status, hasDraft }: { status: SaveStatus; hasDraft: boo
               status === 'error' ? 'text-destructive' : 'text-muted-foreground',
             )}
           >
-            <HugeiconsIcon icon={icon} size={15} strokeWidth={1.5} color="currentColor" />
+            <StatusIcon size={15} />
           </span>
         </TooltipTrigger>
         <TooltipContent side="top">{label}</TooltipContent>
@@ -336,7 +330,7 @@ function DraftRestored({ onDiscard, onDismiss }: { onDiscard: () => void; onDism
           'max-md:size-11',
         )}
       >
-        <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={2} color="currentColor" />
+        <CloseIcon size={14} />
       </button>
     </div>
   );

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Alert02Icon, CheckmarkCircle02Icon, SecurityCheckIcon } from '@hugeicons/core-free-icons';
+import { AuditIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import type { DesignSystem } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import { auditStatusOf } from '@/components/library/audit-status';
@@ -93,9 +92,9 @@ export function AuditBadge({ findings }: { findings: number | null }) {
   const status = auditStatusOf(findings);
 
   const look = {
-    notRun: { icon: SecurityCheckIcon, className: 'text-muted-foreground ring-1 ring-border' },
-    clean: { icon: CheckmarkCircle02Icon, className: 'bg-secondary text-secondary-foreground' },
-    findings: { icon: Alert02Icon, className: 'bg-destructive/10 text-destructive' },
+    notRun: { icon: AuditIcon, className: 'text-muted-foreground ring-1 ring-border' },
+    clean: { icon: SuccessIcon, className: 'bg-secondary text-secondary-foreground' },
+    findings: { icon: WarningIcon, className: 'bg-destructive/10 text-destructive' },
   }[status.kind];
 
   const label =
@@ -108,7 +107,7 @@ export function AuditBadge({ findings }: { findings: number | null }) {
         look.className,
       )}
     >
-      <HugeiconsIcon icon={look.icon} size={12} strokeWidth={2} aria-hidden />
+      <look.icon size={12} aria-hidden />
       {label}
     </span>
   );

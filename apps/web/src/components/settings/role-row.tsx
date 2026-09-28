@@ -2,8 +2,7 @@
 
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
+import { ChevronDownIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -121,12 +120,7 @@ export function RoleRow({
                 {/* Для чтения с экрана — какая роль, а видимое значение кнопки остаётся её именем. */}
                 <span className="sr-only">{t('picker.label', { role: name })}: </span>
                 <PickerValue assignment={assignment} connections={connections} />
-                <HugeiconsIcon
-                  icon={ArrowDown01Icon}
-                  strokeWidth={1.5}
-                  data-icon="inline-end"
-                  className="text-muted-foreground"
-                />
+                <ChevronDownIcon data-icon="inline-end" className="text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
