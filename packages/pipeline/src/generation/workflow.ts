@@ -21,8 +21,10 @@ export type DeckVariant = 'dense' | 'balanced' | 'airy';
 
 export interface GenerationDependencies {
   provider: TextProvider;
-  /** Which rendering to plan and write. Absent: balanced. */
+  /** Which rendering to lay out and write. Absent: balanced. */
   variant?: DeckVariant;
+  /** The one plan the variants of a brief share. Absent: this run plans for itself. */
+  sharedPlan?: SharedPlan;
   plannerInstructions: string;
   writerInstructions: string;
   repairInstructions?: string;
@@ -146,83 +148,99 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         );
       const covers = coversOf(full);
       const catalog = variantCatalog(full, variant, covers);
-      const plan = (
-        corrections?: Record<string, unknown>,
-        previous?: z.infer<typeof compositionPlanSchema>,
-      ) =>
-        deps.provider.generate(
-          'planner',
-          deps.plannerInstructions,
-          {
-            brief: inputData.brief,
-            slideCount: inputData.slideCount,
-            variant,
-            catalog,
-            coverPatternIds: covers.map((p) => p.patternId),
-            ...(previous ? { previous } : {}),
-            ...(corrections ? { corrections } : {}),
-          },
-          compositionPlanSchema,
-          deps.signal,
-        );
-      const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
-        inputData.slideCount === null || result.slides.length === inputData.slideCount
-          ? undefined
-          : {
-              exactSlideCount: inputData.slideCount,
-              returnedSlideCount: result.slides.length,
-              message: 'Return exactly exactSlideCount slides.',
-            };
-      const coverCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
-        result.slides.length > 1 &&
-        covers.length &&
-        !covers.some((p) => p.patternId === result.slides[0]?.patternId)
-          ? { firstSlidePatternMustBeOneOf: covers.map((p) => p.patternId) }
-          : undefined;
-      let result: z.infer<typeof compositionPlanSchema>;
-      try {
-        result = await plan();
-      } catch {
-        result = await plan({
-          minimumSlideCount: 10,
-          exactSlideCount: inputData.slideCount,
-          message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
-        });
-      }
-      // One layout repeated over most of the deck reads as the same slide again and again; the
-      // planner gets the overused ids and replans once.
-      const varietyCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
-        const counts = new Map<string, number>();
-        for (const slide of result.slides) {
-          counts.set(slide.patternId, (counts.get(slide.patternId) ?? 0) + 1);
+      // The story is planned once for all three variants, on the full catalog; each variant then
+      // lays the same slides out on its own compositions (remapPlan).
+      const computePlan = async () => {
+        const plan = (
+          corrections?: Record<string, unknown>,
+          previous?: z.infer<typeof compositionPlanSchema>,
+        ) =>
+          deps.provider.generate(
+            'planner',
+            deps.plannerInstructions,
+            {
+              brief: inputData.brief,
+              slideCount: inputData.slideCount,
+              catalog: full,
+              coverPatternIds: covers.map((p) => p.patternId),
+              ...(previous ? { previous } : {}),
+              ...(corrections ? { corrections } : {}),
+            },
+            compositionPlanSchema,
+            deps.signal,
+          );
+        const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
+          inputData.slideCount === null || result.slides.length === inputData.slideCount
+            ? undefined
+            : {
+                exactSlideCount: inputData.slideCount,
+                returnedSlideCount: result.slides.length,
+                message: 'Return exactly exactSlideCount slides.',
+              };
+        const coverCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
+          result.slides.length > 1 &&
+          covers.length &&
+          !covers.some((p) => p.patternId === result.slides[0]?.patternId)
+            ? { firstSlidePatternMustBeOneOf: covers.map((p) => p.patternId) }
+            : undefined;
+        let result: z.infer<typeof compositionPlanSchema>;
+        try {
+          result = await plan();
+        } catch {
+          result = await plan({
+            minimumSlideCount: 10,
+            exactSlideCount: inputData.slideCount,
+            message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
+          });
         }
-        const limit = Math.max(3, Math.ceil(result.slides.length / 3));
-        const overused = [...counts].filter(([, n]) => n > limit).map(([id]) => id);
-        return overused.length && catalog.length > 1
-          ? {
-              overusedPatternIds: overused,
-              maximumUsesPerPattern: limit,
-              message:
-                'Use each composition at most maximumUsesPerPattern times; vary the layouts.',
-            }
-          : undefined;
+        // One layout repeated over most of the deck reads as the same slide again and again; the
+        // planner gets the overused ids and replans once.
+        const varietyCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+          const counts = new Map<string, number>();
+          for (const slide of result.slides) {
+            counts.set(slide.patternId, (counts.get(slide.patternId) ?? 0) + 1);
+          }
+          const limit = Math.max(3, Math.ceil(result.slides.length / 3));
+          const overused = [...counts].filter(([, n]) => n > limit).map(([id]) => id);
+          return overused.length && full.length > 1
+            ? {
+                overusedPatternIds: overused,
+                maximumUsesPerPattern: limit,
+                message:
+                  'Use each composition at most maximumUsesPerPattern times; vary the layouts.',
+              }
+            : undefined;
+        };
+        const corrections = {
+          ...countCorrections(result),
+          ...coverCorrections(result),
+          ...varietyCorrections(result),
+        };
+        if (Object.keys(corrections).length) result = await plan(corrections, result);
+        if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
+          throw new Error('Planner returned the wrong slide count.');
+        if (coverCorrections(result))
+          throw new Error('Planner did not select a cover composition.');
+        return result;
       };
-      const corrections = {
-        ...countCorrections(result),
-        ...coverCorrections(result),
-        ...varietyCorrections(result),
-      };
-      if (Object.keys(corrections).length) result = await plan(corrections, result);
-      if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
-        throw new Error('Planner returned the wrong slide count.');
-      if (coverCorrections(result)) throw new Error('Planner did not select a cover composition.');
+      const result = deps.sharedPlan
+        ? await deps.sharedPlan.once(computePlan)
+        : await computePlan();
+      const layouts = remapPlan(
+        result.slides.map((slide) => slide.patternId),
+        full,
+        catalog,
+        variant,
+        covers,
+      );
       return result.slides.map((slide, index) => {
         const composition = inputData.profile.compositions.find(
-          (p) => p.patternId === slide.patternId,
+          (p) => p.patternId === layouts[index],
         );
         if (!composition) throw new Error('Planner selected an unknown template composition.');
         return {
           ...slide,
+          patternId: composition.patternId,
           narrative: result.slides.map((s) => s.purpose),
           index,
           total: result.slides.length,
@@ -308,6 +326,58 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     .foreach(write, { concurrency: Math.max(1, Math.min(6, deps.concurrency ?? 3)) })
     .commit();
 }
+/**
+ * One plan for the variants of a brief, computed by whichever variant gets there first and awaited
+ * by the others, so the three decks tell the same story and the planner is called once.
+ */
+export class SharedPlan {
+  private pending: Promise<z.infer<typeof compositionPlanSchema>> | undefined;
+
+  once(
+    compute: () => Promise<z.infer<typeof compositionPlanSchema>>,
+  ): Promise<z.infer<typeof compositionPlanSchema>> {
+    this.pending ??= compute();
+    return this.pending;
+  }
+}
+
+/**
+ * The composition each planned slide gets in a variant. Balanced keeps the planner's. Dense and
+ * airy take, from their own catalog, a composition with as many text blocks as the planned one,
+ * the roomiest for dense and the lightest for airy, spreading slides over the three best so no
+ * layout repeats through the deck. The cover stays the planner's in every variant.
+ */
+export function remapPlan<T extends GenerationProfile['compositions'][number]>(
+  patternIds: readonly string[],
+  full: readonly T[],
+  catalog: readonly T[],
+  variant: DeckVariant,
+  covers: readonly T[] = [],
+): string[] {
+  if (variant === 'balanced') return [...patternIds];
+  const capacity = (p: T) =>
+    p.slots.filter((s) => s.role === 'body').reduce((sum, s) => sum + s.maxChars, 0);
+  const blocks = (p: T) => p.slots.filter((s) => s.role === 'body').length;
+  const coverIds = new Set(covers.map((p) => p.patternId));
+  const pool = catalog.filter((p) => !coverIds.has(p.patternId));
+  const used = new Map<string, number>();
+  return patternIds.map((id, index) => {
+    const planned = full.find((p) => p.patternId === id);
+    if (planned === undefined || index === 0 || coverIds.has(id) || pool.length === 0) return id;
+    const same = pool.filter((p) => blocks(p) === blocks(planned));
+    const ranked = [...(same.length ? same : pool)].sort((a, b) =>
+      variant === 'dense' ? capacity(b) - capacity(a) : capacity(a) - capacity(b),
+    );
+    const choice = ranked
+      .slice(0, 3)
+      .reduce((best, p) =>
+        (used.get(p.patternId) ?? 0) < (used.get(best.patternId) ?? 0) ? p : best,
+      );
+    used.set(choice.patternId, (used.get(choice.patternId) ?? 0) + 1);
+    return choice.patternId;
+  });
+}
+
 /**
  * The compositions a variant plans with. Dense takes the two thirds of the template's layouts
  * that hold the most text, airy the two thirds that hold the least, balanced all of them; covers

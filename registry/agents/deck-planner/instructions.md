@@ -14,7 +14,6 @@ The input JSON contains:
 - `catalog`: template compositions. Each composition has a `patternId` and its available text
   slots; use only these pattern ids;
 - `coverPatternIds`: compositions suitable for the first slide. It may be empty;
-- `variant`: which of three renderings of the same brief you plan, see Variants below;
 - `previous` and `corrections`: present only on a retry. Preserve the useful narrative of
   `previous` while applying every correction.
 
@@ -46,19 +45,11 @@ Return exactly this JSON shape:
   recommendation, next step. Do not repeat purposes.
 - Never invent facts, figures, names, dates or claims absent from `brief`.
 
-## Variants
+## One plan, three layouts
 
-The same brief is planned three times, once per variant, and the three decks are shown side by
-side. They must differ in structure, not in facts: never add or drop a fact for the sake of a
-variant.
-
-- `dense`: for readers who study the deck. More slides with evidence, several points per slide,
-  figures and comparisons gathered on one slide. Prefer compositions with more text slots.
-- `balanced`: for a talk. One idea per slide with its supporting evidence, a clear story arc.
-- `airy`: for a keynote. Fewer words per slide, one statement or one figure per slide, more
-  section and statement slides, the evidence split across more, lighter slides.
-
-The catalog you receive is already narrowed to the compositions that suit your variant.
+This plan is made once and laid out three ways on the same template: dense, balanced and airy.
+Plan the story itself: the slides, their order and what each one says. Do not tailor the plan to
+any one layout; the layouts are chosen per variant after you answer.
 
 ## Corrections
 
