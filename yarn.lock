@@ -7017,6 +7017,7 @@ __metadata:
     "@clack/prompts": "npm:1.7.0"
     "@lct/contracts": "workspace:^"
     "@lct/engine-client": "workspace:^"
+    "@lct/input-validation": "workspace:^"
     "@lct/pipeline": "workspace:^"
     "@lct/registry": "workspace:^"
     "@lct/run-store": "workspace:^"
