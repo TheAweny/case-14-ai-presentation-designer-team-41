@@ -23,10 +23,20 @@ export function slideArea(slide: SlideIr): Area {
   return { left: 0, top: 0, right: slide.slideCx, bottom: slide.slideCy };
 }
 
+/**
+ * Share of each side of the slide the margins may take together and still be margins. Measured
+ * margins that leave less than half the slide for content were read off something else — a
+ * second column, a picture — and judging content by them would flag a whole slide.
+ */
+const MAX_MARGIN_SHARE = 0.5;
+
 /** The part of the slide the template keeps its content in. */
 export function safeArea(slide: SlideIr, context: AuditContext): Area {
   const { grid } = context.designSystem;
-  const measured = grid.meta.source !== 'fallback';
+  const plausible =
+    grid.marginLeft + grid.marginRight < MAX_MARGIN_SHARE * slide.slideCx &&
+    grid.marginTop + grid.marginBottom < MAX_MARGIN_SHARE * slide.slideCy;
+  const measured = grid.meta.source !== 'fallback' && plausible;
   const fallback = profileOf(context.profile).minMarginPt * EMU_PER_PT;
   return {
     left: measured ? grid.marginLeft : fallback,

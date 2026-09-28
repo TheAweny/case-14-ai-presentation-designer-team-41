@@ -5,8 +5,17 @@ import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideFrame, TextMark, slideSizeOf } from '@lct/slide-renderer';
 import { pxToEmu } from '@/components/editor/text-fit';
 
-/** Высота набранного текста: слайд → блок → EMU. */
-export type TextHeights = ReadonlyMap<string, ReadonlyMap<string, number>>;
+/** Где стоит набранный текст блока, в EMU: высота строк и их протяжённость по горизонтали. */
+export interface TextMetric {
+  readonly height: number;
+  /** Левый край самой левой строки от левого края слайда. */
+  readonly x: number;
+  /** От него до правого края самой правой строки. */
+  readonly cx: number;
+}
+
+/** Замер набранного текста: слайд → блок → метрика. */
+export type TextHeights = ReadonlyMap<string, ReadonlyMap<string, TextMetric>>;
 
 /**
  * Ширина кадра замера. Текст меряется в долях слайда, так что подойдёт любая, но на крупном
@@ -48,9 +57,37 @@ function contentHeight(mark: HTMLElement): number | null {
   return last.offsetTop + last.offsetHeight - first.offsetTop;
 }
 
-function sameHeights(a: ReadonlyMap<string, number> | undefined, b: ReadonlyMap<string, number>) {
+/**
+ * Где по горизонтали стоят буквы блока, в пикселях от `origin`: по прямоугольникам текстовых
+ * узлов, а не абзацев — абзац занимает всю ширину рамки, даже когда строка в нём короткая.
+ */
+function contentExtent(mark: HTMLElement, origin: number): { x: number; cx: number } | null {
+  const walker = document.createTreeWalker(mark, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let left = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.textContent?.trim()) continue;
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) {
+      if (rect.width <= 0) continue;
+      left = Math.min(left, rect.left);
+      right = Math.max(right, rect.right);
+    }
+  }
+  return right > left ? { x: left - origin, cx: right - left } : null;
+}
+
+function sameMetric(a: TextMetric | undefined, b: TextMetric): boolean {
+  return a !== undefined && a.height === b.height && a.x === b.x && a.cx === b.cx;
+}
+
+function sameHeights(
+  a: ReadonlyMap<string, TextMetric> | undefined,
+  b: ReadonlyMap<string, TextMetric>,
+) {
   if (!a || a.size !== b.size) return false;
-  for (const [id, value] of b) if (a.get(id) !== value) return false;
+  for (const [id, value] of b) if (!sameMetric(a.get(id), value)) return false;
   return true;
 }
 
@@ -63,7 +100,7 @@ const MeasuredSlide = memo(function MeasuredSlide({
   slide: SlideIr;
   designSystem: DesignSystem;
   fontLoads: number;
-  onMeasure: (slideId: string, heights: ReadonlyMap<string, number>) => void;
+  onMeasure: (slideId: string, heights: ReadonlyMap<string, TextMetric>) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const size = slideSizeOf(slide);
@@ -72,13 +109,17 @@ const MeasuredSlide = memo(function MeasuredSlide({
     const frame = ref.current;
     if (!frame) return;
     const width = frame.offsetWidth;
-    const heights = new Map<string, number>();
+    const origin = frame.getBoundingClientRect().left;
+    const toEmu = (px: number) => Math.round(pxToEmu(px, width, slide.slideCx));
+    const heights = new Map<string, TextMetric>();
     for (const node of frame.querySelectorAll<HTMLElement>('[data-measure-id]')) {
       const mark = node.firstElementChild;
       const id = node.dataset.measureId;
       if (!(mark instanceof HTMLElement) || !id) continue;
       const px = contentHeight(mark);
-      if (px !== null) heights.set(id, Math.round(pxToEmu(px, width, slide.slideCx)));
+      const extent = contentExtent(mark, origin);
+      if (px === null || extent === null) continue;
+      heights.set(id, { height: toEmu(px), x: toEmu(extent.x), cx: toEmu(extent.cx) });
     }
     onMeasure(slide.slideId, heights);
   }, [slide, designSystem, fontLoads, onMeasure]);
@@ -116,18 +157,20 @@ export function TextMeasurer({
   onChange: (heights: TextHeights) => void;
 }) {
   const fontLoads = useFontLoads();
-  const heights = useRef(new Map<string, ReadonlyMap<string, number>>());
+  const heights = useRef(new Map<string, ReadonlyMap<string, TextMetric>>());
   const report = useRef(onChange);
   useEffect(() => {
     report.current = onChange;
   }, [onChange]);
 
   // Ссылка стабильна, иначе каждая перерисовка снимала бы замер со всех слайдов.
-  const [onMeasure] = useState(() => (slideId: string, measured: ReadonlyMap<string, number>) => {
-    if (sameHeights(heights.current.get(slideId), measured)) return;
-    heights.current = new Map(heights.current).set(slideId, measured);
-    report.current(heights.current);
-  });
+  const [onMeasure] = useState(
+    () => (slideId: string, measured: ReadonlyMap<string, TextMetric>) => {
+      if (sameHeights(heights.current.get(slideId), measured)) return;
+      heights.current = new Map(heights.current).set(slideId, measured);
+      report.current(heights.current);
+    },
+  );
 
   return (
     <div

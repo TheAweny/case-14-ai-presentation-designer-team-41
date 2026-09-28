@@ -2,7 +2,7 @@ import type { Box, SlideElement, SlideIr } from '@lct/contracts';
 import { bounds, outline } from '../geometry.js';
 import { TOLERANCE_EMU, issue, layoutTwin, pt } from '../issue.js';
 import { relocate, safeArea, slideArea, type Area } from '../placement.js';
-import { isBlank } from '../text.js';
+import { estimatedExtent, footprint, isBlank } from '../text.js';
 import type { AuditContext, AuditIssue } from '../types.js';
 
 /** Roles the template itself puts at the very edge of the slide. */
@@ -40,7 +40,19 @@ export function checkSlideBounds(slide: SlideIr, context: AuditContext): AuditIs
   const issues: AuditIssue[] = [];
 
   for (const element of slide.elements) {
-    const outer = bounds(outline(element.box, element.rotation ?? 0));
+    // Text is judged by where its words are: the empty end of a wide box may pass the edge.
+    // Where no browser measured them, as for a finished run, their width is estimated.
+    const outer = bounds(
+      element.kind === 'text'
+        ? footprint(element, slide.slideId, {
+            ...context,
+            textExtent: (slideId, elementId) =>
+              context.textExtent?.(slideId, elementId) ??
+              estimatedExtent(element, context) ??
+              undefined,
+          })
+        : outline(element.box, element.rotation ?? 0),
+    );
     const base = { slideId: slide.slideId, elementId: element.elementId, box: outer };
 
     const outside =

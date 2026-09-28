@@ -11,8 +11,8 @@ import { sortIssues } from '@/components/editor/audit/deck-audit';
 
 /**
  * Живой аудит колоды — как проверка кода в редакторе: пересчитывается после каждой правки,
- * локально и без модели. Высоту текста берёт из замера в браузере; пока слайд не измерен,
- * переполнение — то, что записала вёрстка.
+ * локально и без модели. Высоту и ширину набранного текста берёт из замера в браузере; пока
+ * слайд не измерен, переполнение — то, что записала вёрстка.
  */
 export function useDeckAudit({
   slides,
@@ -31,7 +31,8 @@ export function useDeckAudit({
     const byPattern = new Map(layouts.map((layout) => [layout.slide.patternId, layout.slide]));
     return {
       designSystem,
-      textHeight: (slideId, elementId) => heights.get(slideId)?.get(elementId),
+      textHeight: (slideId, elementId) => heights.get(slideId)?.get(elementId)?.height,
+      textExtent: (slideId, elementId) => heights.get(slideId)?.get(elementId),
       isFontMissing: (family) => isFontMissing(fonts, family),
       layoutFor: (patternId) => byPattern.get(patternId),
     };

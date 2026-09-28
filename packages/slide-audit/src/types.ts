@@ -60,6 +60,15 @@ export interface AuditContext {
    * Without a measurement the audit falls back on the overflow the layout recorded.
    */
   readonly textHeight?: (slideId: string, elementId: string) => number | undefined;
+  /**
+   * Where the set words of an element run across the slide, in EMU: the left edge of the leftest
+   * line and the width to the right edge of the rightest one. Undefined when it was not measured;
+   * the box stands in for it then. A short line in a wide box stops long before the box does.
+   */
+  readonly textExtent?: (
+    slideId: string,
+    elementId: string,
+  ) => { readonly x: number; readonly cx: number } | undefined;
   /** Whether a typeface is missing where the deck is shown. Absent: every typeface is there. */
   readonly isFontMissing?: (family: string) => boolean;
   /**

@@ -150,11 +150,30 @@ describe('element-overlap', () => {
 
 describe('off-slide', () => {
   it('flags text crossing the slide edge and offers to move it back within the margins', () => {
-    const issues = auditSlide(slide([text('t', box(800, 100, 300, 40), 'Words')]), context);
+    const line = 'Words that run all the way to the right edge';
+    const issues = auditSlide(slide([text('t', box(800, 100, 300, 40), line)]), context);
     const [found] = ofCheck(issues, 'off-slide');
     expect(found).toMatchObject({ kind: 'edge', level: 'error', fixability: 'auto' });
     // Back inside the template margins, not merely inside the edge: 960 − 48 − 300.
     expect(found?.fix).toEqual([{ op: 'move', elementId: 't', box: box(612, 100, 300, 40) }]);
+  });
+
+  it('estimates where a short line ends when nothing was measured', () => {
+    const short = slide([text('t', box(585, 100, 393, 36), 'Words')]);
+    expect(ofCheck(auditSlide(short, context), 'off-slide')).toEqual([]);
+  });
+
+  it('judges text by where its words run, not by the empty end of its box', () => {
+    // A box 18 pt past the right edge whose short line stops well inside the slide.
+    const wide = slide([text('t', box(585, 100, 393, 36), 'Words')]);
+    const measured = (right: number) => ({
+      ...context,
+      textExtent: () => ({ x: pt(585), cx: pt(right - 585) }),
+    });
+    expect(ofCheck(auditSlide(wide, measured(700)), 'off-slide')).toEqual([]);
+    expect(ofCheck(auditSlide(wide, measured(975)), 'off-slide')).toMatchObject([
+      { kind: 'edge', level: 'error' },
+    ]);
   });
 
   it('flags anything lying wholly off the slide, and passes a full-bleed picture', () => {
@@ -178,6 +197,19 @@ describe('safe-margins', () => {
     ]);
   });
 
+  it('falls back on the profile margin when the measured ones leave no room for content', () => {
+    const skewed = designSystem();
+    const grid = { ...skewed.grid, marginLeft: pt(526), marginRight: pt(156) };
+    const issues = auditSlide(slide([text('t', box(48, 100, 400, 40), 'Words')]), {
+      designSystem: { ...skewed, grid },
+    });
+    expect(ofCheck(issues, 'safe-margins')).toEqual([]);
+    const past = auditSlide(slide([text('t', box(4, 100, 400, 40), 'Words')]), {
+      designSystem: { ...skewed, grid },
+    });
+    expect(ofCheck(past, 'safe-margins')).toMatchObject([{ level: 'warning' }]);
+  });
+
   it('passes content inside the margins and footers at the edge', () => {
     const issues = auditSlide(
       slide([
@@ -195,7 +227,7 @@ describe('fixes', () => {
     // The nearest place inside the margins is taken by the neighbour.
     const broken = slide([
       text('neighbour', box(560, 90, 352, 60), 'Taken'),
-      text('t', box(800, 100, 300, 40), 'Words'),
+      text('t', box(800, 100, 300, 40), 'Words that run all the way to the right edge'),
     ]);
     const [found] = ofCheck(auditSlide(broken, context), 'off-slide');
     expect(found?.fixability).toBe('auto');
@@ -216,7 +248,7 @@ describe('fixes', () => {
 
   it('offer nothing when no free place is left, instead of a half fix', () => {
     const full = slide([
-      { ...text('t', box(800, 100, 300, 40), 'Words') },
+      { ...text('t', box(800, 100, 300, 40), 'Words that run all the way to the right edge') },
       {
         kind: 'table',
         elementId: 'table',
