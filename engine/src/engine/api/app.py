@@ -188,7 +188,12 @@ def build_editable_deck(request: EditableDeckRequest) -> EditableDeckResponse:
     )
 
 
-@app.post("/v1/generation-profile", response_model=GenerationProfile)
+@app.post(
+    "/v1/generation-profile",
+    response_model=GenerationProfile,
+    # Optional slot fields such as prompt stay absent when unset: TypeScript rejects a null.
+    response_model_exclude_unset=True,
+)
 def generation_profile(request: TemplateProfileRequest) -> dict:
     """Prepare exact reusable compositions before the timed generation request."""
     path = Path(request.template_path).resolve()
@@ -221,7 +226,13 @@ def composition_check(request: CompositionExportRequest) -> dict:
     return {"schemaVersion": 1, "findings": findings}
 
 
-@app.post("/v1/composition-decks", response_model=CompositionExportResponse)
+@app.post(
+    "/v1/composition-decks",
+    response_model=CompositionExportResponse,
+    # TemplateIR tells an absent paragraph field from a null one. Pydantic defaults such as
+    # bullet and marginEmu must stay absent, or the TypeScript schema rejects the export.
+    response_model_exclude_unset=True,
+)
 def composition_deck(request: CompositionExportRequest) -> dict:
     """Join independent document layers for a template-faithful editable export.
 

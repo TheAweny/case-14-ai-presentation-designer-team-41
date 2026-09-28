@@ -101,6 +101,37 @@ def test_absent_font_exports_and_keeps_the_template_typeface(tmp_path: Path, mon
     assert _typefaces(output, "Новый заголовок") == {family}
 
 
+_ABSENT_WHEN_UNSET = ("bullet", "marginEmu", "indentEmu", "spaceBeforePt", "spaceAfterPt", "align")
+
+
+def _paragraphs(node: object) -> list[dict]:
+    found: list[dict] = []
+    if isinstance(node, dict):
+        if "runs" in node and "level" in node:
+            found.append(node)
+        for value in node.values():
+            found.extend(_paragraphs(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_paragraphs(item))
+    return found
+
+
+def test_export_omits_unset_paragraph_fields(tmp_path: Path, monkeypatch) -> None:
+    source = _source(tmp_path / "in.pptx", "Template Face")
+    output = tmp_path / "out.pptx"
+    _stub_preview(monkeypatch)
+    _stub_fonts(monkeypatch, {"Template Face"})
+    response = TestClient(app).post("/v1/composition-decks", json=_request(source, output))
+    assert response.status_code == 200, response.text
+    paragraphs = _paragraphs(response.json()["templateIr"])
+    assert paragraphs
+    for paragraph in paragraphs:
+        assert "lineSpacing" in paragraph
+        for key in _ABSENT_WHEN_UNSET:
+            assert key not in paragraph or paragraph[key] is not None
+
+
 def test_installed_font_exports_without_a_font_warning(tmp_path: Path, monkeypatch) -> None:
     family = "Template Face"
     source = _source(tmp_path / "in.pptx", family)

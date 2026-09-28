@@ -38,6 +38,9 @@ def text_metrics(shape: Any, slide: Any) -> dict[str, Any]:
                 paragraph_properties.append(pp)
             properties.extend(paragraph.findall(f"{_A}r/{_A}rPr"))
             properties.extend(paragraph.findall(f"{_A}pPr/{_A}defRPr"))
+            if item is shape:
+                # An empty placeholder carries the size its text will take in endParaRPr.
+                properties.extend(paragraph.findall(f"{_A}endParaRPr"))
         level = body.find(f"{_A}lstStyle/{_A}lvl1pPr")
         if level is not None:
             paragraph_properties.append(level)

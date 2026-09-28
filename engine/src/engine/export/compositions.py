@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from pptx import Presentation
+from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.oxml.xmlchemy import OxmlElement
 
 
@@ -25,6 +26,17 @@ def _replace_text(shape: Any, text: str) -> None:
                     run_props = deepcopy(props)
             if not child.tag.endswith("}pPr") and not child.tag.endswith("}endParaRPr"):
                 paragraph.remove(child)
+        if run_props is None:
+            # An empty placeholder keeps the formatting its author set for the first typed
+            # character in endParaRPr: PowerPoint applies it to new text, and without it the text
+            # falls back to the layout's defaults, often the wrong colour for this slide.
+            end = paragraph.find(f"{_A}endParaRPr")
+            if end is not None:
+                run_props = OxmlElement("a:rPr")
+                for key, value in end.attrib.items():
+                    run_props.set(key, value)
+                for child in end:
+                    run_props.append(deepcopy(child))
         run = OxmlElement("a:r")
         if run_props is not None:
             # I remove hyperlinks tied to the previous copy while keeping typography.
@@ -41,6 +53,32 @@ def _replace_text(shape: Any, text: str) -> None:
         else:
             paragraph.insert(list(paragraph).index(end), run)
         frame._txBody.append(paragraph)
+
+
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_KEPT_PLACEHOLDERS = {
+    PP_PLACEHOLDER.FOOTER,
+    PP_PLACEHOLDER.DATE,
+    PP_PLACEHOLDER.SLIDE_NUMBER,
+    PP_PLACEHOLDER.HEADER,
+}
+
+
+def _drop_empty_placeholders(slide: Any) -> None:
+    """I remove placeholders the deck leaves empty.
+
+    An empty placeholder is invisible in a PowerPoint slide show, but renderers draw its prompt
+    ("Логотип", "Вставьте рисунок") and editors show a frame. Picture placeholders are never filled
+    by this pipeline, and an unbound or blank text placeholder has nothing to say.
+    """
+    for shape in list(_all_shapes(slide.shapes)):
+        if not shape.is_placeholder or not shape._element.tag.endswith("}sp"):
+            continue
+        if shape.placeholder_format.type in _KEPT_PLACEHOLDERS:
+            continue
+        if shape.has_text_frame and shape.text.strip():
+            continue
+        shape._element.getparent().remove(shape._element)
 
 
 def _all_shapes(shapes: Any) -> Any:
@@ -146,6 +184,7 @@ def export_compositions(
                 _replace_text(shape, texts[str(shape.shape_id)])
         if item.get("visual") and draw_visual is not None:
             _replace_with_visual(slide, item["visual"], draw_visual)
+        _drop_empty_placeholders(slide)
         notes = slide.notes_slide.notes_text_frame
         if notes is not None:
             notes.text = item.get("speakerNotes", "")
