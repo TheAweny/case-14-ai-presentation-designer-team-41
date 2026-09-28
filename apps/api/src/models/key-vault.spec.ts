@@ -28,7 +28,9 @@ describe('createKeyVault', () => {
     const stored = createKeyVault(SECRET).encrypt(KEY, 'c1');
     expect(() => createKeyVault(`${SECRET}x`).decrypt(stored, 'c1')).toThrow(KeyDecryptionError);
     const [version, iv, tag, body = ''] = stored.split('.');
-    const flipped = `${body.slice(0, -1)}${body.endsWith('A') ? 'B' : 'A'}`;
+    // The first character: the last one may carry only padding bits, and changing those
+    // leaves the decoded bytes as they were.
+    const flipped = `${body.startsWith('A') ? 'B' : 'A'}${body.slice(1)}`;
     expect(() =>
       createKeyVault(SECRET).decrypt([version, iv, tag, flipped].join('.'), 'c1'),
     ).toThrow(KeyDecryptionError);
