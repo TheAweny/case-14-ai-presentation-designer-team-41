@@ -77,3 +77,7 @@ Thumbs.db
 # next dev writes agent notes into the app on start
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+
+# scratch output of local sessions: slide renders, unpacked templates, working plans
+/tmp/
+/plans/
