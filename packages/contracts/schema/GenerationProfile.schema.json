@@ -79,6 +79,9 @@
                   "maximum": 9007199254740991,
                   "type": "integer"
                 },
+                "prompt": {
+                  "type": "boolean"
+                },
                 "role": {
                   "enum": [
                     "title",

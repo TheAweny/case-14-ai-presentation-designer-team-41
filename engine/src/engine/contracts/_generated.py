@@ -5462,6 +5462,7 @@ class Slot1(BaseModel):
     lineSpacing: PositiveFloat | None = None
     maxChars: conint(le=9007199254740991, gt=0)
     maxLines: conint(le=9007199254740991, gt=0)
+    prompt: bool | None = None
     role: Role25
     sample: str
     slotId: constr(min_length=1)

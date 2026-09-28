@@ -7,6 +7,11 @@ export const compositionSlotSchema = z.object({
   slotId: z.string().min(1),
   role: z.enum(['title', 'body']),
   sample: z.string(),
+  /**
+   * The sample is the layout's prompt for an empty placeholder ("Образец текста"), not copy the
+   * template set in the box: it names what the box expects but says nothing about its length.
+   */
+  prompt: z.boolean().optional(),
   maxChars: z.number().int().positive(),
   maxLines: z.number().int().positive(),
   font: z.string(),
@@ -125,6 +130,12 @@ export type CompositionFinding = z.infer<typeof compositionFindingSchema>;
 export type CompositionCheckResponse = z.infer<typeof compositionCheckResponseSchema>;
 
 export const compositionPlanSchema = z.object({
+  /**
+   * Who the deck is for and what they should do after it, as the planner read them from the
+   * brief. Every writer call receives them, so each slide speaks to the same listener.
+   */
+  audience: z.string().max(300).default(''),
+  goal: z.string().max(300).default(''),
   title: z.string().min(1).max(100),
   slides: z
     .array(
@@ -167,6 +178,42 @@ export const templateSlotCopySchema = z.object({
 export const slotRewriteChoicesSchema = z.object({
   rewrites: z.record(z.string(), z.array(z.string()).length(3)),
 });
+/**
+ * What one template composition is for, as the template indexer read it once when the template
+ * was prepared. The planner sees this instead of guessing from raw samples. Model-only: the
+ * engine neither produces nor reads it.
+ */
+export const compositionNoteSchema = z.object({
+  patternId: z.string().min(1),
+  kind: z.enum([
+    'cover',
+    'section',
+    'statement',
+    'list',
+    'cards',
+    'process',
+    'comparison',
+    'problem-solution',
+    'team',
+    'closing',
+    'reference',
+    'other',
+  ]),
+  /** Parallel content items the slide shows: cards, steps, columns, list rows. */
+  items: z.number().int().min(0).max(12),
+  useFor: z.string().max(200),
+  /** A page about the template itself (instructions, fonts, icons, links): never a deck slide. */
+  skip: z.boolean(),
+});
+export const templateIndexSchema = z.object({ notes: z.array(compositionNoteSchema) });
+export const storedTemplateIndexSchema = templateIndexSchema.extend({
+  templateHash: z.string().length(64),
+  /** Indexer version and instruction hash: a new prompt re-indexes the template. */
+  revision: z.string().min(1),
+});
+export type CompositionNote = z.infer<typeof compositionNoteSchema>;
+export type TemplateIndex = z.infer<typeof templateIndexSchema>;
+export type StoredTemplateIndex = z.infer<typeof storedTemplateIndexSchema>;
 export type CompositionPlan = z.infer<typeof compositionPlanSchema>;
 export type CompositionCritique = z.infer<typeof compositionCritiqueSchema>;
 export type TemplateSlotCopy = z.infer<typeof templateSlotCopySchema>;
