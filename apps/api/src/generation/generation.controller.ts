@@ -26,7 +26,12 @@ import {
 } from '@lct/contracts';
 import type { GenerationProfile } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
-import { generatePresentation, GenerationProvider, RoutedTextProvider } from '@lct/pipeline';
+import {
+  generatePresentation,
+  GenerationProvider,
+  RoutedTextProvider,
+  SharedPlan,
+} from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
@@ -127,6 +132,8 @@ export class GenerationController implements OnApplicationShutdown {
     // The three variants of one brief are separate runs, so every deck endpoint serves each of
     // them as it is, and they share one cancellation.
     const controller = new AbortController();
+    // One plan for the three variants: the story is decided once, the layouts per variant.
+    const sharedPlan = new SharedPlan();
     const runs: {
       run: Awaited<ReturnType<RunRepository['create']>>;
       variant: (typeof VARIANTS)[number];
@@ -161,6 +168,7 @@ export class GenerationController implements OnApplicationShutdown {
           provider,
           seed: input.seed,
           variant,
+          sharedPlan,
           signal: controller.signal,
           onEvent: (event) => this.repository.appendEvent(run.runId, event),
         });

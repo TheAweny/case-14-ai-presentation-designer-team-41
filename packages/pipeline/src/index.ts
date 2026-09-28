@@ -71,6 +71,8 @@ export {
   critiqueSchema,
   type GenerationDependencies,
   variantCatalog,
+  remapPlan,
+  SharedPlan,
   type DeckVariant,
 } from './generation/workflow.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
