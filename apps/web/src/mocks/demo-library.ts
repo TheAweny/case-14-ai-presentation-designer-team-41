@@ -9,6 +9,7 @@ import {
   PROJECT_NAME_MAX_LENGTH,
   ProjectNotFoundError,
   TemplateNotFoundError,
+  ChatNotFoundError,
   type DeckPatch,
   type DeckSummary,
   type LibrarySource,
@@ -427,6 +428,15 @@ export function createDemoLibrary({ seedDemo = true }: { seedDemo?: boolean } = 
       };
       templates = [...templates, template];
       return structuredClone(template);
+    },
+    async listChats() {
+      return [];
+    },
+    async updateChat(chatId) {
+      throw new ChatNotFoundError(chatId);
+    },
+    async deleteChat(chatId) {
+      throw new ChatNotFoundError(chatId);
     },
     async updateTemplate(templateId, patch) {
       const template = findTemplate(templateId);

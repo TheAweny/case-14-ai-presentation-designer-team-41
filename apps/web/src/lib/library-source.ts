@@ -3,6 +3,7 @@ import type { SlideLayout, SlideSize } from './deck-source';
 
 export { DeckNotFoundError } from './deck-source';
 import type { ProjectAppearance } from './project-appearance';
+import type { ChatSummary } from './chat-records';
 
 /**
  * Откуда главное меню берёт проекты и презентации. Как и `DeckSource`, это граница: сейчас за
@@ -63,6 +64,8 @@ export interface DeckSummary {
   readonly projectId: string | null;
   /** Шаблон, которым свёрстана колода: по нему рисуется обложка. */
   readonly templateId: string;
+  /** Чат, в котором колода собрана: карточка ведёт туда. null — колода без чата. */
+  readonly chatId?: string | null;
   readonly title: string;
   readonly slideCount: number;
   readonly slideSize: SlideSize;
@@ -84,6 +87,17 @@ export class ProjectNotFoundError extends Error {
   constructor(projectId: string) {
     super(`Project not found: ${projectId}`);
     this.projectId = projectId;
+  }
+}
+
+/** Чата с таким id нет у этого аккаунта. */
+export class ChatNotFoundError extends Error {
+  override readonly name = 'ChatNotFoundError';
+  readonly chatId: string;
+
+  constructor(chatId: string) {
+    super(`Chat not found: ${chatId}`);
+    this.chatId = chatId;
   }
 }
 
@@ -225,6 +239,18 @@ export interface LibrarySource {
    * открываются. Шаблона нет — `TemplateNotFoundError`.
    */
   deleteTemplate(templateId: string): Promise<void>;
+  /** Чаты с ассистентом, недавние первыми. С `projectId` — только этого проекта. */
+  listChats(filter?: { readonly projectId?: string | null }): Promise<readonly ChatSummary[]>;
+  /**
+   * Переименовать чат или перенести его в другой проект вместе с его презентациями. Время
+   * правки не двигается. Чата нет — `ChatNotFoundError`.
+   */
+  updateChat(
+    chatId: string,
+    patch: { readonly title?: string; readonly projectId?: string | null },
+  ): Promise<ChatSummary>;
+  /** Удалить чат вместе с презентациями, которые в нём собраны. */
+  deleteChat(chatId: string): Promise<void>;
   /** Удалить презентацию насовсем. Колоды нет — `DeckNotFoundError`. */
   deleteDeck(deckId: string): Promise<void>;
   /**

@@ -306,6 +306,14 @@ export class GenerationController implements OnApplicationShutdown {
   async list(@CurrentAccount() account: Account): Promise<unknown[]> {
     await mkdir(this.root, { recursive: true });
     const results: unknown[] = [];
+    // A deck leads back to the chat it was generated in.
+    const chats = await this.pool.query<{ id: string; deck_ids: string[] }>(
+      'SELECT id, deck_ids FROM chats WHERE owner_id = $1',
+      [account.id],
+    );
+    const chatOf = new Map(
+      chats.rows.flatMap((chat) => chat.deck_ids.map((deck) => [deck, chat.id])),
+    );
     for (const id of await readdir(this.root)) {
       if (!/^run-[0-9a-f-]{36}$/i.test(id)) continue;
       const run = await this.repository.get(id);
@@ -315,7 +323,10 @@ export class GenerationController implements OnApplicationShutdown {
         await readFile(join(this.directory(id), 'metadata.json'), 'utf8'),
       );
       if (metadata.deletedAt || metadata.ownerId !== account.id) continue;
-      results.push({ deck: { ...deck, title: metadata.title ?? deck.title }, metadata });
+      results.push({
+        deck: { ...deck, title: metadata.title ?? deck.title },
+        metadata: { ...metadata, chatId: chatOf.get(id) ?? null },
+      });
     }
     return results;
   }

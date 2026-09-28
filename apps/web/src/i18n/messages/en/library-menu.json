@@ -36,7 +36,13 @@
     "deckMoved": "Presentation moved to “{project}”",
     "deckMovedOut": "Presentation is no longer in a project",
     "moveDeckFailed": "Could not move the presentation. Please try again.",
-    "dismiss": "Dismiss notification"
+    "dismiss": "Dismiss notification",
+    "renameChatFailed": "Could not rename the chat. Try again.",
+    "chatDeleted": "Chat “{title}” deleted",
+    "deleteChatFailed": "Could not delete the chat. Try again.",
+    "chatMoved": "Chat moved to “{project}”",
+    "chatMovedOut": "The chat is no longer in a project",
+    "moveChatFailed": "Could not move the chat. Try again."
   },
   "renameDeck": {
     "title": "Rename presentation",
@@ -61,5 +67,15 @@
     "confirm": "Delete project"
   },
   "cancel": "Cancel",
-  "close": "Close"
+  "close": "Close",
+  "chatMenu": "Actions for the “{title}” chat",
+  "renameChat": {
+    "title": "Rename chat",
+    "label": "Chat name"
+  },
+  "deleteChat": {
+    "title": "Delete the chat?",
+    "body": "The “{title}” chat and the presentations built in it will be deleted for good. This cannot be undone.",
+    "confirm": "Delete"
+  }
 }

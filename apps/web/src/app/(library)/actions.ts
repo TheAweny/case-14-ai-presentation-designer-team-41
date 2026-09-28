@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import {
+  ChatNotFoundError,
   DeckNotFoundError,
   InvalidDeckPatchError,
   InvalidProjectPatchError,
@@ -282,4 +283,55 @@ export async function getTemplateAction(templateId: string): Promise<TemplateSum
     if (error instanceof TemplateNotFoundError) return null;
     throw error;
   }
+}
+
+/**
+ * Переименовать чат или перенести его в проект вместе с его презентациями — из меню истории.
+ * Перерисовываются все страницы меню: чат виден в истории и на странице проекта.
+ */
+export async function updateChatAction(
+  chatId: string,
+  patch: { title?: string; projectId?: string | null },
+): Promise<LibraryActionResult> {
+  await requireAccount();
+  if (typeof chatId !== 'string' || typeof patch !== 'object' || patch === null) {
+    return { ok: false, reason: 'invalid' };
+  }
+  const next: { title?: string; projectId?: string | null } = {};
+  if (patch.title !== undefined) {
+    if (typeof patch.title !== 'string' || patch.title.trim() === '') {
+      return { ok: false, reason: 'invalid' };
+    }
+    next.title = patch.title.trim();
+  }
+  if (patch.projectId !== undefined) {
+    if (patch.projectId !== null && typeof patch.projectId !== 'string') {
+      return { ok: false, reason: 'invalid' };
+    }
+    next.projectId = patch.projectId;
+  }
+  try {
+    await librarySource.updateChat(chatId, next);
+  } catch (error) {
+    if (error instanceof ChatNotFoundError) return { ok: false, reason: 'notFound' };
+    throw error;
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * Удалить чат вместе с презентациями, собранными в нём. Уже удалённый — не ошибка: его и хотели
+ * убрать.
+ */
+export async function deleteChatAction(chatId: string): Promise<LibraryActionResult> {
+  await requireAccount();
+  if (typeof chatId !== 'string') return { ok: false, reason: 'invalid' };
+  try {
+    await librarySource.deleteChat(chatId);
+  } catch (error) {
+    if (!(error instanceof ChatNotFoundError)) throw error;
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
 }

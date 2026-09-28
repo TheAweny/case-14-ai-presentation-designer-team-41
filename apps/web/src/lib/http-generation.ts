@@ -83,6 +83,17 @@ function wait(signal: AbortSignal): Promise<void> {
     if (signal.aborted) abort();
   });
 }
+/**
+ * Файлы материалов, уже отправленные на сервер, и их id. Пересборка того же разговора не шлёт
+ * файл заново, а сохранённый разговор помнит материалы по id (`sentContentId`).
+ */
+const sentContent = new WeakMap<File, string>();
+
+/** Id файла материалов на сервере, если его уже отправили. */
+export function sentContentId(file: File): string | undefined {
+  return sentContent.get(file);
+}
+
 export function createHttpGenerator(): DeckGenerator {
   return {
     profilesUploadedTemplates: true,
@@ -94,14 +105,19 @@ export function createHttpGenerator(): DeckGenerator {
         body: JSON.stringify({ templateId: input.templateId, model: input.model }),
         signal,
       });
-      const contentIds: string[] = [];
+      const contentIds: string[] = [...(input.contentIds ?? [])];
       for (const file of input.files) {
-        const body = new FormData();
-        body.set('file', file);
-        const uploaded = (await request('/files/content', { method: 'POST', body, signal })) as {
-          fileId: string;
-        };
-        contentIds.push(uploaded.fileId);
+        let fileId = sentContent.get(file);
+        if (fileId === undefined) {
+          const body = new FormData();
+          body.set('file', file);
+          const uploaded = (await request('/files/content', { method: 'POST', body, signal })) as {
+            fileId: string;
+          };
+          fileId = uploaded.fileId;
+          sentContent.set(file, fileId);
+        }
+        if (!contentIds.includes(fileId)) contentIds.push(fileId);
       }
       const run = (await request('/generation', {
         method: 'POST',

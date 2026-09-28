@@ -5,7 +5,9 @@ import type { LibrarySource, ProjectSummary, TemplateSummary } from './library-s
 import { templateLayoutsFromIr } from './template-profile';
 import type { ProjectAppearance } from './project-appearance';
 import { DeckNotFoundError } from './deck-source';
+import { chatSummaryOf, type ChatSummary } from './chat-records';
 import {
+  ChatNotFoundError,
   ProjectNotFoundError,
   TemplateNotFoundError,
   InvalidDeckPatchError,
@@ -87,7 +89,12 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
     async listDecks(filter) {
       const rows = (await request('/generation')) as {
         deck: unknown;
-        metadata: { projectId: string | null; templateId: string; updatedAt: number };
+        metadata: {
+          projectId: string | null;
+          templateId: string;
+          updatedAt: number;
+          chatId?: string | null;
+        };
       }[];
       return rows.flatMap((row) => {
         const deck = decodeGeneratedDeck(row.deck);
@@ -103,6 +110,7 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
             title: deck.title,
             projectId: row.metadata.projectId,
             templateId: row.metadata.templateId,
+            chatId: row.metadata.chatId ?? null,
             updatedAt: row.metadata.updatedAt,
             slideCount: deck.slides.length,
             slideSize: deck.slideSize,
@@ -114,6 +122,36 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
           },
         ];
       });
+    },
+    async listChats(filter) {
+      const query =
+        filter?.projectId !== undefined && filter.projectId !== null
+          ? `?projectId=${encodeURIComponent(filter.projectId)}`
+          : '';
+      const rows = (await request(`/chats${query}`)) as unknown[];
+      const chats = rows.map(chatSummaryOf).filter((chat): chat is ChatSummary => chat !== null);
+      return filter?.projectId === null ? chats.filter((chat) => chat.projectId === null) : chats;
+    },
+    async updateChat(chatId, patch) {
+      const row = await request(`/chats/${encodeURIComponent(chatId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      }).catch((error: unknown) => {
+        if (String(error).includes('404')) throw new ChatNotFoundError(chatId);
+        throw error;
+      });
+      const chat = chatSummaryOf(row);
+      if (!chat) throw new ChatNotFoundError(chatId);
+      return chat;
+    },
+    async deleteChat(chatId) {
+      await request(`/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }).catch(
+        (error: unknown) => {
+          if (String(error).includes('404')) throw new ChatNotFoundError(chatId);
+          throw error;
+        },
+      );
     },
     async listTemplates() {
       return templates();

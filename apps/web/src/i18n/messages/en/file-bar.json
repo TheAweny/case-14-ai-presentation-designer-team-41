@@ -1,6 +1,7 @@
 {
   "label": "File and export",
   "fileMenu": "File menu: {title}",
+  "toChat": "Back to chat",
   "allDecks": "All presentations",
   "rename": "Rename",
   "renameLabel": "Presentation name",

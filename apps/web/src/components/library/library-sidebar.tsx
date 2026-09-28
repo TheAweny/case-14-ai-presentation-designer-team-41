@@ -23,17 +23,13 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import type { Account } from '@/lib/auth';
 import {
-  deckHref,
+  chatHref,
   NEW_DECK_HREF,
   newDeckInProjectHref,
   PROJECTS_HREF,
   projectHref,
 } from '@/lib/library-menu';
-import {
-  PROJECT_NAME_MAX_LENGTH,
-  type DeckSummary,
-  type ProjectSummary,
-} from '@/lib/library-source';
+import { PROJECT_NAME_MAX_LENGTH, type ProjectSummary } from '@/lib/library-source';
 import { EXPANDED_PROJECTS_KEY, parseExpandedProjects } from '@/lib/sidebar-expanded';
 import {
   buildSidebarLists,
@@ -52,8 +48,13 @@ export type SidebarProject = Pick<
   'projectId' | 'name' | 'appearance' | 'deckCount' | 'pinned' | 'pinnedAt'
 >;
 
-/** Презентация в истории: обложка рисуется на странице, в панели хватает названия. */
-export type SidebarDeck = Pick<DeckSummary, 'deckId' | 'title' | 'projectId' | 'updatedAt'>;
+/**
+ * Чат в истории: строка ведёт в чат, а не в редактор. `id` — id чата, `deckId` — колода, которую
+ * он ведёт (для показа из меню); null — колода ещё не собрана.
+ */
+export interface SidebarDeck extends SidebarDeckRef {
+  readonly deckId: string | null;
+}
 
 /**
  * Боковая панель меню. Сверху — поиск, под ним новая презентация и переход ко всем проектам. Дальше
@@ -304,7 +305,7 @@ function SidebarBody({
                     </h3>
                     <ul className="flex flex-col gap-px">
                       {group.items.map((deck) => (
-                        <li key={deck.deckId}>
+                        <li key={deck.id}>
                           <HistoryDeck deck={deck} onNavigate={onNavigate} />
                         </li>
                       ))}
@@ -457,7 +458,7 @@ function PinnedProject({
       {row.open ? (
         <ul className="mt-0.5 mb-1 ml-3.5 flex flex-col gap-px border-l border-foreground/15 pl-1.5">
           {row.decks.map((deck) => (
-            <li key={deck.deckId}>
+            <li key={deck.id}>
               <HistoryDeck deck={deck} onNavigate={onNavigate} />
             </li>
           ))}
@@ -482,12 +483,13 @@ function PinnedProject({
   );
 }
 
-function HistoryDeck({ deck, onNavigate }: { deck: SidebarDeckRef; onNavigate?: () => void }) {
+function HistoryDeck({ deck, onNavigate }: { deck: SidebarDeck; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const href = deckHref(deck.deckId);
+  const href = chatHref(deck.id);
   const active = pathname === href;
   return (
     <DeckActions
+      chatId={deck.id}
       deckId={deck.deckId}
       projectId={deck.projectId}
       title={deck.title}

@@ -58,9 +58,35 @@ export interface NewDeckInput {
   readonly audienceLabels: Readonly<Record<AudienceOption, string>>;
 }
 
+/**
+ * Что агент помнит о разговоре, без файлов: так разговор сохраняется в API и продолжается после
+ * обновления страницы. Материалы, уже отправленные на сервер, остаются в сборках по своим id.
+ */
+export interface ConversationSnapshot {
+  readonly request: Omit<DeckDraft, 'files' | 'contentIds'>;
+  readonly projectName: string | null;
+  readonly meta: RequestMeta;
+  readonly returnHref: string;
+  readonly audienceLabels: Readonly<Record<AudienceOption, string>>;
+  readonly templateId: string | null;
+  readonly templateName: string;
+  readonly audience: AudienceOption | null;
+  readonly refinements: readonly string[];
+  readonly contentIds: readonly string[];
+  readonly model: ModelRef | null;
+  readonly runId: string | null;
+}
+
 export interface DeckConversations {
   /** Начать разговор о новой колоде. Отдаёт id разговора — по нему открывается его страница. */
   start(input: NewDeckInput): string;
+  /** Снимок разговора для сохранения; разговор не собирает колоду — undefined. */
+  snapshot(threadId: string): ConversationSnapshot | undefined;
+  /**
+   * Продолжить сохранённый разговор: пожелания снова пересобирают колоду. Разговор, который
+   * агент уже ведёт во вкладке, не трогается.
+   */
+  restore(threadId: string, snapshot: ConversationSnapshot): void;
   /**
    * Сообщение из поля панели редактора, когда вопросов нет. `attachments` — то, что человек дал
    * как контекст: объекты и слайды колоды со снимком SlideIR. Они остаются в сообщении человека —
@@ -175,6 +201,8 @@ interface ConversationState {
   readonly refinements: string[];
   /** Материалы, добавленные после старта разговора; входят в следующую сборку. */
   files: readonly File[];
+  /** Материалы, уже лежащие на сервере: сохранённый разговор помнит их по id. */
+  readonly contentIds: readonly string[];
   /** Модель для следующей сборки; null означает модель по умолчанию. */
   model: ModelRef | null;
   /** Номер сборки: сборка, которую сменила новая, уходит молча. */
@@ -197,6 +225,7 @@ export function createDeckConversations({
   imports,
   attachTemplate,
   review,
+  contentIdOf = () => undefined,
 }: {
   threads: AssistantThreads;
   runs: GenerationRuns;
@@ -210,6 +239,8 @@ export function createDeckConversations({
   attachTemplate: AttachTemplate;
   /** Аудит готовых вариантов; без него агент советует без аудита. */
   review?: ReviewVariants;
+  /** Id файла материалов на сервере, если его уже отправили: так снимок помнит материалы. */
+  contentIdOf?: (file: File) => string | undefined;
 }): DeckConversations {
   const states = new Map<string, ConversationState>();
 
@@ -383,6 +414,7 @@ export function createDeckConversations({
         templateId: state.templateId,
         brief: briefOf(state),
         files: state.files,
+        contentIds: state.contentIds,
         model: state.model,
       },
       state.input.returnHref,
@@ -452,6 +484,7 @@ export function createDeckConversations({
         audience: null,
         refinements: [],
         files: input.request.files,
+        contentIds: input.request.contentIds ?? [],
         model: input.request.model,
         build: 0,
         runId: null,
@@ -518,6 +551,56 @@ export function createDeckConversations({
       if (!state || state.runId === null) return;
       threads.append(threadId, { kind: 'user', text, attachments: [], meta: null });
       rebuild(threadId, state);
+    },
+    snapshot(threadId) {
+      const state = states.get(threadId);
+      if (!state) return undefined;
+      const { input } = state;
+      const sent = [...input.request.files, ...state.files]
+        .map((file) => contentIdOf(file))
+        .filter((id): id is string => id !== undefined);
+      return {
+        request: {
+          templateId: input.request.templateId,
+          projectId: input.request.projectId,
+          brief: input.request.brief,
+          slideCount: input.request.slideCount,
+          model: input.request.model,
+        },
+        projectName: input.projectName,
+        meta: input.meta,
+        returnHref: input.returnHref,
+        audienceLabels: input.audienceLabels,
+        templateId: state.templateId,
+        templateName: state.templateName,
+        audience: state.audience,
+        refinements: [...state.refinements],
+        contentIds: [...new Set([...state.contentIds, ...sent])],
+        model: state.model,
+        runId: state.runId,
+      };
+    },
+    restore(threadId, snapshot) {
+      if (states.has(threadId)) return;
+      states.set(threadId, {
+        input: {
+          request: { ...snapshot.request, files: [], contentIds: snapshot.contentIds },
+          templateFile: null,
+          projectName: snapshot.projectName,
+          meta: snapshot.meta,
+          returnHref: snapshot.returnHref,
+          audienceLabels: snapshot.audienceLabels,
+        },
+        templateId: snapshot.templateId,
+        templateName: snapshot.templateName,
+        audience: snapshot.audience,
+        refinements: [...snapshot.refinements],
+        files: [],
+        contentIds: snapshot.contentIds,
+        model: snapshot.model,
+        build: 0,
+        runId: snapshot.runId,
+      });
     },
     returnHref: (threadId) => states.get(threadId)?.input.returnHref,
     modelOf: (threadId) => states.get(threadId)?.model,

@@ -23,7 +23,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
 import type { EditorLayout } from '@/components/editor/editor-layout';
 import { AssistantPanel } from '@/components/assistant/assistant-panel';
-import { useThreadForDeck } from '@/components/assistant/session';
+import { loadChatForDeck, useThreadForDeck } from '@/components/assistant/session';
+import { EditorChatContext } from '@/components/editor/editor-chat';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navigation';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
@@ -54,6 +55,10 @@ export function DeckEditor({
 }) {
   // Разговор с агентом, который собрал эту колоду: его продолжает панель «Ассистент».
   const thread = useThreadForDeck(deck.deckId);
+  // После обновления страницы разговора во вкладке нет — его приносит API.
+  useEffect(() => {
+    if (!thread) void loadChatForDeck(deck.deckId).catch(() => null);
+  }, [thread, deck.deckId]);
   const base = useMemo(() => deckFingerprint(deck.slides), [deck.slides]);
   // Блокировка шаблона — как в настройках при открытии; оболочка получает то же значение.
   const { lockTemplate: lockPref } = useEditorPrefs();
@@ -229,19 +234,21 @@ export function DeckEditor({
     <>
       {ready ? (
         <FontAvailabilityProvider families={fonts} fontsReady={assets.fonts}>
-          <EditorShell
-            key={opened.generation}
-            deck={shown}
-            media={media}
-            layout={layout}
-            lockTemplateOnOpen={lockTemplate}
-            // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
-            presentOnOpen={present && opened.generation === 0}
-            onSlidesChange={onSlidesChange}
-            saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
-            assistant={<AssistantPanel thread={thread} deckId={deck.deckId} />}
-            openAssistant={thread !== undefined}
-          />
+          <EditorChatContext value={thread?.threadId ?? null}>
+            <EditorShell
+              key={opened.generation}
+              deck={shown}
+              media={media}
+              layout={layout}
+              lockTemplateOnOpen={lockTemplate}
+              // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
+              presentOnOpen={present && opened.generation === 0}
+              onSlidesChange={onSlidesChange}
+              saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
+              assistant={<AssistantPanel thread={thread} deckId={deck.deckId} />}
+              openAssistant={thread !== undefined}
+            />
+          </EditorChatContext>
           {restored ? (
             <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} />
           ) : null}

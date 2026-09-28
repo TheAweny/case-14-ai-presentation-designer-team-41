@@ -44,6 +44,8 @@ export interface GenerationRequest {
   readonly brief: string;
   /** Материалы контент-пака. Разбирает их сервер, интерфейс только проверяет тип. */
   readonly files: readonly File[];
+  /** Материалы, уже отправленные на сервер раньше, — например, в сохранённом разговоре. */
+  readonly contentIds?: readonly string[];
   /** Желаемое число слайдов; null — сколько потребует материал. */
   readonly slideCount: number | null;
   /**

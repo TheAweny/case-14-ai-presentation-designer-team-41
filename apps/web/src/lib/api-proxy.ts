@@ -13,6 +13,9 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|previews)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },
+  // Chats are saved as the conversation goes on and read back after a reload.
+  { method: 'GET', pattern: /^chats(\/[\w-]+)?$/ },
+  { method: 'PUT', pattern: /^chats\/[\w-]+$/ },
 ];
 
 /**

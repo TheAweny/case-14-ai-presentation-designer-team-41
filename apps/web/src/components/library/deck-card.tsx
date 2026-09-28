@@ -5,7 +5,7 @@ import type { DesignSystem } from '@lct/contracts';
 import { SlidePreview } from '@/components/library/slide-preview';
 import { auditStatusOf } from '@/components/library/audit-status';
 import { DeckActions, DeckTitle } from '@/components/library/deck-actions';
-import { deckHref } from '@/lib/library-menu';
+import { deckOpenHref } from '@/lib/library-menu';
 import type { DeckSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
 
@@ -36,7 +36,7 @@ export function DeckCard({
   return (
     <DeckActions deckId={deck.deckId} projectId={deck.projectId} title={deck.title} layout="card">
       <Link
-        href={deckHref(deck.deckId)}
+        href={deckOpenHref(deck)}
         className={cn(
           'group/deck flex min-w-0 flex-col gap-2.5 rounded-lg p-1.5 outline-none',
           'transition-colors duration-150 motion-reduce:transition-none',

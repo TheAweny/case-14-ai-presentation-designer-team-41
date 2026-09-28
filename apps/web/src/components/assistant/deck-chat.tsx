@@ -43,6 +43,8 @@ import {
   TemplateIcon,
 } from '@/components/ui/icons';
 import type { AssistantThread, ThreadMessage } from '@/lib/assistant-threads';
+import { chatDeckId, conversationTitle } from '@/lib/chat-records';
+import { deckHref } from '@/lib/library-menu';
 import { addContentFiles, CONTENT_FILE_ACCEPT } from '@/lib/deck-generator';
 import type { TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
@@ -51,8 +53,10 @@ import { BuildCard } from './build-card';
 import { ResultCard } from './result-card';
 import {
   assistantThreads,
+  chatSync,
   deckConversations,
   generationRuns,
+  loadChat,
   useHydrated,
   useRun,
   useThread,
@@ -71,32 +75,6 @@ import {
 /** Подсказки после готовой колоды: подпись на кнопке и то, что уйдёт агенту. */
 const SUGGESTIONS = ['shorter', 'numbers', 'simpler'] as const;
 
-/** Первая строка брифа — название разговора. */
-/**
- * Название разговора: колода, которую агент собрал (название советованного варианта), а пока её
- * нет — первая строка брифа.
- */
-function conversationTitle(thread: AssistantThread): string | null {
-  const done = thread.messages.findLast((message) => message.kind === 'result');
-  if (done?.kind === 'result') {
-    const { variants, recommended } = done.result;
-    const title = (variants.find((item) => item.variant === recommended) ?? variants[0])?.title;
-    if (title) return title;
-  }
-  return workingTitle(thread);
-}
-
-function workingTitle(thread: AssistantThread): string | null {
-  const first = thread.messages[0];
-  if (first?.kind !== 'user') return null;
-  return (
-    first.text
-      .split('\n')
-      .find((line) => line.trim() !== '')
-      ?.trim() ?? null
-  );
-}
-
 /** Прогон последней сборки разговора. */
 function latestRunId(thread: AssistantThread): string | null {
   const work = thread.messages.findLast((message) => message.kind === 'work');
@@ -109,7 +87,9 @@ function latestRunId(thread: AssistantThread): string | null {
  * посмотреть, показать и скачать, не открывая редактор. Пожелания пишут в поле — агент
  * пересобирает колоду.
  *
- * Разговор живёт во вкладке: после обновления страницы его нет, и страница говорит об этом.
+ * Разговор сохраняется в API: после обновления страницы или с другого устройства страница
+ * берёт его оттуда, и пожелания снова пересобирают колоду. В шапке — что это за презентация и
+ * путь в редактор.
  */
 export function DeckChat({
   threadId,
@@ -128,8 +108,28 @@ export function DeckChat({
   // Ленту прокрутили вверх — над полем кнопка «К последнему». Прокручивает ленту она сама.
   const [away, setAway] = useState(false);
   const jump = useRef<() => void>(() => undefined);
+  // Разговора нет во вкладке — его приносит API. null — ещё не спросили.
+  const [stored, setStored] = useState<{ chatId: string; found: boolean } | null>(null);
+  const untitled = t('untitled');
 
-  if (!hydrated) return <div className="min-h-dvh md:h-full md:min-h-0" />;
+  useEffect(() => {
+    chatSync?.setUntitled(untitled);
+  }, [untitled]);
+
+  useEffect(() => {
+    if (!hydrated || thread) return;
+    let live = true;
+    loadChat(threadId).then(
+      (found) => live && setStored({ chatId: threadId, found }),
+      () => live && setStored({ chatId: threadId, found: false }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [hydrated, thread, threadId]);
+
+  const loading = !thread && (stored === null || stored.chatId !== threadId);
+  if (!hydrated || loading) return <div className="min-h-dvh md:h-full md:min-h-0" />;
   if (!thread) {
     return (
       <div className="grid min-h-dvh place-items-center px-6 md:h-full md:min-h-0">
@@ -146,6 +146,9 @@ export function DeckChat({
   }
 
   const project = projects.find((item) => item.projectId === thread.projectId);
+  const deckId = chatDeckId(thread);
+  const templateId = deckConversations.snapshot(threadId)?.templateId ?? null;
+  const template = templates.find((item) => item.templateId === templateId);
   return (
     // На широком экране прокручивается лента, а шапка и поле стоят на месте. На телефоне
     // прокручивается документ под шапкой меню, а шапка разговора и поле прилипают к краям.
@@ -173,6 +176,20 @@ export function DeckChat({
             <ProjectIcon appearance={project.appearance} size="sm" />
             <span className="max-w-40 truncate">{project.name}</span>
           </span>
+        ) : null}
+        {template ? (
+          <span
+            className="hidden shrink-0 items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1.5 text-xs text-muted-foreground ring-1 ring-border sm:flex"
+            title={t('header.template', { template: template.fileName })}
+          >
+            <PaletteStrip system={template.designSystem} className="h-2 w-4 rounded-full" />
+            <span className="max-w-40 truncate">{template.fileName}</span>
+          </span>
+        ) : null}
+        {deckId ? (
+          <Button asChild variant="outline" size="sm" className="ml-auto shrink-0">
+            <Link href={deckHref(deckId)}>{t('header.openEditor')}</Link>
+          </Button>
         ) : null}
       </header>
       <ChatLog

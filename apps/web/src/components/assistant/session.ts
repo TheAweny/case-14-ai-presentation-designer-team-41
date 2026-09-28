@@ -8,7 +8,9 @@ import { createGenerationRuns, type GenerationRun } from '@/lib/generation-runs'
 import type { TemplateSummary } from '@/lib/library-source';
 import { createTemplateImports, type TemplateImport } from '@/lib/template-imports';
 import { createVariantReview } from '@/lib/variant-review';
-import { createHttpGenerator } from '@/lib/http-generation';
+import { createHttpGenerator, sentContentId } from '@/lib/http-generation';
+import { chatDocumentOf, chatSummaryOf, threadOfChat, type ChatSave } from '@/lib/chat-records';
+import { createChatSync } from '@/lib/chat-sync';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
 import { deckSource } from '@/mocks/sources';
 import { apiFetch } from '@/lib/api';
@@ -76,7 +78,9 @@ const deckGenerator: typeof httpGenerator = {
 /**
  * Сессия ассистента во вкладке: прогоны генерации, разговоры и агент, который их ведёт. Одна на
  * приложение — поле ввода начинает разговор, редактор его продолжает, и переход между
- * страницами ничего не обрывает. Обновили страницу — сессии нет: сервер разговоров не хранит.
+ * страницами ничего не обрывает. Разговоры сохраняются в API (`chatSync`) и после обновления
+ * страницы возвращаются во вкладку (`loadChat`); прогоны генерации — нет: идущая сборка после
+ * обновления не досматривается, её итог появится в библиотеке.
  */
 export const generationRuns = createGenerationRuns(deckGenerator);
 export const assistantThreads = createAssistantThreads();
@@ -87,7 +91,64 @@ export const deckConversations = createDeckConversations({
   // Серверным действием: проект, к которому прикрепили шаблон, видят серверные страницы.
   attachTemplate: attachTemplateAction,
   review: createVariantReview(deckSource),
+  contentIdOf: sentContentId,
 });
+
+async function saveChat(chatId: string, chat: ChatSave): Promise<void> {
+  const response = await apiFetch(`/chats/${encodeURIComponent(chatId)}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(chat),
+  });
+  if (!response.ok) throw new Error(`Chat save failed (${response.status})`);
+}
+
+/**
+ * Разговоры сохраняются в API по ходу дела: чат переживает обновление страницы и виден с
+ * другого устройства. Когда меняется то, что видно в истории, серверные страницы обновляются.
+ */
+export const chatSync =
+  typeof window === 'undefined'
+    ? null
+    : createChatSync({
+        threads: assistantThreads,
+        conversations: deckConversations,
+        save: saveChat,
+        onSaved: (_chatId, listChanged) => {
+          if (listChanged) void refreshLibraryAction();
+        },
+      });
+
+/**
+ * Вернуть сохранённый чат во вкладку. Уже открытый во вкладке разговор новее сохранённого и
+ * остаётся как есть. Чата нет или он чужой — false.
+ */
+export async function loadChat(chatId: string): Promise<boolean> {
+  if (assistantThreads.get(chatId)) return true;
+  const response = await apiFetch(`/chats/${encodeURIComponent(chatId)}`);
+  if (response.status === 404 || response.status === 400) return false;
+  if (!response.ok) throw new Error(`Chat load failed (${response.status})`);
+  const chat = chatDocumentOf(await response.json());
+  if (!chat) return false;
+  if (assistantThreads.get(chatId)) return true;
+  if (chat.conversation?.agent) deckConversations.restore(chatId, chat.conversation.agent);
+  const thread = threadOfChat(chat);
+  chatSync?.markSaved(thread);
+  assistantThreads.hydrate(thread);
+  return true;
+}
+
+/** Чат, в котором собрана колода, — во вкладку; его id или null, если колода собрана без чата. */
+export async function loadChatForDeck(deckId: string): Promise<string | null> {
+  const open = assistantThreads.forDeck(deckId);
+  if (open) return open.threadId;
+  const response = await apiFetch(`/chats?deckId=${encodeURIComponent(deckId)}`);
+  if (!response.ok) return null;
+  const rows = (await response.json()) as unknown;
+  const chat = Array.isArray(rows) ? chatSummaryOf(rows[0]) : null;
+  if (!chat) return null;
+  return (await loadChat(chat.chatId)) ? chat.chatId : null;
+}
 
 const noSubscribe = () => () => undefined;
 

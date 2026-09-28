@@ -6,7 +6,8 @@ import type { ContextMention, SlideRefAttachment } from './slide-context';
 /**
  * Разговоры с ассистентом: запрос человека, ответы агента, ход генерации и вопросы с вариантами.
  * Разговор начинается в поле ввода, продолжается в панели «Ассистент» редактора и переживает
- * переход между страницами — поэтому живёт здесь, а не в компоненте.
+ * переход между страницами — поэтому живёт здесь, а не в компоненте. Сохраняет разговоры в API
+ * синхронизация чатов (`chat-records.ts`), она же возвращает их после обновления страницы.
  *
  * Тексты демо-агента хранятся ключами словаря, а не строками: язык интерфейса можно сменить
  * посреди разговора. Ответ настоящей модели придёт готовым текстом — для него есть `raw`.
@@ -164,7 +165,14 @@ export interface AssistantThread {
 
 export interface AssistantThreads {
   create(projectId: string | null): string;
+  /**
+   * Вернуть сохранённый разговор — после обновления страницы его приносит API. Разговор, который
+   * уже есть во вкладке, не трогается: он новее сохранённого.
+   */
+  hydrate(thread: AssistantThread): void;
   get(threadId: string): AssistantThread | undefined;
+  /** Все разговоры вкладки: их сохраняет синхронизация с API. */
+  list(): readonly AssistantThread[];
   /** Разговор, который открыл эту колоду, — его продолжает панель редактора. */
   forDeck(deckId: string): AssistantThread | undefined;
   subscribe(listener: () => void): () => void;
@@ -211,7 +219,13 @@ export function createAssistantThreads(
       notify();
       return threadId;
     },
+    hydrate(thread) {
+      if (threads.has(thread.threadId)) return;
+      threads.set(thread.threadId, thread);
+      notify();
+    },
     get: (threadId) => threads.get(threadId),
+    list: () => [...threads.values()],
     forDeck: (deckId) => [...threads.values()].findLast((thread) => thread.deckId === deckId),
     subscribe(listener) {
       listeners.add(listener);
