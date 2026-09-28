@@ -298,7 +298,14 @@ export class GenerationController implements OnApplicationShutdown {
       path = join(root, name);
       type = 'application/zip';
     } else if (/^slide-\d+\.png$/.test(name)) {
-      path = join(root, 'previews', name);
+      // pdftoppm pads the page number to the width of the page count: slide-01.png in a deck of
+      // ten or more. A slide is asked for by its number, however the file spells it.
+      const number = Number(/\d+/.exec(name)?.[0]);
+      const found = (await readdir(join(root, 'previews'))).find(
+        (file) => /^slide-\d+\.png$/.test(file) && Number(/\d+/.exec(file)?.[0]) === number,
+      );
+      if (!found) throw new NotFoundException('Artifact not found.');
+      path = join(root, 'previews', found);
       type = 'image/png';
     } else throw new NotFoundException('Artifact not found.');
     return new StreamableFile(await readFile(path), {

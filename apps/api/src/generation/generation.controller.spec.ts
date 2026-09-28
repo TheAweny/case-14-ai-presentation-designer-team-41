@@ -112,3 +112,15 @@ describe('GET /generation/:id/media/:name', () => {
     await expect(routes.media(RUN, '..%2Fdeck.json')).rejects.toThrow('Unknown media.');
   });
 });
+
+describe('GET /generation/:id/artifacts/:name', () => {
+  it('finds a slide preview by its number, however pdftoppm padded it', async () => {
+    await mkdir(join(root, RUN, 'previews'), { recursive: true });
+    await writeFile(join(root, RUN, 'previews', 'slide-01.png'), 'first');
+    const routes = withEngine(null);
+
+    const cover = await routes.artifact(RUN, 'slide-1.png');
+    expect(cover.getHeaders().type).toBe('image/png');
+    await expect(routes.artifact(RUN, 'slide-2.png')).rejects.toThrow('Artifact not found.');
+  });
+});
