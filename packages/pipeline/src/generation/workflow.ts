@@ -11,6 +11,7 @@ import {
   compositionSchema,
   generationProfileSchema,
   type ComposedSlide,
+  type CompositionNote,
   type GenerationProfile,
 } from '@lct/contracts';
 import type { TextProvider } from './provider.js';
@@ -29,6 +30,8 @@ export interface GenerationDependencies {
   signal: AbortSignal;
   concurrency?: number;
   onProgress?: (done: number, total: number) => Promise<void>;
+  /** What the template indexer read about each composition; absent when never indexed. */
+  notes?: readonly CompositionNote[];
 }
 const inputSchema = z.object({
   brief: z.string(),
@@ -39,6 +42,8 @@ const taskSchema = z.object({
   narrative: z.array(z.string()).default([]),
   index: z.number(),
   total: z.number(),
+  audience: z.string().default(''),
+  goal: z.string().default(''),
   title: z.string(),
   brief: z.string(),
   purpose: z.string(),
@@ -62,9 +67,15 @@ const VISUAL_MIN_CHARS = 120;
  * phrase the template itself set in the box. Stay near it, and let a title grow only as far as
  * a short assertion.
  */
-export function fitChars(slot: { role: string; sample: string; maxChars: number }): number {
+export function fitChars(slot: {
+  role: string;
+  sample: string;
+  maxChars: number;
+  prompt?: boolean;
+}): number {
   const sampleLen = slot.sample.trim().length;
-  if (sampleLen === 0) return slot.maxChars;
+  // A layout prompt names the box but was never sized to it: the box itself is the measure.
+  if (sampleLen === 0 || slot.prompt) return slot.maxChars;
   const scaled = Math.ceil(sampleLen * 1.25);
   const floor = Math.min(slot.maxChars, slot.role === 'title' ? 36 : 8);
   return Math.max(4, Math.min(slot.maxChars, Math.max(scaled, floor)));
@@ -74,9 +85,29 @@ export function fitChars(slot: { role: string; sample: string; maxChars: number 
  * How often one template composition may be reused. Two compositions cannot cover ten slides
  * without repetition. A richer catalog must not be cloned into the same diagram five times.
  */
+/** The shortest title that still states a claim: «Здоровье — это экономия». */
+const SHORT_CLAIM_CHARS = 16;
+
 export function patternUseLimit(patternCount: number, slideCount: number): number {
   if (patternCount <= 2) return Math.max(3, Math.ceil(slideCount / Math.max(1, patternCount)));
-  return 2;
+  // A limit the catalog cannot meet only makes the planner ignore it: three layouts cannot
+  // carry ten slides at two uses each.
+  return Math.max(2, Math.ceil(slideCount / patternCount));
+}
+
+/**
+ * Compositions a plan leans on: used more than `limit` times, or on three slides in a row. Even
+ * within the limit, the same layout three times running reads as one slide shown again.
+ */
+export function overusedPatterns(patternIds: readonly string[], limit: number): string[] {
+  const counts = new Map<string, number>();
+  for (const id of patternIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const overused = new Set([...counts].filter(([, n]) => n > limit).map(([id]) => id));
+  patternIds.forEach((id, index) => {
+    if (index >= 2 && patternIds[index - 1] === id && patternIds[index - 2] === id)
+      overused.add(id);
+  });
+  return [...overused];
 }
 
 /** Reading order of a composition's slots. Row and column are indexes, not coordinates. */
@@ -92,19 +123,31 @@ export function slotBriefs(slots: GenerationProfile['compositions'][number]['slo
   );
   let row = 0;
   let rowTop = ordered[0]?.box?.y ?? 0;
-  const nextColumn = new Map<number, number>();
-  return ordered.map((slot) => {
+  const rows = ordered.map((slot) => {
     const y = slot.box?.y ?? rowTop;
     if (y - rowTop > gap) {
       row += 1;
       rowTop = y;
     }
+    return { slot, row };
+  });
+  // Within a row, left to right: slots a few EMU apart in height are still one row, and sorting
+  // them by height alone puts the third card first.
+  rows.sort(
+    (a, b) =>
+      a.row - b.row ||
+      (a.slot.box?.x ?? 0) - (b.slot.box?.x ?? 0) ||
+      (a.slot.box?.y ?? 0) - (b.slot.box?.y ?? 0),
+  );
+  const nextColumn = new Map<number, number>();
+  return rows.map(({ slot, row }) => {
     const column = nextColumn.get(row) ?? 0;
     nextColumn.set(row, column + 1);
     return {
       slotId: slot.slotId,
       role: slot.role,
       sample: slot.sample,
+      ...(slot.prompt ? { prompt: true } : {}),
       maxChars: slot.maxChars,
       maxLines: slot.maxLines,
       fontSize: slot.fontSize,
@@ -116,9 +159,121 @@ export function slotBriefs(slots: GenerationProfile['compositions'][number]['slo
 }
 
 export function visualSlots(pattern: GenerationProfile['compositions'][number]): string[] {
+  const mirrored = mirroredSlots(pattern);
   return pattern.slots
-    .filter((slot) => slot.role === 'body' && slot.maxChars >= VISUAL_MIN_CHARS)
+    .filter(
+      (slot) =>
+        slot.role === 'body' && slot.maxChars >= VISUAL_MIN_CHARS && !mirrored.has(slot.slotId),
+    )
     .map((slot) => slot.slotId);
+}
+
+/**
+ * Slots stacked exactly on an earlier slot with the same sample: the template drew one line of
+ * copy twice. Writing both prints two phrases over each other, so the copy goes to the first
+ * slot and the mirror is cleared. The export keeps template text in any shape left unbound, so
+ * the mirror stays bound, to an empty string.
+ */
+export function mirroredSlots(pattern: GenerationProfile['compositions'][number]): Set<string> {
+  const seen: GenerationProfile['compositions'][number]['slots'] = [];
+  const mirrored = new Set<string>();
+  for (const slot of pattern.slots) {
+    const box = slot.box;
+    const twin =
+      box &&
+      seen.find(
+        (other) =>
+          other.sample.trim() === slot.sample.trim() &&
+          other.box &&
+          other.box.x === box.x &&
+          other.box.y === box.y &&
+          other.box.cx === box.cx &&
+          other.box.cy === box.cy,
+      );
+    if (twin) mirrored.add(slot.slotId);
+    else seen.push(slot);
+  }
+  return mirrored;
+}
+
+/** Slots the writer fills: every slot but mirrors. Each is visible on the slide. */
+export function writableSlots(pattern: GenerationProfile['compositions'][number]) {
+  const mirrored = mirroredSlots(pattern);
+  return pattern.slots.filter((slot) => !mirrored.has(slot.slotId));
+}
+
+const NUMBERING = /^\s*(\d{1,2})([.)]?)\s*$/;
+
+/**
+ * Numbering slots (`01`, `02` or `1.`, `2.`) and the numbers they get in reading order. The
+ * template drew a sequence; a model asked to continue it mixes numbers and labels, so code keeps
+ * it. A single number is a section mark, not a sequence, and stays with the writer.
+ */
+export function numberedSlots(pattern: GenerationProfile['compositions'][number]) {
+  const slots = writableSlots(pattern).filter(
+    (slot) => slot.role !== 'title' && NUMBERING.test(slot.sample),
+  );
+  const numbers = new Map<string, string>();
+  if (slots.length < 2) return numbers;
+  slotBriefs(slots).forEach((slot, index) => {
+    const [, digits = '', suffix = ''] = NUMBERING.exec(slot.sample) ?? [];
+    const value = String(index + 1).padStart(digits.length, '0');
+    numbers.set(slot.slotId, value + suffix);
+  });
+  return numbers;
+}
+
+/** Slots whose copy the model writes: everything visible but mirrors and numbering. */
+export function writerSlots(pattern: GenerationProfile['compositions'][number]) {
+  const numbers = numberedSlots(pattern);
+  return writableSlots(pattern).filter((slot) => !numbers.has(slot.slotId));
+}
+
+/**
+ * What the planner sees of a composition. Fonts, boxes and line metrics are the engine's
+ * business; the planner needs the structure: how many slots it must fill and what each one held.
+ */
+export function plannerComposition(
+  pattern: GenerationProfile['compositions'][number],
+  note?: CompositionNote,
+) {
+  const slots = writerSlots(pattern);
+  return {
+    patternId: pattern.patternId,
+    name: pattern.name,
+    ...(note ? { kind: note.kind, items: note.items, useFor: note.useFor } : {}),
+    imageCount: pattern.imageCount,
+    contentSlots: slots.filter((slot) => slot.role !== 'title').length,
+    slots: slotBriefs(slots).map((slot) => ({
+      role: slot.role,
+      sample: slot.sample.replace(/\s+/g, ' ').trim().slice(0, 60),
+      ...(slot.prompt ? { prompt: true } : {}),
+      fitChars: slot.fitChars,
+      row: slot.row,
+      column: slot.column,
+    })),
+  };
+}
+
+/**
+ * Template decks often repeat a sample slide: the same layout, the same slots, the same copy.
+ * The planner reads one of each, so its catalog is shorter and it does not mistake a copy for
+ * variety.
+ */
+export function distinctCompositions<T extends GenerationProfile['compositions'][number]>(
+  catalog: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  return catalog.filter((pattern) => {
+    const key = JSON.stringify([
+      pattern.name,
+      pattern.imageCount,
+      pattern.slots.map((slot) => [slot.role, slot.sample.trim(), slot.maxChars, slot.maxLines]),
+    ]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) {
@@ -136,7 +291,12 @@ function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) 
     patternId: z.literal(pattern.patternId),
     textsBySlot: z.object(
       Object.fromEntries(
-        pattern.slots.map((slot) => [slot.slotId, z.string().min(slot.role === 'title' ? 1 : 0)]),
+        writerSlots(pattern).map((slot) => [
+          slot.slotId,
+          // Permissive on purpose: an empty or too long slot is sent to the rewriter after
+          // parsing, instead of failing the whole request at the provider.
+          z.string(),
+        ]),
       ),
     ),
     speakerNotes: z.string(),
@@ -178,8 +338,94 @@ function writingComposition(pattern: GenerationProfile['compositions'][number]) 
     patternId: pattern.patternId,
     name: pattern.name,
     imageCount: pattern.imageCount,
-    slots: slotBriefs(pattern.slots),
+    slots: slotBriefs(writerSlots(pattern)),
   };
+}
+
+/** Empty visible slots: the card, pill or frame around them stays on the slide with no copy. */
+export function emptySlots(
+  slide: ComposedSlide,
+  pattern: GenerationProfile['compositions'][number],
+): string[] {
+  return writableSlots(pattern)
+    .filter((slot) => slot.slotId !== slide.visual?.slotId)
+    .filter((slot) => !(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '').trim())
+    .map((slot) => slot.slotId);
+}
+
+const EMPTY_SLOT_MESSAGE =
+  'This slot is empty, but its card or frame stays visible on the slide. Write a distinct point ' +
+  'that supports the slide purpose and does not repeat any other slot. Follow the sample: a short ' +
+  'label stays a short label, a numbering sample like 01 continues the numbering.';
+
+/** Title and fit problems block a slide; an empty body slot is repaired but does not block. */
+/**
+ * Defects code can see in written copy that fit its box: the same phrase in two slots of one
+ * slide, and a word longer than one line of its box, which the renderer breaks mid-word. Both are
+ * sent to the rewriter; neither blocks the deck if the rewrite does not cure it.
+ */
+export function copyDefects(
+  slide: ComposedSlide,
+  pattern: GenerationProfile['compositions'][number],
+): Map<string, string> {
+  const defects = new Map<string, string>();
+  const seen = new Map<string, string>();
+  for (const slot of writerSlots(pattern)) {
+    if (slot.slotId === slide.visual?.slotId) continue;
+    const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
+    if (!text) continue;
+    const key = text.toLowerCase().replace(/\s+/g, ' ');
+    const first = seen.get(key);
+    if (first) {
+      defects.set(
+        slot.slotId,
+        `Slot ${first} already says "${text}". Write a different point for this slot.`,
+      );
+      continue;
+    }
+    seen.set(key, slot.slotId);
+    const perLine = Math.floor(slot.maxChars / Math.max(1, slot.maxLines));
+    const long = text.split(/\s+/).find((word) => word.length > perLine);
+    if (perLine >= 6 && long)
+      defects.set(
+        slot.slotId,
+        `The word "${long}" is longer than one line of this box (${perLine} characters) and ` +
+          'breaks mid-word. Rephrase with shorter words.',
+      );
+  }
+  return defects;
+}
+
+function blockingProblems(
+  slide: ComposedSlide,
+  pattern: GenerationProfile['compositions'][number],
+): string[] {
+  return validateBindings(slide, pattern).filter(
+    (problem) => !problem.startsWith('Fill empty slot') && !problem.startsWith('Revise slot'),
+  );
+}
+
+function slotCorrections(slide: ComposedSlide, pattern: GenerationProfile['compositions'][number]) {
+  const empty = new Set(emptySlots(slide, pattern));
+  const defects = copyDefects(slide, pattern);
+  return writableSlots(pattern)
+    .filter((slot) => {
+      const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
+      return (
+        empty.has(slot.slotId) ||
+        defects.has(slot.slotId) ||
+        text.length > fitChars(slot) ||
+        text.length > slot.maxChars ||
+        text.split('\n').length > slot.maxLines
+      );
+    })
+    .map((slot) => ({
+      slotId: slot.slotId,
+      message: empty.has(slot.slotId)
+        ? EMPTY_SLOT_MESSAGE
+        : (defects.get(slot.slotId) ??
+          `Maximum ${fitChars(slot)} characters and ${slot.maxLines} lines. The template sample was ${slot.sample.length} characters.`),
+    }));
 }
 
 export function createGenerationWorkflow(deps: GenerationDependencies) {
@@ -189,12 +435,20 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     inputSchema,
     outputSchema: z.array(taskSchema),
     execute: async ({ inputData }) => {
-      const spacious = inputData.profile.compositions.filter(
+      const notes = new Map((deps.notes ?? []).map((note) => [note.patternId, note]));
+      // Pages about the template itself are not slides. Keep them only if the indexer left
+      // too little to build a deck from, which means it misread the template.
+      const all = distinctCompositions(inputData.profile.compositions);
+      const usable = all.filter((pattern) => !notes.get(pattern.patternId)?.skip);
+      const distinct = usable.length >= 3 ? usable : all;
+      // A title on a pill holds a short claim, not a sentence, so the floor is a few words.
+      // Numbering is written by code and does not need room for a phrase.
+      const spacious = distinct.filter(
         (p) =>
-          p.slots.some((s) => s.role === 'title' && s.maxChars >= 25) &&
-          p.slots.every((s) => s.maxChars >= 12),
+          p.slots.some((s) => s.role === 'title' && s.maxChars >= SHORT_CLAIM_CHARS) &&
+          writerSlots(p).every((s) => s.maxChars >= 12),
       );
-      const full = spacious.length ? spacious : inputData.profile.compositions;
+      const full = spacious.length ? spacious : distinct;
       const variant = deps.variant ?? 'balanced';
       const titleSizes = full
         .flatMap((p) => p.slots.filter((s) => s.role === 'title').map((s) => s.fontSize))
@@ -206,7 +460,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             p.slots.length <= 3 &&
             p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
         );
-      const covers = coversOf(full);
+      const indexedCovers = full.filter((p) => notes.get(p.patternId)?.kind === 'cover');
+      const covers = indexedCovers.length ? indexedCovers : coversOf(full);
       const catalog = variantCatalog(full, variant, covers);
       const plan = (
         corrections?: Record<string, unknown>,
@@ -219,7 +474,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             brief: inputData.brief,
             slideCount: inputData.slideCount,
             variant,
-            catalog,
+            catalog: catalog.map((pattern) =>
+              plannerComposition(pattern, notes.get(pattern.patternId)),
+            ),
             coverPatternIds: covers.map((p) => p.patternId),
             ...(previous ? { previous } : {}),
             ...(corrections ? { corrections } : {}),
@@ -254,18 +511,18 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       // One layout repeated over most of the deck reads as the same slide again and again; the
       // planner gets the overused ids and replans once.
       const varietyCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
-        const counts = new Map<string, number>();
-        for (const slide of result.slides) {
-          counts.set(slide.patternId, (counts.get(slide.patternId) ?? 0) + 1);
-        }
         const limit = patternUseLimit(catalog.length, result.slides.length);
-        const overused = [...counts].filter(([, n]) => n > limit).map(([id]) => id);
+        const overused = overusedPatterns(
+          result.slides.map((slide) => slide.patternId),
+          limit,
+        );
         return overused.length && catalog.length > 1
           ? {
               overusedPatternIds: overused,
               maximumUsesPerPattern: limit,
               message:
-                'Use each composition at most maximumUsesPerPattern times; vary the layouts.',
+                'Use each composition at most maximumUsesPerPattern times and never on three ' +
+                'slides in a row; vary the layouts.',
             }
           : undefined;
       };
@@ -288,6 +545,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           narrative: result.slides.map((s) => s.purpose),
           index,
           total: result.slides.length,
+          audience: result.audience,
+          goal: result.goal,
           title: result.title,
           brief: inputData.brief,
           composition,
@@ -301,7 +560,6 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     outputSchema: writtenSchema,
     execute: async ({ inputData }) => {
       let slide: ComposedSlide | undefined;
-      let problems: string[] = [];
       const raw = await deps.provider.generate(
         'writer',
         deps.writerInstructions,
@@ -315,41 +573,34 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         deps.signal,
       );
       const visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
+      const texts = raw.textsBySlot as Record<string, string | undefined>;
+      const numbers = numberedSlots(inputData.composition);
       slide = {
         patternId: raw.patternId,
         speakerNotes: raw.speakerNotes,
-        // The slot a visual replaces carries no text: the export removes it.
-        texts: Object.entries(raw.textsBySlot).map(([slotId, text]) => ({
-          slotId,
-          text: visual?.slotId === slotId ? '' : text,
+        // Numbering comes from code; mirrors and the slot a visual replaces carry no text.
+        texts: inputData.composition.slots.map((slot) => ({
+          slotId: slot.slotId,
+          text:
+            visual?.slotId === slot.slotId
+              ? ''
+              : (numbers.get(slot.slotId) ?? (texts[slot.slotId] ?? '').trim()),
         })),
         visual,
       };
       for (let attempt = 0; attempt < 2; attempt++) {
-        problems = validateBindings(slide, inputData.composition);
-        if (!problems.length) break;
+        if (!validateBindings(slide, inputData.composition).length) break;
+        const current: ComposedSlide = slide;
         slide = await rewriteSlide(deps, {
           index: inputData.index,
           brief: inputData.brief,
+          purpose: inputData.purpose,
           composition: inputData.composition,
-          previous: slide,
-          corrections: inputData.composition.slots
-            .filter((slot) => {
-              const text = slide?.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
-              return (
-                text.length > fitChars(slot) ||
-                text.length > slot.maxChars ||
-                text.split('\n').length > slot.maxLines ||
-                (slot.role === 'title' && !text.trim())
-              );
-            })
-            .map((slot) => ({
-              slotId: slot.slotId,
-              message: `Maximum ${fitChars(slot)} characters and ${slot.maxLines} lines. The template sample was ${slot.sample.length} characters.`,
-            })),
+          previous: current,
+          corrections: slotCorrections(current, inputData.composition),
         });
-        problems = validateBindings(slide, inputData.composition);
       }
+      const problems = blockingProblems(slide, inputData.composition);
       if (!slide || problems.length)
         throw new Error(`Slide ${inputData.index + 1}: ${problems.join('; ')}`);
       completed++;
@@ -403,11 +654,17 @@ export function validateBindings(
     new Set(slide.texts.map((t) => t.slotId)).size !== slide.texts.length
   )
     errors.push('Bind every slot exactly once');
+  const mirrored = mirroredSlots(pattern);
+  const empty = new Set(emptySlots(slide, pattern));
+  const defects = copyDefects(slide, pattern);
   for (const slot of pattern.slots) {
     const binding = slide.texts.find((t) => t.slotId === slot.slotId);
     if (!binding) errors.push(`Missing slot ${slot.slotId}`);
-    else if (slot.role === 'title' && !binding.text.trim())
+    else if (mirrored.has(slot.slotId)) {
+      if (binding.text.trim()) errors.push(`Clear mirrored slot ${slot.slotId}`);
+    } else if (slot.role === 'title' && !binding.text.trim())
       errors.push(`Title ${slot.slotId} must not be empty`);
+    else if (empty.has(slot.slotId)) errors.push(`Fill empty slot ${slot.slotId}`);
     else if (
       binding.text.length > fitChars(slot) ||
       binding.text.length > slot.maxChars ||
@@ -416,6 +673,7 @@ export function validateBindings(
       errors.push(
         `Shorten slot ${slot.slotId} to <= ${fitChars(slot)} chars and ${slot.maxLines} lines`,
       );
+    else if (defects.has(slot.slotId)) errors.push(`Revise slot ${slot.slotId}`);
   }
   return errors;
 }
@@ -423,6 +681,8 @@ export function validateBindings(
 export const repairTaskSchema = z.object({
   index: z.number(),
   brief: z.string(),
+  /** The slide's claim from the plan: an empty card is filled with a point that supports it. */
+  purpose: z.string().optional(),
   composition: compositionSchema,
   previous: composedSlideSchema,
   corrections: z.array(z.object({ slotId: z.string(), message: z.string() })),
@@ -442,7 +702,7 @@ export function createRepairWorkflow(deps: GenerationDependencies) {
     outputSchema: repairedSlideSchema,
     execute: async ({ inputData }) => {
       const slide = await rewriteSlide(deps, inputData);
-      const problems = validateBindings(slide, inputData.composition);
+      const problems = blockingProblems(slide, inputData.composition);
       if (problems.length) throw new Error(`Repair ${inputData.index + 1}: ${problems.join('; ')}`);
       return { index: inputData.index, slide };
     },
@@ -467,7 +727,12 @@ async function rewriteSlide(
   if (!slots.length) return task.previous;
   const schema = slotRewriteChoicesSchema.extend({
     rewrites: z.object(
-      Object.fromEntries(slots.map((s) => [s.slotId, z.array(z.string()).length(3)])),
+      Object.fromEntries(
+        slots.map((s) => [
+          s.slotId,
+          z.array(s.role === 'title' ? z.string().min(1) : z.string()).length(3),
+        ]),
+      ),
     ),
   });
   const result = await deps.provider.generate(
@@ -475,10 +740,16 @@ async function rewriteSlide(
     deps.repairInstructions ?? deps.writerInstructions,
     {
       brief: task.brief,
+      ...(task.purpose ? { purpose: task.purpose } : {}),
+      // The filled slots of the same slide, so a new point does not repeat them.
+      otherSlots: task.previous.texts
+        .filter((t) => t.text.trim() && !slots.some((s) => s.slotId === t.slotId))
+        .map((t) => t.text),
       slots: slots.map((s) => ({
         slotId: s.slotId,
         role: s.role,
         sample: s.sample,
+        ...(s.prompt ? { prompt: true } : {}),
         maxChars: s.maxChars,
         fitChars: fitChars(s),
         maxLines: s.maxLines,
@@ -504,6 +775,9 @@ async function rewriteSlide(
           (slot.role !== 'title' || t.trim()),
       )
       .sort((a, b) => b.length - a.length)[0];
+    const before = task.previous.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
+    // An empty card that no alternative fits stays empty: a visible gap, not a failed deck.
+    if (text === undefined && !before.trim() && slot.role !== 'title') continue;
     if (text === undefined)
       throw new Error(
         `No complete rewrite fits slot ${slot.slotId} (${fitChars(slot)} chars; alternatives: ${alternatives.map((t) => t.length).join(',')}).`,

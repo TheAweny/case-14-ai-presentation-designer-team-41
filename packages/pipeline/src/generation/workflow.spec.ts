@@ -3,10 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { generationProfileSchema } from '@lct/contracts';
 import {
+  copyDefects,
   createGenerationWorkflow,
   fitChars,
   groundedVisual,
+  mirroredSlots,
+  numberedSlots,
+  overusedPatterns,
   patternUseLimit,
+  writerSlots,
   slotBriefs,
   validateBindings,
   variantCatalog,
@@ -342,6 +347,7 @@ describe('slot fit and reading order', () => {
 
   it('caps repeats only when the template offers more than two compositions', () => {
     expect(patternUseLimit(6, 10)).toBe(2);
+    expect(patternUseLimit(3, 10)).toBe(4);
     expect(patternUseLimit(2, 10)).toBe(5);
     expect(patternUseLimit(1, 10)).toBe(10);
   });
@@ -360,6 +366,115 @@ describe('slot fit and reading order', () => {
         pattern,
       ).some((error) => error.includes('36')),
     ).toBe(true);
+  });
+
+  const withLabel = () => {
+    const title = composition.slots[0];
+    if (!title) throw new Error('Fixture slot missing');
+    const label = {
+      ...title,
+      slotId: '8',
+      role: 'body' as const,
+      sample: 'Label',
+      maxChars: 24,
+      box: title.box ? { ...title.box, y: title.box.y + title.box.cy * 2 } : undefined,
+    };
+    const pattern = { ...composition, slots: [title, label] };
+    return {
+      title,
+      pattern,
+      profile: {
+        ...profile,
+        compositions: profile.compositions.map((item) =>
+          item.patternId === pattern.patternId ? pattern : item,
+        ),
+      },
+    };
+  };
+  const labelProvider = (rewrite: string, rewritten: string[]): TextProvider => ({
+    model: 'fake',
+    async generate<T>(agent: string, _instructions: string, input: unknown, schema: z.ZodType<T>) {
+      const { title, pattern } = withLabel();
+      if (agent === 'planner')
+        return schema.parse({
+          title: 'Blank label',
+          slides: Array.from({ length: 10 }, () => ({
+            patternId: pattern.patternId,
+            purpose: 'Point',
+            imageQuery: '',
+          })),
+        });
+      if (agent === 'rewriter') {
+        rewritten.push(JSON.stringify(input));
+        return schema.parse({ rewrites: { '8': [rewrite, rewrite, rewrite] } });
+      }
+      return schema.parse({
+        patternId: pattern.patternId,
+        textsBySlot: { [title.slotId]: 'Point', '8': '' },
+        speakerNotes: '',
+        visual: null,
+      });
+    },
+  });
+  const runLabel = async (provider: TextProvider) => {
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    return (await workflow.createRun()).start({
+      inputData: { brief: 'Point', slideCount: null, profile: withLabel().profile },
+    });
+  };
+
+  it('sends an empty card to the rewriter and keeps the point it writes', async () => {
+    const rewritten: string[] = [];
+    const result = await runLabel(labelProvider('Speed', rewritten));
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(rewritten.some((input) => input.includes('empty'))).toBe(true);
+    for (const written of result.result)
+      expect(written.slide.texts.find((t) => t.slotId === '8')?.text).toBe('Speed');
+  });
+
+  it('does not fail the deck when an empty card cannot be filled', async () => {
+    const result = await runLabel(labelProvider('', []));
+    expect(result.status).toBe('success');
+  });
+
+  it('reports an empty card but not a mirrored twin of a filled slot', () => {
+    const { pattern } = withLabel();
+    const title = { ...withLabel().title, box: { x: 10, y: 10, cx: 100, cy: 20 } };
+    const twin = { ...title, slotId: '9' };
+    const mirrored = { ...pattern, slots: [title, twin] };
+    expect(mirroredSlots(mirrored)).toEqual(new Set(['9']));
+    expect(
+      validateBindings(
+        {
+          patternId: pattern.patternId,
+          texts: [
+            { slotId: title.slotId, text: 'Point' },
+            { slotId: '9', text: '' },
+          ],
+          speakerNotes: '',
+        },
+        mirrored,
+      ),
+    ).toEqual([]);
+    expect(
+      validateBindings(
+        {
+          patternId: pattern.patternId,
+          texts: [
+            { slotId: title.slotId, text: 'Point' },
+            { slotId: '8', text: '' },
+          ],
+          speakerNotes: '',
+        },
+        pattern,
+      ),
+    ).toEqual(['Fill empty slot 8']);
   });
 });
 
@@ -389,5 +504,100 @@ describe('groundedVisual', () => {
     expect(
       groundedVisual({ kind: 'table', slotId: '5', headers: ['A', 'B'], rows: [['94%']] }, brief),
     ).toBeNull();
+  });
+});
+
+describe('numberedSlots', () => {
+  const base = composition.slots[0];
+  if (!base) throw new Error('Fixture slot missing');
+  const card = (slotId: string, sample: string, x: number, y: number) => ({
+    ...base,
+    slotId,
+    role: 'body' as const,
+    sample,
+    box: { x, y, cx: 100, cy: 20 },
+  });
+
+  it('numbers a drawn sequence in reading order and keeps it from the writer', () => {
+    const pattern = {
+      ...composition,
+      slots: [
+        { ...base, box: { x: 0, y: 0, cx: 500, cy: 40 } },
+        card('b', '03', 0, 200),
+        card('a', '01', 0, 100),
+        card('c', '02', 300, 100),
+        card('text', 'Card copy', 0, 130),
+      ],
+    };
+    expect(Object.fromEntries(numberedSlots(pattern))).toEqual({ a: '01', c: '02', b: '03' });
+    expect(writerSlots(pattern).map((slot) => slot.slotId)).toEqual([base.slotId, 'text']);
+  });
+
+  it('reads a row left to right even when its slots sit a few units apart in height', () => {
+    const row = {
+      ...composition,
+      slots: [card('c', '03', 200, 98), card('a', '01', 0, 101), card('b', '02', 100, 100)],
+    };
+    expect([...numberedSlots(row)]).toEqual([
+      ['a', '01'],
+      ['b', '02'],
+      ['c', '03'],
+    ]);
+  });
+
+  it('keeps the sample format and leaves a single section number to the writer', () => {
+    const steps = { ...composition, slots: [card('x', '1.', 0, 0), card('y', '2.', 0, 100)] };
+    expect([...numberedSlots(steps).values()]).toEqual(['1.', '2.']);
+    const section = { ...composition, slots: [card('x', '01', 0, 0), card('t', 'Copy', 0, 100)] };
+    expect(numberedSlots(section).size).toBe(0);
+  });
+});
+
+describe('fitChars', () => {
+  it('measures a layout prompt by its box, and template copy by its own length', () => {
+    const slot = { role: 'body', sample: 'Образец текста', maxChars: 300 };
+    expect(fitChars({ ...slot, prompt: true })).toBe(300);
+    expect(fitChars(slot)).toBe(18);
+  });
+});
+
+describe('overusedPatterns', () => {
+  it('flags a layout over its limit and one repeated on three slides in a row', () => {
+    expect(overusedPatterns(['a', 'b', 'a', 'c', 'a'], 2)).toEqual(['a']);
+    expect(overusedPatterns(['a', 'b', 'b', 'b', 'c'], 3)).toEqual(['b']);
+    expect(overusedPatterns(['a', 'b', 'a', 'b', 'c'], 2)).toEqual([]);
+  });
+});
+
+describe('copyDefects', () => {
+  const base = composition.slots[0];
+  if (!base) throw new Error('Fixture slot missing');
+  const slot = (slotId: string, maxChars: number, maxLines: number) => ({
+    ...base,
+    slotId,
+    role: 'body' as const,
+    sample: 'A template sample of thirty two',
+    maxChars,
+    maxLines,
+  });
+  const slide = (texts: Record<string, string>) => ({
+    patternId: composition.patternId,
+    texts: Object.entries(texts).map(([slotId, text]) => ({ slotId, text })),
+    speakerNotes: '',
+  });
+
+  it('flags the same phrase in two slots of one slide, not the first of them', () => {
+    const pattern = { ...composition, slots: [slot('a', 40, 1), slot('b', 40, 1)] };
+    const defects = copyDefects(slide({ a: 'Больничные', b: ' больничные ' }), pattern);
+    expect([...defects.keys()]).toEqual(['b']);
+    expect(validateBindings(slide({ a: 'Больничные', b: 'Больничные' }), pattern)).toEqual([
+      'Revise slot b',
+    ]);
+  });
+
+  it('flags a word longer than one line of a narrow box', () => {
+    const pattern = { ...composition, slots: [slot('a', 99, 9)] };
+    expect(copyDefects(slide({ a: 'Корпоративные программы' }), pattern).has('a')).toBe(true);
+    expect(copyDefects(slide({ a: 'Программы для команды' }), pattern).size).toBe(0);
   });
 });

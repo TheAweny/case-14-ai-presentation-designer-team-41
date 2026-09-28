@@ -2,7 +2,7 @@
 # The plan is made once per run and every layout variant is built from it.
 
 id: deck-planner
-version: 1.7.0
+version: 2.2.0
 description: 'Plans a CompositionPlan: an exact requested 10-15 slides or an automatic 10-60 slides.'
 modelId: planner-default
 

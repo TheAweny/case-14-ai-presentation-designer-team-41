@@ -6,6 +6,7 @@ import type { EngineClient } from '@lct/engine-client';
 import { loadAgent, toManifestEntry } from '@lct/registry';
 import {
   artifactManifestSchema,
+  type CompositionNote,
   type GenerationProfile,
   type JobEvent,
   type JobStage,
@@ -41,6 +42,8 @@ export interface GenerateOptions {
   brief: string;
   slideCount: number | null;
   profile: GenerationProfile;
+  /** The template indexer's notes for this profile, if the template was indexed. */
+  notes?: readonly CompositionNote[];
   registryDir: string;
   engine: EngineClient;
   provider: TextProvider;
@@ -99,6 +102,7 @@ export async function generatePresentation(options: GenerateOptions) {
       variant: options.variant ?? 'balanced',
       signal,
       concurrency: 3,
+      ...(options.notes ? { notes: options.notes } : {}),
       onProgress: async (done, total) =>
         emit({
           type: 'stage-progress',
@@ -194,7 +198,16 @@ export async function generatePresentation(options: GenerateOptions) {
           ...f,
           message: `${f.message} Maximum ${f.maxChars} characters, ${f.maxLines} lines.`,
         })),
-        ...critique.issues.filter((i) => i.category !== 'style'),
+        // A critic that names several slots in one issue ("6,8") gets one issue per slot:
+        // the repair addresses slots by id, and a joined id would silently match none.
+        ...critique.issues
+          .filter((i) => i.category !== 'style')
+          .flatMap((issue) =>
+            issue.slotId
+              .split(/[\s,;]+/)
+              .filter(Boolean)
+              .map((slotId) => ({ ...issue, slotId })),
+          ),
       ];
       if (!issues.length) break;
       if (attempt === 2) {

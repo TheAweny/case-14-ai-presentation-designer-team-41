@@ -141,7 +141,7 @@ export class OpenAICompatibleProvider implements TextProvider {
       signal.throwIfAborted();
       const release = await requests.acquire(signal);
       const started = Date.now();
-      let retryDelay: number;
+      let retryDelay = 500;
       try {
         signal.throwIfAborted();
         const response = await this.fetchImpl(this.endpoint, {
@@ -193,7 +193,14 @@ export class OpenAICompatibleProvider implements TextProvider {
             if (attempt < 2) continue;
             throw new Error('Model returned empty or truncated JSON.');
           }
-          const result = parseModelJson(choice.message.content, schema);
+          let result: T;
+          try {
+            result = parseModelJson(choice.message.content, schema);
+          } catch (error) {
+            // Malformed or off-schema JSON is a sampling accident; one more draw usually fixes it.
+            if (attempt < 2) continue;
+            throw error;
+          }
           this.calls.push({
             agent,
             ms: Date.now() - started,
@@ -203,6 +210,11 @@ export class OpenAICompatibleProvider implements TextProvider {
           });
           return result;
         }
+      } catch (error) {
+        // One slow answer must not sink the deck: a request that hit its own time limit is
+        // retried, while cancellation of the whole run still stops at once.
+        const timedOut = error instanceof Error && error.name === 'TimeoutError';
+        if (!timedOut || signal.aborted || attempt >= 2) throw error;
       } finally {
         release();
       }

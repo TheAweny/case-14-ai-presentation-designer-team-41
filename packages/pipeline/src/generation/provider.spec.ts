@@ -22,6 +22,41 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     expect(parseModelJson('```json\n{"ok":true}\n```', schema)).toEqual({ ok: true });
     expect(() => parseModelJson('{"ok":"yes"}', schema)).toThrow();
   });
+  it('retries a request that hit its own time limit, but not a cancelled run', async () => {
+    const timeout = () => Promise.reject(new DOMException('slow answer', 'TimeoutError'));
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(timeout)
+      .mockResolvedValue(answer());
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    await expect(
+      provider.generate('writer', 'instructions', {}, schema, AbortSignal.timeout(10000)),
+    ).resolves.toEqual({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const cancelled = new AbortController();
+    const stop = vi.fn<typeof fetch>().mockImplementation(() => {
+      cancelled.abort(new DOMException('run cancelled', 'TimeoutError'));
+      return Promise.reject(cancelled.signal.reason);
+    });
+    const stopped = new OpenAICompatibleProvider({ ...settings, fetchImpl: stop });
+    await expect(
+      stopped.generate('writer', 'instructions', {}, schema, cancelled.signal),
+    ).rejects.toThrow();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+  it('draws again after off-schema JSON', async () => {
+    const bad = new Response(
+      JSON.stringify({
+        choices: [{ message: { content: '{"ok":"yes"}' }, finish_reason: 'stop' }],
+      }),
+    );
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(bad).mockResolvedValue(answer());
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    await expect(
+      provider.generate('writer', 'instructions', {}, schema, AbortSignal.timeout(10000)),
+    ).resolves.toEqual({ ok: true });
+  });
   it('requires an address and a model before sending requests', () => {
     for (const field of ['baseUrl', 'model'] as const) {
       expect(() => new OpenAICompatibleProvider({ ...settings, [field]: '' })).toThrow();
