@@ -45,7 +45,12 @@ services:
       engine:
         condition: service_healthy
     environment:
-      # Accounts written by `lct onboard` and `lct user`; the API loads them into app_users at start.
+      # The first administrator, written by `lct onboard`. Made at start if that account does not
+      # exist; later the password lives in the database and is changed in the interface.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-}
+      # Older list of accounts: missing ones are made at start, existing ones are left alone.
       AUTH_USERS: ${AUTH_USERS:-}
       # The API answers only requests carrying this token, which only the web server has.
       API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:-}
@@ -88,10 +93,9 @@ services:
       # /api/backend route forwards their requests here with the service token.
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3001}
       API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:-}
-      # Accounts of the interface and the key that signs their sessions; `lct onboard` and
-      # `lct user` write both into .env.
+      # Signs the sessions of the interface; `lct onboard` writes it into .env. Accounts live in
+      # the API's database.
       AUTH_SECRET: ${AUTH_SECRET:-}
-      AUTH_USERS: ${AUTH_USERS:-}
     ports:
       - '3000:3000'
     restart: unless-stopped

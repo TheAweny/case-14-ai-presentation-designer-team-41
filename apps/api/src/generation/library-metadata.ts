@@ -3,9 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { readFile, readdir, rename, writeFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-interface Metadata {
+export interface Metadata {
   templateId: string;
   projectId: string | null;
+  /** The account that generated the deck. Decks made before accounts have none and are hidden. */
+  ownerId?: string;
+  /** The chat the deck was generated in. */
+  chatId?: string | null;
+  variant?: string;
   updatedAt: number;
   title?: string;
   deletedAt?: number;
@@ -32,9 +37,11 @@ export class LibraryMetadata {
     }
   }
 
-  async visible(id: string): Promise<boolean> {
+  /** Not deleted and, when `ownerId` is given, belonging to that account. */
+  async visible(id: string, ownerId?: string): Promise<boolean> {
     try {
-      return !(await this.read(id)).deletedAt;
+      const metadata = await this.read(id);
+      return !metadata.deletedAt && (ownerId === undefined || metadata.ownerId === ownerId);
     } catch (error) {
       if (error instanceof NotFoundException) return false;
       throw error;

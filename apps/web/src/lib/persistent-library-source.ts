@@ -7,6 +7,7 @@ import type { ProjectAppearance } from './project-appearance';
 import { DeckNotFoundError } from './deck-source';
 import {
   ProjectNotFoundError,
+  TemplateNotFoundError,
   InvalidDeckPatchError,
   DECK_TITLE_MAX_LENGTH,
 } from './library-source';
@@ -14,6 +15,10 @@ import {
 interface StoredTemplate {
   readonly fileId: string;
   readonly fileName?: string;
+  readonly name?: string;
+  readonly shared?: boolean;
+  readonly mine?: boolean;
+  readonly createdAt?: string;
   readonly size?: number;
   readonly profile?: { designSystem?: unknown; templateIr?: unknown; previewDataUrl?: unknown };
 }
@@ -32,8 +37,10 @@ function templateOf(row: StoredTemplate): TemplateSummary {
   const ir = templateIrSchema.parse(row.profile?.templateIr);
   return {
     templateId: row.fileId,
-    fileName: row.fileName ?? 'Шаблон.pptx',
-    importedAt: Date.now(),
+    fileName: row.name ?? row.fileName ?? 'Шаблон.pptx',
+    shared: row.shared ?? false,
+    mine: row.mine ?? true,
+    importedAt: (row.createdAt && Date.parse(row.createdAt)) || Date.now(),
     layouts: templateLayoutsFromIr(ir),
     designSystem: designSystemSchema.parse(row.profile?.designSystem),
     templateIr: ir,
@@ -110,6 +117,25 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
     },
     async listTemplates() {
       return templates();
+    },
+    async updateTemplate(templateId, patch) {
+      const row = (await request(`/files/templates/${encodeURIComponent(templateId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      }).catch((error: unknown) => {
+        if (String(error).includes('404')) throw new TemplateNotFoundError(templateId);
+        throw error;
+      })) as StoredTemplate;
+      return templateOf(row);
+    },
+    async deleteTemplate(templateId) {
+      await request(`/files/templates/${encodeURIComponent(templateId)}`, {
+        method: 'DELETE',
+      }).catch((error: unknown) => {
+        if (String(error).includes('404')) throw new TemplateNotFoundError(templateId);
+        throw error;
+      });
     },
     async getTemplate(templateId) {
       return (

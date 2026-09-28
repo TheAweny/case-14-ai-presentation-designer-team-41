@@ -20,8 +20,12 @@ import type { ProjectAppearance } from './project-appearance';
 /** Шаблон библиотеки так, как его показывает меню: файл, дата импорта и извлечённый профиль. */
 export interface TemplateSummary {
   readonly templateId: string;
-  /** Имя загруженного файла, как его прислал человек. */
+  /** Имя шаблона в библиотеке: имя загруженного файла, пока шаблон не переименовали. */
   readonly fileName: string;
+  /** Администратор открыл шаблон всем аккаунтам. */
+  readonly shared?: boolean;
+  /** Шаблон загрузил этот аккаунт: может переименовать и удалить. */
+  readonly mine?: boolean;
   /** Когда шаблон импортирован, мс с эпохи. */
   readonly importedAt: number;
   /** Макеты шаблона в порядке файла: по ним рисуется галерея макетов проекта. */
@@ -208,6 +212,19 @@ export interface LibrarySource {
    * `ProjectNotFoundError`. Правка проверяется целиком до того, как что-то поменяется.
    */
   updateDeck(deckId: string, patch: DeckPatch): Promise<DeckSummary>;
+  /**
+   * Переименовать шаблон или (администратору) открыть его всем. Шаблона нет —
+   * `TemplateNotFoundError`.
+   */
+  updateTemplate(
+    templateId: string,
+    patch: { readonly name?: string; readonly shared?: boolean },
+  ): Promise<TemplateSummary>;
+  /**
+   * Убрать шаблон из библиотеки и из проектов. Презентации, свёрстанные им, остаются и
+   * открываются. Шаблона нет — `TemplateNotFoundError`.
+   */
+  deleteTemplate(templateId: string): Promise<void>;
   /** Удалить презентацию насовсем. Колоды нет — `DeckNotFoundError`. */
   deleteDeck(deckId: string): Promise<void>;
   /**

@@ -5,8 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunRepository } from '@lct/run-store';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
 import { GenerationController } from './generation.controller.js';
+import type { Account } from '../accounts/account-rules.js';
 
 const RUN = 'run-00000000-0000-4000-8000-000000000001';
+
+function accountOf(id: string): Account {
+  return {
+    id,
+    email: `${id}@example.com`,
+    name: id,
+    role: 'user',
+    disabled: false,
+    createdAt: '2026-09-29T00:00:00.000Z',
+  };
+}
+const owner = accountOf('owner');
+const stranger = accountOf('stranger');
 
 const imported = JSON.parse(
   await readFile(
@@ -48,7 +62,13 @@ beforeEach(async () => {
   );
   await writeFile(
     join(root, RUN, 'metadata.json'),
-    JSON.stringify({ templateId: 't', projectId: null, updatedAt: 1, title: 'Для руководства' }),
+    JSON.stringify({
+      templateId: 't',
+      projectId: null,
+      ownerId: owner.id,
+      updatedAt: 1,
+      title: 'Для руководства',
+    }),
   );
 });
 
@@ -62,7 +82,7 @@ afterEach(async () => {
 
 describe('GET /generation/:id/deck', () => {
   it('answers the slides the engine read from the finished file', async () => {
-    const deck = (await withEngine(imported).deck(RUN)) as Record<string, unknown>;
+    const deck = (await withEngine(imported).deck(RUN, owner)) as Record<string, unknown>;
 
     expect(deck.slides).toEqual(imported.slides);
     expect(deck.title).toBe('Для руководства');
@@ -78,14 +98,14 @@ describe('GET /generation/:id/deck', () => {
   });
 
   it('answers without slides when the engine cannot read the file', async () => {
-    const deck = (await withEngine(null).deck(RUN)) as Record<string, unknown>;
+    const deck = (await withEngine(null).deck(RUN, owner)) as Record<string, unknown>;
 
     expect(deck).not.toHaveProperty('slides');
     expect(deck.runId).toBe(RUN);
   });
 
   it('answers without slides when the engine breaks the contract', async () => {
-    const deck = (await withEngine({ schemaVersion: 1, slides: [{}] }).deck(RUN)) as Record<
+    const deck = (await withEngine({ schemaVersion: 1, slides: [{}] }).deck(RUN, owner)) as Record<
       string,
       unknown
     >;
@@ -100,16 +120,16 @@ describe('GET /generation/:id/media/:name', () => {
     await writeFile(join(root, RUN, 'media', 'image6.jpeg'), 'jpeg');
     const routes = withEngine(null);
 
-    const png = await routes.media(RUN, 'image5.png');
+    const png = await routes.media(RUN, 'image5.png', owner);
     expect(png.getHeaders().type).toBe('image/png');
-    expect((await routes.media(RUN, 'image6.jpeg')).getHeaders().type).toBe('image/jpeg');
+    expect((await routes.media(RUN, 'image6.jpeg', owner)).getHeaders().type).toBe('image/jpeg');
   });
 
   it('refuses a name that is not a picture file', async () => {
     const routes = withEngine(null);
 
-    await expect(routes.media(RUN, 'deck.pptx')).rejects.toThrow('Unknown media.');
-    await expect(routes.media(RUN, '..%2Fdeck.json')).rejects.toThrow('Unknown media.');
+    await expect(routes.media(RUN, 'deck.pptx', owner)).rejects.toThrow('Unknown media.');
+    await expect(routes.media(RUN, '..%2Fdeck.json', owner)).rejects.toThrow('Unknown media.');
   });
 });
 
@@ -119,8 +139,26 @@ describe('GET /generation/:id/artifacts/:name', () => {
     await writeFile(join(root, RUN, 'previews', 'slide-01.png'), 'first');
     const routes = withEngine(null);
 
-    const cover = await routes.artifact(RUN, 'slide-1.png');
+    const cover = await routes.artifact(RUN, 'slide-1.png', owner);
     expect(cover.getHeaders().type).toBe('image/png');
-    await expect(routes.artifact(RUN, 'slide-2.png')).rejects.toThrow('Artifact not found.');
+    await expect(routes.artifact(RUN, 'slide-2.png', owner)).rejects.toThrow('Artifact not found.');
+  });
+});
+
+describe('decks of other accounts', () => {
+  it('answers another account as if the deck did not exist', async () => {
+    const routes = withEngine(imported);
+
+    await expect(routes.deck(RUN, stranger)).rejects.toThrow('Completed deck not found.');
+    await expect(routes.artifact(RUN, 'deck.pptx', stranger)).rejects.toThrow(
+      'Completed deck not found.',
+    );
+    await expect(routes.remove(RUN, stranger)).rejects.toThrow('Completed deck not found.');
+  });
+
+  it('answers the owner', async () => {
+    const deck = (await withEngine(imported).deck(RUN, owner)) as Record<string, unknown>;
+
+    expect(deck.runId).toBe(RUN);
   });
 });

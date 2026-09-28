@@ -13,15 +13,7 @@ import {
   portFree,
   repoRoot,
 } from './stack.js';
-import {
-  emailProblem,
-  formatUsers,
-  nameProblem,
-  normalizeEmail,
-  parseUsers,
-  passwordProblem,
-  upsertUser,
-} from './users.js';
+import { emailProblem, nameProblem, normalizeEmail, parseUsers, passwordProblem } from './users.js';
 
 function env(): EnvFile {
   const root = repoRoot();
@@ -29,82 +21,66 @@ function env(): EnvFile {
 }
 
 /**
- * The API loads AUTH_USERS into its accounts table when it starts, so a running stack picks a
- * change up by recreating the API (and the web, which reads the same file). Stopped, nothing to
- * do: the next start loads the list.
+ * `lct user admin [почта]` — the administrator of the installation. Other accounts are made in
+ * the interface (Settings → Users); this is the way in when there is nobody to make them: the API
+ * makes the account named here at start, or makes an existing one an administrator again and
+ * switches it on. An existing account keeps the password it has in the database.
  */
-async function applyAccounts(): Promise<void> {
-  if (composeCommand() === null) return;
-  const running = await compose(['ps', '--status', 'running', '--services'], { quiet: true })
-    .then((code) => code === 0)
-    .catch(() => false);
-  if (!running) return;
-  const spinner = p.spinner();
-  spinner.start('Применяю аккаунты в запущенном сервисе');
-  const code = await compose(['up', '-d', 'api', 'web'], { quiet: true });
-  spinner.stop(code === 0 ? 'Аккаунты применены' : 'Не удалось перезапустить API: lct restart api');
-}
-
-/** `lct user add|list|remove|passwd` — accounts of the web interface. */
 export async function user(
   args: readonly string[],
   flags: Record<string, string>,
 ): Promise<number> {
   const file = env();
-  const users = parseUsers(file.get('AUTH_USERS'));
   const [action, target] = args;
-  if (action === 'list' || action === undefined) {
-    if (users.length === 0) p.log.warn('Аккаунтов нет: lct user add');
-    for (const u of users) p.log.message(`${u.email}  ${u.name}`);
-    return 0;
-  }
-  if (action === 'remove') {
-    const email = normalizeEmail(target ?? '');
-    if (!users.some((u) => u.email === email)) {
-      p.log.error(`Нет аккаунта ${email}`);
-      return 1;
-    }
-    file.set('AUTH_USERS', formatUsers(users.filter((u) => u.email !== email)));
-    file.save();
-    p.log.success(`Удалён ${email}`);
-    await applyAccounts();
-    return 0;
-  }
-  if (action === 'add' || action === 'passwd') {
-    const email = normalizeEmail(
-      target ?? String(await p.text({ message: 'Почта', validate: (v) => emailProblem(v ?? '') })),
+  if (action !== 'admin') {
+    const admin = file.get('ADMIN_EMAIL');
+    p.log.info(
+      'Аккаунты заводит администратор в интерфейсе: Настройки → Пользователи.\n' +
+        `Администратор из .env: ${admin || 'не задан'}. Сменить: lct user admin [почта]`,
     );
-    const known = users.find((u) => u.email === email);
-    if (action === 'passwd' && !known) {
-      p.log.error(`Нет аккаунта ${email}`);
-      return 1;
-    }
-    const name =
-      flags.name ??
-      known?.name ??
+    return action === undefined || action === 'list' ? 0 : 2;
+  }
+  const email = normalizeEmail(
+    target ??
       String(
         await p.text({
-          message: 'Имя',
-          defaultValue: email.split('@')[0],
-          placeholder: email.split('@')[0],
+          message: 'Почта администратора',
+          validate: (v) => emailProblem(v ?? ''),
         }),
-      );
-    const password =
-      flags.password ??
-      String(await p.password({ message: 'Пароль', validate: (v) => passwordProblem(v ?? '') }));
-    const problem = emailProblem(email) ?? passwordProblem(password) ?? nameProblem(name);
-    if (problem) {
-      p.log.error(problem);
-      return 1;
-    }
-    file.set('AUTH_USERS', formatUsers(upsertUser(users, { email, name, password })));
-    file.save();
-    p.log.success(action === 'add' ? `Аккаунт ${email} создан` : `Пароль ${email} изменён`);
-    await applyAccounts();
-    return 0;
+      ),
+  );
+  const name =
+    flags.name ??
+    String(
+      await p.text({
+        message: 'Имя',
+        defaultValue: email.split('@')[0],
+        placeholder: email.split('@')[0],
+      }),
+    );
+  const password =
+    flags.password ??
+    String(await p.password({ message: 'Пароль', validate: (v) => passwordProblem(v ?? '') }));
+  const problem = emailProblem(email) ?? passwordProblem(password) ?? nameProblem(name);
+  if (problem) {
+    p.log.error(problem);
+    return 1;
   }
-  p.log.error('lct user list | add [почта] | remove <почта> | passwd <почта>');
-  return 2;
+  file.set('ADMIN_EMAIL', email);
+  file.set('ADMIN_PASSWORD', password);
+  file.set('ADMIN_NAME', name);
+  file.save();
+  p.log.success(`Администратор ${email} записан в .env`);
+  if (composeCommand() !== null) {
+    const running = await compose(['ps', '--status', 'running', '--services'], { quiet: true })
+      .then((code) => code === 0)
+      .catch(() => false);
+    if (running) {
+      const code = await compose(['up', '-d', 'api'], { quiet: true });
+      if (code !== 0) p.log.warn('Не удалось перезапустить API: lct restart api');
+    }
+  }
+  return 0;
 }
 
 /** `lct doctor` — what is installed, what answers, what is misconfigured. */
@@ -140,12 +116,12 @@ export async function doctor(): Promise<number> {
   );
 
   const file = env();
-  const users = parseUsers(file.get('AUTH_USERS'));
-  check(users.length > 0, `Аккаунтов: ${users.length}`, 'Нет аккаунтов: lct user add');
+  const admin = file.get('ADMIN_EMAIL') ?? '';
+  check(admin !== '', `Администратор: ${admin}`, 'Администратор не задан: lct user admin');
   check(
-    !users.some((u) => u.email === 'demo@example.com'),
+    !parseUsers(file.get('AUTH_USERS')).some((u) => u.email === 'demo@example.com'),
     'Демо-аккаунта из примера нет',
-    'Остался demo@example.com из .env.example: lct user remove demo@example.com',
+    'Остался demo@example.com из .env.example в AUTH_USERS: уберите его из .env',
   );
   for (const name of INSTALLATION_SECRETS) {
     check(

@@ -28,7 +28,7 @@ export const USER_HEADER = 'x-lct-user';
 /** Shorter than this, a token is guessable and the API refuses to run on it. */
 export const SERVICE_TOKEN_MIN_LENGTH = 32;
 
-const PUBLIC_ROUTE = 'lct:public-route';
+export const PUBLIC_ROUTE = 'lct:public-route';
 
 /** Marks a route that answers without the service token. Only `/health` should carry it. */
 export const PublicRoute = () => SetMetadata(PUBLIC_ROUTE, true);
