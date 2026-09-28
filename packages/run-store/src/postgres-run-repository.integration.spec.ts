@@ -29,7 +29,7 @@ describeWithPostgres('PostgresRunRepository integration', () => {
     const result = await admin.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM ${schema}.schema_migrations`,
     );
-    expect(result.rows[0]?.count).toBe('2');
+    expect(result.rows[0]?.count).toBe('3');
     await repository.close();
   });
 

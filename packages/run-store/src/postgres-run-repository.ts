@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import type { PoolClient } from 'pg';
+import { jobEventSchema, type JobEvent } from '@lct/contracts';
 import {
   InvalidRunTransitionError,
   RunNotFoundError,
@@ -141,6 +142,55 @@ export class PostgresRunRepository implements RunRepository {
     } finally {
       client.release();
     }
+  }
+
+  async appendEvent(runId: string, event: JobEvent): Promise<void> {
+    this.assertRunId(runId);
+    const parsed = jobEventSchema.parse(event);
+    if (parsed.runId !== runId) {
+      throw new Error(`Event run id ${parsed.runId} does not match ${runId}.`);
+    }
+    const stage = 'stage' in parsed ? parsed.stage : 'queued';
+    const status =
+      parsed.type === 'failed'
+        ? 'failed'
+        : parsed.type.endsWith('finished')
+          ? 'completed'
+          : 'started';
+    const message = 'message' in parsed ? parsed.message : 'note' in parsed ? parsed.note : null;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const previous = await client.query<{ sequence: number }>(
+        `SELECT sequence FROM run_events WHERE run_id = $1 ORDER BY sequence DESC LIMIT 1 FOR UPDATE`,
+        [runId],
+      );
+      const expected = (previous.rows[0]?.sequence ?? -1) + 1;
+      if (parsed.seq !== expected) {
+        throw new Error(`Run ${runId} event sequence must be dense.`);
+      }
+      await client.query(
+        `INSERT INTO run_events(run_id, sequence, stage, status, message, payload)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        [runId, parsed.seq, stage, status, message, JSON.stringify(parsed)],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async events(runId: string, afterSequence = -1): Promise<readonly JobEvent[]> {
+    this.assertRunId(runId);
+    const result = await this.pool.query<{ payload: unknown }>(
+      `SELECT payload FROM run_events
+       WHERE run_id = $1 AND sequence > $2 ORDER BY sequence ASC`,
+      [runId, afterSequence],
+    );
+    return result.rows.map((row) => jobEventSchema.parse(row.payload));
   }
 
   async close(): Promise<void> {

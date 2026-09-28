@@ -3557,6 +3557,7 @@ class Kind3(StrEnum):
     pptx = "pptx"
     pdf = "pdf"
     html = "html"
+    audit = "audit"
     manifest = "manifest"
 
 

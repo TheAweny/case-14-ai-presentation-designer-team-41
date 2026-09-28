@@ -2,6 +2,7 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PostgresRunRepository, type RunRecord } from '@lct/run-store';
+import { validateLocalRunInputs } from '@lct/input-validation';
 import { readRunConfig } from './config.js';
 import { generateFromConfig } from './generate.js';
 import { parseArgs } from './setup/args.js';
@@ -56,14 +57,32 @@ export async function initializeRun(
   connectionString = process.env.DATABASE_URL,
   createId?: () => string,
 ): Promise<RunRecord> {
-  readRunConfig(configPath);
+  const config = readRunConfig(configPath);
   if (connectionString === undefined || connectionString.length === 0) {
     throw new Error('DATABASE_URL is required. Start PostgreSQL or use docker compose.');
   }
+  validateLocalRunInputs(config);
   const repository = new PostgresRunRepository({ connectionString, createId });
   try {
     await repository.migrate();
     return await repository.create();
+  } finally {
+    await repository.close();
+  }
+}
+
+export async function readRunEvents(
+  runId: string,
+  connectionString = process.env.DATABASE_URL,
+  afterSequence = -1,
+): Promise<readonly JobEvent[]> {
+  if (connectionString === undefined || connectionString.length === 0) {
+    throw new Error('DATABASE_URL is required. Start PostgreSQL or use docker compose.');
+  }
+  const repository = new PostgresRunRepository({ connectionString });
+  try {
+    await repository.migrate();
+    return await repository.events(runId, afterSequence);
   } finally {
     await repository.close();
   }

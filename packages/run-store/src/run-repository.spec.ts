@@ -53,4 +53,53 @@ describe('RunRepository contract', () => {
       InvalidRunTransitionError,
     );
   });
+
+  it('persists a dense typed event journal and supports cursors', async () => {
+    const store = new MemoryRunRepository(() => 'run-fixture');
+    await store.create();
+    await store.appendEvent('run-fixture', {
+      schemaVersion: 1,
+      runId: 'run-fixture',
+      seq: 0,
+      at: new Date().toISOString(),
+      type: 'stage-started',
+      stage: 'queued',
+    });
+    await store.appendEvent('run-fixture', {
+      schemaVersion: 1,
+      runId: 'run-fixture',
+      seq: 1,
+      at: new Date().toISOString(),
+      type: 'stage-progress',
+      stage: 'parsing-template',
+      done: 1,
+      total: 1,
+      note: 'parsed',
+    });
+
+    await expect(store.events('run-fixture', 0)).resolves.toHaveLength(1);
+    await expect(
+      store.appendEvent('run-fixture', {
+        schemaVersion: 1,
+        runId: 'run-fixture',
+        seq: 3,
+        at: new Date().toISOString(),
+        type: 'stage-finished',
+        stage: 'parsing-template',
+        durationMs: 1,
+      }),
+    ).rejects.toThrow('sequence must be dense');
+
+    await expect(
+      store.appendEvent('run-fixture', {
+        schemaVersion: 1,
+        runId: 'another-run',
+        seq: 2,
+        at: new Date().toISOString(),
+        type: 'stage-finished',
+        stage: 'parsing-template',
+        durationMs: 1,
+      }),
+    ).rejects.toThrow('does not match');
+  });
 });
