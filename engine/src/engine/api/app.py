@@ -5,6 +5,7 @@ import hashlib
 import subprocess
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,16 @@ from engine.parser._errors import TemplateParseError
 from engine.parser.compositions import extract_compositions
 
 _STARTED_AT = time.monotonic()
+
+
+def bundle_previews(previews: list[Path], output: Path) -> Path:
+    """Write the rendered slides into one portable PNG archive."""
+    if not previews:
+        raise ValueError("Cannot create a PNG archive without rendered slides.")
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for preview in previews:
+            archive.write(preview, preview.name)
+    return output
 
 
 class TemplateProfileRequest(BaseModel):
@@ -204,14 +215,13 @@ def composition_deck(request: CompositionExportRequest) -> dict:
         export_compositions(source, output, [s.model_dump() for s in request.slides], patterns)
         previews = render.render_to_png(output, output.parent / "previews", dpi=110)
         ir = parser.parse_template(output)
-        import zipfile
-
         with zipfile.ZipFile(output) as archive:
             media_dir = output.parent / "media"
             media_dir.mkdir(exist_ok=True)
             for entry in archive.namelist():
                 if entry.startswith("ppt/media/") and not entry.endswith("/"):
                     (media_dir / Path(entry).name).write_bytes(archive.read(entry))
+        bundle_previews(previews, output.parent / "slides.zip")
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return {

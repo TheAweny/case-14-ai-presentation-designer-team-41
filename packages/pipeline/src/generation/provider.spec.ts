@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { OpenAICompatibleProvider, parseModelJson } from './provider.js';
+import { OpenAICompatibleProvider, parseModelJson, RoutedTextProvider } from './provider.js';
 
 const schema = z.object({ ok: z.boolean() });
 const settings = {
@@ -39,6 +39,41 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     expect(url).toBe(settings.baseUrl + '/chat/completions');
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer test-secret' });
     expect(JSON.parse(String(init?.body)).model).toBe(settings.model);
+  });
+  it('routes a pipeline role to its assigned persisted provider', async () => {
+    const fallbackFetch = vi.fn<typeof fetch>().mockResolvedValue(answer());
+    const plannerFetch = vi.fn<typeof fetch>().mockResolvedValue(answer());
+    const writerFetch = vi.fn<typeof fetch>().mockResolvedValue(answer());
+    const fallback = new OpenAICompatibleProvider({
+      ...settings,
+      model: 'fallback',
+      fetchImpl: fallbackFetch,
+    });
+    const planner = new OpenAICompatibleProvider({
+      ...settings,
+      model: 'planner-model',
+      fetchImpl: plannerFetch,
+    });
+    const writer = new OpenAICompatibleProvider({
+      ...settings,
+      model: 'writer-model',
+      fetchImpl: writerFetch,
+    });
+    const provider = new RoutedTextProvider(
+      fallback,
+      new Map([
+        ['planner', planner],
+        ['writer', writer],
+      ]),
+    );
+
+    await provider.generate('planner', '', {}, schema, AbortSignal.timeout(1000));
+    await provider.generate('writer', '', {}, schema, AbortSignal.timeout(1000));
+    await provider.generate('critic', '', {}, schema, AbortSignal.timeout(1000));
+
+    expect(JSON.parse(String(plannerFetch.mock.calls[0]?.[1]?.body)).model).toBe('planner-model');
+    expect(JSON.parse(String(writerFetch.mock.calls[0]?.[1]?.body)).model).toBe('writer-model');
+    expect(JSON.parse(String(fallbackFetch.mock.calls[0]?.[1]?.body)).model).toBe('fallback');
   });
   it('disables thinking and passes the output schema as strict json_schema', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());

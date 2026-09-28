@@ -73,6 +73,49 @@ def _box_of(shape: Any) -> Box | None:
     return Box(x=int(left), y=int(top), cx=int(width), cy=int(height))
 
 
+class _Transform:
+    """Affine scale and translation from a group child space to slide EMU."""
+
+    def __init__(
+        self,
+        scale_x: float = 1,
+        scale_y: float = 1,
+        offset_x: float = 0,
+        offset_y: float = 0,
+    ) -> None:
+        self.scale_x = scale_x
+        self.scale_y = scale_y
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+
+    def box(self, value: Box | None) -> Box | None:
+        if value is None:
+            return None
+        return Box(
+            x=round(self.offset_x + value.x * self.scale_x),
+            y=round(self.offset_y + value.y * self.scale_y),
+            cx=round(value.cx * self.scale_x),
+            cy=round(value.cy * self.scale_y),
+        )
+
+    def group_children(self, shape: Any) -> _Transform:
+        """Compose this transform with the OOXML child coordinate system of one group."""
+        try:
+            xfrm = shape._element.grpSpPr.xfrm
+            off, ext = xfrm.off, xfrm.ext
+            child_off, child_ext = xfrm.chOff, xfrm.chExt
+            scale_x = int(ext.cx) / int(child_ext.cx)
+            scale_y = int(ext.cy) / int(child_ext.cy)
+            return _Transform(
+                self.scale_x * scale_x,
+                self.scale_y * scale_y,
+                self.offset_x + self.scale_x * (int(off.x) - int(child_off.x) * scale_x),
+                self.offset_y + self.scale_y * (int(off.y) - int(child_off.y) * scale_y),
+            )
+        except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+            return self
+
+
 def _flips(shape: Any) -> tuple[bool, bool]:
     """Horizontal and vertical flip, which python-pptx does not surface on every shape type."""
     try:
@@ -202,6 +245,7 @@ def collect_shapes(
     warnings: list[ParseWarning],
     sha_to_part: dict[str, str],
     path: tuple[int, ...] = (),
+    transform: _Transform | None = None,
 ) -> tuple[Shape, ...]:
     """Flatten a shape container into an ordered tuple.
 
@@ -209,6 +253,7 @@ def collect_shapes(
     index within the parent.
     """
     collected: list[Shape] = []
+    transform = transform or _Transform()
     for index, shape in enumerate(container):
         shape_id = int(getattr(shape, "shape_id", 0) or 0)
         where = f"{location}#{shape_id}"
@@ -221,7 +266,7 @@ def collect_shapes(
             digest = _media_sha1(shape, warnings, where)
             media_part = sha_to_part.get(digest, "")
 
-        box = _box_of(shape)
+        box = transform.box(_box_of(shape))
         props = shape._element.find(f"{_P}spPr")
         geometry, radius = geometry_of(props, box.cx if box else None, box.cy if box else None)
 
@@ -252,7 +297,14 @@ def collect_shapes(
 
         if kind == "group":
             collected.extend(
-                collect_shapes(shape.shapes, location, warnings, sha_to_part, (*path, shape_id))
+                collect_shapes(
+                    shape.shapes,
+                    location,
+                    warnings,
+                    sha_to_part,
+                    (*path, shape_id),
+                    transform.group_children(shape),
+                )
             )
 
     return tuple(collected)

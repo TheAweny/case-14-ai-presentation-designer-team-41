@@ -16,11 +16,17 @@ import type { OnApplicationShutdown } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
+import { createDecipheriv, createHash } from 'node:crypto';
 import { Pool } from 'pg';
-import { generationProfileSchema, generationRequestSchema } from '@lct/contracts';
+import {
+  designSystemSchema,
+  generationProfileSchema,
+  generationRequestSchema,
+  templateIrSchema,
+} from '@lct/contracts';
 import type { GenerationProfile } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
-import { generatePresentation, GenerationProvider } from '@lct/pipeline';
+import { generatePresentation, GenerationProvider, RoutedTextProvider } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
@@ -90,12 +96,26 @@ export class GenerationController implements OnApplicationShutdown {
       brief += `\n\nSource ${id}:\n${content}`;
     }
     if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
-    const provider = new GenerationProvider({
-      apiKey: process.env.MODEL_API_KEY ?? '',
-      baseUrl: process.env.LLM_BASE_URL ?? '',
-      model: process.env.LLM_MODEL ?? '',
-      seed: input.seed,
-    });
+    if (input.userId === null) {
+      throw new BadRequestException('Connect a model before starting generation.');
+    }
+    const configured = await this.userModels(input.userId, input.model);
+    const writer = configured.get('writer');
+    if (!writer) {
+      throw new BadRequestException(
+        'Connect and select a checked writer model before starting generation.',
+      );
+    }
+    const fallback = this.provider(writer, input.seed);
+    const provider = new RoutedTextProvider(
+      fallback,
+      new Map(
+        ['planner', 'writer', 'critic', 'rewriter'].flatMap((role) => {
+          const settings = configured.get(role === 'rewriter' ? 'writer' : role);
+          return settings ? [[role, this.provider(settings, input.seed)] as const] : [];
+        }),
+      ),
+    );
     const run = await this.repository.create();
     await mkdir(this.directory(run.runId), { recursive: true });
     await writeFile(
@@ -194,7 +214,14 @@ export class GenerationController implements OnApplicationShutdown {
   async deck(@Param('id') id: string): Promise<unknown> {
     const metadata = await this.completed(id);
     const deck = JSON.parse(await readFile(join(this.directory(id), 'deck.json'), 'utf8'));
-    return { ...deck, title: metadata.title ?? deck.title };
+    const current = await this.engine
+      .parseTemplateProfile(join(this.directory(id), 'deck.pptx'))
+      .then((profile) => ({
+        designSystem: designSystemSchema.parse(profile.designSystem),
+        templateIr: templateIrSchema.parse(profile.templateIr),
+      }))
+      .catch(() => null);
+    return { ...deck, ...current, title: metadata.title ?? deck.title };
   }
 
   @Get(':id/artifacts/:name')
@@ -212,13 +239,16 @@ export class GenerationController implements OnApplicationShutdown {
     } else if (name === 'manifest.json') {
       path = join(root, name);
       type = 'application/json';
+    } else if (name === 'slides.zip') {
+      path = join(root, name);
+      type = 'application/zip';
     } else if (/^slide-\d+\.png$/.test(name)) {
       path = join(root, 'previews', name);
       type = 'image/png';
     } else throw new NotFoundException('Artifact not found.');
     return new StreamableFile(await readFile(path), {
       type,
-      disposition: `inline; filename="${basename(path)}"`,
+      disposition: `attachment; filename="${basename(path)}"`,
     });
   }
 
@@ -274,5 +304,92 @@ export class GenerationController implements OnApplicationShutdown {
     if (!Object.keys(patch).length) throw new BadRequestException('Empty deck patch.');
     await this.library.patch(id, patch);
     return { ok: true };
+  }
+
+  private provider(configured: { baseUrl: string; apiKey: string; model: string }, seed: number) {
+    return new GenerationProvider({
+      apiKey: configured.apiKey,
+      baseUrl: configured.baseUrl,
+      model: configured.model,
+      seed,
+    });
+  }
+
+  private async userModels(
+    userId: string,
+    selected: { connectionId: string; modelId: string } | null,
+  ) {
+    const models = new Map<string, { baseUrl: string; apiKey: string; model: string }>();
+    for (const role of ['planner', 'writer', 'critic'] as const) {
+      const model = await this.userModel(userId, role === 'writer' ? selected : null, role);
+      if (model) models.set(role, model);
+    }
+    return models;
+  }
+
+  private async userModel(
+    userId: string,
+    selected: { connectionId: string; modelId: string } | null,
+    role: 'planner' | 'writer' | 'critic',
+  ) {
+    const stored = (
+      await this.pool.query<{ connection_id: string; model_id: string }>(
+        `SELECT connection_id, model_id FROM user_model_role_assignments
+       WHERE user_id=$1 AND role=$2 AND kind='model'`,
+        [userId, role],
+      )
+    ).rows[0];
+    const assignment = selected
+      ? { connectionId: selected.connectionId, modelId: selected.modelId }
+      : stored
+        ? { connectionId: stored.connection_id, modelId: stored.model_id }
+        : null;
+    if (assignment === null) return null;
+    const connection = (
+      await this.pool.query<{
+        base_url: string;
+        api_key_ciphertext: string | null;
+        last_check: unknown;
+      }>(
+        `SELECT base_url, api_key_ciphertext, last_check FROM user_model_connections
+       WHERE id=$1 AND user_id=$2`,
+        [assignment.connectionId, userId],
+      )
+    ).rows[0];
+    if (!connection) throw new BadRequestException('Selected model connection is unavailable.');
+    if (!this.hasCheckedModel(connection.last_check, assignment.modelId)) {
+      throw new BadRequestException(
+        'Selected model was not returned by the latest successful connection check.',
+      );
+    }
+    return {
+      baseUrl: connection.base_url,
+      apiKey: connection.api_key_ciphertext
+        ? this.decryptModelKey(connection.api_key_ciphertext)
+        : '',
+      model: assignment.modelId,
+    };
+  }
+
+  private decryptModelKey(value: string): string {
+    const data = Buffer.from(value, 'base64url');
+    const key = createHash('sha256')
+      .update(
+        process.env.MODEL_SETTINGS_ENCRYPTION_KEY ||
+          process.env.MODEL_API_KEY ||
+          'lct-local-model-settings',
+      )
+      .digest();
+    const decipher = createDecipheriv('aes-256-gcm', key, data.subarray(0, 12));
+    decipher.setAuthTag(data.subarray(data.length - 16));
+    return Buffer.concat([decipher.update(data.subarray(12, -16)), decipher.final()]).toString(
+      'utf8',
+    );
+  }
+
+  private hasCheckedModel(lastCheck: unknown, modelId: string): boolean {
+    if (!lastCheck || typeof lastCheck !== 'object') return false;
+    const check = lastCheck as { ok?: unknown; models?: unknown };
+    return check.ok === true && Array.isArray(check.models) && check.models.includes(modelId);
   }
 }

@@ -39,7 +39,7 @@ export const compositionExportRequestSchema = z.object({
   schemaVersion: z.literal(1),
   templatePath: z.string().min(1),
   outputPath: z.string().min(1),
-  slides: z.array(composedSlideSchema).min(1).max(15),
+  slides: z.array(composedSlideSchema).min(1).max(60),
 });
 export const compositionExportResponseSchema = z.object({
   schemaVersion: z.literal(1),
@@ -52,10 +52,15 @@ export const compositionExportResponseSchema = z.object({
 export const generationRequestSchema = z.object({
   templateId: z.string().uuid(),
   brief: z.string().trim().min(10).max(60000),
-  slideCount: z.number().int().min(1).max(15).nullable().default(null),
+  slideCount: z.number().int().min(10).max(15).nullable().default(null),
   projectId: z.string().nullable().default(null),
   contentIds: z.array(z.string().uuid()).max(10).default([]),
   seed: z.number().int().default(42),
+  userId: z.string().min(1).max(120).nullable().default(null),
+  model: z
+    .object({ connectionId: z.string().min(1).max(120), modelId: z.string().min(1).max(256) })
+    .nullable()
+    .default(null),
 });
 export type GenerationProfile = z.infer<typeof generationProfileSchema>;
 export type Composition = z.infer<typeof compositionSchema>;
@@ -91,8 +96,8 @@ export const compositionPlanSchema = z.object({
         imageQuery: z.string().default(''),
       }),
     )
-    .min(1)
-    .max(15),
+    .min(10)
+    .max(60),
 });
 
 export const compositionCritiqueSchema = z.object({

@@ -11,7 +11,7 @@ import {
   type ProbeInput,
   type RoleAssignment,
 } from '@/lib/model-settings';
-import { modelSettingsSource } from '@/mocks/sources';
+import { createHttpModelSettings } from '@/lib/http-model-settings';
 import { requireAccount } from './auth-session';
 
 /**
@@ -51,15 +51,14 @@ function failure(error: unknown): SettingsFailure {
 }
 
 export async function getModelSettingsAction(): Promise<ModelSettings> {
-  await requireAccount();
-  return modelSettingsSource.get();
+  return createHttpModelSettings((await requireAccount()).userId).get();
 }
 
 export async function saveConnectionAction(input: ConnectionInput): Promise<SaveConnectionResult> {
-  await requireAccount();
+  const source = createHttpModelSettings((await requireAccount()).userId);
   try {
-    const connection = await modelSettingsSource.saveConnection(input);
-    return { ok: true, connection, settings: await modelSettingsSource.get() };
+    const connection = await source.saveConnection(input);
+    return { ok: true, connection, settings: await source.get() };
   } catch (error) {
     return failure(error);
   }
@@ -67,23 +66,23 @@ export async function saveConnectionAction(input: ConnectionInput): Promise<Save
 
 /** Удалить подключение. Уже удалённое — не ошибка: человек хотел, чтобы его не было. */
 export async function deleteConnectionAction(connectionId: string): Promise<SettingsResult> {
-  await requireAccount();
+  const source = createHttpModelSettings((await requireAccount()).userId);
   if (typeof connectionId !== 'string') return { ok: false, reason: 'invalid', problems: {} };
   try {
-    await modelSettingsSource.deleteConnection(connectionId);
+    await source.deleteConnection(connectionId);
   } catch (error) {
     if (!(error instanceof ConnectionNotFoundError)) throw error;
   }
-  return { ok: true, settings: await modelSettingsSource.get() };
+  return { ok: true, settings: await source.get() };
 }
 
 /** Проверить сохранённое подключение: итог запоминается и виден на карточке. */
 export async function checkConnectionAction(connectionId: string): Promise<SettingsResult> {
-  await requireAccount();
+  const source = createHttpModelSettings((await requireAccount()).userId);
   if (typeof connectionId !== 'string') return { ok: false, reason: 'invalid', problems: {} };
   try {
-    await modelSettingsSource.checkConnection(connectionId);
-    return { ok: true, settings: await modelSettingsSource.get() };
+    await source.checkConnection(connectionId);
+    return { ok: true, settings: await source.get() };
   } catch (error) {
     return failure(error);
   }
@@ -91,19 +90,19 @@ export async function checkConnectionAction(connectionId: string): Promise<Setti
 
 /** Проверить подключение из формы, ещё не сохраняя. */
 export async function probeConnectionAction(input: ProbeInput): Promise<ProbeResult> {
-  await requireAccount();
+  const source = createHttpModelSettings((await requireAccount()).userId);
   try {
-    return { ok: true, check: await modelSettingsSource.probe(input) };
+    return { ok: true, check: await source.probe(input) };
   } catch (error) {
     return failure(error);
   }
 }
 
 export async function setRoleAction(assignment: RoleAssignment): Promise<SettingsResult> {
-  await requireAccount();
+  const source = createHttpModelSettings((await requireAccount()).userId);
   try {
-    await modelSettingsSource.setRole(assignment);
-    return { ok: true, settings: await modelSettingsSource.get() };
+    await source.setRole(assignment);
+    return { ok: true, settings: await source.get() };
   } catch (error) {
     return failure(error);
   }

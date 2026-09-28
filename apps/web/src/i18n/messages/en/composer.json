@@ -54,5 +54,14 @@
     "search": "Find a model",
     "notFound": "Nothing found",
     "pinned": "Selected and default"
+  },
+  "modelRequired": {
+    "title": "Connect a model first",
+    "description": "Generation cannot start without a checked model. Connect a provider and choose a writer model in Settings.",
+    "connect": "Connect model",
+    "later": "Not now",
+    "close": "Close model message",
+    "loading": "Checking connected models",
+    "hint": "Connect a model first"
   }
 }

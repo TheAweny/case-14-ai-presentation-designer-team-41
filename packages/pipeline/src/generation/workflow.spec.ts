@@ -17,8 +17,8 @@ if (!composition) throw new Error('Fixture has no composition.');
 
 describe('template generation workflow', () => {
   it.each([
-    { brief: 'Short', count: 3 },
-    { brief: 'Detailed', count: 8 },
+    { brief: 'Short', count: 10 },
+    { brief: 'Detailed', count: 23 },
   ])('lets the planner size auto mode from $brief context', async ({ brief, count }) => {
     const provider: TextProvider = {
       model: 'fake',
@@ -58,18 +58,35 @@ describe('template generation workflow', () => {
     expect(result.status).toBe('success');
     if (result.status === 'success') expect(result.result).toHaveLength(count);
   });
-  it('keeps an explicit count mandatory', async () => {
+  it('asks the planner once more when a manual count is wrong', async () => {
+    let plannerCalls = 0;
     const provider: TextProvider = {
       model: 'fake',
       async generate<T>(
-        _agent: string,
+        agent: string,
         _instructions: string,
-        _input: unknown,
+        input: unknown,
         schema: z.ZodType<T>,
       ) {
+        if (agent !== 'planner')
+          return schema.parse({
+            patternId: composition.patternId,
+            textsBySlot: { '2': 'Point' },
+            speakerNotes: '',
+          });
+        plannerCalls += 1;
+        if (plannerCalls === 2)
+          expect(input).toMatchObject({
+            previous: expect.objectContaining({ slides: expect.any(Array) }),
+            corrections: { exactSlideCount: 12, returnedSlideCount: 10 },
+          });
         return schema.parse({
           title: 'Wrong count',
-          slides: [{ patternId: composition.patternId, purpose: 'Only one', imageQuery: '' }],
+          slides: Array.from({ length: plannerCalls === 1 ? 10 : 12 }, (_, index) => ({
+            patternId: composition.patternId,
+            purpose: `Point ${index + 1}`,
+            imageQuery: '',
+          })),
         });
       },
     };
@@ -81,8 +98,48 @@ describe('template generation workflow', () => {
     });
     const result = await (
       await workflow.createRun()
-    ).start({ inputData: { brief: 'Two', slideCount: 2, profile } });
-    expect(result.status).toBe('failed');
+    ).start({ inputData: { brief: 'Twelve', slideCount: 12, profile } });
+    expect(result.status).toBe('success');
+    expect(plannerCalls).toBe(2);
+  });
+  it('retries auto mode when the planner returns fewer than 10 slides', async () => {
+    let plannerCalls = 0;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        _input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        if (agent !== 'planner')
+          return schema.parse({
+            patternId: composition.patternId,
+            textsBySlot: { '2': 'Point' },
+            speakerNotes: '',
+          });
+        plannerCalls += 1;
+        return schema.parse({
+          title: 'Auto',
+          slides: Array.from({ length: plannerCalls === 1 ? 2 : 10 }, (_, index) => ({
+            patternId: composition.patternId,
+            purpose: `Point ${index + 1}`,
+            imageQuery: '',
+          })),
+        });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({ inputData: { brief: 'Auto', slideCount: null, profile } });
+    expect(result.status).toBe('success');
+    expect(plannerCalls).toBe(2);
   });
   it('detects over-capacity and missing slot bindings', () => {
     expect(
@@ -116,7 +173,7 @@ describe('template generation workflow', () => {
         if (agent === 'planner')
           return schema.parse({
             title: 'Test',
-            slides: Array.from({ length: 4 }, (_, i) => ({
+            slides: Array.from({ length: 10 }, (_, i) => ({
               patternId: composition.patternId,
               purpose: `Slide ${i}`,
               imageQuery: '',
@@ -142,11 +199,13 @@ describe('template generation workflow', () => {
       concurrency: 2,
     });
     const run = await workflow.createRun();
-    const result = await run.start({ inputData: { brief: 'Test brief', slideCount: 4, profile } });
+    const result = await run.start({ inputData: { brief: 'Test brief', slideCount: 10, profile } });
     expect(result.status).toBe('success');
     expect(peak).toBe(2);
     if (result.status === 'success')
-      expect(result.result.map((s) => s.index).sort()).toEqual([0, 1, 2, 3]);
+      expect(result.result.map((s) => s.index).sort()).toEqual(
+        Array.from({ length: 10 }, (_, i) => i),
+      );
   });
   it('fails if the planner selects a composition outside the template', async () => {
     const provider: TextProvider = {
@@ -154,7 +213,11 @@ describe('template generation workflow', () => {
       async generate<T>(_a: string, _i: string, _input: unknown, schema: z.ZodType<T>) {
         return schema.parse({
           title: 'Test',
-          slides: [{ patternId: 'invented', purpose: 'Test', imageQuery: '' }],
+          slides: Array.from({ length: 10 }, () => ({
+            patternId: 'invented',
+            purpose: 'Test',
+            imageQuery: '',
+          })),
         });
       },
     };
@@ -165,7 +228,7 @@ describe('template generation workflow', () => {
       signal: AbortSignal.timeout(10000),
     });
     const run = await workflow.createRun();
-    const result = await run.start({ inputData: { brief: 'Test', slideCount: 1, profile } });
+    const result = await run.start({ inputData: { brief: 'Test', slideCount: 10, profile } });
     expect(result.status).toBe('failed');
   });
 });

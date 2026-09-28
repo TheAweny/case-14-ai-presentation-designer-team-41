@@ -57,7 +57,6 @@
   "hide": "Minimise",
   "done": "Done: {file}",
   "downloadAgain": "Download again",
-  "demoResult": "Demo mode: the export server is not connected yet, so no file was created. The stages above are the ones the server will report.",
   "another": "Another format",
   "failed": "Export failed",
   "failedUnknown": "The connection to the server dropped. Please try again.",

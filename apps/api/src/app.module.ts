@@ -5,8 +5,10 @@ import { LibraryModule } from './library/library.module.js';
 import { HealthModule } from './health/health.module.js';
 import { MastraModule } from './mastra/mastra.module.js';
 import { RunsModule } from './runs/runs.module.js';
+import { ModelSettingsController } from './model-settings/model-settings.controller.js';
 
 @Module({
   imports: [MastraModule, HealthModule, RunsModule, FilesModule, AuthModule, LibraryModule],
+  controllers: [ModelSettingsController],
 })
 export class AppModule {}

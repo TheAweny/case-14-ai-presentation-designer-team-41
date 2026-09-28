@@ -352,9 +352,7 @@ function Done({ job, onClose }: { job: DeckExportJob; onClose: () => void }) {
           >
             {t('downloadAgain')}
           </a>
-        ) : (
-          <p className="text-xs text-balance text-muted-foreground">{t('demoResult')}</p>
-        )}
+        ) : null}
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={job.reset}>

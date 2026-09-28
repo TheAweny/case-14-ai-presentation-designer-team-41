@@ -36,6 +36,8 @@ export const SLIDE_COUNT_RANGE = {
 } as const;
 
 export interface GenerationRequest {
+  /** Идентификатор текущего аккаунта: API использует его для сохранённого подключения модели. */
+  readonly userId?: string | null;
   /** Шаблон библиотеки, которым оформить колоду. Его профиль уже извлечён при импорте. */
   readonly templateId: string;
   /** Проект, в который попадёт колода; null — вне проектов. */

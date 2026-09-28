@@ -95,6 +95,8 @@ export function createHttpGenerator(): DeckGenerator {
           slideCount: input.slideCount,
           projectId: input.projectId,
           contentIds,
+          userId: input.userId,
+          model: input.model,
         }),
         signal,
       })) as { runId: string };
@@ -162,8 +164,6 @@ export function createHttpExporter(): DeckExporter {
         });
         throw new Error(message);
       };
-      if (input.format !== 'pptx' && input.format !== 'pdf')
-        fail('В этом режиме доступны PPTX и PDF.');
       if (input.audit)
         fail(
           'Повторный аудит при скачивании пока недоступен. Отчёт генерации сохранён в audit.json.',
@@ -181,10 +181,151 @@ export function createHttpExporter(): DeckExporter {
         JSON.stringify(original.designSystem) !== JSON.stringify(input.designSystem)
       )
         fail('Экспорт правок редактора пока не подключён. Доступен исходный сгенерированный файл.');
+      const artifact = (name: string) =>
+        `${apiBaseUrl}/generation/${encodeURIComponent(input.deckId)}/artifacts/${name}`;
+      const previews = async () =>
+        z
+          .array(z.string())
+          .parse(
+            await request(`/generation/${encodeURIComponent(input.deckId)}/previews`, { signal }),
+          );
+      const previewFiles = async () =>
+        await Promise.all(
+          (await previews()).map(async (name) => ({
+            name,
+            blob: await artifactBlob(artifact(name), signal),
+          })),
+        );
+      if (input.format === 'html') {
+        const images = await Promise.all(
+          (await previewFiles()).map(async ({ name, blob }) => ({
+            name,
+            data: await dataUrl(blob),
+          })),
+        );
+        return {
+          fileName: `${input.fileName}.html`,
+          url: URL.createObjectURL(
+            new Blob([standaloneHtml(input.fileName, images)], { type: 'text/html;charset=utf-8' }),
+          ),
+        };
+      }
+      if (input.format === 'png') {
+        return {
+          fileName: `${input.fileName}.zip`,
+          url: URL.createObjectURL(await zipPreviews(await previewFiles())),
+        };
+      }
+      const blob = await artifactBlob(artifact(`deck.${input.format}`), signal);
       return {
         fileName: `${input.fileName}.${input.format}`,
-        url: `${apiBaseUrl}/generation/${encodeURIComponent(input.deckId)}/artifacts/deck.${input.format}`,
+        url: URL.createObjectURL(blob),
       };
     },
   };
+}
+
+async function artifactBlob(url: string, signal: AbortSignal): Promise<Blob> {
+  const response = await fetch(url, { cache: 'no-store', signal });
+  if (!response.ok) throw new Error(`Artifact API: ${response.status}`);
+  return response.blob();
+}
+
+/** I create a standards-compliant store-only ZIP without depending on server-side archiving. */
+export async function zipPreviews(files: readonly { name: string; blob: Blob }[]): Promise<Blob> {
+  const entries = await Promise.all(
+    files.map(async ({ name, blob }) => {
+      const data = new Uint8Array(await blob.arrayBuffer());
+      return { name: new TextEncoder().encode(name), data, crc: crc32(data) };
+    }),
+  );
+  const parts: BlobPart[] = [];
+  const central: BlobPart[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    parts.push(localHeader(entry), entry.name, entry.data);
+    central.push(centralHeader(entry, offset), entry.name);
+    offset += 30 + entry.name.length + entry.data.length;
+  }
+  const centralSize = entries.reduce((size, entry) => size + 46 + entry.name.length, 0);
+  return new Blob([...parts, ...central, endHeader(entries.length, centralSize, offset)], {
+    type: 'application/zip',
+  });
+}
+
+function localHeader(entry: ZipEntry): Uint8Array<ArrayBuffer> {
+  const header = new Uint8Array(new ArrayBuffer(30));
+  const view = new DataView(header.buffer);
+  view.setUint32(0, 0x04034b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint32(14, entry.crc, true);
+  view.setUint32(18, entry.data.length, true);
+  view.setUint32(22, entry.data.length, true);
+  view.setUint16(26, entry.name.length, true);
+  return header;
+}
+
+function centralHeader(entry: ZipEntry, offset: number): Uint8Array<ArrayBuffer> {
+  const header = new Uint8Array(new ArrayBuffer(46));
+  const view = new DataView(header.buffer);
+  view.setUint32(0, 0x02014b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint16(6, 20, true);
+  view.setUint32(16, entry.crc, true);
+  view.setUint32(20, entry.data.length, true);
+  view.setUint32(24, entry.data.length, true);
+  view.setUint16(28, entry.name.length, true);
+  view.setUint32(42, offset, true);
+  return header;
+}
+
+function endHeader(entries: number, centralSize: number, offset: number): Uint8Array<ArrayBuffer> {
+  const header = new Uint8Array(new ArrayBuffer(22));
+  const view = new DataView(header.buffer);
+  view.setUint32(0, 0x06054b50, true);
+  view.setUint16(8, entries, true);
+  view.setUint16(10, entries, true);
+  view.setUint32(12, centralSize, true);
+  view.setUint32(16, offset, true);
+  return header;
+}
+
+function crc32(data: Uint8Array): number {
+  let value = 0xffffffff;
+  for (const byte of data) {
+    value ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+interface ZipEntry {
+  readonly name: Uint8Array<ArrayBuffer>;
+  readonly data: Uint8Array<ArrayBuffer>;
+  readonly crc: number;
+}
+
+async function dataUrl(blob: Blob): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Cannot read preview.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function standaloneHtml(title: string, images: readonly { name: string; data: string }[]): string {
+  const escaped = title.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ??
+      character,
+  );
+  const slides = images
+    .map(
+      ({ name, data }, index) =>
+        `<section id="slide-${index + 1}" aria-label="Slide ${index + 1}"><img alt="${name}" src="${data}"></section>`,
+    )
+    .join('');
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaped}</title><style>body{margin:0;background:#111;color:#fff;font-family:Arial,sans-serif}main{display:grid;gap:24px;padding:24px}section{margin:auto;width:min(100%,1200px);box-shadow:0 8px 28px #000}img{display:block;width:100%;height:auto}</style></head><body><main>${slides}</main></body></html>`;
 }

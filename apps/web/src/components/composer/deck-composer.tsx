@@ -16,9 +16,19 @@ import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import { deckConversations } from '@/components/assistant/session';
+import { useAccount } from '@/components/auth/account-context';
+import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
 import { Button } from '@/components/ui/button';
-import { AttachIcon, SendIcon, SpinnerIcon } from '@/components/ui/icons';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { AttachIcon, ConnectIcon, SendIcon, SpinnerIcon, WarningIcon } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -32,7 +42,7 @@ import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-
 import { newDeckHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
-import { effectiveModel, shortModelName } from '@/lib/writer-models';
+import { effectiveModel, shortModelName, writerModelReady } from '@/lib/writer-models';
 import { projectColorVar } from '@/lib/project-appearance';
 import { cn } from '@/lib/utils';
 import { apiBaseUrl } from '@/lib/api';
@@ -92,6 +102,7 @@ export function DeckComposer({
   /** Страницу открыли кнопкой «Новая презентация» (`?compose=1`): поле сразу в фокусе. */
   focusRequested?: boolean;
 }) {
+  const account = useAccount();
   const t = useTranslations('composer');
   const tAudience = useTranslations('assistant.audience.brief');
   const router = useRouter();
@@ -116,6 +127,7 @@ export function DeckComposer({
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(false);
+  const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
   const groups = templateGroups(templates, project);
@@ -159,6 +171,10 @@ export function DeckComposer({
 
   const submit = async () => {
     if (!ready || sending || !hasTemplate) return;
+    if (!writerModelReady(models)) {
+      if (models !== null) setModelRequiredOpen(true);
+      return;
+    }
     setSending(true);
     for (const file of files) {
       const form = new FormData();
@@ -176,6 +192,7 @@ export function DeckComposer({
       request: {
         // Новый файл важнее выбора в меню: id шаблона разговор узнает, когда разберёт файл.
         templateId: templateFile ? null : (selected?.templateId ?? null),
+        userId: account?.userId ?? null,
         projectId,
         brief: text.trim(),
         files,
@@ -230,201 +247,239 @@ export function DeckComposer({
   };
 
   return (
-    <div
-      ref={root}
-      {...aurora.handlers}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className="aurora rounded-xl"
-      style={glowStyle}
-    >
-      <div aria-hidden className="aurora-halo" />
-      <div aria-hidden className="aurora-ring" />
-      <form
-        onSubmit={onSubmit}
-        aria-busy={sending}
-        className="relative z-1 flex flex-col rounded-[inherit] bg-card ring-1 ring-border"
+    <>
+      <Dialog open={modelRequiredOpen} onOpenChange={setModelRequiredOpen}>
+        <DialogContent closeLabel={t('modelRequired.close')} className="max-w-md">
+          <DialogHeader className="pr-8">
+            <span className="mb-1 grid size-10 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <WarningIcon size={20} aria-hidden />
+            </span>
+            <DialogTitle>{t('modelRequired.title')}</DialogTitle>
+            <DialogDescription>{t('modelRequired.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2 border-0 px-0 pb-0">
+            <Button type="button" variant="ghost" onClick={() => setModelRequiredOpen(false)}>
+              {t('modelRequired.later')}
+            </Button>
+            <Button
+              type="button"
+              autoFocus
+              onClick={() => {
+                setModelRequiredOpen(false);
+                openSettings('models');
+              }}
+              className="ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
+            >
+              <ConnectIcon data-icon="inline-start" />
+              {t('modelRequired.connect')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <div
+        ref={root}
+        {...aurora.handlers}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className="aurora rounded-xl"
+        style={glowStyle}
       >
-        <label htmlFor={fieldId} className="sr-only">
-          {t('label')}
-        </label>
-        <textarea
-          ref={field}
-          id={fieldId}
-          value={text}
-          rows={2}
-          placeholder={t('placeholder')}
-          aria-describedby={rejected.length > 0 ? rejectedId : undefined}
-          onChange={(event) => {
-            setText(event.currentTarget.value);
-            aurora.kick();
-          }}
-          onKeyDown={onKeyDown}
-          className={cn(
-            'max-h-64 min-h-16 w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1',
-            'text-sm text-foreground outline-none placeholder:text-muted-foreground',
-          )}
-        />
+        <div aria-hidden className="aurora-halo" />
+        <div aria-hidden className="aurora-ring" />
+        <form
+          onSubmit={onSubmit}
+          aria-busy={sending}
+          className="relative z-1 flex flex-col rounded-[inherit] bg-card ring-1 ring-border"
+        >
+          <label htmlFor={fieldId} className="sr-only">
+            {t('label')}
+          </label>
+          <textarea
+            ref={field}
+            id={fieldId}
+            value={text}
+            rows={2}
+            placeholder={t('placeholder')}
+            aria-describedby={rejected.length > 0 ? rejectedId : undefined}
+            onChange={(event) => {
+              setText(event.currentTarget.value);
+              aurora.kick();
+            }}
+            onKeyDown={onKeyDown}
+            className={cn(
+              'max-h-64 min-h-16 w-full resize-none overflow-y-auto bg-transparent px-4 pt-3.5 pb-1',
+              'text-sm text-foreground outline-none placeholder:text-muted-foreground',
+            )}
+          />
 
-        {templateFile || files.length > 0 ? (
-          <ul aria-label={t('files')} className="flex flex-wrap gap-1.5 px-3 pt-1 pb-1.5">
-            {/* Шаблон — первым: он меняет всю презентацию, а не добавляет материал. */}
-            {templateFile ? (
-              <AttachmentChip
-                attachment={{ kind: 'template', name: templateFile.name, size: templateFile.size }}
-                onRemove={() => {
-                  setRejected([]);
+          {templateFile || files.length > 0 ? (
+            <ul aria-label={t('files')} className="flex flex-wrap gap-1.5 px-3 pt-1 pb-1.5">
+              {/* Шаблон — первым: он меняет всю презентацию, а не добавляет материал. */}
+              {templateFile ? (
+                <AttachmentChip
+                  attachment={{
+                    kind: 'template',
+                    name: templateFile.name,
+                    size: templateFile.size,
+                  }}
+                  onRemove={() => {
+                    setRejected([]);
+                    setTemplateFile(null);
+                    aurora.flash();
+                  }}
+                />
+              ) : null}
+              {files.map((file, index) => (
+                <AttachmentChip
+                  key={`${file.name}-${file.size}-${file.lastModified}`}
+                  attachment={{ kind: 'file', name: file.name, size: file.size }}
+                  onRemove={() => {
+                    setRejected([]);
+                    setFiles((current) => current.filter((_, at) => at !== index));
+                  }}
+                />
+              ))}
+            </ul>
+          ) : null}
+
+          <TooltipProvider>
+            <div className="flex flex-wrap items-center gap-1.5 px-2.5 pt-1 pb-2.5">
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                accept={COMPOSER_FILE_ACCEPT}
+                tabIndex={-1}
+                aria-hidden
+                className="sr-only"
+                onChange={(event) => {
+                  addFiles(Array.from(event.currentTarget.files ?? []));
+                  // Тот же файл можно выбрать снова, если его убрали.
+                  event.currentTarget.value = '';
+                }}
+              />
+              <input
+                ref={templatePicker}
+                type="file"
+                accept={TEMPLATE_FILE_ACCEPT}
+                tabIndex={-1}
+                aria-hidden
+                className="sr-only"
+                onChange={(event) => {
+                  addFiles(Array.from(event.currentTarget.files ?? []));
+                  event.currentTarget.value = '';
+                }}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    className="rounded-full text-muted-foreground"
+                    aria-label={t('attach')}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <AttachIcon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {t('attachHint', {
+                    text: extensionsOf('text'),
+                    table: extensionsOf('table'),
+                    template: TEMPLATE_EXTENSIONS.join(', '),
+                  })}
+                </TooltipContent>
+              </Tooltip>
+              <ComposerTemplateMenu
+                groups={groups}
+                inProject={project !== null}
+                selected={selected}
+                pendingFile={templateFile}
+                onSelect={(next) => {
+                  // Шаблон из библиотеки выбран осознанно: новый файл больше не нужен.
+                  setPickedId(next);
                   setTemplateFile(null);
                   aurora.flash();
                 }}
+                onUpload={() => templatePicker.current?.click()}
               />
-            ) : null}
-            {files.map((file, index) => (
-              <AttachmentChip
-                key={`${file.name}-${file.size}-${file.lastModified}`}
-                attachment={{ kind: 'file', name: file.name, size: file.size }}
-                onRemove={() => {
-                  setRejected([]);
-                  setFiles((current) => current.filter((_, at) => at !== index));
-                }}
-              />
-            ))}
-          </ul>
-        ) : null}
-
-        <TooltipProvider>
-          <div className="flex flex-wrap items-center gap-1.5 px-2.5 pt-1 pb-2.5">
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              accept={COMPOSER_FILE_ACCEPT}
-              tabIndex={-1}
-              aria-hidden
-              className="sr-only"
-              onChange={(event) => {
-                addFiles(Array.from(event.currentTarget.files ?? []));
-                // Тот же файл можно выбрать снова, если его убрали.
-                event.currentTarget.value = '';
-              }}
-            />
-            <input
-              ref={templatePicker}
-              type="file"
-              accept={TEMPLATE_FILE_ACCEPT}
-              tabIndex={-1}
-              aria-hidden
-              className="sr-only"
-              onChange={(event) => {
-                addFiles(Array.from(event.currentTarget.files ?? []));
-                event.currentTarget.value = '';
-              }}
-            />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-lg"
-                  className="rounded-full text-muted-foreground"
-                  aria-label={t('attach')}
-                  onClick={() => picker.current?.click()}
-                >
-                  <AttachIcon />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {t('attachHint', {
-                  text: extensionsOf('text'),
-                  table: extensionsOf('table'),
-                  template: TEMPLATE_EXTENSIONS.join(', '),
-                })}
-              </TooltipContent>
-            </Tooltip>
-            <ComposerTemplateMenu
-              groups={groups}
-              inProject={project !== null}
-              selected={selected}
-              pendingFile={templateFile}
-              onSelect={(next) => {
-                // Шаблон из библиотеки выбран осознанно: новый файл больше не нужен.
-                setPickedId(next);
-                setTemplateFile(null);
-                aurora.flash();
-              }}
-              onUpload={() => templatePicker.current?.click()}
-            />
-            <SlideCountMenu value={slideCount} onChange={setSlideCount} />
-            {/* Модель и отправка — справа и вместе, даже когда ряд переносится на узком экране. */}
-            <div className="ml-auto flex items-center gap-1.5">
-              <ModelMenu value={model} onChange={setModel} />
-              <Tooltip>
-                {/*
-                 * Подсказка висит на обёртке: у недоступной кнопки нет событий указателя, а
-                 * объяснить, почему стрелка не нажимается, нужно как раз тогда.
-                 */}
-                <TooltipTrigger asChild>
-                  <span className="inline-flex rounded-full">
-                    <Button
-                      type="submit"
-                      size="icon-lg"
-                      disabled={!ready || !hasTemplate || sending}
-                      aria-label={sending ? t('sending') : t('submit')}
-                      aria-describedby={hasTemplate ? undefined : blockedId}
-                      aria-keyshortcuts={mac ? 'Meta+Enter' : 'Control+Enter'}
-                      className={cn(
-                        'rounded-full',
-                        // Пока идёт переход, кнопка не блёкнет: это ответ на нажатие, а не запрет.
-                        sending && 'disabled:opacity-100',
-                      )}
-                    >
-                      {sending ? (
-                        <SpinnerIcon className="animate-spin motion-reduce:animate-none" />
-                      ) : (
-                        <SendIcon className="[--icon-stroke:2]" />
-                      )}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {hasTemplate ? (
-                    <>
-                      {t('submit')}
-                      <span className="flex items-center gap-0.5">
-                        <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
-                        <Kbd>Enter</Kbd>
-                      </span>
-                    </>
-                  ) : (
-                    t('needTemplate')
-                  )}
-                </TooltipContent>
-              </Tooltip>
+              <SlideCountMenu value={slideCount} onChange={setSlideCount} />
+              {/* Модель и отправка — справа и вместе, даже когда ряд переносится на узком экране. */}
+              <div className="ml-auto flex items-center gap-1.5">
+                <ModelMenu value={model} onChange={setModel} />
+                <Tooltip>
+                  {/*
+                   * Подсказка висит на обёртке: у недоступной кнопки нет событий указателя, а
+                   * объяснить, почему стрелка не нажимается, нужно как раз тогда.
+                   */}
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex rounded-full">
+                      <Button
+                        type="submit"
+                        size="icon-lg"
+                        disabled={!ready || !hasTemplate || sending || models === null}
+                        aria-label={sending ? t('sending') : t('submit')}
+                        aria-describedby={hasTemplate ? undefined : blockedId}
+                        aria-keyshortcuts={mac ? 'Meta+Enter' : 'Control+Enter'}
+                        className={cn(
+                          'rounded-full',
+                          // Пока идёт переход, кнопка не блёкнет: это ответ на нажатие, а не запрет.
+                          sending && 'disabled:opacity-100',
+                        )}
+                      >
+                        {sending ? (
+                          <SpinnerIcon className="animate-spin motion-reduce:animate-none" />
+                        ) : (
+                          <SendIcon className="[--icon-stroke:2]" />
+                        )}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {!hasTemplate ? (
+                      t('needTemplate')
+                    ) : models === null ? (
+                      t('modelRequired.loading')
+                    ) : !writerModelReady(models) ? (
+                      t('modelRequired.hint')
+                    ) : (
+                      <>
+                        {t('submit')}
+                        <span className="flex items-center gap-0.5">
+                          <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
+                          <Kbd>Enter</Kbd>
+                        </span>
+                      </>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
+          </TooltipProvider>
+
+          {hasTemplate ? null : (
+            <p id={blockedId} className="sr-only">
+              {t('needTemplate')}
+            </p>
+          )}
+          {rejected.length > 0 ? (
+            <p id={rejectedId} role="alert" className="px-4 pb-3 text-xs text-destructive">
+              {t('rejected', { names: rejected.join(', ') })}
+            </p>
+          ) : null}
+        </form>
+
+        {dragging ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-3 grid place-items-center rounded-[inherit] border border-dashed border-foreground/40 bg-card/90 text-sm text-foreground"
+          >
+            {t('dropHere')}
           </div>
-        </TooltipProvider>
-
-        {hasTemplate ? null : (
-          <p id={blockedId} className="sr-only">
-            {t('needTemplate')}
-          </p>
-        )}
-        {rejected.length > 0 ? (
-          <p id={rejectedId} role="alert" className="px-4 pb-3 text-xs text-destructive">
-            {t('rejected', { names: rejected.join(', ') })}
-          </p>
         ) : null}
-      </form>
-
-      {dragging ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-3 grid place-items-center rounded-[inherit] border border-dashed border-foreground/40 bg-card/90 text-sm text-foreground"
-        >
-          {t('dropHere')}
-        </div>
-      ) : null}
-    </div>
+      </div>
+    </>
   );
 }

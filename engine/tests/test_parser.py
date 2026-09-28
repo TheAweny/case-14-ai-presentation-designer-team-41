@@ -20,7 +20,8 @@ from engine.parser import (
     parse_template,
     parse_template_ir,
 )
-from engine.parser._model import WarningCode
+from engine.parser._model import Box, WarningCode
+from engine.parser._shapes import _Transform
 from lct_tools.fixtures import FIXTURE_BUILDERS, build_all_fixtures, build_fixture_template
 
 #: Fixtures that must parse. The two broken ones are asserted separately.
@@ -75,6 +76,12 @@ def test_groups_are_flattened_and_keep_their_path(fixtures: dict[str, Path]) -> 
     assert any(shape.kind == "group" for shape in shapes)
     nested = [shape for shape in shapes if len(shape.path) == 2]
     assert nested, "a shape two groups deep must survive flattening"
+
+
+def test_group_transform_maps_child_coordinates_into_slide_space() -> None:
+    """A flattened group child must retain the location PowerPoint paints, not its local one."""
+    transform = _Transform(scale_x=0.5, scale_y=2, offset_x=100, offset_y=200)
+    assert transform.box(Box(x=20, y=30, cx=40, cy=50)) == Box(x=110, y=260, cx=20, cy=100)
 
 
 def test_rotation_and_flip_survive(fixtures: dict[str, Path]) -> None:
