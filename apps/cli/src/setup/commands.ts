@@ -27,8 +27,21 @@ function env(): EnvFile {
   return EnvFile.open(join(root, '.env'), join(root, '.env.example'));
 }
 
-function restartHint(): void {
-  p.log.info('Чтобы веб увидел изменения: lct restart web');
+/**
+ * The API loads AUTH_USERS into its accounts table when it starts, so a running stack picks a
+ * change up by recreating the API (and the web, which reads the same file). Stopped, nothing to
+ * do: the next start loads the list.
+ */
+async function applyAccounts(): Promise<void> {
+  if (composeCommand() === null) return;
+  const running = await compose(['ps', '--status', 'running', '--services'], { quiet: true })
+    .then((code) => code === 0)
+    .catch(() => false);
+  if (!running) return;
+  const spinner = p.spinner();
+  spinner.start('Применяю аккаунты в запущенном сервисе');
+  const code = await compose(['up', '-d', 'api', 'web'], { quiet: true });
+  spinner.stop(code === 0 ? 'Аккаунты применены' : 'Не удалось перезапустить API: lct restart api');
 }
 
 /** `lct user add|list|remove|passwd` — accounts of the web interface. */
@@ -53,7 +66,7 @@ export async function user(
     file.set('AUTH_USERS', formatUsers(users.filter((u) => u.email !== email)));
     file.save();
     p.log.success(`Удалён ${email}`);
-    restartHint();
+    await applyAccounts();
     return 0;
   }
   if (action === 'add' || action === 'passwd') {
@@ -86,7 +99,7 @@ export async function user(
     file.set('AUTH_USERS', formatUsers(upsertUser(users, { email, name, password })));
     file.save();
     p.log.success(action === 'add' ? `Аккаунт ${email} создан` : `Пароль ${email} изменён`);
-    restartHint();
+    await applyAccounts();
     return 0;
   }
   p.log.error('lct user list | add [почта] | remove <почта> | passwd <почта>');

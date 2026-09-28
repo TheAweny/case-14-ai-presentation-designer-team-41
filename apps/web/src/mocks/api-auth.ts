@@ -14,6 +14,21 @@ function account(row: ApiAccount): Account {
   return { userId: row.id, email: row.email, name: row.name };
 }
 
+/**
+ * The account in an API answer, or null. The API answers `{ account }`; an empty body or a bare
+ * row, which older builds sent, are read too, so a wrong password is a wrong password and never
+ * a crash on JSON.parse.
+ */
+async function accountOf(response: Response): Promise<Account | null> {
+  if (!response.ok) return null;
+  const text = await response.text();
+  if (text.trim() === '') return null;
+  const payload = JSON.parse(text) as { account?: ApiAccount | null } | ApiAccount | null;
+  if (payload === null) return null;
+  const row = 'account' in payload ? payload.account : (payload as ApiAccount);
+  return row && typeof row.id === 'string' ? account(row) : null;
+}
+
 export function createApiAuth(): AuthSource {
   return {
     async hasAccounts() {
@@ -29,17 +44,13 @@ export function createApiAuth(): AuthSource {
         body: JSON.stringify({ email, password }),
         cache: 'no-store',
       });
-      if (!response.ok) return null;
-      const payload = (await response.json()) as ApiAccount | null;
-      return payload === null ? null : account(payload);
+      return accountOf(response);
     },
     async getAccount(userId) {
       const response = await fetch(`${apiUrl()}/auth/accounts/${encodeURIComponent(userId)}`, {
         cache: 'no-store',
       });
-      if (!response.ok) return null;
-      const payload = (await response.json()) as ApiAccount | null;
-      return payload === null ? null : account(payload);
+      return accountOf(response);
     },
   };
 }

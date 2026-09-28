@@ -44,6 +44,8 @@ services:
       engine:
         condition: service_healthy
     environment:
+      # Accounts written by `lct onboard` and `lct user`; the API loads them into app_users at start.
+      AUTH_USERS: ${AUTH_USERS:-}
       API_PORT: '3001'
       DATABASE_URL: postgresql://${POSTGRES_USER:-lct26}:${POSTGRES_PASSWORD:-lct26-local}@postgres:5432/${POSTGRES_DB:-lct26}
       ENGINE_URL: http://engine:8000
