@@ -315,10 +315,10 @@ export interface DemoLibrary {
  * пока жив процесс сервера, и пропадают при его перезапуске. Настоящее хранение — дело API.
  * Новые проекты и шаблоны получают случайные id, как их выдал бы сервер.
  */
-export function createDemoLibrary(): DemoLibrary {
-  let entries: readonly DemoEntry[] = ENTRIES;
-  let templates: readonly TemplateSummary[] = TEMPLATES;
-  let projects: readonly DemoProject[] = PROJECTS.map((project) => ({
+export function createDemoLibrary({ seedDemo = true }: { seedDemo?: boolean } = {}): DemoLibrary {
+  let entries: readonly DemoEntry[] = seedDemo ? ENTRIES : [];
+  let templates: readonly TemplateSummary[] = seedDemo ? TEMPLATES : [];
+  let projects: readonly DemoProject[] = (seedDemo ? PROJECTS : []).map((project) => ({
     ...project,
     appearance: parseProjectAppearance(project.appearance),
   }));

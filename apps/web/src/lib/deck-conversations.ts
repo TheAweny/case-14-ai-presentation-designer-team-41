@@ -2,6 +2,7 @@ import type { AssistantThreads, MessageAttachment, RequestMeta } from './assista
 import type { GenerationRequest } from './deck-generator';
 import type { GenerationRun, GenerationRuns } from './generation-runs';
 import type { TemplateSummary } from './library-source';
+import { contextMentions } from './slide-context';
 import type { TemplateImport, TemplateImports } from './template-imports';
 
 /**
@@ -46,8 +47,13 @@ export interface NewDeckInput {
 export interface DeckConversations {
   /** Начать разговор о новой колоде. Отдаёт id разговора — по нему открывается редактор. */
   start(input: NewDeckInput): string;
-  /** Сообщение из поля панели, когда вопросов нет. Демо-агент честно отвечает, что не умеет. */
-  say(threadId: string, text: string): void;
+  /**
+   * Сообщение из поля панели, когда вопросов нет. `attachments` — то, что человек дал как
+   * контекст: объекты и слайды колоды со снимком SlideIR. Они остаются в сообщении человека —
+   * настоящий агент прочитает их оттуда. Демо-агент честно говорит, что видит, и что править
+   * по просьбе пока не умеет.
+   */
+  say(threadId: string, text: string, attachments?: readonly MessageAttachment[]): void;
   /** Где начат разговор. */
   returnHref(threadId: string): string | undefined;
 }
@@ -334,9 +340,13 @@ export function createDeckConversations({
       void converse(threadId, input);
       return threadId;
     },
-    say(threadId, text) {
-      threads.append(threadId, { kind: 'user', text, attachments: [], meta: null });
-      threads.append(threadId, { kind: 'agent', text: { key: 'unsupported' } });
+    say(threadId, text, attachments = []) {
+      threads.append(threadId, { kind: 'user', text, attachments, meta: null });
+      const seen = contextMentions(attachments);
+      threads.append(threadId, {
+        kind: 'agent',
+        text: seen.length > 0 ? { key: 'contextSeen', seen } : { key: 'unsupported' },
+      });
     },
     returnHref: (threadId) => origins.get(threadId),
   };

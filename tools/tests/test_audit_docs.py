@@ -1,11 +1,13 @@
-"""The generated audit document covers both registries."""
+"""The generated audit document covers every check registry."""
 
 from lct_tools.audit_docs import render_audit_doc
 
 
-def test_document_lists_both_kinds_of_checks() -> None:
+def test_document_lists_every_registry() -> None:
     text = render_audit_doc()
-    assert "Детерминированные проверки" in text
+    assert "Детерминированные проверки над SlideIR" in text
+    assert "`element-overlap`" in text
+    assert "Проверки движка" in text
     assert "Контекстные проверки" in text
     assert "`contrast`" in text
     assert "`slide-title-matches-body`" in text

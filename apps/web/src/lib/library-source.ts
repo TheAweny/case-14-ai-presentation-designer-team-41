@@ -1,4 +1,4 @@
-import type { DesignSystem, SlideIr } from '@lct/contracts';
+import type { DesignSystem, SlideIr, TemplateIr } from '@lct/contracts';
 import type { SlideLayout, SlideSize } from './deck-source';
 
 export { DeckNotFoundError } from './deck-source';
@@ -28,6 +28,10 @@ export interface TemplateSummary {
   readonly layouts: readonly SlideLayout[];
   /** Профиль шаблона: палитра, шрифты и сетка. По нему же рисуются миниатюры. */
   readonly designSystem: DesignSystem;
+  /** Полный детерминированный результат разбора, если шаблон загружен через API. */
+  readonly templateIr?: TemplateIr;
+  /** Настоящий PNG первого слайда, отрендеренный Python engine, если доступен. */
+  readonly previewDataUrl?: string;
 }
 
 export interface ProjectSummary {

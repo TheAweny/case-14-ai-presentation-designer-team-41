@@ -1,3 +1,11 @@
+import { compositionCheckResponseSchema, type CompositionCheckResponse } from '@lct/contracts';
+import {
+  generationProfileSchema,
+  compositionExportResponseSchema,
+  type GenerationProfile,
+  type CompositionExportRequest,
+  type CompositionExportResponse,
+} from '@lct/contracts';
 import {
   auditReportSchema,
   deckExportResponseSchema,
@@ -22,6 +30,11 @@ export interface EngineClientOptions {
   readonly timeoutMs?: number;
   /** Injectable fetch, so tests do not need a running engine. */
   readonly fetchImpl?: typeof fetch;
+}
+
+export interface TemplateProfileResponse {
+  readonly designSystem: unknown;
+  readonly templateIr: unknown;
 }
 
 /** Raised when the engine answers with a non-2xx status. */
@@ -86,12 +99,14 @@ export class EngineClient {
     return response.json();
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
+  private async post(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)])
+        : AbortSignal.timeout(this.timeoutMs),
     });
     if (!response.ok) {
       throw new EngineHttpError(response.status, path, await response.text());

@@ -1019,7 +1019,7 @@ class Meta5(BaseModel):
     source: Source2
 
 
-class Stroke(BaseModel):
+class Stroke3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1185,7 +1185,7 @@ class TypeScaleItem(BaseModel):
     sizePt: PositiveFloat = Field(..., description="Size in points.")
 
 
-class Code(StrEnum):
+class Code1(StrEnum):
     observed_overrides_theme = "observed-overrides-theme"
     font_unavailable = "font-unavailable"
     low_confidence = "low-confidence"
@@ -1194,11 +1194,11 @@ class Code(StrEnum):
     theme_missing = "theme-missing"
 
 
-class Warning(BaseModel):
+class Warning1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code
+    code: Code1
     message: constr(min_length=1)
     token: str = Field(
         ...,
@@ -1229,7 +1229,7 @@ class DesignSystem1(BaseModel):
         ..., description="Incremented by any incompatible change."
     )
     shadows: Shadows
-    strokes: list[Stroke] = Field(
+    strokes: list[Stroke3] = Field(
         ..., description="Outline styles in use, most common first."
     )
     surfaces: list[Surface] = Field(
@@ -1243,7 +1243,7 @@ class DesignSystem1(BaseModel):
     typeScale: list[TypeScaleItem] = Field(
         ..., description="One entry per role in use.", min_length=1
     )
-    warnings: list[Warning] = Field(
+    warnings: list[Warning1] = Field(
         ..., description="Empty only when every token was measured with confidence."
     )
 
@@ -1314,7 +1314,7 @@ class Role4(StrEnum):
     decoration = "decoration"
 
 
-class Slot(BaseModel):
+class Slot1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1357,7 +1357,7 @@ class Pattern(BaseModel):
     patternId: constr(min_length=1) = Field(
         ..., description="Referred to by every SlideIR built on this pattern."
     )
-    slots: list[Slot] = Field(..., description="In reading order.", min_length=1)
+    slots: list[Slot1] = Field(..., description="In reading order.", min_length=1)
     sourceParts: list[SourcePart] = Field(
         ...,
         description="Layout or slide parts this arrangement was observed on.",
@@ -1441,7 +1441,7 @@ class Overflow(BaseModel):
     )
 
 
-class Paragraph2(BaseModel):
+class Paragraph5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1604,7 +1604,7 @@ class BandFill(StrEnum):
     negative = "negative"
 
 
-class Color(StrEnum):
+class Color9(StrEnum):
     """
     A palette role, or a hex value a user chose.
     """
@@ -1629,7 +1629,7 @@ class Borders(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+    color: Color9 | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="A palette role, or a hex value a user chose."
     )
     horizontal: bool = Field(
@@ -1642,7 +1642,7 @@ class Borders(BaseModel):
     )
 
 
-class Align3(StrEnum):
+class Align6(StrEnum):
     """
     Horizontal alignment. Absent means left.
     """
@@ -1653,7 +1653,7 @@ class Align3(StrEnum):
     justify = "justify"
 
 
-class Color1(StrEnum):
+class Color10(StrEnum):
     """
     Colour of the text. Absent: the type role.
     """
@@ -1670,7 +1670,7 @@ class Color1(StrEnum):
     negative = "negative"
 
 
-class Fill(StrEnum):
+class Fill3(StrEnum):
     """
     A palette role, or six hex digits without a hash when a user chose their own.
     """
@@ -1701,16 +1701,16 @@ class CellStyles(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    align: Align3 | None = Field(
+    align: Align6 | None = Field(
         None, description="Horizontal alignment. Absent means left."
     )
     bold: bool | None = Field(
         None, description="Absent: bold in the header row, regular elsewhere."
     )
-    color: Color1 | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+    color: Color10 | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
         None, description="Colour of the text. Absent: the type role."
     )
-    fill: Fill | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+    fill: Fill3 | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
         None,
         description="Background of the cell. Null for none, even in a header or banded row.",
     )
@@ -1833,7 +1833,7 @@ class Elements3(BaseModel):
     yTitle: str
 
 
-class Align4(StrEnum):
+class Align7(StrEnum):
     """
     Null or absent when the paragraph inherits its alignment.
     """
@@ -1844,11 +1844,11 @@ class Align4(StrEnum):
     justify = "justify"
 
 
-class Paragraph3(BaseModel):
+class Paragraph6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    align: Align4 | None = Field(
+    align: Align7 | None = Field(
         None, description="Null or absent when the paragraph inherits its alignment."
     )
     level: conint(ge=0, le=9007199254740991) = Field(
@@ -1860,7 +1860,7 @@ class Paragraph3(BaseModel):
     runs: list[Run] = Field(..., description="Runs in reading order.")
 
 
-class Shape(StrEnum):
+class Shape3(StrEnum):
     """
     Absent for template decoration of a geometry the parser did not name.
     """
@@ -1873,7 +1873,7 @@ class Shape(StrEnum):
     line = "line"
 
 
-class Color2(StrEnum):
+class Color11(StrEnum):
     """
     A palette role, or a hex value a user chose.
     """
@@ -1914,7 +1914,7 @@ class Tail(StrEnum):
     arrow = "arrow"
 
 
-class Stroke1(BaseModel):
+class Stroke5(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -1922,7 +1922,7 @@ class Stroke1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    color: Color2 | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+    color: Color11 | constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="A palette role, or a hex value a user chose."
     )
     dash: Dash
@@ -1967,7 +1967,7 @@ class Elements4(BaseModel):
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
     )
     elementId: constr(min_length=1)
-    fill: Fill | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+    fill: Fill3 | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
         None,
         description="Null for no fill. Absent when the template did not state one.",
     )
@@ -1989,7 +1989,7 @@ class Elements4(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    paragraphs: list[Paragraph3] | None = Field(
+    paragraphs: list[Paragraph6] | None = Field(
         None,
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
@@ -1999,7 +1999,7 @@ class Elements4(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
-    shape: Shape | None = Field(
+    shape: Shape3 | None = Field(
         None,
         description="Absent for template decoration of a geometry the parser did not name.",
     )
@@ -2007,7 +2007,7 @@ class Elements4(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke1 | None = Field(
+    stroke: Stroke5 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -2025,7 +2025,7 @@ class Slide(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    background: Background | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+    background: Background3 | constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
         None,
         description="Colour the slide is filled with. Null or absent: the template background.",
     )
@@ -5686,7 +5686,7 @@ class Color12(BaseModel):
     )
 
 
-class Kind4(StrEnum):
+class Kind10(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -5694,7 +5694,7 @@ class Kind4(StrEnum):
     none = "none"
 
 
-class Stop(BaseModel):
+class Stop6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5769,7 +5769,7 @@ class Color13(BaseModel):
     )
 
 
-class Stop1(BaseModel):
+class Stop7(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5918,7 +5918,7 @@ class Shape4(BaseModel):
     )
 
 
-class Layout(BaseModel):
+class Layout1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5968,7 +5968,7 @@ class Color15(BaseModel):
     )
 
 
-class Stop2(BaseModel):
+class Stop8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6021,7 +6021,7 @@ class Color16(BaseModel):
     )
 
 
-class Stop3(BaseModel):
+class Stop9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6156,7 +6156,7 @@ class Shape5(BaseModel):
     )
 
 
-class Master(BaseModel):
+class Master1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6223,7 +6223,7 @@ class Color18(BaseModel):
     )
 
 
-class Stop4(BaseModel):
+class Stop10(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6276,7 +6276,7 @@ class Color19(BaseModel):
     )
 
 
-class Stop5(BaseModel):
+class Stop11(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6496,8 +6496,8 @@ class TemplateIR(BaseModel):
         ...,
         description="Digest over the canonical IR. Two runs over one file agree; the name is excluded.",
     )
-    layouts: list[Layout]
-    masters: list[Master]
+    layouts: list[Layout1]
+    masters: list[Master1]
     media: list[MediaItem] = Field(
         ..., description="Inventory of ppt/media, ordered by part name."
     )
@@ -6549,6 +6549,9 @@ class ContractsBundle(BaseModel):
         None, alias="EditableDeckResponse"
     )
     FixPatch_1: FixPatch | None = Field(None, alias="FixPatch")
+    GenerationProfile_1: GenerationProfile | None = Field(
+        None, alias="GenerationProfile"
+    )
     HealthCheck_1: HealthCheck | None = Field(None, alias="HealthCheck")
     JobEvent_1: JobEvent | None = Field(None, alias="JobEvent")
     LayoutVariantsRequest_1: LayoutVariantsRequest | None = Field(

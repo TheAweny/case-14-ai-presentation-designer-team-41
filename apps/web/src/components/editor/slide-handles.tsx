@@ -34,6 +34,7 @@ import {
 import type { EditMode, ElementMove } from '@/components/editor/use-deck-history';
 import { EDITOR_CHROME } from '@/components/editor/chrome-focus';
 import { cn } from '@/lib/utils';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 
 /** Прилипание срабатывает ближе этого, в экранных пикселях при любом зуме. */
 const SNAP_THRESHOLD_PX = 6;
@@ -394,6 +395,7 @@ export function SlideHandles({
   /** Центр рамки группы в EMU: вокруг него поворачивается несколько объектов. */
   const pivot = useRef<Point | null>(null);
   const [keys, setKeys] = useState({ shift: false, alt: false, mod: false });
+  const { snap } = useEditorPrefs();
   /** Рамку тащит Moveable: ручки концов линии на это время прячутся. */
   const [moving, setMoving] = useState(false);
   /** Кадр слайда в координатах окна: в них Moveable рисует рамку, направляющие и границы. */
@@ -998,8 +1000,9 @@ export function SlideHandles({
           throttleDragRotate={keys.shift ? 90 : 0}
           origin={false}
           keepRatio={keepRatio}
-          // Ctrl/Cmd во время жеста — без прилипания, как в Figma.
-          snappable={!keys.mod}
+          // Ctrl/Cmd во время жеста — без прилипания, как в Figma. В настройках его можно
+          // выключить совсем.
+          snappable={snap && !keys.mod}
           snapDirections={ALL_SIDES}
           elementSnapDirections={ALL_SIDES}
           snapThreshold={SNAP_THRESHOLD_PX}

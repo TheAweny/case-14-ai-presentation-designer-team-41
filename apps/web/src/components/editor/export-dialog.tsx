@@ -48,6 +48,7 @@ export function ExportDialog({
   job,
   initialFormat,
   defaultFileName,
+  defaultAudit = false,
   slideCount,
   currentIndex,
   variant,
@@ -58,6 +59,8 @@ export function ExportDialog({
   job: DeckExportJob;
   initialFormat: ExportFormat;
   defaultFileName: string;
+  /** Отчёт аудита отмечен заранее — так в настройках. */
+  defaultAudit?: boolean;
   slideCount: number;
   currentIndex: number;
   variant: LayoutVariantName;
@@ -81,6 +84,7 @@ export function ExportDialog({
             key={initialFormat}
             initialFormat={initialFormat}
             defaultFileName={defaultFileName}
+            defaultAudit={defaultAudit}
             slideCount={slideCount}
             currentIndex={currentIndex}
             onCancel={() => onOpenChange(false)}
@@ -101,6 +105,7 @@ export function ExportDialog({
 function ExportForm({
   initialFormat,
   defaultFileName,
+  defaultAudit = false,
   slideCount,
   currentIndex,
   onCancel,
@@ -108,6 +113,8 @@ function ExportForm({
 }: {
   initialFormat: ExportFormat;
   defaultFileName: string;
+  /** Отчёт аудита отмечен заранее — так в настройках. */
+  defaultAudit?: boolean;
   slideCount: number;
   currentIndex: number;
   onCancel: () => void;
@@ -117,7 +124,7 @@ function ExportForm({
   const [format, setFormat] = useState<ExportFormat>(initialFormat);
   const [fileName, setFileName] = useState(defaultFileName);
   const [range, setRange] = useState<SlideRange>('all');
-  const [audit, setAudit] = useState(false);
+  const [audit, setAudit] = useState(defaultAudit);
   const nameId = useId();
   const formatsId = useId();
   const rangeId = useId();

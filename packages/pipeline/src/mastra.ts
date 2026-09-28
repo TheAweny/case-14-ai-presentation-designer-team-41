@@ -1,9 +1,12 @@
+import type { createGenerationWorkflow, createRepairWorkflow } from './generation/workflow.js';
 import { Mastra } from '@mastra/core';
 import { LibSQLStore } from '@mastra/libsql';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 export interface PipelineOptions {
+  readonly generationWorkflow?: ReturnType<typeof createGenerationWorkflow>;
+  readonly repairWorkflow?: ReturnType<typeof createRepairWorkflow>;
   /** LibSQL connection string for Mastra's internal workflow state. */
   readonly storageUrl?: string;
 }
@@ -36,6 +39,9 @@ export function createMastra(options: PipelineOptions = {}): Mastra {
       url: storageUrl,
     }),
     agents: {},
-    workflows: {},
+    workflows: {
+      ...(options.generationWorkflow ? { generation: options.generationWorkflow } : {}),
+      ...(options.repairWorkflow ? { repair: options.repairWorkflow } : {}),
+    },
   });
 }

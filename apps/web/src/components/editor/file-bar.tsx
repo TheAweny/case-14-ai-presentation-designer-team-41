@@ -20,7 +20,7 @@ import {
   PencilEdit01Icon,
   PlayIcon,
   Ppt01Icon,
-  SecurityCheckIcon,
+  Settings01Icon,
 } from '@hugeicons/core-free-icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,9 +37,11 @@ import { cn } from '@/lib/utils';
 import type { ExportFormat } from '@/lib/deck-export';
 import { NEW_DECK_HREF } from '@/lib/library-menu';
 import { keepCanvasFocus, useMenuFocus } from '@/components/editor/chrome-focus';
+import { shortcutText } from '@/components/editor/editor-shortcuts';
+import { openSettings, useIsMac } from '@/components/settings/open-settings';
 
 /**
- * Полоса над холстом: слева название колоды с меню файла, справа аудит, показ и экспорт.
+ * Полоса над холстом: слева название колоды с меню файла, справа показ и экспорт.
  *
  * Действие, которому ещё нечем работать, не прячется, а показано неактивным с объяснением:
  * место в интерфейсе у него уже есть, и человек видит, чего ждать.
@@ -94,7 +97,6 @@ export function FileBar({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-card p-1 shadow-sm shadow-black/20 ring-1 ring-border">
-          <BarButton icon={SecurityCheckIcon} label={t('audit')} pending={t('auditPending')} />
           <BarButton
             icon={PlayIcon}
             label={t('present')}
@@ -129,7 +131,9 @@ function FileMenu({
   const focus = useMenuFocus();
   const exportAs = (format: ExportFormat) => (onExport ? () => onExport(format) : undefined);
   const renameAsked = useRef(false);
+  const settingsAsked = useRef(false);
   const router = useRouter();
+  const mac = useIsMac();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -158,6 +162,14 @@ function FileMenu({
             renameAsked.current = false;
             event.preventDefault();
             onRename();
+            return;
+          }
+          if (settingsAsked.current) {
+            // Окно настроек открываем, когда меню уже вернуло фокус: иначе меню забрало бы его
+            // у окна, закрываясь.
+            settingsAsked.current = false;
+            event.preventDefault();
+            openSettings();
             return;
           }
           focus.onCloseAutoFocus(event);
@@ -190,6 +202,16 @@ function FileMenu({
         <MenuItem icon={Image01Icon} label={t('exportPng')} onSelect={exportAs('png')} />
         <MenuItem icon={Globe02Icon} label={t('exportHtml')} onSelect={exportAs('html')} />
         <MenuItem icon={CodeIcon} label={t('manifest')} />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            settingsAsked.current = true;
+          }}
+        >
+          <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.5} />
+          {t('settings')}
+          <DropdownMenuShortcut>{shortcutText('settings', mac)}</DropdownMenuShortcut>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <p className="px-2 py-1.5 text-xs text-balance text-muted-foreground">{t('pendingApi')}</p>
       </DropdownMenuContent>

@@ -321,4 +321,36 @@ describe('createDeckConversations', () => {
     const last = threads.get(threadId)?.messages.at(-1);
     expect(last?.kind === 'agent' && 'key' in last.text && last.text.key).toBe('unsupported');
   });
+
+  it('сообщение с объектами слайда — контекст остаётся в сообщении, агент называет, что видит', () => {
+    const { threads, conversations } = setup();
+    const threadId = threads.create('sales');
+    const slide = {
+      schemaVersion: 1 as const,
+      slideId: 's1',
+      variant: 'balanced' as const,
+      index: 0,
+      patternId: 'p',
+      slideCx: 100,
+      slideCy: 50,
+      elements: [],
+    };
+    const attachments = [
+      {
+        kind: 'slide-ref' as const,
+        slideId: 's1',
+        elementIds: [],
+        subject: { kind: 'slide' as const },
+        slideNumber: 4,
+        context: { scope: 'slide' as const, slideNumber: 4, slide },
+      },
+    ];
+    conversations.say(threadId, 'Что здесь не так?', attachments);
+    const [user, agent] = threads.get(threadId)?.messages ?? [];
+    expect(user?.kind === 'user' && user.attachments).toEqual(attachments);
+    expect(agent?.kind === 'agent' && agent.text).toEqual({
+      key: 'contextSeen',
+      seen: [{ subject: { kind: 'slide' }, slideNumber: 4 }],
+    });
+  });
 });

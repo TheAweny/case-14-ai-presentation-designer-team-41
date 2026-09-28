@@ -3,9 +3,11 @@ import { LibraryNotices } from '@/components/library/library-notices';
 import { LibraryProjects } from '@/components/library/library-projects';
 import { LibrarySidebar } from '@/components/library/library-sidebar';
 import { librarySource } from '@/mocks/sources';
+import { requireAccount } from '../auth-session';
 
 /** Главное меню: сайдбар с проектами слева, страница справа. Редактор живёт вне этой группы. */
 export default async function LibraryLayout({ children }: { children: ReactNode }) {
+  const account = await requireAccount();
   const projects = (await librarySource.listProjects()).map(
     ({ projectId, name, appearance, deckCount }) => ({ projectId, name, appearance, deckCount }),
   );
@@ -15,7 +17,7 @@ export default async function LibraryLayout({ children }: { children: ReactNode 
     <LibraryNotices>
       <LibraryProjects projects={projects}>
         <div className="flex min-h-dvh flex-col bg-background text-foreground md:h-dvh md:flex-row">
-          <LibrarySidebar projects={projects} />
+          <LibrarySidebar projects={projects} account={account} />
           <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
         </div>
       </LibraryProjects>

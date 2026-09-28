@@ -24,8 +24,10 @@
    дают IR слайдов. Если текст не влезает, слой возвращает сигнал о переполнении и не трогает
    текст сам; переписывание делает агент на стороне TypeScript. Графики, таблицы и схемы
    собираются нативными фигурами, а не картинками.
-4. **Аудит**. Детерминированные проверки (`engine.checks`) измеряют геометрию, контраст,
-   количества, шрифты, остатки заглушек. Контекстные проверки (`@lct/pipeline`) читают смысл:
+4. **Аудит**. Детерминированные проверки над SlideIR (`@lct/slide-audit`) измеряют геометрию,
+   контраст, шрифты, остатки заглушек; редактор запускает их после каждой правки, пайплайн — после
+   вёрстки. Проверки, которым нужен сам `.pptx` или его рендер, — в `engine.checks`. Контекстные
+   проверки (`@lct/pipeline`) читают смысл:
    отвечает ли заголовок содержанию, подтверждён ли тезис контент-паком. Пользователь видит
    findings и выбирает, какие правки применить.
 5. **Экспорт и рендер** (Python, `engine.export` и `engine.render`). `.pptx` собирается поверх
@@ -87,7 +89,9 @@ PPTX с нативными PowerPoint text boxes. Внутри endpoint нет �
 Из этого следует важное практическое свойство: движок можно прогнать в тестах без GPU и без сети,
 а пайплайн — на фейковом провайдере моделей с записанными ответами. Деление аудита на
 детерминированную и контекстную половины — прямое следствие этой же границы, а не отдельное
-решение.
+решение. Детерминированные проверки над SlideIR при этом живут в TypeScript, в общем пакете: модели
+они не вызывают, с `.pptx` не работают, а редактору нужны без сети (запись от 2026-09-26 в
+`docs/DECISIONS.md`).
 
 Обратное направление тоже запрещено: в TypeScript нет работы с `.pptx`. Если бы она там
 появилась, вёрстка перестала бы быть детерминированной и воспроизводимой.
@@ -104,6 +108,7 @@ PPTX с нативными PowerPoint text boxes. Внутри endpoint нет �
 | `packages/contracts`      | `scope:shared`, `type:lib` | Zod-схемы — источник правды для обеих сторон                        |
 | `packages/slide-renderer` | `scope:shared`, `type:lib` | IR → React: превью и HTML-экспорт                                   |
 | `packages/deck-ops`       | `scope:shared`, `type:lib` | Журнал правок редактора (Immer) и сборка `PatchOp`; порядок слайдов |
+| `packages/slide-audit`    | `scope:shared`, `type:lib` | Детерминированные проверки над SlideIR: живой аудит в редакторе     |
 | `packages/pipeline`       | `scope:api`, `type:lib`    | Mastra: workflow, шаги, агенты, контекстный аудит                   |
 | `packages/registry`       | `scope:api`, `type:lib`    | загрузка агентов из `registry/`, манифест прогона                   |
 | `packages/engine-client`  | `scope:api`, `type:lib`    | типизированный клиент движка                                        |
@@ -123,7 +128,7 @@ PPTX с нативными PowerPoint text boxes. Внутри endpoint нет �
 | `engine.visuals`   | нативные графики, таблицы, схемы из фигур                    |
 | `engine.export`    | IR → `.pptx` / `.pdf`                                        |
 | `engine.render`    | `.pptx` → PNG через LibreOffice                              |
-| `engine.checks`    | детерминированный аудит                                      |
+| `engine.checks`    | проверки аудита по файлу `.pptx` и его рендеру               |
 | `engine.api`       | FastAPI-приложение, единственное место, где слои соединяются |
 
 `parser`, `layout`, `visuals`, `export`, `render` и `checks` **не импортируют друг друга** — им
@@ -192,3 +197,19 @@ _Раздел дополняется по мере реализации: сюд�
 - Не используем бета-функции Mastra (file-based agents, Editor).
 - Не выставляем наружу собственные маршруты Mastra: публичный контракт — это API.
 - Не кладём в репозиторий датасет организаторов и чужие корпоративные шрифты.
+
+## Реализованный single-deck composition workflow (2026-09-27)
+
+Новый путь описан в `docs/GENERATION.md`. `GenerationController` использует Postgres run store,
+реальный `generatePresentation` и typed `EngineClient`. Он не подменяет старый демо-lifecycle
+фиктивными событиями. Mastra планирует одну колоду и параллелит writer/repair. Все промпты
+находятся в registry; planner, writer, critic, rewriter — роли одной модели.
+
+`engine.api` связывает независимые `parser.compositions`, `layout.text_fit`,
+`export.compositions` и `render`. `.pptx` хранит исходные layout/master/relations;
+модель выбирает композиции, но не генерирует координаты. `CompositionExportRequest` и
+`CompositionCheckResponse` валидируются с обеих сторон. Model-only Zod-схемы также экспортируются
+из contracts, но не требуют Pydantic: они не пересекают границу Python.
+
+Single-deck `CompositionPlan` пока не заменяет трёхвариантный `DeckPlan`. Изображения — mock,
+а исходный PPTX/PDF не следует путать с приблизительным редакторским SlideIR.

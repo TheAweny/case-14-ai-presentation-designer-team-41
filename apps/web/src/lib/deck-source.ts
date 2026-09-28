@@ -33,6 +33,7 @@ export interface SlideLayout {
  */
 export interface Deck {
   readonly deckId: string;
+  readonly renderedPdfUrl?: string;
   readonly title: string;
   readonly variant: LayoutVariantName;
   readonly slideSize: SlideSize;

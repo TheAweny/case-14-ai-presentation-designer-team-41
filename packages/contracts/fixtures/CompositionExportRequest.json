@@ -1,0 +1,33 @@
+{
+  "contract": "CompositionExportRequest",
+  "valid": [
+    {
+      "name": "valid composition contract",
+      "payload": {
+        "templatePath": "data/template.pptx",
+        "outputPath": "runs/test/deck.pptx",
+        "slides": [
+          {
+            "patternId": "source-slide-0",
+            "texts": [
+              {
+                "slotId": "2",
+                "text": "Title"
+              }
+            ],
+            "speakerNotes": ""
+          }
+        ],
+        "schemaVersion": 1
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty payload",
+      "payload": {},
+      "why": "Required fields are absent",
+      "path": ["templatePath"]
+    }
+  ]
+}

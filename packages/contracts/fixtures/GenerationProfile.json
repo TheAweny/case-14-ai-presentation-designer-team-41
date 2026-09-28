@@ -1,0 +1,258 @@
+{
+  "contract": "GenerationProfile",
+  "valid": [
+    {
+      "name": "valid composition contract",
+      "payload": {
+        "schemaVersion": 1,
+        "templateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "designSystem": {
+          "schemaVersion": 1,
+          "templateHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "aspect": "16:9",
+          "palette": [
+            {
+              "role": "accent",
+              "hex": "0077FF",
+              "meta": {
+                "source": "observed",
+                "count": 16,
+                "share": 0.8,
+                "confidence": 0.62,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            },
+            {
+              "role": "background",
+              "hex": "FFFFFF",
+              "meta": {
+                "source": "observed",
+                "count": 66,
+                "share": 0.71,
+                "confidence": 0.67,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            },
+            {
+              "role": "text",
+              "hex": "8F8F8F",
+              "meta": {
+                "source": "observed",
+                "count": 2974,
+                "share": 0.73,
+                "confidence": 0.72,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            },
+            {
+              "role": "text-on-accent",
+              "hex": "FFFFFF",
+              "meta": {
+                "source": "theme",
+                "count": 0,
+                "share": 0.0,
+                "confidence": 0.5,
+                "parts": []
+              }
+            }
+          ],
+          "surfaces": [
+            {
+              "tone": "light",
+              "background": "FFFFFF",
+              "text": "8F8F8F",
+              "accent": "0077FF",
+              "meta": {
+                "source": "observed",
+                "count": 66,
+                "share": 0.71,
+                "confidence": 0.67,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            },
+            {
+              "tone": "dark",
+              "background": "000000",
+              "text": "FFFFFF",
+              "accent": null,
+              "meta": {
+                "source": "observed",
+                "count": 27,
+                "share": 0.29,
+                "confidence": 0.27,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            }
+          ],
+          "typeFamilies": [
+            {
+              "role": "primary",
+              "font": "Play",
+              "declared": "Arial",
+              "meta": {
+                "source": "observed",
+                "count": 7581,
+                "share": 0.94,
+                "confidence": 0.94,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            }
+          ],
+          "typeScale": [
+            {
+              "role": "title",
+              "font": "Play",
+              "sizePt": 40.0,
+              "bold": true,
+              "italic": false,
+              "lineSpacing": 0.9,
+              "colorRole": "text",
+              "meta": {
+                "source": "observed",
+                "count": 120,
+                "share": 0.9,
+                "confidence": 0.68,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            },
+            {
+              "role": "body",
+              "font": "Play",
+              "sizePt": 16.0,
+              "bold": false,
+              "italic": false,
+              "lineSpacing": 1.1,
+              "colorRole": "text",
+              "meta": {
+                "source": "observed",
+                "count": 1600,
+                "share": 0.83,
+                "confidence": 0.81,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            }
+          ],
+          "grid": {
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "marginLeft": 676656,
+            "marginRight": 658368,
+            "marginTop": 694944,
+            "marginBottom": 658368,
+            "columns": 12,
+            "gutter": 217170,
+            "baseline": 223520,
+            "meta": {
+              "source": "observed",
+              "count": 39,
+              "share": 0.76,
+              "confidence": 0.68,
+              "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+            }
+          },
+          "strokes": [
+            {
+              "widthPt": 0.75,
+              "hex": "808080",
+              "colorRole": null,
+              "meta": {
+                "source": "observed",
+                "count": 209,
+                "share": 0.7,
+                "confidence": 0.69,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            }
+          ],
+          "radii": [
+            {
+              "name": "sm",
+              "radiusPt": 8.0,
+              "meta": {
+                "source": "observed",
+                "count": 35,
+                "share": 0.3,
+                "confidence": 0.25,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            },
+            {
+              "name": "lg",
+              "radiusPt": 13.7,
+              "meta": {
+                "source": "observed",
+                "count": 25,
+                "share": 0.21,
+                "confidence": 0.17,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            }
+          ],
+          "shadows": {
+            "present": false,
+            "meta": {
+              "source": "observed",
+              "count": 2366,
+              "share": 1.0,
+              "confidence": 1.0,
+              "parts": []
+            }
+          },
+          "protectedZones": [
+            {
+              "role": "logo",
+              "box": {
+                "x": 365760,
+                "y": 6309360,
+                "cx": 609600,
+                "cy": 205740
+              },
+              "mediaPart": "",
+              "meta": {
+                "source": "observed",
+                "count": 30,
+                "share": 0.83,
+                "confidence": 0.69,
+                "parts": ["/ppt/slideLayouts/slideLayout1.xml"]
+              }
+            }
+          ],
+          "warnings": [
+            {
+              "code": "observed-overrides-theme",
+              "token": "type.primary",
+              "message": "the theme declares Arial, the slides are set in Play; the slides win"
+            }
+          ]
+        },
+        "compositions": [
+          {
+            "patternId": "source-slide-0",
+            "sourceIndex": 0,
+            "name": "Title",
+            "slots": [
+              {
+                "slotId": "2",
+                "role": "title",
+                "sample": "Example",
+                "maxChars": 80,
+                "maxLines": 2,
+                "font": "Arial",
+                "fontSize": 32
+              }
+            ],
+            "imageCount": 0
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty payload",
+      "payload": {},
+      "why": "Required fields are absent",
+      "path": ["schemaVersion"]
+    }
+  ]
+}

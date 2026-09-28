@@ -3,6 +3,7 @@ import { SlideView } from '@lct/slide-renderer';
 import { useEmptyTextPrompt } from '@/components/editor/empty-text';
 import { FontSample } from '@/components/library/project-card';
 import type { TemplateSummary } from '@/lib/library-source';
+import { templateSlideFromIr } from '@/lib/template-profile';
 import { cn } from '@/lib/utils';
 
 /**
@@ -15,6 +16,7 @@ export interface TemplateThumb {
   readonly fileName: string;
   readonly layoutCount: number;
   readonly designSystem: DesignSystem;
+  readonly previewDataUrl?: string;
   /** Титульный макет — первый в файле, как в PowerPoint; макетов нет — null. */
   readonly cover: SlideIr | null;
 }
@@ -25,7 +27,10 @@ export function templateThumbOf(template: TemplateSummary): TemplateThumb {
     fileName: template.fileName,
     layoutCount: template.layouts.length,
     designSystem: template.designSystem,
-    cover: template.layouts[0]?.slide ?? null,
+    previewDataUrl: template.previewDataUrl,
+    cover: template.templateIr
+      ? (templateSlideFromIr(template.templateIr) ?? template.layouts[0]?.slide ?? null)
+      : (template.layouts[0]?.slide ?? null),
   };
 }
 
@@ -38,7 +43,7 @@ export function TemplateCover({
   template,
   className,
 }: {
-  template: Pick<TemplateThumb, 'cover' | 'designSystem'>;
+  template: Pick<TemplateThumb, 'cover' | 'designSystem' | 'previewDataUrl'>;
   className?: string;
 }) {
   const emptyText = useEmptyTextPrompt();
@@ -53,7 +58,9 @@ export function TemplateCover({
           : designSystem.aspect.replace(':', ' / '),
       }}
     >
-      {cover ? (
+      {template.previewDataUrl ? (
+        <img src={template.previewDataUrl} alt="" className="size-full object-cover" />
+      ) : cover ? (
         <SlideView slide={cover} profile={designSystem} emptyText={emptyText} thumbnail />
       ) : (
         <FontSample system={designSystem} className="size-full rounded-none text-2xl ring-0" />

@@ -13,6 +13,7 @@ export { SlideFrame, type SlideFrameProps } from './slide-frame.js';
 export { SlideSchematic, type SlideSchematicProps } from './schematic/slide-schematic.js';
 export { createTypeResolver, typeRoleOf, type TypeResolver } from './schematic/text-layout.js';
 export { SlideView, type SlideViewProps } from './slide-view.js';
+export { TextMark } from './view/text.js';
 export {
   fontFamily,
   genericFamily,

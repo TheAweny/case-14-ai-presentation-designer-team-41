@@ -1,0 +1,22 @@
+{
+  "contract": "CompositionCheckResponse",
+  "valid": [
+    {
+      "name": "clean",
+      "payload": {
+        "schemaVersion": 1,
+        "findings": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "missing findings",
+      "payload": {
+        "schemaVersion": 1
+      },
+      "why": "Findings required",
+      "path": ["findings"]
+    }
+  ]
+}

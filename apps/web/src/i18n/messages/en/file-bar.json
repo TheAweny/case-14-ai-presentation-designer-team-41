@@ -18,12 +18,11 @@
   "exportPng": "Slides as PNG (.zip)",
   "manifest": "Run manifest (.json)",
   "pendingApi": "Greyed-out items start working once the editor is connected to the server.",
-  "audit": "Audit",
-  "auditPending": "Audit checks are not connected yet",
   "present": "Present",
   "presentPending": "Presentation mode is not ready yet",
   "export": "Export",
   "exportPending": "Export is not connected yet",
   "exportHtml": "HTML page",
+  "settings": "Settings…",
   "exportRunning": "Export · {percent} %"
 }

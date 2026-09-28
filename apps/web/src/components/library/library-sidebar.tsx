@@ -5,14 +5,22 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { Add01Icon, Home01Icon, PresentationBarChart01Icon } from '@hugeicons/core-free-icons';
-import { LocaleSwitcher } from '@/components/locale-switcher';
+import {
+  Add01Icon,
+  Home01Icon,
+  PresentationBarChart01Icon,
+  Settings01Icon,
+} from '@hugeicons/core-free-icons';
+import { AccountMenu } from '@/components/auth/account-menu';
+import { openSettings, useSettingsShortcut } from '@/components/settings/open-settings';
+import { SettingsButton } from '@/components/settings/settings-button';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreateProjectDialog } from '@/components/library/create-project-dialog';
 import { InlineNameInput } from '@/components/library/inline-name-input';
 import { HIDE_REMOVED_ITEMS } from '@/components/library/page-parts';
 import { ProjectActions, ProjectLook } from '@/components/library/project-actions';
+import type { Account } from '@/lib/auth';
 import { NEW_DECK_HREF, projectHref } from '@/lib/library-menu';
 import { PROJECT_NAME_MAX_LENGTH, type ProjectSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
@@ -31,19 +39,37 @@ export type SidebarProject = Pick<
  * и цветом — так проекты различаются с одного взгляда, как в ChatGPT. Правая кнопка и «⋯»
  * у проекта открывают его меню; имя там правится по месту. «+» у заголовка группы создаёт
  * проект.
- * На узком экране панель становится полосой сверху.
+ * В подвале — аккаунт и настройки. На узком экране панель становится полосой сверху.
  */
-export function LibrarySidebar({ projects }: { projects: readonly SidebarProject[] }) {
+export function LibrarySidebar({
+  projects,
+  account,
+}: {
+  projects: readonly SidebarProject[];
+  account: Account;
+}) {
   const t = useTranslations('library');
   const tMenu = useTranslations('libraryMenu');
+  const tSettings = useTranslations('settings');
   const pathname = usePathname();
   const [creating, setCreating] = useState(false);
+  useSettingsShortcut();
 
   return (
     <>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4 md:hidden">
         <Brand />
-        <Button asChild size="sm" className="ml-auto">
+        <AccountMenu account={account} compact className="ml-auto" />
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={tSettings('open')}
+          className="text-muted-foreground"
+          onClick={() => openSettings()}
+        >
+          <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.5} />
+        </Button>
+        <Button asChild size="sm">
           <Link href={NEW_DECK_HREF}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
             {t('newDeck')}
@@ -152,8 +178,10 @@ export function LibrarySidebar({ projects }: { projects: readonly SidebarProject
           </ul>
         </section>
 
-        <div className="mt-auto">
-          <LocaleSwitcher />
+        {/* Аккаунт слева, настройки справа одной иконкой — как в Claude и Linear. */}
+        <div className="mt-auto flex items-center gap-1">
+          <AccountMenu account={account} className="flex-1" />
+          <SettingsButton iconOnly className="size-8" />
         </div>
       </aside>
 

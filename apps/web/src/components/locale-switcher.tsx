@@ -8,18 +8,18 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { setLocale } from '@/i18n/actions';
 import { LOCALES, LOCALE_NAMES, isLocale } from '@/i18n/config';
-import { cn } from '@/lib/utils';
 
 /**
  * Выбор языка интерфейса. Смена языка — серверное действие: оно пишет cookie, и Next
  * перерисовывает страницу с новым словарём, не сбрасывая состояние редактора.
+ *
+ * Живёт в настройках, в разделе «Общие»: кнопка называет язык целиком, на нём самом.
  */
 export function LocaleSwitcher({ className }: { className?: string }) {
   const t = useTranslations('localeSwitcher');
@@ -34,7 +34,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
           size="sm"
           title={t('label')}
           disabled={pending}
-          className={cn('text-muted-foreground', className)}
+          className={className}
         >
           <HugeiconsIcon
             icon={LanguageSkillIcon}
@@ -43,13 +43,12 @@ export function LocaleSwitcher({ className }: { className?: string }) {
             data-icon="inline-start"
           />
           <span className="sr-only">{t('label')}</span>
-          <span aria-hidden className="uppercase">
-            {locale}
+          <span aria-hidden lang={locale}>
+            {isLocale(locale) ? LOCALE_NAMES[locale] : locale}
           </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-auto">
-        <DropdownMenuLabel>{t('label')}</DropdownMenuLabel>
+      <DropdownMenuContent side="bottom" align="end" className="w-auto">
         <DropdownMenuRadioGroup
           value={locale}
           onValueChange={(next) => {

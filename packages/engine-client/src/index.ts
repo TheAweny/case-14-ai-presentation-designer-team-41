@@ -1,1 +1,6 @@
-export { EngineClient, EngineHttpError, type EngineClientOptions } from './client.js';
+export {
+  EngineClient,
+  EngineHttpError,
+  type EngineClientOptions,
+  type TemplateProfileResponse,
+} from './client.js';

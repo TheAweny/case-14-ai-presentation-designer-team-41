@@ -1,5 +1,9 @@
 """FastAPI application of the engine."""
 
+import base64
+import hashlib
+import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -23,8 +27,23 @@ from engine.contracts import (
     SlideIR,
     Status,
 )
+from engine.contracts._generated import (
+    CompositionCheckResponse,
+    CompositionExportRequest,
+    CompositionExportResponse,
+    GenerationProfile,
+)
+from engine.export.compositions import export_compositions
+from engine.layout.text_fit import check_composition_text
+from engine.parser._errors import TemplateParseError
+from engine.parser.compositions import extract_compositions
 
 _STARTED_AT = time.monotonic()
+
+
+class TemplateProfileRequest(BaseModel):
+    template_path: str
+
 
 app = FastAPI(
     title="Deck engine",
@@ -45,6 +64,42 @@ def health() -> HealthCheck:
         version=__version__,
         uptimeSeconds=time.monotonic() - _STARTED_AT,
     )
+
+
+@app.post(
+    "/v1/template-profile",
+    response_model=dict,
+    summary="Parse a saved PPTX template and return its profile",
+)
+def template_profile(request: TemplateProfileRequest) -> dict:
+    """Return the deterministic parser output for a saved template file."""
+    path = Path(request.template_path).resolve()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Template PPTX was not found.")
+    try:
+        design_system = parser.design_system_of(path)
+        # Use the public parser entrypoint so the canonical IR digest is included in the payload.
+        template_ir = parser.parse_template(path)
+    except (OSError, ValueError, TemplateParseError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    preview_data_url: str | None = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="template-preview-") as directory:
+            rendered = render.render_to_png(
+                path, Path(directory), dpi=96, first_slide_only=True, timeout_seconds=20
+            )
+            if rendered:
+                preview_data_url = "data:image/png;base64," + base64.b64encode(
+                    rendered[0].read_bytes()
+                ).decode("ascii")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        # A profile remains useful when a headless renderer is unavailable.
+        preview_data_url = None
+    return {
+        "designSystem": design_system,
+        "templateIr": template_ir,
+        "previewDataUrl": preview_data_url,
+    }
 
 
 @app.post(

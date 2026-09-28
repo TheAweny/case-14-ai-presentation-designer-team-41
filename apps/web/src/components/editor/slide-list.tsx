@@ -25,7 +25,9 @@ import { CSS } from '@dnd-kit/utilities';
 import type { DesignSystem, SlideIr } from '@lct/contracts';
 import { SlideView } from '@lct/slide-renderer';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Add01Icon, Note01Icon } from '@hugeicons/core-free-icons';
+import { Add01Icon, AiSparklesIcon, Note01Icon } from '@hugeicons/core-free-icons';
+import { LEVEL_ICON, LEVEL_TEXT } from '@/components/editor/audit/audit-panel';
+import type { AuditCounts } from '@/components/editor/audit/deck-audit';
 import { cn } from '@/lib/utils';
 import type { SlideLayout } from '@/lib/deck-source';
 import {
@@ -101,6 +103,9 @@ export function SlideList({
   onAdd,
   onDuplicate,
   onRemove,
+  onAddToAssistant,
+  highlightedSlideId = null,
+  audit,
   className,
 }: {
   slides: readonly SlideIr[];
@@ -124,6 +129,15 @@ export function SlideList({
   onDuplicate: (slideIds: readonly string[]) => readonly string[];
   /** Последний слайд не удаляется: колода без слайдов — не колода. */
   onRemove: (slideIds: readonly string[]) => void;
+  /** Выбранные слайды целиком — в контекст ассистента. Нет — пункта в меню нет. */
+  onAddToAssistant?: (slideIds: readonly string[]) => void;
+  /**
+   * Слайд, который подсвечивает чип ассистента под курсором: объекты этого слайда или он
+   * целиком. Выбор при этом не меняется.
+   */
+  highlightedSlideId?: string | null;
+  /** Находки аудита по слайдам: значок у номера. Слайда без находок в карте нет. */
+  audit?: ReadonlyMap<string, AuditCounts>;
   className?: string;
 }) {
   const t = useTranslations('editor');
@@ -352,6 +366,9 @@ export function SlideList({
                   index={index}
                   current={index === current}
                   selected={picked.has(slide.slideId)}
+                  highlighted={slide.slideId === highlightedSlideId}
+                  errors={audit?.get(slide.slideId)?.errors ?? 0}
+                  warnings={audit?.get(slide.slideId)?.warnings ?? 0}
                   carried={
                     carried.length > 1 &&
                     draggingId !== slide.slideId &&
@@ -376,6 +393,7 @@ export function SlideList({
             onAddFrom={addFrom}
             onDuplicate={duplicatePicked}
             onRemove={removePicked}
+            onAddToAssistant={onAddToAssistant ? () => onAddToAssistant(selection) : undefined}
           />
         </ContextMenu>
         <DropdownMenu modal={false}>
@@ -455,6 +473,7 @@ function SlideMenu({
   onAddFrom,
   onDuplicate,
   onRemove,
+  onAddToAssistant,
 }: {
   /** Сколько слайдов выбрано: копия и удаление — над всеми. */
   count: number;
@@ -467,12 +486,22 @@ function SlideMenu({
   onAddFrom: (choice: NewSlideChoice) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  onAddToAssistant?: () => void;
 }) {
   const t = useTranslations('editor');
   const many = useTranslations('slideList');
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
     <ContextMenuContent>
+      {onAddToAssistant ? (
+        <>
+          <ContextMenuItem onSelect={onAddToAssistant}>
+            <HugeiconsIcon icon={AiSparklesIcon} strokeWidth={1.5} color="currentColor" />
+            {count > 1 ? many('addSlidesToAssistant', { count }) : many('addToAssistant')}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      ) : null}
       <ContextMenuItem onSelect={onAdd}>
         {t('addSlide')}
         <ContextMenuShortcut>{shortcutLabel(shortcutKeys('slide-new'), mac)}</ContextMenuShortcut>
@@ -543,6 +572,9 @@ const SortableSlide = memo(function SortableSlide({
   index,
   current,
   selected,
+  highlighted,
+  errors,
+  warnings,
   carried,
   count,
   digits,
@@ -558,6 +590,11 @@ const SortableSlide = memo(function SortableSlide({
   current: boolean;
   /** Среди выбранных. */
   selected: boolean;
+  /** Подсвечен чипом ассистента под курсором: рамка цветом выделения, выбор не меняется. */
+  highlighted: boolean;
+  /** Находки аудита на слайде: значок у номера, как у файла с ошибками в редакторе кода. */
+  errors: number;
+  warnings: number;
   /** Едет вместе с перетаскиваемым слайдом: на своём месте он бледнеет. */
   carried: boolean;
   /** Сколько слайдов тянут вместе с этим; больше одного — значок со счётом. */
@@ -571,6 +608,11 @@ const SortableSlide = memo(function SortableSlide({
     id: slide.slideId,
   });
   const notes = useTranslations('speakerNotes');
+  const audit = useTranslations('auditPanel');
+  const flagged = errors > 0 || warnings > 0;
+  const auditLabel = flagged
+    ? audit('slideBadge', { errors, warnings, both: String(errors > 0 && warnings > 0) })
+    : '';
   // Значок заметок у номера, как в PowerPoint: видно, к каким слайдам докладчик что-то записал.
   const hasNotes = (slide.notes ?? '').trim() !== '';
 
@@ -584,12 +626,15 @@ const SortableSlide = memo(function SortableSlide({
       aria-label={label}
       aria-describedby={attributes['aria-describedby']}
       aria-roledescription={attributes['aria-roledescription']}
-      aria-description={hasNotes ? notes('has') : undefined}
+      aria-description={
+        [hasNotes ? notes('has') : '', auditLabel].filter(Boolean).join('. ') || undefined
+      }
       tabIndex={current ? 0 : -1}
       data-index={index}
       data-has-notes={hasNotes ? '' : undefined}
       data-slide-id={slide.slideId}
       data-current={current ? '' : undefined}
+      data-highlighted={highlighted ? '' : undefined}
       {...listeners}
       onClick={(event) =>
         onPick(index, { range: event.shiftKey, toggle: event.ctrlKey || event.metaKey })
@@ -627,6 +672,20 @@ const SortableSlide = memo(function SortableSlide({
             <HugeiconsIcon icon={Note01Icon} size={11} strokeWidth={1.75} color="currentColor" />
           </span>
         ) : null}
+        {flagged ? (
+          <span
+            data-audit-mark={errors > 0 ? 'error' : 'warning'}
+            title={auditLabel}
+            className={cn('grid place-items-center', LEVEL_TEXT[errors > 0 ? 'error' : 'warning'])}
+          >
+            <HugeiconsIcon
+              icon={LEVEL_ICON[errors > 0 ? 'error' : 'warning']}
+              size={11}
+              strokeWidth={2}
+              color="currentColor"
+            />
+          </span>
+        ) : null}
       </span>
       {count > 1 ? (
         <span
@@ -649,6 +708,7 @@ const SortableSlide = memo(function SortableSlide({
           // Выбранные — рамкой потише, открытый — яркой.
           'group-aria-selected/slide:ring-2 group-aria-selected/slide:ring-primary/45',
           'group-data-current/slide:ring-2 group-data-current/slide:ring-primary',
+          'group-data-highlighted/slide:ring-2 group-data-highlighted/slide:ring-[var(--canvas-selection)]',
           'group-focus-visible/slide:ring-2 group-focus-visible/slide:ring-ring',
           'max-md:h-16 md:min-w-0 md:flex-1',
         )}

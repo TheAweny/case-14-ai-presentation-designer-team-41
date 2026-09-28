@@ -13,6 +13,7 @@ import { useTransformEffect } from 'react-zoom-pan-pinch';
 import { useTranslations } from 'next-intl';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
+  AiSparklesIcon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -88,6 +89,8 @@ import {
   type DistributeAxis,
 } from '@/components/editor/slide-geometry';
 import { pickImageFiles, registerImage } from '@/lib/image-files';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
+import type { BarOptional } from '@/components/editor/editor-prefs';
 
 /** Зазор между полосой и краем видимой области. От выделения — `SELECTION_BAR_CLEARANCE`. */
 const GAP = 8;
@@ -160,6 +163,11 @@ export type SelectionBarActions = Pick<
   readonly onCommand: (command: CanvasCommand) => void;
   /** Открыть свойства выделенного в правой панели. */
   readonly onOpenInspector: () => void;
+  /**
+   * Выделенное — в контекст ассистента: чипом в его поле, с переходом на вкладку и фокусом в
+   * поле. Нет — кнопки нет.
+   */
+  readonly onAskAssistant?: () => void;
   /** Есть ли что вставить: скопированное в этой вкладке. */
   readonly canPaste: boolean;
 };
@@ -204,6 +212,8 @@ export function SelectionBar({
   onEditTable: (elementId: string) => void;
 }) {
   const t = useTranslations('selectionBar');
+  const prefs = useEditorPrefs();
+  const pinned = prefs.selectionBar === 'pinned';
   const reduceMotion = useReducedMotion() === true;
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
@@ -242,6 +252,21 @@ export function SelectionBar({
     );
     if (!bar || !bounds || hidden) return;
     const origin = overlay.getBoundingClientRect();
+    if (pinned) {
+      // Закреплённая полоса стоит по центру над холстом и не ездит за выделением.
+      const area = barArea(origin, railIn(overlay, origin));
+      const next = {
+        x: Math.round(area.x + Math.max(0, (area.width - bar.offsetWidth) / 2)),
+        y: area.y + GAP,
+        below: false,
+      };
+      setPlacement((previous) =>
+        previous?.x === next.x && previous.y === next.y && previous.below === next.below
+          ? previous
+          : next,
+      );
+      return;
+    }
     const sheet = slideRoot.getBoundingClientRect();
     const scaleX = sheet.width / slide.slideCx;
     const scaleY = sheet.height / slide.slideCy;
@@ -263,10 +288,11 @@ export function SelectionBar({
         ? previous
         : next,
     );
-  }, [overlay, slideRoot, bar, slide, selectedIds, hidden, resized]);
+  }, [overlay, slideRoot, bar, slide, selectedIds, hidden, resized, pinned]);
 
   const context = barContext(selected);
-  if (context === null || hidden) return null;
+  // Выключенная в настройках полоса: свойства остаются в панели «Дизайн».
+  if (context === null || hidden || prefs.selectionBar === 'off') return null;
   const ids = selected.map((element) => element.elementId);
   const side = placement?.below ? 'bottom' : 'top';
   const only = selected.length === 1 ? selected[0] : undefined;
@@ -324,6 +350,17 @@ export function SelectionBar({
           animate={{ opacity: 1 }}
           transition={FADE}
         >
+          {actions.onAskAssistant && prefs.barAssistant ? (
+            <>
+              <BarButton
+                icon={AiSparklesIcon}
+                label={t('askAssistant')}
+                shortcut="assistant-context"
+                onClick={actions.onAskAssistant}
+              />
+              <BarSeparator />
+            </>
+          ) : null}
           {controls}
           <BarSeparator />
           <CommonControls slide={slide} selected={selected} actions={actions} context={context} />
@@ -593,6 +630,9 @@ function CommonControls({
   const t = useTranslations('selectionBar');
   const menu = useTranslations('canvasMenu');
   const panel = useTranslations('designPanel');
+  // Кнопки, убранные в настройках, не пропадают: они ждут в меню «⋯».
+  const { barHidden } = useEditorPrefs();
+  const shown = (id: BarOptional) => !barHidden.includes(id);
   const locked = selected.every((element) => element.locked === true);
   const flippable = selected.every((element) => element.kind === 'decor');
   const run = (command: CanvasCommand) => () => actions.onCommand(command);
@@ -604,38 +644,46 @@ function CommonControls({
 
   return (
     <>
-      <BarButton
-        icon={Copy01Icon}
-        label={menu('duplicate')}
-        shortcut="duplicate"
-        onClick={run({ kind: 'duplicate' })}
-      />
-      <BarMenu
-        icon={Layers01Icon}
-        label={t('layers')}
-        content={LAYERS.map(({ id, icon, shortcut: keys }) => (
-          <DropdownMenuItem key={id} onSelect={run({ kind: 'arrange', to: id })}>
-            <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
-            {menu(id)}
-            {shortcut(keys)}
-          </DropdownMenuItem>
-        ))}
-      />
-      <BarButton
-        icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
-        label={locked ? panel('unlock') : panel('lock')}
-        shortcut="lock"
-        pressed={locked}
-        // Как Alt+Shift+L: заблокированное не выделяется, и выделение снимается.
-        onClick={run({ kind: 'lock' })}
-      />
-      <BarButton
-        icon={Delete02Icon}
-        label={menu('remove')}
-        shortcut="remove"
-        tone="danger"
-        onClick={run({ kind: 'remove' })}
-      />
+      {shown('duplicate') && (
+        <BarButton
+          icon={Copy01Icon}
+          label={menu('duplicate')}
+          shortcut="duplicate"
+          onClick={run({ kind: 'duplicate' })}
+        />
+      )}
+      {shown('layers') && (
+        <BarMenu
+          icon={Layers01Icon}
+          label={t('layers')}
+          content={LAYERS.map(({ id, icon, shortcut: keys }) => (
+            <DropdownMenuItem key={id} onSelect={run({ kind: 'arrange', to: id })}>
+              <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
+              {menu(id)}
+              {shortcut(keys)}
+            </DropdownMenuItem>
+          ))}
+        />
+      )}
+      {shown('lock') && (
+        <BarButton
+          icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
+          label={locked ? panel('unlock') : panel('lock')}
+          shortcut="lock"
+          pressed={locked}
+          // Как Alt+Shift+L: заблокированное не выделяется, и выделение снимается.
+          onClick={run({ kind: 'lock' })}
+        />
+      )}
+      {shown('remove') && (
+        <BarButton
+          icon={Delete02Icon}
+          label={menu('remove')}
+          shortcut="remove"
+          tone="danger"
+          onClick={run({ kind: 'remove' })}
+        />
+      )}
       <BarMenu
         icon={MoreHorizontalIcon}
         label={t('more')}
@@ -686,6 +734,49 @@ function CommonControls({
                 </DropdownMenuItem>
               </>
             ) : null}
+            {barHidden.length > 0 ? <DropdownMenuSeparator /> : null}
+            {!shown('duplicate') && (
+              <DropdownMenuItem onSelect={run({ kind: 'duplicate' })}>
+                <HugeiconsIcon icon={Copy01Icon} strokeWidth={1.5} color="currentColor" />
+                {menu('duplicate')}
+                {shortcut('duplicate')}
+              </DropdownMenuItem>
+            )}
+            {!shown('layers') && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <HugeiconsIcon icon={Layers01Icon} strokeWidth={1.5} color="currentColor" />
+                  {t('layers')}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent data-editor-chrome="" className="z-[4000]">
+                  {LAYERS.map(({ id, icon, shortcut: keys }) => (
+                    <DropdownMenuItem key={id} onSelect={run({ kind: 'arrange', to: id })}>
+                      <HugeiconsIcon icon={icon} strokeWidth={1.5} color="currentColor" />
+                      {menu(id)}
+                      {shortcut(keys)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
+            {!shown('lock') && (
+              <DropdownMenuItem onSelect={run({ kind: 'lock' })}>
+                <HugeiconsIcon
+                  icon={locked ? LockKeyholeIcon : LockKeyholeOpenIcon}
+                  strokeWidth={1.5}
+                  color="currentColor"
+                />
+                {locked ? panel('unlock') : panel('lock')}
+                {shortcut('lock')}
+              </DropdownMenuItem>
+            )}
+            {!shown('remove') && (
+              <DropdownMenuItem variant="destructive" onSelect={run({ kind: 'remove' })}>
+                <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.5} color="currentColor" />
+                {menu('remove')}
+                {shortcut('remove')}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={actions.onOpenInspector}>
               <HugeiconsIcon icon={PanelRightIcon} strokeWidth={1.5} color="currentColor" />

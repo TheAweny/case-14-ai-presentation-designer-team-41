@@ -1,0 +1,268 @@
+{
+  "title": "Settings",
+  "description": "Interface language, editor, shortcuts, decks and generation models.",
+  "open": "Settings",
+  "close": "Close settings",
+  "sections": {
+    "label": "Settings sections",
+    "account": "Account",
+    "general": "General",
+    "editor": "Editor",
+    "shortcuts": "Shortcuts",
+    "decks": "Decks",
+    "models": "Models"
+  },
+  "account": {
+    "title": "Account",
+    "managed": "Your administrator changes the name, email and password.",
+    "signOutHint": "Sign out on this device",
+    "signOut": "Sign out"
+  },
+  "general": {
+    "title": "General",
+    "language": "Interface language"
+  },
+  "editor": {
+    "title": "Editor",
+    "description": "Changes apply right away — an open editor updates as you go.",
+    "rail": {
+      "title": "Toolbar",
+      "items": {
+        "data": "Charts, tables and diagrams",
+        "ai": "Assistant",
+        "shortcuts": "Keyboard shortcuts",
+        "present": "Present"
+      },
+      "keepTool": "Keep the tool after inserting",
+      "keepToolHint": "To insert several shapes in a row. Otherwise the cursor goes back to select, as in Figma."
+    },
+    "bar": {
+      "title": "Bar above the object",
+      "mode": "Show",
+      "modes": {
+        "object": "By the object",
+        "off": "Hidden",
+        "pinned": "Above the canvas"
+      },
+      "modeHint": {
+        "object": "Properties of the selected object, right above it.",
+        "off": "Properties only in the Design panel on the right.",
+        "pinned": "The bar stays centered above the canvas and doesn’t cover nearby objects."
+      },
+      "assistant": "“Ask the assistant” button",
+      "items": {
+        "duplicate": "Duplicate",
+        "layers": "Layer order",
+        "lock": "Lock",
+        "remove": "Delete"
+      },
+      "itemsHint": "Buttons you turn off move to the bar’s “⋯” menu."
+    },
+    "canvas": {
+      "title": "Canvas",
+      "snap": "Snapping",
+      "snapHint": "To nearby objects and slide edges. Hold Ctrl while dragging to turn it off for the moment.",
+      "wheel": "Mouse wheel",
+      "wheelModes": {
+        "pan": "Scroll",
+        "zoom": "Zoom"
+      },
+      "wheelHint": {
+        "pan": "The wheel moves the slide, Ctrl+wheel zooms.",
+        "zoom": "The wheel zooms, Shift+wheel moves the slide."
+      },
+      "largeNudge": "Shift+arrow step",
+      "largeNudgeHint": "{steps, plural, one {Shift+arrow moves by # template grid step.} other {Shift+arrow moves by # template grid steps.}}"
+    },
+    "template": {
+      "title": "Template",
+      "lock": "Lock template design",
+      "lockHint": "Template backgrounds and decor can’t be moved by accident. Applies to decks you open afterwards."
+    },
+    "reset": "Restore defaults"
+  },
+  "shortcuts": {
+    "title": "Shortcuts",
+    "description": "Click a shortcut and press a new one. A shortcut already in use moves to this command, and the other one becomes unassigned.",
+    "press": "Press keys…",
+    "none": "Unassigned",
+    "reset": "Restore the shortcut for “{command}”",
+    "resetAll": "Restore all shortcuts",
+    "moved": "Taken from “{command}”.",
+    "problems": {
+      "needs-modifier": "Use Ctrl or Alt: without them the key types text.",
+      "reserved": "The browser keeps this shortcut for itself.",
+      "modifier": "Press a key, not just a modifier."
+    }
+  },
+  "decks": {
+    "title": "Decks",
+    "description": "Where the new deck composer and the export dialog start. You can still change everything for a single deck.",
+    "generation": {
+      "title": "Generation",
+      "slideCount": "Number of slides",
+      "slideCountHint": "Auto — as many as the material needs.",
+      "auto": "Auto"
+    },
+    "export": {
+      "title": "Export",
+      "format": "Format",
+      "name": "File name",
+      "names": {
+        "title": "Title",
+        "title-date": "Title and date"
+      },
+      "nameHint": {
+        "title": "The file is named after the deck.",
+        "title-date": "The date goes after the title: “Report 2026-09-26”."
+      },
+      "audit": "Attach the audit report",
+      "auditHint": "The check report and run manifest next to the file."
+    }
+  },
+  "models": {
+    "title": "Models",
+    "description": "Generation runs on servers with an OpenAI-compatible API — on this machine, on your local network or in the cloud. Connect a server and assign its models to roles.",
+    "loading": "Loading settings…",
+    "loadFailed": "Couldn’t load model settings.",
+    "retry": "Try again",
+    "actionFailed": "That didn’t work. Please try again.",
+    "connections": {
+      "title": "Connections",
+      "add": "Add connection",
+      "emptyTitle": "No connections yet",
+      "emptyBody": "Add the server your models run on: Ollama, LM Studio, vLLM or any other with an OpenAI-compatible API.",
+      "location": {
+        "local": "Local",
+        "cloud": "Cloud"
+      },
+      "keySet": "key …{hint}",
+      "keySetShort": "key set",
+      "status": {
+        "unchecked": "Not checked",
+        "checking": "Checking…",
+        "ok": "{count, plural, =0 {Checked · no models} one {Checked · # model} other {Checked · # models}}",
+        "failed": "Error: {reason}"
+      },
+      "menu": {
+        "label": "Actions for connection “{name}”",
+        "check": "Check",
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "delete": {
+        "title": "Delete connection?",
+        "body": "The connection “{name}” will be deleted.",
+        "roles": "{count, plural, one {The {roles} role will become unassigned.} other {The {roles} roles will become unassigned.}}",
+        "confirm": "Delete"
+      }
+    },
+    "errors": {
+      "unreachable": "server unreachable",
+      "unreachableDetail": "server unreachable ({detail})",
+      "unauthorized": "invalid key (response {status})",
+      "http": "server responded {status}",
+      "notFound": "server responded 404 — the address may be missing /v1",
+      "invalidResponse": "response is not in OpenAI format",
+      "timeout": "no response within {seconds} s"
+    },
+    "form": {
+      "newTitle": "New connection",
+      "editTitle": "Edit connection",
+      "back": "Back to connections",
+      "preset": {
+        "label": "Server",
+        "custom": "Other",
+        "customHint": "OpenAI-compatible"
+      },
+      "name": {
+        "label": "Name",
+        "placeholder": "For example, GPU server"
+      },
+      "baseUrl": {
+        "label": "API address",
+        "placeholder": "https://…/v1",
+        "hint": "The address as the app server sees it: localhost is the machine the server runs on."
+      },
+      "apiKey": {
+        "label": "API key",
+        "optional": "optional",
+        "hint": "Local servers usually don’t need a key. The key is stored on the app server and never sent back to the browser.",
+        "set": "Key set",
+        "setHint": "Key set …{hint}",
+        "replace": "Replace",
+        "keep": "Keep current"
+      },
+      "problems": {
+        "name": {
+          "empty": "Enter a name.",
+          "tooLong": "The name is longer than {max} characters."
+        },
+        "baseUrl": {
+          "empty": "Enter an address.",
+          "tooLong": "The address is too long.",
+          "invalid": "This doesn’t look like a server address.",
+          "protocol": "The address starts with http:// or https://.",
+          "credentials": "Don’t put a login and password in the address — enter the key in the field below."
+        },
+        "apiKey": {
+          "tooLong": "The key is longer than {max} characters.",
+          "whitespace": "The key contains a space or line break — make sure you copied all of it and nothing else."
+        }
+      },
+      "check": "Check connection",
+      "checking": "Checking…",
+      "checkOk": "{count, plural, =0 {The server responded, but it has no models.} one {The server responded: # model.} other {The server responded: # models.}}",
+      "checkFailed": "Couldn’t connect: {reason}.",
+      "unsavedHint": "You can save without checking.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "gone": "This connection no longer exists — it was deleted."
+    },
+    "roles": {
+      "title": "Roles",
+      "description": "Which model performs each step of generation. Models come from the connection’s last check; you can also type a model id.",
+      "needsConnection": "Add a connection first.",
+      "unassigned": "Not assigned",
+      "missing": "{count, plural, one {# required role is not assigned — generation won’t start without it.} other {# required roles are not assigned — generation won’t start without them.}}",
+      "disabled": "Don’t generate images",
+      "picker": {
+        "label": "Model for the “{role}” role",
+        "noModels": "Model list not received",
+        "manual": "Type a model id…",
+        "clear": "Clear assignment"
+      },
+      "manual": {
+        "label": "Model id on connection “{connection}”",
+        "placeholder": "e.g. qwen2.5:7b-instruct",
+        "save": "Done",
+        "cancel": "Cancel"
+      },
+      "items": {
+        "planner": {
+          "name": "Planner",
+          "description": "Plans the deck: what each slide is about and what type it is."
+        },
+        "writer": {
+          "name": "Writer",
+          "description": "Writes slide text and shortens it when it doesn’t fit the layout."
+        },
+        "critic": {
+          "name": "Critic",
+          "description": "Checks the deck’s content against the audit rules and phrases fixes."
+        },
+        "vision": {
+          "name": "Visual review",
+          "description": "Looks at rendered slides: composition, legibility, consistency with the style.",
+          "hint": "Needs a model that understands images (VLM)."
+        },
+        "image": {
+          "name": "Illustrator",
+          "description": "Draws illustrations when the materials have none.",
+          "hint": "Needs a text-to-image model with an OpenAI-compatible images API."
+        }
+      }
+    }
+  }
+}

@@ -66,6 +66,7 @@ describe('contract registry', () => {
       'EditableDeckRequest',
       'EditableDeckResponse',
       'FixPatch',
+      'GenerationProfile',
       'HealthCheck',
       'JobEvent',
       'LayoutVariantsRequest',

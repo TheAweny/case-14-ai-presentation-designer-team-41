@@ -29,6 +29,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./runs:/app/runs
+      - ${TEMPLATE_FONTS_DIR:-./data/fonts}:/usr/local/share/fonts/template:ro
     expose:
       - '8000'
     restart: unless-stopped
@@ -49,6 +50,7 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       MASTRA_STORAGE_URL: ${MASTRA_STORAGE_URL:-file:/app/runs/mastra.db}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       VLM_BASE_URL: ${VLM_BASE_URL:-}
       IMAGE_BASE_URL: ${IMAGE_BASE_URL:-}
       MODEL_API_KEY: ${MODEL_API_KEY:-}

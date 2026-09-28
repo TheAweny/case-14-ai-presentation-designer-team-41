@@ -1,3 +1,9 @@
+import {
+  compositionCheckResponseSchema,
+  generationProfileSchema,
+  compositionExportRequestSchema,
+  compositionExportResponseSchema,
+} from './generation.js';
 import type { ZodType } from 'zod';
 import { healthCheckSchema } from './health.js';
 import { runConfigSchema } from './run-config.js';
@@ -28,6 +34,10 @@ import { editableDeckRequestSchema, editableDeckResponseSchema } from './editabl
  * slides, findings and a manifest.
  */
 export const contractRegistry = {
+  CompositionCheckResponse: compositionCheckResponseSchema,
+  GenerationProfile: generationProfileSchema,
+  CompositionExportRequest: compositionExportRequestSchema,
+  CompositionExportResponse: compositionExportResponseSchema,
   HealthCheck: healthCheckSchema,
   RunConfig: runConfigSchema,
   AgentConfig: agentConfigSchema,

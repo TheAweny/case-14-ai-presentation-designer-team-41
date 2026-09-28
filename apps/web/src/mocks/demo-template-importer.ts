@@ -24,13 +24,15 @@ const DEMO_UNITS: Readonly<Partial<Record<JobStage, number>>> = {
 export function createDemoTemplateImporter({
   register,
   stepMs = 180,
+  profilesFiles = false,
 }: {
   register: (file: File) => Promise<TemplateSummary>;
   stepMs?: number;
+  profilesFiles?: boolean;
 }): TemplateImporter {
   let runs = 0;
   return {
-    profilesFiles: false,
+    profilesFiles,
     async import(file, onEvent, signal) {
       runs += 1;
       const events = scriptFor(`demo-import-${runs}`);

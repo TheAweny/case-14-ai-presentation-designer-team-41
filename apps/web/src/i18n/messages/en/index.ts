@@ -1,5 +1,7 @@
 import type { Messages } from 'next-intl';
 import assistant from './assistant.json';
+import auth from './auth.json';
+import auditPanel from './audit-panel.json';
 import canvasMenu from './canvas-menu.json';
 import composer from './composer.json';
 import designPanel from './design-panel.json';
@@ -21,6 +23,7 @@ import newDeckEditor from './new-deck-editor.json';
 import projectAppearance from './project-appearance.json';
 import projectPage from './project-page.json';
 import selectionBar from './selection-bar.json';
+import settings from './settings.json';
 import shortcuts from './shortcuts.json';
 import slideList from './slide-list.json';
 import slideShow from './slide-show.json';
@@ -52,6 +55,7 @@ const messages = {
   tableMenu,
   tablePanel,
   layersPanel,
+  auditPanel,
   slideList,
   library,
   libraryMenu,
@@ -62,6 +66,8 @@ const messages = {
   newDeckEditor,
   assistant,
   splash,
+  settings,
+  auth,
 } satisfies Messages;
 
 export default messages;

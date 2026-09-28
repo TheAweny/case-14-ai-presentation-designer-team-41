@@ -11,6 +11,7 @@ import type { CanvasCommand } from '@/components/editor/editor-keymap';
 import { shortcutKeys, shortcutLabel } from '@/components/editor/editor-shortcuts';
 
 type MenuId =
+  | 'addToAssistant'
   | 'cut'
   | 'copy'
   | 'paste'
@@ -34,6 +35,14 @@ type Entry = {
 };
 
 const GROUPS: readonly (readonly Entry[])[] = [
+  // Без выделения в контекст ассистента уходит слайд целиком — пункт активен всегда.
+  [
+    {
+      id: 'addToAssistant',
+      command: { kind: 'assistant-context' },
+      keys: shortcutKeys('assistant-context'),
+    },
+  ],
   [
     { id: 'cut', command: { kind: 'cut' }, keys: shortcutKeys('cut'), needsSelection: true },
     { id: 'copy', command: { kind: 'copy' }, keys: shortcutKeys('copy'), needsSelection: true },
@@ -100,7 +109,8 @@ function isMac(): boolean {
 }
 
 /**
- * Меню правой кнопки на холсте, как в Figma: буфер обмена, слои, группы, выделить всё, удалить.
+ * Меню правой кнопки на холсте, как в Figma: контекст ассистента, буфер обмена, слои, группы,
+ * выделить всё, удалить.
  * Пункты, которым нужно выделение, без него неактивны, а не спрятаны: место каждого пункта
  * в меню постоянно.
  */

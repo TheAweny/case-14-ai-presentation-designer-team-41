@@ -1,6 +1,6 @@
 # Python engine: parsing, layout, visuals, export, render and the deterministic audit.
 # The image carries LibreOffice for rendering and only freely redistributable fonts — a
-# template's own fonts are read out of the uploaded file at runtime.
+# additional licensed template fonts can be mounted into the system font directory.
 FROM python:3.12-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1 \
@@ -13,6 +13,8 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install --no-install-recommends -y \
       libreoffice-impress \
       libreoffice-core \
+      poppler-utils \
+      fontconfig \
       fonts-dejavu-core \
       fonts-liberation2 \
       fonts-noto-core \
@@ -31,11 +33,18 @@ RUN mkdir -p engine/src/engine tools/src/lct_tools \
     && touch engine/src/engine/__init__.py tools/src/lct_tools/__init__.py \
     && uv sync --frozen --no-dev --package engine
 
+COPY infra/fonts /usr/local/share/fonts/lct
+RUN fc-cache -f
+
 COPY engine engine
 
 RUN uv sync --frozen --no-dev --package engine
 
 EXPOSE 8000
+
+RUN python -c "from engine.render import require_fonts; require_fonts({'Play', 'Inter', 'Inter SemiBold'})"
+COPY infra/docker/engine-entrypoint.sh /usr/local/bin/engine-entrypoint.sh
+ENTRYPOINT ["sh", "/usr/local/bin/engine-entrypoint.sh"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"

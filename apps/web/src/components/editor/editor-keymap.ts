@@ -1,7 +1,12 @@
 import type { ArrangeTarget } from '@lct/deck-ops';
 import type { ParagraphAlign } from '@lct/contracts';
 import { arrowDirection, type ArrowDirection } from './slide-geometry';
-import { SHORTCUTS, type Chord, type ShortcutId, type ShortcutScope } from './editor-shortcuts';
+import {
+  activeShortcuts,
+  type Chord,
+  type ShortcutId,
+  type ShortcutScope,
+} from './editor-shortcuts';
 
 export { shortcutLabel } from './editor-shortcuts';
 
@@ -41,8 +46,12 @@ export type EditorCommand =
   // Tab / Shift+Tab в наборе: уровень абзацев выделения.
   | { readonly kind: 'text-indent'; readonly step: -1 | 1 }
   | { readonly kind: 'shortcuts' }
+  // Окно настроек приложения — то же, что в главном меню.
+  | { readonly kind: 'settings' }
   // Показ на весь экран: с первого слайда или с открытого.
-  | { readonly kind: 'present'; readonly from: 'start' | 'current' };
+  | { readonly kind: 'present'; readonly from: 'start' | 'current' }
+  // Выделение (без выделения — открытый слайд) в контекст ассистента.
+  | { readonly kind: 'assistant-context' };
 
 export interface KeyLike {
   readonly code: string;
@@ -67,6 +76,8 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
   switch (id) {
     case 'shortcuts':
       return { kind: 'shortcuts' };
+    case 'settings':
+      return { kind: 'settings' };
     case 'undo':
       return { kind: 'undo' };
     case 'redo':
@@ -152,6 +163,8 @@ function commandFor(id: ShortcutId, code: string): EditorCommand | null {
       return { kind: 'present', from: 'start' };
     case 'present-current':
       return { kind: 'present', from: 'current' };
+    case 'assistant-context':
+      return { kind: 'assistant-context' };
     case 'copy':
     case 'cut':
     case 'paste':
@@ -183,7 +196,7 @@ function matches(chord: Chord, event: KeyLike): boolean {
 }
 
 /**
- * Клавиша → команда по реестру `SHORTCUTS`. Раскладка по `code`, чтобы Ctrl+Z работал и в
+ * Клавиша → команда по реестру `SHORTCUTS` с учётом своих сочетаний человека. Раскладка по `code`, чтобы Ctrl+Z работал и в
  * русской раскладке. Ctrl и Cmd равноправны: на Mac это Cmd, на остальных — Ctrl.
  * В наборе текста (`context: 'text'`) отвечают только сочетания, которые там работают.
  */
@@ -191,7 +204,7 @@ export function editorCommand(
   event: KeyLike,
   context: KeyContext = 'canvas',
 ): EditorCommand | null {
-  for (const spec of SHORTCUTS) {
+  for (const spec of activeShortcuts()) {
     for (const chord of spec.chords) {
       if (!inScope(chord.scope ?? spec.scope, context) || !matches(chord, event)) continue;
       return commandFor(spec.id, event.code);

@@ -63,15 +63,28 @@ import { flipEntries } from '@/components/editor/inspector/selection-model';
 import type { SelectionBarActions } from '@/components/editor/selection-bar';
 import { layoutOf, slideFromLayout } from '@/components/editor/slide-factory';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { useActiveTextEditor } from '@/components/editor/active-text-editor';
 import { SlideList } from '@/components/editor/slide-list';
+import type { AuditIssue } from '@lct/slide-audit';
+import type { AuditPanelProps } from '@/components/editor/audit/audit-panel';
+import { TextMeasurer, type TextHeights } from '@/components/editor/audit/text-measurer';
+import { useDeckAudit } from '@/components/editor/audit/use-deck-audit';
+import { useAuditIgnores } from '@/components/editor/audit/use-audit-ignores';
+import { AuditStatus } from '@/components/editor/audit/audit-status';
+import { countBySlide, fixCommits } from '@/components/editor/audit/deck-audit';
 import { gridForSlide, nudgeBox, type Alignment } from '@/components/editor/slide-geometry';
 import { isTypingTarget, slideTitle, stepSlide } from '@/components/editor/slide-navigation';
 import { FileBar } from '@/components/editor/file-bar';
 import { ExportDialog, type ExportOptions } from '@/components/editor/export-dialog';
 import { useDeckExport } from '@/components/editor/use-deck-export';
-import { safeFileName, type DeckExporter, type ExportFormat } from '@/lib/deck-export';
-import { createDemoExporter } from '@/mocks/demo-exporter';
+import {
+  datedFileName,
+  safeFileName,
+  type DeckExporter,
+  type ExportFormat,
+} from '@/lib/deck-export';
+import { createHttpExporter } from '@/lib/http-generation';
 import {
   alignUnits,
   canGroup,
@@ -93,8 +106,11 @@ import {
 } from '@/components/editor/use-deck-history';
 import { useSlideSelection } from '@/components/editor/use-slide-selection';
 import type { SelectPick } from '@/components/editor/slide-handles';
-import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SpeakerNotesPanel } from '@/components/editor/speaker-notes-panel';
+import { AssistantDeckProvider, type DeckTarget } from '@/components/assistant/deck-context';
+import { useAssistantContext } from '@/components/editor/use-assistant-context';
+import { openSettings } from '@/components/settings/open-settings';
+import { SettingsButton } from '@/components/settings/settings-button';
 
 /**
  * Ниже этой ширины правая панель сама уходит с глаз: иначе от слайда остаётся марка.
@@ -131,7 +147,10 @@ const WITHOUT_SELECTION: ReadonlySet<EditorCommand['kind']> = new Set<EditorComm
   'new-slide',
   'duplicate-slide',
   'shortcuts',
+  'settings',
   'present',
+  // Без выделения в контекст ассистента уходит открытый слайд.
+  'assistant-context',
 ]);
 
 /** Команды колоды: работают и из списка слайдов, если список не забрал клавишу себе. */
@@ -143,6 +162,7 @@ const DECK_COMMANDS: ReadonlySet<EditorCommand['kind']> = new Set<EditorCommand[
   'new-slide',
   'duplicate-slide',
   'shortcuts',
+  'settings',
   'present',
 ]);
 
@@ -189,6 +209,7 @@ export function EditorShell({
   deck,
   media = {},
   layout: saved = EDITOR_LAYOUT_DEFAULT,
+  lockTemplateOnOpen,
   presentOnOpen = false,
   onSlidesChange,
   saveStatus,
@@ -201,6 +222,8 @@ export function EditorShell({
   media?: Readonly<Record<string, string>>;
   /** Раскладка из cookie: сервер знает её заранее, поэтому колонки не прыгают. */
   layout?: EditorLayout;
+  /** Блокировать ли оформление шаблона. Не задано — как в настройках на момент открытия. */
+  lockTemplateOnOpen?: boolean;
   /** Сразу начать показ с первого слайда и убрать `?present=` из адреса. */
   presentOnOpen?: boolean;
   /** Записанные слайды после каждой правки (без живого вида жеста): для черновика колоды. */
@@ -224,24 +247,32 @@ export function EditorShell({
   const [tab, setTab] = useState<InspectorTab>('design');
   const wide = useMediaQuery(WIDE_SCREEN, true);
   const [tool, setTool] = useState<VariantId>('select');
+  const prefs = useEditorPrefs();
+  const { keepTool, largeNudge } = prefs;
+  // Блокировку шаблона берём при открытии: переключатель в настройках действует со следующей
+  // колоды, а не переписывает блокировки посреди правки.
+  const [lockTemplate] = useState(() => lockTemplateOnOpen ?? prefs.lockTemplate);
   // Реестр знает адреса файлов, которые пользователь положил на слайд в этой вкладке.
   const resolveMedia = useMediaResolver(media);
   // Название живёт в редакторе, пока колоду некуда сохранить: API для этого ещё нет.
   const [title, setTitle] = useState(deck.title);
-  const [exporter] = useState(() => givenExporter ?? createDemoExporter());
+  const [exporter] = useState(() => givenExporter ?? createHttpExporter());
   const exportJob = useDeckExport(exporter);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>('pptx');
-  // Оформление шаблона заблокировано с самого начала: см. `lockTemplateDecor`.
-  const startSlides = useMemo(() => lockTemplateDecor(deck.slides), [deck.slides]);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(prefs.exportFormat);
+  // Оформление шаблона заблокировано с самого начала, если так в настройках: см. `lockTemplateDecor`.
+  const startSlides = useMemo(
+    () => (lockTemplate ? lockTemplateDecor(deck.slides) : deck.slides),
+    [deck.slides, lockTemplate],
+  );
   // Макеты — тоже оформление шаблона: слайд на макете начинается с заблокированной подложкой.
   const layouts = useMemo(
     () =>
       deck.layouts.map((layout) => ({
         ...layout,
-        slide: lockTemplateDecor([layout.slide])[0] ?? layout.slide,
+        slide: lockTemplate ? (lockTemplateDecor([layout.slide])[0] ?? layout.slide) : layout.slide,
       })),
-    [deck.layouts],
+    [deck.layouts, lockTemplate],
   );
   const {
     slides,
@@ -342,6 +373,33 @@ export function EditorShell({
     setInspector('closed');
     inspectorPanelRef.current?.collapse();
   }, [inspectorPanelRef]);
+
+  /*
+   * Объекты и слайды как контекст ассистента. Выделение предлагается призраком, только пока
+   * вкладка «Ассистент» на виду: справа или в выезжающей панели узкого экрана.
+   */
+  const assistantVisible =
+    tab === 'assistant' &&
+    (narrow ? sheetOpen : inspector === 'open' || (inspector === 'auto' && wide));
+  const assistantContext = useAssistantContext({
+    slides,
+    slideId,
+    selectedIds,
+    active: assistantVisible,
+    reveal,
+  });
+  const addToAssistant = assistantContext.add;
+  /** Положить объекты в поле ассистента, открыть его вкладку и поставить фокус в поле. */
+  const askAssistant = useCallback(
+    (targets: readonly DeckTarget[]) => {
+      if (!addToAssistant(targets)) return;
+      if (narrow) {
+        setTab('assistant');
+        setSheetOpen(true);
+      } else openInspector('assistant');
+    },
+    [addToAssistant, narrow, openInspector],
+  );
 
   // Разговор, который собрал колоду, продолжается здесь же: панель открыта на «Ассистенте».
   // Через кадр: на узком окне панель спрятана, и развернуть её группа может, только когда
@@ -472,6 +530,27 @@ export function EditorShell({
   );
   /** Строка панели слоёв под курсором: её объекты подсвечены на холсте. */
   const [layerHover, setLayerHover] = useState<readonly string[] | null>(null);
+  // Живой аудит: высоты текста снимает скрытый замер, находки пересчитываются после правки.
+  const [textHeights, setTextHeights] = useState<TextHeights>(() => new Map());
+  const deckIssues = useDeckAudit({
+    slides: committedSlides,
+    designSystem,
+    layouts,
+    heights: textHeights,
+  });
+  // Пропущенные находки уходят из счёта и с холста, но остаются во вкладке, чтобы их вернуть.
+  const auditIgnores = useAuditIgnores(deck.deckId);
+  const [auditIssues, ignoredIssues] = useMemo(() => {
+    const active: AuditIssue[] = [];
+    const skipped: AuditIssue[] = [];
+    for (const issue of deckIssues) {
+      (auditIgnores.ignored.has(issue.issueId) ? skipped : active).push(issue);
+    }
+    return [active, skipped] as const;
+  }, [deckIssues, auditIgnores.ignored]);
+  const auditBySlide = useMemo(() => countBySlide(auditIssues), [auditIssues]);
+  const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
+  const [issueHover, setIssueHover] = useState<AuditIssue | null>(null);
   useEffect(() => {
     setLayerHover(null);
   }, [slideId]);
@@ -744,9 +823,17 @@ export function EditorShell({
         setShortcutsOpen(true);
         return;
       }
+      if (command.kind === 'settings') {
+        openSettings();
+        return;
+      }
       if (!slide) return;
       const selected = slide.elements.filter((element) => selectedIds.includes(element.elementId));
       if (runDeckCommand(command)) return;
+      if (command.kind === 'assistant-context') {
+        askAssistant([{ slideId: slide.slideId, elementIds: selectedIds }]);
+        return;
+      }
       if (command.kind === 'select-step') {
         setSelectedIds(stepUnits(slide.elements, selectedIds, command.step));
         return;
@@ -804,7 +891,7 @@ export function EditorShell({
             slide.slideId,
             selected.map((element) => ({
               elementId: element.elementId,
-              box: nudgeBox(element.box, command.direction, grid, command.large),
+              box: nudgeBox(element.box, command.direction, grid, command.large, largeNudge),
             })),
           );
           return;
@@ -815,8 +902,10 @@ export function EditorShell({
     },
     [
       arrange,
+      askAssistant,
       designSystem.grid,
       duplicate,
+      largeNudge,
       nudge,
       pasteElements,
       redo,
@@ -1004,16 +1093,21 @@ export function EditorShell({
       onStartCrop: (elementId) => canvasControl.current?.startEditing(elementId),
       onCommand: runCommand,
       onOpenInspector: () => openInspector('design'),
+      onAskAssistant: () => {
+        if (slideId) askAssistant([{ slideId, elementIds: selectedIds }]);
+      },
       canPaste,
     }),
     [
       alignSelected,
+      askAssistant,
       canPaste,
       commit,
       endPreview,
       openInspector,
       replaceImageOf,
       runCommand,
+      selectedIds,
       setColorAll,
       setFontSizes,
       setPropsEach,
@@ -1043,6 +1137,35 @@ export function EditorShell({
     onHover: setLayerHover,
     onLock: (ids, locked) => setPropsOf(ids, { locked }),
     onMove: moveLayer,
+  };
+
+  /** Вкладка «Аудит»: находки аудита, переход к ним и исправление в один шаг отмены. */
+  const audit: AuditPanelProps = {
+    issues: auditIssues,
+    slides: committedSlides,
+    activeIssueId,
+    onOpen: (issue) => {
+      setActiveIssueId(issue.issueId);
+      reveal({
+        slideId: issue.slideId,
+        elementIds: issue.elementId ? [issue.elementId] : [],
+      });
+    },
+    onHover: setIssueHover,
+    fixOf: (issue) => {
+      const commits = fixCommits(issue, designSystem);
+      return commits ? () => run(commits) : null;
+    },
+    ignored: ignoredIssues,
+    onIgnore: (issue) => {
+      auditIgnores.ignore(issue.issueId);
+      setIssueHover(null);
+    },
+    onRestore: (issue) => auditIgnores.restore(issue.issueId),
+    onAskAssistant: (issue) => {
+      if (issue.elementId)
+        askAssistant([{ slideId: issue.slideId, elementIds: [issue.elementId] }]);
+    },
   };
 
   /** Панель «Дизайн» — одна и та же справа и в нижней панели узкого экрана. */
@@ -1084,289 +1207,332 @@ export function EditorShell({
   };
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
-      <ResizablePanelGroup
-        id="editor"
-        orientation="horizontal"
-        data-inspector={inspector}
-        onLayoutChanged={(_, meta) => {
-          // Состояние панели меняет только человек. Схлопывание, которое библиотека сделала
-          // сама, когда окну стало тесно, — это не решение «закрыть».
-          if (!meta.isUserInteraction) return;
-          const size = inspectorPanelRef.current?.getSize().inPixels ?? 0;
-          if (size === 0) setInspector('closed');
-          else {
-            remember({ inspector: size });
-            setInspector((current) => (current === 'closed' ? 'open' : current));
-          }
-        }}
-        className={cn(
-          'min-h-0 flex-1',
-          // Узкое окно: панель свойств уходит целиком, вместе со своей ручкой. Решает CSS —
-          // на первом кадре, ещё до гидратации, иначе панель успевала бы мелькнуть.
-          'max-[1099px]:data-[inspector=auto]:[&>[data-inspector-part]]:hidden!',
-        )}
-      >
-        <ResizablePanel id="workspace" minSize="45%" className="min-w-0">
-          {/*
-           * Слайды слева, холст в середине. На узком экране список уходит лентой вниз, и её
-           * высоту задают сами миниатюры: колонки здесь превращаются в две строки.
-           */}
-          <ResizablePanelGroup
-            id="workspace"
-            orientation="horizontal"
-            onLayoutChanged={(_, meta) => {
-              if (!meta.isUserInteraction) return;
-              const size = slidesPanelRef.current?.getSize().inPixels ?? 0;
-              if (size > 0) remember({ slides: size });
-            }}
-            className={cn(
-              'h-full',
-              'max-md:flex-col-reverse!',
-              'max-md:[&>[data-slides-panel]]:flex-none!',
-            )}
-          >
-            <ResizablePanel
-              id="slides"
-              data-slides-panel=""
-              panelRef={slidesPanelRef}
-              defaultSize={initial.slides}
-              minSize={SLIDES_WIDTH.min}
-              maxSize={SLIDES_WIDTH.max}
-              groupResizeBehavior="preserve-pixel-size"
-              className="flex min-h-0 min-w-0 bg-sidebar max-md:touch-auto! md:flex-col"
+    <AssistantDeckProvider value={assistantContext.bridge}>
+      <div className="flex h-dvh flex-col overflow-hidden bg-background">
+        <ResizablePanelGroup
+          id="editor"
+          orientation="horizontal"
+          data-inspector={inspector}
+          onLayoutChanged={(_, meta) => {
+            // Состояние панели меняет только человек. Схлопывание, которое библиотека сделала
+            // сама, когда окну стало тесно, — это не решение «закрыть».
+            if (!meta.isUserInteraction) return;
+            const size = inspectorPanelRef.current?.getSize().inPixels ?? 0;
+            if (size === 0) setInspector('closed');
+            else {
+              remember({ inspector: size });
+              setInspector((current) => (current === 'closed' ? 'open' : current));
+            }
+          }}
+          className={cn(
+            'min-h-0 flex-1',
+            // Узкое окно: панель свойств уходит целиком, вместе со своей ручкой. Решает CSS —
+            // на первом кадре, ещё до гидратации, иначе панель успевала бы мелькнуть.
+            'max-[1099px]:data-[inspector=auto]:[&>[data-inspector-part]]:hidden!',
+          )}
+        >
+          <ResizablePanel id="workspace" minSize="45%" className="min-w-0">
+            {/*
+             * Слайды слева, холст в середине. На узком экране список уходит лентой вниз, и её
+             * высоту задают сами миниатюры: колонки здесь превращаются в две строки.
+             */}
+            <ResizablePanelGroup
+              id="workspace"
+              orientation="horizontal"
+              onLayoutChanged={(_, meta) => {
+                if (!meta.isUserInteraction) return;
+                const size = slidesPanelRef.current?.getSize().inPixels ?? 0;
+                if (size > 0) remember({ slides: size });
+              }}
+              className={cn(
+                'h-full',
+                'max-md:flex-col-reverse!',
+                'max-md:[&>[data-slides-panel]]:flex-none!',
+              )}
             >
-              <SlideList
-                slides={slides}
-                layouts={layouts}
-                designSystem={designSystem}
-                labels={labels}
-                current={index}
-                resolveMedia={resolveMedia}
-                onSelect={select}
-                onMove={moveSlides}
-                onAdd={addSlide}
-                onDuplicate={duplicateSlides}
-                onRemove={removeSlides}
-                className="min-h-0 min-w-0 flex-1"
-              />
-              {/*
-               * Настройки приложения живут в подвале колонки, пока у редактора нет своего меню.
-               * Там же счётчик: он про место в этом списке и не спорит с рейкой за края холста.
-               */}
-              <div
-                className={cn(
-                  'flex shrink-0 items-center justify-between gap-1 p-1.5',
-                  'max-md:flex-col max-md:justify-center max-md:border-l md:border-t',
-                  'border-border',
-                )}
+              <ResizablePanel
+                id="slides"
+                data-slides-panel=""
+                panelRef={slidesPanelRef}
+                defaultSize={initial.slides}
+                minSize={SLIDES_WIDTH.min}
+                maxSize={SLIDES_WIDTH.max}
+                groupResizeBehavior="preserve-pixel-size"
+                className="flex min-h-0 min-w-0 bg-sidebar max-md:touch-auto! md:flex-col"
               >
-                <LocaleSwitcher />
-                {saveStatus}
-                <p className="px-2 text-xs text-muted-foreground tabular-nums">
-                  <span className="sr-only">
-                    {t('slideLabel', { number: index + 1, total: slides.length })}
-                  </span>
-                  <span aria-hidden>
-                    {t('counter', { number: index + 1, total: slides.length })}
-                  </span>
-                </p>
-              </div>
-            </ResizablePanel>
+                <SlideList
+                  slides={slides}
+                  layouts={layouts}
+                  designSystem={designSystem}
+                  labels={labels}
+                  current={index}
+                  resolveMedia={resolveMedia}
+                  onSelect={select}
+                  onMove={moveSlides}
+                  onAdd={addSlide}
+                  onDuplicate={duplicateSlides}
+                  onRemove={removeSlides}
+                  onAddToAssistant={(slideIds) =>
+                    askAssistant(slideIds.map((id) => ({ slideId: id, elementIds: [] })))
+                  }
+                  highlightedSlideId={assistantContext.highlight.slideId}
+                  audit={auditBySlide}
+                  className="min-h-0 min-w-0 flex-1"
+                />
+                {/*
+                 * Подвал колонки: настройки, статус сохранения и счётчик. Счётчик про место в этом
+                 * списке и не спорит с рейкой за края холста.
+                 */}
+                <div
+                  className={cn(
+                    'flex shrink-0 items-center justify-between gap-1 p-1.5',
+                    'max-md:flex-col max-md:justify-center max-md:border-l md:border-t',
+                    'border-border',
+                  )}
+                >
+                  <SettingsButton iconOnly />
+                  <AuditStatus issues={auditIssues} onOpen={() => openInspector('audit')} />
+                  {saveStatus}
+                  <p className="px-2 text-xs text-muted-foreground tabular-nums md:ml-auto">
+                    <span className="sr-only">
+                      {t('slideLabel', { number: index + 1, total: slides.length })}
+                    </span>
+                    <span aria-hidden>
+                      {t('counter', { number: index + 1, total: slides.length })}
+                    </span>
+                  </p>
+                </div>
+              </ResizablePanel>
 
-            <ResizableHandle aria-label={t('resizeSlides')} className="max-md:hidden" />
+              <ResizableHandle aria-label={t('resizeSlides')} className="max-md:hidden" />
 
-            <ResizablePanel id="canvas" minSize="40%" className="flex min-w-0 flex-col">
-              <FileBar
-                title={title}
-                onRename={setTitle}
-                onPresent={() => startShow(index)}
-                onExport={openExport}
-                exportPercent={
-                  exportJob.phase === 'running' ? (exportJob.progress?.percent ?? 0) : null
-                }
-              />
-              <ExportDialog
-                open={exportOpen}
-                onOpenChange={setExportOpen}
-                job={exportJob}
-                initialFormat={exportFormat}
-                defaultFileName={safeFileName(title, t('untitled'))}
-                slideCount={slides.length}
-                currentIndex={index}
-                variant={deck.variant}
-                onStart={startExport}
-              />
-              <ToolRailDock
-                className="min-h-0 min-w-0 flex-1"
-                railClassName="max-md:hidden"
-                dock={initial.dock}
-                onDockChange={(dock) => remember({ dock })}
-                tool={tool}
-                onToolChange={setTool}
-                onAction={(id) => {
-                  if (id === 'shortcuts') setShortcutsOpen(true);
-                  else if (id === 'present') startShow(index);
-                  else openInspector('assistant');
-                }}
-                history={history}
-              >
-                {slide ? (
-                  <ZoomBasis slideWidthEmu={slide.slideCx}>
-                    <SlideCanvas
-                      slide={slide}
-                      designSystem={designSystem}
-                      label={labels[index] ?? ''}
-                      resolveMedia={resolveMedia}
-                      selectedIds={selectedIds}
-                      tool={tool}
-                      onSelect={setSelectedIds}
-                      onCommit={commit}
-                      onTextCommit={setText}
-                      onRemoveElements={(ids) => {
-                        if (slideId) remove(slideId, ids);
-                      }}
-                      onInsert={(elements) => {
-                        if (!slideId) return;
-                        insert(slideId, elements);
-                        // Как в Figma: объект вставлен — курсор снова выбирает.
-                        setTool('select');
-                      }}
-                      onReplaceImage={replaceImageOf}
-                      onCommand={runCommand}
-                      canPaste={canPaste}
-                      hasLocked={slide.elements.some((element) => element.locked === true)}
-                      tableOps={tableOps}
-                      onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
-                      onNudge={nudgeOf}
-                      onDuplicate={duplicateTo}
-                      onLineEnds={reshapeLine}
-                      onRotateMany={rotateMany}
-                      controlRef={canvasControl}
-                      selectionActions={selectionActions}
-                      className={CANVAS_PADDING}
-                      onPick={pickOnCanvas}
-                      onEnterGroup={enterGroupAt}
-                      hoverUnit={hoverUnit}
-                      highlightIds={layerHover ?? undefined}
-                      canGroup={grouping.canGroup}
-                      canUngroup={grouping.canUngroup}
-                      groupFrame={grouping.wholeGroup}
-                      onShapeTextCommit={(target, elementId, paragraphs) =>
-                        run([
-                          (current) =>
-                            commitShapeText(current, { slideId: target, elementId, paragraphs }),
-                        ])
-                      }
-                      onCrop={(elementId, crop, box) => {
-                        if (slideId) {
-                          run([
-                            (current) =>
-                              commitImageCrop(current, { slideId, elementId, crop, box }),
-                          ]);
-                        }
-                      }}
-                    />
-                  </ZoomBasis>
-                ) : null}
-                {inspector === 'open' ? null : (
-                  <InspectorToggle
-                    onOpen={openInspector}
-                    // В `auto` кнопка нужна только там, где панель сама ушла: между узким
-                    // экраном (там панели нет вовсе) и порогом, с которого она открыта.
-                    className={cn(
-                      'hidden',
-                      inspector === 'closed' ? 'md:block' : 'md:max-[1099px]:block',
-                    )}
-                  />
-                )}
-              </ToolRailDock>
-              {slide ? (
-                <SpeakerNotesPanel
-                  className="max-md:hidden"
-                  slideId={slide.slideId}
-                  notes={slide.notes}
-                  onCommit={(target, notes) =>
-                    run([(current) => commitSlideNotes(current, { slideId: target, notes })])
+              <ResizablePanel id="canvas" minSize="40%" className="flex min-w-0 flex-col">
+                <FileBar
+                  title={title}
+                  onRename={setTitle}
+                  onPresent={() => startShow(index)}
+                  onExport={openExport}
+                  exportPercent={
+                    exportJob.phase === 'running' ? (exportJob.progress?.percent ?? 0) : null
                   }
                 />
-              ) : null}
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
+                {deck.renderedPdfUrl && (
+                  <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                    {t('generatedNotice')}{' '}
+                    <a
+                      href={deck.renderedPdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {t('generatedPdf')}
+                    </a>
+                  </div>
+                )}
+                <ExportDialog
+                  open={exportOpen}
+                  onOpenChange={setExportOpen}
+                  job={exportJob}
+                  initialFormat={exportFormat}
+                  defaultFileName={
+                    prefs.exportName === 'title-date'
+                      ? datedFileName(safeFileName(title, t('untitled')), new Date())
+                      : safeFileName(title, t('untitled'))
+                  }
+                  defaultAudit={prefs.exportAudit}
+                  slideCount={slides.length}
+                  currentIndex={index}
+                  variant={deck.variant}
+                  onStart={startExport}
+                />
+                <ToolRailDock
+                  className="min-h-0 min-w-0 flex-1"
+                  railClassName="max-md:hidden"
+                  dock={initial.dock}
+                  onDockChange={(dock) => remember({ dock })}
+                  tool={tool}
+                  onToolChange={setTool}
+                  onAction={(id) => {
+                    if (id === 'shortcuts') setShortcutsOpen(true);
+                    else if (id === 'present') startShow(index);
+                    else openInspector('assistant');
+                  }}
+                  history={history}
+                >
+                  {slide ? (
+                    <ZoomBasis slideWidthEmu={slide.slideCx}>
+                      <SlideCanvas
+                        slide={slide}
+                        designSystem={designSystem}
+                        label={labels[index] ?? ''}
+                        resolveMedia={resolveMedia}
+                        selectedIds={selectedIds}
+                        tool={tool}
+                        onSelect={setSelectedIds}
+                        onCommit={commit}
+                        onTextCommit={setText}
+                        onRemoveElements={(ids) => {
+                          if (slideId) remove(slideId, ids);
+                        }}
+                        onInsert={(elements) => {
+                          if (!slideId) return;
+                          insert(slideId, elements);
+                          // Как в Figma: объект вставлен — курсор снова выбирает. В настройках
+                          // можно остаться в инструменте и вставить несколько подряд.
+                          if (!keepTool) setTool('select');
+                        }}
+                        onReplaceImage={replaceImageOf}
+                        onCommand={runCommand}
+                        canPaste={canPaste}
+                        hasLocked={slide.elements.some((element) => element.locked === true)}
+                        tableOps={tableOps}
+                        onRotate={(elementId, rotation) => setPropsOf([elementId], { rotation })}
+                        onNudge={nudgeOf}
+                        onDuplicate={duplicateTo}
+                        onLineEnds={reshapeLine}
+                        onRotateMany={rotateMany}
+                        controlRef={canvasControl}
+                        selectionActions={selectionActions}
+                        className={CANVAS_PADDING}
+                        onPick={pickOnCanvas}
+                        onEnterGroup={enterGroupAt}
+                        hoverUnit={hoverUnit}
+                        highlightIds={
+                          layerHover ??
+                          (issueHover?.slideId === slide.slideId && issueHover.elementId
+                            ? [issueHover.elementId]
+                            : null) ??
+                          assistantContext.highlight.elementIds ??
+                          undefined
+                        }
+                        auditIssues={auditIssues}
+                        activeIssueId={issueHover?.issueId ?? activeIssueId}
+                        canGroup={grouping.canGroup}
+                        canUngroup={grouping.canUngroup}
+                        groupFrame={grouping.wholeGroup}
+                        onShapeTextCommit={(target, elementId, paragraphs) =>
+                          run([
+                            (current) =>
+                              commitShapeText(current, { slideId: target, elementId, paragraphs }),
+                          ])
+                        }
+                        onCrop={(elementId, crop, box) => {
+                          if (slideId) {
+                            run([
+                              (current) =>
+                                commitImageCrop(current, { slideId, elementId, crop, box }),
+                            ]);
+                          }
+                        }}
+                      />
+                    </ZoomBasis>
+                  ) : null}
+                  {inspector === 'open' ? null : (
+                    <InspectorToggle
+                      onOpen={openInspector}
+                      // В `auto` кнопка нужна только там, где панель сама ушла: между узким
+                      // экраном (там панели нет вовсе) и порогом, с которого она открыта.
+                      className={cn(
+                        'hidden',
+                        inspector === 'closed' ? 'md:block' : 'md:max-[1099px]:block',
+                      )}
+                    />
+                  )}
+                </ToolRailDock>
+                {slide ? (
+                  <SpeakerNotesPanel
+                    className="max-md:hidden"
+                    slideId={slide.slideId}
+                    notes={slide.notes}
+                    onCommit={(target, notes) =>
+                      run([(current) => commitSlideNotes(current, { slideId: target, notes })])
+                    }
+                  />
+                ) : null}
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
 
-        <ResizableHandle
-          withHandle
-          data-inspector-part=""
-          aria-label={t('resizeInspector')}
-          // Схлопнутую панель ручка не тянет: её возвращает кнопка на холсте.
-          disabled={inspector === 'closed' || (inspector === 'auto' && !wide)}
-          className={cn(inspector === 'closed' && 'hidden')}
+          <ResizableHandle
+            withHandle
+            data-inspector-part=""
+            aria-label={t('resizeInspector')}
+            // Схлопнутую панель ручка не тянет: её возвращает кнопка на холсте.
+            disabled={inspector === 'closed' || (inspector === 'auto' && !wide)}
+            className={cn(inspector === 'closed' && 'hidden')}
+          />
+
+          <ResizablePanel
+            id="inspector"
+            data-inspector-part=""
+            panelRef={inspectorPanelRef}
+            collapsible
+            collapsedSize={0}
+            defaultSize={initial.inspector}
+            minSize={INSPECTOR_WIDTH.min}
+            maxSize={INSPECTOR_WIDTH.max}
+            groupResizeBehavior="preserve-pixel-size"
+            className="min-w-0"
+          >
+            {inspector === 'closed' ? null : (
+              <InspectorPanel
+                tab={tab}
+                onTabChange={setTab}
+                onCollapse={closeInspector}
+                design={design}
+                layers={layers}
+                audit={audit}
+                assistant={assistant}
+              />
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        <MobileBar
+          className="md:hidden"
+          history={history}
+          tool={tool}
+          onToolChange={setTool}
+          onPresent={() => startShow(index)}
+          onProperties={() => setSheetOpen(true)}
         />
-
-        <ResizablePanel
-          id="inspector"
-          data-inspector-part=""
-          panelRef={inspectorPanelRef}
-          collapsible
-          collapsedSize={0}
-          defaultSize={initial.inspector}
-          minSize={INSPECTOR_WIDTH.min}
-          maxSize={INSPECTOR_WIDTH.max}
-          groupResizeBehavior="preserve-pixel-size"
-          className="min-w-0"
-        >
-          {inspector === 'closed' ? null : (
-            <InspectorPanel
-              tab={tab}
-              onTabChange={setTab}
-              onCollapse={closeInspector}
-              design={design}
-              layers={layers}
-              assistant={assistant}
-            />
-          )}
-        </ResizablePanel>
-      </ResizablePanelGroup>
-      <MobileBar
-        className="md:hidden"
-        history={history}
-        tool={tool}
-        onToolChange={setTool}
-        onPresent={() => startShow(index)}
-        onProperties={() => setSheetOpen(true)}
-      />
-      <Sheet open={sheetOpen && narrow} onOpenChange={setSheetOpen}>
-        <SheetContent className="h-[min(60dvh,36rem)]">
-          <SheetTitle className="sr-only">{t('inspector')}</SheetTitle>
-          <SheetDescription className="sr-only">{labels[index] ?? ''}</SheetDescription>
-          <div className="min-h-0 flex-1">
-            <InspectorPanel
-              tab={tab}
-              onTabChange={setTab}
-              onCollapse={() => setSheetOpen(false)}
-              design={design}
-              layers={layers}
-              assistant={assistant}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
-      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      {show ? (
-        <SlideShow
-          slides={slides}
+        <Sheet open={sheetOpen && narrow} onOpenChange={setSheetOpen}>
+          <SheetContent className="h-[min(60dvh,36rem)]">
+            <SheetTitle className="sr-only">{t('inspector')}</SheetTitle>
+            <SheetDescription className="sr-only">{labels[index] ?? ''}</SheetDescription>
+            <div className="min-h-0 flex-1">
+              <InspectorPanel
+                tab={tab}
+                onTabChange={setTab}
+                onCollapse={() => setSheetOpen(false)}
+                design={design}
+                layers={layers}
+                audit={audit}
+                assistant={assistant}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+        <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <TextMeasurer
+          slides={committedSlides}
           designSystem={designSystem}
-          labels={labels}
-          start={show.start}
-          resolveMedia={resolveMedia}
-          onExit={(at) => {
-            setShow(null);
-            select(at);
-            canvasControl.current?.focus();
-          }}
+          onChange={setTextHeights}
         />
-      ) : null}
-    </div>
+        {show ? (
+          <SlideShow
+            slides={slides}
+            designSystem={designSystem}
+            labels={labels}
+            start={show.start}
+            resolveMedia={resolveMedia}
+            onExit={(at) => {
+              setShow(null);
+              select(at);
+              canvasControl.current?.focus();
+            }}
+          />
+        ) : null}
+      </div>
+    </AssistantDeckProvider>
   );
 }
