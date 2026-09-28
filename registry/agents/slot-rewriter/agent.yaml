@@ -1,7 +1,7 @@
 id: slot-rewriter
 version: 1.1.0
 description: Short complete alternatives for overflowing template slots
-modelId: qwen-yandex
+modelId: writer-default
 generation:
   temperature: 0.35
   topP: 1

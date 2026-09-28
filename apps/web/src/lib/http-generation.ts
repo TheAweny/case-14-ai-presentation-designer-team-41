@@ -70,7 +70,6 @@ function wait(signal: AbortSignal): Promise<void> {
 export function createHttpGenerator(): DeckGenerator {
   return {
     profilesUploadedTemplates: true,
-    models: [{ modelId: 'qwen-yandex', name: 'Qwen3.6 35B A3B' }],
     async generate(input, onEvent, signal, onSlide) {
       await request('/generation/prepare', {
         method: 'POST',

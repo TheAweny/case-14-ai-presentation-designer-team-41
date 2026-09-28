@@ -32,6 +32,7 @@ import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-
 import { newDeckHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
+import { effectiveModel, shortModelName } from '@/lib/writer-models';
 import { projectColorVar } from '@/lib/project-appearance';
 import { cn } from '@/lib/utils';
 import { apiBaseUrl } from '@/lib/api';
@@ -169,7 +170,8 @@ export function DeckComposer({
         return;
       }
     }
-    const model = writerModels.find((item) => item.modelId === modelId) ?? null;
+    // Модель подписывается в сообщении, только когда выбор показывают, т.е. моделей несколько.
+    const chosen = models ? effectiveModel(models, model) : null;
     const threadId = deckConversations.start({
       request: {
         // Новый файл важнее выбора в меню: id шаблона разговор узнает, когда разберёт файл.

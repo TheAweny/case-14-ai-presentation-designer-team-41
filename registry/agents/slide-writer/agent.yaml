@@ -1,7 +1,7 @@
 id: slide-writer
 version: 1.4.0
 description: Template-grounded writer
-modelId: qwen-yandex
+modelId: writer-default
 generation:
   temperature: 0.35
   topP: 1

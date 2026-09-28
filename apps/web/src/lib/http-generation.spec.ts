@@ -56,7 +56,7 @@ describe('generated artifact download', () => {
         brief: 'Test briefing',
         files: [],
         slideCount: null,
-        modelId: null,
+        model: null,
       },
       vi.fn(),
       AbortSignal.timeout(2000),

@@ -1,5 +1,13 @@
 {
   "minContrastRatio": 4.5,
   "minMarginPt": 18,
-  "forbiddenPatterns": ["lorem ipsum", "вставьте текст"]
+  "forbiddenPatterns": [
+    "lorem ipsum",
+    "вставьте текст",
+    "xxx",
+    "todo",
+    "click to add",
+    "нажмите, чтобы добавить",
+    "заголовок слайда"
+  ]
 }
