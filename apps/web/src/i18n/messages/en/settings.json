@@ -170,7 +170,9 @@
         "confirm": "Delete"
       },
       "managed": "server .env",
-      "managedHint": "Set at installation in the server .env: it can only be checked here."
+      "managedHint": "Set at installation in the server .env: it can only be checked here.",
+      "shared": "Shared",
+      "sharedHint": "Set up by an administrator: everyone can use its models, only an administrator changes it."
     },
     "errors": {
       "unreachable": "server unreachable",
@@ -235,7 +237,11 @@
       "save": "Save",
       "saving": "Saving…",
       "gone": "This connection no longer exists — it was deleted.",
-      "keysUnavailable": "The key cannot be saved: the server has no MODEL_KEYS_SECRET to encrypt keys with. Run lct onboard or set it in .env."
+      "keysUnavailable": "The key cannot be saved: the server has no MODEL_KEYS_SECRET to encrypt keys with. Run lct onboard or set it in .env.",
+      "shared": {
+        "label": "Available to every user",
+        "hint": "Every account sees the models of this connection; only administrators see its address and key."
+      }
     },
     "roles": {
       "title": "Roles",
@@ -279,7 +285,9 @@
           "description": "Draws illustrations when the materials have none.",
           "hint": "Needs a text-to-image model with an OpenAI-compatible images API."
         }
-      }
+      },
+      "descriptionShared": "You are an administrator: these roles are the defaults for every user. Only shared connections are offered here; anyone can pick their own.",
+      "inherited": "Default for everyone — pick a model to use your own."
     }
   },
   "users": {

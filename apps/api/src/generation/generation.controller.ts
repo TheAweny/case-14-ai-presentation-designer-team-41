@@ -46,6 +46,11 @@ import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 
+/** The account as model settings see it: whose connections and role choices apply. */
+function actorOf(account: Account) {
+  return { userId: account.id, admin: account.role === 'admin' };
+}
+
 /** The renderings of every brief, generated in parallel. */
 const VARIANTS = ['dense', 'balanced', 'airy'] as const;
 
@@ -85,7 +90,7 @@ export class GenerationController implements OnApplicationShutdown {
       .nullable()
       .catch(null)
       .parse(body.model ?? null);
-    await this.indexTemplate(body.templateId ?? '', profile, row.profile?.index, model);
+    await this.indexTemplate(body.templateId ?? '', profile, row.profile?.index, model, account);
     return { ready: true };
   }
 
@@ -99,6 +104,7 @@ export class GenerationController implements OnApplicationShutdown {
     profile: GenerationProfile,
     stored: unknown,
     model: z.infer<typeof modelRefSchema> | null,
+    account: Account,
   ): Promise<void> {
     try {
       const registryDir = this.registryDir();
@@ -111,7 +117,8 @@ export class GenerationController implements OnApplicationShutdown {
       )
         return;
       const resolved =
-        (await this.models.resolveRole('planner')) ?? (await this.models.resolve(model));
+        (await this.models.resolveRole('planner', actorOf(account))) ??
+        (await this.models.resolve(model, actorOf(account)));
       const provider = new GenerationProvider({
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
@@ -196,11 +203,15 @@ export class GenerationController implements OnApplicationShutdown {
           });
         throw error;
       });
-    const writer = await settle(this.models.resolve(input.model));
+    const actor = actorOf(account);
+    const writer = await settle(this.models.resolve(input.model, actor));
     // Planner and critic run on the models of their roles; a role without one writes with the
     // writer's model, and the slot rewriter always does.
     const [planner, critic] = await settle(
-      Promise.all([this.models.resolveRole('planner'), this.models.resolveRole('critic')]),
+      Promise.all([
+        this.models.resolveRole('planner', actor),
+        this.models.resolveRole('critic', actor),
+      ]),
     );
     const providerOf = (model: { apiKey: string; baseUrl: string; model: string }) =>
       new GenerationProvider({

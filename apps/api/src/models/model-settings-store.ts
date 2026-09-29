@@ -14,6 +14,8 @@ export interface StoredConnection {
   readonly baseUrl: string;
   readonly apiKeyEncrypted: string | null;
   readonly lastCheck: ConnectionCheck | null;
+  /** The account the connection belongs to; null — shared with everyone by an administrator. */
+  readonly ownerId: string | null;
 }
 
 /** A stored role: a model or switched off. A role that is not stored is not assigned. */
@@ -26,16 +28,22 @@ export interface SettingsEvent {
   readonly detail?: Record<string, unknown>;
 }
 
+/**
+ * Whose roles: an account's own choices, or null for the defaults an administrator set for
+ * everyone.
+ */
+export type RoleOwner = string | null;
+
 export interface ModelSettingsStore {
-  /** Connections in the order they were added. */
-  listConnections(): Promise<StoredConnection[]>;
+  /** Shared connections and those of `ownerId`, in the order they were added. */
+  listConnections(ownerId: string): Promise<StoredConnection[]>;
   getConnection(connectionId: string): Promise<StoredConnection | null>;
   saveConnection(connection: StoredConnection): Promise<void>;
   /** Removes the connection and the roles assigned to it; false when there was none. */
   deleteConnection(connectionId: string): Promise<boolean>;
-  listRoles(): Promise<StoredRole[]>;
-  setRole(role: StoredRole): Promise<void>;
-  clearRole(role: PipelineRole): Promise<void>;
+  listRoles(owner: RoleOwner): Promise<StoredRole[]>;
+  setRole(role: StoredRole, owner: RoleOwner): Promise<void>;
+  clearRole(role: PipelineRole, owner: RoleOwner): Promise<void>;
   record(event: SettingsEvent): Promise<void>;
 }
 
@@ -46,6 +54,7 @@ interface ConnectionRow {
   base_url: string;
   api_key_encrypted: string | null;
   last_check: ConnectionCheck | null;
+  owner_id: string | null;
 }
 
 interface RoleRow {
@@ -63,6 +72,7 @@ function connectionOf(row: ConnectionRow): StoredConnection {
     baseUrl: row.base_url,
     apiKeyEncrypted: row.api_key_encrypted,
     lastCheck: row.last_check,
+    ownerId: row.owner_id,
   };
 }
 
@@ -76,17 +86,19 @@ function roleOf(row: RoleRow): StoredRole | null {
 export class PostgresModelSettingsStore implements ModelSettingsStore {
   constructor(private readonly pool: Pool) {}
 
-  async listConnections() {
+  async listConnections(ownerId: string) {
     const result = await this.pool.query<ConnectionRow>(
-      `SELECT id, name, preset, base_url, api_key_encrypted, last_check
-       FROM model_connections ORDER BY created_at, id`,
+      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, owner_id
+       FROM model_connections WHERE owner_id IS NULL OR owner_id = $1
+       ORDER BY created_at, id`,
+      [ownerId],
     );
     return result.rows.map(connectionOf);
   }
 
   async getConnection(connectionId: string) {
     const result = await this.pool.query<ConnectionRow>(
-      `SELECT id, name, preset, base_url, api_key_encrypted, last_check
+      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, owner_id
        FROM model_connections WHERE id = $1`,
       [connectionId],
     );
@@ -96,12 +108,13 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
 
   async saveConnection(connection: StoredConnection) {
     await this.pool.query(
-      `INSERT INTO model_connections (id, name, preset, base_url, api_key_encrypted, last_check)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      `INSERT INTO model_connections
+         (id, name, preset, base_url, api_key_encrypted, last_check, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, preset = EXCLUDED.preset, base_url = EXCLUDED.base_url,
          api_key_encrypted = EXCLUDED.api_key_encrypted, last_check = EXCLUDED.last_check,
-         updated_at = now()`,
+         owner_id = EXCLUDED.owner_id, updated_at = now()`,
       [
         connection.connectionId,
         connection.name,
@@ -109,6 +122,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
         connection.baseUrl,
         connection.apiKeyEncrypted,
         connection.lastCheck === null ? null : JSON.stringify(connection.lastCheck),
+        connection.ownerId,
       ],
     );
   }
@@ -133,18 +147,20 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
     }
   }
 
-  async listRoles() {
+  async listRoles(owner: RoleOwner) {
     const result = await this.pool.query<RoleRow>(
-      'SELECT role, kind, connection_id, model_id FROM model_role_assignments',
+      `SELECT role, kind, connection_id, model_id FROM model_role_assignments
+       WHERE owner_id IS NOT DISTINCT FROM $1`,
+      [owner],
     );
     return result.rows.map(roleOf).filter((role): role is StoredRole => role !== null);
   }
 
-  async setRole(role: StoredRole) {
+  async setRole(role: StoredRole, owner: RoleOwner) {
     await this.pool.query(
-      `INSERT INTO model_role_assignments (role, kind, connection_id, model_id)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (role) DO UPDATE SET
+      `INSERT INTO model_role_assignments (role, kind, connection_id, model_id, owner_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (role, COALESCE(owner_id, '')) DO UPDATE SET
          kind = EXCLUDED.kind, connection_id = EXCLUDED.connection_id,
          model_id = EXCLUDED.model_id, updated_at = now()`,
       [
@@ -152,12 +168,16 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
         role.kind,
         role.kind === 'model' ? role.connectionId : null,
         role.kind === 'model' ? role.modelId : null,
+        owner,
       ],
     );
   }
 
-  async clearRole(role: PipelineRole) {
-    await this.pool.query('DELETE FROM model_role_assignments WHERE role = $1', [role]);
+  async clearRole(role: PipelineRole, owner: RoleOwner) {
+    await this.pool.query(
+      'DELETE FROM model_role_assignments WHERE role = $1 AND owner_id IS NOT DISTINCT FROM $2',
+      [role, owner],
+    );
   }
 
   async record(event: SettingsEvent) {
@@ -172,11 +192,24 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
 /** Settings in memory, for tests. Behaves like the PostgreSQL store. */
 export class MemoryModelSettingsStore implements ModelSettingsStore {
   readonly connections = new Map<string, StoredConnection>();
-  readonly roles = new Map<PipelineRole, StoredRole>();
+  /** Roles by owner: '' — the defaults for everyone. */
+  readonly roles = new Map<string, Map<PipelineRole, StoredRole>>();
   readonly events: SettingsEvent[] = [];
 
-  async listConnections() {
-    return [...this.connections.values()];
+  private rolesOf(owner: RoleOwner) {
+    const key = owner ?? '';
+    let roles = this.roles.get(key);
+    if (!roles) {
+      roles = new Map();
+      this.roles.set(key, roles);
+    }
+    return roles;
+  }
+
+  async listConnections(ownerId: string) {
+    return [...this.connections.values()].filter(
+      (connection) => connection.ownerId === null || connection.ownerId === ownerId,
+    );
   }
 
   async getConnection(connectionId: string) {
@@ -189,22 +222,24 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
 
   async deleteConnection(connectionId: string) {
     const existed = this.connections.delete(connectionId);
-    for (const [role, stored] of this.roles) {
-      if (stored.kind === 'model' && stored.connectionId === connectionId) this.roles.delete(role);
+    for (const roles of this.roles.values()) {
+      for (const [role, stored] of roles) {
+        if (stored.kind === 'model' && stored.connectionId === connectionId) roles.delete(role);
+      }
     }
     return existed;
   }
 
-  async listRoles() {
-    return [...this.roles.values()];
+  async listRoles(owner: RoleOwner) {
+    return [...this.rolesOf(owner).values()];
   }
 
-  async setRole(role: StoredRole) {
-    this.roles.set(role.role, role);
+  async setRole(role: StoredRole, owner: RoleOwner) {
+    this.rolesOf(owner).set(role.role, role);
   }
 
-  async clearRole(role: PipelineRole) {
-    this.roles.delete(role);
+  async clearRole(role: PipelineRole, owner: RoleOwner) {
+    this.rolesOf(owner).delete(role);
   }
 
   async record(event: SettingsEvent) {
