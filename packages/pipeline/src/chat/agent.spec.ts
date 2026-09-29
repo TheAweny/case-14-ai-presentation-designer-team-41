@@ -7,6 +7,7 @@ import {
   chatInstructions,
   loadChatAgent,
   looping,
+  mendedArguments,
   modelHistory,
   runChatTurn,
   toolSpecs,
@@ -325,5 +326,26 @@ describe('the chat agent in the registry', () => {
     );
     expect(specs.every((spec) => spec.description.length > 40)).toBe(true);
     expect(() => toolSpecs(agent, [named('unknown_tool')])).toThrow(/unknown_tool/);
+  });
+});
+
+describe('mendedArguments', () => {
+  const schema = z.object({
+    outline: z.object({ title: z.string(), slides: z.array(z.string()).min(1) }),
+    templateId: z.string().nullable(),
+  });
+  const meant = { outline: { title: 'Умный квартал', slides: ['Пилот'] }, templateId: null };
+
+  it('reads a nested object sent as a string of JSON or spread over the top level', () => {
+    const asString = { outline: JSON.stringify(meant.outline), templateId: null };
+    expect(schema.parse(mendedArguments(schema, asString))).toEqual(meant);
+    const spread = { title: 'Умный квартал', slides: ['Пилот'], templateId: null };
+    expect(schema.parse(mendedArguments(schema, spread))).toEqual(meant);
+  });
+
+  it('leaves arguments it cannot read for the schema to reject', () => {
+    const broken = { outline: '{"title": ', templateId: null };
+    expect(mendedArguments(schema, broken)).toEqual(broken);
+    expect(schema.safeParse(mendedArguments(schema, broken)).success).toBe(false);
   });
 });

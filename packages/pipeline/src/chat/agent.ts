@@ -331,6 +331,51 @@ function parseArguments(text: string): { ok: true; value: unknown } | { ok: fals
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The object schema under optional, nullable and default wrappers, if there is one. */
+function objectShape(schema: unknown): Record<string, unknown> | undefined {
+  let current = schema;
+  for (let depth = 0; depth < 4; depth++) {
+    if (current instanceof z.ZodObject) return current.shape as Record<string, unknown>;
+    const unwrap = (current as { unwrap?: () => unknown } | undefined)?.unwrap;
+    if (typeof unwrap !== 'function') return undefined;
+    current = unwrap.call(current);
+  }
+  return undefined;
+}
+
+/**
+ * Arguments as the model meant them. Open models often send a nested object as a string of
+ * JSON, or spread its fields over the top level; both are read back into the object before the
+ * schema judges them. Anything else is left for the schema to reject with its reasons.
+ */
+export function mendedArguments(schema: z.ZodType, value: unknown): unknown {
+  const shape = objectShape(schema);
+  if (!isRecord(value) || !shape) return value;
+  const out: Record<string, unknown> = { ...value };
+  for (const [key, field] of Object.entries(out)) {
+    if (typeof field !== 'string' || !/^\s*[[{]/.test(field)) continue;
+    try {
+      out[key] = JSON.parse(field);
+    } catch {
+      // Not JSON after all: the schema says what is wrong.
+    }
+  }
+  for (const [key, field] of Object.entries(shape)) {
+    if (out[key] !== undefined) continue;
+    const inner = objectShape(field);
+    if (!inner) continue;
+    const spread = Object.keys(inner).filter((name) => name in out && !(name in shape));
+    if (!spread.length) continue;
+    out[key] = Object.fromEntries(spread.map((name) => [name, out[name]]));
+    for (const name of spread) delete out[name];
+  }
+  return out;
+}
+
 async function runTool(
   tool: ChatTool | undefined,
   input: { ok: true; value: unknown } | { ok: false },
@@ -338,7 +383,11 @@ async function runTool(
 ): Promise<ToolOutcome> {
   if (!tool) return { output: { error: 'There is no such tool here.' }, failed: true };
   if (!input.ok) return { output: { error: 'The arguments are not valid JSON.' }, failed: true };
-  const parsed = tool.input.safeParse(input.value);
+  let parsed = tool.input.safeParse(input.value);
+  if (!parsed.success) {
+    const mended = tool.input.safeParse(mendedArguments(tool.input, input.value));
+    if (mended.success) parsed = mended;
+  }
   if (!parsed.success) {
     return {
       output: { error: 'Invalid arguments.', issues: z.treeifyError(parsed.error) },
