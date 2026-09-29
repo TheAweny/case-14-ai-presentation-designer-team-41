@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRunRepository, type RunRepository } from '@lct/run-store';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
 import { GenerationController } from './generation.controller.js';
-import { GenerationService } from './generation.service.js';
+import { GenerationService, PROFILE_REVISION, type StoredTemplate } from './generation.service.js';
 import type { Account } from '../accounts/account-rules.js';
 
 const RUN = 'run-00000000-0000-4000-8000-000000000001';
@@ -208,6 +208,25 @@ const generationProfile = JSON.parse(
     'utf8',
   ),
 ).valid[0].payload;
+
+describe('a prepared template', () => {
+  const stored = (profile: StoredTemplate['profile']): StoredTemplate => ({
+    storage_path: '/templates/t.pptx',
+    file_name: 't.pptx',
+    profile,
+  });
+
+  it('is one read by the current engine, and one read before is read again', () => {
+    expect(
+      GenerationService.prepared(
+        stored({ generation: generationProfile, generationRevision: PROFILE_REVISION }),
+      ),
+    ).toBe(true);
+    // Read before the engine found places for pictures: no revision stored.
+    expect(GenerationService.prepared(stored({ generation: generationProfile }))).toBe(false);
+    expect(GenerationService.prepared(stored({}))).toBe(false);
+  });
+});
 
 describe('preparing a template', () => {
   const TEMPLATE = '00000000-0000-4000-8000-0000000000aa';

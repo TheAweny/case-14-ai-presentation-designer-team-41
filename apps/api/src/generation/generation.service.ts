@@ -76,11 +76,19 @@ export interface VariantEnd {
   readonly state: 'done' | 'failed';
 }
 
+/**
+ * The revision of the engine's generation profile. Raise it when the engine reads something new
+ * from a template, so templates prepared before are read again: 2 added places for pictures.
+ */
+export const PROFILE_REVISION = 2;
+
 export interface StoredTemplate {
   readonly storage_path: string;
   readonly file_name: string;
   readonly profile: {
     generation?: GenerationProfile;
+    /** The revision of the engine's reading the generation profile came from. */
+    generationRevision?: number;
     index?: unknown;
     previews?: unknown;
     designSystem?: unknown;
@@ -149,9 +157,15 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     };
   }
 
-  /** The template has its generation profile: a deck can be built in it now. */
+  /**
+   * The template has a generation profile of the current reading: a deck can be built in it now.
+   * A profile read before the engine learned something new (places for pictures) is read again.
+   */
   static prepared(template: StoredTemplate): boolean {
-    return generationProfileSchema.safeParse(template.profile?.generation).success;
+    return (
+      template.profile?.generationRevision === PROFILE_REVISION &&
+      generationProfileSchema.safeParse(template.profile.generation).success
+    );
   }
 
   /**
@@ -166,8 +180,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     try {
       const profile = await this.engine.generationProfile(row.storage_path);
       await this.pool.query(
-        "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
-        [templateId, JSON.stringify(profile)],
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb, 'generationRevision', $3::int) WHERE id = $1",
+        [templateId, JSON.stringify(profile), PROFILE_REVISION],
       );
       progress.stage = 'index';
       await this.indexTemplate(templateId, profile, row.profile?.index, model, account, (step) => {
