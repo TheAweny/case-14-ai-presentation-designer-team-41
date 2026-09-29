@@ -54,7 +54,8 @@
                 "kind": {
                   "enum": [
                     "placeholder",
-                    "panel"
+                    "panel",
+                    "photo"
                   ],
                   "type": "string"
                 },

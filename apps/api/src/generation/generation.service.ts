@@ -78,9 +78,10 @@ export interface VariantEnd {
 
 /**
  * The revision of the engine's generation profile. Raise it when the engine reads something new
- * from a template, so templates prepared before are read again: 2 added places for pictures.
+ * from a template, so templates prepared before are read again: 2 added places for pictures,
+ * 3 the sample photos of a slide among them.
  */
-export const PROFILE_REVISION = 2;
+export const PROFILE_REVISION = 3;
 
 export interface StoredTemplate {
   readonly storage_path: string;

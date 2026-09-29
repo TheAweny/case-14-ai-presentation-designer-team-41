@@ -968,8 +968,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
       const readable = usable.length >= 3 ? usable : assetSafe;
       // Without an image model a place for a picture would be removed on export and leave a
-      // hole, so such compositions are not offered while the rest can carry the deck.
-      const textOnly = readable.filter((pattern) => !pattern.imageSlots?.length);
+      // hole, so such compositions are not offered while the rest can carry the deck. A sample
+      // photo stays in place without a picture for it, so a composition with only those is kept.
+      const textOnly = readable.filter(
+        (pattern) => !pattern.imageSlots?.some((slot) => slot.kind !== 'photo'),
+      );
       const distinct = deps.imagesAvailable || textOnly.length < 3 ? readable : textOnly;
       if (!distinct.length)
         throw new Error('Template has no composition usable without an external image or asset.');

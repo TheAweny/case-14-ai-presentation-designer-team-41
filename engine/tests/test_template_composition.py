@@ -319,6 +319,47 @@ def test_a_generated_picture_fills_its_slot_and_an_unfilled_slot_leaves_the_slid
     assert [s.shape_type for s in empty.shapes] == [MSO_SHAPE_TYPE.TEXT_BOX]
 
 
+def test_a_sample_photo_is_replaced_by_a_picture_and_stays_without_one(tmp_path: Path) -> None:
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(0.5), Inches(1), Inches(4), Inches(1))
+    box.text_frame.paragraphs[0].add_run().text = "Text design"
+    body = slide.shapes.add_textbox(Inches(0.5), Inches(4), Inches(4), Inches(2))
+    body.text_frame.paragraphs[0].add_run().text = "Details of the sample slide"
+    sample = _picture_file(tmp_path / "sample.png", (800, 800))
+    photo = slide.shapes.add_picture(str(sample), Inches(5), Inches(0.5), Inches(4.5), Inches(6))
+    icon = slide.shapes.add_picture(str(sample), Inches(0.5), Inches(3), Inches(0.6), Inches(0.6))
+    source = tmp_path / "source.pptx"
+    deck.save(str(source))
+    pattern = extract_compositions(source)[0]
+    # The large photo of the sample is a place for a picture; the icon is decoration.
+    assert [(s["slotId"], s["kind"]) for s in pattern["imageSlots"]] == [
+        (str(photo.shape_id), "photo")
+    ]
+    run = tmp_path / "run"
+    (run / "media").mkdir(parents=True)
+    _picture_file(run / "media" / "picture.png", (1536, 1024))
+
+    def export(images: list[dict[str, str]]) -> Any:
+        output = run / "deck.pptx"
+        texts = [{"slotId": s["slotId"], "text": "Датчики"} for s in pattern["slots"]]
+        item = {"patternId": pattern["patternId"], "texts": texts, "speakerNotes": ""}
+        export_compositions(source, output, [{**item, "images": images}], [pattern])
+        return Presentation(str(output)).slides[0]
+
+    filled = export([{"slotId": str(photo.shape_id), "path": "media/picture.png", "fit": "cover"}])
+    boxes = {
+        (s.left, s.top, s.width, s.height)
+        for s in filled.shapes
+        if s.shape_type == MSO_SHAPE_TYPE.PICTURE
+    }
+    assert (photo.left, photo.top, photo.width, photo.height) in boxes
+    assert all(s.shape_id != photo.shape_id for s in filled.shapes)
+    kept = export([])
+    assert any(s.shape_id == photo.shape_id for s in kept.shapes)
+    assert any(s.shape_id == icon.shape_id for s in kept.shapes)
+
+
 def test_text_is_measured_to_the_edge_of_the_pill_it_sits_on(tmp_path: Path) -> None:
     def title_chars(pill: bool) -> int:
         deck = Presentation()

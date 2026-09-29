@@ -29,7 +29,11 @@ export const compositionSlotSchema = z.object({
  */
 export const imageSlotSchema = z.object({
   slotId: z.string().min(1),
-  kind: z.enum(['placeholder', 'panel']),
+  /**
+   * `placeholder` — a picture placeholder, `panel` — a large empty card, `photo` — a large sample
+   * photo of the template slide, which shows what the slide is about only in the template.
+   */
+  kind: z.enum(['placeholder', 'panel', 'photo']),
   box: boxSchema,
 });
 export const compositionSchema = z.object({

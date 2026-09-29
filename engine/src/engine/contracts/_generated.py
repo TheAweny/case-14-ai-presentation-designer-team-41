@@ -5509,6 +5509,7 @@ class Box26(BaseModel):
 class Kind9(StrEnum):
     placeholder = "placeholder"
     panel = "panel"
+    photo = "photo"
 
 
 class ImageSlot(BaseModel):

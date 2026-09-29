@@ -301,7 +301,9 @@ def export_compositions(
         for image_slot in pattern.get("imageSlots") or []:
             chosen = pictures.get(image_slot["slotId"])
             if chosen is None:
-                _remove_shape(slide, image_slot["slotId"])
+                # A sample photo with no picture for it stays: the slide keeps a photo, not a hole.
+                if image_slot.get("kind") != "photo":
+                    _remove_shape(slide, image_slot["slotId"])
             else:
                 file = _picture_file(output.parent, chosen["path"])
                 _place_picture(slide, image_slot["slotId"], file, chosen["fit"])

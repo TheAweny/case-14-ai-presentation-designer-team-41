@@ -81,6 +81,9 @@ _PICTURE_SHEET = 12
 #: An empty filled card covering this share of the slide, with nothing drawn on it, is a place the
 #: template left for a picture; a smaller one is a pill or a badge.
 _PANEL_SHARE = 0.08
+#: A photo of the sample slide covering this share of the slide shows the template's own example
+#: subject; a smaller picture is an icon, an avatar or a logo and stays.
+_PHOTO_SHARE = 0.15
 _NS_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 _NS_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 _FILLS = ("solidFill", "gradFill", "pattFill", "blipFill")
@@ -142,12 +145,14 @@ def _centre_inside(box: dict[str, int], frame: dict[str, int]) -> bool:
 
 
 def _image_slots(placed: list[Any], slide_area: int) -> list[dict[str, Any]]:
-    """I find where a picture goes: picture placeholders and large empty cards.
+    """I find where a picture goes: picture placeholders, large empty cards and sample photos.
 
     A picture placeholder says so itself. A large filled card with no copy and nothing drawn on it
-    is the other kind: the template left a white frame where its author meant to put a picture,
-    and a deck that keeps it shows a blank card. The template's own photos and brand art are its
-    design, not slots.
+    is the second kind: the template left a white frame where its author meant to put a picture,
+    and a deck that keeps it shows a blank card. The third is a large photo on the sample slide
+    itself: students at a laptop illustrate the template's example, not the deck's subject. Brand
+    art lives on the layout and the master, which are not read here, and small pictures (icons,
+    avatars, logos) stay.
     """
     boxes = [(shape, _slide_box(shape, transform)) for shape, transform in placed]
     slots = []
@@ -157,6 +162,14 @@ def _image_slots(placed: list[Any], slide_area: int) -> list[dict[str, Any]]:
             continue
         if shape.is_placeholder and shape.placeholder_format.type in _IMAGE_PLACEHOLDERS:
             slots.append({"slotId": str(shape.shape_id), "kind": "placeholder", "box": box})
+            continue
+        if (
+            shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+            and box["cx"] * box["cy"] >= _PHOTO_SHARE * slide_area
+            # Only a picture of the slide itself: one inside a group moves with the group.
+            and shape._element.getparent().tag == f"{_NS_P}spTree"
+        ):
+            slots.append({"slotId": str(shape.shape_id), "kind": "photo", "box": box})
             continue
         if shape.shape_type != MSO_SHAPE_TYPE.AUTO_SHAPE or not _is_filled_backdrop(shape):
             continue
