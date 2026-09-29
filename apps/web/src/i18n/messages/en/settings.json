@@ -10,13 +10,26 @@
     "editor": "Editor",
     "shortcuts": "Shortcuts",
     "decks": "Decks",
-    "models": "Models"
+    "models": "Models",
+    "users": "Users"
   },
   "account": {
     "title": "Account",
-    "managed": "Your administrator changes the name, email and password.",
+    "managed": "The administrator changes your name and email under Users.",
     "signOutHint": "Sign out on this device",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "password": {
+      "title": "Password",
+      "current": "Current password",
+      "next": "New password",
+      "hint": "At least 8 characters.",
+      "save": "Change password",
+      "changed": "Password changed",
+      "wrongCurrent": "The current password is wrong.",
+      "failed": "Could not change the password. Try again.",
+      "passwordShort": "The new password needs at least 8 characters.",
+      "passwordLong": "The new password is at most 200 characters."
+    }
   },
   "general": {
     "title": "General",
@@ -267,6 +280,62 @@
           "hint": "Needs a text-to-image model with an OpenAI-compatible images API."
         }
       }
+    }
+  },
+  "users": {
+    "title": "Users",
+    "description": "There is no sign-up: the administrator creates accounts. A switched-off person cannot sign in and keeps their presentations; deleting erases their presentations, chats and private templates.",
+    "add": "Add user",
+    "loading": "Loading users…",
+    "listLabel": "Users of this installation",
+    "you": "You",
+    "admin": "Administrator",
+    "disabled": "Switched off",
+    "since": "since {date}",
+    "menu": "Actions for {email}",
+    "resetPassword": "Reset password",
+    "makeAdmin": "Make administrator",
+    "makeUser": "Make regular user",
+    "disable": "Switch off",
+    "enable": "Switch on",
+    "delete": "Delete…",
+    "created": "Account {email} created",
+    "deleted": "Account {email} deleted",
+    "madeAdmin": "{email} is now an administrator",
+    "madeUser": "{email} is now a regular user",
+    "disabledNotice": "Account {email} switched off",
+    "enabledNotice": "Account {email} switched on again",
+    "passwordReset": "Password of {email} reset",
+    "issued": "Password for {email}. It is shown once — pass it on; it can be changed under Account.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "hide": "Hide",
+    "deleteTitle": "Delete the account?",
+    "deleteBody": "{email} will be deleted with their presentations, chats, projects and private templates. Shared templates stay. This cannot be undone. If the person is only away, switch the account off instead.",
+    "deleteConfirm": "Delete account",
+    "fields": {
+      "email": "Email",
+      "name": "Name",
+      "password": "Password",
+      "role": "Role"
+    },
+    "roles": {
+      "user": "User",
+      "admin": "Administrator"
+    },
+    "generate": "Generate",
+    "cancel": "Cancel",
+    "create": "Create",
+    "problems": {
+      "email": "Needs an email like name@example.com",
+      "passwordShort": "At least 8 characters",
+      "passwordLong": "At most 200 characters",
+      "name": "Name cannot be empty"
+    },
+    "errors": {
+      "exists": "An account with this email already exists.",
+      "forbidden": "This action is not available.",
+      "failed": "That did not work. Try again."
     }
   }
 }
