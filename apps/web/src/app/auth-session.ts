@@ -4,12 +4,27 @@ import { redirect } from 'next/navigation';
 import { LOGIN_PATH, SESSION_COOKIE, authSecret, type Account } from '@/lib/auth';
 import { SESSION_TTL_MS, signSessionToken, verifySessionToken } from '@/lib/session-token';
 import { authSource } from '@/mocks/auth-source';
+import { setActingUserResolver } from '@/lib/api';
 
 /**
  * Сессия на сервере. Proxy проверяет только подпись cookie и пускает дальше; кто именно пришёл
  * и есть ли он ещё, решает `currentAccount` — его зовут макеты и каждое серверное действие:
  * действие — отдельная точка входа, и одной проверки в proxy ему мало.
  */
+
+/** Id из подписанной cookie этого запроса; есть ли ещё такой аккаунт, проверит API. */
+async function sessionUserId(): Promise<string | null> {
+  try {
+    const token = (await cookies()).get(SESSION_COOKIE)?.value;
+    return await verifySessionToken(token, authSecret());
+  } catch {
+    // Вне запроса cookie нет — и аккаунта тоже.
+    return null;
+  }
+}
+
+// Запросы серверного кода к API идут от вошедшего аккаунта: API отдаёт только его данные.
+setActingUserResolver(sessionUserId);
 
 /** Аккаунт этого запроса или null. Один раз на запрос, сколько бы компонентов ни спросили. */
 export const currentAccount = cache(async (): Promise<Account | null> => {

@@ -21485,6 +21485,64 @@
       ],
       "title": "TemplateIR",
       "type": "object"
+    },
+    "TemplatePreviewsRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "outputDir": {
+          "description": "Directory the PNG files are written into.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "templatePath": {
+          "description": "The template .pptx, on the engine filesystem.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "widthPx": {
+          "description": "Width of every picture; the height follows the slide proportions.",
+          "maximum": 1920,
+          "minimum": 160,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "templatePath",
+        "outputDir",
+        "widthPx"
+      ],
+      "title": "TemplatePreviewsRequest",
+      "type": "object"
+    },
+    "TemplatePreviewsResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "previews": {
+          "description": "File names inside the output directory, one per slide, in slide order.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "previews"
+      ],
+      "title": "TemplatePreviewsResponse",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -21577,6 +21635,12 @@
     },
     "TemplateIR": {
       "$ref": "#/$defs/TemplateIR"
+    },
+    "TemplatePreviewsRequest": {
+      "$ref": "#/$defs/TemplatePreviewsRequest"
+    },
+    "TemplatePreviewsResponse": {
+      "$ref": "#/$defs/TemplatePreviewsResponse"
     }
   },
   "title": "ContractsBundle",

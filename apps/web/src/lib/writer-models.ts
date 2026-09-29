@@ -1,4 +1,13 @@
-import { assignmentFor, knownModels, type ModelRef, type ModelSettings } from './model-settings';
+import {
+  MODEL_FAMILIES,
+  assignmentFor,
+  knownModels,
+  modelFamily,
+  modelOffered,
+  type ModelFamily,
+  type ModelRef,
+  type ModelSettings,
+} from './model-settings';
 
 /**
  * Какой моделью писать текст колоды — выбор у поля ввода, как в чатах. Список — модели
@@ -48,7 +57,9 @@ export function writerModels(settings: ModelSettings): WriterModels {
     .map((connection) => {
       const known = knownModels(connection);
       const manual =
-        assigned?.connectionId === connection.connectionId && !known.includes(assigned.modelId)
+        assigned?.connectionId === connection.connectionId &&
+        !known.includes(assigned.modelId) &&
+        modelOffered(connection, assigned.modelId)
           ? [assigned.modelId]
           : [];
       return {
@@ -67,8 +78,9 @@ export function writerModels(settings: ModelSettings): WriterModels {
 }
 
 /**
- * Модель, которой уйдёт прогон: выбранная, если она ещё есть в списке, иначе модель роли,
- * иначе первая в списке. Моделей нет — null, и сервер решает сам.
+ * Модель, которой уйдёт прогон: выбранная, если она ещё есть в списке, иначе модель роли — тоже
+ * если есть в списке, иначе первая в списке. Выключенную модель роли прогон не возьмёт: сервер
+ * её отклонит. Моделей нет — null, и сервер решает сам.
  */
 export function effectiveModel(models: WriterModels, picked: ModelRef | null): ModelRef | null {
   const listed = (ref: ModelRef | null) =>
@@ -77,7 +89,7 @@ export function effectiveModel(models: WriterModels, picked: ModelRef | null): M
       (group) => group.connectionId === ref.connectionId && group.models.includes(ref.modelId),
     );
   if (listed(picked)) return picked;
-  if (models.assigned) return models.assigned;
+  if (listed(models.assigned)) return models.assigned;
   const first = models.groups[0];
   const modelId = first?.models[0];
   return first && modelId ? { connectionId: first.connectionId, modelId } : null;
@@ -94,6 +106,35 @@ export function shortModelName(modelId: string): string {
 
 /** С этого числа моделей у меню появляется поиск, а выбранная и модель по умолчанию — сверху. */
 export const MODEL_SEARCH_FROM = 9;
+
+/** Семейство, которым сужают список. `all` — без сужения. */
+export type ModelFamilyFilter = ModelFamily | 'all';
+
+/** Семейства, которые реально есть в списке, в порядке чипов. */
+export function modelFamilies(models: WriterModels): readonly ModelFamily[] {
+  return byFamily(models.groups.flatMap((group) => group.models)).map(({ family }) => family);
+}
+
+/** Модели одного семейства, в порядке списка. */
+export interface FamilyGroup {
+  readonly family: ModelFamily;
+  readonly models: readonly string[];
+}
+
+/** Модели по семействам: семейства — в порядке чипов, модели внутри — в порядке списка. */
+export function byFamily(modelIds: readonly string[]): readonly FamilyGroup[] {
+  const groups = new Map<ModelFamily, string[]>();
+  for (const modelId of modelIds) {
+    const family = modelFamily(modelId);
+    const group = groups.get(family);
+    if (group) group.push(modelId);
+    else groups.set(family, [modelId]);
+  }
+  return MODEL_FAMILIES.flatMap((family) => {
+    const models = groups.get(family);
+    return models ? [{ family, models }] : [];
+  });
+}
 
 /** Строка меню моделей: заголовок раздела или модель. */
 export type ModelRow =
@@ -122,6 +163,7 @@ export function modelRows(
   models: WriterModels,
   selected: ModelRef | null,
   query: string,
+  family: ModelFamilyFilter = 'all',
 ): readonly ModelRow[] {
   const needle = query.trim().toLowerCase();
   const nameOf = (connectionId: string) =>
@@ -139,7 +181,9 @@ export function modelRows(
   if (pinned) {
     const top = [selected, models.assigned].filter(
       (ref, at, all): ref is ModelRef =>
-        ref !== null && all.findIndex((other) => sameModel(other, ref)) === at,
+        ref !== null &&
+        (family === 'all' || modelFamily(ref.modelId) === family) &&
+        all.findIndex((other) => sameModel(other, ref)) === at,
     );
     if (top.length > 0) {
       rows.push({ kind: 'header', key: 'pinned', section: 'pinned', name: '' });
@@ -151,7 +195,9 @@ export function modelRows(
   for (const group of models.groups) {
     const groupMatches = group.name.toLowerCase().includes(needle);
     const matching = group.models.filter(
-      (modelId) => groupMatches || modelId.toLowerCase().includes(needle),
+      (modelId) =>
+        (family === 'all' || modelFamily(modelId) === family) &&
+        (groupMatches || modelId.toLowerCase().includes(needle)),
     );
     if (matching.length === 0) continue;
     if (headed) {

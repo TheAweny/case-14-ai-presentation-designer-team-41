@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from PIL import Image, UnidentifiedImageError
+from pptx import Presentation
 from pydantic import BaseModel
 
 from engine import __version__, checks, export, layout, parser, render, visuals
@@ -31,6 +32,8 @@ from engine.contracts import (
     LayoutVariantsResponse,
     SlideIR,
     Status,
+    TemplatePreviewsRequest,
+    TemplatePreviewsResponse,
 )
 from engine.contracts._generated import (
     CompositionCheckResponse,
@@ -115,6 +118,38 @@ def template_profile(request: TemplateProfileRequest) -> dict:
         "templateIr": template_ir,
         "previewDataUrl": preview_data_url,
     }
+
+
+#: English Metric Units per inch: how OOXML measures a slide.
+EMU_PER_INCH = 914400
+
+
+@app.post(
+    "/v1/template-previews",
+    response_model=TemplatePreviewsResponse,
+    summary="Draw every slide of a saved template as a PNG of the requested width",
+)
+def template_previews(request: TemplatePreviewsRequest) -> TemplatePreviewsResponse:
+    """Pictures of the template's sample slides, for the library to show them as they are."""
+    path = Path(request.templatePath).resolve()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Template PPTX was not found.")
+    try:
+        slide_width = Presentation(str(path)).slide_width or EMU_PER_INCH * 10
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+        raise HTTPException(status_code=422, detail=f"PPTX cannot be read: {error}") from error
+    dpi = max(1, round(request.widthPx * EMU_PER_INCH / slide_width))
+    try:
+        images = render.render_to_png(
+            path, Path(request.outputDir).resolve(), dpi=dpi, timeout_seconds=900
+        )
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        raise HTTPException(
+            status_code=503, detail=f"The template could not be drawn: {error}"
+        ) from error
+    return TemplatePreviewsResponse.model_validate(
+        {"schemaVersion": 1, "previews": [image.name for image in images]}
+    )
 
 
 @app.post(

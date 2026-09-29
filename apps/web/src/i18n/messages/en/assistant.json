@@ -7,31 +7,6 @@
     "attachments": "Attachments",
     "settings": "Request settings"
   },
-  "agent": {
-    "building": "Building the deck on the “{template}” template.",
-    "stopped": "Stopped. What is laid out stays — you can run it again from the card above.",
-    "refining": "I’ll take this into account when I start building the deck.",
-    "unsupported": "For now I only build decks: edits on request arrive with the editor agent.",
-    "templateImportFailed": "Could not read the “{template}” template. Check that the file opens in PowerPoint and start again — or pick one of the templates you have already uploaded.",
-    "templateSaved": "The template is saved to the library — it will appear in your templates.",
-    "templateAttached": "Attached to the “{project}” project.",
-    "templateAttachFailed": "Could not attach the template to the “{project}” project. I will still build the deck with it; you can attach it later on the project’s Templates tab.",
-    "contextSeen": "I can see: {items}. I can’t edit slides on request yet — that arrives with the editor agent."
-  },
-  "import": {
-    "running": "Reading the “{template}” template",
-    "done": "The “{template}” template is read",
-    "failed": "Could not read “{template}”",
-    "failedUnknown": "Reading stopped without a reason. Please try again.",
-    "retry": "Read again",
-    "progress": "Reading progress"
-  },
-  "template": {
-    "layouts": "{count, plural, one {# layout} other {# layouts}}",
-    "fonts": "Headings — {heading}, text — {body}",
-    "font": "Font — {font}",
-    "demoProfile": "Demo mode does not read the file: this is a demo profile, not the profile of this template."
-  },
   "work": {
     "starting": "Starting",
     "finishing": "Finishing",
@@ -60,7 +35,8 @@
       "failed": "failed"
     },
     "stageCount": "{done} of {total}",
-    "failedUnknown": "The run stopped without a reason. Please try again."
+    "failedUnknown": "The run stopped without a reason. Please try again.",
+    "lostAfterReload": "A build was running when the page reloaded and can no longer be followed here. The finished deck will appear in the library; to build again here, write a wish."
   },
   "build": {
     "elapsed": "{time} of {budget}",
@@ -71,55 +47,6 @@
     "galleryTitle": "Slides as they are laid out",
     "galleryNote": "The “{variant}” variant. The other two are built from the same plan.",
     "doneTitle": "Built the deck in {time}"
-  },
-  "ask": {
-    "keys": "1–{count} and Enter",
-    "answer": "Answer"
-  },
-  "questions": {
-    "attachTemplate": {
-      "title": "Attach the template to the “{project}” project?",
-      "note": "This presentation is built with it either way. An attached template shows up in the template picker for the project’s new presentations.",
-      "options": {
-        "attach": {
-          "label": "Attach to “{project}”",
-          "description": "The template appears on the project’s Templates tab"
-        },
-        "deckOnly": {
-          "label": "Only for this presentation",
-          "description": "The template stays in the library; the project does not change"
-        }
-      }
-    }
-  },
-  "audience": {
-    "title": "Assumption",
-    "titleChanged": "Audience",
-    "lead": "The brief doesn’t say who the presentation is for — building it for “{audience}”. You can change this at any time.",
-    "leadChanged": "Building for “{audience}”.",
-    "change": "Change",
-    "changeLabel": "Change the audience",
-    "menuTitle": "Who is it for",
-    "said": "Audience: {audience}",
-    "options": {
-      "leadership": {
-        "label": "Leadership",
-        "description": "Short: numbers, conclusions, decisions"
-      },
-      "clients": {
-        "label": "Clients",
-        "description": "Benefits, examples, next step"
-      },
-      "team": {
-        "label": "Team",
-        "description": "Tasks, deadlines, owners"
-      }
-    },
-    "brief": {
-      "leadership": "Audience: leadership — short, with numbers, conclusions and decisions.",
-      "clients": "Audience: clients — benefits, examples and the next step.",
-      "team": "Audience: the team — tasks, deadlines and owners."
-    }
   },
   "variants": {
     "dense": {
@@ -163,13 +90,6 @@
     "list": "All slides",
     "slide": "Slide {number}",
     "counter": "{number} / {total}"
-  },
-  "input": {
-    "label": "Message to the assistant",
-    "placeholder": "Ask for a change to the deck",
-    "placeholderAnswer": "Or answer in your own words",
-    "send": "Send",
-    "stop": "Stop"
   },
   "context": {
     "label": "Context for the assistant",

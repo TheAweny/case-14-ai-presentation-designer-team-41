@@ -1,12 +1,14 @@
 import type { CSSProperties } from 'react';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import type { DesignSystem, TypeStyle } from '@lct/contracts';
+import type { DesignSystem, SlideIr, TypeStyle } from '@lct/contracts';
 import { SlideView, lineHeightOf } from '@lct/slide-renderer';
 import { useEmptyTextPrompt } from '@/components/editor/empty-text';
 import { FontSample } from '@/components/library/project-card';
 import { fontStackOf, roleColor } from '@/components/library/template-swatch';
 import type { SlideLayout } from '@/lib/deck-source';
-import type { TemplateSummary } from '@/lib/library-source';
+import type { TemplateSample, TemplateSummary } from '@/lib/library-source';
+import { templateSlideFromIr } from '@/lib/template-profile';
+import { TemplateSamplesWatcher } from './template-samples-watcher';
 
 /**
  * Вкладка «Шаблон»: что извлечено из файла при импорте — профиль (палитра по ролям, шрифты,
@@ -29,19 +31,168 @@ export async function TemplatePanel({ template }: { template: TemplateSummary })
         <TypeScale system={template.designSystem} />
       </section>
 
-      <section aria-labelledby="template-layouts" className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 id="template-layouts" className="flex items-baseline gap-2 text-base font-semibold">
-            {t('gallery')}
-            <span className="text-sm font-normal text-muted-foreground tabular-nums">
-              {template.layouts.length}
-            </span>
-          </h2>
-          <p className="text-sm text-muted-foreground">{t('galleryHint')}</p>
-        </div>
-        <LayoutGallery layouts={template.layouts} system={template.designSystem} />
-      </section>
+      {template.samples ? (
+        <SampleGallery template={template} samples={template.samples} />
+      ) : (
+        <section aria-labelledby="template-layouts" className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 id="template-layouts" className="flex items-baseline gap-2 text-base font-semibold">
+              {t('layoutsGallery')}
+              <span className="text-sm font-normal text-muted-foreground tabular-nums">
+                {template.layouts.length}
+              </span>
+            </h2>
+            <p className="text-sm text-muted-foreground">{t('layoutsGalleryHint')}</p>
+            {/* Шаблон из API ещё не разобран: разбор запускается отсюда. */}
+            {template.templateIr ? (
+              <TemplateSamplesWatcher key="index" templateId={template.templateId} mode="index" />
+            ) : null}
+          </div>
+          <LayoutGallery layouts={template.layouts} system={template.designSystem} />
+        </section>
+      )}
     </div>
+  );
+}
+
+/** Порядок видов в галерее: как слайды идут в презентации. */
+const SAMPLE_KINDS: readonly TemplateSample['kind'][] = [
+  'cover',
+  'section',
+  'statement',
+  'list',
+  'cards',
+  'process',
+  'comparison',
+  'problem-solution',
+  'team',
+  'closing',
+  'other',
+];
+
+/**
+ * Слайды шаблона по видам — образцы из файла, из которых собираются слайды презентации, с
+ * названиями от индексатора. Особые (код, формулы, мокапы) — своей группой: агент ставит их не в
+ * любую презентацию. Служебные страницы шаблона свёрнуты: в презентацию они не попадают.
+ */
+async function SampleGallery({
+  template,
+  samples,
+}: {
+  template: TemplateSummary;
+  samples: readonly TemplateSample[];
+}) {
+  const t = await getTranslations('projectPage.template');
+  const regular = samples.filter((sample) => !sample.reference && !sample.special);
+  const groups = [
+    ...SAMPLE_KINDS.map((kind) => ({
+      id: kind,
+      title: t(`categories.${kind}`),
+      hint: null,
+      items: regular.filter((sample) => sample.kind === kind),
+    })),
+    {
+      id: 'special',
+      title: t('categories.special'),
+      hint: t('specialHint'),
+      items: samples.filter((sample) => sample.special),
+    },
+  ].filter((group) => group.items.length > 0);
+  const reference = samples.filter((sample) => sample.reference);
+  const drawn = samples.some((sample) => sample.previewUrl !== undefined);
+
+  return (
+    <section aria-labelledby="template-samples" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h2 id="template-samples" className="flex items-baseline gap-2 text-base font-semibold">
+          {t('gallery')}
+          <span className="text-sm font-normal text-muted-foreground tabular-nums">
+            {samples.length - reference.length}
+          </span>
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('galleryHint')}</p>
+        {drawn ? null : (
+          <TemplateSamplesWatcher key="draw" templateId={template.templateId} mode="draw" />
+        )}
+      </div>
+      {groups.map((group) => (
+        <section
+          key={group.id}
+          aria-labelledby={`template-samples-${group.id}`}
+          className="flex flex-col gap-3"
+        >
+          <div className="flex flex-col gap-0.5">
+            <h3
+              id={`template-samples-${group.id}`}
+              className="flex items-baseline gap-2 text-sm font-semibold"
+            >
+              {group.title}
+              <span className="text-xs font-normal text-muted-foreground tabular-nums">
+                {group.items.length}
+              </span>
+            </h3>
+            {group.hint ? <p className="text-xs text-muted-foreground">{group.hint}</p> : null}
+          </div>
+          <SampleGrid template={template} samples={group.items} untitled={t('untitled')} />
+        </section>
+      ))}
+      {reference.length > 0 ? (
+        <details className="group flex flex-col gap-3">
+          <summary className="flex cursor-pointer items-baseline gap-2 text-sm font-semibold text-muted-foreground select-none">
+            {t('categories.reference')}
+            <span className="text-xs font-normal tabular-nums">{reference.length}</span>
+          </summary>
+          <p className="mt-1 mb-3 text-xs text-muted-foreground">{t('referenceHint')}</p>
+          <SampleGrid template={template} samples={reference} untitled={t('untitled')} />
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+function SampleGrid({
+  template,
+  samples,
+  untitled,
+}: {
+  template: TemplateSummary;
+  samples: readonly TemplateSample[];
+  untitled: string;
+}) {
+  const ir = template.templateIr;
+  const aspect = ir ? `${ir.slideCx} / ${ir.slideCy}` : '16 / 9';
+  return (
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] gap-x-4 gap-y-4">
+      {samples.map((sample) => {
+        const slide = sample.previewUrl || !ir ? null : templateSlideFromIr(ir, sample.slideIndex);
+        return (
+          <li key={sample.patternId} className="min-w-0">
+            <figure className="flex min-w-0 flex-col gap-1.5" title={sample.useFor || undefined}>
+              <div
+                aria-hidden
+                className="overflow-hidden rounded-md bg-card ring-1 ring-border"
+                style={{ aspectRatio: aspect }}
+              >
+                {sample.previewUrl ? (
+                  <img
+                    src={sample.previewUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="size-full object-cover"
+                  />
+                ) : slide ? (
+                  <SampleSlide slide={slide} system={template.designSystem} />
+                ) : null}
+              </div>
+              <figcaption className="truncate px-0.5 text-xs text-muted-foreground">
+                {sample.title || untitled}
+              </figcaption>
+            </figure>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -187,6 +338,12 @@ async function TypeScale({ system }: { system: DesignSystem }) {
  * Макеты шаблона миниатюрами, в порядке файла. Миниатюра скрыта от чтения с экрана: макет
  * называет подпись. В пустых рамках — подсказки, как в меню нового слайда редактора.
  */
+/** Схема образца, пока API не нарисовал слайды шаблона: без картинок, но с текстом и формой. */
+function SampleSlide({ slide, system }: { slide: SlideIr; system: DesignSystem }) {
+  const emptyText = useEmptyTextPrompt();
+  return <SlideView slide={slide} profile={system} emptyText={emptyText} thumbnail />;
+}
+
 function LayoutGallery({
   layouts,
   system,

@@ -4,7 +4,9 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
-import { deckConversations } from '@/components/assistant/session';
+import { ModeMenu, nextChatMode, useLastChatMode } from '@/components/assistant/mode-menu';
+import { chatStore } from '@/components/assistant/session';
+import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
 import { Button } from '@/components/ui/button';
@@ -25,13 +27,12 @@ import {
   chosenTemplate,
   templateGroups,
 } from '@/lib/composer-templates';
-import { apiFetch } from '@/lib/api';
 import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-generator';
-import { newDeckHref } from '@/lib/library-menu';
+import { chatHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
-import { effectiveModel, shortModelName, writerModelReady } from '@/lib/writer-models';
+import { effectiveModel, writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
@@ -45,8 +46,6 @@ import {
   usePromptBox,
 } from './prompt-box';
 import { promptAction } from './prompt-keys';
-import { SlideCountMenu } from './slide-count-menu';
-import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 
 /** Расширения одного вида контента через запятую — для подсказки у скрепки. */
 function extensionsOf(kind: string): string {
@@ -65,8 +64,9 @@ function extensionsOf(kind: string): string {
  * файл: .pptx и .potx через скрепку, перетаскивание или «Загрузить шаблон…» становятся чипом
  * шаблона и заменяют выбор, пока чип не убрали. Разбирает новый файл агент в разговоре.
  *
- * Стрелка (или Enter) начинает разговор с агентом (`deckConversations`) и открывает его страницу:
- * там агент собирает колоду и отдаёт три варианта. Поле собрано из частей `prompt-box.tsx` — тех
+ * Стрелка (или Enter) начинает чат с агентом (`chatStore`) и открывает его страницу. Режим у
+ * поля решает, что агент сделает с сообщением: «Чат» ответит, «План» покажет план колоды на
+ * одобрение, «Авто» соберёт сразу. Шаблон не обязателен: без него агент спросит или обсудит. Поле собрано из частей `prompt-box.tsx` — тех
  * же, что в чате и в панели редактора, поэтому ведёт себя везде одинаково.
  * Файлы едут вместе с разговором, а не через адрес или хранилище. Презентация появится там, где
  * стоит поле: в проекте страницы или, на главной, вне проектов. «Аврора» светится цветом этого
@@ -88,7 +88,6 @@ export function DeckComposer({
   focusRequested?: boolean;
 }) {
   const t = useTranslations('composer');
-  const tAudience = useTranslations('assistant.audience.brief');
   const router = useRouter();
   const pathname = usePathname();
   const rejectedId = useId();
@@ -99,9 +98,9 @@ export function DeckComposer({
   const [files, setFiles] = useState<readonly File[]>([]);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [rejected, setRejected] = useState<readonly string[]>([]);
-  // Число слайдов по умолчанию — из настроек; null — «Авто».
-  const prefs = useEditorPrefs();
-  const [slideCount, setSlideCount] = useState<number | null>(prefs.slideCount);
+  const [mode, setMode] = useLastChatMode();
+  // Число слайдов из настроек — пожелание агенту, а не жёсткое правило.
+  const { slideCount } = useEditorPrefs();
   const [model, setModel] = useState<ModelRef | null>(null);
   const models = useWriterModels();
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -112,10 +111,9 @@ export function DeckComposer({
   const groups = templateGroups(templates, project);
   // Выбор в меню переживает чип: убрали новый файл — вернулся прежний шаблон.
   const selected = chosenTemplate(templates, project, pickedId);
-  const hasTemplate = templateFile !== null || selected !== null;
-  const ready = hasContent(text, files);
+  const ready = hasContent(text, files) || templateFile !== null;
   // Пока настройки моделей не загрузились, неизвестно, есть ли чем писать: отправку придерживаем.
-  const box = usePromptBox({ ready: ready && hasTemplate && models !== null, busy: sending });
+  const box = usePromptBox({ ready: ready && models !== null, busy: sending });
   const glowStyle = {
     '--aurora-color': projectColorVar(project?.appearance.color ?? 'gray'),
   } as CSSProperties;
@@ -141,50 +139,32 @@ export function DeckComposer({
     else box.aurora.kick();
   };
 
-  const submit = async () => {
-    if (!ready || sending || !hasTemplate) return;
+  const submit = () => {
+    if (!ready || sending) return;
     if (!writerModelReady(models)) {
       if (models !== null) setModelRequiredOpen(true);
       return;
     }
     setSending(true);
-    for (const file of files) {
-      const form = new FormData();
-      form.set('file', file);
-      const response = await apiFetch('/files/content', { method: 'POST', body: form });
-      if (!response.ok) {
-        setSending(false);
-        setRejected((current) => [...current, file.name]);
-        return;
-      }
-    }
     // Выбор показывают, только когда моделей несколько: подписывать в сообщении есть смысл тогда же.
     const chosen = models ? effectiveModel(models, model) : null;
-    const threadId = deckConversations.start({
-      request: {
-        // Новый файл важнее выбора в меню: id шаблона разговор узнает, когда разберёт файл.
-        templateId: templateFile ? null : (selected?.templateId ?? null),
-        projectId,
-        brief: text.trim(),
+    const chatId = crypto.randomUUID();
+    chatStore.start(
+      chatId,
+      { projectId, mode, model: chosen },
+      {
+        text: text.trim(),
         files,
         slideCount,
-        model: chosen,
+        // Новый файл важнее выбора в меню.
+        templateFile,
+        template:
+          templateFile || !selected
+            ? null
+            : { templateId: selected.templateId, name: selected.fileName },
       },
-      templateFile,
-      projectName: project?.name ?? null,
-      meta: {
-        templateName: templateFile?.name ?? selected?.fileName ?? '',
-        slideCount,
-        modelName: chosen && models && models.count > 1 ? shortModelName(chosen.modelId) : null,
-      },
-      returnHref: pathname,
-      audienceLabels: {
-        leadership: tAudience('leadership'),
-        clients: tAudience('clients'),
-        team: tAudience('team'),
-      },
-    });
-    router.push(newDeckHref(threadId));
+    );
+    router.push(chatHref(chatId));
   };
 
   return (
@@ -258,6 +238,11 @@ export function DeckComposer({
           placeholder={t('placeholder')}
           fieldRef={field}
           describedBy={rejected.length > 0 ? rejectedId : undefined}
+          onKeyDown={(event) => {
+            if (event.key !== 'Tab' || !event.shiftKey) return;
+            event.preventDefault();
+            setMode(nextChatMode(mode));
+          }}
         />
         <PromptToolbar
           end={
@@ -267,10 +252,10 @@ export function DeckComposer({
                 state={promptAction({
                   hasInput: ready,
                   sending,
-                  blocked: !hasTemplate || models === null,
+                  blocked: models === null,
                 })}
                 label={t('submit')}
-                blockedHint={hasTemplate ? t('modelRequired.loading') : t('needTemplate')}
+                blockedHint={t('modelRequired.loading')}
               />
             </>
           }
@@ -335,7 +320,7 @@ export function DeckComposer({
             }}
             onUpload={() => templatePicker.current?.click()}
           />
-          <SlideCountMenu value={slideCount} onChange={setSlideCount} />
+          <ModeMenu value={mode} onChange={setMode} />
         </PromptToolbar>
       </PromptBox>
       {rejected.length > 0 ? (

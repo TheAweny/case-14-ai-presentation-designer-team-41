@@ -1,9 +1,9 @@
 import { PROJECT_COLOR_IDS, type ProjectColorId } from './project-appearance';
 
 /**
- * Аккаунты. Регистрации нет: пользователей заводит тот, кто разворачивает продукт, — пока
- * переменной окружения `AUTH_USERS`, позже это возьмёт на себя API. Библиотека у всех общая:
- * аккаунт отвечает на вопрос «кто работает», а не «чьё это».
+ * Аккаунты. Регистрации нет: первого администратора создаёт установщик (`ADMIN_EMAIL` и
+ * `ADMIN_PASSWORD` в `.env`), остальных — администратор в настройках. Всё, что человек сделал —
+ * проекты, шаблоны, презентации, чаты, — принадлежит его аккаунту; чужого API не отдаёт.
  *
  * Модуль без React и DOM: разбор настроек, адреса возврата и вид аватара проверяются тестами.
  */
@@ -17,10 +17,14 @@ export const LOGIN_PATH = '/login';
 /** Параметр адреса входа: куда вернуться после входа. */
 export const NEXT_PARAM = 'next';
 
+/** Администратор заводит аккаунты, глобальные подключения к моделям и общие шаблоны. */
+export type AccountRole = 'admin' | 'user';
+
 export interface Account {
   readonly userId: string;
   readonly email: string;
   readonly name: string;
+  readonly role: AccountRole;
 }
 
 export interface AuthSource {
@@ -32,35 +36,9 @@ export interface AuthSource {
   getAccount(userId: string): Promise<Account | null>;
 }
 
-/** Пользователь из `AUTH_USERS`, как его завёл администратор. */
-export interface SeedUser {
-  readonly email: string;
-  readonly password: string;
-  readonly name: string;
-}
-
 /** Почта для сравнения: без пробелов по краям и без регистра. */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-/**
- * Пользователи из `AUTH_USERS`: записи через `;`, в записи `почта:пароль:Имя`. Имя — последнее
- * поле и может содержать двоеточия; пароль — не может. Имя можно опустить, тогда им станет
- * часть почты до `@`. Запись без почты или пароля пропускаем, повтор почты — тоже: побеждает первая.
- */
-export function parseAuthUsers(value: string | undefined): SeedUser[] {
-  const users: SeedUser[] = [];
-  const seen = new Set<string>();
-  for (const entry of (value ?? '').split(';')) {
-    const [rawEmail = '', password = '', ...nameParts] = entry.split(':');
-    const email = normalizeEmail(rawEmail);
-    if (!email.includes('@') || password === '' || seen.has(email)) continue;
-    seen.add(email);
-    const name = nameParts.join(':').trim() || email.slice(0, email.indexOf('@'));
-    users.push({ email, password, name });
-  }
-  return users;
 }
 
 /**

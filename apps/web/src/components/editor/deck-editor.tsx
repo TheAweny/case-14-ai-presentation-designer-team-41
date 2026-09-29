@@ -23,7 +23,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
 import type { EditorLayout } from '@/components/editor/editor-layout';
 import { AssistantPanel } from '@/components/assistant/assistant-panel';
-import { useThreadForDeck } from '@/components/assistant/session';
+import { chatStore } from '@/components/assistant/session';
+import type { TemplateSummary } from '@/lib/library-source';
+import { EditorChatContext } from '@/components/editor/editor-chat';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navigation';
 import { lockTemplateDecor } from '@/components/editor/template-lock';
@@ -45,15 +47,30 @@ export function DeckEditor({
   media,
   layout,
   present = false,
+  templates = [],
 }: {
   deck: Deck;
   media?: Readonly<Record<string, string>>;
   layout?: EditorLayout;
   /** Открыть колоду сразу в показе с первого слайда: так просит пункт «Начать показ» в меню. */
   present?: boolean;
+  /** Шаблоны библиотеки: для плана в чате колоды. */
+  templates?: readonly TemplateSummary[];
 }) {
-  // Разговор с агентом, который собрал эту колоду: его продолжает панель «Ассистент».
-  const thread = useThreadForDeck(deck.deckId);
+  // Чат, в котором собрана эта колода: его продолжает панель «Ассистент».
+  const [chatId, setChatId] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    chatStore.forDeck(deck.deckId).then(
+      (found) => {
+        if (live) setChatId(found);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [deck.deckId]);
   const base = useMemo(() => deckFingerprint(deck.slides), [deck.slides]);
   // Блокировка шаблона — как в настройках при открытии; оболочка получает то же значение.
   const { lockTemplate: lockPref } = useEditorPrefs();
@@ -229,19 +246,28 @@ export function DeckEditor({
     <>
       {ready ? (
         <FontAvailabilityProvider families={fonts} fontsReady={assets.fonts}>
-          <EditorShell
-            key={opened.generation}
-            deck={shown}
-            media={media}
-            layout={layout}
-            lockTemplateOnOpen={lockTemplate}
-            // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
-            presentOnOpen={present && opened.generation === 0}
-            onSlidesChange={onSlidesChange}
-            saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
-            assistant={<AssistantPanel thread={thread} deckId={deck.deckId} />}
-            openAssistant={thread !== undefined}
-          />
+          <EditorChatContext value={chatId}>
+            <EditorShell
+              key={opened.generation}
+              deck={shown}
+              media={media}
+              layout={layout}
+              lockTemplateOnOpen={lockTemplate}
+              // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
+              presentOnOpen={present && opened.generation === 0}
+              onSlidesChange={onSlidesChange}
+              saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
+              assistant={
+                <AssistantPanel
+                  chatId={chatId}
+                  deckId={deck.deckId}
+                  projectId={null}
+                  templates={templates}
+                />
+              }
+              openAssistant={chatId !== null}
+            />
+          </EditorChatContext>
           {restored ? (
             <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} />
           ) : null}

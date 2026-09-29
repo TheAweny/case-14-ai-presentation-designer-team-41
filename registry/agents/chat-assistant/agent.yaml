@@ -1,0 +1,16 @@
+# Talks with the person in the chat: answers, reads templates, materials and built decks, proposes
+# a deck outline and starts the build. The mode prompts in modes/, the tool descriptions in tools/
+# and json-mode.md are part of the agent and share its version.
+
+id: chat-assistant
+version: 1.1.1
+description: 'Chat assistant of the deck designer: conversation, deck outline, build.'
+modelId: assistant-default
+
+generation:
+  temperature: 0.4
+  topP: 0.95
+  maxOutputTokens: 4096
+
+outputSchema: ChatTurn
+instructionsFile: instructions.md

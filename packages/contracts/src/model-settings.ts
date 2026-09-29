@@ -12,8 +12,18 @@ import { z } from 'zod';
  * Not part of `contractRegistry`: the engine never calls a model, so Python has no use for it.
  */
 
-/** Roles of the pipeline from `docs/MODELS.md`, in the order they work on a deck. */
-export const PIPELINE_ROLES = ['planner', 'writer', 'critic', 'vision', 'image'] as const;
+/**
+ * Roles of the pipeline from `docs/MODELS.md`, in the order they work on a deck: the assistant
+ * talks to the person in the chat, the rest build the deck.
+ */
+export const PIPELINE_ROLES = [
+  'assistant',
+  'planner',
+  'writer',
+  'critic',
+  'vision',
+  'image',
+] as const;
 export const pipelineRoleSchema = z.enum(PIPELINE_ROLES);
 export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
 
@@ -23,6 +33,11 @@ export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
  */
 export function isRoleOptional(role: PipelineRole): boolean {
   return role === 'image';
+}
+
+/** A role that, without a model of its own, works with the writer's: the chat assistant. */
+export function usesWriterModelByDefault(role: PipelineRole): boolean {
+  return role === 'assistant';
 }
 
 /**
@@ -88,8 +103,21 @@ export const modelConnectionSchema = z.object({
   keyHint: z.string().nullable(),
   /** Null: the connection has not been checked yet. */
   lastCheck: connectionCheckSchema.nullable(),
+  /**
+   * Models this connection offers. Null or missing: any model, the whole list the check reported
+   * and ids typed by hand. A list offers only those ids, so a shared gateway can offer one model
+   * instead of hundreds; for a shared key it applies to every account.
+   */
+  enabledModels: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH).nullable().optional(),
   /** Configured on the server through the environment: it can be checked, not edited. */
   managed: z.boolean(),
+  /**
+   * Shared with every account by an administrator. Everyone can pick its models; only an
+   * administrator changes it, and nobody else sees its key hint.
+   */
+  shared: z.boolean().optional(),
+  /** The account asking may edit and delete it. */
+  editable: z.boolean().optional(),
 });
 export type ModelConnection = z.infer<typeof modelConnectionSchema>;
 
@@ -117,6 +145,16 @@ export type ModelRef = z.infer<typeof modelRefSchema>;
 export const modelSettingsSchema = z.object({
   connections: z.array(modelConnectionSchema),
   roles: z.array(roleAssignmentSchema),
+  /**
+   * Roles whose model comes from the defaults for everyone (set by an administrator, or the
+   * server connection) rather than the account's own choice.
+   */
+  inheritedRoles: z.array(pipelineRoleSchema).optional(),
+  /**
+   * The account asking is an administrator: its connections may be shared, and its role choices
+   * are the defaults for everyone.
+   */
+  managesShared: z.boolean().optional(),
 });
 export type ModelSettings = z.infer<typeof modelSettingsSchema>;
 
@@ -137,6 +175,8 @@ export const connectionInputSchema = z.object({
     .max(API_KEY_MAX_LENGTH * 2)
     .optional(),
   lastCheck: connectionCheckSchema.nullable().optional(),
+  /** Share with every account; only an administrator's request may set it. */
+  shared: z.boolean().optional(),
 });
 export type ConnectionInput = z.infer<typeof connectionInputSchema>;
 
@@ -150,6 +190,18 @@ export const probeInputSchema = z.object({
     .optional(),
 });
 export type ProbeInput = z.infer<typeof probeInputSchema>;
+
+/**
+ * Which models of one connection stay available. `null` lifts the limit, an empty list switches
+ * every model off. Only whoever may edit the connection can send this — for a shared connection
+ * and the one from the server environment that is an administrator; everyone else just sees the
+ * shorter list.
+ */
+export const connectionModelsInputSchema = z.object({
+  connectionId: z.string().min(1),
+  enabledModels: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH).nullable(),
+});
+export type ConnectionModelsInput = z.infer<typeof connectionModelsInputSchema>;
 
 // Input checks. Each returns a reason, not a text: the words live in the interface dictionary.
 

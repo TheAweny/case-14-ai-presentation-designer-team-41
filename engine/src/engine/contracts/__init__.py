@@ -41,6 +41,8 @@ from engine.contracts._generated import (
     SlideReview,
     Status,
     TemplateIR,
+    TemplatePreviewsRequest,
+    TemplatePreviewsResponse,
 )
 from engine.contracts.provisional import (
     ChartSpec,
@@ -89,6 +91,8 @@ __all__ = [
     "Status",
     "TableSpec",
     "TemplateIR",
+    "TemplatePreviewsRequest",
+    "TemplatePreviewsResponse",
     "TemplateProfile",
     "TemplateProfileDraft",
 ]

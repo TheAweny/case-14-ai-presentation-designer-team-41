@@ -1,4 +1,5 @@
 import { GenerationController } from '../generation/generation.controller.js';
+import { GenerationService } from '../generation/generation.service.js';
 import { Module } from '@nestjs/common';
 import { PostgresRunRepository } from '@lct/run-store';
 import { ModelsModule } from '../models/models.module.js';
@@ -28,7 +29,8 @@ import { RUN_REPOSITORY } from './runs.tokens.js';
       },
     },
     RunsService,
+    GenerationService,
   ],
-  exports: [RunsService],
+  exports: [RunsService, GenerationService],
 })
 export class RunsModule {}

@@ -7,6 +7,7 @@ import { loadAgent, toManifestEntry } from '@lct/registry';
 import {
   artifactManifestSchema,
   type CompositionNote,
+  type DeckOutline,
   type GenerationProfile,
   type JobEvent,
   type JobStage,
@@ -42,6 +43,8 @@ export interface GenerateOptions {
   outputDir: string;
   brief: string;
   slideCount: number | null;
+  /** The approved outline; the planner lays out its slides instead of planning its own. */
+  outline?: DeckOutline | null;
   profile: GenerationProfile;
   /** The template indexer's notes for this profile, if the template was indexed. */
   notes?: readonly CompositionNote[];
@@ -144,7 +147,12 @@ export async function generatePresentation(options: GenerateOptions) {
     });
     const run = await mastra.getWorkflow('generation').createRun();
     const result = await run.start({
-      inputData: { brief: options.brief, slideCount: options.slideCount, profile: options.profile },
+      inputData: {
+        brief: options.brief,
+        slideCount: options.slideCount,
+        profile: options.profile,
+        outline: options.outline ?? null,
+      },
     });
     if (result.status !== 'success')
       throw new Error(

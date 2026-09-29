@@ -10,6 +10,7 @@ import {
   auditReportSchema,
   deckExportResponseSchema,
   deckImportResponseSchema,
+  templatePreviewsResponseSchema,
   editableDeckResponseSchema,
   healthCheckSchema,
   layoutVariantsResponseSchema,
@@ -18,6 +19,8 @@ import {
   type DeckExportRequest,
   type DeckExportResponse,
   type DeckImportRequest,
+  type TemplatePreviewsRequest,
+  type TemplatePreviewsResponse,
   type DeckImportResponse,
   type EditableDeckRequest,
   type EditableDeckResponse,
@@ -140,6 +143,19 @@ export class EngineClient {
    */
   async importDeck(request: DeckImportRequest, signal?: AbortSignal): Promise<DeckImportResponse> {
     return deckImportResponseSchema.parse(await this.post('/v1/deck-import', request, signal));
+  }
+
+  /**
+   * `POST /v1/template-previews` — every slide of a saved template drawn as a PNG, for the library
+   * to show its sample slides as they are. Takes about a minute for a large template.
+   */
+  async templatePreviews(
+    request: TemplatePreviewsRequest,
+    signal?: AbortSignal,
+  ): Promise<TemplatePreviewsResponse> {
+    return templatePreviewsResponseSchema.parse(
+      await this.post('/v1/template-previews', request, signal),
+    );
   }
 
   private async get(path: string): Promise<unknown> {

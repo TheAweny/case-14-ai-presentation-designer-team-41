@@ -1,36 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  accountColor,
-  accountInitials,
-  authSecret,
-  loginHref,
-  parseAuthUsers,
-  safeNextPath,
-} from './auth';
-
-describe('parseAuthUsers', () => {
-  it('reads email, password and a name that may contain colons', () => {
-    expect(
-      parseAuthUsers(' Anna@Example.com:s3cret:Анна Петрова ; b@example.com:pw:Team: Design'),
-    ).toEqual([
-      { email: 'anna@example.com', password: 's3cret', name: 'Анна Петрова' },
-      { email: 'b@example.com', password: 'pw', name: 'Team: Design' },
-    ]);
-  });
-
-  it('names a user after the mailbox when the name is missing', () => {
-    expect(parseAuthUsers('ivan@example.com:pw')).toEqual([
-      { email: 'ivan@example.com', password: 'pw', name: 'ivan' },
-    ]);
-  });
-
-  it('skips broken entries and repeated emails', () => {
-    expect(parseAuthUsers(';no-at:pw;c@example.com:;c@example.com:1;c@example.com:2')).toEqual([
-      { email: 'c@example.com', password: '1', name: 'c' },
-    ]);
-    expect(parseAuthUsers(undefined)).toEqual([]);
-  });
-});
+import { accountColor, accountInitials, authSecret, loginHref, safeNextPath } from './auth';
 
 describe('safeNextPath', () => {
   it('keeps a local path with its query', () => {

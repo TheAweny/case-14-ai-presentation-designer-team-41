@@ -9185,6 +9185,34 @@ class TemplateIR(BaseModel):
     warnings: list[Warning5] = Field(..., description="Empty when nothing was lost.")
 
 
+class TemplatePreviewsRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    outputDir: constr(min_length=1) = Field(
+        ..., description="Directory the PNG files are written into."
+    )
+    schemaVersion: Literal[1]
+    templatePath: constr(min_length=1) = Field(
+        ..., description="The template .pptx, on the engine filesystem."
+    )
+    widthPx: conint(ge=160, le=1920) = Field(
+        ...,
+        description="Width of every picture; the height follows the slide proportions.",
+    )
+
+
+class TemplatePreviewsResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    previews: list[constr(min_length=1)] = Field(
+        ...,
+        description="File names inside the output directory, one per slide, in slide order.",
+    )
+    schemaVersion: Literal[1]
+
+
 class ContractsBundle(BaseModel):
     """
     All contracts shared between the TypeScript side and the Python engine.
@@ -9246,3 +9274,9 @@ class ContractsBundle(BaseModel):
     SlideIR_1: SlideIR | None = Field(None, alias="SlideIR")
     SlideReview_1: SlideReview | None = Field(None, alias="SlideReview")
     TemplateIR_1: TemplateIR | None = Field(None, alias="TemplateIR")
+    TemplatePreviewsRequest_1: TemplatePreviewsRequest | None = Field(
+        None, alias="TemplatePreviewsRequest"
+    )
+    TemplatePreviewsResponse_1: TemplatePreviewsResponse | None = Field(
+        None, alias="TemplatePreviewsResponse"
+    )

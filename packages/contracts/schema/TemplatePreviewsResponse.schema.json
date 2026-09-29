@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "previews": {
+      "description": "File names inside the output directory, one per slide, in slide order.",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "previews"
+  ],
+  "title": "TemplatePreviewsResponse",
+  "type": "object"
+}

@@ -56,10 +56,16 @@ const inputClass = cn(
  */
 export function ConnectionForm({
   connection,
+  canShare = false,
   onDone,
 }: {
   /** null — новое подключение. */
   connection: ModelConnection | null;
+  /**
+   * Форму открыл администратор: подключение можно открыть всем аккаунтам. Новое у него общее по
+   * умолчанию — ради этого администратор его и заводит.
+   */
+  canShare?: boolean;
   /** Форма закрыта: с новыми настройками после сохранения или null — отмена. */
   onDone: (settings: ModelSettings | null) => void;
 }) {
@@ -77,6 +83,7 @@ export function ConnectionForm({
   const [check, setCheck] = useState<CheckState>(IDLE);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [shared, setShared] = useState(connection ? connection.shared === true : canShare);
   const checkRun = useRef(0);
   const nameInput = useRef<HTMLInputElement>(null);
   const urlInput = useRef<HTMLInputElement>(null);
@@ -184,6 +191,7 @@ export function ConnectionForm({
       baseUrl,
       apiKey: enteredKey,
       lastCheck,
+      ...(canShare ? { shared } : {}),
     })
       .then((result) => {
         if (result.ok) {
@@ -411,6 +419,21 @@ export function ConnectionForm({
           ) : null}
         </div>
       </div>
+
+      {canShare ? (
+        <label className="flex items-start gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={shared}
+            onChange={(event) => setShared(event.currentTarget.checked)}
+            className="mt-0.5 accent-foreground"
+          />
+          <span className="grid gap-0.5">
+            {t('shared.label')}
+            <span className="text-xs text-pretty text-muted-foreground">{t('shared.hint')}</span>
+          </span>
+        </label>
+      ) : null}
 
       {failure ? (
         <p role="alert" className="text-xs text-destructive">

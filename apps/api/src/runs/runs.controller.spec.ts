@@ -3,6 +3,16 @@ import { BadRequestException } from '@nestjs/common';
 import { MemoryRunRepository } from '@lct/run-store';
 import { RunsController } from './runs.controller.js';
 import { RunsService } from './runs.service.js';
+import type { Account } from '../accounts/account-rules.js';
+
+const account: Account = {
+  id: 'user-1',
+  email: 'ann@example.com',
+  name: 'Ann',
+  role: 'user',
+  disabled: false,
+  createdAt: '2026-09-29T00:00:00.000Z',
+};
 
 function controller(): RunsController {
   return new RunsController(new RunsService(new MemoryRunRepository(() => 'run-api')));
@@ -19,7 +29,7 @@ describe('RunsController', () => {
     const runs = controller();
     await runs.create();
 
-    await expect(runs.status('run-api')).resolves.toMatchObject({ state: 'queued' });
+    await expect(runs.status('run-api', account)).resolves.toMatchObject({ state: 'queued' });
   });
 
   it('rejects an invalid local input configuration before a run starts', () => {
@@ -32,13 +42,15 @@ describe('RunsController', () => {
     const runs = controller();
     await runs.create();
 
-    await expect(runs.events('run-api')).resolves.toEqual([]);
+    await expect(runs.events('run-api', account)).resolves.toEqual([]);
   });
 
   it('rejects an invalid event cursor', async () => {
     const runs = controller();
     await runs.create();
 
-    await expect(runs.events('run-api', 'nope')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(runs.events('run-api', account, 'nope')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 });

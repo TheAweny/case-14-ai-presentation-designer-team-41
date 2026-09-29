@@ -31,6 +31,7 @@ import splash from './splash.json';
 import speakerNotes from './speaker-notes.json';
 import tableMenu from './table-menu.json';
 import tablePanel from './table-panel.json';
+import templatesPage from './templates-page.json';
 import toolRail from './tool-rail.json';
 
 /** Перевод повторяет состав исходного словаря: пропущенную строку поймает проверка типов. */
@@ -61,6 +62,7 @@ const messages = {
   libraryMenu,
   home,
   projectPage,
+  templatesPage,
   projectAppearance,
   composer,
   deckChat,

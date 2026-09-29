@@ -2,7 +2,6 @@
   "label": "What is the new presentation about?",
   "placeholder": "What is the presentation about? Who is it for and what should it achieve",
   "submit": "Generate",
-  "needTemplate": "Choose a template first: the presentation takes its style",
   "attach": "Attach material or a template",
   "attachHint": "Text: {text}. Tables: {table}. Template: {template}",
   "files": "Attachments",
@@ -16,17 +15,6 @@
     "figure": "figure",
     "link": "link",
     "template": "template"
-  },
-  "slides": {
-    "label": "Number of slides",
-    "auto": "Auto",
-    "count": "{count, plural, one {# slide} other {# slides}}",
-    "autoShort": "Auto",
-    "autoNote": "as the material needs",
-    "unit": "{count, plural, one {slide} other {slides}}",
-    "autoSwitch": "Auto",
-    "autoHint": "The plan decides how many slides the material needs.",
-    "hint": "The run settings allow {min} to {max}."
   },
   "template": {
     "change": "Template: {file}. Change template",
@@ -52,7 +40,23 @@
     "manage": "Manage models…",
     "search": "Find a model",
     "notFound": "Nothing found",
-    "pinned": "Selected and default"
+    "pinned": "Selected and default",
+    "all": "All",
+    "families": {
+      "gpt": "GPT",
+      "claude": "Claude",
+      "gemini": "Gemini",
+      "qwen": "Qwen",
+      "llama": "Llama",
+      "deepseek": "DeepSeek",
+      "mistral": "Mistral",
+      "grok": "Grok",
+      "command": "Command",
+      "phi": "Phi",
+      "gemma": "Gemma",
+      "yi": "Yi",
+      "other": "Other"
+    }
   },
   "prompt": {
     "stop": "Stop",

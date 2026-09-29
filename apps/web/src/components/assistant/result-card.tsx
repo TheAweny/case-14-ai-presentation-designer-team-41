@@ -19,14 +19,13 @@ import { SlideShow } from '@/components/editor/slide-show';
 import { useDeckExport } from '@/components/editor/use-deck-export';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { Button } from '@/components/ui/button';
-import type { DeckResult, VariantReview } from '@/lib/assistant-threads';
+import type { DeckResult, VariantReview } from '@/lib/variant-review';
 import { datedFileName, safeFileName } from '@/lib/deck-export';
 import { browserDraftStore, editedSlidesOf } from '@/lib/draft-storage';
 import { createHttpExporter } from '@/lib/http-generation';
 import { deckHref } from '@/lib/library-menu';
 import { cn } from '@/lib/utils';
 import { formatElapsed } from './elapsed';
-import { assistantThreads } from './session';
 import { SlidesDialog } from './slides-dialog';
 import { mediaResolver, useVariantDeck, type VariantDeck } from './use-variant-deck';
 
@@ -39,12 +38,13 @@ import { mediaResolver, useVariantDeck, type VariantDeck } from './use-variant-d
  * показывать и скачивать там умеет сам редактор.
  */
 export function ResultCard({
-  threadId,
+  onChoose,
   result,
   compact = false,
   currentDeckId,
 }: {
-  threadId: string;
+  /** Человек открыл вариант: чат теперь ведёт к нему. */
+  onChoose: (deckId: string) => void;
   result: DeckResult;
   compact?: boolean;
   /** Колода, открытая в редакторе сейчас: её вариант помечен, открыть его второй раз нельзя. */
@@ -79,7 +79,7 @@ export function ResultCard({
 
   const open = (deckId: string) => {
     if (deckId === currentDeckId) return;
-    assistantThreads.setDeck(threadId, deckId);
+    onChoose(deckId);
     router.push(deckHref(deckId));
   };
 

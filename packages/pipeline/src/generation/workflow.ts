@@ -2,6 +2,7 @@ import {
   composedSlideSchema,
   compositionPlanSchema,
   compositionSchema,
+  deckOutlineSchema,
   generationProfileSchema,
   slotChartSchema,
   slotRewriteChoicesSchema,
@@ -9,6 +10,7 @@ import {
   templateSlotCopySchema,
   type ComposedSlide,
   type CompositionNote,
+  type DeckOutline,
   type GenerationProfile,
   type SlotVisual,
 } from '@lct/contracts';
@@ -41,6 +43,8 @@ const inputSchema = z.object({
   brief: z.string(),
   slideCount: z.number().int().min(10).max(15).nullable(),
   profile: generationProfileSchema,
+  /** The approved story: its slides, in its order, are what the planner lays out. */
+  outline: deckOutlineSchema.nullish(),
 });
 const taskSchema = z.object({
   narrative: z.array(z.string()).default([]),
@@ -246,6 +250,7 @@ export function plannerComposition(
     patternId: pattern.patternId,
     name: pattern.name,
     ...(note ? { kind: note.kind, items: note.items, useFor: note.useFor } : {}),
+    ...(note?.special ? { special: true } : {}),
     imageCount: pattern.imageCount,
     contentSlots: slots.filter((slot) => slot.role !== 'title').length,
     slots: slotBriefs(slots).map((slot) => ({
@@ -452,7 +457,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           p.slots.some((s) => s.role === 'title' && s.maxChars >= SHORT_CLAIM_CHARS) &&
           writerSlots(p).every((s) => s.maxChars >= 12),
       );
-      const full = spacious.length ? spacious : distinct;
+      // A deck opens and ends on the template's own cover and closing, and those carry short
+      // lines (a date, a tag, the speaker) the floor above would drop them for.
+      const framing = distinct.filter((p) => {
+        const note = notes.get(p.patternId);
+        return note && !note.special && (note.kind === 'cover' || note.kind === 'closing');
+      });
+      const full = spacious.length
+        ? distinct.filter((p) => spacious.includes(p) || framing.includes(p))
+        : distinct;
       const variant = deps.variant ?? 'balanced';
       const titleSizes = full
         .flatMap((p) => p.slots.filter((s) => s.role === 'title').map((s) => s.fontSize))
@@ -465,10 +478,18 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
         );
       const indexedCovers = full.filter((p) => notes.get(p.patternId)?.kind === 'cover');
-      const covers = indexedCovers.length ? indexedCovers : coversOf(full);
+      // A special cover (a partner's co-branding) opens a deck only when nothing else can.
+      const plainCovers = indexedCovers.filter((p) => !notes.get(p.patternId)?.special);
+      const covers = plainCovers.length
+        ? plainCovers
+        : indexedCovers.length
+          ? indexedCovers
+          : coversOf(full);
       const catalog = variantCatalog(full, variant, covers);
       // The story is planned once for all three variants, on the full catalog; each variant then
       // lays the same slides out on its own compositions (remapPlan).
+      const outline = inputData.outline ?? null;
+      const slideCount = outline?.slides.length ?? inputData.slideCount;
       const computePlan = async () => {
         const plan = (
           corrections?: Record<string, unknown>,
@@ -479,7 +500,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.plannerInstructions,
             {
               brief: inputData.brief,
-              slideCount: inputData.slideCount,
+              slideCount,
+              ...(outline ? { outline } : {}),
               catalog: full.map((pattern) =>
                 plannerComposition(pattern, notes.get(pattern.patternId)),
               ),
@@ -491,10 +513,10 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.signal,
           );
         const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
-          inputData.slideCount === null || result.slides.length === inputData.slideCount
+          slideCount === null || result.slides.length === slideCount
             ? undefined
             : {
-                exactSlideCount: inputData.slideCount,
+                exactSlideCount: slideCount,
                 returnedSlideCount: result.slides.length,
                 message: 'Return exactly exactSlideCount slides.',
               };
@@ -510,7 +532,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         } catch {
           result = await plan({
             minimumSlideCount: 10,
-            exactSlideCount: inputData.slideCount,
+            exactSlideCount: slideCount,
             message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
           });
         }
@@ -538,11 +560,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...varietyCorrections(result),
         };
         if (Object.keys(corrections).length) result = await plan(corrections, result);
-        if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
+        if (slideCount !== null && result.slides.length !== slideCount)
           throw new Error('Planner returned the wrong slide count.');
         if (coverCorrections(result))
           throw new Error('Planner did not select a cover composition.');
-        return result;
+        return outline ? keepOutline(result, outline) : result;
       };
       const result = deps.sharedPlan
         ? await deps.sharedPlan.once(computePlan)
@@ -649,6 +671,32 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     .commit();
 }
 /**
+ * The plan of an approved outline says what the outline says. The deck is titled as the outline,
+ * speaks to its audience, and every slide keeps its claim: the planner chose the compositions, but
+ * a slide whose purpose lost the approved title gets the outline's own words back.
+ */
+export function keepOutline(
+  plan: z.infer<typeof compositionPlanSchema>,
+  outline: DeckOutline,
+): z.infer<typeof compositionPlanSchema> {
+  return {
+    ...plan,
+    title: outline.title,
+    audience: outline.audience || plan.audience,
+    goal: outline.goal || plan.goal,
+    slides: plan.slides.map((slide, index) => {
+      const planned = outline.slides[index];
+      if (!planned || slide.purpose.includes(planned.title)) return slide;
+      const points = planned.points.join('; ');
+      return {
+        ...slide,
+        purpose: (points ? `${planned.title} — ${points}` : planned.title).slice(0, 600),
+      };
+    }),
+  };
+}
+
+/**
  * One plan for the variants of a brief, computed by whichever variant gets there first and awaited
  * by the others, so the three decks tell the same story and the planner is called once.
  */
@@ -683,11 +731,21 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   const capacity = (p: T) => content(p).reduce((sum, s) => sum + s.maxChars, 0);
   const blocks = (p: T) => content(p).length;
   const coverIds = new Set(covers.map((p) => p.patternId));
-  const pool = catalog.filter((p) => !coverIds.has(p.patternId));
+  const special = (id: string) => notes.get(id)?.special === true;
+  // A layout for code or a device screen is never a stand-in for an ordinary slide, and the
+  // planner chose a special one for its content, so that one stays in every variant.
+  const pool = catalog.filter((p) => !coverIds.has(p.patternId) && !special(p.patternId));
   const used = new Map<string, number>();
   return patternIds.map((id, index) => {
     const planned = full.find((p) => p.patternId === id);
-    if (planned === undefined || index === 0 || coverIds.has(id) || pool.length === 0) return id;
+    if (
+      planned === undefined ||
+      index === 0 ||
+      coverIds.has(id) ||
+      special(id) ||
+      pool.length === 0
+    )
+      return id;
     const sameCount = pool.filter((p) => blocks(p) === blocks(planned));
     // The indexer's kind keeps a process a process and cards cards when the template has both.
     const kind = notes.get(planned.patternId)?.kind;

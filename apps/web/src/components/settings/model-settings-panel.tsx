@@ -8,6 +8,7 @@ import {
   DeleteIcon,
   EditIcon,
   MoreIcon,
+  ModelsIcon,
   PlusIcon,
   RetryIcon,
   SpinnerIcon,
@@ -31,6 +32,8 @@ import {
   PIPELINE_ROLES,
   assignmentFor,
   connectionLocation,
+  knownModels,
+  modelsLimited,
   rolesUsingConnection,
   unassignedRequiredRoles,
   type ModelConnection,
@@ -38,12 +41,15 @@ import {
   type RoleAssignment,
 } from '@/lib/model-settings';
 import { ConnectionForm } from './connection-form';
+import { ConnectionModels } from './connection-models';
 import { RoleRow } from './role-row';
 import { StatusDot } from './status-dot';
 import { useCheckErrorText, useModelSettings } from './use-model-settings';
 
 type Screen =
-  { readonly kind: 'list' } | { readonly kind: 'form'; readonly connectionId: string | null };
+  | { readonly kind: 'list' }
+  | { readonly kind: 'form'; readonly connectionId: string | null }
+  | { readonly kind: 'models'; readonly connectionId: string };
 
 /**
  * Раздел «Модели»: подключения к серверам моделей и роли пайплайна. Форма подключения открывается
@@ -119,10 +125,31 @@ export function ModelSettingsPanel() {
           // Новое подключение и каждое редактируемое — своя форма с чистым состоянием.
           key={screen.connectionId ?? 'new'}
           connection={editing}
+          canShare={settings.managesShared === true}
           onDone={(next) => {
             if (next) setSettings(next);
             setScreen({ kind: 'list' });
           }}
+        />
+      </PanelBody>
+    );
+  }
+
+  if (screen.kind === 'models') {
+    const connection =
+      settings.connections.find((item) => item.connectionId === screen.connectionId) ?? null;
+    if (!connection) {
+      setScreen({ kind: 'list' });
+      return null;
+    }
+    return (
+      <PanelBody>
+        <ConnectionModels
+          key={connection.connectionId}
+          connection={connection}
+          canEditManaged={settings.managesShared === true}
+          onBack={() => setScreen({ kind: 'list' })}
+          apply={apply}
         />
       </PanelBody>
     );
@@ -174,6 +201,9 @@ export function ModelSettingsPanel() {
                   checking={checking.has(connection.connectionId)}
                   onCheck={() => void check(connection.connectionId)}
                   onEdit={() => setScreen({ kind: 'form', connectionId: connection.connectionId })}
+                  onModels={() =>
+                    setScreen({ kind: 'models', connectionId: connection.connectionId })
+                  }
                   onDelete={() => apply(() => deleteConnectionAction(connection.connectionId))}
                   // Карточки больше нет: фокус — на «Добавить», когда список перерисуется.
                   onDeleted={() => setTimeout(() => addButton.current?.focus())}
@@ -189,7 +219,9 @@ export function ModelSettingsPanel() {
           <h3 id="settings-roles" className="text-sm font-medium">
             {t('roles.title')}
           </h3>
-          <p className="text-xs text-pretty text-muted-foreground">{t('roles.description')}</p>
+          <p className="text-xs text-pretty text-muted-foreground">
+            {settings.managesShared ? t('roles.descriptionShared') : t('roles.description')}
+          </p>
         </div>
         {settings.connections.length === 0 ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -207,7 +239,12 @@ export function ModelSettingsPanel() {
             <li key={role}>
               <RoleRow
                 assignment={assignmentFor(settings, role)}
-                connections={settings.connections}
+                // Роли администратора — умолчания для всех: только на подключениях, доступных всем.
+                connections={
+                  settings.managesShared
+                    ? settings.connections.filter((item) => item.managed || item.shared)
+                    : settings.connections
+                }
                 onChange={(next: RoleAssignment) => {
                   // Выбор виден сразу, не дожидаясь сервера: меню закрылось — роль уже другая.
                   setSettings((current) =>
@@ -223,6 +260,11 @@ export function ModelSettingsPanel() {
                   void apply(() => setRoleAction(next));
                 }}
               />
+              {settings.inheritedRoles?.includes(role) ? (
+                <p className="-mt-1 px-3 pb-2 text-[0.6875rem] text-muted-foreground">
+                  {t('roles.inherited')}
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -258,6 +300,7 @@ function ConnectionCard({
   checking,
   onCheck,
   onEdit,
+  onModels,
   onDelete,
   onDeleted,
 }: {
@@ -266,6 +309,7 @@ function ConnectionCard({
   checking: boolean;
   onCheck: () => void;
   onEdit: () => void;
+  onModels: () => void;
   onDelete: () => Promise<void>;
   onDeleted: () => void;
 }) {
@@ -297,6 +341,13 @@ function ConnectionCard({
             >
               {t('managed')}
             </span>
+          ) : connection.shared ? (
+            <span
+              title={t('sharedHint')}
+              className="shrink-0 rounded-sm px-1 text-[0.6875rem] font-normal text-muted-foreground ring-1 ring-border"
+            >
+              {t('shared')}
+            </span>
           ) : null}
         </p>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -327,7 +378,12 @@ function ConnectionCard({
           ) : check.ok ? (
             <>
               <StatusDot tone="ok" />
-              {t('status.ok', { count: check.models.length })}
+              {modelsLimited(connection)
+                ? t('status.okLimited', {
+                    enabled: knownModels(connection).length,
+                    count: check.models.length,
+                  })
+                : t('status.ok', { count: check.models.length })}
             </>
           ) : (
             <>
@@ -356,8 +412,13 @@ function ConnectionCard({
             <RetryIcon />
             {t('menu.check')}
           </DropdownMenuItem>
-          {/* Подключение из .env сервера здесь только проверяют: его ключ правят в .env. */}
-          {connection.managed ? null : (
+          <DropdownMenuItem onSelect={onModels}>
+            <ModelsIcon />
+            {t('menu.models')}
+          </DropdownMenuItem>
+          {/* Подключение из .env сервера здесь только проверяют: его ключ правят в .env. Общее
+              подключение правит только администратор. */}
+          {connection.managed || connection.editable === false ? null : (
             <>
               <DropdownMenuItem onSelect={onEdit}>
                 <EditIcon />

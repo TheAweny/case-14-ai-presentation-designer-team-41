@@ -1,0 +1,27 @@
+{
+  "contract": "TemplatePreviewsRequest",
+  "valid": [
+    {
+      "name": "an uploaded template drawn for the library",
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "/app/data/files/template-1/template.pptx",
+        "outputDir": "/app/data/files/template-1/previews",
+        "widthPx": 640
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a picture too small to see",
+      "why": "a thumbnail narrower than 160 pixels shows nothing",
+      "path": ["widthPx"],
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "/app/data/files/template-1/template.pptx",
+        "outputDir": "/app/data/files/template-1/previews",
+        "widthPx": 40
+      }
+    }
+  ]
+}

@@ -10,13 +10,26 @@
     "editor": "Editor",
     "shortcuts": "Shortcuts",
     "decks": "Decks",
-    "models": "Models"
+    "models": "Models",
+    "users": "Users"
   },
   "account": {
     "title": "Account",
-    "managed": "Your administrator changes the name, email and password.",
+    "managed": "The administrator changes your name and email under Users.",
     "signOutHint": "Sign out on this device",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "password": {
+      "title": "Password",
+      "current": "Current password",
+      "next": "New password",
+      "hint": "At least 8 characters.",
+      "save": "Change password",
+      "changed": "Password changed",
+      "wrongCurrent": "The current password is wrong.",
+      "failed": "Could not change the password. Try again.",
+      "passwordShort": "The new password needs at least 8 characters.",
+      "passwordLong": "The new password is at most 200 characters."
+    }
   },
   "general": {
     "title": "General",
@@ -140,11 +153,13 @@
         "unchecked": "Not checked",
         "checking": "Checking…",
         "ok": "{count, plural, =0 {Checked · no models} one {Checked · # model} other {Checked · # models}}",
+        "okLimited": "Checked · {enabled} of {count} on",
         "failed": "Error: {reason}"
       },
       "menu": {
         "label": "Actions for connection “{name}”",
         "check": "Check",
+        "models": "Models",
         "edit": "Edit",
         "delete": "Delete"
       },
@@ -155,7 +170,23 @@
         "confirm": "Delete"
       },
       "managed": "server .env",
-      "managedHint": "Set at installation in the server .env: it can only be checked here."
+      "managedHint": "Set at installation in the server .env: it can only be checked here.",
+      "shared": "Shared",
+      "sharedHint": "Set up by an administrator: everyone can use its models, only an administrator changes it.",
+      "models": {
+        "back": "Back to connections",
+        "hint": "A model you switch off disappears from the picker for everyone who uses this connection, and a run with it will not start. Until you switch one off, any model is available, including new ones the server adds.",
+        "readOnly": "The list is set by whoever can change this connection. Here you can only look at it.",
+        "unchecked": "Check the connection first — its models will show up here.",
+        "search": "Find a model",
+        "empty": "Nothing found",
+        "summaryAll": "{count, plural, one {# model on} other {All # models on}}, new ones too",
+        "summary": "{enabled} of {count} on",
+        "enableAll": "Switch all on",
+        "disableAll": "Switch all off",
+        "enableShown": "Switch shown on",
+        "disableShown": "Switch shown off"
+      }
     },
     "errors": {
       "unreachable": "server unreachable",
@@ -220,7 +251,11 @@
       "save": "Save",
       "saving": "Saving…",
       "gone": "This connection no longer exists — it was deleted.",
-      "keysUnavailable": "The key cannot be saved: the server has no MODEL_KEYS_SECRET to encrypt keys with. Run lct onboard or set it in .env."
+      "keysUnavailable": "The key cannot be saved: the server has no MODEL_KEYS_SECRET to encrypt keys with. Run lct onboard or set it in .env.",
+      "shared": {
+        "label": "Available to every user",
+        "hint": "Every account sees the models of this connection; only administrators see its address and key."
+      }
     },
     "roles": {
       "title": "Roles",
@@ -233,7 +268,8 @@
         "label": "Model for the “{role}” role",
         "noModels": "Model list not received",
         "manual": "Type a model id…",
-        "clear": "Clear assignment"
+        "clear": "Clear assignment",
+        "off": "This model is switched off in the connection settings: a run with it will not start"
       },
       "manual": {
         "label": "Model id on connection “{connection}”",
@@ -242,6 +278,10 @@
         "cancel": "Cancel"
       },
       "items": {
+        "assistant": {
+          "name": "Assistant",
+          "description": "Runs the chat: answers, proposes a deck plan and starts the build. Without a model of its own it talks with the writer’s."
+        },
         "planner": {
           "name": "Planner",
           "description": "Plans the deck: what each slide is about and what type it is."
@@ -264,7 +304,66 @@
           "description": "Draws illustrations when the materials have none.",
           "hint": "Needs a text-to-image model with an OpenAI-compatible images API."
         }
-      }
+      },
+      "descriptionShared": "You are an administrator: these roles are the defaults for every user. Only shared connections are offered here; anyone can pick their own.",
+      "inherited": "Default for everyone — pick a model to use your own.",
+      "writerDefault": "The writer’s model"
+    }
+  },
+  "users": {
+    "title": "Users",
+    "description": "There is no sign-up: the administrator creates accounts. A switched-off person cannot sign in and keeps their presentations; deleting erases their presentations, chats and private templates.",
+    "add": "Add user",
+    "loading": "Loading users…",
+    "listLabel": "Users of this installation",
+    "you": "You",
+    "admin": "Administrator",
+    "disabled": "Switched off",
+    "since": "since {date}",
+    "menu": "Actions for {email}",
+    "resetPassword": "Reset password",
+    "makeAdmin": "Make administrator",
+    "makeUser": "Make regular user",
+    "disable": "Switch off",
+    "enable": "Switch on",
+    "delete": "Delete…",
+    "created": "Account {email} created",
+    "deleted": "Account {email} deleted",
+    "madeAdmin": "{email} is now an administrator",
+    "madeUser": "{email} is now a regular user",
+    "disabledNotice": "Account {email} switched off",
+    "enabledNotice": "Account {email} switched on again",
+    "passwordReset": "Password of {email} reset",
+    "issued": "Password for {email}. It is shown once — pass it on; it can be changed under Account.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "hide": "Hide",
+    "deleteTitle": "Delete the account?",
+    "deleteBody": "{email} will be deleted with their presentations, chats, projects and private templates. Shared templates stay. This cannot be undone. If the person is only away, switch the account off instead.",
+    "deleteConfirm": "Delete account",
+    "fields": {
+      "email": "Email",
+      "name": "Name",
+      "password": "Password",
+      "role": "Role"
+    },
+    "roles": {
+      "user": "User",
+      "admin": "Administrator"
+    },
+    "generate": "Generate",
+    "cancel": "Cancel",
+    "create": "Create",
+    "problems": {
+      "email": "Needs an email like name@example.com",
+      "passwordShort": "At least 8 characters",
+      "passwordLong": "At most 200 characters",
+      "name": "Name cannot be empty"
+    },
+    "errors": {
+      "exists": "An account with this email already exists.",
+      "forbidden": "This action is not available.",
+      "failed": "That did not work. Try again."
     }
   }
 }

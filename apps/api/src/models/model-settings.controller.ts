@@ -14,13 +14,15 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { ConnectionCheck, ModelConnection, ModelSettings } from '@lct/contracts';
-import { ActingUser } from '../auth/service-token.guard.js';
+import { CurrentAccount } from '../accounts/account.guard.js';
+import type { Account } from '../accounts/account-rules.js';
 import { KeyDecryptionError, KeyVaultUnavailableError } from './key-vault.js';
 import {
   InvalidModelSettingsInputError,
   ManagedConnectionError,
   ModelConnectionNotFoundError,
   ModelSettingsService,
+  type SettingsActor,
 } from './model-settings.service.js';
 
 /**
@@ -44,47 +46,66 @@ function refuse(error: unknown): never {
   throw error;
 }
 
+/** The account as the settings see it: an administrator manages what everyone shares. */
+function actorOf(account: Account): SettingsActor {
+  return { userId: account.id, admin: account.role === 'admin' };
+}
+
 @Controller('model-settings')
 export class ModelSettingsController {
   constructor(@Inject(ModelSettingsService) private readonly settings: ModelSettingsService) {}
 
   @Get()
-  get(): Promise<ModelSettings> {
-    return this.settings.get();
+  get(@CurrentAccount() account: Account): Promise<ModelSettings> {
+    return this.settings.get(actorOf(account));
   }
 
   @Post('connections')
   saveConnection(
     @Body() body: unknown,
-    @ActingUser() userId: string | null,
+    @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
-    return this.settings.saveConnection(body, userId).catch(refuse);
+    return this.settings.saveConnection(body, actorOf(account)).catch(refuse);
   }
 
   @Delete('connections/:id')
   @HttpCode(204)
   async deleteConnection(
     @Param('id') connectionId: string,
-    @ActingUser() userId: string | null,
+    @CurrentAccount() account: Account,
   ): Promise<void> {
-    await this.settings.deleteConnection(connectionId, userId).catch(refuse);
+    await this.settings.deleteConnection(connectionId, actorOf(account)).catch(refuse);
   }
 
   @Post('connections/:id/check')
   @HttpCode(200)
-  checkConnection(@Param('id') connectionId: string): Promise<ModelConnection> {
-    return this.settings.checkConnection(connectionId).catch(refuse);
+  checkConnection(
+    @Param('id') connectionId: string,
+    @CurrentAccount() account: Account,
+  ): Promise<ModelConnection> {
+    return this.settings.checkConnection(connectionId, actorOf(account)).catch(refuse);
+  }
+
+  @Put('connections/:id/models')
+  setConnectionModels(
+    @Param('id') connectionId: string,
+    @Body() body: unknown,
+    @CurrentAccount() account: Account,
+  ): Promise<ModelConnection> {
+    const input =
+      body !== null && typeof body === 'object' ? { ...body, connectionId } : { connectionId };
+    return this.settings.setConnectionModels(input, actorOf(account)).catch(refuse);
   }
 
   @Post('probe')
   @HttpCode(200)
-  probe(@Body() body: unknown): Promise<ConnectionCheck> {
-    return this.settings.probe(body).catch(refuse);
+  probe(@Body() body: unknown, @CurrentAccount() account: Account): Promise<ConnectionCheck> {
+    return this.settings.probe(body, actorOf(account)).catch(refuse);
   }
 
   @Put('roles')
   @HttpCode(204)
-  async setRole(@Body() body: unknown, @ActingUser() userId: string | null): Promise<void> {
-    await this.settings.setRole(body, userId).catch(refuse);
+  async setRole(@Body() body: unknown, @CurrentAccount() account: Account): Promise<void> {
+    await this.settings.setRole(body, actorOf(account)).catch(refuse);
   }
 }

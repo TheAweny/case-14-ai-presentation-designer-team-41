@@ -9,6 +9,7 @@ import {
   useState,
   type CSSProperties,
   type DragEvent,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -189,6 +190,7 @@ export function PromptField({
   placeholder,
   fieldRef,
   describedBy,
+  onKeyDown,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -196,6 +198,8 @@ export function PromptField({
   placeholder: string;
   fieldRef?: RefObject<HTMLTextAreaElement | null>;
   describedBy?: string;
+  /** Свои клавиши поля — раньше отправки; `preventDefault` отменяет её. */
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const { aurora, size } = usePromptBoxContext();
   const own = useRef<HTMLTextAreaElement>(null);
@@ -234,6 +238,8 @@ export function PromptField({
         aurora.kick();
       }}
       onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (event.defaultPrevented) return;
         if (!isSubmitKey({ ...event, isComposing: event.nativeEvent.isComposing })) return;
         event.preventDefault();
         event.currentTarget.form?.requestSubmit();

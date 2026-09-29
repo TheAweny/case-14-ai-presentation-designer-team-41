@@ -9,12 +9,21 @@
 const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] = [
   { method: 'POST', pattern: /^files\/(template|content)$/ },
   { method: 'POST', pattern: /^generation(\/prepare)?$/ },
+  // How far the preparation of a template has got.
+  { method: 'GET', pattern: /^generation\/prepare\/[\w-]+$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/export$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/cancel$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|previews)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/exports\/[\w-]+\/[\w.-]+$/ },
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },
+  // Pictures of a template's sample slides in the library.
+  { method: 'GET', pattern: /^files\/templates\/[\w-]+\/previews\/slide-\d+\.png$/ },
+  // Chats: read one or the list, send a turn and stream its answer, watch a turn still running,
+  // stop it, pick the deck a chat leads to.
+  { method: 'GET', pattern: /^chats(\/[\w-]+(\/stream)?)?$/ },
+  { method: 'POST', pattern: /^chats\/[\w-]+\/(turns|cancel)$/ },
+  { method: 'PATCH', pattern: /^chats\/[\w-]+$/ },
 ];
 
 /**

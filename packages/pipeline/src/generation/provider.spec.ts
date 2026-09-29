@@ -22,6 +22,12 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     expect(parseModelJson('```json\n{"ok":true}\n```', schema)).toEqual({ ok: true });
     expect(() => parseModelJson('{"ok":"yes"}', schema)).toThrow();
   });
+  it('finds the object in an answer that wraps it in reasoning or prose', () => {
+    expect(
+      parseModelJson('<think>{"ok":false} maybe</think>\n**Answer:**\n{"ok":true}\nDone.', schema),
+    ).toEqual({ ok: true });
+    expect(() => parseModelJson('The request is unclear.', schema)).toThrow(SyntaxError);
+  });
   it('retries a request that hit its own time limit, but not a cancelled run', async () => {
     const timeout = () => Promise.reject(new DOMException('slow answer', 'TimeoutError'));
     const fetchImpl = vi

@@ -10,6 +10,10 @@ import {
 } from './model-settings.service.js';
 
 const SECRET = 'q4mR9v2LxT7pWc1nZ8bK3sHd6fJ0yGaE5uNo=';
+/** Settings as an administrator sets them up: shared with everyone, the way they worked before accounts. */
+const ADMIN = { userId: 'u1', admin: true };
+/** Anyone else: uses shared connections, changes only their own. */
+const ANN = { userId: 'ann', admin: false };
 const KEY = 'sk-proj-very-secret-0123456789WXYZ';
 const SERVER_KEY = 'yc-server-key-000000000000ABCD';
 const SERVER_ENV = {
@@ -50,14 +54,14 @@ const cloud = (apiKey?: string) => ({
 
 describe('ModelSettingsService', () => {
   it('starts empty without a server model: no connections, every role unassigned', async () => {
-    const settings = await setup().service.get();
+    const settings = await setup().service.get(ADMIN);
     expect(settings.connections).toEqual([]);
-    expect(settings.roles.map((role) => role.kind)).toEqual(Array(5).fill('unassigned'));
+    expect(settings.roles.map((role) => role.kind)).toEqual(Array(6).fill('unassigned'));
   });
 
   it('never lets the key out and stores it only encrypted', async () => {
     const { service, store } = setup();
-    const saved = await service.saveConnection(cloud(KEY), 'u1');
+    const saved = await service.saveConnection(cloud(KEY), ADMIN);
     expect(saved).toMatchObject({
       name: 'Cloud',
       baseUrl: 'https://llm.example.com/v1',
@@ -66,7 +70,7 @@ describe('ModelSettingsService', () => {
       managed: false,
     });
     expect(JSON.stringify(saved)).not.toContain(KEY);
-    expect(JSON.stringify(await service.get())).not.toContain(KEY);
+    expect(JSON.stringify(await service.get(ADMIN))).not.toContain(KEY);
     // At rest: ciphertext only, and the audit trail says what happened, not what the key is.
     expect(JSON.stringify([...store.connections.values()])).not.toContain(KEY);
     expect(store.connections.get(saved.connectionId)?.apiKeyEncrypted).toMatch(/^v1\./);
@@ -77,40 +81,40 @@ describe('ModelSettingsService', () => {
   it('keeps the key when an edit leaves the field empty, replaces it when filled', async () => {
     const fetchMock = vi.fn(async () => Response.json({ data: [] }));
     const { service } = setup({ fetch: fetchMock as never });
-    const { connectionId } = await service.saveConnection(cloud(KEY), null);
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
     const kept = await service.saveConnection(
       { ...cloud(''), connectionId, name: 'Cloud 2' },
-      null,
+      ADMIN,
     );
     expect(kept).toMatchObject({ name: 'Cloud 2', hasKey: true, keyHint: 'WXYZ' });
 
-    await service.checkConnection(connectionId);
+    await service.checkConnection(connectionId, ADMIN);
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect((init.headers as Record<string, string>).authorization).toBe(`Bearer ${KEY}`);
 
     const replaced = await service.saveConnection(
       { ...cloud('sk-another-key-00001111'), connectionId },
-      null,
+      ADMIN,
     );
     expect(replaced.keyHint).toBe('1111');
   });
 
   it('refuses to store a key without MODEL_KEYS_SECRET instead of storing it in the clear', async () => {
     const { service, store } = setup({ secret: '' });
-    await expect(service.saveConnection(cloud(KEY), null)).rejects.toThrow(/MODEL_KEYS_SECRET/);
+    await expect(service.saveConnection(cloud(KEY), ADMIN)).rejects.toThrow(/MODEL_KEYS_SECRET/);
     expect(store.connections.size).toBe(0);
   });
 
   it('shows a key that no longer decrypts as missing, so it is entered again', async () => {
     const { service, store } = setup();
-    const { connectionId } = await service.saveConnection(cloud(KEY), null);
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
     const moved = setup({ secret: `${SECRET}-rotated` });
     for (const connection of store.connections.values()) {
       await moved.store.saveConnection(connection);
     }
-    const [view] = (await moved.service.get()).connections;
+    const [view] = (await moved.service.get(ADMIN)).connections;
     expect(view).toMatchObject({ connectionId, hasKey: false, keyHint: null });
-    await expect(moved.service.resolve({ connectionId, modelId: 'm' })).rejects.toThrow(
+    await expect(moved.service.resolve({ connectionId, modelId: 'm' }, ADMIN)).rejects.toThrow(
       /введите его заново/,
     );
   });
@@ -119,9 +123,9 @@ describe('ModelSettingsService', () => {
     const { service } = setup({ allowPrivateHosts: true });
     const { connectionId } = await service.saveConnection(
       { name: 'Ollama', preset: 'ollama', baseUrl: 'http://localhost:11434/v1' },
-      null,
+      ADMIN,
     );
-    const checked = await service.checkConnection(connectionId);
+    const checked = await service.checkConnection(connectionId, ADMIN);
     expect(checked.lastCheck).toEqual({
       ok: true,
       at: '2026-09-26T10:00:00.000Z',
@@ -129,7 +133,7 @@ describe('ModelSettingsService', () => {
     });
     const renamed = await service.saveConnection(
       { connectionId, name: 'Ollama GPU', preset: 'ollama', baseUrl: 'http://localhost:11434/v1' },
-      null,
+      ADMIN,
     );
     expect(renamed.lastCheck).not.toBeNull();
     const moved = await service.saveConnection(
@@ -139,7 +143,7 @@ describe('ModelSettingsService', () => {
         preset: 'ollama',
         baseUrl: 'http://192.168.1.5:11434/v1',
       },
-      null,
+      ADMIN,
     );
     expect(moved.lastCheck).toBeNull();
   });
@@ -147,7 +151,7 @@ describe('ModelSettingsService', () => {
   it('rejects invalid input with problems per field', async () => {
     const { service } = setup();
     const error = await service
-      .saveConnection({ name: '', preset: 'custom', baseUrl: 'localhost' }, null)
+      .saveConnection({ name: '', preset: 'custom', baseUrl: 'localhost' }, ADMIN)
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(InvalidModelSettingsInputError);
     expect((error as InvalidModelSettingsInputError).problems).toEqual({
@@ -157,7 +161,7 @@ describe('ModelSettingsService', () => {
     await expect(
       service.saveConnection(
         { connectionId: 'nope', name: 'x', preset: 'custom', baseUrl: 'http://x' },
-        null,
+        ADMIN,
       ),
     ).rejects.toBeInstanceOf(ModelConnectionNotFoundError);
   });
@@ -165,45 +169,49 @@ describe('ModelSettingsService', () => {
   it('probes an unsaved address with the saved key when the field is empty', async () => {
     const fetchMock = vi.fn(async () => Response.json({ data: [{ id: 'm' }] }));
     const { service } = setup({ fetch: fetchMock as never });
-    const { connectionId } = await service.saveConnection(cloud(KEY), null);
-    const check = await service.probe({ connectionId, baseUrl: 'https://llm2.example.com/v1' });
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    const check = await service.probe(
+      { connectionId, baseUrl: 'https://llm2.example.com/v1' },
+      ADMIN,
+    );
     expect(check.ok).toBe(true);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://llm2.example.com/v1/models');
     expect((init.headers as Record<string, string>).authorization).toBe(`Bearer ${KEY}`);
-    expect((await service.get()).connections[0]?.lastCheck).toBeNull();
+    expect((await service.get(ADMIN)).connections[0]?.lastCheck).toBeNull();
   });
 
   it('assigns roles, switches off only the illustrator, and unassigns on delete', async () => {
     const { service } = setup();
     const a = await service.saveConnection(
       { name: 'A', preset: 'custom', baseUrl: 'https://a.example/v1' },
-      null,
+      ADMIN,
     );
     const b = await service.saveConnection(
       { name: 'B', preset: 'custom', baseUrl: 'https://b.example/v1' },
-      null,
+      ADMIN,
     );
     await service.setRole(
       { role: 'planner', kind: 'model', connectionId: a.connectionId, modelId: 'p' },
-      null,
+      ADMIN,
     );
     await service.setRole(
       { role: 'writer', kind: 'model', connectionId: b.connectionId, modelId: 'w' },
-      null,
+      ADMIN,
     );
-    await service.setRole({ role: 'image', kind: 'disabled' }, null);
+    await service.setRole({ role: 'image', kind: 'disabled' }, ADMIN);
     await expect(
-      service.setRole({ role: 'critic', kind: 'disabled' }, null),
+      service.setRole({ role: 'critic', kind: 'disabled' }, ADMIN),
     ).rejects.toBeInstanceOf(InvalidModelSettingsInputError);
     await expect(
-      service.setRole({ role: 'critic', kind: 'model', connectionId: 'gone', modelId: 'c' }, null),
+      service.setRole({ role: 'critic', kind: 'model', connectionId: 'gone', modelId: 'c' }, ADMIN),
     ).rejects.toBeInstanceOf(ModelConnectionNotFoundError);
 
-    await service.deleteConnection(a.connectionId, null);
-    const settings = await service.get();
+    await service.deleteConnection(a.connectionId, ADMIN);
+    const settings = await service.get(ADMIN);
     expect(settings.connections.map((item) => item.name)).toEqual(['B']);
     expect(settings.roles).toEqual([
+      { role: 'assistant', kind: 'unassigned' },
       { role: 'planner', kind: 'unassigned' },
       { role: 'writer', kind: 'model', connectionId: b.connectionId, modelId: 'w' },
       { role: 'critic', kind: 'unassigned' },
@@ -216,7 +224,7 @@ describe('ModelSettingsService', () => {
 describe('the server connection', () => {
   it('comes from the environment, read-only, with only a hint of its key', async () => {
     const { service } = setup({ env: SERVER_ENV });
-    const settings = await service.get();
+    const settings = await service.get(ADMIN);
     expect(settings.connections).toEqual([
       {
         connectionId: 'server',
@@ -226,81 +234,278 @@ describe('the server connection', () => {
         hasKey: true,
         keyHint: 'ABCD',
         lastCheck: null,
+        enabledModels: null,
         managed: true,
       },
     ]);
     expect(JSON.stringify(settings)).not.toContain(SERVER_KEY);
     // The text roles default to it until someone assigns another model.
-    expect(settings.roles.slice(0, 3)).toEqual(
-      ['planner', 'writer', 'critic'].map((role) => ({
+    expect(settings.roles.slice(0, 4)).toEqual(
+      ['assistant', 'planner', 'writer', 'critic'].map((role) => ({
         role,
         kind: 'model',
         connectionId: 'server',
         modelId: SERVER_ENV.LLM_MODEL,
       })),
     );
-    expect(settings.roles[3]).toEqual({ role: 'vision', kind: 'unassigned' });
+    expect(settings.roles[4]).toEqual({ role: 'vision', kind: 'unassigned' });
   });
 
   it('can be checked but not edited, removed or probed from the interface', async () => {
     const { service } = setup({ env: SERVER_ENV });
-    const checked = await service.checkConnection('server');
+    const checked = await service.checkConnection('server', ADMIN);
     expect(checked.lastCheck).toMatchObject({ ok: true, models: ['qwen'] });
     await expect(
-      service.saveConnection({ ...cloud(KEY), connectionId: 'server' }, null),
+      service.saveConnection({ ...cloud(KEY), connectionId: 'server' }, ADMIN),
     ).rejects.toBeInstanceOf(ManagedConnectionError);
-    await expect(service.deleteConnection('server', null)).rejects.toBeInstanceOf(
+    await expect(service.deleteConnection('server', ADMIN)).rejects.toBeInstanceOf(
       ManagedConnectionError,
     );
     await expect(
-      service.probe({ connectionId: 'server', baseUrl: 'https://evil.example/v1' }),
+      service.probe({ connectionId: 'server', baseUrl: 'https://evil.example/v1' }, ADMIN),
     ).rejects.toBeInstanceOf(ManagedConnectionError);
+  });
+
+  it('lets an administrator limit which of its models stay available', async () => {
+    const { service } = setup({ env: SERVER_ENV });
+    await service.checkConnection('server', ADMIN);
+    const limited = await service.setConnectionModels(
+      { connectionId: 'server', enabledModels: ['qwen'] },
+      ADMIN,
+    );
+    expect(limited.enabledModels).toEqual(['qwen']);
+    await expect(
+      service.setConnectionModels(
+        { connectionId: 'server', enabledModels: ['qwen'] },
+        { userId: 'ann', admin: false },
+      ),
+    ).rejects.toBeInstanceOf(ManagedConnectionError);
+  });
+
+  it('keeps its limit after a restart, for its own address only', async () => {
+    const { service, store } = setup({ env: SERVER_ENV });
+    await service.setConnectionModels({ connectionId: 'server', enabledModels: ['qwen'] }, ADMIN);
+    const vault = createKeyVault(SECRET);
+    const restarted = new ModelSettingsService(store, vault, { env: SERVER_ENV });
+    expect((await restarted.get(ANN)).connections[0]?.enabledModels).toEqual(['qwen']);
+    await expect(
+      restarted.resolve({ connectionId: 'server', modelId: SERVER_ENV.LLM_MODEL }, ANN),
+    ).rejects.toThrow(/выключена/);
+    const moved = new ModelSettingsService(store, vault, {
+      env: { ...SERVER_ENV, LLM_BASE_URL: 'https://gateway.example.com/v1' },
+    });
+    expect((await moved.get(ANN)).connections[0]?.enabledModels).toBeNull();
+  });
+
+  it('stops being the default of the text roles once its model is switched off', async () => {
+    const { service } = setup({ env: SERVER_ENV });
+    await service.setConnectionModels({ connectionId: 'server', enabledModels: [] }, ADMIN);
+    const settings = await service.get(ANN);
+    expect(settings.roles.slice(0, 3).map((role) => role.kind)).toEqual(
+      Array(3).fill('unassigned'),
+    );
+    expect(await service.resolveRole('writer', ANN)).toBeNull();
   });
 });
 
 describe('resolve', () => {
   it('uses the picked model, else the writer role, else the server', async () => {
     const { service } = setup({ env: SERVER_ENV });
-    expect(await service.resolve(null)).toEqual({
+    expect(await service.resolve(null, ADMIN)).toEqual({
       connectionId: 'server',
       baseUrl: 'https://llm.api.cloud.yandex.net/v1',
       apiKey: SERVER_KEY,
       model: SERVER_ENV.LLM_MODEL,
     });
-    const { connectionId } = await service.saveConnection(cloud(KEY), null);
-    await service.setRole({ role: 'writer', kind: 'model', connectionId, modelId: 'w' }, null);
-    expect(await service.resolve(null)).toMatchObject({ connectionId, apiKey: KEY, model: 'w' });
-    expect(await service.resolve({ connectionId: 'server', modelId: 'other' })).toMatchObject({
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setRole({ role: 'writer', kind: 'model', connectionId, modelId: 'w' }, ADMIN);
+    expect(await service.resolve(null, ADMIN)).toMatchObject({
+      connectionId,
+      apiKey: KEY,
+      model: 'w',
+    });
+    expect(
+      await service.resolve({ connectionId: 'server', modelId: 'other' }, ADMIN),
+    ).toMatchObject({
       connectionId: 'server',
       model: 'other',
     });
   });
 
+  it('refuses a model that was switched off, and an id typed by hand past the list', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.checkConnection(connectionId, ADMIN);
+    await service.setConnectionModels({ connectionId, enabledModels: ['other'] }, ADMIN);
+    await expect(service.resolve({ connectionId, modelId: 'qwen' }, ADMIN)).rejects.toThrow(
+      /выключена/,
+    );
+    await expect(
+      service.resolve({ connectionId, modelId: 'typed-by-hand' }, ADMIN),
+    ).rejects.toThrow(/выключена/);
+    await expect(service.resolve({ connectionId, modelId: 'other' }, ADMIN)).resolves.toMatchObject(
+      { connectionId, model: 'other' },
+    );
+    const opened = await service.setConnectionModels({ connectionId, enabledModels: null }, ADMIN);
+    expect(opened.enabledModels).toBeNull();
+    await expect(service.resolve({ connectionId, modelId: 'qwen' }, ADMIN)).resolves.toMatchObject({
+      model: 'qwen',
+    });
+  });
+
+  it('keeps a model switched off when a later check fails', async () => {
+    let up = true;
+    const fetchMock = vi.fn(async () =>
+      up
+        ? Response.json({ data: [{ id: 'qwen' }, { id: 'big' }] })
+        : new Response('', { status: 503 }),
+    );
+    const { service } = setup({ fetch: fetchMock as never });
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.checkConnection(connectionId, ADMIN);
+    await service.setConnectionModels({ connectionId, enabledModels: ['qwen'] }, ADMIN);
+    up = false;
+    expect((await service.checkConnection(connectionId, ADMIN)).lastCheck?.ok).toBe(false);
+    await expect(service.resolve({ connectionId, modelId: 'big' }, ADMIN)).rejects.toThrow(
+      /выключена/,
+    );
+  });
+
+  it('keeps the model list when the connection is renamed', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setConnectionModels({ connectionId, enabledModels: ['qwen'] }, ADMIN);
+    const renamed = await service.saveConnection(
+      { ...cloud(''), connectionId, name: 'Cloud renamed' },
+      ADMIN,
+    );
+    expect(renamed.enabledModels).toEqual(['qwen']);
+  });
+
   it('gives each role its own model, and nothing for a role left without one', async () => {
     const { service } = setup();
-    expect(await service.resolveRole('planner')).toBeNull();
-    const { connectionId } = await service.saveConnection(cloud(KEY), null);
-    await service.setRole({ role: 'critic', kind: 'model', connectionId, modelId: 'c' }, null);
-    expect(await service.resolveRole('critic')).toMatchObject({ connectionId, model: 'c' });
-    expect(await service.resolveRole('planner')).toBeNull();
+    expect(await service.resolveRole('planner', ADMIN)).toBeNull();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setRole({ role: 'critic', kind: 'model', connectionId, modelId: 'c' }, ADMIN);
+    expect(await service.resolveRole('critic', ADMIN)).toMatchObject({ connectionId, model: 'c' });
+    expect(await service.resolveRole('planner', ADMIN)).toBeNull();
   });
 
   it('says clearly that no model is configured', async () => {
-    await expect(setup().service.resolve(null)).rejects.toBeInstanceOf(ModelNotConfiguredError);
-    await expect(setup().service.resolve(null)).rejects.toThrow(/Модель не настроена/);
+    await expect(setup().service.resolve(null, ADMIN)).rejects.toBeInstanceOf(
+      ModelNotConfiguredError,
+    );
+    await expect(setup().service.resolve(null, ADMIN)).rejects.toThrow(/Модель не настроена/);
   });
 
   it('refuses a stored connection that points into a private network', async () => {
     const { service } = setup({ allowPrivateHosts: true });
     const { connectionId } = await service.saveConnection(
       { name: 'Ollama', preset: 'ollama', baseUrl: 'http://localhost:11434/v1' },
-      null,
+      ADMIN,
     );
     const strict = new ModelSettingsService(
       (service as unknown as { store: MemoryModelSettingsStore }).store,
       createKeyVault(SECRET),
       { env: {}, allowPrivateHosts: false },
     );
-    await expect(strict.resolve({ connectionId, modelId: 'm' })).rejects.toThrow(/внутреннюю сеть/);
+    await expect(strict.resolve({ connectionId, modelId: 'm' }, ADMIN)).rejects.toThrow(
+      /внутреннюю сеть/,
+    );
+  });
+});
+
+describe('shared and personal connections', () => {
+  const BOB = { userId: 'bob', admin: false };
+
+  it('shares what an administrator adds and keeps what a person adds to them', async () => {
+    const { service } = setup();
+    const shared = await service.saveConnection(cloud(KEY), ADMIN);
+    const own = await service.saveConnection({ ...cloud(KEY), name: 'Mine' }, ANN);
+
+    const ann = await service.get(ANN);
+    expect(ann.connections.map((c) => [c.name, c.shared, c.editable])).toEqual([
+      ['Cloud', true, false],
+      ['Mine', false, true],
+    ]);
+    // The key of a shared connection is not even hinted at to those who cannot change it.
+    expect(ann.connections[0]?.keyHint).toBeNull();
+    expect((await service.get(BOB)).connections.map((c) => c.connectionId)).toEqual([
+      shared.connectionId,
+    ]);
+    await expect(
+      service.resolve({ connectionId: own.connectionId, modelId: 'm' }, BOB),
+    ).rejects.toThrow(ModelNotConfiguredError);
+    await expect(
+      service.resolve({ connectionId: shared.connectionId, modelId: 'm' }, BOB),
+    ).resolves.toMatchObject({ apiKey: KEY });
+  });
+
+  it('lets only an administrator change or delete a shared connection', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await expect(
+      service.saveConnection({ ...cloud(), connectionId, name: 'Hijacked' }, ANN),
+    ).rejects.toThrow(ManagedConnectionError);
+    await expect(service.deleteConnection(connectionId, ANN)).rejects.toThrow(
+      ManagedConnectionError,
+    );
+    const own = await service.saveConnection(cloud(KEY), ANN);
+    await expect(service.deleteConnection(own.connectionId, BOB)).rejects.toThrow(
+      ModelConnectionNotFoundError,
+    );
+  });
+
+  it('lets only an administrator change which models a shared connection offers', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.checkConnection(connectionId, ADMIN);
+    await expect(
+      service.setConnectionModels({ connectionId, enabledModels: ['qwen'] }, ANN),
+    ).rejects.toThrow(ManagedConnectionError);
+    const limited = await service.setConnectionModels(
+      { connectionId, enabledModels: ['qwen'] },
+      ADMIN,
+    );
+    expect(limited.enabledModels).toEqual(['qwen']);
+    expect((await service.get(ANN)).connections[0]?.enabledModels).toEqual(['qwen']);
+    // The limit is on the shared key, not on the administrator's view of it.
+    await expect(service.resolve({ connectionId, modelId: 'big' }, ANN)).rejects.toThrow(
+      /выключена/,
+    );
+  });
+
+  it('starts everyone on the roles an administrator set and lets each change their own', async () => {
+    const { service } = setup();
+    const shared = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId: shared.connectionId, modelId: 'big' },
+      ADMIN,
+    );
+    const writerOf = async (actor: typeof ANN) =>
+      (await service.get(actor)).roles.find((role) => role.role === 'writer');
+
+    expect(await writerOf(ANN)).toMatchObject({ modelId: 'big' });
+    expect((await service.get(ANN)).inheritedRoles).toContain('writer');
+
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId: shared.connectionId, modelId: 'small' },
+      ANN,
+    );
+    expect(await writerOf(ANN)).toMatchObject({ modelId: 'small' });
+    expect(await writerOf(BOB)).toMatchObject({ modelId: 'big' });
+  });
+
+  it('keeps the defaults on connections everyone can use', async () => {
+    const { service } = setup();
+    await service.saveConnection(cloud(KEY), ADMIN);
+    const personal = await service.saveConnection({ ...cloud(KEY), shared: false }, ADMIN);
+    expect(personal.shared).toBe(false);
+    await expect(
+      service.setRole(
+        { role: 'writer', kind: 'model', connectionId: personal.connectionId, modelId: 'm' },
+        ADMIN,
+      ),
+    ).rejects.toThrow(InvalidModelSettingsInputError);
   });
 });

@@ -1,7 +1,11 @@
 import {
   CONNECTION_NAME_MAX_LENGTH,
   PIPELINE_ROLES,
+  enabledModelIds,
+  isModelEnabled,
   isRoleOptional,
+  usesWriterModelByDefault,
+  type ConnectionModelsInput,
   type ConnectionCheck,
   type ConnectionInput,
   type ConnectionPreset,
@@ -41,15 +45,21 @@ export {
   apiKeyProblem,
   baseUrlProblem,
   checkErrorSchema as CheckErrorSchema,
+  connectionModelsInputSchema as ConnectionModelsInputSchema,
   connectionCheckSchema as ConnectionCheckSchema,
   connectionInputProblems,
   connectionInputSchema as ConnectionInputSchema,
   connectionNameProblem,
   connectionPresetSchema as ConnectionPresetSchema,
+  enabledModelIds,
   hasProblems,
+  isModelEnabled,
   isRoleOptional,
+  usesWriterModelByDefault,
   keyHint,
   modelConnectionSchema as ModelConnectionSchema,
+  modelFamily,
+  MODEL_FAMILIES,
   modelsEndpoint,
   modelSettingsSchema as ModelSettingsSchema,
   normalizeBaseUrl,
@@ -59,11 +69,13 @@ export {
   type ApiKeyProblem,
   type BaseUrlProblem,
   type CheckError,
+  type ConnectionModelsInput,
   type ConnectionCheck,
   type ConnectionInput,
   type ConnectionNameProblem,
   type ConnectionPreset,
   type ConnectionProblems,
+  type ModelFamily,
   type ModelConnection,
   type ModelRef,
   type ModelSettings,
@@ -79,6 +91,7 @@ export {
 export type ModelKind = 'llm' | 'vlm' | 'text-to-image';
 
 export const ROLE_MODEL_KIND: Readonly<Record<PipelineRole, ModelKind>> = {
+  assistant: 'llm',
   planner: 'llm',
   writer: 'llm',
   critic: 'llm',
@@ -154,7 +167,10 @@ export function assignmentFor(settings: ModelSettings, role: PipelineRole): Role
 /** Обязательные роли без модели: пока они есть, колоду собрать нечем. */
 export function unassignedRequiredRoles(settings: ModelSettings): readonly PipelineRole[] {
   return PIPELINE_ROLES.filter(
-    (role) => !isRoleOptional(role) && assignmentFor(settings, role).kind === 'unassigned',
+    (role) =>
+      !isRoleOptional(role) &&
+      !usesWriterModelByDefault(role) &&
+      assignmentFor(settings, role).kind === 'unassigned',
   );
 }
 
@@ -170,7 +186,26 @@ export function rolesUsingConnection(
 
 /** Модели из последней успешной проверки; не проверяли или не вышло — пусто. */
 export function knownModels(connection: ModelConnection): readonly string[] {
+  const reported = connection.lastCheck?.ok === true ? connection.lastCheck.models : [];
+  return enabledModelIds(reported, connection.enabledModels ?? null);
+}
+
+/** Модели, которые проверка нашла, ещё до фильтра включённых. */
+export function reportedModels(connection: ModelConnection): readonly string[] {
   return connection.lastCheck?.ok === true ? connection.lastCheck.models : [];
+}
+
+/**
+ * Модель можно выбрать. У подключения без ограничения — любую, и вписанную вручную тоже. У
+ * ограниченного — только включённую: иначе вписанный вручную id обходил бы запрет на общем ключе.
+ */
+export function modelOffered(connection: ModelConnection, modelId: string): boolean {
+  return isModelEnabled(modelId, connection.enabledModels ?? null);
+}
+
+/** У подключения выключена хотя бы часть моделей. */
+export function modelsLimited(connection: ModelConnection): boolean {
+  return connection.enabledModels !== null && connection.enabledModels !== undefined;
 }
 
 /** Нет такого подключения: его удалили в другой вкладке или id неверный. */
@@ -233,4 +268,9 @@ export interface ModelSettingsSource {
    * подключении.
    */
   setRole(assignment: RoleAssignment): Promise<void>;
+  /**
+   * Ограничить модели подключения. `null` — доступны все, которые нашла проверка. Чужое общее
+   * подключение менять нельзя.
+   */
+  setConnectionModels(input: ConnectionModelsInput): Promise<ModelConnection>;
 }

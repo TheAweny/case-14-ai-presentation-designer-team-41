@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { AccountGuard } from './accounts/account.guard.js';
+import { AccountsModule } from './accounts/accounts.module.js';
+import { ChatsModule } from './chats/chats.module.js';
 import { FilesModule } from './files/files.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ServiceTokenGuard } from './auth/service-token.guard.js';
@@ -11,6 +14,7 @@ import { RunsModule } from './runs/runs.module.js';
 
 @Module({
   imports: [
+    AccountsModule,
     MastraModule,
     HealthModule,
     ModelsModule,
@@ -18,8 +22,13 @@ import { RunsModule } from './runs/runs.module.js';
     FilesModule,
     AuthModule,
     LibraryModule,
+    ChatsModule,
   ],
-  // Every route answers only the web server; see ServiceTokenGuard.
-  providers: [{ provide: APP_GUARD, useClass: ServiceTokenGuard }],
+  // Every route answers only the web server (ServiceTokenGuard), and for a signed-in account
+  // (AccountGuard). Guards run in this order.
+  providers: [
+    { provide: APP_GUARD, useClass: ServiceTokenGuard },
+    { provide: APP_GUARD, useClass: AccountGuard },
+  ],
 })
 export class AppModule {}

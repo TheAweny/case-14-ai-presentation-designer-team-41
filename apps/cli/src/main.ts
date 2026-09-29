@@ -16,10 +16,7 @@ const HELP = `lct — цифровой дизайнер презентаций
   lct start | stop | status   сервис в Docker Compose
   lct restart [сервис]        перезапуск, например lct restart web
   lct logs [сервис]           логи
-  lct user list               аккаунты интерфейса
-  lct user add [почта]        новый аккаунт
-  lct user passwd <почта>     сменить пароль
-  lct user remove <почта>     удалить аккаунт
+  lct user admin [почта]      администратор (остальные — в интерфейсе)
   lct doctor                  проверить окружение, модель и сервис
   lct generate <config.yaml>  сгенерировать колоды по конфигу прогона
 

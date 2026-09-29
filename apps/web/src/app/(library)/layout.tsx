@@ -7,14 +7,14 @@ import { librarySource } from '@/mocks/sources';
 import { requireAccount } from '../auth-session';
 
 /**
- * Главное меню: слева история и закреплённые проекты, справа страница. Редактор живёт вне
+ * Главное меню: слева история чатов и закреплённые проекты, справа страница. Редактор живёт вне
  * этой группы. День истории считается в момент запроса, чтобы подписи не разъехались при гидрации.
  */
 export default async function LibraryLayout({ children }: { children: ReactNode }) {
   const account = await requireAccount();
-  const [listedProjects, listedDecks, now] = await Promise.all([
+  const [listedProjects, listedChats, now] = await Promise.all([
     librarySource.listProjects(),
-    librarySource.listDecks(),
+    librarySource.listChats(),
     getNow(),
   ]);
   const projects = listedProjects.map(
@@ -27,7 +27,9 @@ export default async function LibraryLayout({ children }: { children: ReactNode 
       pinnedAt,
     }),
   );
-  const decks = listedDecks.map(({ deckId, title, projectId, updatedAt }) => ({
+  // История — чаты: строка открывает разговор, в редактор ведёт кнопка в его шапке.
+  const decks = listedChats.map(({ chatId, deckId, title, projectId, updatedAt }) => ({
+    id: chatId,
     deckId,
     title,
     projectId,

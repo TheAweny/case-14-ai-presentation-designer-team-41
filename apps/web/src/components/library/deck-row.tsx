@@ -3,7 +3,7 @@ import { useFormatter, useNow, useTranslations } from 'next-intl';
 import type { DesignSystem } from '@lct/contracts';
 import { SlidePreview } from '@/components/library/slide-preview';
 import { DeckActions, DeckTitle } from '@/components/library/deck-actions';
-import { deckHref } from '@/lib/library-menu';
+import { deckOpenHref } from '@/lib/library-menu';
 import type { DeckSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
 
@@ -23,7 +23,7 @@ export function DeckRow({ deck, designSystem }: { deck: DeckSummary; designSyste
   return (
     <DeckActions deckId={deck.deckId} projectId={deck.projectId} title={deck.title} layout="row">
       <Link
-        href={deckHref(deck.deckId)}
+        href={deckOpenHref(deck)}
         className={cn(
           // Справа место под «⋯»: кнопка не должна накрывать название и мету.
           'group/row flex min-w-0 items-center gap-3 py-2 pr-11 pl-2 outline-none sm:gap-4 sm:pr-12 sm:pl-3',

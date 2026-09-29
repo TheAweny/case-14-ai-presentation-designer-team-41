@@ -5,6 +5,7 @@ import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import {
   AddFileIcon,
+  AgentIcon,
   BackIcon,
   ChevronDownIcon,
   CodeIcon,
@@ -35,7 +36,8 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ExportFormat } from '@/lib/deck-export';
-import { NEW_DECK_HREF } from '@/lib/library-menu';
+import { chatHref, NEW_DECK_HREF } from '@/lib/library-menu';
+import { useEditorChat } from '@/components/editor/editor-chat';
 import { keepCanvasFocus, useMenuFocus } from '@/components/editor/chrome-focus';
 import { shortcutText } from '@/components/editor/editor-shortcuts';
 import { openSettings, useIsMac } from '@/components/settings/open-settings';
@@ -134,6 +136,7 @@ function FileMenu({
   const settingsAsked = useRef(false);
   const router = useRouter();
   const mac = useIsMac();
+  const chatId = useEditorChat();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -171,6 +174,13 @@ function FileMenu({
           focus.onCloseAutoFocus(event);
         }}
       >
+        {chatId ? (
+          <MenuItem
+            icon={AgentIcon}
+            label={t('toChat')}
+            onSelect={() => router.push(chatHref(chatId))}
+          />
+        ) : null}
         <MenuItem icon={BackIcon} label={t('allDecks')} onSelect={() => router.push('/')} />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t('groups.deck')}</DropdownMenuLabel>

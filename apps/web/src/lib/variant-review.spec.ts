@@ -1,32 +1,36 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoLibrary } from '../mocks/demo-library';
-import type { GeneratedVariant } from './deck-generator';
-import { createVariantReview } from './variant-review';
+import { recommendVariant, reviewDeck } from './variant-review';
 
-describe('createVariantReview', () => {
-  it('считает ошибки и замечания аудита по колоде каждого варианта', async () => {
+describe('reviewDeck', () => {
+  it('считает ошибки и замечания аудита по колоде варианта', async () => {
     const { library, decks } = createDemoLibrary();
-    const [first, second] = await library.listDecks();
-    if (!first || !second) throw new Error('Demo library needs two decks');
-    const variants = [
-      { variant: 'dense', deckId: first.deckId },
-      { variant: 'balanced', deckId: second.deckId },
-    ] as GeneratedVariant[];
+    const [first] = await library.listDecks();
+    if (!first) throw new Error('Demo library needs a deck');
+    const review = reviewDeck(await decks.getDeck(first.deckId));
+    expect(review.errors).toBeGreaterThanOrEqual(0);
+    expect(review.warnings).toBeGreaterThanOrEqual(0);
+  });
+});
 
-    const reviews = await createVariantReview(decks)(variants);
+describe('recommendVariant', () => {
+  const variants = [
+    { variant: 'dense' as const, deckId: 'd' },
+    { variant: 'balanced' as const, deckId: 'b' },
+    { variant: 'airy' as const, deckId: 'a' },
+  ];
 
-    expect(Object.keys(reviews).sort()).toEqual([first.deckId, second.deckId].sort());
-    for (const review of Object.values(reviews)) {
-      expect(review.errors).toBeGreaterThanOrEqual(0);
-      expect(review.warnings).toBeGreaterThanOrEqual(0);
-    }
+  it('советует вариант с меньшим числом ошибок, затем замечаний', () => {
+    expect(
+      recommendVariant(variants, {
+        d: { errors: 0, warnings: 2 },
+        b: { errors: 1, warnings: 0 },
+        a: { errors: 0, warnings: 1 },
+      }),
+    ).toBe('airy');
   });
 
-  it('колоды нет — аудит отказывает, и агент советует без него', async () => {
-    const { decks } = createDemoLibrary();
-    const review = createVariantReview(decks);
-    await expect(
-      review([{ variant: 'airy', deckId: 'missing' } as GeneratedVariant]),
-    ).rejects.toThrow();
+  it('без аудита советует сбалансированный', () => {
+    expect(recommendVariant(variants, null)).toBe('balanced');
   });
 });

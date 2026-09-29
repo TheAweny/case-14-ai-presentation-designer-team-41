@@ -7,6 +7,7 @@ import {
   createGenerationWorkflow,
   fitChars,
   groundedVisual,
+  keepOutline,
   mirroredSlots,
   numberedSlots,
   overusedPatterns,
@@ -72,6 +73,58 @@ describe('template generation workflow', () => {
     ).start({ inputData: { brief, slideCount: null, profile } });
     expect(result.status).toBe('success');
     if (result.status === 'success') expect(result.result).toHaveLength(count);
+  });
+  it('lays out an approved outline slide for slide, in its words', async () => {
+    const outline = {
+      title: 'Зелёный офис',
+      audience: 'HR-директора IT-компаний',
+      goal: 'Заказать эко-аудит',
+      slides: Array.from({ length: 11 }, (_, index) => ({
+        title: `Тезис ${index + 1}`,
+        points: [`Факт ${index + 1}`],
+        kind: 'statement' as const,
+      })),
+    };
+    const purposes: string[] = [];
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        if (agent === 'planner') {
+          expect(input).toMatchObject({ slideCount: 11, outline });
+          return schema.parse({
+            title: 'Другое название',
+            slides: outline.slides.map((_, index) => ({
+              patternId: composition.patternId,
+              purpose: index === 0 ? 'Тезис 1 — Факт 1' : 'Пересказ своими словами',
+              imageQuery: '',
+            })),
+          });
+        }
+        purposes.push((input as { purpose: string }).purpose);
+        return schema.parse({
+          patternId: composition.patternId,
+          textsBySlot: { '2': 'Point' },
+          speakerNotes: '',
+        });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({ inputData: { brief: 'Бриф', slideCount: null, profile, outline } });
+    expect(result.status).toBe('success');
+    if (result.status === 'success') expect(result.result).toHaveLength(11);
+    expect(purposes.sort()).toContain('Тезис 7 — Факт 7');
   });
   it('asks the planner once more when a manual count is wrong', async () => {
     let plannerCalls = 0;
@@ -804,10 +857,64 @@ describe('one plan, three layouts', () => {
     expect(airy[4]?.startsWith('two-')).toBe(true);
   });
 
+  it('never swaps an ordinary slide onto a special layout, nor a special one away', () => {
+    const special = (patternId: string) =>
+      [
+        patternId,
+        {
+          patternId,
+          kind: 'statement' as const,
+          items: 1,
+          useFor: 'code',
+          title: 'Code',
+          skip: false,
+          special: true,
+        },
+      ] as const;
+    // The roomiest one-block layout is kept for code: dense would pick it otherwise.
+    const notes = new Map([special('one-1200'), special('one-150')]);
+    const plan = ['cover', 'one-450', 'one-150', 'one-600'];
+    for (const variant of ['dense', 'airy'] as const) {
+      const catalog = variantCatalog(full, variant, [cover]);
+      const layouts = remapPlan(plan, full, catalog, variant, [cover], notes);
+      expect(layouts[2]).toBe('one-150');
+      expect([layouts[1], layouts[3]]).not.toContain('one-1200');
+      expect([layouts[1], layouts[3]]).not.toContain('one-150');
+    }
+  });
+
   it('spreads repeated slides over several layouts', () => {
     const dense = remapPlan(planned, full, variantCatalog(full, 'dense', [cover]), 'dense', [
       cover,
     ]);
     expect(new Set(dense.slice(1, 4)).size).toBe(3);
+  });
+});
+
+describe('keepOutline', () => {
+  it('titles the deck as the outline and gives a slide that lost its claim the outline words', () => {
+    const plan = {
+      title: 'План',
+      audience: 'Кто-то',
+      goal: '',
+      slides: [
+        { patternId: 'a', purpose: 'Рынок растёт — 12% в год', imageQuery: '' },
+        { patternId: 'b', purpose: 'Что-то общее', imageQuery: '' },
+      ],
+    };
+    const kept = keepOutline(plan, {
+      title: 'Колода',
+      audience: '',
+      goal: 'Решить',
+      slides: [
+        { title: 'Рынок растёт', points: [], kind: 'statement' },
+        { title: 'Мы быстрее', points: ['в 2 раза', 'без простоя'], kind: 'list' },
+      ],
+    });
+    expect(kept).toMatchObject({ title: 'Колода', audience: 'Кто-то', goal: 'Решить' });
+    expect(kept.slides.map((slide) => slide.purpose)).toEqual([
+      'Рынок растёт — 12% в год',
+      'Мы быстрее — в 2 раза; без простоя',
+    ]);
   });
 });

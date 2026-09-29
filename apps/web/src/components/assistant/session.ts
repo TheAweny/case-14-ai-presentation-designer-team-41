@@ -1,16 +1,13 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { attachTemplateAction, refreshLibraryAction } from '@/app/(library)/actions';
-import { createAssistantThreads, type AssistantThread } from '@/lib/assistant-threads';
-import { createDeckConversations } from '@/lib/deck-conversations';
+import { refreshLibraryAction } from '@/app/(library)/actions';
+import { createChatStore, type ChatView } from '@/lib/chat-store';
 import { createGenerationRuns, type GenerationRun } from '@/lib/generation-runs';
 import type { TemplateSummary } from '@/lib/library-source';
 import { createTemplateImports, type TemplateImport } from '@/lib/template-imports';
-import { createVariantReview } from '@/lib/variant-review';
 import { createHttpGenerator } from '@/lib/http-generation';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
-import { deckSource } from '@/mocks/sources';
 import { apiFetch } from '@/lib/api';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
 import { templateLayoutsFromIr } from '@/lib/template-profile';
@@ -64,6 +61,8 @@ export const templateImporter = createDemoTemplateImporter({
 export const templateImports = createTemplateImports(templateImporter);
 
 const httpGenerator = createHttpGenerator();
+const { follow } = httpGenerator;
+/** Готовая колода появляется в библиотеке: серверные страницы обновляются. */
 const deckGenerator: typeof httpGenerator = {
   ...httpGenerator,
   async generate(...args) {
@@ -71,23 +70,72 @@ const deckGenerator: typeof httpGenerator = {
     await refreshLibraryAction();
     return result;
   },
+  ...(follow
+    ? {
+        async follow(...args) {
+          const result = await follow(...args);
+          await refreshLibraryAction();
+          return result;
+        },
+      }
+    : {}),
 };
 
 /**
- * Сессия ассистента во вкладке: прогоны генерации, разговоры и агент, который их ведёт. Одна на
- * приложение — поле ввода начинает разговор, редактор его продолжает, и переход между
- * страницами ничего не обрывает. Обновили страницу — сессии нет: сервер разговоров не хранит.
+ * Прогоны генерации во вкладке. Сборку в чате запускает агент на сервере, а вкладка досматривает
+ * её прогон (`followBuild`) — отсюда ход сборки в карточке.
  */
 export const generationRuns = createGenerationRuns(deckGenerator);
-export const assistantThreads = createAssistantThreads();
-export const deckConversations = createDeckConversations({
-  threads: assistantThreads,
-  runs: generationRuns,
-  imports: templateImports,
-  // Серверным действием: проект, к которому прикрепили шаблон, видят серверные страницы.
-  attachTemplate: attachTemplateAction,
-  review: createVariantReview(deckSource),
+
+/** Загрузить материал: чат получает его id и имя. */
+async function uploadContent(file: File) {
+  const body = new FormData();
+  body.set('file', file);
+  const response = await apiFetch('/files/content', { method: 'POST', body });
+  if (!response.ok) throw new Error(`Content upload failed (${response.status})`);
+  const uploaded = (await response.json()) as { fileId: string; fileName?: string };
+  return { fileId: uploaded.fileId, name: uploaded.fileName ?? file.name, size: file.size };
+}
+
+/**
+ * Чаты во вкладке. Разговор ведёт агент на сервере; вкладка отправляет ходы и читает ответ
+ * событиями. Ход закончился — серверные страницы обновляются: в истории новый чат или колода.
+ */
+export const chatStore = createChatStore({
+  request: (path, init) => apiFetch(path, init),
+  uploadContent,
+  async uploadTemplate(file) {
+    const template = await registerTemplate(file);
+    return { templateId: template.templateId, name: template.fileName };
+  },
+  onTurnEnd: () => void refreshLibraryAction(),
 });
+
+/**
+ * Досмотреть сборку, которую запустил агент: её прогон во вкладке ведёт карточку хода. Прогон
+ * уже во вкладке — ничего не делает. Повторить такую сборку из карточки нельзя: её перезапускает
+ * агент.
+ */
+export function followBuild(build: {
+  readonly runId: string;
+  readonly variantRunIds: readonly string[];
+  readonly templateId: string;
+  readonly startedAt: number;
+}): void {
+  generationRuns.follow(build.runId, {
+    request: {
+      templateId: build.templateId,
+      projectId: null,
+      brief: '',
+      files: [],
+      slideCount: null,
+      model: null,
+    },
+    returnHref: '/',
+    server: { runId: build.runId, variantRunIds: build.variantRunIds },
+    startedAt: build.startedAt,
+  });
+}
 
 const noSubscribe = () => () => undefined;
 
@@ -100,19 +148,10 @@ export function useHydrated(): boolean {
   );
 }
 
-export function useThread(threadId: string | null): AssistantThread | undefined {
+export function useChat(chatId: string | null): ChatView | undefined {
   return useSyncExternalStore(
-    assistantThreads.subscribe,
-    () => (threadId ? assistantThreads.get(threadId) : undefined),
-    () => undefined,
-  );
-}
-
-/** Разговор, который открыл эту колоду: его продолжает панель редактора. */
-export function useThreadForDeck(deckId: string): AssistantThread | undefined {
-  return useSyncExternalStore(
-    assistantThreads.subscribe,
-    () => assistantThreads.forDeck(deckId),
+    chatStore.subscribe,
+    () => (chatId ? chatStore.get(chatId) : undefined),
     () => undefined,
   );
 }
