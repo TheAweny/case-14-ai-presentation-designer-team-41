@@ -294,6 +294,19 @@ def _template_leftover(s: dict[str, Any]) -> None:
     _run(s, "list")["text"] = "Итоги 2019 года"
 
 
+def _empty_image_slot(s: dict[str, Any]) -> None:
+    frame = {"x": _LEFT, "y": 1_828_800, "cx": 3_000_000, "cy": 2_000_000}
+    s["elements"].append(
+        {
+            "kind": "decor",
+            "elementId": "image-slot-9",
+            "role": "image",
+            "box": frame,
+            "sourceShapeId": 9,
+        }
+    )
+
+
 _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] = {
     "slide-bounds": _slide_bounds,
     "text-clipped": _text_clipped,
@@ -319,6 +332,7 @@ _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] 
     "duplicate-slide": _duplicate_slide,
     "placeholder-text": _placeholder_text,
     "template-leftover": _template_leftover,
+    "empty-image-slot": _empty_image_slot,
 }
 
 _IDS = [check.id for check in DETERMINISTIC_CHECKS]

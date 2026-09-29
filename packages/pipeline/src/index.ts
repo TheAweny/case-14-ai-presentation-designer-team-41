@@ -77,6 +77,13 @@ export {
 } from './generation/workflow.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
 export {
+  FakeImageProvider,
+  OpenAICompatibleImageProvider,
+  sizeFor,
+  type ImageProvider,
+} from './generation/images.js';
+export { SharedIllustrations, styleOf, type Illustration } from './generation/illustrations.js';
+export {
   currentTemplateIndexRevision,
   indexTemplate,
   indexTemplateWithAgent,

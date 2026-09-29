@@ -9,6 +9,7 @@ import {
   type CompositionNote,
   type DeckOutline,
   type GenerationProfile,
+  type ImageSlot,
   type JobEvent,
   type JobStage,
   type StageTiming,
@@ -25,10 +26,12 @@ import {
   repairedSlideSchema,
   type repairTaskSchema,
   briefYears,
+  type PlannedSlide,
   withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
+import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 
 type EventData = {
   [K in JobEvent['type']]: Omit<
@@ -66,13 +69,36 @@ export interface GenerateOptions {
   sharedPlan?: SharedPlan;
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
+  /**
+   * The pictures of the brief, shared by its three variants. Absent or null: no image model is
+   * assigned, the planner is not offered compositions with a place for a picture.
+   */
+  illustrations?: SharedIllustrations | null;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
+}
+
+/** Time kept for export, audit and render after the pictures are awaited, in ms. */
+const EXPORT_RESERVE_MS = 60_000;
+/** The run's own deadline, under the five minutes the three variants share. */
+const RUN_DEADLINE_MS = 290_000;
+
+interface PendingPicture {
+  index: number;
+  slotId: string;
+  ordinal: number;
+  query: string;
+  picture: Promise<Illustration | null>;
+}
+
+/** Image slots of a composition in reading order: top to bottom, then left to right. */
+function orderedImageSlots(slots: readonly ImageSlot[]): ImageSlot[] {
+  return [...slots].sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
 }
 export async function generatePresentation(options: GenerateOptions) {
   const started = Date.now();
   const signal = AbortSignal.any([
-    AbortSignal.timeout(290000),
+    AbortSignal.timeout(RUN_DEADLINE_MS),
     ...(options.signal ? [options.signal] : []),
   ]);
   let seq = 0;
@@ -119,6 +145,47 @@ export async function generatePresentation(options: GenerateOptions) {
       }
     }
     await emit({ type: 'stage-started', stage });
+    // Pictures are asked for as soon as the plan is laid out, and drawn while the copy is written.
+    const illustrations = options.illustrations ?? null;
+    const pending: PendingPicture[] = [];
+    let illustratingStarted = 0;
+    const onPlan = (slides: readonly PlannedSlide[]) => {
+      if (!illustrations) return;
+      for (const slide of slides) {
+        const frames = orderedImageSlots(slide.composition.imageSlots ?? []);
+        frames.forEach((frame, ordinal) => {
+          pending.push({
+            index: slide.index,
+            slotId: frame.slotId,
+            ordinal,
+            query: slide.imageQuery,
+            picture: illustrations.request({
+              index: slide.index,
+              ordinal,
+              count: frames.length,
+              imageQuery: slide.imageQuery,
+              purpose: slide.purpose,
+              deck: { title: slide.title, audience: slide.audience, goal: slide.goal },
+              box: frame.box,
+            }),
+          });
+        });
+      }
+      if (!pending.length) return;
+      illustratingStarted = Date.now();
+      void emit({ type: 'stage-started', stage: 'illustrating' });
+      let drawn = 0;
+      for (const item of pending)
+        void item.picture.then(() =>
+          emit({
+            type: 'stage-progress',
+            stage: 'illustrating',
+            done: ++drawn,
+            total: pending.length,
+            note: 'Нарисована иллюстрация',
+          }),
+        );
+    };
     const workflow = createGenerationWorkflow({
       provider: options.provider,
       plannerInstructions: planner.instructions,
@@ -127,6 +194,8 @@ export async function generatePresentation(options: GenerateOptions) {
       variant: options.variant ?? 'balanced',
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
       today,
+      imagesAvailable: illustrations !== null,
+      onPlan,
       signal,
       concurrency: 3,
       ...(options.notes ? { notes: options.notes } : {}),
@@ -329,20 +398,60 @@ export async function generatePresentation(options: GenerateOptions) {
     await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
     timings.push({ stage, ms: Date.now() - auditStarted });
     await emit({ type: 'stage-finished', stage, durationMs: Date.now() - auditStarted });
-    const images = written
-      .filter((s) => s.imageQuery)
-      .map((s) => ({
-        slide: s.index,
-        query: s.imageQuery,
-        provider: 'mock',
-        status: 'not-generated',
-      }));
-    await emit({
-      type: 'warning',
-      stage: 'laying-out',
-      code: 'images-mocked',
-      message: 'Генерация иллюстраций пока отключена; сохранено оформление шаблона.',
-    });
+    // The pictures get what is left of the budget but the export; one that is not ready by then
+    // leaves its slot, and the export removes the empty frame.
+    const images: Record<string, unknown>[] = [];
+    if (pending.length) {
+      const waitMs = Math.max(0, RUN_DEADLINE_MS - EXPORT_RESERVE_MS - (Date.now() - started));
+      const deadline = new Promise<'late'>((resolve) => {
+        const timer = setTimeout(() => resolve('late'), waitMs);
+        timer.unref?.();
+      });
+      const settled = await Promise.all(
+        pending.map(async (item) => ({
+          item,
+          picture: await Promise.race([item.picture, deadline]),
+        })),
+      );
+      for (const { item, picture } of settled) {
+        const current = written.find((s) => s.index === item.index);
+        const base = { slide: item.index, slotId: item.slotId, query: item.query };
+        if (picture === 'late' || picture === null || !current) {
+          images.push({ ...base, status: picture === 'late' ? 'timed-out' : 'failed' });
+          continue;
+        }
+        const path = await saveIllustration(options.outputDir, item.index, item.ordinal, picture);
+        current.slide = {
+          ...current.slide,
+          images: [
+            ...(current.slide.images ?? []),
+            { slotId: item.slotId, path, fit: 'cover' as const },
+          ],
+        };
+        images.push({
+          ...base,
+          status: 'generated',
+          path,
+          model: picture.model,
+          prompt: picture.prompt,
+          seed: picture.seed,
+          size: picture.size,
+        });
+      }
+      const drawnMs = Date.now() - illustratingStarted;
+      timings.push({ stage: 'illustrating', ms: drawnMs });
+      await emit({ type: 'stage-finished', stage: 'illustrating', durationMs: drawnMs });
+      const missing = images.filter((image) => image.status !== 'generated').length;
+      if (missing)
+        await emit({
+          type: 'warning',
+          stage: 'illustrating',
+          code: 'images-missing',
+          message:
+            `Не нарисовано иллюстраций: ${missing} из ${images.length}. ` +
+            'Их слоты убраны со слайдов, пустых рамок нет.',
+        });
+    }
     await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
     await writeFile(join(options.outputDir, 'images.json'), JSON.stringify(images, null, 2));
     stage = 'exporting';
@@ -427,7 +536,7 @@ export async function generatePresentation(options: GenerateOptions) {
       designSystem: options.profile.designSystem,
       templateIr: output.templateIr,
       warnings: [...output.warnings, ...reviewWarnings],
-      imagesMocked: true,
+      imagesMocked: illustrations === null,
     };
     await writeFile(join(options.outputDir, 'deck.json'), JSON.stringify(deck));
     const artifacts: RunArtifact[] = [];
@@ -457,7 +566,13 @@ export async function generatePresentation(options: GenerateOptions) {
       contentPackId: createHash('sha256').update(options.brief).digest('hex'),
       planId: options.runId,
       seed: options.seed ?? 42,
-      revisions: [planner, writer, critic, rewriter]
+      revisions: [
+        planner,
+        writer,
+        critic,
+        rewriter,
+        ...(illustrations ? [illustrations.agent] : []),
+      ]
         .map((agent) => ({
           kind: 'agent',
           id: agent.config.id,
@@ -471,6 +586,17 @@ export async function generatePresentation(options: GenerateOptions) {
             version: 'hosted-revision-not-reported',
             hash: createHash('sha256').update(options.provider.model).digest('hex'),
           },
+          // The image model as the server names it; a hosted one does not report its weights.
+          ...(illustrations
+            ? [
+                {
+                  kind: 'model',
+                  id: illustrations.model,
+                  version: 'hosted-revision-not-reported',
+                  hash: createHash('sha256').update(illustrations.model).digest('hex'),
+                },
+              ]
+            : []),
         ]),
       modelCalls:
         options.provider instanceof OpenAICompatibleProvider

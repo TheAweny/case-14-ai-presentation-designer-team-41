@@ -9,7 +9,7 @@ from engine.export.compositions import export_compositions
 from engine.parser.compositions import extract_compositions
 from fastapi.testclient import TestClient
 from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
+from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE, PP_PLACEHOLDER
 from pptx.shapes.autoshape import Shape
 from pptx.util import Emu, Inches, Pt
 
@@ -234,14 +234,89 @@ def test_unfilled_picture_placeholders_leave_the_exported_slide(tmp_path: Path) 
     assert all(shape.has_text_frame and shape.text.strip() for shape in shapes)
 
 
-def test_a_slide_built_around_an_empty_photo_frame_is_not_offered(tmp_path: Path) -> None:
+def test_a_photo_frame_and_an_empty_card_are_image_slots(tmp_path: Path) -> None:
     deck = Presentation()
     deck.slides.add_slide(deck.slide_layouts[8])
     text = deck.slides.add_slide(deck.slide_layouts[6])
-    box = text.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1))
+    box = text.shapes.add_textbox(Inches(0.5), Inches(1), Inches(4), Inches(1))
     box.text_frame.paragraphs[0].add_run().text = "Text design"
+    card = text.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(5), Inches(1), Inches(4.5), Inches(5)
+    )
+    badge = text.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(3), Inches(1), Inches(0.5)
+    )
     deck.save(str(tmp_path / "photo.pptx"))
-    assert [p["sourceIndex"] for p in extract_compositions(tmp_path / "photo.pptx")] == [1]
+    photo, cards = extract_compositions(tmp_path / "photo.pptx")
+    assert [s["kind"] for s in photo["imageSlots"]] == ["placeholder"]
+    # The large empty card is a place for a picture; the small badge is decoration.
+    assert [s["slotId"] for s in cards["imageSlots"]] == [str(card.shape_id)]
+    assert str(badge.shape_id) not in [s["slotId"] for s in cards["imageSlots"]]
+
+
+def _picture_file(path: Path, size: tuple[int, int]) -> Path:
+    from PIL import Image
+
+    Image.new("RGB", size, (40, 160, 90)).save(path)
+    return path
+
+
+def test_a_generated_picture_fills_its_slot_and_an_unfilled_slot_leaves_the_slide(
+    tmp_path: Path,
+) -> None:
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(0.5), Inches(1), Inches(4), Inches(1))
+    box.text_frame.paragraphs[0].add_run().text = "Text design"
+    card = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(5), Inches(1), Inches(4), Inches(5)
+    )
+    source = tmp_path / "source.pptx"
+    deck.save(str(source))
+    pattern = extract_compositions(source)[0]
+    texts = [{"slotId": s["slotId"], "text": "Озеленение"} for s in pattern["slots"]]
+    run = tmp_path / "run"
+    (run / "media").mkdir(parents=True)
+    _picture_file(run / "media" / "picture.png", (1536, 1024))
+
+    def export(images: list[dict[str, str]]) -> Any:
+        output = run / "deck.pptx"
+        export_compositions(
+            source,
+            output,
+            [
+                {
+                    "patternId": pattern["patternId"],
+                    "texts": texts,
+                    "speakerNotes": "",
+                    "images": images,
+                }
+            ],
+            [pattern],
+        )
+        return Presentation(str(output)).slides[0]
+
+    filled = export([{"slotId": str(card.shape_id), "path": "media/picture.png", "fit": "cover"}])
+    pictures = [s for s in filled.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
+    assert len(pictures) == 1
+    picture = pictures[0]
+    # The picture takes the card's box and keeps its proportions by cropping, not stretching.
+    assert (picture.left, picture.top, picture.width, picture.height) == (
+        card.left,
+        card.top,
+        card.width,
+        card.height,
+    )
+    shown = (1536 * (1 - picture.crop_left - picture.crop_right)) / (
+        1024 * (1 - picture.crop_top - picture.crop_bottom)
+    )
+    assert abs(shown - card.width / card.height) < 0.01
+    # The card's rounded corners carry over to the picture.
+    assert picture._element.spPr.find(f"{_A}prstGeom").get("prst") == "roundRect"
+    assert all(s.shape_id != card.shape_id for s in filled.shapes)
+
+    empty = export([])
+    assert [s.shape_type for s in empty.shapes] == [MSO_SHAPE_TYPE.TEXT_BOX]
 
 
 def test_text_is_measured_to_the_edge_of_the_pill_it_sits_on(tmp_path: Path) -> None:

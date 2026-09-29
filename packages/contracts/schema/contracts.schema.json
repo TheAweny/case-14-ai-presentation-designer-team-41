@@ -286,6 +286,7 @@
                   "parsing-template",
                   "profiling-template",
                   "planning",
+                  "illustrating",
                   "laying-out",
                   "rendering",
                   "auditing",
@@ -4508,6 +4509,39 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "images": {
+                "description": "Generated pictures for image slots. An image slot without one is removed on export, so no empty frame or blank card is left.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fit": {
+                      "description": "cover crops the picture to fill the box; contain fits it whole inside.",
+                      "enum": [
+                        "cover",
+                        "contain"
+                      ],
+                      "type": "string"
+                    },
+                    "path": {
+                      "description": "The picture file, relative to the run directory: media/<name>.png.",
+                      "pattern": "^media\\/[\\w.-]+\\.(?:png|jpe?g)$",
+                      "type": "string"
+                    },
+                    "slotId": {
+                      "description": "An imageSlots id of the composition.",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slotId",
+                    "path",
+                    "fit"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "patternId": {
                 "minLength": 1,
                 "type": "string"
@@ -12445,6 +12479,67 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "imageSlots": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "box": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    "kind": {
+                      "enum": [
+                        "placeholder",
+                        "panel"
+                      ],
+                      "type": "string"
+                    },
+                    "slotId": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slotId",
+                    "kind",
+                    "box"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "name": {
                 "type": "string"
               },
@@ -13563,6 +13658,7 @@
                 "parsing-template",
                 "profiling-template",
                 "planning",
+                "illustrating",
                 "laying-out",
                 "rendering",
                 "auditing",
@@ -13624,6 +13720,7 @@
                 "parsing-template",
                 "profiling-template",
                 "planning",
+                "illustrating",
                 "laying-out",
                 "rendering",
                 "auditing",
@@ -13690,6 +13787,7 @@
                 "parsing-template",
                 "profiling-template",
                 "planning",
+                "illustrating",
                 "laying-out",
                 "rendering",
                 "auditing",
@@ -13824,6 +13922,7 @@
                 "parsing-template",
                 "profiling-template",
                 "planning",
+                "illustrating",
                 "laying-out",
                 "rendering",
                 "auditing",
@@ -13899,6 +13998,7 @@
                 "parsing-template",
                 "profiling-template",
                 "planning",
+                "illustrating",
                 "laying-out",
                 "rendering",
                 "auditing",
