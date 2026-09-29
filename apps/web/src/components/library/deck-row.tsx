@@ -3,15 +3,13 @@ import { useFormatter, useNow, useTranslations } from 'next-intl';
 import type { DesignSystem } from '@lct/contracts';
 import { SlidePreview } from '@/components/library/slide-preview';
 import { DeckActions, DeckTitle } from '@/components/library/deck-actions';
-import { AuditBadge } from '@/components/library/deck-card';
 import { deckOpenHref } from '@/lib/library-menu';
 import type { DeckSummary } from '@/lib/library-source';
 import { cn } from '@/lib/utils';
 
 /**
- * Строка презентации для вида «списком»: маленькая обложка, название, число слайдов, время
- * правки и итог аудита. Вся строка — ссылка в редактор; «⋯» справа и правая кнопка открывают
- * меню презентации.
+ * Строка презентации для вида «списком»: маленькая обложка, название, число слайдов и время
+ * правки. Вся строка — ссылка в редактор; «⋯» справа и правая кнопка открывают меню презентации.
  *
  * Как и `DeckCard`, рендерится только на сервере: «2 часа назад» считается один раз, и
  * гидрации нечего сверять.
@@ -55,7 +53,6 @@ export function DeckRow({ deck, designSystem }: { deck: DeckSummary; designSyste
             <time dateTime={edited.toISOString()}>
               {t('edited', { time: format.relativeTime(edited, now) })}
             </time>
-            <AuditBadge findings={deck.auditFindings} />
           </p>
         </div>
       </Link>

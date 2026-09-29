@@ -7,8 +7,16 @@ import {
   type CompositionNote,
 } from '@lct/contracts';
 import {
+  clearEchoes,
   copyDefects,
   createGenerationWorkflow,
+  createRepairWorkflow,
+  datedSlots,
+  deckYear,
+  emptySlots,
+  keepStatedFacts,
+  repeatsHeading,
+  withCardHeadings,
   fitChars,
   groundedVisual,
   keepOutline,
@@ -364,6 +372,47 @@ describe('slot fit and reading order', () => {
     expect(fitChars({ role: 'title', sample: 'Logic', maxChars: 200 })).toBe(36);
     expect(fitChars({ role: 'body', sample: 'Context', maxChars: 400 })).toBe(9);
     expect(fitChars({ role: 'title', sample: '', maxChars: 80 })).toBe(80);
+    // A one-word heading over a step in a wide one-line box holds a two-word name.
+    expect(fitChars({ role: 'body', sample: 'Работа', maxChars: 39, maxLines: 1 })).toBe(13);
+    expect(fitChars({ role: 'body', sample: 'Тег', maxChars: 12, maxLines: 1 })).toBe(8);
+  });
+
+  it('keeps copy that fits when no rewrite of it does', async () => {
+    const base = composition.slots[0];
+    if (!base) throw new Error('Fixture slot missing');
+    const label = { ...base, slotId: 'h', role: 'body' as const, sample: 'Работа' };
+    const pattern = { ...composition, slots: [{ ...label, maxChars: 39, maxLines: 1 }] };
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(_a: string, _i: string, _input: unknown, schema: z.ZodType<T>) {
+        return schema.parse({
+          rewrites: { h: ['Эко-аудит офиса и всех его зон', 'x'.repeat(20), 'y'.repeat(14)] },
+        });
+      },
+    };
+    const workflow = createRepairWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const run = await workflow.createRun();
+    const result = await run.start({
+      inputData: [
+        {
+          index: 0,
+          brief: '',
+          composition: pattern,
+          previous: {
+            patternId: pattern.patternId,
+            texts: [{ slotId: 'h', text: 'Аудит' }],
+            speakerNotes: '',
+          },
+          corrections: [{ slotId: 'h', message: 'Заменить «Аудит» на «Эко-аудит офиса»' }],
+        },
+      ],
+    });
+    expect(result.status).toBe('success');
   });
 
   it('puts slots that share a vertical band on one row', () => {
@@ -503,6 +552,130 @@ describe('slot fit and reading order', () => {
     expect(result.status).toBe('success');
   });
 
+  it('asks the rewriter again with feedback when every alternative exceeds the slot limit', async () => {
+    const inputs: unknown[] = [];
+    let calls = 0;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        const { title, pattern } = withLabel();
+        if (agent === 'planner')
+          return schema.parse({
+            title: 'Overlong label',
+            slides: Array.from({ length: 10 }, () => ({
+              patternId: pattern.patternId,
+              purpose: 'Point',
+              imageQuery: '',
+            })),
+          });
+        if (agent === 'rewriter') {
+          inputs.push(input);
+          calls += 1;
+          // First answer ignores the limit, the retry obeys it.
+          const rewrites =
+            calls === 1
+              ? { '8': ['way too long text', 'still too long', 'much too long'] }
+              : { '8': ['Speed', 'Go', 'Ok'] };
+          return schema.parse({ rewrites });
+        }
+        const first =
+          typeof input === 'object' &&
+          input !== null &&
+          'index' in input &&
+          (input as { index?: number }).index === 0;
+        return schema.parse({
+          patternId: pattern.patternId,
+          textsBySlot: {
+            [title.slotId]: 'Point',
+            // Only the first slide overflows, so the rewriter runs once.
+            '8': first ? 'an overlong label text' : 'Speed',
+          },
+          speakerNotes: '',
+          visual: null,
+        });
+      },
+    };
+    const result = await runLabel(provider);
+    expect(result.status).toBe('success');
+    expect(calls).toBe(2);
+    const second = inputs[1] as {
+      feedback?: string;
+      slots?: { slotId: string; fitChars: number }[];
+    };
+    expect(second.feedback).toMatch(/8/);
+    expect(second.feedback).toMatch(/не длиннее/);
+    if (result.status !== 'success') return;
+    for (const written of result.result)
+      expect(written.slide.texts.find((t) => t.slotId === '8')?.text).toBe('Speed');
+  });
+
+  it('keeps the previous copy and still completes when every rewrite attempt overflows the slot limit', async () => {
+    const inputs: unknown[] = [];
+    let calls = 0;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        const { title, pattern } = withLabel();
+        if (agent === 'planner')
+          return schema.parse({
+            title: 'Stubborn label',
+            slides: Array.from({ length: 10 }, () => ({
+              patternId: pattern.patternId,
+              purpose: 'Point',
+              imageQuery: '',
+            })),
+          });
+        if (agent === 'rewriter') {
+          inputs.push(input);
+          calls += 1;
+          // The model never obeys the limit: every draw stays too long.
+          return schema.parse({
+            rewrites: { '8': ['way too long text', 'still too long', 'again too long'] },
+          });
+        }
+        const first =
+          typeof input === 'object' &&
+          input !== null &&
+          'index' in input &&
+          (input as { index?: number }).index === 0;
+        return schema.parse({
+          patternId: pattern.patternId,
+          textsBySlot: {
+            [title.slotId]: 'Point',
+            // Only the first slide overflows, so the rewriter runs once.
+            '8': first ? 'an overlong label text' : 'Speed',
+          },
+          speakerNotes: '',
+          visual: null,
+        });
+      },
+    };
+    const result = await runLabel(provider);
+    // All three variants are mandatory, so a slot the model cannot shorten costs a warning,
+    // not the whole deck.
+    expect(result.status).toBe('success');
+    expect(calls).toBe(5);
+    // Every draw after the first carries the accumulated feedback.
+    for (const input of inputs.slice(1)) {
+      expect((input as { feedback?: string }).feedback).toMatch(/не длиннее/);
+    }
+    if (result.status !== 'success') return;
+    const first = result.result[0];
+    expect(first?.slide.texts.find((t) => t.slotId === '8')?.text).toBe('an overlong label text');
+    for (const written of result.result.slice(1))
+      expect(written.slide.texts.find((t) => t.slotId === '8')?.text).toBe('Speed');
+  });
+
   it('reports an empty card but not a mirrored twin of a filled slot', () => {
     const { pattern } = withLabel();
     const title = { ...withLabel().title, box: { x: 10, y: 10, cx: 100, cy: 20 } };
@@ -605,6 +778,35 @@ describe('numberedSlots', () => {
     ]);
   });
 
+  it('reads the highest of equal step headings as a heading and the large claim as the title', () => {
+    // Steps: a number and a heading each; the first heading sits highest and was read as the
+    // title, while the slide's claim is set large in a body slot.
+    const heading = (slotId: string, y: number, role: 'title' | 'body') => ({
+      ...card(slotId, 'Работа', 120, y),
+      role,
+      fontSize: 30,
+      box: { x: 120, y, cx: 400, cy: 48 },
+    });
+    const claim = { ...card('claim', 'Несколько этапов процесса', 700, 0), fontSize: 75 };
+    const steps = {
+      ...composition,
+      slots: [
+        heading('h1', 0, 'title'),
+        card('c1', '01', 0, 0),
+        heading('h2', 100, 'body'),
+        card('c2', '02', 0, 100),
+        claim,
+      ],
+    };
+    const read = withCardHeadings(steps);
+    expect(read.slots.filter((s) => s.role === 'title').map((s) => s.slotId)).toEqual(['claim']);
+    expect(read.slots.find((s) => s.slotId === 'h1')?.role).toBe('body');
+    expect(Object.fromEntries(numberedSlots(read))).toEqual({ c1: '01', c2: '02' });
+    // A title unlike every body slot stays the title.
+    const plain = { ...steps, slots: [heading('h1', 0, 'title'), claim] };
+    expect(withCardHeadings(plain)).toBe(plain);
+  });
+
   it('keeps the sample format and leaves a single section number to the writer', () => {
     const steps = { ...composition, slots: [card('x', '1.', 0, 0), card('y', '2.', 0, 100)] };
     expect([...numberedSlots(steps).values()]).toEqual(['1.', '2.']);
@@ -659,6 +861,120 @@ describe('copyDefects', () => {
     const pattern = { ...composition, slots: [slot('a', 99, 9)] };
     expect(copyDefects(slide({ a: 'Корпоративные программы' }), pattern).has('a')).toBe(true);
     expect(copyDefects(slide({ a: 'Программы для команды' }), pattern).size).toBe(0);
+  });
+
+  const today = new Date(2026, 8, 29);
+
+  it('flags a past year the brief does not name, and passes one it does', () => {
+    const pattern = { ...composition, slots: [slot('a', 80, 2)] };
+    const brief = 'Пилот запущен в 2025 году.';
+    expect(
+      copyDefects(slide({ a: 'Итоги 2024 года' }), pattern, { brief, today }).get('a'),
+    ).toMatch(/2024/);
+    expect(copyDefects(slide({ a: 'Пилот 2025 года' }), pattern, { brief, today }).size).toBe(0);
+    expect(copyDefects(slide({ a: 'План на 2026' }), pattern, { brief, today }).size).toBe(0);
+  });
+
+  it("flags a field left with the template's label unless the brief says it", () => {
+    const label = { ...slot('a', 40, 1), sample: 'Контакт' };
+    const pattern = { ...composition, slots: [label] };
+    expect(copyDefects(slide({ a: 'Контакт' }), pattern, { brief: 'Офисы' }).has('a')).toBe(true);
+    expect(copyDefects(slide({ a: 'hr@green.office' }), pattern, { brief: 'Офисы' }).size).toBe(0);
+    expect(
+      copyDefects(slide({ a: 'Контакт' }), pattern, { brief: 'Раздел «Контакт» для клиентов' })
+        .size,
+    ).toBe(0);
+    expect(clearEchoes(slide({ a: 'Контакт' }), pattern, 'Офисы').texts).toEqual([
+      { slotId: 'a', text: '' },
+    ]);
+    // A speaker field the writer labelled instead of filling is a label too.
+    const speaker = { ...composition, slots: [{ ...slot('a', 40, 1), sample: 'Спикер' }] };
+    expect(copyDefects(slide({ a: 'Контакт' }), speaker, { brief: 'Офисы' }).has('a')).toBe(true);
+    expect(copyDefects(slide({ a: 'Анна Петрова' }), speaker, { brief: 'Офисы' }).size).toBe(0);
+  });
+
+  it('keeps in a speaker or contact field only what the brief states', () => {
+    const speaker = { ...slot('s', 40, 1), sample: 'Спикер' };
+    const body = slot('b', 80, 2);
+    const pattern = { ...composition, slots: [speaker, body] };
+    const brief = 'Докладчик: Анна Петрова, отдел продаж';
+    expect(
+      keepStatedFacts(slide({ s: 'Контакт', b: 'Озеленение офиса' }), pattern, brief).texts,
+    ).toEqual([
+      { slotId: 's', text: '' },
+      { slotId: 'b', text: 'Озеленение офиса' },
+    ]);
+    expect(keepStatedFacts(slide({ s: 'Анна Петрова', b: 'x' }), pattern, brief).texts[0]).toEqual({
+      slotId: 's',
+      text: 'Анна Петрова',
+    });
+    // An empty speaker field is not a card to fill.
+    expect(emptySlots(slide({ s: '', b: 'Озеленение' }), pattern)).toEqual([]);
+  });
+
+  it('flags a bare number in a field whose sample is words', () => {
+    const pattern = { ...composition, slots: [{ ...slot('a', 40, 1), sample: 'Работа' }] };
+    expect(copyDefects(slide({ a: '05' }), pattern).has('a')).toBe(true);
+    expect(copyDefects(slide({ a: 'Монтаж' }), pattern).size).toBe(0);
+  });
+
+  it('flags a list that opens with the heading of its card, not one that opens with a point', () => {
+    const heading = { ...slot('h', 40, 1), box: { x: 0, y: 0, cx: 300, cy: 40 } };
+    const list = { ...slot('l', 200, 6), box: { x: 0, y: 60, cx: 300, cy: 240 } };
+    const other = { ...slot('o', 40, 1), box: { x: 400, y: 0, cx: 300, cy: 40 } };
+    const pattern = { ...composition, slots: [heading, list, other] };
+    const defects = copyDefects(
+      slide({ h: 'Результат', l: 'Результаты\nЗелень\nАвтополив', o: 'Исходная точка' }),
+      pattern,
+    );
+    expect([...defects.keys()]).toEqual(['l']);
+    expect(
+      copyDefects(
+        slide({ h: 'Результат', l: 'Зелень\nАвтополив\nБодрость', o: 'Исходная точка' }),
+        pattern,
+      ).size,
+    ).toBe(0);
+    expect(repeatsHeading('Исходная точка', 'Точка отсчёта')).toBe(true);
+  });
+});
+
+describe('dates', () => {
+  const base = composition.slots[0];
+  if (!base) throw new Error('Fixture slot missing');
+  const field = (slotId: string, sample: string) => ({
+    ...base,
+    slotId,
+    role: 'body' as const,
+    sample,
+  });
+  const today = new Date(2026, 8, 29);
+
+  it("dates a date field today in the sample's format and keeps it from the writer", () => {
+    const pattern = {
+      ...composition,
+      slots: [
+        field('y', '2024'),
+        field('d', '12.05.2024'),
+        field('m', 'Май 2023'),
+        field('f', 'Дата'),
+        field('t', 'B2B-услуги'),
+      ],
+    };
+    expect(Object.fromEntries(datedSlots(pattern, { brief: 'Озеленение', today }))).toEqual({
+      y: '2026',
+      d: '29.09.2026',
+      m: 'Сентябрь 2026',
+      f: '2026',
+    });
+    expect(writerSlots(pattern).map((slot) => slot.slotId)).toContain('t');
+    expect(writerSlots(pattern).map((slot) => slot.slotId)).not.toContain('y');
+  });
+
+  it('takes the year from the brief when it plans ahead, never an old one', () => {
+    expect(deckYear('Стратегия на 2027 год', today)).toBe(2027);
+    expect(deckYear('С 2019 года на рынке', today)).toBe(2026);
+    const pattern = { ...composition, slots: [field('d', '12.05.2024')] };
+    expect(datedSlots(pattern, { brief: 'План на 2027', today }).get('d')).toBe('2027');
   });
 });
 

@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import { AuditIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import type { DesignSystem } from '@lct/contracts';
 import { SlidePreview } from '@/components/library/slide-preview';
-import { auditStatusOf } from '@/components/library/audit-status';
 import { DeckActions, DeckTitle } from '@/components/library/deck-actions';
 import { deckOpenHref } from '@/lib/library-menu';
 import type { DeckSummary } from '@/lib/library-source';
@@ -11,8 +9,8 @@ import { cn } from '@/lib/utils';
 
 /**
  * Карточка презентации в главном меню: обложка — первый слайд, нарисованный профилем её шаблона,
- * под ней название, проект, время правки, число слайдов и итог аудита. Вся карточка — ссылка
- * в редактор; правая кнопка и «⋯» в углу обложки открывают меню презентации (`DeckActions`).
+ * под ней название, проект, время правки и число слайдов. Вся карточка — ссылка в редактор;
+ * правая кнопка и «⋯» в углу обложки открывают меню презентации (`DeckActions`).
  *
  * Компонент без `'use client'`: он рендерится только на сервере, поэтому «2 часа назад»
  * считается один раз и гидрации нечего сверять.
@@ -82,37 +80,9 @@ export function DeckCard({
             <time dateTime={edited.toISOString()}>
               {t('edited', { time: format.relativeTime(edited, now) })}
             </time>
-            <AuditBadge findings={deck.auditFindings} />
           </p>
         </div>
       </Link>
     </DeckActions>
-  );
-}
-
-/** Итог последнего аудита колоды: не запускали, чисто или сколько замечаний. */
-export function AuditBadge({ findings }: { findings: number | null }) {
-  const t = useTranslations('home.deckCard.audit');
-  const status = auditStatusOf(findings);
-
-  const look = {
-    notRun: { icon: AuditIcon, className: 'text-muted-foreground ring-1 ring-border' },
-    clean: { icon: SuccessIcon, className: 'bg-secondary text-secondary-foreground' },
-    findings: { icon: WarningIcon, className: 'bg-destructive/10 text-destructive' },
-  }[status.kind];
-
-  const label =
-    status.kind === 'findings' ? t('findings', { count: status.count }) : t(status.kind);
-
-  return (
-    <span
-      className={cn(
-        'inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[0.6875rem] font-medium',
-        look.className,
-      )}
-    >
-      <look.icon size={12} aria-hidden />
-      {label}
-    </span>
   );
 }

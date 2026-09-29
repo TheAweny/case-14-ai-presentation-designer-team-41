@@ -29,7 +29,6 @@ export interface ExportOptions {
   readonly format: ExportFormat;
   readonly fileName: string;
   readonly range: SlideRange;
-  readonly audit: boolean;
 }
 
 /**
@@ -42,7 +41,6 @@ export function ExportDialog({
   job,
   initialFormat,
   defaultFileName,
-  defaultAudit = false,
   slideCount,
   currentIndex,
   variant,
@@ -53,8 +51,6 @@ export function ExportDialog({
   job: DeckExportJob;
   initialFormat: ExportFormat;
   defaultFileName: string;
-  /** Отчёт аудита отмечен заранее — так в настройках. */
-  defaultAudit?: boolean;
   slideCount: number;
   currentIndex: number;
   variant: LayoutVariantName;
@@ -78,7 +74,6 @@ export function ExportDialog({
             key={initialFormat}
             initialFormat={initialFormat}
             defaultFileName={defaultFileName}
-            defaultAudit={defaultAudit}
             slideCount={slideCount}
             currentIndex={currentIndex}
             onCancel={() => onOpenChange(false)}
@@ -99,7 +94,6 @@ export function ExportDialog({
 function ExportForm({
   initialFormat,
   defaultFileName,
-  defaultAudit = false,
   slideCount,
   currentIndex,
   onCancel,
@@ -107,8 +101,6 @@ function ExportForm({
 }: {
   initialFormat: ExportFormat;
   defaultFileName: string;
-  /** Отчёт аудита отмечен заранее — так в настройках. */
-  defaultAudit?: boolean;
   slideCount: number;
   currentIndex: number;
   onCancel: () => void;
@@ -118,14 +110,13 @@ function ExportForm({
   const [format, setFormat] = useState<ExportFormat>(initialFormat);
   const [fileName, setFileName] = useState(defaultFileName);
   const [range, setRange] = useState<SlideRange>('all');
-  const [audit, setAudit] = useState(defaultAudit);
   const nameId = useId();
   const formatsId = useId();
   const rangeId = useId();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onStart({ format, fileName, range, audit });
+    onStart({ format, fileName, range });
   };
 
   return (
@@ -213,19 +204,6 @@ function ExportForm({
             </span>
           </div>
         </div>
-
-        <label className="flex items-start gap-2 text-xs text-foreground">
-          <input
-            type="checkbox"
-            checked={audit}
-            onChange={(event) => setAudit(event.currentTarget.checked)}
-            className="mt-0.5 size-3.5 accent-foreground"
-          />
-          <span className="flex flex-col gap-0.5">
-            {t('audit')}
-            <span className="text-muted-foreground">{t('auditHint')}</span>
-          </span>
-        </label>
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>

@@ -43,7 +43,5 @@
     "quote": "Quote",
     "kpiValue": "Figure",
     "kpiCaption": "Figure caption"
-  },
-  "generatedNotice": "The web canvas is an approximate view. Exact styling and editing are available in the exported PPTX. Canvas edits are not exported yet.",
-  "generatedPdf": "Open the rendered PDF"
+  }
 }

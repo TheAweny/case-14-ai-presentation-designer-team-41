@@ -77,6 +77,10 @@ export const compositionExportRequestSchema = z.object({
   templatePath: z.string().min(1),
   outputPath: z.string().min(1),
   slides: z.array(composedSlideSchema).min(1).max(60),
+  /** The day the deck is dated by, YYYY-MM-DD; the audit calls older years past. Absent: today. */
+  today: z.iso.date().optional(),
+  /** Years the brief names: a past year the brief speaks of is not a leftover. */
+  briefYears: z.array(z.number().int()).optional(),
 });
 export const compositionExportResponseSchema = z.object({
   schemaVersion: z.literal(1),

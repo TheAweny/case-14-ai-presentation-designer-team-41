@@ -18,6 +18,13 @@ export const deckExportRequestSchema = z.object({
   slides: z.array(slideIrSchema).min(1),
   outputDir: z.string().min(1).describe('Local directory the files are written to.'),
   formats: z.array(exportFormatSchema).min(1).optional().describe('Absent: pptx and pdf.'),
+  previews: z
+    .boolean()
+    .optional()
+    .describe(
+      'Render slide previews from the written file. Absent: true. The edited-deck export ' +
+        'sets it per format, so a PPTX download does not pay for PNG rendering.',
+    ),
 });
 
 export const exportedFileSchema = z.object({

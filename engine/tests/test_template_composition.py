@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.shapes.autoshape import Shape
-from pptx.util import Inches, Pt
+from pptx.util import Emu, Inches, Pt
 
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 
@@ -258,3 +258,54 @@ def test_text_is_measured_to_the_edge_of_the_pill_it_sits_on(tmp_path: Path) -> 
         return extract_compositions(tmp_path / "pill.pptx")[0]["slots"][0]["maxChars"]
 
     assert title_chars(pill=True) < title_chars(pill=False) / 2
+
+
+def _statement_deck(path: Path) -> Path:
+    """A slide with a large statement centred on it and a title at the top.
+
+    Both are top-anchored boxes that grow with their text, sized to a three-line sample.
+    """
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    height = int(deck.slide_height or 0)
+    for name, top, box in (
+        ("Title", Inches(0.4), Inches(1.2)),
+        ("Statement", Emu((height - Inches(3)) // 2), Inches(3)),
+    ):
+        shape = slide.shapes.add_textbox(Inches(1), top, Inches(6), box)
+        shape.name = name
+        shape.text_frame.text = "Большой заголовок\nв три\nстроки" if name == "Statement" else name
+        body = shape.text_frame._txBody.find(f"{_A}bodyPr")
+        assert body is not None
+        body.set("anchor", "t")
+        for child in list(body):
+            body.remove(child)
+        body.append(body.makeelement(f"{_A}spAutoFit", {}))
+        shape.text_frame.paragraphs[0].runs[0].font.size = Pt(60)
+    deck.save(str(path))
+    return path
+
+
+def test_a_statement_centred_on_the_slide_stays_centred_with_fewer_lines(
+    tmp_path: Path,
+) -> None:
+    source = _statement_deck(tmp_path / "source.pptx")
+    pattern = extract_compositions(source)[0]
+    texts = [{"slotId": s["slotId"], "text": "+15%"} for s in pattern["slots"]]
+    output = tmp_path / "out.pptx"
+    export_compositions(
+        source,
+        output,
+        [{"patternId": pattern["patternId"], "texts": texts, "speakerNotes": ""}],
+        [pattern],
+    )
+    shapes = {s.name: cast(Shape, s) for s in Presentation(str(output)).slides[0].shapes}
+    statement = shapes["Statement"].text_frame._txBody.find(f"{_A}bodyPr")
+    title = shapes["Title"].text_frame._txBody.find(f"{_A}bodyPr")
+    assert statement is not None and title is not None
+    assert statement.get("anchor") == "ctr"
+    assert statement.find(f"{_A}spAutoFit") is None
+    assert statement.find(f"{_A}noAutofit") is not None
+    # A title at the top of the slide keeps its top edge.
+    assert title.get("anchor") == "t"
+    assert title.find(f"{_A}spAutoFit") is not None

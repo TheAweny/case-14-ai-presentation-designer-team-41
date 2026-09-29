@@ -214,13 +214,39 @@ def test_exports_endpoint_writes_pptx_and_pdf(template: Path, tmp_path: Path) ->
             "variant": "balanced",
             "slides": [s.model_dump(mode="json", exclude_unset=True) for s in slides],
             "outputDir": str(tmp_path),
+            # Previews are not part of this request; without them the export needs no renderer.
             "formats": formats,
+            "previews": False,
         },
     )
     assert response.status_code == 200, response.text
     written = {f["format"]: Path(f["path"]) for f in response.json()["files"]}
     assert set(written) == set(formats)
     assert all(path.is_file() and path.stat().st_size > 0 for path in written.values())
+    assert not (tmp_path / "previews").exists()
+
+
+def test_exports_render_previews_only_when_asked(template: Path, tmp_path: Path) -> None:
+    design_system, patterns = template_profile_of(template)
+    slides = build_slide_ir(_plan(_CHART, _TABLE), design_system, patterns)
+    payload = {
+        "schemaVersion": 1,
+        "templatePath": str(template),
+        "variant": "balanced",
+        "slides": [s.model_dump(mode="json", exclude_unset=True) for s in slides],
+        "outputDir": str(tmp_path),
+        "formats": ["pptx"],
+    }
+    # Without a renderer the export still works, it just cannot draw previews.
+    response = TestClient(app).post("/v1/exports", json={**payload, "previews": False})
+    assert response.status_code == 200, response.text
+    assert not (tmp_path / "previews").exists()
+    if not (shutil.which("soffice") and shutil.which("pdftoppm")):
+        return
+    rendered = TestClient(app).post("/v1/exports", json={**payload, "previews": True})
+    assert rendered.status_code == 200, rendered.text
+    previews = list((tmp_path / "previews").glob("slide-*.png"))
+    assert len(previews) == len(slides)
 
 
 def test_figures_step_down_the_scale_until_they_fit(profile: tuple[dict[str, Any], ...]) -> None:

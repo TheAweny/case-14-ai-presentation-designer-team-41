@@ -11,7 +11,6 @@ const request: ExportRequest = {
   variant: DEMO_DECK.variant,
   slides: DEMO_DECK.slides.slice(0, 3),
   designSystem: DEMO_DECK.designSystem,
-  audit: true,
 };
 
 describe('eventsFor', () => {
@@ -23,15 +22,10 @@ describe('eventsFor', () => {
 
   it('проходит запланированные этапы и заканчивается done', () => {
     const events = eventsFor(request, 'run');
-    const progress = exportProgress(plannedStages(request), events);
+    const progress = exportProgress(plannedStages(), events);
     expect(progress.finished).toBe(true);
-    expect(progress.stages.map((stage) => stage.stage)).toEqual(plannedStages(request));
+    expect(progress.stages.map((stage) => stage.stage)).toEqual(plannedStages());
     expect(events.at(-1)?.type).toBe('done');
-  });
-
-  it('без аудита этапа аудита нет', () => {
-    const events = eventsFor({ ...request, audit: false }, 'run');
-    expect(events.some((event) => 'stage' in event && event.stage === 'auditing')).toBe(false);
   });
 });
 

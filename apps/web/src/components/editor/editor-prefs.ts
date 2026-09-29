@@ -73,8 +73,6 @@ export type EditorPrefs = {
   slideCount: number | null;
   exportFormat: ExportFormat;
   exportName: ExportName;
-  /** Отчёт аудита и манифест к экспорту — отмечено заранее. */
-  exportAudit: boolean;
 };
 
 export const EDITOR_PREFS_DEFAULT: EditorPrefs = {
@@ -91,7 +89,6 @@ export const EDITOR_PREFS_DEFAULT: EditorPrefs = {
   slideCount: null,
   exportFormat: 'pptx',
   exportName: 'title',
-  exportAudit: false,
 };
 
 function oneOf<T>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -164,7 +161,6 @@ export function parseEditorPrefs(raw: string | null | undefined): EditorPrefs {
     slideCount: slideCount(prefs.slideCount),
     exportFormat: oneOf(prefs.exportFormat, EXPORT_FORMATS, fallback.exportFormat),
     exportName: oneOf(prefs.exportName, EXPORT_NAMES, fallback.exportName),
-    exportAudit: flag(prefs.exportAudit, fallback.exportAudit),
   };
 }
 

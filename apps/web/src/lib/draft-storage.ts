@@ -1,5 +1,13 @@
 import { createStore, del, get, keys, set } from 'idb-keyval';
-import { draftKey, mediaKey, mediaPrefix, readDraft, type DeckDraft } from './deck-draft';
+import type { SlideIr } from '@lct/contracts';
+import {
+  deckFingerprint,
+  draftKey,
+  mediaKey,
+  mediaPrefix,
+  readDraft,
+  type DeckDraft,
+} from './deck-draft';
 
 /**
  * Где лежат черновики колод. В браузере — IndexedDB через `idb-keyval`, в тестах — `Map`.
@@ -69,6 +77,22 @@ export function createDraftStorage(store: KeyValueStore): DraftStorage {
     },
     clear,
   };
+}
+
+/**
+ * Слайды черновика колоды, если он относится к этой же сборке, иначе null. Экспорт из карточки
+ * результата идёт по ним, а не по исходной колоде: удаление и перестановка объектов в редакторе
+ * доезжают до файла. Черновика нет, он битый или от другой сборки — экспортируется исходная колода.
+ */
+export async function editedSlidesOf(
+  store: KeyValueStore | null,
+  deckId: string,
+  origin: readonly SlideIr[],
+): Promise<readonly SlideIr[] | null> {
+  if (!store) return null;
+  const raw = await store.get(draftKey(deckId));
+  const draft = readDraft(raw, { deckId, base: deckFingerprint(origin) });
+  return draft ? draft.slides : null;
 }
 
 /** База и таблица черновиков в IndexedDB. Имена — свои, чтобы не делить базу с кем-то ещё. */

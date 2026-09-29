@@ -30,8 +30,6 @@
   "allSlides": "Все · {count}",
   "currentSlide": "Текущий · {number}",
   "fileName": "Имя файла",
-  "audit": "Проверить аудитом перед выгрузкой",
-  "auditHint": "Отчёт о замечаниях придёт вместе с файлом",
   "cancel": "Отмена",
   "start": "Скачать {extension}",
   "runningFile": "{file} · {count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",

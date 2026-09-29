@@ -100,6 +100,8 @@ export interface ServerRun {
   readonly runId: string;
   /** Все варианты вёрстки этой сборки, включая `runId`. */
   readonly variantRunIds: readonly string[];
+  /** Имена вариантов вёрстки для тех же прогонов, когда их знает источник. */
+  readonly variants?: readonly { readonly variant: string; readonly runId: string }[];
 }
 
 export interface DeckGenerator {

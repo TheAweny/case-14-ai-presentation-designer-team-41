@@ -41,6 +41,21 @@ export const auditRequestSchema = z.object({
     .record(z.string(), mediaSizeSchema)
     .optional()
     .describe('Pixel size per mediaPart, for pictures the engine cannot open itself.'),
+  slotSamples: z
+    .record(z.string(), z.record(z.string(), z.string()))
+    .optional()
+    .describe(
+      'Text each element showed in the template sample it was built from, by slideId and ' +
+        'elementId. Lets the audit tell template copy left in place.',
+    ),
+  today: z.iso
+    .date()
+    .optional()
+    .describe('The day the deck is dated by; earlier years are past. Absent: today.'),
+  knownYears: z
+    .array(z.number().int())
+    .optional()
+    .describe('Years the source content names; a past year it names is not stale.'),
 });
 
 export const categorySummarySchema = z.object({

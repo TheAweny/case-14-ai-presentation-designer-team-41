@@ -9,6 +9,7 @@ import pytest
 from engine.api.app import app
 from fastapi.testclient import TestClient
 from pptx import Presentation
+from pptx.util import Emu
 
 from engine import render
 
@@ -125,7 +126,7 @@ def test_upload_keeps_all_slides_and_bounds_optional_preview(tmp_path, monkeypat
 def test_template_previews_draw_every_slide_at_the_requested_width(tmp_path, monkeypatch):
     source = tmp_path / "template.pptx"
     deck = Presentation()
-    deck.slide_width = 914400 * 20
+    deck.slide_width = Emu(914400 * 20)
     deck.save(source)
     seen = {}
 

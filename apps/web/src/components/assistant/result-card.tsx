@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import {
@@ -12,7 +12,7 @@ import {
   SuccessIcon,
   WarningIcon,
 } from '@/components/ui/icons';
-import type { LayoutVariant } from '@lct/contracts';
+import type { LayoutVariant, SlideIr } from '@lct/contracts';
 import { SlidePreview } from '@/components/library/slide-preview';
 import { ExportDialog, type ExportOptions } from '@/components/editor/export-dialog';
 import { SlideShow } from '@/components/editor/slide-show';
@@ -21,6 +21,7 @@ import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { Button } from '@/components/ui/button';
 import type { DeckResult, VariantReview } from '@/lib/variant-review';
 import { datedFileName, safeFileName } from '@/lib/deck-export';
+import { browserDraftStore, editedSlidesOf } from '@/lib/draft-storage';
 import { createHttpExporter } from '@/lib/http-generation';
 import { deckHref } from '@/lib/library-menu';
 import { cn } from '@/lib/utils';
@@ -355,18 +356,35 @@ function VariantViews({
   const job = useDeckExport(exporter);
   const { deck, media } = variantDeck;
   const resolveMedia = mediaResolver(media);
-  const labels = deck.slides.map((_, at) => tSlides('slide', { number: at + 1 }));
+  // Правки редактора живут в черновике браузера: экспорт идёт по ним, а не по исходной колоде —
+  // удаление и перестановка объектов доезжают до файла.
+  const [editedSlides, setEditedSlides] = useState<readonly SlideIr[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void editedSlidesOf(browserDraftStore(), deck.deckId, deck.slides)
+      .then((slides) => {
+        if (live) setEditedSlides(slides);
+      })
+      .catch(() => {
+        if (live) setEditedSlides(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [deck.deckId, deck.slides]);
+  const slides = editedSlides ?? deck.slides;
+  const labels = slides.map((_, at) => tSlides('slide', { number: at + 1 }));
 
   const startExport = (options: ExportOptions) => {
-    const slides = options.range === 'all' ? deck.slides : deck.slides.slice(0, 1);
+    const chosen = options.range === 'all' ? slides : slides.slice(0, 1);
+    if (chosen.length === 0) return;
     job.start({
       deckId: deck.deckId,
       fileName: safeFileName(options.fileName, safeFileName(deck.title, tEditor('untitled'))),
       format: options.format,
       variant: deck.variant,
-      slides,
+      slides: chosen,
       designSystem: deck.designSystem,
-      audit: options.audit,
     });
   };
 
@@ -380,15 +398,15 @@ function VariantViews({
             if (!next) onGalleryClose();
           }}
           title={deck.title}
-          description={t('galleryNote', { variant: variantName, count: deck.slides.length })}
-          slides={deck.slides}
+          description={t('galleryNote', { variant: variantName, count: slides.length })}
+          slides={slides}
           designSystem={deck.designSystem}
           resolveMedia={resolveMedia}
         />
       ) : null}
       {show ? (
         <SlideShow
-          slides={deck.slides}
+          slides={slides}
           designSystem={deck.designSystem}
           labels={labels}
           start={0}
@@ -406,8 +424,7 @@ function VariantViews({
             ? datedFileName(safeFileName(deck.title, tEditor('untitled')), new Date())
             : safeFileName(deck.title, tEditor('untitled'))
         }
-        defaultAudit={prefs.exportAudit}
-        slideCount={deck.slides.length}
+        slideCount={slides.length}
         currentIndex={0}
         variant={deck.variant}
         onStart={startExport}

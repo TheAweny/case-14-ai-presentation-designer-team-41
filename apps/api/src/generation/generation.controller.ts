@@ -6,21 +6,26 @@ import {
   HttpCode,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Patch,
   Post,
-  Logger,
+  ServiceUnavailableException,
   StreamableFile,
 } from '@nestjs/common';
-import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, readdir, rename, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import {
   designSystemSchema,
   generationRequestSchema,
+  slideIrSchema,
   storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
+import type { SlideIr } from '@lct/contracts';
 import { buildOf, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -246,6 +251,85 @@ export class GenerationController {
     return new StreamableFile(await readFile(path), {
       type,
       disposition: `attachment; filename="${basename(path)}"`,
+    });
+  }
+
+  /**
+   * The edited deck the user sees in the editor is drawn again as a native PPTX (plus PDF and
+   * slide previews on request), so the download reproduces exactly what the editor shows.
+   */
+  @Post(':id/export')
+  async exportEdited(
+    @Param('id') id: string,
+    @Body() body: { slides?: unknown; variant?: unknown; format?: unknown },
+    @CurrentAccount() account: Account,
+  ): Promise<{ exportId: string; previews: string[] }> {
+    await this.completed(id, account);
+    const slides = Array.isArray(body.slides)
+      ? body.slides.map((slide) => slideIrSchema.parse(slide))
+      : [];
+    if (!slides.length) throw new BadRequestException('At least one slide is required.');
+    const variant = body.variant === 'dense' || body.variant === 'airy' ? body.variant : 'balanced';
+    // The requested download decides what the engine builds: a PPTX pays for neither PDF nor
+    // previews, PDF skips previews, PNG and HTML are built from the rendered previews.
+    const format =
+      body.format === 'pdf' || body.format === 'png' || body.format === 'html'
+        ? body.format
+        : 'pptx';
+    const formats: ('pptx' | 'pdf')[] = format === 'pdf' ? ['pptx', 'pdf'] : ['pptx'];
+    const previews = format === 'png' || format === 'html';
+    const exportId = randomUUID();
+    const outputDir = join(this.directory(id), 'exports', exportId);
+    await mkdir(outputDir, { recursive: true });
+    try {
+      await this.engine.exportDeck({
+        schemaVersion: 1,
+        templatePath: join(this.directory(id), 'deck.pptx'),
+        variant,
+        slides: slides as SlideIr[],
+        outputDir,
+        formats,
+        previews,
+      });
+      await rename(join(outputDir, `${variant}.pptx`), join(outputDir, 'deck.pptx'));
+      if (format === 'pdf')
+        await rename(join(outputDir, `${variant}.pdf`), join(outputDir, 'deck.pdf'));
+      const previewNames = previews
+        ? (await readdir(join(outputDir, 'previews'))).filter((name) =>
+            /^slide-\d+\.png$/.test(name),
+          )
+        : [];
+      if (previews && !previewNames.length) throw new Error('Engine produced no export previews.');
+      return { exportId, previews: previewNames };
+    } catch (error) {
+      await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
+      throw new ServiceUnavailableException(
+        error instanceof Error ? error.message : 'Edited deck export failed.',
+      );
+    }
+  }
+
+  @Get(':id/exports/:exportId/:name')
+  async editedArtifact(
+    @Param('id') id: string,
+    @Param('exportId') exportId: string,
+    @Param('name') name: string,
+    @CurrentAccount() account: Account,
+  ): Promise<StreamableFile> {
+    await this.completed(id, account);
+    if (!/^[0-9a-f-]{36}$/i.test(exportId) || !/^(deck\.(pptx|pdf)|slide-\d+\.png)$/.test(name))
+      throw new NotFoundException('Artifact not found.');
+    const root = join(this.directory(id), 'exports', exportId);
+    const path = name.startsWith('slide-') ? join(root, 'previews', name) : join(root, name);
+    if (!existsSync(path)) throw new NotFoundException('Artifact not found.');
+    const type = name.endsWith('.pptx')
+      ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      : name.endsWith('.pdf')
+        ? 'application/pdf'
+        : 'image/png';
+    return new StreamableFile(await readFile(path), {
+      type,
+      disposition: `attachment; filename="${name}"`,
     });
   }
 

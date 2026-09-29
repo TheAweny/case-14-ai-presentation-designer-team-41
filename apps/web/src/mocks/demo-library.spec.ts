@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { auditStatusOf } from '../components/library/audit-status';
 import {
   DECK_TITLE_MAX_LENGTH,
   DeckNotFoundError,
@@ -572,19 +571,5 @@ describe('перенос презентации (updateDeck с projectId)', () =
       projectId: 'hackathon',
     });
     expect(updated).toMatchObject({ title: 'Адаптация', projectId: 'hackathon' });
-  });
-});
-
-describe('auditStatusOf', () => {
-  it('null — аудит не запускали', () => {
-    expect(auditStatusOf(null)).toEqual({ kind: 'notRun' });
-  });
-
-  it('ноль замечаний — чисто', () => {
-    expect(auditStatusOf(0)).toEqual({ kind: 'clean' });
-  });
-
-  it('замечания — их число', () => {
-    expect(auditStatusOf(3)).toEqual({ kind: 'findings', count: 3 });
   });
 });

@@ -128,9 +128,7 @@
       "nameHint": {
         "title": "The file is named after the deck.",
         "title-date": "The date goes after the title: “Report 2026-09-26”."
-      },
-      "audit": "Attach the audit report",
-      "auditHint": "The check report and run manifest next to the file."
+      }
     }
   },
   "models": {

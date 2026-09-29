@@ -24,6 +24,8 @@ import {
   type SharedPlan,
   repairedSlideSchema,
   type repairTaskSchema,
+  briefYears,
+  withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
@@ -35,7 +37,13 @@ type EventData = {
   >;
 }[JobEvent['type']];
 /** Checks of the deterministic audit whose findings a rewrite of the slot's copy can fix. */
-const REWRITABLE = new Set(['placeholder-text', 'bullet-length', 'bullet-count', 'text-clipped']);
+const REWRITABLE = new Set([
+  'placeholder-text',
+  'bullet-length',
+  'bullet-count',
+  'text-clipped',
+  'template-leftover',
+]);
 
 export interface GenerateOptions {
   runId: string;
@@ -56,6 +64,8 @@ export interface GenerateOptions {
   variant?: DeckVariant;
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
+  /** The day the deck is dated by. Absent: today. */
+  today?: Date;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
 }
@@ -81,7 +91,16 @@ export async function generatePresentation(options: GenerateOptions) {
     return events;
   };
   await mkdir(options.outputDir, { recursive: true });
+  // A card heading the template placed highest reads as a heading everywhere: in the plan, the
+  // writer, the critic and the repair.
+  const profile = withCardHeadingProfile(options.profile);
+  // One date for the whole run: the writer and the audit judge years by the same day.
+  const today = options.today ?? new Date();
   try {
+    // Warnings collected from repairs and audits; recorded in the deck and streamed as events.
+    const reviewWarnings: string[] = [];
+    const warn = (message: string) =>
+      emit({ type: 'warning', stage, code: 'content-review-required', message });
     const planner = await loadAgent(join(options.registryDir, 'deck-planner'));
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
@@ -107,6 +126,7 @@ export async function generatePresentation(options: GenerateOptions) {
       repairInstructions: rewriter.instructions,
       variant: options.variant ?? 'balanced',
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
+      today,
       signal,
       concurrency: 3,
       ...(options.notes ? { notes: options.notes } : {}),
@@ -118,6 +138,10 @@ export async function generatePresentation(options: GenerateOptions) {
           total,
           note: 'Подготовлено содержание слайда',
         }),
+      onWarning: async (message) => {
+        reviewWarnings.push(message);
+        await warn(message);
+      },
     });
     const repairWorkflow = createRepairWorkflow({
       provider: options.provider,
@@ -125,8 +149,13 @@ export async function generatePresentation(options: GenerateOptions) {
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
       variant: options.variant ?? 'balanced',
+      today,
       signal,
       concurrency: 3,
+      onWarning: async (message) => {
+        reviewWarnings.push(message);
+        await warn(message);
+      },
     });
     const mastra = createMastra({
       storageUrl: `file:${join(options.outputDir, 'mastra.db')}`,
@@ -138,7 +167,7 @@ export async function generatePresentation(options: GenerateOptions) {
       inputData: {
         brief: options.brief,
         slideCount: options.slideCount,
-        profile: options.profile,
+        profile,
         outline: options.outline ?? null,
       },
     });
@@ -161,9 +190,15 @@ export async function generatePresentation(options: GenerateOptions) {
       templatePath: options.templatePath,
       outputPath: join(options.outputDir, 'deck.pptx'),
       slides: written.map((s) => s.slide),
+      // The local day, as the writer dates the deck; toISOString would give the UTC one.
+      today: [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-'),
+      briefYears: briefYears(options.brief),
     });
     const auditHistory = [];
-    const reviewWarnings: string[] = [];
     for (let attempt = 0; attempt < 3; attempt++) {
       const [fit, critique] = await Promise.all([
         options.engine.checkCompositions(exportRequest(), signal),
@@ -173,9 +208,7 @@ export async function generatePresentation(options: GenerateOptions) {
           {
             brief: options.brief,
             slides: written.map((s) => {
-              const pattern = options.profile.compositions.find(
-                (p) => p.patternId === s.slide.patternId,
-              );
+              const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
               return {
                 slideIndex: s.index,
                 patternId: s.slide.patternId,
@@ -223,8 +256,16 @@ export async function generatePresentation(options: GenerateOptions) {
       ];
       if (!issues.length) break;
       if (attempt === 2) {
-        if (fit.findings.length)
-          throw new Error(`Quality gate failed: ${JSON.stringify(fit.findings)}`);
+        // The bounded repair could not cure every defect, yet the deck is still produced: the
+        // remaining findings become warnings. Three variants are mandatory, so a stuck quality
+        // gate must not drop one of them.
+        for (const finding of fit.findings) {
+          const message =
+            `Слайд ${finding.slideIndex + 1}, ${finding.slotId}: ${finding.message} ` +
+            `Maximum ${finding.maxChars} characters, ${finding.maxLines} lines.`;
+          reviewWarnings.push(message);
+          await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        }
         for (const issue of critique.issues) {
           const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
           reviewWarnings.push(message);
@@ -236,9 +277,7 @@ export async function generatePresentation(options: GenerateOptions) {
       for (const current of written) {
         const corrections = issues.filter((i) => i.slideIndex === current.index);
         if (!corrections.length) continue;
-        const pattern = options.profile.compositions.find(
-          (p) => p.patternId === current.slide.patternId,
-        );
+        const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
         if (!pattern) throw new Error('Missing composition during repair.');
         const composition = {
           ...pattern,
@@ -259,10 +298,29 @@ export async function generatePresentation(options: GenerateOptions) {
           corrections,
         });
       }
-      if (!tasks.length) throw new Error('Critic returned invalid slide references.');
+      if (!tasks.length) {
+        // The critic named slides the deck does not have: report the issues and finish instead
+        // of failing the variant, which would leave the user with fewer than three decks.
+        for (const issue of issues) {
+          const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
+          reviewWarnings.push(message);
+          await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        }
+        break;
+      }
       const repairRun = await mastra.getWorkflow('repair').createRun();
       const repaired = await repairRun.start({ inputData: tasks });
-      if (repaired.status !== 'success') throw new Error(`Repair workflow ${repaired.status}`);
+      if (repaired.status !== 'success') {
+        // A failed repair keeps the previous copy: the run goes on with a warning instead of
+        // failing, so the variant still reaches the export with the other two.
+        const message =
+          repaired.status === 'failed'
+            ? repaired.error.message
+            : `Repair workflow ${repaired.status}`;
+        reviewWarnings.push(message);
+        await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        continue;
+      }
       for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
         const current = written.find((s) => s.index === update.index);
         if (current) current.slide = update.slide;
@@ -313,9 +371,7 @@ export async function generatePresentation(options: GenerateOptions) {
             slotId: (f.target.elementId ?? '').slice('slot-'.length),
             message: `${f.title}: ${f.detail} (${f.evidence.measured}; ${f.evidence.expected})`,
           }));
-        const pattern = options.profile.compositions.find(
-          (p) => p.patternId === current.slide.patternId,
-        );
+        const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
         if (corrections.length && pattern) {
           tasks.push({
             index: current.index,

@@ -156,12 +156,14 @@ describe('real generation orchestration with offline dependencies', () => {
     await run.result;
     expect(run.counters()).toEqual({ checks: 2, exports: 1, repairs: 1 });
   });
-  it('does not export or mark done when fit still fails after bounded repair', async () => {
+  it('still exports the deck when fit fails after bounded repair, warning instead of dropping the variant', async () => {
     const run = await exercise('unfixable');
-    await expect(run.result).rejects.toThrow('Quality gate failed');
-    expect(run.counters()).toEqual({ checks: 3, exports: 0, repairs: 2 });
-    expect(run.events.at(-1)).toBe('failed');
+    await run.result;
+    // Three variants are mandatory: an unfixable overflow is reported, not fatal.
+    expect(run.counters()).toEqual({ checks: 3, exports: 1, repairs: 2 });
+    expect(run.events.at(-1)).toBe('done');
     expect(JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'))).toHaveLength(3);
+    expect(run.warnings.some((w) => w.code === 'content-review-required')).toBe(true);
   });
   it('never calls the engine export on cancellation', async () => {
     const run = await exercise('cancel');
