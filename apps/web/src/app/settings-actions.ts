@@ -5,6 +5,7 @@ import {
   InvalidModelSettingsError,
   ModelKeysUnavailableError,
   type ConnectionCheck,
+  type ConnectionModelsInput,
   type ConnectionInput,
   type ConnectionProblems,
   type ModelConnection,
@@ -106,6 +107,19 @@ export async function setRoleAction(assignment: RoleAssignment): Promise<Setting
   const source = modelSettingsSource((await requireAccount()).userId);
   try {
     await source.setRole(assignment);
+    return { ok: true, settings: await source.get() };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Какие модели подключения доступны. `null` снимает ограничение. */
+export async function setConnectionModelsAction(
+  input: ConnectionModelsInput,
+): Promise<SettingsResult> {
+  const source = modelSettingsSource((await requireAccount()).userId);
+  try {
+    await source.setConnectionModels(input);
     return { ok: true, settings: await source.get() };
   } catch (error) {
     return failure(error);

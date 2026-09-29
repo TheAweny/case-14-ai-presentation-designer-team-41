@@ -52,7 +52,23 @@
     "manage": "Manage models…",
     "search": "Find a model",
     "notFound": "Nothing found",
-    "pinned": "Selected and default"
+    "pinned": "Selected and default",
+    "all": "All",
+    "families": {
+      "gpt": "GPT",
+      "claude": "Claude",
+      "gemini": "Gemini",
+      "qwen": "Qwen",
+      "llama": "Llama",
+      "deepseek": "DeepSeek",
+      "mistral": "Mistral",
+      "grok": "Grok",
+      "command": "Command",
+      "phi": "Phi",
+      "gemma": "Gemma",
+      "yi": "Yi",
+      "other": "Other"
+    }
   },
   "prompt": {
     "stop": "Stop",

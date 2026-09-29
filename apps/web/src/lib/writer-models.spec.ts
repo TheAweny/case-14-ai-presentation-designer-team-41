@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { PIPELINE_ROLES, type ModelConnection, type ModelSettings } from './model-settings';
 import {
+  byFamily,
   effectiveModel,
+  modelFamilies,
   modelRows,
   sameModel,
   shortModelName,
@@ -25,6 +27,10 @@ function connection(connectionId: string, models: readonly string[] | null): Mod
         : { ok: true, at: AT, models: [...models] },
     managed: false,
   };
+}
+
+function limited(base: ModelConnection, enabledModels: readonly string[] | null): ModelConnection {
+  return { ...base, enabledModels: enabledModels === null ? null : [...enabledModels] };
 }
 
 function settings(
@@ -65,6 +71,29 @@ describe('writerModels', () => {
     const list = writerModels(settings([], { connectionId: 'gone', modelId: 'x' }));
     expect(list.assigned).toBeNull();
     expect(list.count).toBe(0);
+  });
+
+  it('hides a model that was switched off, and one typed by hand past the list', () => {
+    const list = writerModels(
+      settings(
+        [limited(connection('cloud', ['gpt-4o', 'qwen3:8b', 'claude-3-7-sonnet']), ['qwen3:8b'])],
+        { connectionId: 'cloud', modelId: 'typed-by-hand' },
+      ),
+    );
+    expect(list.groups[0]?.models).toEqual(['qwen3:8b']);
+  });
+
+  it('drops a hand-typed model once that exact id is switched off', () => {
+    const list = writerModels(
+      settings([limited(connection('cloud', ['gpt-4o', 'qwen3:8b']), ['gpt-4o'])], {
+        connectionId: 'cloud',
+        modelId: 'qwen3:8b',
+      }),
+    );
+    expect(list.groups[0]?.models).toEqual(['gpt-4o']);
+    expect(list.assigned).toEqual({ connectionId: 'cloud', modelId: 'qwen3:8b' });
+    // The run does not go to the switched-off default: the server would refuse it.
+    expect(effectiveModel(list, null)).toEqual({ connectionId: 'cloud', modelId: 'gpt-4o' });
   });
 });
 
@@ -163,5 +192,23 @@ describe('modelRows', () => {
   it('skips headers for a short list on one server', () => {
     const short = writerModels(settings([connection('a', ['one', 'two'])]));
     expect(modelRows(short, null, '').every((row) => row.kind === 'model')).toBe(true);
+  });
+
+  it('groups models by family in chip order, keeping the list order inside', () => {
+    expect(byFamily(['qwen3:8b', 'dolphin', 'gpt-4o', 'qwen2.5', 'gpt-4o-mini'])).toEqual([
+      { family: 'gpt', models: ['gpt-4o', 'gpt-4o-mini'] },
+      { family: 'qwen', models: ['qwen3:8b', 'qwen2.5'] },
+      { family: 'other', models: ['dolphin'] },
+    ]);
+    expect(byFamily([])).toEqual([]);
+  });
+
+  it('keeps only the family that was chosen', () => {
+    const mixed = writerModels(
+      settings([connection('cloud', ['gpt-4o', 'claude-3-7-sonnet', 'qwen3:8b', 'dolphin'])]),
+    );
+    expect(modelFamilies(mixed)).toEqual(['gpt', 'claude', 'qwen', 'other']);
+    expect(models(modelRows(mixed, null, '', 'qwen'))).toEqual(['qwen3:8b']);
+    expect(models(modelRows(mixed, null, '', 'other'))).toEqual(['dolphin']);
   });
 });

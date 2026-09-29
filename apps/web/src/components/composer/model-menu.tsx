@@ -20,9 +20,11 @@ import { cn } from '@/lib/utils';
 import {
   MODEL_SEARCH_FROM,
   effectiveModel,
+  modelFamilies,
   modelRows,
   sameModel,
   shortModelName,
+  type ModelFamilyFilter,
   type ModelRow,
   type WriterModels,
 } from '@/lib/writer-models';
@@ -170,8 +172,13 @@ function ModelList({
   const listId = useId();
   const list = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
+  const [family, setFamily] = useState<ModelFamilyFilter>('all');
+  const families = modelFamilies(models);
   const searchable = models.count >= MODEL_SEARCH_FROM;
-  const rows = useMemo(() => modelRows(models, selected, query), [models, selected, query]);
+  const rows = useMemo(
+    () => modelRows(models, selected, query, family),
+    [models, selected, query, family],
+  );
   const [active, setActive] = useState(() => {
     const at = rows.findIndex((row) => row.kind === 'model' && sameModel(row.ref, selected));
     return at >= 0 ? at : firstModel(rows);
@@ -232,11 +239,33 @@ function ModelList({
             onChange={(event) => {
               const next = event.currentTarget.value;
               setQuery(next);
-              setActive(firstModel(modelRows(models, selected, next)));
+              setActive(firstModel(modelRows(models, selected, next, family)));
             }}
             onKeyDown={onKeyDown}
             className="h-9 min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
           />
+        </div>
+      ) : null}
+      {families.length > 1 ? (
+        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-1.5">
+          {(['all', ...families] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={family === option}
+              onClick={() => {
+                setFamily(option);
+                setActive(firstModel(modelRows(models, selected, query, option)));
+              }}
+              className={cn(
+                'shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] text-muted-foreground outline-none',
+                'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                family === option && 'bg-accent text-accent-foreground',
+              )}
+            >
+              {option === 'all' ? t('all') : t(`families.${option}`)}
+            </button>
+          ))}
         </div>
       ) : null}
       <div

@@ -52,7 +52,23 @@
     "manage": "Настроить модели…",
     "search": "Найти модель",
     "notFound": "Ничего не нашлось",
-    "pinned": "Выбрана и по умолчанию"
+    "pinned": "Выбрана и по умолчанию",
+    "all": "Все",
+    "families": {
+      "gpt": "GPT",
+      "claude": "Claude",
+      "gemini": "Gemini",
+      "qwen": "Qwen",
+      "llama": "Llama",
+      "deepseek": "DeepSeek",
+      "mistral": "Mistral",
+      "grok": "Grok",
+      "command": "Command",
+      "phi": "Phi",
+      "gemma": "Gemma",
+      "yi": "Yi",
+      "other": "Другие"
+    }
   },
   "prompt": {
     "stop": "Остановить",

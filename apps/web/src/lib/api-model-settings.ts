@@ -65,5 +65,13 @@ export function createApiModelSettings(userId: string): ModelSettingsSource {
     async setRole(assignment) {
       await call('/roles', { method: 'PUT', body: json(assignment) });
     },
+    async setConnectionModels(input) {
+      return modelConnectionSchema.parse(
+        await call(`/connections/${encodeURIComponent(input.connectionId)}/models`, {
+          method: 'PUT',
+          body: json({ enabledModels: input.enabledModels }),
+        }),
+      );
+    },
   };
 }

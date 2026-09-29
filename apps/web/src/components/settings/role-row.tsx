@@ -2,16 +2,20 @@
 
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronDownIcon } from '@/components/ui/icons';
+import { CheckIcon, ChevronDownIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -19,10 +23,13 @@ import {
   ROLE_MODEL_KIND,
   isRoleOptional,
   knownModels,
+  modelOffered,
+  modelsLimited,
   type ModelConnection,
   type RoleAssignment,
 } from '@/lib/model-settings';
 import { cn } from '@/lib/utils';
+import { MODEL_SEARCH_FROM, byFamily } from '@/lib/writer-models';
 import { StatusDot } from './status-dot';
 
 /** Значение пункта меню: пара «подключение, модель» без риска склеить разделитель с id. */
@@ -35,7 +42,9 @@ export const OWN_ESCAPE_ATTRIBUTE = 'data-own-escape';
 
 /**
  * Строка роли: что роль делает и кто её выполняет. Модель выбирают из списка последней проверки
- * подключения; если списка нет — или нужной модели в нём нет, — id вписывают вручную.
+ * подключения; если списка нет — или нужной модели в нём нет, — id вписывают вручную. Длинный
+ * список подключения разложен по семействам, каждое — своим подменю. У подключения, где часть
+ * моделей выключена, вписать id нельзя: так обходили бы выключение.
  */
 export function RoleRow({
   assignment,
@@ -47,6 +56,7 @@ export function RoleRow({
   onChange: (next: RoleAssignment) => void;
 }) {
   const t = useTranslations('settings.models.roles');
+  const tFamilies = useTranslations('composer.model.families');
   const { role } = assignment;
   const [manualFor, setManualFor] = useState<string | null>(null);
   const manualAsked = useRef<string | null>(null);
@@ -147,39 +157,69 @@ export function RoleRow({
               >
                 {connections.map((connection, index) => {
                   const models = [...knownModels(connection)];
-                  // Вписанная вручную модель тоже видна в списке и отмечена.
+                  // Вписанная вручную модель тоже видна в списке и отмечена, пока её не выключили.
                   if (
                     assignment.kind === 'model' &&
                     assignment.connectionId === connection.connectionId &&
-                    !models.includes(assignment.modelId)
+                    !models.includes(assignment.modelId) &&
+                    modelOffered(connection, assignment.modelId)
                   ) {
                     models.unshift(assignment.modelId);
                   }
+                  const families = byFamily(models);
+                  const grouped = models.length >= MODEL_SEARCH_FROM && families.length > 1;
+                  const item = (modelId: string) => (
+                    <DropdownMenuRadioItem
+                      key={modelId}
+                      value={modelValue(connection.connectionId, modelId)}
+                      className="font-mono"
+                    >
+                      <span className="truncate">{modelId}</span>
+                    </DropdownMenuRadioItem>
+                  );
                   return (
                     <div key={connection.connectionId} role="group" aria-label={connection.name}>
                       {index > 0 ? <DropdownMenuSeparator /> : null}
                       <DropdownMenuLabel className="truncate">{connection.name}</DropdownMenuLabel>
                       {models.length === 0 ? (
                         <DropdownMenuItem disabled>{t('picker.noModels')}</DropdownMenuItem>
-                      ) : (
-                        models.map((modelId) => (
-                          <DropdownMenuRadioItem
-                            key={modelId}
-                            value={modelValue(connection.connectionId, modelId)}
-                            className="font-mono"
-                          >
-                            <span className="truncate">{modelId}</span>
-                          </DropdownMenuRadioItem>
+                      ) : grouped ? (
+                        families.map((group) => (
+                          <DropdownMenuSub key={group.family}>
+                            <DropdownMenuSubTrigger>
+                              <span className="min-w-0 flex-1 truncate">
+                                {tFamilies(group.family)}
+                              </span>
+                              {group.models.some(
+                                (modelId) =>
+                                  modelValue(connection.connectionId, modelId) === current,
+                              ) ? (
+                                <CheckIcon aria-hidden />
+                              ) : null}
+                              <span className="text-muted-foreground tabular-nums">
+                                {group.models.length}
+                              </span>
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuPortal>
+                              <DropdownMenuSubContent className="max-h-80 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto">
+                                {group.models.map(item)}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuPortal>
+                          </DropdownMenuSub>
                         ))
+                      ) : (
+                        models.map(item)
                       )}
-                      <DropdownMenuItem
-                        className="text-muted-foreground"
-                        onSelect={() => {
-                          manualAsked.current = connection.connectionId;
-                        }}
-                      >
-                        {t('picker.manual')}
-                      </DropdownMenuItem>
+                      {modelsLimited(connection) ? null : (
+                        <DropdownMenuItem
+                          className="text-muted-foreground"
+                          onSelect={() => {
+                            manualAsked.current = connection.connectionId;
+                          }}
+                        >
+                          {t('picker.manual')}
+                        </DropdownMenuItem>
+                      )}
                     </div>
                   );
                 })}
@@ -229,9 +269,14 @@ function PickerValue({
     );
   }
   const connection = connections.find((item) => item.connectionId === assignment.connectionId);
+  // Модель выключили уже после назначения: прогон с ней не начнётся, роль надо переназначить.
+  const off = connection !== undefined && !modelOffered(connection, assignment.modelId);
   return (
-    <span className="flex min-w-0 items-baseline gap-1.5">
-      <span className="truncate font-mono">{assignment.modelId}</span>
+    <span className="flex min-w-0 items-center gap-1.5" title={off ? t('picker.off') : undefined}>
+      {off ? <StatusDot tone="warning" /> : null}
+      <span className={cn('truncate font-mono', off && 'text-muted-foreground line-through')}>
+        {assignment.modelId}
+      </span>
       {connection ? (
         <span className="max-w-24 shrink-0 truncate text-muted-foreground">{connection.name}</span>
       ) : null}

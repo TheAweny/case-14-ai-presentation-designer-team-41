@@ -155,11 +155,13 @@
         "unchecked": "Not checked",
         "checking": "Checking…",
         "ok": "{count, plural, =0 {Checked · no models} one {Checked · # model} other {Checked · # models}}",
+        "okLimited": "Checked · {enabled} of {count} on",
         "failed": "Error: {reason}"
       },
       "menu": {
         "label": "Actions for connection “{name}”",
         "check": "Check",
+        "models": "Models",
         "edit": "Edit",
         "delete": "Delete"
       },
@@ -172,7 +174,21 @@
       "managed": "server .env",
       "managedHint": "Set at installation in the server .env: it can only be checked here.",
       "shared": "Shared",
-      "sharedHint": "Set up by an administrator: everyone can use its models, only an administrator changes it."
+      "sharedHint": "Set up by an administrator: everyone can use its models, only an administrator changes it.",
+      "models": {
+        "back": "Back to connections",
+        "hint": "A model you switch off disappears from the picker for everyone who uses this connection, and a run with it will not start. Until you switch one off, any model is available, including new ones the server adds.",
+        "readOnly": "The list is set by whoever can change this connection. Here you can only look at it.",
+        "unchecked": "Check the connection first — its models will show up here.",
+        "search": "Find a model",
+        "empty": "Nothing found",
+        "summaryAll": "{count, plural, one {# model on} other {All # models on}}, new ones too",
+        "summary": "{enabled} of {count} on",
+        "enableAll": "Switch all on",
+        "disableAll": "Switch all off",
+        "enableShown": "Switch shown on",
+        "disableShown": "Switch shown off"
+      }
     },
     "errors": {
       "unreachable": "server unreachable",
@@ -254,7 +270,8 @@
         "label": "Model for the “{role}” role",
         "noModels": "Model list not received",
         "manual": "Type a model id…",
-        "clear": "Clear assignment"
+        "clear": "Clear assignment",
+        "off": "This model is switched off in the connection settings: a run with it will not start"
       },
       "manual": {
         "label": "Model id on connection “{connection}”",
