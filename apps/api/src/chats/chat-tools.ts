@@ -64,6 +64,30 @@ export function chatDecks(messages: readonly ChatMessage[]): Set<string> {
   );
 }
 
+/**
+ * The object of a deck the person attached from the editor, as it was when they sent it: the
+ * latest attachment of that slide that names it. The agent edits only what it was shown.
+ */
+export function pointedElement(
+  messages: readonly ChatMessage[],
+  target: { deckId: string; slideNumber: number; elementId: string },
+): { kind: string; text: string } | null {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== 'user') continue;
+    for (const attachment of message.attachments) {
+      if (
+        attachment.kind !== 'slides' ||
+        attachment.deckId !== target.deckId ||
+        attachment.slideNumber !== target.slideNumber
+      )
+        continue;
+      const element = attachment.elements.find((item) => item.elementId === target.elementId);
+      if (element) return { kind: element.kind, text: element.text };
+    }
+  }
+  return null;
+}
+
 /** What the person said in the chat: every fact the deck may use is in there. */
 function peopleSaid(messages: readonly ChatMessage[]): string {
   return messages
@@ -399,6 +423,52 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
     },
   };
 
+  const editSlide: ChatTool = {
+    name: 'edit_slide',
+    input: z.object({
+      deckId: z.string().min(1).max(100),
+      slideNumber: z.number().int().positive(),
+      elementId: z.string().min(1).max(100),
+      text: z.string().max(4000),
+    }),
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      const edit = input as {
+        deckId: string;
+        slideNumber: number;
+        elementId: string;
+        text: string;
+      };
+      const pointed = pointedElement(scope.messages(), edit);
+      if (!pointed)
+        throw new Error(
+          'The person has not pointed at this object: only objects attached from the editor ' +
+            'can be edited. Ask them to select it on the slide and attach it to the message.',
+        );
+      if (pointed.kind !== 'text')
+        throw new Error('Only the text of a text object can be changed with edit_slide.');
+      const editId = crypto.randomUUID();
+      context.show({
+        type: 'slide-edit',
+        callId: context.callId,
+        editId,
+        deckId: edit.deckId,
+        slideNumber: edit.slideNumber,
+        elementId: edit.elementId,
+        before: pointed.text,
+        text: edit.text,
+      });
+      return {
+        output: {
+          editId,
+          status:
+            'Sent to the editor: it writes the text into the draft, where the person sees it and ' +
+            'can undo it.',
+        },
+      };
+    },
+  };
+
   return [
     listTemplates,
     describeTemplate,
@@ -408,6 +478,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
     askUser,
     proposePlan,
     buildDeck,
+    editSlide,
   ].filter((tool) => tool.modes.includes(scope.mode));
 }
 

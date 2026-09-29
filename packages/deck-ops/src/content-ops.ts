@@ -194,3 +194,29 @@ export function commitSlideNotes(
     after: selectionOf(change.slideId, []),
   });
 }
+
+const PLAIN_RUN = {
+  text: '',
+  font: '',
+  sizePt: null,
+  bold: null,
+  italic: null,
+  color: '',
+} as const;
+
+/**
+ * Paragraphs for plain text written by an agent, set as the element set its text: line `n` takes
+ * the look of paragraph `n` (the last one for lines past it) and of that paragraph's first run.
+ * The agent writes words; the template's typography stays where it was.
+ */
+export function paragraphsForText(current: readonly Paragraph[], text: string): Paragraph[] {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  return lines.map((line, index) => {
+    const model = current[Math.min(index, current.length - 1)];
+    const run = model?.runs[0] ?? PLAIN_RUN;
+    const paragraph: Paragraph = model
+      ? structuredClone(model)
+      : { level: 0, runs: [], lineSpacing: null };
+    return { ...paragraph, runs: [{ ...structuredClone(run), text: line }] };
+  });
+}

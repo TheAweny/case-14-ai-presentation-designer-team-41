@@ -390,6 +390,7 @@ export {
   type ChatAnswer,
   type BuildStatus,
   type ChatPart,
+  type SlideEditPart,
   type ChatMessage,
   type UserChatMessage,
   type AssistantChatMessage,
