@@ -387,6 +387,7 @@ export function EditorShell({
     selectedIds,
     active: assistantVisible,
     reveal,
+    writeText: setText,
   });
   const addToAssistant = assistantContext.add;
   /** Положить объекты в поле ассистента, открыть его вкладку и поставить фокус в поле. */

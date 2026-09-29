@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { SlideIr } from '@lct/contracts';
+import type { Paragraph, SlideIr } from '@lct/contracts';
 import type { SlideRef } from '@/lib/slide-context';
 
 /** Какие объекты подсветить или открыть: слайд и объекты на нём, пусто — слайд целиком. */
@@ -37,6 +37,11 @@ export interface AssistantDeckBridge {
    */
   readonly focusRequest: number;
   takeFocus(): boolean;
+  /**
+   * Записать текст объекта правкой журнала: так пишет агент (`edit_slide`), и человек отменяет
+   * её, как свою, через Ctrl+Z.
+   */
+  writeText(slideId: string, elementId: string, paragraphs: readonly Paragraph[]): void;
 }
 
 const BridgeContext = createContext<AssistantDeckBridge | null>(null);
