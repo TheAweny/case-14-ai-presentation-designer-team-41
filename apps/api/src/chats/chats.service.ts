@@ -566,10 +566,14 @@ export class ChatsService implements OnApplicationShutdown {
       if (!model) return;
       sync();
       const tools = chatTools(this.generation, scope);
+      // The agent tells the person whether the deck gets pictures, and does not promise them
+      // when no image model is assigned.
+      const imagesAvailable = await this.generation.imagesAvailable(account).catch(() => false);
       await runChatTurn({
         model,
         instructions: chatInstructions(agent, request.mode, {
           ...this.facts(state),
+          imagesAvailable,
           preferredSlideCount: request.slideCount,
         }),
         history: modelHistory(
