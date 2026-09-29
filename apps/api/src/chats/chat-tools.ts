@@ -16,7 +16,11 @@ import {
 import type { ChatTool, ToolContext, ToolOutcome } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
-import { GenerationService } from '../generation/generation.service.js';
+import {
+  GenerationService,
+  type StartedBuild,
+  type VariantEnd,
+} from '../generation/generation.service.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -475,14 +479,21 @@ export async function runBuild(
     });
     const stop = () => generation.cancel(build.runId);
     context.signal.addEventListener('abort', stop, { once: true });
-    const settled = await build.settled.finally(() =>
+    const settled = await settleWithGrace(build).finally(() =>
       context.signal.removeEventListener('abort', stop),
     );
     context.signal.throwIfAborted();
     const done = settled.filter((variant) => variant.state === 'done');
     if (done.length === 0) {
-      set({ status: 'failed', finishedAt: Date.now(), error: 'Сборка не удалась.' });
-      return { output: { status: 'failed', error: 'No variant was built.' }, failed: true };
+      const reasons = await failureReasons(
+        generation,
+        settled.map((variant) => variant.runId),
+      );
+      set({ status: 'failed', finishedAt: Date.now(), error: reasons[0] ?? null });
+      return {
+        output: { status: 'failed', error: 'No variant was built.', reasons },
+        failed: true,
+      };
     }
     const outcomes: VariantOutcome[] = [];
     let audited = true;
@@ -521,6 +532,7 @@ export async function runBuild(
         variants: outcomes,
         recommended,
         failedVariants: settled.filter((v) => v.state === 'failed').map((v) => v.variant),
+        unfinishedVariants: settled.filter((v) => v.state === 'running').map((v) => v.variant),
       },
     };
   } catch (error) {
@@ -532,6 +544,58 @@ export async function runBuild(
     set({ status: 'failed', finishedAt: Date.now(), error: message });
     throw error;
   }
+}
+
+/** How long the other variants may keep the person waiting once the balanced one is ready. */
+const VARIANT_GRACE_MS = 60000;
+
+/**
+ * Wait for the variants of a build, but not for a straggler: once the balanced variant is done,
+ * the others get a minute more. One still running then is reported as running and left to finish
+ * in the library.
+ */
+export async function settleWithGrace(
+  build: Pick<StartedBuild, 'runId' | 'variants' | 'each'>,
+  graceMs = VARIANT_GRACE_MS,
+): Promise<{ variant: LayoutVariant; runId: string; state: 'done' | 'failed' | 'running' }[]> {
+  const ended = new Map<string, VariantEnd>();
+  for (const pending of build.each) void pending.then((end) => ended.set(end.runId, end));
+  const primary = build.each[build.variants.findIndex((item) => item.runId === build.runId)];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const grace = primary
+    ? primary.then((end) =>
+        end.state === 'done'
+          ? new Promise<void>((resolve) => (timer = setTimeout(resolve, graceMs)))
+          : new Promise<void>(() => undefined),
+      )
+    : new Promise<void>(() => undefined);
+  await Promise.race([Promise.all(build.each), grace]);
+  clearTimeout(timer);
+  return build.variants.map(
+    (item) =>
+      ended.get(item.runId) ?? { variant: item.variant, runId: item.runId, state: 'running' },
+  );
+}
+
+/** Why the runs of a build failed, as each wrote it down, without repeats. */
+async function failureReasons(
+  generation: GenerationService,
+  runIds: readonly string[],
+): Promise<string[]> {
+  const reasons = new Set<string>();
+  for (const runId of runIds) {
+    try {
+      const failure = z
+        .object({ message: z.string() })
+        .parse(
+          JSON.parse(await readFile(join(generation.directory(runId), 'failure.json'), 'utf8')),
+        );
+      reasons.add(failure.message.slice(0, 500));
+    } catch {
+      // A run that wrote no reason adds none.
+    }
+  }
+  return [...reasons];
 }
 
 async function readAuditCounts(generation: GenerationService, deckId: string) {

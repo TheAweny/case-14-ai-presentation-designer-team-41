@@ -331,15 +331,22 @@ export class ChatsService implements OnApplicationShutdown {
     }
     if (request.input.type !== 'message') throw new NotFoundException('Chat not found.');
     if (request.projectId !== null) await this.requireProject(request.projectId, account);
+    const deck =
+      request.deckId !== null && (await this.generation.library.visible(request.deckId, account.id))
+        ? request.deckId
+        : null;
+    // A chat started at a deck lives where the deck does.
+    const projectId =
+      request.projectId ?? (deck ? (await this.generation.library.read(deck)).projectId : null);
     return {
       id,
       ownerId: account.id,
       title: titleOf(request.input.text, request.input.attachments),
-      projectId: request.projectId,
+      projectId,
       mode: request.mode,
       messages: [],
-      deckIds: [],
-      primaryDeckId: null,
+      deckIds: deck ? [deck] : [],
+      primaryDeckId: deck,
     };
   }
 
@@ -350,6 +357,13 @@ export class ChatsService implements OnApplicationShutdown {
   ): Promise<ChatAttachment[]> {
     const checked: ChatAttachment[] = [];
     for (const attachment of attachments) {
+      if (attachment.kind === 'slides') {
+        // What the editor showed is the person's own words about their deck, if it is theirs.
+        if (!(await this.generation.library.visible(attachment.deckId, account.id)))
+          throw new NotFoundException('The deck is not in the library.');
+        checked.push(attachment);
+        continue;
+      }
       const id = attachment.kind === 'file' ? attachment.fileId : attachment.templateId;
       const kind = attachment.kind === 'file' ? 'content' : 'template';
       const result = await this.pool.query<{ name: string; size_bytes: string }>(
@@ -554,7 +568,10 @@ export class ChatsService implements OnApplicationShutdown {
       const tools = chatTools(this.generation, scope);
       await runChatTurn({
         model,
-        instructions: chatInstructions(agent, request.mode, this.facts(state)),
+        instructions: chatInstructions(agent, request.mode, {
+          ...this.facts(state),
+          preferredSlideCount: request.slideCount,
+        }),
         history: modelHistory(
           state.messages
             .filter((item) => item.id !== message.id)

@@ -3,7 +3,7 @@ import type { ChatMessage, ChatMode, ChatPart, DeckOutline } from '@lct/contract
 import type { ChatTool, ToolContext } from '@lct/pipeline';
 import type { GenerationService } from '../generation/generation.service.js';
 import type { Account } from '../accounts/account-rules.js';
-import { chatTools, recommend, type ChatToolScope } from './chat-tools.js';
+import { chatTools, recommend, settleWithGrace, type ChatToolScope } from './chat-tools.js';
 import { titleOf } from './chats.service.js';
 
 const account: Account = {
@@ -155,5 +155,51 @@ describe('titleOf', () => {
     expect(
       titleOf('', [{ kind: 'template', templateId: crypto.randomUUID(), name: 'ЦУ.pptx' }]),
     ).toBe('ЦУ.pptx');
+  });
+});
+
+describe('settleWithGrace', () => {
+  const dense = { variant: 'dense' as const, runId: 'run-dense' };
+  const balanced = { variant: 'balanced' as const, runId: 'run-balanced' };
+  const airy = { variant: 'airy' as const, runId: 'run-airy' };
+  const variants: { variant: 'dense' | 'balanced' | 'airy'; runId: string }[] = [
+    dense,
+    balanced,
+    airy,
+  ];
+
+  it('does not wait for a straggler once the balanced variant is ready', async () => {
+    const ended = (variant: (typeof variants)[number], state: 'done' | 'failed') =>
+      Promise.resolve({ ...variant, state });
+    const result = await settleWithGrace(
+      {
+        runId: 'run-balanced',
+        variants,
+        each: [new Promise(() => undefined), ended(balanced, 'done'), ended(airy, 'failed')],
+      },
+      10,
+    );
+    expect(result.map((item) => item.state)).toEqual(['running', 'done', 'failed']);
+  });
+
+  it('waits for every variant while the balanced one is not ready', async () => {
+    let finish!: () => void;
+    const late = new Promise<{ variant: 'balanced'; runId: string; state: 'done' }>(
+      (resolve) => (finish = () => resolve({ ...balanced, variant: 'balanced', state: 'done' })),
+    );
+    const pending = settleWithGrace(
+      {
+        runId: 'run-balanced',
+        variants,
+        each: [
+          Promise.resolve({ ...dense, state: 'done' as const }),
+          late,
+          Promise.resolve({ ...airy, state: 'done' as const }),
+        ],
+      },
+      10,
+    );
+    setTimeout(finish, 30);
+    expect((await pending).every((item) => item.state === 'done')).toBe(true);
   });
 });

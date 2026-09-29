@@ -330,6 +330,7 @@ export {
   probeInputSchema,
   modelSettingsErrorSchema,
   isRoleOptional,
+  usesWriterModelByDefault,
   connectionNameProblem,
   baseUrlProblem,
   apiKeyProblem,

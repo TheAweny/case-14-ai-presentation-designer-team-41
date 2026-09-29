@@ -33,6 +33,26 @@ export const chatAttachmentSchema = z.discriminatedUnion('kind', [
     templateId: z.string().uuid(),
     name: z.string().min(1).max(300),
   }),
+  /**
+   * Objects of a deck open in the editor, or a whole slide, as the person pointed at them: what
+   * they are and what they say at the moment of sending.
+   */
+  z.object({
+    kind: z.literal('slides'),
+    deckId: z.string().min(1).max(100),
+    slideNumber: z.number().int().positive(),
+    /** How the chip named it, in the language of the interface. */
+    name: z.string().min(1).max(200),
+    elements: z
+      .array(
+        z.object({
+          kind: z.string().max(20),
+          role: z.string().max(40),
+          text: z.string().max(4000).default(''),
+        }),
+      )
+      .max(60),
+  }),
 ]);
 export type ChatAttachment = z.infer<typeof chatAttachmentSchema>;
 
@@ -170,6 +190,10 @@ export const chatTurnRequestSchema = z.object({
   model: modelRefSchema.nullable().default(null),
   /** The project a new chat belongs to; ignored for a chat that exists. */
   projectId: z.string().nullable().default(null),
+  /** How many slides the person usually wants (their setting); null — as the material needs. */
+  slideCount: z.number().int().min(10).max(60).nullable().default(null),
+  /** The deck a new chat starts from, in the editor: the chat leads to it. */
+  deckId: z.string().max(100).nullable().default(null),
   input: chatTurnInputSchema,
 });
 export type ChatTurnRequest = z.infer<typeof chatTurnRequestSchema>;

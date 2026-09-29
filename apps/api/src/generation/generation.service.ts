@@ -61,9 +61,15 @@ export const VARIANTS = ['dense', 'balanced', 'airy'] as const satisfies readonl
 export interface StartedBuild {
   readonly runId: string;
   readonly variants: readonly { readonly variant: LayoutVariant; readonly runId: string }[];
-  readonly settled: Promise<
-    readonly { variant: LayoutVariant; runId: string; state: 'done' | 'failed' }[]
-  >;
+  /** How each variant ended, one promise per variant. */
+  readonly each: readonly Promise<VariantEnd>[];
+  readonly settled: Promise<readonly VariantEnd[]>;
+}
+
+export interface VariantEnd {
+  readonly variant: LayoutVariant;
+  readonly runId: string;
+  readonly state: 'done' | 'failed';
 }
 
 export interface StoredTemplate {
@@ -401,18 +407,18 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         this.active.delete(run.runId);
       }
     };
-    const settled = Promise.all(
-      runs.map(async (entry) => ({
-        variant: entry.variant,
-        runId: entry.run.runId,
-        state: await work(entry),
-      })),
-    );
+    const each = runs.map(async (entry): Promise<VariantEnd> => ({
+      variant: entry.variant,
+      runId: entry.run.runId,
+      state: await work(entry),
+    }));
+    const settled = Promise.all(each);
     const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
     if (!primary) throw new BadRequestException('No variant could be started.');
     return {
       runId: primary.run.runId,
       variants: runs.map(({ run, variant }) => ({ variant, runId: run.runId })),
+      each,
       settled,
     };
   }

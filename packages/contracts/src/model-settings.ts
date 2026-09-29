@@ -30,10 +30,14 @@ export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
 /**
  * Whether a role can be switched off. A deck is built without the illustrator: pictures come
  * from the content pack or are not drawn. Without a plan, copy, audit or visual review it is not.
- * The assistant without a model of its own talks with the writer's.
  */
 export function isRoleOptional(role: PipelineRole): boolean {
-  return role === 'image' || role === 'assistant';
+  return role === 'image';
+}
+
+/** A role that, without a model of its own, works with the writer's: the chat assistant. */
+export function usesWriterModelByDefault(role: PipelineRole): boolean {
+  return role === 'assistant';
 }
 
 /**

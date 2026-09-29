@@ -175,15 +175,41 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
   let outputTokens = 0;
   for (let step = 1; step <= maxSteps; step++) {
     signal.throwIfAborted();
+    // Calls shown while the model was still writing them, in the order they began.
+    const begun: { name: string; index: number }[] = [];
     const answer = await options.model.step({
       messages,
       tools: options.specs,
       signal,
       onText: (delta) => writer.text(delta),
+      onToolCall: (name) =>
+        begun.push({
+          name,
+          index: writer.show({
+            type: 'tool',
+            callId: `call-${crypto.randomUUID()}`,
+            name,
+            input: null,
+            status: 'running',
+          }),
+        }),
     });
+    const cutOff = () => {
+      for (const early of begun.splice(0)) {
+        writer.update(early.index, {
+          type: 'tool',
+          callId: `call-${crypto.randomUUID()}`,
+          name: early.name,
+          input: null,
+          status: 'failed',
+          output: { error: 'The call was cut off.' },
+        });
+      }
+    };
     inputTokens += answer.inputTokens;
     outputTokens += answer.outputTokens;
     if (answer.toolCalls.length === 0) {
+      cutOff();
       return { steps: step, inputTokens, outputTokens, end: 'answer' };
     }
     messages.push({ role: 'assistant', content: answer.text, toolCalls: answer.toolCalls });
@@ -197,7 +223,9 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
         input: input.ok ? input.value : call.arguments,
         status: 'running',
       };
-      const index = writer.show(part);
+      const early = begun[0]?.name === call.name ? begun.shift() : undefined;
+      const index = early ? early.index : writer.show(part);
+      if (early) writer.update(index, part);
       const outcome = waiting
         ? { output: { skipped: 'The turn waits for the person; call it again later.' } }
         : await runTool(byName.get(call.name), input, {
@@ -211,6 +239,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       messages.push({ role: 'tool', callId: call.id, content: JSON.stringify(output) });
       if (outcome.stop) waiting = true;
     }
+    cutOff();
     if (waiting) return { steps: step, inputTokens, outputTokens, end: 'waiting' };
   }
   return { steps: maxSteps, inputTokens, outputTokens, end: 'limit' };

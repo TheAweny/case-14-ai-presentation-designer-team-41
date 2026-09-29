@@ -42,6 +42,11 @@ export interface ModelStepRequest {
   readonly signal: AbortSignal;
   /** Text as it arrives, reasoning blocks left out. */
   readonly onText?: (delta: string) => void;
+  /**
+   * A tool call has begun: its name is known, its arguments are still being written. A plan is
+   * long to write, and the person sees what the agent is doing meanwhile.
+   */
+  readonly onToolCall?: (name: string) => void;
 }
 
 /** The model a chat turn talks to. Tests replace it with recorded steps. */
@@ -114,25 +119,36 @@ export class OpenAICompatibleChatModel implements ChatModel {
   private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
     const generation = this.options.generation;
     for (let attempt = 0; ; attempt++) {
-      const response = await this.fetchImpl(this.endpoint, {
-        method: 'POST',
-        headers: {
-          ...(this.options.apiKey.trim() ? { Authorization: `Bearer ${this.options.apiKey}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        // A redirect would carry the key to wherever the server points; refuse it instead.
-        redirect: 'error',
-        signal: AbortSignal.any([signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
-        body: JSON.stringify({
-          model: this.model,
-          seed: this.options.seed ?? 42,
-          temperature: generation?.temperature ?? 0.4,
-          top_p: generation?.topP ?? 1,
-          max_tokens: generation?.maxOutputTokens ?? 4096,
-          chat_template_kwargs: { enable_thinking: false },
-          ...body,
-        }),
-      });
+      let response: Response;
+      try {
+        response = await this.fetchImpl(this.endpoint, {
+          method: 'POST',
+          headers: {
+            ...(this.options.apiKey.trim()
+              ? { Authorization: `Bearer ${this.options.apiKey}` }
+              : {}),
+            'Content-Type': 'application/json',
+          },
+          // A redirect would carry the key to wherever the server points; refuse it instead.
+          redirect: 'error',
+          signal: AbortSignal.any([signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
+          body: JSON.stringify({
+            model: this.model,
+            seed: this.options.seed ?? 42,
+            temperature: generation?.temperature ?? 0.4,
+            top_p: generation?.topP ?? 1,
+            max_tokens: generation?.maxOutputTokens ?? 4096,
+            chat_template_kwargs: { enable_thinking: false },
+            ...body,
+          }),
+        });
+      } catch (error) {
+        // A dropped connection before any answer is a network accident: ask again. Stopping the
+        // turn is not one.
+        if (signal.aborted || attempt >= 2 || !(error instanceof TypeError)) throw error;
+        await backoff(1000 * (attempt + 1), signal);
+        continue;
+      }
       if (response.ok || ![429, 502, 503].includes(response.status) || attempt >= 2) {
         return response;
       }
@@ -162,7 +178,7 @@ export class OpenAICompatibleChatModel implements ChatModel {
       }
       throw new Error(`Model API HTTP ${response.status} for ${this.model}.`);
     }
-    return readCompletion(response, request.onText);
+    return readCompletion(response, request.onText, request.onToolCall);
   }
 
   private async json(request: ModelStepRequest): Promise<ModelStep> {
@@ -306,6 +322,7 @@ function jsonModeMessage(message: ModelMessage): Record<string, unknown> {
 async function readCompletion(
   response: Response,
   onText?: (delta: string) => void,
+  onToolCall?: (name: string) => void,
 ): Promise<ModelStep> {
   const thinking = new ThinkingFilter();
   let text = '';
@@ -364,7 +381,9 @@ async function readCompletion(
           const index = part.index ?? calls.length;
           const call = (calls[index] ??= { id: '', name: '', arguments: '' });
           if (part.id) call.id = part.id;
+          const named = call.name !== '';
           if (part.function?.name) call.name += part.function.name;
+          if (!named && call.name !== '') onToolCall?.(call.name);
           if (part.function?.arguments) call.arguments += part.function.arguments;
         }
       }

@@ -27,6 +27,8 @@ function scripted(steps: Partial<ModelStep>[]): ChatModel & { requests: ModelSte
       const step = steps.shift();
       if (!step) throw new Error('The script ran out.');
       if (step.text) request.onText?.(step.text);
+      // A streamed call is announced by name before its arguments are written.
+      for (const call of step.toolCalls ?? []) request.onToolCall?.(call.name);
       return {
         text: '',
         toolCalls: [],
@@ -149,8 +151,34 @@ describe('runChatTurn', () => {
       signal: AbortSignal.timeout(5000),
     });
     expect(result.end).toBe('waiting');
-    expect(answer.parts.map((part) => part.type)).toEqual(['tool', 'question', 'tool']);
-    expect(answer.parts[2]).toMatchObject({ output: { skipped: expect.any(String) } });
+    // Both calls show as they begin; the question card follows them.
+    expect(answer.parts.map((part) => part.type)).toEqual(['tool', 'tool', 'question']);
+    expect(answer.parts[1]).toMatchObject({
+      name: 'echo',
+      output: { skipped: expect.any(String) },
+    });
+  });
+
+  it('shows a call as soon as it begins and fills the same part in afterwards', async () => {
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+      { text: 'Готово.' },
+    ]);
+    const { writer: answer, events } = writer();
+    await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [echo],
+      specs: [],
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+    });
+    const tools = answer.parts.filter((part) => part.type === 'tool');
+    expect(tools).toHaveLength(1);
+    expect(tools[0]).toMatchObject({ callId: 'c1', status: 'done' });
+    const first = events.find((event) => event.type === 'part');
+    expect(first).toMatchObject({ part: { type: 'tool', status: 'running', input: null } });
   });
 
   it('stops after the step limit when the model keeps calling tools', async () => {

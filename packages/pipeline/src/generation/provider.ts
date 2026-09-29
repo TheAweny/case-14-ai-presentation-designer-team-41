@@ -224,10 +224,12 @@ export class OpenAICompatibleProvider implements TextProvider {
           return result;
         }
       } catch (error) {
-        // One slow answer must not sink the deck: a request that hit its own time limit is
-        // retried, while cancellation of the whole run still stops at once.
+        // One slow answer or dropped connection must not sink the deck: a request that hit its
+        // own time limit or lost the network (fetch rejects with a TypeError) is retried, while
+        // cancellation of the whole run still stops at once.
         const timedOut = error instanceof Error && error.name === 'TimeoutError';
-        if (!timedOut || signal.aborted || attempt >= 2) throw error;
+        const dropped = error instanceof TypeError;
+        if (!(timedOut || dropped) || signal.aborted || attempt >= 2) throw error;
       } finally {
         release();
       }
