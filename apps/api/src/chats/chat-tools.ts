@@ -101,16 +101,16 @@ const PREFERENCE: readonly LayoutVariant[] = ['balanced', 'dense', 'airy'];
 interface VariantOutcome {
   readonly variant: LayoutVariant;
   readonly deckId: string;
-  readonly errors: number;
-  readonly warnings: number;
+  readonly errors: number | null;
+  readonly warnings: number | null;
 }
 
 /** Fewer errors first, then fewer warnings, then the balanced one. */
 export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
+  const audited = variants.every((variant) => variant.errors !== null && variant.warnings !== null);
   const best = [...variants].sort(
     (a, b) =>
-      a.errors - b.errors ||
-      a.warnings - b.warnings ||
+      (audited ? (a.errors ?? 0) - (b.errors ?? 0) || (a.warnings ?? 0) - (b.warnings ?? 0) : 0) ||
       PREFERENCE.indexOf(a.variant) - PREFERENCE.indexOf(b.variant),
   )[0];
   if (!best) throw new Error('No variants to recommend.');
@@ -588,8 +588,8 @@ export async function runBuild(
       outcomes.push({
         variant: variant.variant,
         deckId: variant.runId,
-        errors: audit?.errors ?? 0,
-        warnings: audit?.warnings ?? 0,
+        errors: audit?.errors ?? null,
+        warnings: audit?.warnings ?? null,
       });
     }
     const recommended = recommend(outcomes);
@@ -601,7 +601,10 @@ export async function runBuild(
       variants: outcomes.map(({ variant, deckId }) => ({ variant, deckId })),
       reviews: audited
         ? Object.fromEntries(
-            outcomes.map(({ deckId, errors, warnings }) => [deckId, { errors, warnings }]),
+            outcomes.map(({ deckId, errors, warnings }) => [
+              deckId,
+              { errors: errors ?? 0, warnings: warnings ?? 0 },
+            ]),
           )
         : null,
       recommended,
@@ -616,6 +619,7 @@ export async function runBuild(
         status: 'done',
         variants: outcomes,
         recommended,
+        auditAvailable: audited,
         failedVariants: settled.filter((v) => v.state === 'failed').map((v) => v.variant),
         unfinishedVariants: settled.filter((v) => v.state === 'running').map((v) => v.variant),
       },

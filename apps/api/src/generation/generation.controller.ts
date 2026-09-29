@@ -183,6 +183,17 @@ export class GenerationController {
   }
 
   /**
+   * The saved generation result for chat cards. Its cover is already rendered; opening the card
+   * must not parse and import three PPTX files again just to display those covers.
+   */
+  @Get(':id/summary')
+  async summary(@Param('id') id: string, @CurrentAccount() account: Account): Promise<unknown> {
+    const metadata = await this.completed(id, account);
+    const deck = JSON.parse(await readFile(join(this.directory(id), 'deck.json'), 'utf8'));
+    return { ...deck, title: metadata.title ?? deck.title };
+  }
+
+  /**
    * The finished deck for the editor: its design system and template IR, and its slides read back
    * from the .pptx the way they are drawn, with their pictures written next to the run's media.
    * The engine sees the run directory at the same path as the API. When it cannot read the file

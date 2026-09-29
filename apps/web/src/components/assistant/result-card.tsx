@@ -67,11 +67,13 @@ export function ResultCard({
   if (!chosen) return null;
   const recommendedName = tv(`${result.recommended}.name`);
   const recommendedReview = reviewOf(result, result.recommended);
-  const reason = !recommendedReview
-    ? ''
-    : recommendedReview.errors === 0 && recommendedReview.warnings === 0
-      ? t('reasonClean')
-      : t('reasonFewest');
+  const audited = result.variants.every((item) => result.reviews?.[item.deckId] !== undefined);
+  const reason =
+    !audited || !recommendedReview
+      ? t('reasonUnavailable')
+      : recommendedReview.errors === 0 && recommendedReview.warnings === 0
+        ? t('reasonClean')
+        : t('reasonFewest');
   const lead =
     result.elapsedMs === null
       ? t('lead', { variant: recommendedName })
@@ -114,6 +116,7 @@ export function ResultCard({
         <p className={cn('text-muted-foreground', compact ? 'text-xs' : 'text-[0.8125rem]')}>
           {reason ? `${lead} ${reason}` : lead}
         </p>
+        {audited ? <p className="text-xs text-muted-foreground">{t('auditSource')}</p> : null}
       </header>
 
       <div
@@ -163,11 +166,12 @@ export function ResultCard({
                 />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5 pb-0.5">
-                <span className="truncate font-medium text-foreground">
+                <span className="font-medium text-foreground">
                   {tv(`${item.variant}.name`)}
                   {item.deckId === currentDeckId ? (
                     <span className="font-normal text-muted-foreground"> · {t('current')}</span>
-                  ) : item.variant === result.recommended ? (
+                  ) : null}
+                  {item.variant === result.recommended ? (
                     <span className="font-normal text-muted-foreground">
                       {' '}
                       · {t('recommendedInline')}
@@ -199,7 +203,9 @@ export function ResultCard({
             onClick={() => open(chosen.deckId)}
           >
             <EditIcon data-icon="inline-start" />
-            {t('switchTo', { variant: tv(`${chosen.variant}.name`) })}
+            {chosen.deckId === currentDeckId
+              ? t('alreadyOpen')
+              : t('switchTo', { variant: tv(`${chosen.variant}.name`) })}
           </Button>
         ) : (
           <>
@@ -286,7 +292,7 @@ function reviewOf(result: DeckResult, variant: LayoutVariant): VariantReview | n
   return deckId ? (result.reviews?.[deckId] ?? null) : null;
 }
 
-/** Строка аудита варианта: чисто, ошибки, замечания. Без аудита — только число слайдов. */
+/** Строка аудита сборки: чисто, ошибки, замечания или проверка недоступна. */
 function AuditLine({
   review,
   slideCount,
@@ -298,7 +304,11 @@ function AuditLine({
   const t = useTranslations('assistant.result');
   const slides = slideCount === null ? null : t('slides', { count: slideCount });
   if (!review) {
-    return slides ? <span className="text-xs text-muted-foreground">{slides}</span> : null;
+    return (
+      <span className="text-xs text-muted-foreground">
+        {slides ? `${t('auditUnavailable')} · ${slides}` : t('auditUnavailable')}
+      </span>
+    );
   }
   const clean = review.errors === 0 && review.warnings === 0;
   const AuditIcon = review.errors > 0 ? ErrorIcon : review.warnings > 0 ? WarningIcon : SuccessIcon;

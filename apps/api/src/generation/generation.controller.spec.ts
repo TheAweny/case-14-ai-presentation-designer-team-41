@@ -122,6 +122,26 @@ describe('GET /generation/:id/deck', () => {
   });
 });
 
+describe('GET /generation/:id/summary', () => {
+  it('returns the saved result without calling the engine even when it is unavailable', async () => {
+    const deck = await withEngine(null).summary(RUN, owner);
+    expect(deck).toEqual({
+      runId: RUN,
+      title: 'Для руководства',
+      designSystem: {},
+      templateIr: {},
+    });
+    expect(posted).toEqual([]);
+  });
+
+  it('does not expose the summary to another account', async () => {
+    await expect(withEngine(null).summary(RUN, stranger)).rejects.toThrow(
+      'Completed deck not found.',
+    );
+    expect(posted).toEqual([]);
+  });
+});
+
 describe('GET /generation/:id/media/:name', () => {
   it('hands out a picture the import wrote by the file name of its part', async () => {
     await writeFile(join(root, RUN, 'media', 'image5.png'), 'png');

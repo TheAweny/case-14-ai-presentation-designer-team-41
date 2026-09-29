@@ -85,10 +85,15 @@ export function decodeGeneratedDeck(data: unknown): Deck {
     layouts: templateLayoutsFromIr(parsed.templateIr),
   };
 }
-export function createHttpDeckSource(): DeckSource {
+export function createHttpDeckSource(
+  options: { readonly summary?: boolean; readonly timeoutMs?: number } = {},
+): DeckSource {
   return {
     async getDeck(id) {
-      const response = await apiFetch(`/generation/${encodeURIComponent(id)}/deck`);
+      const response = await apiFetch(
+        `/generation/${encodeURIComponent(id)}/${options.summary ? 'summary' : 'deck'}`,
+        { signal: AbortSignal.timeout(options.timeoutMs ?? (options.summary ? 20000 : 120000)) },
+      );
       if (response.status === 404) throw new DeckNotFoundError(id);
       if (!response.ok) throw new Error(`Deck API: ${response.status}`);
       return decodeGeneratedDeck(await response.json());

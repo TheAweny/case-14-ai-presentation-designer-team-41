@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ChatPart } from '@lct/contracts';
 import { SpinnerIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
-import type { GeneratedVariant } from '@/lib/deck-generator';
-import { recommendVariant, reviewDeck, type DeckResult } from '@/lib/variant-review';
+import type { DeckResult } from '@/lib/variant-review';
+import { loadResultVariants } from '@/lib/load-result-variants';
+import { Button } from '@/components/ui/button';
 import { BuildCard } from './build-card';
 import { formatElapsed } from './elapsed';
 import { ResultCard } from './result-card';
 import { chatStore, followBuild, useRun } from './session';
-import { loadVariantDeck } from './use-variant-deck';
+import { loadVariantPreview } from './use-variant-deck';
 
 type BuildPart = Extract<ChatPart, { type: 'build' }>;
 type ResultPart = Extract<ChatPart, { type: 'result' }>;
@@ -67,11 +68,10 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
 type Loaded =
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
-  | { readonly status: 'ready'; readonly result: DeckResult };
+  | { readonly status: 'ready'; readonly result: DeckResult; readonly failedCount: number };
 
 /**
- * Итог сборки агента: варианты подгружаются из библиотеки, и их аудит считается теми же
- * проверками, что живой аудит редактора, — числа в итоге совпадают с тем, что покажет редактор.
+ * Итог сборки агента: превью подгружаются из библиотеки, аудит и совет берутся из итога сборки.
  */
 export function ChatResult({
   chatId,
@@ -89,59 +89,34 @@ export function ChatResult({
     key: '',
     value: { status: 'loading' },
   });
-  const key = part.variants.map((variant) => variant.deckId).join(',');
+  const [attempt, setAttempt] = useState(0);
+  // SSE may replace `part` with an identical object. Its identity must not restart loading.
+  const key = JSON.stringify(part);
+  const loadKey = `${key}:${attempt}`;
 
   useEffect(() => {
     let live = true;
-    Promise.all(part.variants.map((variant) => loadVariantDeck(variant.deckId))).then(
-      (decks) => {
+    const snapshot = JSON.parse(key) as ResultPart;
+    loadResultVariants(snapshot, loadVariantPreview).then(
+      ({ result, failedCount }) => {
         if (!live) return;
-        const variants: GeneratedVariant[] = decks.flatMap(({ deck }, index) => {
-          const cover = deck.slides[0];
-          const variant = part.variants[index]?.variant;
-          return cover && variant
-            ? [
-                {
-                  variant,
-                  deckId: deck.deckId,
-                  title: deck.title,
-                  slideCount: deck.slides.length,
-                  cover,
-                  coverPreviewUrl: deck.coverPreviewUrl,
-                  designSystem: deck.designSystem,
-                },
-              ]
-            : [];
-        });
-        const reviews = Object.fromEntries(
-          decks.map(({ deck }) => [deck.deckId, reviewDeck(deck)]),
-        );
         setLoaded({
-          key,
+          key: `${key}:${attempt}`,
           value: {
             status: 'ready',
-            result: {
-              runId: part.buildId,
-              variants,
-              reviews,
-              // Совет — тот, что агент назвал в чате: карточка и его слова не расходятся.
-              recommended: variants.some((item) => item.variant === part.recommended)
-                ? part.recommended
-                : recommendVariant(variants, reviews),
-              templateSubstituted: false,
-              elapsedMs: part.elapsedMs,
-            },
+            result,
+            failedCount,
           },
         });
       },
-      () => live && setLoaded({ key, value: { status: 'failed' } }),
+      () => live && setLoaded({ key: `${key}:${attempt}`, value: { status: 'failed' } }),
     );
     return () => {
       live = false;
     };
-  }, [key, part]);
+  }, [key, attempt]);
 
-  const value = loaded.key === key ? loaded.value : { status: 'loading' as const };
+  const value = loaded.key === loadKey ? loaded.value : { status: 'loading' as const };
   if (value.status === 'loading') {
     return (
       <p role="status" className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
@@ -151,14 +126,34 @@ export function ChatResult({
     );
   }
   if (value.status === 'failed' || value.result.variants.length === 0) {
-    return <p className="text-[0.8125rem] text-destructive">{t('loadFailed')}</p>;
+    return (
+      <div role="alert" className="flex flex-wrap items-center gap-2">
+        <p className="text-[0.8125rem] text-destructive">{t('loadFailed')}</p>
+        <Button variant="outline" onClick={() => setAttempt((current) => current + 1)}>
+          {t('retryLoad')}
+        </Button>
+      </div>
+    );
   }
   return (
-    <ResultCard
-      result={value.result}
-      compact={compact}
-      currentDeckId={currentDeckId}
-      onChoose={(deckId) => chatStore.choose(chatId, deckId)}
-    />
+    <div className="flex flex-col gap-2">
+      {value.failedCount > 0 ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+        >
+          <p>{t('partialLoad', { count: value.failedCount })}</p>
+          <Button variant="outline" onClick={() => setAttempt((current) => current + 1)}>
+            {t('retryLoad')}
+          </Button>
+        </div>
+      ) : null}
+      <ResultCard
+        result={value.result}
+        compact={compact}
+        currentDeckId={currentDeckId}
+        onChoose={(deckId) => chatStore.choose(chatId, deckId)}
+      />
+    </div>
   );
 }

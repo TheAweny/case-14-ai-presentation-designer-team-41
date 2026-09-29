@@ -165,6 +165,26 @@ describe('recommend', () => {
     expect(recommend([variant('airy', 0, 1), variant('dense', 0, 2)])).toBe('airy');
     expect(recommend([variant('airy', 0, 0), variant('balanced', 0, 0)])).toBe('balanced');
   });
+
+  it('recommends airy for the audit counts in the reported screenshot', () => {
+    expect(
+      recommend([
+        { variant: 'dense', deckId: 'd', errors: 13, warnings: 13 },
+        { variant: 'balanced', deckId: 'b', errors: 7, warnings: 7 },
+        { variant: 'airy', deckId: 'a', errors: 4, warnings: 6 },
+      ]),
+    ).toBe('airy');
+  });
+
+  it('uses the default preference when an audit is unavailable, rather than treating it as clean', () => {
+    expect(
+      recommend([
+        { variant: 'dense', deckId: 'd', errors: null, warnings: null },
+        { variant: 'balanced', deckId: 'b', errors: 2, warnings: 5 },
+        { variant: 'airy', deckId: 'a', errors: 0, warnings: 0 },
+      ]),
+    ).toBe('balanced');
+  });
 });
 
 describe('titleOf', () => {

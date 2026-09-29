@@ -6,6 +6,9 @@ describe('proxiedApiPath', () => {
     expect(proxiedApiPath(['files', 'template'], 'POST')).toBe('/files/template');
     expect(proxiedApiPath(['generation'], 'POST')).toBe('/generation');
     expect(proxiedApiPath(['generation', 'prepare'], 'POST')).toBe('/generation/prepare');
+    expect(proxiedApiPath(['generation', 'run-1', 'summary'], 'GET')).toBe(
+      '/generation/run-1/summary',
+    );
     expect(proxiedApiPath(['generation', 'prepare', 't-1'], 'GET')).toBe('/generation/prepare/t-1');
     expect(proxiedApiPath(['runs', 'run-1', 'events'], 'GET')).toBe('/runs/run-1/events');
     expect(proxiedApiPath(['files', 'templates', 't-1', 'previews', 'slide-12.png'], 'GET')).toBe(
@@ -28,6 +31,7 @@ describe('proxiedApiPath', () => {
   it('checks the method as well as the path', () => {
     expect(proxiedApiPath(['generation', 'run-1'], 'DELETE')).toBeNull();
     expect(proxiedApiPath(['files', 'template'], 'GET')).toBeNull();
+    expect(proxiedApiPath(['generation', 'run-1', 'summary'], 'POST')).toBeNull();
   });
 
   it('cannot be walked out of with dots or encoded slashes', () => {

@@ -1,4 +1,4 @@
-import type { LayoutVariant } from '@lct/contracts';
+import type { ChatPart, LayoutVariant } from '@lct/contracts';
 import { auditDeck } from '@lct/slide-audit';
 import type { GeneratedVariant } from './deck-generator';
 import type { Deck } from './deck-source';
@@ -14,7 +14,7 @@ export interface DeckResult {
   readonly runId: string;
   /** В порядке `LAYOUT_VARIANTS`. */
   readonly variants: readonly GeneratedVariant[];
-  /** Аудит по `deckId` варианта; null — проверить не удалось, и агент выбрал без него. */
+  /** Аудит сборки по `deckId` варианта; null — проверить не удалось. */
   readonly reviews: Readonly<Record<string, VariantReview>> | null;
   /** Вариант, который агент советует: меньше всего ошибок, при равенстве — сбалансированный. */
   readonly recommended: LayoutVariant;
@@ -22,6 +22,40 @@ export interface DeckResult {
   readonly templateSubstituted: boolean;
   /** От запуска прогона до готовности; null — неизвестно. */
   readonly elapsedMs: number | null;
+}
+
+/** Карточка и агент сравнивают один сохранённый аудит сборки, а не аудит импортированных слайдов. */
+export function resultOfBuild(
+  part: Extract<ChatPart, { type: 'result' }>,
+  decks: readonly Deck[],
+): DeckResult {
+  const byId = new Map(decks.map((deck) => [deck.deckId, deck]));
+  const variants: GeneratedVariant[] = part.variants.flatMap(({ variant, deckId }) => {
+    const deck = byId.get(deckId);
+    const cover = deck?.slides[0];
+    return deck && cover
+      ? [
+          {
+            variant,
+            deckId,
+            title: deck.title,
+            slideCount: deck.slides.length,
+            cover,
+            coverPreviewUrl: deck.coverPreviewUrl,
+            designSystem: deck.designSystem,
+          },
+        ]
+      : [];
+  });
+  return {
+    runId: part.buildId,
+    variants,
+    reviews: part.reviews,
+    // Проверяем и старые сохранённые советы по тем же числам, которые показывает карточка.
+    recommended: variants.length ? recommendVariant(variants, part.reviews) : part.recommended,
+    templateSubstituted: false,
+    elapsedMs: part.elapsedMs,
+  };
 }
 
 /**
@@ -46,7 +80,7 @@ const PREFERENCE: readonly LayoutVariant[] = ['balanced', 'dense', 'airy'];
 
 /**
  * Какой вариант советовать: меньше ошибок, затем меньше замечаний, затем сбалансированный.
- * Без аудита — сбалансированный, если он есть.
+ * Без полного аудита — сбалансированный, если он есть: неизвестные числа не равны нулю.
  */
 export function recommendVariant(
   variants: readonly Pick<GeneratedVariant, 'variant' | 'deckId'>[],
@@ -56,10 +90,11 @@ export function recommendVariant(
     const at = PREFERENCE.indexOf(variant);
     return at < 0 ? PREFERENCE.length : at;
   };
+  const audited = variants.every((item) => reviews?.[item.deckId] !== undefined);
   const sorted = [...variants].sort((a, b) => {
     const ra = reviews?.[a.deckId];
     const rb = reviews?.[b.deckId];
-    if (ra && rb) {
+    if (audited && ra && rb) {
       if (ra.errors !== rb.errors) return ra.errors - rb.errors;
       if (ra.warnings !== rb.warnings) return ra.warnings - rb.warnings;
     }

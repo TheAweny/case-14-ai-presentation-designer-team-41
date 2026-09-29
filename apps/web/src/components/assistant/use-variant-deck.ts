@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { mediaUrls, type Deck } from '@/lib/deck-source';
 import { deckSource } from '@/mocks/sources';
+import { createHttpDeckSource } from '@/lib/http-generation';
 
 /** Колода варианта с адресами её картинок: этого хватает для просмотра, показа и экспорта. */
 export interface VariantDeck {
@@ -16,6 +17,20 @@ export interface VariantDeck {
  * попытка спросит снова.
  */
 const loaded = new Map<string, Promise<VariantDeck>>();
+
+// Summary data belongs to its own cache: the editor and export still need a full imported deck.
+const previewSource = createHttpDeckSource({ summary: true });
+const previews = new Map<string, Promise<Deck>>();
+
+export function loadVariantPreview(deckId: string): Promise<Deck> {
+  let pending = previews.get(deckId);
+  if (!pending) {
+    pending = previewSource.getDeck(deckId);
+    previews.set(deckId, pending);
+    pending.catch(() => previews.delete(deckId));
+  }
+  return pending;
+}
 
 export function loadVariantDeck(deckId: string): Promise<VariantDeck> {
   let pending = loaded.get(deckId);

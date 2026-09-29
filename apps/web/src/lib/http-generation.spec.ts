@@ -28,6 +28,44 @@ const deck = decodeGeneratedDeck(stored);
 it('uses the engine-rendered first slide for the cover preview', () => {
   expect(deck.coverPreviewUrl).toBe('/api/backend/generation/run-test/artifacts/slide-1.png');
 });
+
+describe('deck source', () => {
+  it('loads chat summaries separately from full editor decks', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url);
+      return Response.json(stored);
+    });
+    const preview = await createHttpDeckSource({ summary: true }).getDeck('run-test');
+    const full = await createHttpDeckSource().getDeck('run-test');
+    expect(urls.map((url) => new URL(url).pathname)).toEqual([
+      '/generation/run-test/summary',
+      '/generation/run-test/deck',
+    ]);
+    expect(preview.coverPreviewUrl).toEqual(full.coverPreviewUrl);
+  });
+
+  it('aborts a stalled request rather than leaving the result card loading forever', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        'fetch',
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+              once: true,
+            });
+          }),
+      );
+      const pending = createHttpDeckSource({ summary: true, timeoutMs: 5 }).getDeck('run-test');
+      const rejected = expect(pending).rejects.toMatchObject({ name: 'TimeoutError' });
+      await vi.advanceTimersByTimeAsync(5);
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 function input(): ExportRequest {
   return {
     deckId: deck.deckId,
