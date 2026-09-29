@@ -27,7 +27,7 @@ const outline: DeckOutline = {
 };
 
 /** A chat with the tools of one mode, recording what they show and change. */
-function chat(mode: ChatMode, messages: ChatMessage[] = []) {
+function chat(mode: ChatMode, messages: ChatMessage[] = [], generation = {} as GenerationService) {
   const shown: ChatPart[] = [];
   const updated: { messageId: string; index: number; part: ChatPart }[] = [];
   const scope: ChatToolScope = {
@@ -40,7 +40,7 @@ function chat(mode: ChatMode, messages: ChatMessage[] = []) {
     updatePart: (messageId, index, part) => updated.push({ messageId, index, part }),
     addDecks: () => undefined,
   };
-  const tools = chatTools({} as GenerationService, scope);
+  const tools = chatTools(generation, scope);
   const context: ToolContext = {
     signal: AbortSignal.timeout(5000),
     callId: 'call-1',
@@ -113,6 +113,29 @@ describe('chat tools by mode', () => {
     await expect(build.run(input, context)).rejects.toThrow(/not approved/);
     const withoutPlan = build.input.parse({ templateId: '00000000-0000-4000-8000-0000000000aa' });
     await expect(build.run(withoutPlan, context)).rejects.toThrow(/only from a plan/);
+  });
+
+  it('never sends the template to the build as material', async () => {
+    const templateId = '00000000-0000-4000-8000-0000000000aa';
+    const fileId = '00000000-0000-4000-8000-0000000000bb';
+    const started: unknown[] = [];
+    const generation = {
+      template: async () => ({ file_name: 'VK Tech.pptx', profile: null }),
+      prepare: async () => undefined,
+      start: async (input: unknown) => {
+        started.push(input);
+        throw new Error('Stop after the request.');
+      },
+    } as unknown as GenerationService;
+    const { tool, context } = chat('auto', [], generation);
+    const build = tool('build_deck');
+    await build
+      .run(
+        build.input.parse({ templateId, brief: 'Пилот', fileIds: [templateId, fileId] }),
+        context,
+      )
+      .catch(() => undefined);
+    expect(started).toEqual([expect.objectContaining({ contentIds: [fileId] })]);
   });
 
   it('asks a question and ends the turn', async () => {

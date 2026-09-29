@@ -8,3 +8,7 @@ Each figure of the material goes to one slide, the one whose claim it proves; on
 slide may sum figures up again. A point states only what the material says or what follows from
 it plainly: a result the material does not report (payback, customer satisfaction, market share)
 is not a point.
+
+When the person names a length, keep to it: a range means its upper end, and never fewer than
+10 slides. Section dividers are for decks of 15 slides or more; a shorter deck spends every
+slide on content.

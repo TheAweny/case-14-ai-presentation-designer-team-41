@@ -391,11 +391,24 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
       if (request.planId !== null && !plan) throw new Error('There is no plan with this planId.');
       if (plan && plan.part.status !== 'approved')
         scope.updatePart(plan.messageId, plan.index, { ...plan.part, status: 'approved' });
+      // A model may list the template among the materials; as content it would fail the build.
+      const templates = new Set([
+        request.templateId,
+        ...scope
+          .messages()
+          .flatMap((message) =>
+            message.role === 'user'
+              ? message.attachments.flatMap((item) =>
+                  item.kind === 'template' ? [item.templateId] : [],
+                )
+              : [],
+          ),
+      ]);
       return runBuild(generation, scope, context, {
         templateId: request.templateId,
         outline: plan?.part.outline ?? null,
         brief: request.brief,
-        fileIds: request.fileIds,
+        fileIds: request.fileIds.filter((id) => !templates.has(id)),
       });
     },
   };
