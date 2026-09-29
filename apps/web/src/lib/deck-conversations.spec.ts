@@ -15,7 +15,7 @@ import {
   type NewDeckInput,
   type ReviewVariants,
 } from './deck-conversations';
-import type { GeneratedVariant, GenerationRequest } from './deck-generator';
+import type { DeckGenerator, GeneratedVariant, GenerationRequest } from './deck-generator';
 import { createGenerationRuns, type GenerationRuns } from './generation-runs';
 import type { TemplateSummary } from './library-source';
 import { createTemplateImports } from './template-imports';
@@ -503,5 +503,94 @@ describe('createDeckConversations', () => {
       key: 'contextSeen',
       seen: [{ subject: { kind: 'slide' }, slideNumber: 4 }],
     });
+  });
+});
+
+describe('сборка после обновления страницы', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const SERVER = {
+    runId: 'srv-balanced',
+    variantRunIds: ['srv-dense', 'srv-balanced', 'srv-airy'],
+  };
+
+  /** Вкладка с генератором, у которого есть сервер: он называет прогон и умеет его досмотреть. */
+  function tab() {
+    const { library, decks } = createDemoLibrary();
+    const demo = createDemoGenerator({ library, decks, stepMs: 10 });
+    const follow = vi.fn<NonNullable<DeckGenerator['follow']>>((_run, onEvent, signal, onSlide) =>
+      demo.generate(request(LONG), onEvent, signal, onSlide),
+    );
+    const generator: DeckGenerator = {
+      ...demo,
+      generate(next, onEvent, signal, onSlide, onServerRun) {
+        onServerRun?.(SERVER);
+        return demo.generate(next, onEvent, signal, onSlide);
+      },
+      follow,
+    };
+    let next = 0;
+    const id = () => `id-${(next += 1)}`;
+    const threads = createAssistantThreads(id);
+    const runs = createGenerationRuns(generator, id);
+    const conversations = createDeckConversations({
+      threads,
+      runs,
+      imports: createTemplateImports(
+        createDemoTemplateImporter({ register: (file) => library.importTemplate(file) }),
+        id,
+      ),
+      attachTemplate: async () => ({ ok: true }),
+    });
+    return { threads, runs, conversations, follow };
+  }
+
+  it('сообщение о сборке запоминает прогон сервера, как только сервер его принял', async () => {
+    const { threads, conversations } = tab();
+    const threadId = conversations.start(input(LONG));
+    await vi.advanceTimersByTimeAsync(0);
+    const work = threads.get(threadId)?.messages.find((message) => message.kind === 'work');
+    expect(work?.kind === 'work' && work.server).toMatchObject({
+      ...SERVER,
+      startedAt: expect.any(Number),
+    });
+  });
+
+  it('прерванную сборку досматривает по прогону сервера, и итог приходит в разговор', async () => {
+    const before = tab();
+    const threadId = before.conversations.start(input(LONG));
+    await vi.advanceTimersByTimeAsync(0);
+    const snapshot = before.conversations.snapshot(threadId);
+    const thread = before.threads.get(threadId);
+    if (!snapshot || !thread) throw new Error('No conversation to save');
+
+    const after = tab();
+    after.conversations.restore(threadId, snapshot);
+    after.threads.hydrate(thread);
+    after.conversations.resume(threadId);
+    after.conversations.resume(threadId);
+    await vi.runAllTimersAsync();
+
+    expect(after.follow).toHaveBeenCalledTimes(1);
+    expect(after.follow.mock.calls[0]?.[0]).toEqual(SERVER);
+    const work = thread.messages.find((message) => message.kind === 'work');
+    expect(resultOf(after.threads, threadId)?.runId).toBe(work?.kind === 'work' && work.runId);
+  });
+
+  it('сборку с итогом не досматривает', async () => {
+    const before = tab();
+    const threadId = before.conversations.start(input(LONG));
+    await vi.runAllTimersAsync();
+    const snapshot = before.conversations.snapshot(threadId);
+    const thread = before.threads.get(threadId);
+    if (!snapshot || !thread) throw new Error('No conversation to save');
+
+    const after = tab();
+    after.conversations.restore(threadId, snapshot);
+    after.threads.hydrate(thread);
+    after.conversations.resume(threadId);
+
+    expect(after.follow).not.toHaveBeenCalled();
   });
 });

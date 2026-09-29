@@ -14,7 +14,7 @@ import {
   ServiceUnavailableException,
   StreamableFile,
 } from '@nestjs/common';
-import type { OnApplicationShutdown } from '@nestjs/common';
+import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
@@ -55,7 +55,7 @@ function actorOf(account: Account) {
 const VARIANTS = ['dense', 'balanced', 'airy'] as const;
 
 @Controller('generation')
-export class GenerationController implements OnApplicationShutdown {
+export class GenerationController implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly root = resolve(process.env.RUNS_DIR ?? join(process.cwd(), 'runs'));
   private readonly pool = new Pool({ connectionString: process.env.DATABASE_URL });
   private readonly engine = new EngineClient({
@@ -439,6 +439,38 @@ export class GenerationController implements OnApplicationShutdown {
     return (await readdir(join(this.directory(id), 'previews'))).filter((name) =>
       /^slide-\d+\.png$/.test(name),
     );
+  }
+
+  /**
+   * A generation lives in this process, so one still queued or running at start was cut short by
+   * a restart and will not go on. It is failed with a reason, and the chat that follows it offers
+   * to build again instead of waiting for it. The API runs as a single instance.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    await mkdir(this.root, { recursive: true });
+    for (const id of await readdir(this.root)) {
+      if (!/^run-[0-9a-f-]{36}$/i.test(id) || this.active.has(id)) continue;
+      try {
+        const run = await this.repository.get(id);
+        if (run?.state !== 'queued' && run?.state !== 'running') continue;
+        const last = (await this.repository.events(id)).at(-1);
+        await this.repository.appendEvent(id, {
+          schemaVersion: 1,
+          runId: id,
+          seq: (last?.seq ?? -1) + 1,
+          at: new Date().toISOString(),
+          type: 'failed',
+          stage: last && 'stage' in last ? last.stage : 'queued',
+          code: 'internal',
+          // The chat shows the message as it is, and its interface speaks Russian.
+          message: 'Сервер перезапустился во время сборки. Запустите её ещё раз.',
+          retryable: true,
+        });
+        await this.repository.transition(id, 'failed');
+      } catch (error) {
+        this.logger.warn(`Could not close interrupted run ${id}: ${String(error)}`);
+      }
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {

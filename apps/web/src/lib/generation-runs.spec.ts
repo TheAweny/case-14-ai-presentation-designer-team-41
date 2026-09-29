@@ -93,3 +93,52 @@ describe('createGenerationRuns', () => {
     expect(createGenerationRuns(demo(), ids()).get('nope')).toBeUndefined();
   });
 });
+
+describe('прогон на сервере', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const SERVER = { runId: 'srv-1', variantRunIds: ['srv-1'] };
+
+  it('запоминает прогон, который принял сервер; повтор начинает без него', async () => {
+    const generator = demo();
+    const runs = createGenerationRuns(
+      {
+        ...generator,
+        generate(next, onEvent, signal, onSlide, onServerRun) {
+          onServerRun?.(SERVER);
+          return generator.generate(next, onEvent, signal, onSlide);
+        },
+      },
+      ids(),
+    );
+    const runId = runs.start(request, '/');
+    expect(runs.get(runId)?.server).toEqual(SERVER);
+    runs.cancel(runId);
+    runs.retry(runId);
+    // Повтор — новый прогон на сервере: его имя придёт снова.
+    expect(runs.get(runId)?.server).toEqual(SERVER);
+  });
+
+  it('досматривает прогон сервера под прежним id и с прежним началом', async () => {
+    const generator = demo();
+    const follow = vi.fn<NonNullable<DeckGenerator['follow']>>((_run, onEvent, signal, onSlide) =>
+      generator.generate(request, onEvent, signal, onSlide),
+    );
+    const runs = createGenerationRuns({ ...generator, follow }, ids());
+    const plan = { request, returnHref: '/', server: SERVER, startedAt: 1000 };
+    runs.follow('run-old', plan);
+    runs.follow('run-old', plan);
+    expect(runs.get('run-old')).toMatchObject({ phase: 'running', startedAt: 1000 });
+    await vi.runAllTimersAsync();
+    expect(follow).toHaveBeenCalledTimes(1);
+    expect(runs.get('run-old')?.phase).toBe('done');
+  });
+
+  it('генератор без сервера досмотреть не может — прогон с ошибкой, её можно повторить', async () => {
+    const runs = createGenerationRuns(demo(), ids());
+    runs.follow('run-old', { request, returnHref: '/', server: SERVER, startedAt: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runs.get('run-old')).toMatchObject({ phase: 'failed', failure: { retryable: true } });
+  });
+});

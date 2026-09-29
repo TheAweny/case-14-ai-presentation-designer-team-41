@@ -91,6 +91,17 @@ export interface GenerationResult {
   readonly templateSubstituted: boolean;
 }
 
+/**
+ * Прогон на сервере. Его запоминает разговор: после обновления страницы сборку досматривают по
+ * нему (`DeckGenerator.follow`), а не запускают заново.
+ */
+export interface ServerRun {
+  /** Прогон, по событиям которого идёт ход сборки. */
+  readonly runId: string;
+  /** Все варианты вёрстки этой сборки, включая `runId`. */
+  readonly variantRunIds: readonly string[];
+}
+
 export interface DeckGenerator {
   /**
    * Умеет ли источник извлечь профиль из загруженного файла. Демо-источник не умеет, и интерфейс
@@ -101,9 +112,21 @@ export interface DeckGenerator {
    * Запустить генерацию. События приходят в `onEvent` по порядку `seq`. Отмена через `signal`
    * отклоняет обещание ошибкой `AbortError`; сбой сообщает событие `failed`, а затем отказ.
    * Свёрстанные слайды, если источник умеет их отдавать, приходят в `onSlide` по порядку.
+   * Прогон, который принял сервер, приходит в `onServerRun`, как только он известен.
    */
   generate(
     request: GenerationRequest,
+    onEvent: (event: JobEvent) => void,
+    signal: AbortSignal,
+    onSlide?: (slide: StreamedSlide) => void,
+    onServerRun?: (run: ServerRun) => void,
+  ): Promise<GenerationResult>;
+  /**
+   * Досмотреть прогон, запущенный раньше, — например, до обновления страницы. События приходят
+   * с начала прогона, так что ход восстанавливается целиком. Источник без сервера этого не умеет.
+   */
+  follow?(
+    run: ServerRun,
     onEvent: (event: JobEvent) => void,
     signal: AbortSignal,
     onSlide?: (slide: StreamedSlide) => void,

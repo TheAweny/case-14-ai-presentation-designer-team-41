@@ -66,6 +66,8 @@ export const templateImporter = createDemoTemplateImporter({
 export const templateImports = createTemplateImports(templateImporter);
 
 const httpGenerator = createHttpGenerator();
+const { follow } = httpGenerator;
+/** Готовая колода появляется в библиотеке: серверные страницы обновляются. */
 const deckGenerator: typeof httpGenerator = {
   ...httpGenerator,
   async generate(...args) {
@@ -73,14 +75,23 @@ const deckGenerator: typeof httpGenerator = {
     await refreshLibraryAction();
     return result;
   },
+  ...(follow
+    ? {
+        async follow(...args) {
+          const result = await follow(...args);
+          await refreshLibraryAction();
+          return result;
+        },
+      }
+    : {}),
 };
 
 /**
  * Сессия ассистента во вкладке: прогоны генерации, разговоры и агент, который их ведёт. Одна на
  * приложение — поле ввода начинает разговор, редактор его продолжает, и переход между
  * страницами ничего не обрывает. Разговоры сохраняются в API (`chatSync`) и после обновления
- * страницы возвращаются во вкладку (`loadChat`); прогоны генерации — нет: идущая сборка после
- * обновления не досматривается, её итог появится в библиотеке.
+ * страницы возвращаются во вкладку (`loadChat`); идущую сборку такой разговор досматривает по
+ * прогону на сервере.
  */
 export const generationRuns = createGenerationRuns(deckGenerator);
 export const assistantThreads = createAssistantThreads();
@@ -135,6 +146,7 @@ export async function loadChat(chatId: string): Promise<boolean> {
   const thread = threadOfChat(chat);
   chatSync?.markSaved(thread);
   assistantThreads.hydrate(thread);
+  deckConversations.resume(chatId);
   return true;
 }
 

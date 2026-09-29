@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RunRepository } from '@lct/run-store';
+import { MemoryRunRepository, type RunRepository } from '@lct/run-store';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
 import { GenerationController } from './generation.controller.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -160,5 +160,36 @@ describe('decks of other accounts', () => {
     const deck = (await withEngine(imported).deck(RUN, owner)) as Record<string, unknown>;
 
     expect(deck.runId).toBe(RUN);
+  });
+});
+
+describe('runs cut short by a restart', () => {
+  it('fails a run still going at start and leaves finished ones alone', async () => {
+    const LIVE = 'run-00000000-0000-4000-8000-000000000002';
+    const ids = [LIVE, RUN];
+    const runs = new MemoryRunRepository(() => ids.shift() ?? 'run-unexpected');
+    await mkdir(join(root, LIVE), { recursive: true });
+    await runs.create();
+    await runs.create();
+    await runs.transition(LIVE, 'running');
+    await runs.transition(RUN, 'running');
+    await runs.transition(RUN, 'done');
+    await runs.appendEvent(LIVE, {
+      schemaVersion: 1,
+      runId: LIVE,
+      seq: 0,
+      at: '2026-09-29T00:00:00.000Z',
+      type: 'stage-started',
+      stage: 'planning',
+    });
+    controller = new GenerationController(runs, {} as ModelSettingsService);
+
+    await controller.onApplicationBootstrap();
+
+    expect((await runs.get(LIVE))?.state).toBe('failed');
+    const failed = (await runs.events(LIVE)).at(-1);
+    expect(failed).toMatchObject({ seq: 1, type: 'failed', stage: 'planning', retryable: true });
+    expect((await runs.get(RUN))?.state).toBe('done');
+    expect(await runs.events(RUN)).toEqual([]);
   });
 });

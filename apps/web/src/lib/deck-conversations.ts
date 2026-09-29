@@ -88,6 +88,11 @@ export interface DeckConversations {
    */
   restore(threadId: string, snapshot: ConversationSnapshot): void;
   /**
+   * Досмотреть сборку восстановленного разговора, если её прервало обновление страницы: прогон
+   * на сервере идёт дальше, и его итог появится в разговоре. Разговор и сообщения уже во вкладке.
+   */
+  resume(threadId: string): void;
+  /**
    * Сообщение из поля панели редактора, когда вопросов нет. `attachments` — то, что человек дал
    * как контекст: объекты и слайды колоды со снимком SlideIR. Они остаются в сообщении человека —
    * настоящий агент прочитает их оттуда. Демо-агент честно говорит, что видит, и что править
@@ -219,6 +224,18 @@ function briefOf({ input, audience, refinements }: ConversationState): string {
     .join('\n\n');
 }
 
+/** Запрос сборки по тому, что агент знает сейчас. */
+function requestOf(state: ConversationState, templateId: string): GenerationRequest {
+  return {
+    ...state.input.request,
+    templateId,
+    brief: briefOf(state),
+    files: state.files,
+    contentIds: state.contentIds,
+    model: state.model,
+  };
+}
+
 export function createDeckConversations({
   threads,
   runs,
@@ -243,6 +260,26 @@ export function createDeckConversations({
   contentIdOf?: (file: File) => string | undefined;
 }): DeckConversations {
   const states = new Map<string, ConversationState>();
+
+  /**
+   * Сообщения о сборках по прогону вкладки. Когда сервер принимает прогон (и заново — при
+   * повторе), сообщение запоминает его: так сохранённый разговор досмотрит сборку.
+   */
+  const works = new Map<string, { threadId: string; messageId: string }>();
+  const rememberServer = (runId: string) => {
+    const work = works.get(runId);
+    const run = runs.get(runId);
+    if (!work || !run?.server) return;
+    const message = threads.get(work.threadId)?.messages.find((item) => item.id === work.messageId);
+    if (message?.kind !== 'work' || message.server?.runId === run.server.runId) return;
+    threads.setServerRun(work.threadId, work.messageId, {
+      ...run.server,
+      startedAt: run.startedAt,
+    });
+  };
+  runs.subscribe(() => {
+    for (const runId of works.keys()) rememberServer(runId);
+  });
 
   /** Ждать, пока на вопрос ответят. */
   const answerOf = (threadId: string, messageId: string) =>
@@ -401,27 +438,32 @@ export function createDeckConversations({
     if (state.templateId === null) return;
     state.build += 1;
     const ticket = state.build;
-    const current = () => state.build === ticket;
     if (state.runId !== null) runs.cancel(state.runId);
 
     threads.append(threadId, {
       kind: 'agent',
       text: { key: 'building', values: { template: state.templateName } },
     });
-    const runId = runs.start(
-      {
-        ...state.input.request,
-        templateId: state.templateId,
-        brief: briefOf(state),
-        files: state.files,
-        contentIds: state.contentIds,
-        model: state.model,
-      },
-      state.input.returnHref,
-    );
+    const runId = runs.start(requestOf(state, state.templateId), state.input.returnHref);
     state.runId = runId;
-    threads.append(threadId, { kind: 'work', runId });
+    const messageId = threads.append(threadId, { kind: 'work', runId });
+    works.set(runId, { threadId, messageId });
+    // Сервер мог назвать прогон ещё до того, как появилось сообщение о сборке.
+    rememberServer(runId);
+    await settle(threadId, state, runId, ticket);
+  };
 
+  /**
+   * Дождаться сборки и положить итог с аудитом. Сборка, которую сменила новая (`ticket` уже не
+   * последний), уходит молча.
+   */
+  const settle = async (
+    threadId: string,
+    state: ConversationState,
+    runId: string,
+    ticket: number,
+  ) => {
+    const current = () => state.build === ticket;
     let run = await finished(runId);
     while (run.phase !== 'done' || !run.result) {
       if (!current()) return;
@@ -601,6 +643,27 @@ export function createDeckConversations({
         build: 0,
         runId: snapshot.runId,
       });
+    },
+    resume(threadId) {
+      const state = states.get(threadId);
+      const messages = threads.get(threadId)?.messages ?? [];
+      const work = messages.findLast((message) => message.kind === 'work');
+      if (!state || work?.kind !== 'work' || !work.server || runs.get(work.runId)) return;
+      const settled = messages.some(
+        (message) => message.kind === 'result' && message.result.runId === work.runId,
+      );
+      if (settled || state.templateId === null) return;
+      const { startedAt, ...server } = work.server;
+      runs.follow(work.runId, {
+        request: requestOf(state, state.templateId),
+        returnHref: state.input.returnHref,
+        server,
+        startedAt,
+      });
+      state.runId = work.runId;
+      state.build += 1;
+      works.set(work.runId, { threadId, messageId: work.id });
+      void settle(threadId, state, work.runId, state.build);
     },
     returnHref: (threadId) => states.get(threadId)?.input.returnHref,
     modelOf: (threadId) => states.get(threadId)?.model,

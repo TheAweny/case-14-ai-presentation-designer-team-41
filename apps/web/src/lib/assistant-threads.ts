@@ -1,5 +1,5 @@
 import type { LayoutVariant } from '@lct/contracts';
-import type { GeneratedVariant } from './deck-generator';
+import type { GeneratedVariant, ServerRun } from './deck-generator';
 import type { TemplateSummary } from './library-source';
 import type { ContextMention, SlideRefAttachment } from './slide-context';
 
@@ -122,7 +122,17 @@ export type ThreadMessage =
       readonly meta: RequestMeta | null;
     }
   | { readonly kind: 'agent'; readonly id: string; readonly text: AgentText }
-  | { readonly kind: 'work'; readonly id: string; readonly runId: string }
+  | {
+      readonly kind: 'work';
+      readonly id: string;
+      /** Прогон во вкладке: по нему карточка показывает ход. */
+      readonly runId: string;
+      /**
+       * Прогон на сервере и когда начат, мс эпохи. По нему сборку досматривают после обновления
+       * страницы; нет — сервер прогон ещё не принял.
+       */
+      readonly server?: ServerRun & { readonly startedAt: number };
+    }
   /** Ход разбора шаблона: карточка следит за импортом по id, сбой повторяется из неё. */
   | { readonly kind: 'import'; readonly id: string; readonly importId: string }
   /**
@@ -182,6 +192,12 @@ export interface AssistantThreads {
   /** Человек поменял допущение агента: карточка показывает его выбор. */
   reassume(threadId: string, messageId: string, audience: AudienceOption): void;
   setDeck(threadId: string, deckId: string): void;
+  /** Сервер принял прогон сборки: сообщение о ней запоминает его. */
+  setServerRun(
+    threadId: string,
+    messageId: string,
+    server: ServerRun & { readonly startedAt: number },
+  ): void;
   /** Вопрос, который ждёт ответа, — на него отвечает и поле панели. */
   pendingQuestion(threadId: string): Extract<ThreadMessage, { kind: 'ask' }> | undefined;
 }
@@ -257,6 +273,13 @@ export function createAssistantThreads(
       }));
     },
     setDeck: (threadId, deckId) => update(threadId, () => ({ deckId })),
+    setServerRun(threadId, messageId, server) {
+      update(threadId, ({ messages }) => ({
+        messages: messages.map((message) =>
+          message.id === messageId && message.kind === 'work' ? { ...message, server } : message,
+        ),
+      }));
+    },
     pendingQuestion,
   };
 }
