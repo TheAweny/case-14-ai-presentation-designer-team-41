@@ -190,6 +190,8 @@ export const compositionPlanSchema = z.object({
         patternId: z.string(),
         purpose: z.string().min(1).max(600),
         imageQuery: z.string().default(''),
+        /** Exact excerpts proving that a composition's required facts are in the source. */
+        sourceEvidence: z.record(z.string(), z.string()).default({}),
       }),
     )
     .min(10)
@@ -245,6 +247,20 @@ export const compositionNoteSchema = z.object({
    * partner's logo — and is used only when the brief has it.
    */
   special: z.boolean().default(false),
+  /** Source material that must exist before this composition can be used. */
+  requiredContent: z
+    .array(
+      z.enum([
+        'person-name',
+        'contact',
+        'date',
+        'image',
+        'quantitative-data',
+        'brand-asset',
+        'screenshot',
+      ]),
+    )
+    .default([]),
 });
 export const templateIndexSchema = z.object({ notes: z.array(compositionNoteSchema) });
 export const storedTemplateIndexSchema = templateIndexSchema.extend({

@@ -36,6 +36,8 @@ export interface GenerationDependencies {
   onProgress?: (done: number, total: number) => Promise<void>;
   /** What the template indexer read about each composition; absent when never indexed. */
   notes?: readonly CompositionNote[];
+  /** True only when the run can put a new image into a required image area. */
+  imagesAvailable?: boolean;
 }
 const inputSchema = z.object({
   brief: z.string(),
@@ -114,6 +116,27 @@ export function overusedPatterns(patternIds: readonly string[], limit: number): 
       overused.add(id);
   });
   return [...overused];
+}
+
+/** Required context is accepted only when the planner cites an exact source excerpt. */
+export function missingRequiredContent(
+  plan: z.infer<typeof compositionPlanSchema>,
+  notes: ReadonlyMap<string, CompositionNote>,
+  source: string,
+) {
+  return plan.slides.flatMap((slide, slideIndex) => {
+    const requirements = (notes.get(slide.patternId)?.requiredContent ?? []).filter((item) => {
+      if (item === 'image') return false;
+      const quote = slide.sourceEvidence[item]?.trim();
+      return (
+        !quote ||
+        !source.includes(quote) ||
+        (item === 'person-name' && quote.split(/\s+/).length < 2) ||
+        (item === 'quantitative-data' && !/\d/.test(quote))
+      );
+    });
+    return requirements.length ? [{ slideIndex, patternId: slide.patternId, requirements }] : [];
+  });
 }
 
 /** Reading order of a composition's slots. Row and column are indexes, not coordinates. */
@@ -249,6 +272,7 @@ export function plannerComposition(
     name: pattern.name,
     ...(note ? { kind: note.kind, items: note.items, useFor: note.useFor } : {}),
     ...(note?.special ? { special: true } : {}),
+    ...(note ? { requiredContent: note.requiredContent } : {}),
     imageCount: pattern.imageCount,
     contentSlots: slots.filter((slot) => slot.role !== 'title').length,
     slots: slotBriefs(slots).map((slot) => ({
@@ -446,8 +470,21 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       // Pages about the template itself are not slides. Keep them only if the indexer left
       // too little to build a deck from, which means it misread the template.
       const all = distinctCompositions(inputData.profile.compositions);
-      const usable = all.filter((pattern) => !notes.get(pattern.patternId)?.skip);
-      const distinct = usable.length >= 3 ? usable : all;
+      // The current exporter cannot replace an image, a partner asset or a product screenshot.
+      // A slide that requires one must not enter the planner catalog or become a variant layout.
+      const hasMissingAsset = (pattern: (typeof all)[number]) =>
+        notes
+          .get(pattern.patternId)
+          ?.requiredContent.some((item) =>
+            item === 'image'
+              ? !deps.imagesAvailable
+              : item === 'brand-asset' || item === 'screenshot',
+          ) ?? false;
+      const assetSafe = all.filter((pattern) => !hasMissingAsset(pattern));
+      const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
+      const distinct = usable.length >= 3 ? usable : assetSafe;
+      if (!distinct.length)
+        throw new Error('Template has no composition usable without an external image or asset.');
       // A title on a pill holds a short claim, not a sentence, so the floor is a few words.
       // Numbering is written by code and does not need room for a phrase.
       const spacious = distinct.filter(
@@ -498,6 +535,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.plannerInstructions,
             {
               brief: inputData.brief,
+              imagesAvailable: deps.imagesAvailable ?? false,
               slideCount,
               ...(outline ? { outline } : {}),
               catalog: full.map((pattern) =>
@@ -524,6 +562,14 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           !covers.some((p) => p.patternId === result.slides[0]?.patternId)
             ? { firstSlidePatternMustBeOneOf: covers.map((p) => p.patternId) }
             : undefined;
+        const source = [
+          inputData.brief,
+          ...(outline?.slides ?? []).flatMap((slide) => [slide.title, ...slide.points]),
+        ].join('\n');
+        const evidenceCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+          const missing = missingRequiredContent(result, notes, source);
+          return missing.length ? { missingRequiredContent: missing } : undefined;
+        };
         let result: z.infer<typeof compositionPlanSchema>;
         try {
           result = await plan();
@@ -555,6 +601,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         const corrections = {
           ...countCorrections(result),
           ...coverCorrections(result),
+          ...evidenceCorrections(result),
           ...varietyCorrections(result),
         };
         if (Object.keys(corrections).length) result = await plan(corrections, result);
@@ -562,6 +609,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           throw new Error('Planner returned the wrong slide count.');
         if (coverCorrections(result))
           throw new Error('Planner did not select a cover composition.');
+        if (evidenceCorrections(result))
+          throw new Error('Planner selected a composition without its required source content.');
         return outline ? keepOutline(result, outline) : result;
       };
       const result = deps.sharedPlan
@@ -725,6 +774,10 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   const blocks = (p: T) => content(p).length;
   const coverIds = new Set(covers.map((p) => p.patternId));
   const special = (id: string) => notes.get(id)?.special === true;
+  const addsRequirements = (candidate: string, planned: string) => {
+    const available = new Set(notes.get(planned)?.requiredContent ?? []);
+    return (notes.get(candidate)?.requiredContent ?? []).some((item) => !available.has(item));
+  };
   // A layout for code or a device screen is never a stand-in for an ordinary slide, and the
   // planner chose a special one for its content, so that one stays in every variant.
   const pool = catalog.filter((p) => !coverIds.has(p.patternId) && !special(p.patternId));
@@ -739,12 +792,14 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
       pool.length === 0
     )
       return id;
-    const sameCount = pool.filter((p) => blocks(p) === blocks(planned));
+    const compatible = pool.filter((p) => !addsRequirements(p.patternId, id));
+    if (!compatible.length) return id;
+    const sameCount = compatible.filter((p) => blocks(p) === blocks(planned));
     // The indexer's kind keeps a process a process and cards cards when the template has both.
     const kind = notes.get(planned.patternId)?.kind;
     const sameKind = sameCount.filter((p) => kind && notes.get(p.patternId)?.kind === kind);
     const same = sameKind.length ? sameKind : sameCount;
-    const ranked = [...(same.length ? same : pool)].sort((a, b) =>
+    const ranked = [...(same.length ? same : compatible)].sort((a, b) =>
       variant === 'dense' ? capacity(b) - capacity(a) : capacity(a) - capacity(b),
     );
     const choice = ranked

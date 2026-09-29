@@ -54,6 +54,7 @@ export function settleNote(
     items: single ? 1 : Math.min(answer.items, Math.max(blocks, 1)),
     skip: reference,
     special: !reference && (answer.special || inSpecialGroup),
+    requiredContent: reference ? [] : [...new Set(answer.requiredContent)],
   };
 }
 

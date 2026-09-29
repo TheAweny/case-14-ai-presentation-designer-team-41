@@ -41,6 +41,7 @@ const note = (patternId: string, extra: Partial<CompositionNote> = {}): Composit
   title: 'One claim',
   skip: false,
   special: false,
+  requiredContent: [],
   ...extra,
 });
 
@@ -161,9 +162,75 @@ describe('settleNotes', () => {
     expect(cover?.items).toBe(1);
     expect(cards?.items).toBeLessThanOrEqual(Math.max(blocks, 1));
   });
+
+  it('keeps content requirements on usable slides but not reference pages', () => {
+    const [reference, speaker] = settle([
+      answer('pattern-0', { kind: 'reference', requiredContent: ['image'] }),
+      answer('pattern-1', { kind: 'team', requiredContent: ['person-name', 'image'] }),
+    ]);
+    expect(reference?.requiredContent).toEqual([]);
+    expect(speaker?.requiredContent).toEqual(['person-name', 'image']);
+  });
 });
 
 describe('planning with template notes', () => {
+  it('replans when a named-person slide has no source evidence', async () => {
+    let plans = 0;
+    let missing: unknown;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        if (agent === 'planner') {
+          plans++;
+          missing = (input as { corrections?: { missingRequiredContent?: unknown } }).corrections
+            ?.missingRequiredContent;
+          return schema.parse({
+            title: 'Deck',
+            slides: Array.from({ length: 10 }, (_, index) => ({
+              patternId:
+                (index === 1 || index === 6) && plans > 1 ? 'pattern-2' : `pattern-${index % 5}`,
+              purpose: `Point ${index}`,
+              imageQuery: '',
+            })),
+          });
+        }
+        return schema.parse({
+          patternId: (input as { composition: { patternId: string } }).composition.patternId,
+          textsBySlot: Object.fromEntries(
+            (input as { composition: { slots: { slotId: string }[] } }).composition.slots.map(
+              (slot) => [slot.slotId, 'Point'],
+            ),
+          ),
+          speakerNotes: '',
+          visual: null,
+        });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+      notes: [note('pattern-1', { requiredContent: ['person-name'] })],
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({
+      inputData: { brief: 'Описание продукта без имени спикера', slideCount: 10, profile },
+    });
+    expect(result.status).toBe('success');
+    expect(plans).toBe(2);
+    expect(missing).toEqual([
+      { slideIndex: 1, patternId: 'pattern-1', requirements: ['person-name'] },
+      { slideIndex: 6, patternId: 'pattern-1', requirements: ['person-name'] },
+    ]);
+  });
+
   it('hides reference pages from the planner and tells it what each layout is for', async () => {
     let catalog: { patternId: string; kind?: string; useFor?: string }[] = [];
     const provider: TextProvider = {
@@ -205,6 +272,7 @@ describe('planning with template notes', () => {
       notes: [
         note('pattern-0', { kind: 'reference', skip: true, useFor: 'fonts and colours' }),
         note('pattern-1', { kind: 'cards', items: 3, useFor: 'three parallel points' }),
+        note('pattern-2', { requiredContent: ['image'] }),
       ],
     });
     const result = await (
@@ -212,9 +280,26 @@ describe('planning with template notes', () => {
     ).start({ inputData: { brief: 'Point', slideCount: 10, profile } });
     expect(result.status).toBe('success');
     expect(catalog.map((item) => item.patternId)).not.toContain('pattern-0');
+    expect(catalog.map((item) => item.patternId)).not.toContain('pattern-2');
     expect(catalog.find((item) => item.patternId === 'pattern-1')).toMatchObject({
       kind: 'cards',
       useFor: 'three parallel points',
+      requiredContent: [],
+    });
+    const withImages = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+      imagesAvailable: true,
+      notes: [note('pattern-2', { requiredContent: ['image'] })],
+    });
+    const second = await (
+      await withImages.createRun()
+    ).start({ inputData: { brief: 'Point', slideCount: 10, profile } });
+    expect(second.status).toBe('success');
+    expect(catalog.find((item) => item.patternId === 'pattern-2')).toMatchObject({
+      requiredContent: ['image'],
     });
   });
 

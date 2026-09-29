@@ -203,6 +203,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
               useFor: note.useFor,
               items: note.items,
               ...(note.special ? { special: true } : {}),
+              ...(note.requiredContent.length ? { requiredContent: note.requiredContent } : {}),
             }))
         : null;
       return {

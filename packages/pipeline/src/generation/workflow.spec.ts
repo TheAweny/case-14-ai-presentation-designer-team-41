@@ -1,13 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
-import { generationProfileSchema } from '@lct/contracts';
+import {
+  compositionPlanSchema,
+  generationProfileSchema,
+  type CompositionNote,
+} from '@lct/contracts';
 import {
   copyDefects,
   createGenerationWorkflow,
   fitChars,
   groundedVisual,
   keepOutline,
+  missingRequiredContent,
   mirroredSlots,
   numberedSlots,
   overusedPatterns,
@@ -745,10 +750,11 @@ describe('one plan, three layouts', () => {
           title: 'Code',
           skip: false,
           special: true,
+          requiredContent: [] as CompositionNote['requiredContent'],
         },
       ] as const;
     // The roomiest one-block layout is kept for code: dense would pick it otherwise.
-    const notes = new Map([special('one-1200'), special('one-150')]);
+    const notes = new Map<string, CompositionNote>([special('one-1200'), special('one-150')]);
     const plan = ['cover', 'one-450', 'one-150', 'one-600'];
     for (const variant of ['dense', 'airy'] as const) {
       const catalog = variantCatalog(full, variant, [cover]);
@@ -765,6 +771,68 @@ describe('one plan, three layouts', () => {
     ]);
     expect(new Set(dense.slice(1, 4)).size).toBe(3);
   });
+
+  it('does not remap an ordinary slide onto one requiring a named person', () => {
+    const note = (patternId: string, requiredContent: CompositionNote['requiredContent']) =>
+      [
+        patternId,
+        {
+          patternId,
+          kind: 'statement' as const,
+          items: 1,
+          useFor: 'one point',
+          title: 'One point',
+          skip: false,
+          special: false,
+          requiredContent,
+        },
+      ] as const;
+    const notes = new Map([note('one-150', ['person-name']), note('one-450', [])]);
+    const layouts = remapPlan(
+      ['cover', 'one-450'],
+      full,
+      [cover, ...full.filter((p) => p.patternId === 'one-150')],
+      'airy',
+      [cover],
+      notes,
+    );
+    expect(layouts).toEqual(['cover', 'one-450']);
+  });
+});
+
+describe('composition requirements', () => {
+  const notes = new Map<string, CompositionNote>([
+    [
+      'speaker',
+      {
+        patternId: 'speaker',
+        kind: 'team',
+        items: 1,
+        useFor: 'speaker profile',
+        title: 'Speaker',
+        skip: false,
+        special: false,
+        requiredContent: ['person-name'],
+      },
+    ],
+  ]);
+  const plan = (quote: string) =>
+    compositionPlanSchema.parse({
+      title: 'Deck',
+      slides: Array.from({ length: 10 }, (_, index) => ({
+        patternId: index === 1 ? 'speaker' : 'statement',
+        purpose: 'One claim',
+        sourceEvidence: index === 1 ? { 'person-name': quote } : {},
+      })),
+    });
+
+  it('rejects a speaker layout without a cited full name from the source', () => {
+    const source = 'Спикер Анна Иванова расскажет о проекте.';
+    expect(missingRequiredContent(plan(''), notes, source)).toHaveLength(1);
+    expect(missingRequiredContent(plan('Анна'), notes, source)).toHaveLength(1);
+    expect(missingRequiredContent(plan('Иван Петров'), notes, source)).toHaveLength(1);
+    expect(missingRequiredContent(plan('Анна Иванова'), notes, source)).toEqual([]);
+  });
 });
 
 describe('keepOutline', () => {
@@ -774,8 +842,8 @@ describe('keepOutline', () => {
       audience: 'Кто-то',
       goal: '',
       slides: [
-        { patternId: 'a', purpose: 'Рынок растёт — 12% в год', imageQuery: '' },
-        { patternId: 'b', purpose: 'Что-то общее', imageQuery: '' },
+        { patternId: 'a', purpose: 'Рынок растёт — 12% в год', imageQuery: '', sourceEvidence: {} },
+        { patternId: 'b', purpose: 'Что-то общее', imageQuery: '', sourceEvidence: {} },
       ],
     };
     const kept = keepOutline(plan, {
