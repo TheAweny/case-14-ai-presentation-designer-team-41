@@ -53,8 +53,31 @@
     "bold": "bold",
     "regular": "regular",
     "italic": "italic",
-    "gallery": "Template layouts",
-    "galleryHint": "Every slide of a project presentation is built on one of these layouts."
+    "gallery": "Template slides",
+    "galleryHint": "Sample slides from the template file that presentation slides are built from, by kind.",
+    "layoutsGallery": "Template layouts",
+    "layoutsGalleryHint": "Layouts from the template file. Slides by kind appear once the template is analysed.",
+    "categories": {
+      "cover": "Title slides",
+      "section": "Section breaks",
+      "statement": "Statements",
+      "list": "Lists",
+      "cards": "Cards",
+      "process": "Processes and stages",
+      "comparison": "Comparisons",
+      "problem-solution": "Problem and solution",
+      "team": "People and team",
+      "closing": "Closing slides",
+      "other": "Other",
+      "special": "For special content",
+      "reference": "Template service pages"
+    },
+    "specialHint": "Code, formulas, device mockups, references: the agent uses them only when the material has such content.",
+    "referenceHint": "Instructions, palettes, catalogue headings. They never go into a presentation.",
+    "untitled": "Untitled",
+    "pending": "Sorting the template slides by kind. This takes up to a couple of minutes.",
+    "drawing": "Drawing the template slides — schematics are shown for now.",
+    "prepareFailed": "The template could not be analysed: check the model in settings."
   },
   "templates": {
     "label": "Project templates",

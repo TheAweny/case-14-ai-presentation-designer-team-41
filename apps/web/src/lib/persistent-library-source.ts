@@ -1,6 +1,6 @@
 import { apiFetch, publicApiUrl } from './api';
 import { decodeGeneratedDeck } from './http-generation';
-import { designSystemSchema, templateIrSchema } from '@lct/contracts';
+import { compositionNoteSchema, designSystemSchema, templateIrSchema } from '@lct/contracts';
 import type { DeckSummary, LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
 import { templateLayoutsFromIr } from './template-profile';
 import type { ProjectAppearance } from './project-appearance';
@@ -22,7 +22,14 @@ interface StoredTemplate {
   readonly mine?: boolean;
   readonly createdAt?: string;
   readonly size?: number;
-  readonly profile?: { designSystem?: unknown; templateIr?: unknown; previewDataUrl?: unknown };
+  readonly profile?: {
+    designSystem?: unknown;
+    templateIr?: unknown;
+    previewDataUrl?: unknown;
+    generation?: { compositions?: unknown };
+    index?: { notes?: unknown };
+    previews?: unknown;
+  };
 }
 
 interface StoredProject {
@@ -35,8 +42,51 @@ interface StoredProject {
   readonly pinnedAt?: string | null;
 }
 
+/**
+ * Образцы слайдов шаблона с заметками индексатора. Заметок нет — шаблон ещё не разобран, и
+ * образцов нет. Картинка слайда есть, если API уже нарисовал слайды шаблона.
+ */
+export function samplesOf(
+  templateId: string,
+  profile: StoredTemplate['profile'],
+): TemplateSummary['samples'] {
+  const notes = Array.isArray(profile?.index?.notes) ? profile.index.notes : [];
+  const compositions = Array.isArray(profile?.generation?.compositions)
+    ? (profile.generation.compositions as { patternId?: unknown; sourceIndex?: unknown }[])
+    : [];
+  const drawn = Array.isArray(profile?.previews) && profile.previews.length > 0;
+  const samples = notes.flatMap((raw) => {
+    const note = compositionNoteSchema.safeParse(raw);
+    if (!note.success) return [];
+    const slideIndex = compositions.find(
+      (item) => item.patternId === note.data.patternId,
+    )?.sourceIndex;
+    if (typeof slideIndex !== 'number') return [];
+    return [
+      {
+        patternId: note.data.patternId,
+        slideIndex,
+        kind: note.data.kind,
+        title: note.data.title,
+        useFor: note.data.useFor,
+        special: note.data.special,
+        reference: note.data.skip,
+        ...(drawn
+          ? {
+              previewUrl: publicApiUrl(
+                `/files/templates/${encodeURIComponent(templateId)}/previews/slide-${slideIndex + 1}.png`,
+              ),
+            }
+          : {}),
+      },
+    ];
+  });
+  return samples.length ? samples.sort((a, b) => a.slideIndex - b.slideIndex) : undefined;
+}
+
 function templateOf(row: StoredTemplate): TemplateSummary {
   const ir = templateIrSchema.parse(row.profile?.templateIr);
+  const samples = samplesOf(row.fileId, row.profile);
   return {
     templateId: row.fileId,
     fileName: row.name ?? row.fileName ?? 'Шаблон.pptx',
@@ -48,6 +98,7 @@ function templateOf(row: StoredTemplate): TemplateSummary {
     templateIr: ir,
     previewDataUrl:
       typeof row.profile?.previewDataUrl === 'string' ? row.profile.previewDataUrl : undefined,
+    ...(samples ? { samples } : {}),
   };
 }
 
