@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -2203,6 +2204,10 @@ class AuditRequest(BaseModel):
     designSystem: DesignSystem1 = Field(
         ..., description="The template read as rules: fonts, sizes, palette."
     )
+    knownYears: list[conint(ge=-9007199254740991, le=9007199254740991)] | None = Field(
+        None,
+        description="Years the source content names; a past year it names is not stale.",
+    )
     mediaSizes: dict[str, MediaSizes] | None = Field(
         None,
         description="Pixel size per mediaPart, for pictures the engine cannot open itself.",
@@ -2220,6 +2225,14 @@ class AuditRequest(BaseModel):
     )
     slides: list[Slide] = Field(
         ..., description="The deck under audit, any number of variants.", min_length=1
+    )
+    slotSamples: dict[str, dict[str, str]] | None = Field(
+        None,
+        description="Text each element showed in the template sample it was built from, by slideId and elementId. Lets the audit tell template copy left in place.",
+    )
+    today: date | None = Field(
+        None,
+        description="The day the deck is dated by; earlier years are past. Absent: today.",
     )
 
 
@@ -2325,10 +2338,12 @@ class CompositionExportRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    briefYears: list[conint(ge=-9007199254740991, le=9007199254740991)] | None = None
     outputPath: constr(min_length=1)
     schemaVersion: Literal[1]
     slides: list[Slide1] = Field(..., max_length=60, min_length=1)
     templatePath: constr(min_length=1)
+    today: date | None = None
 
 
 class Transform(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]):
