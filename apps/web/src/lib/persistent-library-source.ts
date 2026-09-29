@@ -95,6 +95,7 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
             coverPreviewUrl:
               deck.coverPreviewUrl ??
               publicApiUrl(`/generation/${encodeURIComponent(deck.deckId)}/artifacts/slide-1.png`),
+            designSystem: deck.designSystem,
             auditFindings: null,
           },
           variants: row.metadata.variants ?? [deck.deckId],

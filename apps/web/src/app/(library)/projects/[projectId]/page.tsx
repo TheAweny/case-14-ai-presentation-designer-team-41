@@ -66,12 +66,12 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     librarySource.listTemplates(),
   ]);
   const newDeckHref = newDeckInProjectHref(project.projectId);
-  // Обложку каждой колоды рисует её шаблон: в проекте их может быть несколько, а колода может
-  // быть свёрстана и шаблоном, который уже открепили.
+  // Обложку каждой колоды рисует её профиль, а без него — её шаблон: в проекте их может быть
+  // несколько, а колода может быть свёрстана шаблоном, который уже открепили или удалили.
   const templateById = new Map(templates.map((template) => [template.templateId, template]));
   const covered = decks.flatMap((deck) => {
-    const template = templateById.get(deck.templateId);
-    return template ? [{ deck, designSystem: template.designSystem }] : [];
+    const designSystem = deck.designSystem ?? templateById.get(deck.templateId)?.designSystem;
+    return designSystem ? [{ deck, designSystem }] : [];
   });
   const attached = new Set(project.templates.map((template) => template.templateId));
   // Из чего выбрать в «Прикрепить шаблон»: библиотека без уже прикреплённых.

@@ -73,6 +73,11 @@ export interface DeckSummary {
   readonly cover: SlideIr;
   /** Реальный PNG первого слайда из движка, если он доступен. */
   readonly coverPreviewUrl?: string;
+  /**
+   * Профиль, которым свёрстана колода. Есть — обложка рисуется им, и колоде не нужен шаблон:
+   * шаблон могли удалить из библиотеки, а колода осталась.
+   */
+  readonly designSystem?: DesignSystem;
   /** Последняя правка, мс с эпохи. */
   readonly updatedAt: number;
   /** Замечаний последнего аудита; null — аудит ещё не запускали. */
