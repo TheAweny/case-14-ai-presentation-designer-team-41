@@ -85,6 +85,9 @@ export function checkContrast(slide: SlideIr, context: AuditContext): AuditIssue
 
   slide.elements.forEach((element, index) => {
     if (element.kind !== 'text' || isBlank(element.paragraphs)) return;
+    // Page numbers and footers are the template's chrome, set quiet on purpose; the audit judges
+    // what the deck says, not how the template marks its pages.
+    if (element.role === 'page-number' || element.role === 'footer') return;
     const background = backgroundUnder(
       slide,
       index,
