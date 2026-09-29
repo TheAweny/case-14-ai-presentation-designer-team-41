@@ -1117,11 +1117,27 @@ describe('one plan, three layouts', () => {
       full
         .find((p) => p.patternId === id)
         ?.slots.reduce((sum, s) => sum + (s.role === 'body' ? s.maxChars : 0), 0) ?? 0;
+    // Each dense slide holds at least as much as its airy twin, and the deck holds more.
+    let denser = 0;
+    let lighter = 0;
     for (let i = 1; i < planned.length; i += 1) {
-      expect(capacity(dense[i] ?? '')).toBeGreaterThan(capacity(airy[i] ?? ''));
+      expect(capacity(dense[i] ?? '')).toBeGreaterThanOrEqual(capacity(airy[i] ?? ''));
+      denser += capacity(dense[i] ?? '');
+      lighter += capacity(airy[i] ?? '');
     }
+    expect(denser).toBeGreaterThan(lighter);
     expect(dense[4]?.startsWith('two-')).toBe(true);
     expect(airy[4]?.startsWith('two-')).toBe(true);
+  });
+
+  it('keeps an airy slide on a layout that still holds most of the planned text', () => {
+    const catalog = variantCatalog(full, 'airy', [cover]);
+    const layouts = remapPlan(['cover', 'one-900'], full, catalog, 'airy', [cover]);
+    const room = full
+      .find((p) => p.patternId === layouts[1])
+      ?.slots.reduce((sum, s) => sum + (s.role === 'body' ? s.maxChars : 0), 0);
+    expect(room).toBeGreaterThanOrEqual(540);
+    expect(room).toBeLessThanOrEqual(900);
   });
 
   it('never lays a content slide out on a divider or a closing, nor on a far block count', () => {

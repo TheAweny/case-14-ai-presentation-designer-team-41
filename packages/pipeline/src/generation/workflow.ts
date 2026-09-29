@@ -1226,6 +1226,9 @@ export class SharedPlan {
   }
 }
 
+/** The least room a variant's layout keeps of the planned one's, so the points still fit. */
+const MIN_CAPACITY_SHARE = 0.6;
+
 /** Kinds that frame a deck rather than carry its points. */
 const FRAMING_KINDS: ReadonlySet<string> = new Set(['cover', 'section', 'closing']);
 
@@ -1278,9 +1281,17 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
     // The same number of blocks, or one more or fewer: the planned points still fit. Without
     // such a layout in this variant's set the slide keeps the one the planner chose for it.
     const sameCount = compatible.filter((p) => blocks(p) === blocks(planned));
-    const near = sameCount.length
-      ? sameCount
-      : compatible.filter((p) => blocks(p) > 0 && Math.abs(blocks(p) - blocks(planned)) <= 1);
+    // Lighter, not emptier: a layout holding far less than the planned one drops the slide's
+    // points, as a quote layout would for four figures.
+    const near = (
+      sameCount.length
+        ? sameCount
+        : compatible.filter((p) => blocks(p) > 0 && Math.abs(blocks(p) - blocks(planned)) <= 1)
+    ).filter((p) =>
+      variant === 'dense'
+        ? capacity(p) >= capacity(planned)
+        : capacity(p) <= capacity(planned) && capacity(p) >= capacity(planned) * MIN_CAPACITY_SHARE,
+    );
     if (!near.length) return id;
     // The indexer's kind keeps a process a process and cards cards when the template has both.
     const kind = notes.get(planned.patternId)?.kind;
