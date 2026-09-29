@@ -1,4 +1,10 @@
-import type { DecorShape, ElementRole, SlideElement, SlideIr } from '@lct/contracts';
+import type {
+  ChatAttachment,
+  DecorShape,
+  ElementRole,
+  SlideElement,
+  SlideIr,
+} from '@lct/contracts';
 import { layerTree, pickedLayers } from '@lct/deck-ops';
 
 /**
@@ -241,4 +247,39 @@ export function contextMentions(
 
 function isSlideRefAttachment(value: { readonly kind: string }): value is SlideRefAttachment {
   return value.kind === 'slide-ref';
+}
+
+/** Текст объекта слайда, если он есть: абзацы через перевод строки. */
+function elementText(element: SlideElement): string {
+  if (element.kind !== 'text') return '';
+  return element.paragraphs
+    .map((paragraph) => paragraph.runs.map((run) => run.text).join(''))
+    .join('\n')
+    .slice(0, 4000);
+}
+
+/**
+ * Снимок ссылки для агента в чате: какие объекты и что на них написано. \`name\` — подпись чипа
+ * на языке интерфейса: так вложение видно и в ленте.
+ */
+export function chatContextOf(
+  deckId: string,
+  attachment: SlideRefAttachment,
+  name: string,
+): Extract<ChatAttachment, { kind: 'slides' }> {
+  const elements =
+    attachment.context.scope === 'slide'
+      ? attachment.context.slide.elements
+      : attachment.context.elements;
+  return {
+    kind: 'slides',
+    deckId,
+    slideNumber: attachment.slideNumber,
+    name: name.slice(0, 200),
+    elements: elements.slice(0, 60).map((element) => ({
+      kind: element.kind,
+      role: element.role,
+      text: elementText(element),
+    })),
+  };
 }

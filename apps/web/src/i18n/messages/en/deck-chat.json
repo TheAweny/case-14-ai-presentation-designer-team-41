@@ -13,7 +13,7 @@
     "openEditor": "Open in editor"
   },
   "next": {
-    "title": "Rebuild it",
+    "title": "What next",
     "otherTemplate": "In another template",
     "otherTemplateTitle": "Build the same deck with",
     "otherTemplateSaid": "Build the same deck with the “{template}” template",
@@ -36,15 +36,109 @@
   },
   "input": {
     "label": "Message to the agent",
-    "placeholder": "What should change? The agent will rebuild the deck",
-    "placeholderRunning": "Add a wish — the agent will rebuild with it",
+    "placeholder": "Message the agent",
+    "placeholderRunning": "The agent is answering…",
     "placeholderAnswer": "Or answer in your own words",
     "send": "Send",
     "stop": "Stop",
     "attach": "Add materials",
-    "files": "Materials for the next build",
+    "files": "Attachments",
     "dropHere": "Drop files to add them to the request",
     "rejected": "Unsupported files: {names}."
   },
-  "toBottom": "Jump to latest"
+  "toBottom": "Jump to latest",
+  "modes": {
+    "label": "Mode",
+    "chat": {
+      "name": "Chat",
+      "description": "Just talk: the agent answers and reads materials but builds nothing"
+    },
+    "plan": {
+      "name": "Plan",
+      "description": "A deck plan first: you edit and approve it, then it’s built"
+    },
+    "auto": {
+      "name": "Auto",
+      "description": "The agent decides and builds the deck right away"
+    }
+  },
+  "empty": {
+    "title": "What shall we talk about?",
+    "body": "Ask anything or describe a presentation. In Plan mode the agent shows a plan first."
+  },
+  "pending": {
+    "uploading": "Sending…",
+    "failed": "Not sent",
+    "failedWith": "Not sent: {reason}"
+  },
+  "status": {
+    "cancelled": "Stopped",
+    "failed": "The answer was cut short"
+  },
+  "tools": {
+    "list_templates": "Looked at the templates",
+    "describe_template": "Studied the template",
+    "read_file": "Read the material",
+    "read_deck": "Read the deck",
+    "read_audit": "Looked at the audit",
+    "running": {
+      "list_templates": "Looking at the templates…",
+      "describe_template": "Studying the template…",
+      "read_file": "Reading the material…",
+      "read_deck": "Reading the deck…",
+      "read_audit": "Looking at the audit…",
+      "ask_user": "Putting a question…",
+      "propose_plan": "Drafting the plan…",
+      "build_deck": "Starting the build…"
+    },
+    "failed": "Didn’t work: {name}"
+  },
+  "plan": {
+    "title": "Presentation plan",
+    "slides": "{count, plural, one {# slide} other {# slides}}",
+    "audience": "For",
+    "goal": "Goal",
+    "template": "Template",
+    "chooseTemplate": "Choose a template",
+    "approve": "Build this plan",
+    "refine": "Refine",
+    "approved": "Plan approved",
+    "superseded": "Replaced by a newer plan",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "remove": "Remove slide",
+    "add": "Add slide",
+    "newSlide": "New slide",
+    "titleLabel": "Title of slide {number}",
+    "pointsLabel": "Points of slide {number}, one per line",
+    "minSlides": "A deck has at least {min} slides.",
+    "edited": "Edited by you",
+    "kinds": {
+      "cover": "Cover",
+      "section": "Section",
+      "statement": "Statement",
+      "list": "List",
+      "cards": "Cards",
+      "process": "Steps",
+      "comparison": "Comparison",
+      "problem-solution": "Problem and solution",
+      "team": "Team",
+      "closing": "Closing",
+      "reference": "Reference",
+      "other": "Slide"
+    }
+  },
+  "question": {
+    "answer": "Answer",
+    "answered": "Answer: {answer}",
+    "pickSeveral": "You can pick several"
+  },
+  "build": {
+    "preparing": "Preparing the template “{template}”…",
+    "done": "Built the deck in {time}",
+    "failed": "The build failed",
+    "failedWith": "The build failed: {reason}",
+    "cancelled": "The build was stopped"
+  },
+  "error": "Couldn’t answer: {message}"
 }

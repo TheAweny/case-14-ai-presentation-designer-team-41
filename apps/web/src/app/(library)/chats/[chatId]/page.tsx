@@ -16,5 +16,5 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function ChatPage({ params }: { params: Promise<{ chatId: string }> }) {
   const [{ chatId }, templates] = await Promise.all([params, librarySource.listTemplates()]);
-  return <DeckChat threadId={chatId} templates={templates} />;
+  return <DeckChat chatId={chatId} templates={templates} />;
 }

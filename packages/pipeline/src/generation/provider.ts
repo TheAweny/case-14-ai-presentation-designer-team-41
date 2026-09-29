@@ -78,7 +78,15 @@ class RequestLimiter {
 // I share the HTTP slots across all runs and variants in this process, not per deck.
 const requests = new RequestLimiter();
 
-function backoff(ms: number, signal: AbortSignal): Promise<void> {
+/**
+ * Take one of the process-wide model request slots; the answer releases it. The chat shares them
+ * with the generation, so a chat turn waits behind a deck rather than overloading the provider.
+ */
+export function acquireModelSlot(signal: AbortSignal): Promise<() => void> {
+  return requests.acquire(signal);
+}
+
+export function backoff(ms: number, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const abort = () => {
@@ -216,10 +224,12 @@ export class OpenAICompatibleProvider implements TextProvider {
           return result;
         }
       } catch (error) {
-        // One slow answer must not sink the deck: a request that hit its own time limit is
-        // retried, while cancellation of the whole run still stops at once.
+        // One slow answer or dropped connection must not sink the deck: a request that hit its
+        // own time limit or lost the network (fetch rejects with a TypeError) is retried, while
+        // cancellation of the whole run still stops at once.
         const timedOut = error instanceof Error && error.name === 'TimeoutError';
-        if (!timedOut || signal.aborted || attempt >= 2) throw error;
+        const dropped = error instanceof TypeError;
+        if (!(timedOut || dropped) || signal.aborted || attempt >= 2) throw error;
       } finally {
         release();
       }

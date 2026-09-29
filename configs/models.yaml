@@ -21,6 +21,20 @@
 # spend the budget. The served name is LLM_MODEL / VLM_MODEL in .env, not this file.
 
 models:
+  # The chat talks and calls tools: the same MoE, served with a tool-call parser (vLLM
+  # --enable-auto-tool-choice --tool-call-parser hermes). A server without one gets a JSON mode.
+  - id: assistant-default
+    repo: Qwen/Qwen3-30B-A3B-Instruct-2507
+    revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe
+    license: Apache-2.0
+    sizeB: 30.5
+    type: llm
+    provider: openai-compatible
+    baseUrlEnv: LLM_BASE_URL
+    extraBody:
+      chat_template_kwargs:
+        enable_thinking: false
+
   - id: planner-default
     repo: Qwen/Qwen3-30B-A3B-Instruct-2507
     revision: 0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe

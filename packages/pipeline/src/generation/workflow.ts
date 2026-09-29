@@ -9,8 +9,10 @@ import {
   slotTableSchema,
   type SlotVisual,
   compositionSchema,
+  deckOutlineSchema,
   generationProfileSchema,
   type ComposedSlide,
+  type DeckOutline,
   type CompositionNote,
   type GenerationProfile,
 } from '@lct/contracts';
@@ -39,6 +41,8 @@ const inputSchema = z.object({
   brief: z.string(),
   slideCount: z.number().int().min(10).max(15).nullable(),
   profile: generationProfileSchema,
+  /** The approved story: its slides, in its order, are what the planner lays out. */
+  outline: deckOutlineSchema.nullish(),
 });
 const taskSchema = z.object({
   narrative: z.array(z.string()).default([]),
@@ -482,6 +486,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const catalog = variantCatalog(full, variant, covers);
       // The story is planned once for all three variants, on the full catalog; each variant then
       // lays the same slides out on its own compositions (remapPlan).
+      const outline = inputData.outline ?? null;
+      const slideCount = outline?.slides.length ?? inputData.slideCount;
       const computePlan = async () => {
         const plan = (
           corrections?: Record<string, unknown>,
@@ -492,7 +498,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.plannerInstructions,
             {
               brief: inputData.brief,
-              slideCount: inputData.slideCount,
+              slideCount,
+              ...(outline ? { outline } : {}),
               catalog: full.map((pattern) =>
                 plannerComposition(pattern, notes.get(pattern.patternId)),
               ),
@@ -504,10 +511,10 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.signal,
           );
         const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
-          inputData.slideCount === null || result.slides.length === inputData.slideCount
+          slideCount === null || result.slides.length === slideCount
             ? undefined
             : {
-                exactSlideCount: inputData.slideCount,
+                exactSlideCount: slideCount,
                 returnedSlideCount: result.slides.length,
                 message: 'Return exactly exactSlideCount slides.',
               };
@@ -523,7 +530,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         } catch {
           result = await plan({
             minimumSlideCount: 10,
-            exactSlideCount: inputData.slideCount,
+            exactSlideCount: slideCount,
             message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
           });
         }
@@ -551,11 +558,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...varietyCorrections(result),
         };
         if (Object.keys(corrections).length) result = await plan(corrections, result);
-        if (inputData.slideCount !== null && result.slides.length !== inputData.slideCount)
+        if (slideCount !== null && result.slides.length !== slideCount)
           throw new Error('Planner returned the wrong slide count.');
         if (coverCorrections(result))
           throw new Error('Planner did not select a cover composition.');
-        return result;
+        return outline ? keepOutline(result, outline) : result;
       };
       const result = deps.sharedPlan
         ? await deps.sharedPlan.once(computePlan)
@@ -656,6 +663,32 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     .foreach(write, { concurrency: Math.max(1, Math.min(6, deps.concurrency ?? 3)) })
     .commit();
 }
+/**
+ * The plan of an approved outline says what the outline says. The deck is titled as the outline,
+ * speaks to its audience, and every slide keeps its claim: the planner chose the compositions, but
+ * a slide whose purpose lost the approved title gets the outline's own words back.
+ */
+export function keepOutline(
+  plan: z.infer<typeof compositionPlanSchema>,
+  outline: DeckOutline,
+): z.infer<typeof compositionPlanSchema> {
+  return {
+    ...plan,
+    title: outline.title,
+    audience: outline.audience || plan.audience,
+    goal: outline.goal || plan.goal,
+    slides: plan.slides.map((slide, index) => {
+      const planned = outline.slides[index];
+      if (!planned || slide.purpose.includes(planned.title)) return slide;
+      const points = planned.points.join('; ');
+      return {
+        ...slide,
+        purpose: (points ? `${planned.title} — ${points}` : planned.title).slice(0, 600),
+      };
+    }),
+  };
+}
+
 /**
  * One plan for the variants of a brief, computed by whichever variant gets there first and awaited
  * by the others, so the three decks tell the same story and the planner is called once.

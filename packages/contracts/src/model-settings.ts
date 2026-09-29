@@ -12,8 +12,18 @@ import { z } from 'zod';
  * Not part of `contractRegistry`: the engine never calls a model, so Python has no use for it.
  */
 
-/** Roles of the pipeline from `docs/MODELS.md`, in the order they work on a deck. */
-export const PIPELINE_ROLES = ['planner', 'writer', 'critic', 'vision', 'image'] as const;
+/**
+ * Roles of the pipeline from `docs/MODELS.md`, in the order they work on a deck: the assistant
+ * talks to the person in the chat, the rest build the deck.
+ */
+export const PIPELINE_ROLES = [
+  'assistant',
+  'planner',
+  'writer',
+  'critic',
+  'vision',
+  'image',
+] as const;
 export const pipelineRoleSchema = z.enum(PIPELINE_ROLES);
 export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
 
@@ -23,6 +33,11 @@ export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
  */
 export function isRoleOptional(role: PipelineRole): boolean {
   return role === 'image';
+}
+
+/** A role that, without a model of its own, works with the writer's: the chat assistant. */
+export function usesWriterModelByDefault(role: PipelineRole): boolean {
+  return role === 'assistant';
 }
 
 /**

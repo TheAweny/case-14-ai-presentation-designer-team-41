@@ -11,57 +11,20 @@ import {
   Patch,
   Post,
   Logger,
-  ServiceUnavailableException,
   StreamableFile,
 } from '@nestjs/common';
-import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
-import { Pool } from 'pg';
-import type { z } from 'zod';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import {
   designSystemSchema,
-  generationProfileSchema,
   generationRequestSchema,
-  modelRefSchema,
   storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
-import type { GenerationProfile, StoredTemplateIndex } from '@lct/contracts';
-import { EngineClient } from '@lct/engine-client';
-import {
-  currentTemplateIndexRevision,
-  generatePresentation,
-  GenerationProvider,
-  indexTemplateWithAgent,
-  RoutedTextProvider,
-  SharedPlan,
-  type IndexProgress,
-} from '@lct/pipeline';
-import type { RunRepository } from '@lct/run-store';
-import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
-import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
-import { buildOf, LibraryMetadata, oneDeckPerBuild, type Metadata } from './library-metadata.js';
+import { buildOf, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
-import { visibleFile } from '../files/template-visibility.js';
-
-/** The account as model settings see it: whose connections and role choices apply. */
-function actorOf(account: Account) {
-  return { userId: account.id, admin: account.role === 'admin' };
-}
-
-/** Width of a sample slide picture in the library: sharp in a card, light on the page. */
-const TEMPLATE_PREVIEW_WIDTH = 640;
-
-/** A preparation under way: reading the template's profile, then describing its compositions. */
-interface PrepareProgress {
-  stage: 'profile' | 'index';
-  described: number;
-  total: number;
-}
+import { GenerationService, pickedModel, type PrepareProgress } from './generation.service.js';
 
 /** What `GET /generation/prepare/:templateId` answers. */
 export interface TemplatePreparation {
@@ -77,33 +40,28 @@ export interface TemplatePreparation {
   drawn: boolean;
 }
 
-/** The renderings of every brief, generated in parallel. */
-const VARIANTS = ['dense', 'balanced', 'airy'] as const;
-
 @Controller('generation')
-export class GenerationController implements OnApplicationBootstrap, OnApplicationShutdown {
-  private readonly root = resolve(process.env.RUNS_DIR ?? join(process.cwd(), 'runs'));
-  private readonly pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  private readonly engine = new EngineClient({
-    baseUrl: process.env.ENGINE_URL ?? 'http://localhost:8000',
-    timeoutMs: 120000,
-  });
-  /** Drawing a large template takes the office suite about a minute. */
-  private readonly drawingEngine = new EngineClient({
-    baseUrl: process.env.ENGINE_URL ?? 'http://localhost:8000',
-    timeoutMs: 900000,
-  });
-  private readonly active = new Map<string, AbortController>();
-  private readonly library = new LibraryMetadata(this.root);
+export class GenerationController {
   private readonly logger = new Logger(GenerationController.name);
-  constructor(
-    @Inject(RUN_REPOSITORY) private readonly repository: RunRepository,
-    @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
-  ) {}
+  constructor(@Inject(GenerationService) private readonly generation: GenerationService) {}
 
+  private get pool() {
+    return this.generation.pool;
+  }
+  private get engine() {
+    return this.generation.engine;
+  }
+  private get library() {
+    return this.generation.library;
+  }
+  private get repository() {
+    return this.generation.repository;
+  }
+  private get root() {
+    return this.generation.root;
+  }
   private directory(id: string): string {
-    if (!/^[a-zA-Z0-9-]{1,80}$/.test(id)) throw new BadRequestException('Invalid run id.');
-    return join(this.root, id);
+    return this.generation.directory(id);
   }
 
   @Post('prepare')
@@ -111,36 +69,9 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     @Body() body: { templateId?: string; model?: unknown },
     @CurrentAccount() account: Account,
   ): Promise<{ ready: true }> {
-    const templateId = body.templateId ?? '';
-    const row = await this.template(templateId, account);
-    // The pictures of the sample slides are for the library, not the deck: never waited for.
-    void this.drawPreviews(templateId, row);
-    const progress: PrepareProgress = { stage: 'profile', described: 0, total: 0 };
-    this.preparing.set(templateId, progress);
-    try {
-      const profile = await this.engine.generationProfile(row.storage_path);
-      await this.pool.query(
-        "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
-        [templateId, JSON.stringify(profile)],
-      );
-      const model = modelRefSchema
-        .nullable()
-        .catch(null)
-        .parse(body.model ?? null);
-      progress.stage = 'index';
-      await this.indexTemplate(templateId, profile, row.profile?.index, model, account, (step) => {
-        progress.described = step.described;
-        progress.total = step.total;
-      });
-      return { ready: true };
-    } finally {
-      // A later request for the same template reports on its own.
-      if (this.preparing.get(templateId) === progress) this.preparing.delete(templateId);
-    }
+    await this.generation.prepare(body.templateId ?? '', pickedModel(body.model), account);
+    return { ready: true };
   }
-
-  /** Templates being prepared right now, and how far each has got. */
-  private readonly preparing = new Map<string, PrepareProgress>();
 
   /**
    * How far the preparation of a template has got, for the library to show while it waits: the
@@ -152,275 +83,32 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     @Param('templateId') templateId: string,
     @CurrentAccount() account: Account,
   ): Promise<TemplatePreparation> {
-    const row = await this.template(templateId, account);
-    const running = this.preparing.get(templateId);
+    const row = await this.generation.template(templateId, account);
+    const { progress, drawing } = this.generation.preparationOf(templateId);
     return {
-      stage: running?.stage ?? null,
-      described: running?.described ?? 0,
-      total: running?.total ?? 0,
+      stage: progress?.stage ?? null,
+      described: progress?.described ?? 0,
+      total: progress?.total ?? 0,
       indexed: storedTemplateIndexSchema.safeParse(row.profile?.index).success,
-      drawing: this.drawing.has(templateId),
+      drawing,
       drawn: Array.isArray(row.profile?.previews),
     };
-  }
-
-  /** Templates whose slides are being drawn right now: a second request does not start again. */
-  private readonly drawing = new Set<string>();
-
-  /**
-   * Draw every slide of the template once, for the library to show the sample slides a deck is
-   * built from as they are. The file names go into the profile; a failure is logged and the
-   * library falls back to the slides it draws itself.
-   */
-  private async drawPreviews(
-    templateId: string,
-    row: { storage_path: string; profile: { previews?: unknown } },
-  ): Promise<void> {
-    if (Array.isArray(row.profile?.previews) || this.drawing.has(templateId)) return;
-    this.drawing.add(templateId);
-    try {
-      const drawn = await this.drawingEngine.templatePreviews({
-        schemaVersion: 1,
-        templatePath: row.storage_path,
-        outputDir: join(dirname(row.storage_path), 'previews'),
-        widthPx: TEMPLATE_PREVIEW_WIDTH,
-      });
-      await this.pool.query(
-        "UPDATE stored_files SET profile = profile || jsonb_build_object('previews', $2::jsonb) WHERE id = $1",
-        [templateId, JSON.stringify(drawn.previews)],
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Slides of template ${templateId} were not drawn: ${error instanceof Error ? error.message : error}`,
-      );
-    } finally {
-      this.drawing.delete(templateId);
-    }
-  }
-
-  /**
-   * Describe the template's compositions once per template and indexer revision. Preparation is
-   * outside the timed generation stage; a failure only leaves the planner without the notes, so
-   * it is logged and never blocks the deck.
-   */
-  private async indexTemplate(
-    templateId: string,
-    profile: GenerationProfile,
-    stored: unknown,
-    model: z.infer<typeof modelRefSchema> | null,
-    account: Account,
-    onProgress: (progress: IndexProgress) => void,
-  ): Promise<void> {
-    try {
-      const registryDir = this.registryDir();
-      const revision = await currentTemplateIndexRevision(registryDir);
-      const previous = storedTemplateIndexSchema.safeParse(stored);
-      if (
-        previous.success &&
-        previous.data.templateHash === profile.templateHash &&
-        previous.data.revision === revision
-      )
-        return;
-      const resolved =
-        (await this.models.resolveRole('planner', actorOf(account))) ??
-        (await this.models.resolve(model, actorOf(account)));
-      const provider = new GenerationProvider({
-        apiKey: resolved.apiKey,
-        baseUrl: resolved.baseUrl,
-        model: resolved.model,
-      });
-      const index: StoredTemplateIndex = await indexTemplateWithAgent({
-        provider,
-        registryDir,
-        profile,
-        onProgress,
-        // Outside the generation budget, and a large template on a slow model takes minutes:
-        // the indexer asks again about what an answer left out.
-        signal: AbortSignal.timeout(600000),
-      });
-      await this.pool.query(
-        "UPDATE stored_files SET profile = profile || jsonb_build_object('index', $2::jsonb) WHERE id = $1",
-        [templateId, JSON.stringify(index)],
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Template ${templateId} was not indexed: ${error instanceof Error ? error.message : error}`,
-      );
-    }
-  }
-
-  private registryDir(): string {
-    const found =
-      process.env.REGISTRY_DIR ||
-      [resolve('registry/agents'), resolve('../../registry/agents')].find(existsSync);
-    if (!found) throw new BadRequestException('REGISTRY_DIR is not configured.');
-    return found;
-  }
-
-  private async template(id: string, account: Account) {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Invalid template id.');
-    const result = await this.pool.query<{
-      storage_path: string;
-      profile: { generation?: GenerationProfile; index?: unknown; previews?: unknown };
-    }>(
-      `SELECT storage_path, profile FROM stored_files
-       WHERE id = $1 AND kind = 'template' AND ${visibleFile(2)}`,
-      [id, account.id],
-    );
-    const row = result.rows[0];
-    if (!row) throw new NotFoundException('Template not found.');
-    return row;
   }
 
   @Post()
   async create(@Body() body: unknown, @CurrentAccount() account: Account) {
     const parsed = generationRequestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.message);
-    // Every generation runs three variants, each counted as one active run.
-    if (this.active.size >= 2 * VARIANTS.length)
-      throw new BadRequestException('Two generations are already running.');
-    const input = parsed.data;
-    if (input.projectId !== null) await this.requireProject(input.projectId, account);
-    const template = await this.template(input.templateId, account);
-    const prepared = generationProfileSchema.safeParse(template.profile?.generation);
-    if (!prepared.success) throw new BadRequestException('Prepare the template before generation.');
-    let brief = input.brief;
-    for (const id of input.contentIds) {
-      const files = await this.pool.query<{ storage_path: string }>(
-        `SELECT storage_path FROM stored_files
-         WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
-        [id, account.id],
-      );
-      const path = files.rows[0]?.storage_path;
-      if (!path || !/\.(txt|md|csv|tsv)$/i.test(path))
-        throw new BadRequestException(
-          'This generation supports text, Markdown and CSV/TSV content.',
-        );
-      const content = await readFile(path, 'utf8');
-      brief += `\n\nSource ${id}:\n${content}`;
-    }
-    if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
-    // The models are settled before a run exists: without one there is nothing to start, and the
-    // person gets the reason in the answer rather than a run that fails without one.
-    const settle = <T>(pending: Promise<T>): Promise<T> =>
-      pending.catch((error: unknown) => {
-        if (error instanceof ModelNotConfiguredError)
-          throw new ServiceUnavailableException({
-            code: 'model-not-configured',
-            message: error.message,
-          });
-        throw error;
-      });
-    const actor = actorOf(account);
-    const writer = await settle(this.models.resolve(input.model, actor));
-    // Planner and critic run on the models of their roles; a role without one writes with the
-    // writer's model, and the slot rewriter always does.
-    const [planner, critic] = await settle(
-      Promise.all([
-        this.models.resolveRole('planner', actor),
-        this.models.resolveRole('critic', actor),
-      ]),
-    );
-    const providerOf = (model: { apiKey: string; baseUrl: string; model: string }) =>
-      new GenerationProvider({
-        apiKey: model.apiKey,
-        baseUrl: model.baseUrl,
-        model: model.model,
-        seed: input.seed,
-      });
-    const fallback = providerOf(writer);
-    const provider = new RoutedTextProvider(
-      fallback,
-      new Map([
-        ['writer', fallback],
-        ['rewriter', fallback],
-        ...(planner ? [['planner', providerOf(planner)] as const] : []),
-        ...(critic ? [['critic', providerOf(critic)] as const] : []),
-      ]),
-    );
-    const registryDir = this.registryDir();
-    const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
-    // Notes describe the profile they were made from; a re-parsed template drops stale ones.
-    const notes =
-      index.success && index.data.templateHash === prepared.data.templateHash
-        ? index.data.notes
-        : undefined;
-    // The three variants of one brief are separate runs, so every deck endpoint serves each of
-    // them as it is, and they share one cancellation.
-    const controller = new AbortController();
-    // One plan for the three variants: the story is decided once, the layouts per variant.
-    const sharedPlan = new SharedPlan();
-    const runs: {
-      run: Awaited<ReturnType<RunRepository['create']>>;
-      variant: (typeof VARIANTS)[number];
-    }[] = [];
-    // The variants are one build: the library shows it once.
-    const buildId = randomUUID();
-    for (const variant of VARIANTS) {
-      const run = await this.repository.create();
-      await mkdir(this.directory(run.runId), { recursive: true });
-      await writeFile(
-        join(this.directory(run.runId), 'metadata.json'),
-        JSON.stringify({
-          templateId: input.templateId,
-          projectId: input.projectId,
-          ownerId: account.id,
-          variant,
-          buildId,
-          updatedAt: Date.now(),
-        }),
-      );
-      this.active.set(run.runId, controller);
-      runs.push({ run, variant });
-    }
-    const work = async ({ run, variant }: (typeof runs)[number]) => {
-      try {
-        await this.repository.transition(run.runId, 'running');
-        await generatePresentation({
-          runId: run.runId,
-          templatePath: template.storage_path,
-          outputDir: this.directory(run.runId),
-          brief,
-          slideCount: input.slideCount,
-          profile: prepared.data,
-          ...(notes ? { notes } : {}),
-          registryDir,
-          engine: this.engine,
-          provider,
-          seed: input.seed,
-          variant,
-          sharedPlan,
-          signal: controller.signal,
-          onEvent: (event) => this.repository.appendEvent(run.runId, event),
-        });
-        if (input.projectId !== null) {
-          const project = await this.pool.query(
-            'UPDATE library_projects SET updated_at = now() WHERE id = $1 RETURNING id',
-            [input.projectId],
-          );
-          if (!project.rowCount) await this.library.remove(run.runId);
-        }
-        await this.repository.transition(run.runId, 'done');
-      } catch {
-        await this.repository.transition(run.runId, 'failed');
-      } finally {
-        this.active.delete(run.runId);
-      }
-    };
-    for (const entry of runs) void work(entry).catch(() => undefined);
-    const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
-    if (!primary) throw new BadRequestException('No variant could be started.');
-    return {
-      ...primary.run,
-      variants: runs.map(({ run, variant }) => ({ variant, runId: run.runId })),
-    };
+    const build = await this.generation.start(parsed.data, account);
+    const run = await this.repository.get(build.runId);
+    return { ...run, runId: build.runId, variants: build.variants };
   }
 
   @Post(':id/cancel')
   async cancel(@Param('id') id: string, @CurrentAccount() account: Account) {
     if (!(await this.library.visible(id, account.id)))
       throw new NotFoundException('Run not found.');
-    this.active.get(id)?.abort();
+    this.generation.cancel(id);
     return { ok: true };
   }
 
@@ -433,11 +121,9 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
       id: string;
       deck_ids: string[];
       primary: string | null;
-    }>(
-      `SELECT id, deck_ids, conversation->>'primaryDeckId' AS primary
-       FROM chats WHERE owner_id = $1`,
-      [account.id],
-    );
+    }>('SELECT id, deck_ids, primary_deck_id AS primary FROM chats WHERE owner_id = $1', [
+      account.id,
+    ]);
     const chatOf = new Map(
       chats.rows.flatMap((chat) => chat.deck_ids.map((deck) => [deck, chat.id])),
     );
@@ -571,51 +257,6 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     );
   }
 
-  /**
-   * A generation lives in this process, so one still queued or running at start was cut short by
-   * a restart and will not go on. It is failed with a reason, and the chat that follows it offers
-   * to build again instead of waiting for it. The API runs as a single instance.
-   */
-  async onApplicationBootstrap(): Promise<void> {
-    await mkdir(this.root, { recursive: true });
-    for (const id of await readdir(this.root)) {
-      if (!/^run-[0-9a-f-]{36}$/i.test(id) || this.active.has(id)) continue;
-      try {
-        const run = await this.repository.get(id);
-        if (run?.state !== 'queued' && run?.state !== 'running') continue;
-        const last = (await this.repository.events(id)).at(-1);
-        await this.repository.appendEvent(id, {
-          schemaVersion: 1,
-          runId: id,
-          seq: (last?.seq ?? -1) + 1,
-          at: new Date().toISOString(),
-          type: 'failed',
-          stage: last && 'stage' in last ? last.stage : 'queued',
-          code: 'internal',
-          // The chat shows the message as it is, and its interface speaks Russian.
-          message: 'Сервер перезапустился во время сборки. Запустите её ещё раз.',
-          retryable: true,
-        });
-        await this.repository.transition(id, 'failed');
-      } catch (error) {
-        this.logger.warn(`Could not close interrupted run ${id}: ${String(error)}`);
-      }
-    }
-  }
-
-  async onApplicationShutdown(): Promise<void> {
-    for (const controller of this.active.values()) controller.abort();
-    await this.pool.end();
-  }
-
-  private async requireProject(id: string, account: Account): Promise<void> {
-    const found = await this.pool.query(
-      'SELECT id FROM library_projects WHERE id = $1 AND owner_id = $2',
-      [id, account.id],
-    );
-    if (!found.rowCount) throw new NotFoundException('Project not found.');
-  }
-
   /** The finished deck of this account; another account's is answered as missing. */
   private async completed(id: string, account: Account) {
     const run = await this.repository.get(id);
@@ -649,7 +290,8 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     if (body.projectId !== undefined) {
       if (body.projectId !== null && typeof body.projectId !== 'string')
         throw new BadRequestException('Invalid project id.');
-      if (typeof body.projectId === 'string') await this.requireProject(body.projectId, account);
+      if (typeof body.projectId === 'string')
+        await this.generation.requireProject(body.projectId, account);
       patch.projectId = body.projectId;
     }
     if (!Object.keys(patch).length) throw new BadRequestException('Empty deck patch.');

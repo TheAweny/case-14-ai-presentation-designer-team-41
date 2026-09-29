@@ -22,6 +22,7 @@ import {
   MODEL_ID_MAX_LENGTH,
   ROLE_MODEL_KIND,
   isRoleOptional,
+  usesWriterModelByDefault,
   knownModels,
   modelOffered,
   modelsLimited,
@@ -263,8 +264,16 @@ function PickerValue({
   if (assignment.kind === 'unassigned') {
     return (
       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
-        <StatusDot tone={isRoleOptional(assignment.role) ? 'idle' : 'warning'} />
-        <span className="truncate">{t('unassigned')}</span>
+        <StatusDot
+          tone={
+            isRoleOptional(assignment.role) || usesWriterModelByDefault(assignment.role)
+              ? 'idle'
+              : 'warning'
+          }
+        />
+        <span className="truncate">
+          {usesWriterModelByDefault(assignment.role) ? t('writerDefault') : t('unassigned')}
+        </span>
       </span>
     );
   }

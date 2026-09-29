@@ -91,10 +91,57 @@ export const compositionExportResponseSchema = z.object({
    */
   missingFonts: z.array(z.string()),
 });
+/** What a slide does in a deck: the template indexer sorts compositions by it, a plan uses it too. */
+export const slideKindSchema = z.enum([
+  'cover',
+  'section',
+  'statement',
+  'list',
+  'cards',
+  'process',
+  'comparison',
+  'problem-solution',
+  'team',
+  'closing',
+  'reference',
+  'other',
+]);
+export type SlideKind = z.infer<typeof slideKindSchema>;
+
+/** Slides of a deck the pipeline builds: an automatic deck is 10 to 60 slides long. */
+export const OUTLINE_SLIDES = { min: 10, max: 60 } as const;
+
+export const outlineSlideSchema = z.object({
+  /** The claim of the slide, as its title would say it. */
+  title: z.string().trim().min(1).max(160),
+  /** What the slide says under the title: facts, numbers, items. */
+  points: z.array(z.string().trim().min(1).max(300)).max(8).default([]),
+  kind: slideKindSchema.default('other'),
+});
+export type OutlineSlide = z.infer<typeof outlineSlideSchema>;
+
+/**
+ * The story of a deck before any template: what each slide says, in order. The chat shows it for
+ * approval; the planner then lays it out on the compositions of the chosen template, keeping the
+ * order and the number of slides, so the same outline can be built in any template.
+ */
+export const deckOutlineSchema = z.object({
+  title: z.string().trim().min(1).max(100),
+  audience: z.string().trim().max(300).default(''),
+  goal: z.string().trim().max(300).default(''),
+  slides: z.array(outlineSlideSchema).min(OUTLINE_SLIDES.min).max(OUTLINE_SLIDES.max),
+});
+export type DeckOutline = z.infer<typeof deckOutlineSchema>;
+
 export const generationRequestSchema = z.object({
   templateId: z.string().uuid(),
   brief: z.string().trim().min(10).max(60000),
   slideCount: z.number().int().min(10).max(15).nullable().default(null),
+  /**
+   * The approved story of the deck. With it the planner keeps these slides, in this order, and
+   * only chooses a composition for each; `slideCount` is then the length of the outline.
+   */
+  outline: deckOutlineSchema.nullable().default(null),
   projectId: z.string().nullable().default(null),
   contentIds: z.array(z.string().uuid()).max(10).default([]),
   seed: z.number().int().default(42),
@@ -185,20 +232,7 @@ export const slotRewriteChoicesSchema = z.object({
  */
 export const compositionNoteSchema = z.object({
   patternId: z.string().min(1),
-  kind: z.enum([
-    'cover',
-    'section',
-    'statement',
-    'list',
-    'cards',
-    'process',
-    'comparison',
-    'problem-solution',
-    'team',
-    'closing',
-    'reference',
-    'other',
-  ]),
+  kind: slideKindSchema,
   /** Parallel content items the slide shows: cards, steps, columns, list rows. */
   items: z.number().int().min(0).max(12),
   useFor: z.string().max(200),

@@ -26,6 +26,7 @@ The input JSON contains:
   code, a device screenshot, a partner's logo, a SWOT grid. Use it only when the brief has
   exactly that content; never as a layout for ordinary points;
 - `coverPatternIds`: compositions suitable for the first slide. It may be empty;
+- `outline`: present when the person approved a plan of the deck. See "An approved outline";
 - `previous` and `corrections`: present only on a retry. Preserve the useful narrative of
   `previous` while applying every correction.
 
@@ -95,6 +96,20 @@ Return exactly this JSON shape:
 - Never invent specific figures, percentages, prices, dates, customer names, quotes or results
   that are not in `brief`. Write the point without the number instead.
 - Do not spend slides saying that data, the topic or pictures are absent.
+
+## An approved outline
+
+When `outline` is present, the person has already approved the story, and `slideCount` is the
+number of its slides. Your job is only the layout:
+
+- return exactly one slide per outline slide, in the same order; never add, drop, merge or reorder;
+- take `title`, `audience` and `goal` from the outline when they are set;
+- each `purpose` starts with the outline slide's `title` word for word, then `—` and its
+  `points`, fitted to the slots of the composition you choose; add no fact the outline and
+  `brief` do not have;
+- choose the composition by the outline slide's `kind` and the number of its points: a `process`
+  with four points goes on a four-step process, a `comparison` on a comparison, `cover` and
+  `closing` on the template's cover and closing.
 
 ## One plan, three layouts
 
