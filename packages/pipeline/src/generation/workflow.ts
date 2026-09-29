@@ -57,6 +57,8 @@ const taskSchema = z.object({
   audience: z.string().default(''),
   goal: z.string().default(''),
   title: z.string(),
+  /** The approved title of this slide, when the person approved an outline. */
+  slideTitle: z.string().optional(),
   brief: z.string(),
   purpose: z.string(),
   imageQuery: z.string(),
@@ -65,6 +67,8 @@ const taskSchema = z.object({
 export const writtenSchema = z.object({
   index: z.number(),
   title: z.string(),
+  /** The claim the plan gave the slide: the deck-wide checks and the repair read it. */
+  purpose: z.string().default(''),
   slide: composedSlideSchema,
   imageQuery: z.string(),
 });
@@ -995,6 +999,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...slide,
           patternId: composition.patternId,
           narrative: result.slides.map((s) => s.purpose),
+          ...(outline?.slides[index] ? { slideTitle: outline.slides[index].title } : {}),
           index,
           total: result.slides.length,
           audience: result.audience,
@@ -1012,11 +1017,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     outputSchema: writtenSchema,
     execute: async ({ inputData }) => {
       let slide: ComposedSlide | undefined;
+      // The deck title goes under its own name: as `title` the writer took it for the title
+      // of the slide and put it on slide after slide.
+      const { title: deckTitle, ...task } = inputData;
       const raw = await deps.provider.generate(
         'writer',
         deps.writerInstructions,
         {
-          ...inputData,
+          ...task,
+          deckTitle,
           variant: deps.variant ?? 'balanced',
           composition: writingComposition(inputData.composition),
           visualSlots: visualSlots(inputData.composition),
@@ -1082,6 +1091,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       return {
         index: inputData.index,
         title: inputData.title,
+        purpose: inputData.purpose,
         slide,
         imageQuery: inputData.imageQuery,
       };

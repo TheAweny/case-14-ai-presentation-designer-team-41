@@ -62,7 +62,11 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
       if (typeof input === 'object' && input !== null && 'previous' in input) repairs++;
       return schema.parse({
         patternId: pattern.patternId,
-        textsBySlot: Object.fromEntries(pattern.slots.map((s) => [s.slotId, 'Pilot'])),
+        // Slides of a real deck differ; the same text on all of them is a repeat the deck-wide
+        // check would send to repair.
+        textsBySlot: Object.fromEntries(
+          pattern.slots.map((s) => [s.slotId, `Slide ${(input as { index: number }).index + 1}`]),
+        ),
         speakerNotes: 'Proposal',
       });
     },

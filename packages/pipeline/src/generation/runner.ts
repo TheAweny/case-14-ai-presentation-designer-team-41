@@ -28,6 +28,7 @@ import {
   withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
+import { deckRepeats } from './repeats.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 
 type EventData = {
@@ -235,7 +236,17 @@ export async function generatePresentation(options: GenerateOptions) {
           signal,
         ),
       ]);
-      auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues });
+      // Slides are written one by one, so a figure or a title repeated across the deck is seen
+      // only here, over all of them.
+      const repeats = deckRepeats(
+        written[0]?.title ?? '',
+        written.flatMap((s) => {
+          const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
+          return composition ? [{ ...s, composition }] : [];
+        }),
+        options.brief,
+      );
+      auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues, repeats });
       await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
       await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
       const issues = [
@@ -253,6 +264,7 @@ export async function generatePresentation(options: GenerateOptions) {
               .filter(Boolean)
               .map((slotId) => ({ ...issue, slotId })),
           ),
+        ...repeats,
       ];
       if (!issues.length) break;
       if (attempt === 2) {
@@ -266,7 +278,7 @@ export async function generatePresentation(options: GenerateOptions) {
           reviewWarnings.push(message);
           await emit({ type: 'warning', stage, code: 'content-review-required', message });
         }
-        for (const issue of critique.issues) {
+        for (const issue of [...critique.issues, ...repeats]) {
           const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
           reviewWarnings.push(message);
           await emit({ type: 'warning', stage, code: 'content-review-required', message });
@@ -293,6 +305,7 @@ export async function generatePresentation(options: GenerateOptions) {
         tasks.push({
           index: current.index,
           brief: options.brief,
+          purpose: current.purpose,
           composition,
           previous: current.slide,
           corrections,
@@ -376,6 +389,7 @@ export async function generatePresentation(options: GenerateOptions) {
           tasks.push({
             index: current.index,
             brief: options.brief,
+            purpose: current.purpose,
             composition: pattern,
             previous: current.slide,
             corrections,
