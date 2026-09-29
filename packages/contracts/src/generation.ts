@@ -204,6 +204,11 @@ export const compositionNoteSchema = z.object({
   useFor: z.string().max(200),
   /** A page about the template itself (instructions, fonts, icons, links): never a deck slide. */
   skip: z.boolean(),
+  /**
+   * Fits only one kind of content — code, formulas, references, a QR code, a device screen, a
+   * partner's logo — and is used only when the brief has it.
+   */
+  special: z.boolean().default(false),
 });
 export const templateIndexSchema = z.object({ notes: z.array(compositionNoteSchema) });
 export const storedTemplateIndexSchema = templateIndexSchema.extend({

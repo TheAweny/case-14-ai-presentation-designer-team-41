@@ -115,7 +115,9 @@ export class GenerationController implements OnApplicationShutdown {
         provider,
         registryDir,
         profile,
-        signal: AbortSignal.timeout(180000),
+        // Outside the generation budget, and a large template on a slow model takes minutes:
+        // the indexer asks again about what an answer left out.
+        signal: AbortSignal.timeout(600000),
       });
       await this.pool.query(
         "UPDATE stored_files SET profile = profile || jsonb_build_object('index', $2::jsonb) WHERE id = $1",

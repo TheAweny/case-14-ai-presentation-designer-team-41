@@ -244,6 +244,7 @@ export function plannerComposition(
     patternId: pattern.patternId,
     name: pattern.name,
     ...(note ? { kind: note.kind, items: note.items, useFor: note.useFor } : {}),
+    ...(note?.special ? { special: true } : {}),
     imageCount: pattern.imageCount,
     contentSlots: slots.filter((slot) => slot.role !== 'title').length,
     slots: slotBriefs(slots).map((slot) => ({
@@ -450,7 +451,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           p.slots.some((s) => s.role === 'title' && s.maxChars >= SHORT_CLAIM_CHARS) &&
           writerSlots(p).every((s) => s.maxChars >= 12),
       );
-      const full = spacious.length ? spacious : distinct;
+      // A deck opens and ends on the template's own cover and closing, and those carry short
+      // lines (a date, a tag, the speaker) the floor above would drop them for.
+      const framing = distinct.filter((p) => {
+        const note = notes.get(p.patternId);
+        return note && !note.special && (note.kind === 'cover' || note.kind === 'closing');
+      });
+      const full = spacious.length
+        ? distinct.filter((p) => spacious.includes(p) || framing.includes(p))
+        : distinct;
       const variant = deps.variant ?? 'balanced';
       const titleSizes = full
         .flatMap((p) => p.slots.filter((s) => s.role === 'title').map((s) => s.fontSize))
@@ -463,7 +472,13 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
         );
       const indexedCovers = full.filter((p) => notes.get(p.patternId)?.kind === 'cover');
-      const covers = indexedCovers.length ? indexedCovers : coversOf(full);
+      // A special cover (a partner's co-branding) opens a deck only when nothing else can.
+      const plainCovers = indexedCovers.filter((p) => !notes.get(p.patternId)?.special);
+      const covers = plainCovers.length
+        ? plainCovers
+        : indexedCovers.length
+          ? indexedCovers
+          : coversOf(full);
       const catalog = variantCatalog(full, variant, covers);
       // The story is planned once for all three variants, on the full catalog; each variant then
       // lays the same slides out on its own compositions (remapPlan).
@@ -676,11 +691,21 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   const capacity = (p: T) => content(p).reduce((sum, s) => sum + s.maxChars, 0);
   const blocks = (p: T) => content(p).length;
   const coverIds = new Set(covers.map((p) => p.patternId));
-  const pool = catalog.filter((p) => !coverIds.has(p.patternId));
+  const special = (id: string) => notes.get(id)?.special === true;
+  // A layout for code or a device screen is never a stand-in for an ordinary slide, and the
+  // planner chose a special one for its content, so that one stays in every variant.
+  const pool = catalog.filter((p) => !coverIds.has(p.patternId) && !special(p.patternId));
   const used = new Map<string, number>();
   return patternIds.map((id, index) => {
     const planned = full.find((p) => p.patternId === id);
-    if (planned === undefined || index === 0 || coverIds.has(id) || pool.length === 0) return id;
+    if (
+      planned === undefined ||
+      index === 0 ||
+      coverIds.has(id) ||
+      special(id) ||
+      pool.length === 0
+    )
+      return id;
     const sameCount = pool.filter((p) => blocks(p) === blocks(planned));
     // The indexer's kind keeps a process a process and cards cards when the template has both.
     const kind = notes.get(planned.patternId)?.kind;

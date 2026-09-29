@@ -680,6 +680,31 @@ describe('one plan, three layouts', () => {
     expect(airy[4]?.startsWith('two-')).toBe(true);
   });
 
+  it('never swaps an ordinary slide onto a special layout, nor a special one away', () => {
+    const special = (patternId: string) =>
+      [
+        patternId,
+        {
+          patternId,
+          kind: 'statement' as const,
+          items: 1,
+          useFor: 'code',
+          skip: false,
+          special: true,
+        },
+      ] as const;
+    // The roomiest one-block layout is kept for code: dense would pick it otherwise.
+    const notes = new Map([special('one-1200'), special('one-150')]);
+    const plan = ['cover', 'one-450', 'one-150', 'one-600'];
+    for (const variant of ['dense', 'airy'] as const) {
+      const catalog = variantCatalog(full, variant, [cover]);
+      const layouts = remapPlan(plan, full, catalog, variant, [cover], notes);
+      expect(layouts[2]).toBe('one-150');
+      expect([layouts[1], layouts[3]]).not.toContain('one-1200');
+      expect([layouts[1], layouts[3]]).not.toContain('one-150');
+    }
+  });
+
   it('spreads repeated slides over several layouts', () => {
     const dense = remapPlan(planned, full, variantCatalog(full, 'dense', [cover]), 'dense', [
       cover,

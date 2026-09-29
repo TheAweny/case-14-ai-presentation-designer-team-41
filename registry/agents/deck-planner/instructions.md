@@ -21,7 +21,10 @@ The input JSON contains:
   its length, so read `fitChars` for the room;
 - a composition may also carry `kind`, `items` and `useFor`: what the template indexer read it
   is for. `items` is how many parallel points it shows. Trust them over your guess from samples:
-  a `process` with `items` 4 takes four steps, `problem-solution` takes a problem and its answer;
+  a `process` with `items` 4 takes four steps, `problem-solution` takes a problem and its answer.
+  `special: true` marks a layout for one kind of content only — code, formulas, references, a QR
+  code, a device screenshot, a partner's logo, a SWOT grid. Use it only when the brief has
+  exactly that content; never as a layout for ordinary points;
 - `coverPatternIds`: compositions suitable for the first slide. It may be empty;
 - `previous` and `corrections`: present only on a retry. Preserve the useful narrative of
   `previous` while applying every correction.
