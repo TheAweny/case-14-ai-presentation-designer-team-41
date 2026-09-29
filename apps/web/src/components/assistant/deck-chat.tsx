@@ -246,6 +246,10 @@ function ChatLog({
   };
   const { messages, threadId } = thread;
   const runId = latestRunId(thread);
+  // У последней сборки есть итог: её карточка без прогона во вкладке — просто завершённая сборка.
+  const latestSettled =
+    messages.findLastIndex((message) => message.kind === 'result') >
+    messages.findLastIndex((message) => message.kind === 'work');
   const last = messages.at(-1);
   const lastUserId = messages.findLast((message) => message.kind === 'user')?.id;
   const seenUserId = useRef(lastUserId);
@@ -303,6 +307,7 @@ function ChatLog({
                 threadId={threadId}
                 message={message}
                 latestRunId={runId}
+                latestSettled={latestSettled}
                 onEdit={onEdit}
               />
             </div>
@@ -328,11 +333,13 @@ function ChatMessage({
   threadId,
   message,
   latestRunId: latest,
+  latestSettled,
   onEdit,
 }: {
   threadId: string;
   message: ThreadMessage;
   latestRunId: string | null;
+  latestSettled: boolean;
   onEdit: (text: string) => void;
 }) {
   switch (message.kind) {
@@ -341,7 +348,13 @@ function ChatMessage({
     case 'agent':
       return <AgentMessage text={message.text} />;
     case 'work':
-      return <BuildCard runId={message.runId} latest={message.runId === latest} />;
+      return (
+        <BuildCard
+          runId={message.runId}
+          latest={message.runId === latest}
+          unfinished={message.runId === latest && !latestSettled}
+        />
+      );
     case 'import':
       return <ImportCard importId={message.importId} />;
     case 'template':

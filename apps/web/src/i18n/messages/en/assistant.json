@@ -60,7 +60,8 @@
       "failed": "failed"
     },
     "stageCount": "{done} of {total}",
-    "failedUnknown": "The run stopped without a reason. Please try again."
+    "failedUnknown": "The run stopped without a reason. Please try again.",
+    "lostAfterReload": "A build was running when the page reloaded and can no longer be followed here. The finished deck will appear in the library; to build again here, write a wish."
   },
   "build": {
     "elapsed": "{time} of {budget}",
