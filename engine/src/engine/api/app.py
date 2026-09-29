@@ -311,7 +311,7 @@ def composition_deck(request: CompositionExportRequest) -> dict:
         bundle_previews(previews, output.parent / "slides.zip")
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    warnings = ["Image generation is mocked; existing template artwork is preserved."]
+    warnings: list[str] = []
     if missing:
         warnings.append(
             "Fonts not installed on the render server: "

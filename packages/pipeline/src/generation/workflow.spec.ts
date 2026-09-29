@@ -309,6 +309,75 @@ describe('template generation workflow', () => {
   });
 });
 
+describe('image slots in the plan', () => {
+  const clone = (patternId: string, imageSlots?: { slotId: string; kind: 'panel' }[]) => ({
+    ...composition,
+    patternId,
+    name: patternId,
+    slots: composition.slots.map((slot, index) => ({ ...slot, sample: `${patternId} ${index}` })),
+    ...(imageSlots
+      ? { imageSlots: imageSlots.map((s) => ({ ...s, box: { x: 0, y: 0, cx: 800, cy: 600 } })) }
+      : {}),
+  });
+  const pictured = clone('pictured', [{ slotId: '99', kind: 'panel' }]);
+  const catalog = [clone('a'), clone('b'), clone('c'), pictured];
+
+  async function plan(imagesAvailable: boolean) {
+    let offered: string[] = [];
+    let planned: string[] = [];
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(agent: string, _i: string, input: unknown, schema: z.ZodType<T>) {
+        if (agent === 'planner') {
+          const request = input as { catalog: { patternId: string }[]; imagesAvailable: boolean };
+          expect(request.imagesAvailable).toBe(imagesAvailable);
+          offered = request.catalog.map((c) => c.patternId);
+          return schema.parse({
+            title: 'Deck',
+            slides: offered
+              .slice(0, 10)
+              .concat(Array(10).fill(offered[0]))
+              .slice(0, 10)
+              .map((patternId, index) => ({
+                patternId,
+                purpose: `Point ${index}`,
+                imageQuery: 'plants',
+              })),
+          });
+        }
+        return schema.parse({ patternId: 'x', textsBySlot: {}, speakerNotes: '' });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      imagesAvailable,
+      onPlan: (slides) => {
+        planned = slides.map((slide) => slide.composition.patternId);
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    const run = await workflow.createRun();
+    await run.start({
+      inputData: {
+        brief: 'Brief',
+        slideCount: 10,
+        profile: { ...profile, compositions: catalog },
+      },
+    });
+    return { offered, planned };
+  }
+
+  it('offers a composition with a place for a picture only when pictures can be drawn', async () => {
+    expect((await plan(false)).offered).not.toContain('pictured');
+    const withImages = await plan(true);
+    expect(withImages.offered).toContain('pictured');
+    // The laid-out plan reaches the illustrator before any copy is written.
+    expect(withImages.planned).toHaveLength(10);
+  });
+});
+
 describe('variantCatalog', () => {
   const composition = (patternId: string, body: number) => ({
     patternId,

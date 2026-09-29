@@ -40,6 +40,24 @@ export interface GenerationDependencies {
   notes?: readonly CompositionNote[];
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
+  /**
+   * Whether pictures can be drawn for image slots. Without them the planner is not offered a
+   * composition with a place for a picture, so no slide is left with an empty frame.
+   */
+  imagesAvailable?: boolean;
+  /** The laid-out slides, as soon as the plan is made: pictures are drawn while copy is written. */
+  onPlan?: (slides: readonly PlannedSlide[]) => void;
+}
+
+/** A planned slide with its composition, as the illustrator needs it. */
+export interface PlannedSlide {
+  index: number;
+  purpose: string;
+  imageQuery: string;
+  title: string;
+  audience: string;
+  goal: string;
+  composition: GenerationProfile['compositions'][number];
 }
 const inputSchema = z.object({
   brief: z.string(),
@@ -510,6 +528,8 @@ export function plannerComposition(
     ...(note ? { kind: note.kind, items: note.items, useFor: note.useFor } : {}),
     ...(note?.special ? { special: true } : {}),
     imageCount: pattern.imageCount,
+    /** Places this composition has for a generated picture. */
+    imageSlots: pattern.imageSlots?.length ?? 0,
     contentSlots: slots.filter((slot) => slot.role !== 'title').length,
     slots: slotBriefs(slots).map((slot) => ({
       role: slot.role,
@@ -811,7 +831,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const compositions = inputData.profile.compositions.map(withCardHeadings);
       const all = distinctCompositions(compositions);
       const usable = all.filter((pattern) => !notes.get(pattern.patternId)?.skip);
-      const distinct = usable.length >= 3 ? usable : all;
+      const readable = usable.length >= 3 ? usable : all;
+      // Without an image model a place for a picture would be removed on export and leave a
+      // hole, so such compositions are not offered while the rest can carry the deck.
+      const textOnly = readable.filter((pattern) => !pattern.imageSlots?.length);
+      const distinct = deps.imagesAvailable || textOnly.length < 3 ? readable : textOnly;
       // A title on a pill holds a short claim, not a sentence, so the floor is a few words.
       // Numbering is written by code and does not need room for a phrase.
       const spacious = distinct.filter(
@@ -864,6 +888,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               brief: inputData.brief,
               slideCount,
               ...(outline ? { outline } : {}),
+              imagesAvailable: deps.imagesAvailable === true,
               catalog: full.map((pattern) =>
                 plannerComposition(pattern, notes.get(pattern.patternId)),
               ),
@@ -939,7 +964,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         covers,
         notes,
       );
-      return result.slides.map((slide, index) => {
+      const tasks = result.slides.map((slide, index) => {
         const composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
         return {
@@ -955,6 +980,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           composition,
         };
       });
+      deps.onPlan?.(tasks);
+      return tasks;
     },
   });
   const write = createStep({
