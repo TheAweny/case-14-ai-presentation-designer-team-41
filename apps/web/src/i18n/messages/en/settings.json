@@ -280,6 +280,10 @@
         "cancel": "Cancel"
       },
       "items": {
+        "assistant": {
+          "name": "Assistant",
+          "description": "Runs the chat: answers, proposes a deck plan and starts the build. Without a model of its own it talks with the writer’s."
+        },
         "planner": {
           "name": "Planner",
           "description": "Plans the deck: what each slide is about and what type it is."
