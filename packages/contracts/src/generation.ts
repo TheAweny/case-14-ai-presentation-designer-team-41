@@ -23,12 +23,23 @@ export const compositionSlotSchema = z.object({
   spaceBeforePt: z.number().nonnegative().optional(),
   spaceAfterPt: z.number().nonnegative().optional(),
 });
+/**
+ * A place of a composition a picture fills: a picture placeholder, or a large empty card the
+ * template left for one (`panel`). The template's own photos and brand art are design, not slots.
+ */
+export const imageSlotSchema = z.object({
+  slotId: z.string().min(1),
+  kind: z.enum(['placeholder', 'panel']),
+  box: boxSchema,
+});
 export const compositionSchema = z.object({
   patternId: z.string().min(1),
   sourceIndex: z.number().int().nonnegative(),
   name: z.string(),
   slots: z.array(compositionSlotSchema).min(1),
   imageCount: z.number().int().nonnegative(),
+  /** Places for a picture. Absent in profiles read before pictures were generated. */
+  imageSlots: z.array(imageSlotSchema).optional(),
 });
 export const generationProfileSchema = z.object({
   schemaVersion: z.literal(1),
@@ -71,6 +82,24 @@ export const composedSlideSchema = z.object({
     .nullable()
     .optional()
     .describe('A table or chart replacing one text slot. Absent or null: text only.'),
+  images: z
+    .array(
+      z.object({
+        slotId: z.string().min(1).describe('An imageSlots id of the composition.'),
+        path: z
+          .string()
+          .regex(/^media\/[\w.-]+\.(?:png|jpe?g)$/)
+          .describe('The picture file, relative to the run directory: media/<name>.png.'),
+        fit: z
+          .enum(['cover', 'contain'])
+          .describe('cover crops the picture to fill the box; contain fits it whole inside.'),
+      }),
+    )
+    .optional()
+    .describe(
+      'Generated pictures for image slots. An image slot without one is removed on export, ' +
+        'so no empty frame or blank card is left.',
+    ),
 });
 export const compositionExportRequestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -278,4 +307,10 @@ export type StoredTemplateIndex = z.infer<typeof storedTemplateIndexSchema>;
 export type CompositionPlan = z.infer<typeof compositionPlanSchema>;
 export type CompositionCritique = z.infer<typeof compositionCritiqueSchema>;
 export type TemplateSlotCopy = z.infer<typeof templateSlotCopySchema>;
+/** What the illustrator agent answers: one prompt for a text-to-image model, in English. */
+export const illustrationPromptSchema = z.object({
+  prompt: z.string().min(20).max(1200),
+});
+export type IllustrationPrompt = z.infer<typeof illustrationPromptSchema>;
+export type ImageSlot = z.infer<typeof imageSlotSchema>;
 export type SlotRewriteChoices = z.infer<typeof slotRewriteChoicesSchema>;

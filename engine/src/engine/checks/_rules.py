@@ -1032,6 +1032,23 @@ def template_leftover(
     return out.findings
 
 
+def empty_image_slot(
+    check: CheckDefinition, slide: dict[str, Any], _ctx: AuditContext
+) -> list[Finding]:
+    out = _Emitter(check, slide)
+    for element in slide["elements"]:
+        if element["kind"] == "decor" and element["role"] == "image":
+            out.add(
+                title="Пустой слот картинки",
+                detail="На слайде осталась рамка под картинку без картинки: пустой прямоугольник.",
+                element=element,
+                expected="картинка в слоте или слот убран",
+                ops=[{"op": "remove", "elementId": element["elementId"]}],
+                rationale="Убрать пустую рамку",
+            )
+    return out.findings
+
+
 RULES: dict[str, Rule] = {
     "slide-bounds": slide_bounds,
     "text-clipped": text_clipped,
@@ -1057,4 +1074,5 @@ RULES: dict[str, Rule] = {
     "duplicate-slide": duplicate_slide,
     "placeholder-text": placeholder_text,
     "template-leftover": template_leftover,
+    "empty-image-slot": empty_image_slot,
 }

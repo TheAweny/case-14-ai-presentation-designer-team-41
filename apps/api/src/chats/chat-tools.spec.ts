@@ -75,13 +75,14 @@ function planMessage(status: 'proposed' | 'approved'): ChatMessage {
 }
 
 describe('chat tools by mode', () => {
-  it('only talks and reads in the chat mode', () => {
+  it('talks, reads and edits pointed objects in the chat mode, and builds nothing', () => {
     expect(chat('chat').tools.map((tool) => tool.name)).toEqual([
       'list_templates',
       'describe_template',
       'read_file',
       'read_deck',
       'read_audit',
+      'edit_slide',
     ]);
     expect(chat('plan').tools.map((tool) => tool.name)).toContain('build_deck');
   });
@@ -224,5 +225,63 @@ describe('settleWithGrace', () => {
     );
     setTimeout(finish, 30);
     expect((await pending).every((item) => item.state === 'done')).toBe(true);
+  });
+});
+
+describe('edit_slide', () => {
+  const pointed: ChatMessage = {
+    role: 'user',
+    id: crypto.randomUUID(),
+    text: 'Сократи подзаголовок',
+    mode: 'chat',
+    createdAt: 1,
+    attachments: [
+      {
+        kind: 'slides',
+        deckId: 'run-1',
+        slideNumber: 2,
+        name: 'Слайд 2, текст',
+        elements: [
+          { elementId: 'sub', kind: 'text', role: 'subtitle', text: 'Длинный подзаголовок' },
+          { elementId: 'pic', kind: 'image', role: 'image', text: '' },
+        ],
+      },
+    ],
+  };
+
+  it('sends new text of an attached object to the editor, with the text the agent saw', async () => {
+    const { tool, context, shown } = chat('chat', [pointed]);
+    const result = await tool('edit_slide').run(
+      { deckId: 'run-1', slideNumber: 2, elementId: 'sub', text: 'Короткий' },
+      context,
+    );
+    expect(shown).toEqual([
+      expect.objectContaining({
+        type: 'slide-edit',
+        deckId: 'run-1',
+        slideNumber: 2,
+        elementId: 'sub',
+        before: 'Длинный подзаголовок',
+        text: 'Короткий',
+      }),
+    ]);
+    expect(result.output).toMatchObject({ editId: expect.any(String) });
+  });
+
+  it('refuses an object the person did not attach, and one without text', async () => {
+    const { tool, context, shown } = chat('auto', [pointed]);
+    await expect(
+      tool('edit_slide').run(
+        { deckId: 'run-1', slideNumber: 3, elementId: 'sub', text: 'x' },
+        context,
+      ),
+    ).rejects.toThrow(/not pointed/);
+    await expect(
+      tool('edit_slide').run(
+        { deckId: 'run-1', slideNumber: 2, elementId: 'pic', text: 'x' },
+        context,
+      ),
+    ).rejects.toThrow(/text object/);
+    expect(shown).toEqual([]);
   });
 });

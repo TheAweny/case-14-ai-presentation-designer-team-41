@@ -25,6 +25,7 @@ export function useAssistantContext({
   selectedIds,
   active,
   reveal,
+  writeText,
 }: {
   slides: readonly SlideIr[];
   /** Открытый слайд. */
@@ -33,6 +34,8 @@ export function useAssistantContext({
   /** Вкладка «Ассистент» на виду: только тогда выделение предлагается призраком. */
   active: boolean;
   reveal: (target: DeckSelection) => void;
+  /** Правка текста журналом редактора: ею агент пишет в черновик. */
+  writeText: AssistantDeckBridge['writeText'];
 }) {
   const [refs, setRefs] = useState<readonly SlideRef[]>([]);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -104,8 +107,9 @@ export function useAssistantContext({
         pendingFocus.current = false;
         return pending;
       },
+      writeText,
     }),
-    [focusRequest, ghost, refs, reveal, selectedIds, slideId, slides],
+    [focusRequest, ghost, refs, reveal, selectedIds, slideId, slides, writeText],
   );
 
   /**

@@ -30,6 +30,10 @@ import {
   indexTemplateWithAgent,
   RoutedTextProvider,
   SharedPlan,
+  SharedIllustrations,
+  OpenAICompatibleImageProvider,
+  FakeImageProvider,
+  type ImageProvider,
   type IndexProgress,
 } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
@@ -87,6 +91,26 @@ export interface StoredTemplate {
  * Preparing templates and building decks. The generation endpoints and the chat agent both start
  * builds here, so a build from the chat is the same three runs the library shows.
  */
+/**
+ * The image model a build draws with: the one assigned to the image role in the settings, else
+ * the server's `IMAGE_BASE_URL` and `IMAGE_MODEL` when both are set, else none. `IMAGE_PROVIDER`
+ * set to `fake` draws one-colour pictures without a network, for an offline demo.
+ */
+export function imageProviderOf(
+  assigned: { apiKey: string; baseUrl: string; model: string } | null,
+  env: NodeJS.ProcessEnv = process.env,
+): ImageProvider | null {
+  if (env.IMAGE_PROVIDER === 'fake') return new FakeImageProvider();
+  if (assigned) return new OpenAICompatibleImageProvider(assigned);
+  if (env.IMAGE_BASE_URL && env.IMAGE_MODEL)
+    return new OpenAICompatibleImageProvider({
+      baseUrl: env.IMAGE_BASE_URL,
+      apiKey: env.MODEL_API_KEY ?? '',
+      model: env.IMAGE_MODEL,
+    });
+  return null;
+}
+
 @Injectable()
 export class GenerationService implements OnApplicationBootstrap, OnApplicationShutdown {
   readonly root = resolve(process.env.RUNS_DIR ?? join(process.cwd(), 'runs'));
@@ -273,6 +297,11 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * Start the three variants of a brief. They run in the background; `settled` tells how each
    * ended. With an outline the planner lays out its slides, and their number is the outline's.
    */
+  /** Whether a build of this person gets pictures: an image model is assigned or configured. */
+  async imagesAvailable(account: Account): Promise<boolean> {
+    return imageProviderOf(await this.models.resolveRole('image', actorOf(account))) !== null;
+  }
+
   async start(input: GenerationRequest, account: Account): Promise<StartedBuild> {
     // Every generation runs three variants, each counted as one active run.
     if (this.active.size >= 2 * VARIANTS.length)
@@ -347,6 +376,22 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     const controller = new AbortController();
     // One plan for the three variants: the story is decided once, the layouts per variant.
     const sharedPlan = new SharedPlan();
+    // Pictures too are drawn once per brief. Without an image model the planner is not offered
+    // a place for a picture, so no slide is left with an empty frame.
+    const imageModel = await settle(this.models.resolveRole('image', actor));
+    const images = imageProviderOf(imageModel);
+    const illustrations = images
+      ? await SharedIllustrations.load(
+          {
+            images,
+            text: provider,
+            designSystem: prepared.data.designSystem,
+            seed: input.seed ?? 42,
+            signal: controller.signal,
+          },
+          registryDir,
+        )
+      : null;
     const runs: {
       run: Awaited<ReturnType<RunRepository['create']>>;
       variant: LayoutVariant;
@@ -388,6 +433,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           seed: input.seed,
           variant,
           sharedPlan,
+          illustrations,
           signal: controller.signal,
           onEvent: (event) => this.repository.appendEvent(run.runId, event),
         });

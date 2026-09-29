@@ -306,6 +306,10 @@ export {
   type CompositionCritique,
   type TemplateSlotCopy,
   type SlotRewriteChoices,
+  imageSlotSchema,
+  illustrationPromptSchema,
+  type IllustrationPrompt,
+  type ImageSlot,
 } from './generation.js';
 export {
   PIPELINE_ROLES,
@@ -386,6 +390,7 @@ export {
   type ChatAnswer,
   type BuildStatus,
   type ChatPart,
+  type SlideEditPart,
   type ChatMessage,
   type UserChatMessage,
   type AssistantChatMessage,

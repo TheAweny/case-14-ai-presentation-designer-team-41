@@ -85,6 +85,7 @@ export {
   commitImageCrop,
   commitShapeText,
   commitSlideNotes,
+  paragraphsForText,
   normalCrop,
 } from './content-ops.js';
 export type { DeckChange, DeckChangeKind, DeckCommit, DeckHistory, DeckSelection } from './core.js';

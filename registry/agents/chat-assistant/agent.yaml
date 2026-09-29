@@ -3,7 +3,7 @@
 # and json-mode.md are part of the agent and share its version.
 
 id: chat-assistant
-version: 1.2.0
+version: 1.4.0
 description: 'Chat assistant of the deck designer: conversation, deck outline, build.'
 modelId: assistant-default
 

@@ -277,6 +277,7 @@ export function chatContextOf(
     slideNumber: attachment.slideNumber,
     name: name.slice(0, 200),
     elements: elements.slice(0, 60).map((element) => ({
+      elementId: element.elementId,
       kind: element.kind,
       role: element.role,
       text: elementText(element),

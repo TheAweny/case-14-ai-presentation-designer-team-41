@@ -37,6 +37,8 @@ def composition_slides(
     for index, (slide, composed) in enumerate(zip(ir["slides"], request, strict=False)):
         pattern = patterns.get(composed["patternId"], {"slots": []})
         roles = {str(s["slotId"]): s["role"] for s in pattern["slots"]}
+        # An image slot still in the written file got no picture: a frame left for one.
+        frames = {str(s["slotId"]) for s in pattern.get("imageSlots") or []}
         visual = composed.get("visual") or None
         elements: list[dict[str, Any]] = []
         for shape in slide["shapes"]:
@@ -87,6 +89,10 @@ def composition_slides(
                             "yTitle": visual.get("yTitle", ""),
                         }
                     )
+            elif slot in frames:
+                elements.append(
+                    {**base, "kind": "decor", "elementId": f"image-slot-{slot}", "role": "image"}
+                )
             else:
                 elements.append(
                     {**base, "kind": "decor", "elementId": f"template-{slot}", "role": "decoration"}

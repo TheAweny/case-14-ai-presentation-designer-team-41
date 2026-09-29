@@ -1,4 +1,5 @@
 import {
+  jobStageSchema,
   layoutVariantSchema,
   runConfigSchema,
   type ContentItemKind,
@@ -362,7 +363,14 @@ function updateStage(
 ): readonly GenerationStage[] {
   const index = stages.findIndex((item) => item.stage === stage);
   const current = stages[index];
-  if (current === undefined) return [...stages, change(pendingStage(stage))];
+  if (current === undefined) {
+    // Этап, которого нет в плане (иллюстрации есть не у каждой сборки), встаёт на своё место
+    // в порядке пайплайна, а не в конец списка.
+    const order = jobStageSchema.options;
+    const at = stages.findIndex((item) => order.indexOf(item.stage) > order.indexOf(stage));
+    const added = change(pendingStage(stage));
+    return at < 0 ? [...stages, added] : [...stages.slice(0, at), added, ...stages.slice(at)];
+  }
   return stages.map((item, at) => (at === index ? change(current) : item));
 }
 

@@ -11,6 +11,67 @@
             "minimum": 0,
             "type": "integer"
           },
+          "imageSlots": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "box": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cx": {
+                      "description": "Width in EMU.",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "cy": {
+                      "description": "Height in EMU.",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "x": {
+                      "description": "Left edge in EMU.",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "y": {
+                      "description": "Top edge in EMU.",
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "cx",
+                    "cy"
+                  ],
+                  "type": "object"
+                },
+                "kind": {
+                  "enum": [
+                    "placeholder",
+                    "panel"
+                  ],
+                  "type": "string"
+                },
+                "slotId": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slotId",
+                "kind",
+                "box"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "name": {
             "type": "string"
           },

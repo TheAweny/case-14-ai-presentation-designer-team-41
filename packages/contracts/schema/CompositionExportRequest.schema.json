@@ -22,6 +22,39 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "images": {
+            "description": "Generated pictures for image slots. An image slot without one is removed on export, so no empty frame or blank card is left.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "fit": {
+                  "description": "cover crops the picture to fill the box; contain fits it whole inside.",
+                  "enum": [
+                    "cover",
+                    "contain"
+                  ],
+                  "type": "string"
+                },
+                "path": {
+                  "description": "The picture file, relative to the run directory: media/<name>.png.",
+                  "pattern": "^media\\/[\\w.-]+\\.(?:png|jpe?g)$",
+                  "type": "string"
+                },
+                "slotId": {
+                  "description": "An imageSlots id of the composition.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slotId",
+                "path",
+                "fit"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "patternId": {
             "minLength": 1,
             "type": "string"

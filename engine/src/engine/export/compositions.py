@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
 from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.oxml.xmlchemy import OxmlElement
@@ -125,6 +126,79 @@ def _all_shapes(shapes: Any) -> Any:
             yield shape
 
 
+def _find(shapes: Any, shape_id: str) -> tuple[Any, Any] | None:
+    """I find a shape and the collection it lives in, whose coordinates its box is in."""
+    for shape in shapes:
+        if str(shape.shape_id) == shape_id:
+            return shape, shapes
+        if hasattr(shape, "shapes"):
+            found = _find(shape.shapes, shape_id)
+            if found:
+                return found
+    return None
+
+
+def _picture_file(run: Path, path: str) -> Path:
+    """I resolve a picture path of a composed slide, refusing any path outside the run's media."""
+    media = (run / "media").resolve()
+    file = (run / path).resolve()
+    if not file.is_relative_to(media) or not file.is_file():
+        raise ValueError(f"Picture {path} is not in the run's media directory.")
+    return file
+
+
+def _place_picture(slide: Any, slot_id: str, file: Path, fit: str) -> None:
+    """I put a picture where an image slot is and remove the slot.
+
+    The picture takes the slot's box and its place in the drawing order. `cover` crops it to fill
+    the box, `contain` fits it whole and centres it; neither stretches it. A card's geometry, such
+    as rounded corners, carries over, so the picture keeps the frame the template drew.
+    """
+    found = _find(slide.shapes, slot_id)
+    if found is None:
+        return
+    shape, collection = found
+    left, top, width, height = (
+        int(v or 0) for v in (shape.left, shape.top, shape.width, shape.height)
+    )
+    with Image.open(file) as image:
+        image_ratio = image.width / image.height
+    box_ratio = width / max(1, height)
+    if fit == "contain":
+        if image_ratio > box_ratio:
+            fitted = round(width / image_ratio)
+            top, height = top + (height - fitted) // 2, fitted
+        else:
+            fitted = round(height * image_ratio)
+            left, width = left + (width - fitted) // 2, fitted
+    picture = collection.add_picture(str(file), left, top, width, height)
+    if fit != "contain":
+        if image_ratio > box_ratio:
+            side = (1 - box_ratio / image_ratio) / 2
+            picture.crop_left = picture.crop_right = side
+        else:
+            side = (1 - image_ratio / box_ratio) / 2
+            picture.crop_top = picture.crop_bottom = side
+    geometry = shape._element.find(f".//{_A}prstGeom")
+    if geometry is not None:
+        properties = picture._element.spPr
+        current = properties.find(f"{_A}prstGeom")
+        if current is not None:
+            properties.replace(current, deepcopy(geometry))
+    picture.name = f"Illustration {slot_id}"
+    element = shape._element
+    parent = element.getparent()
+    parent.insert(parent.index(element), picture._element)
+    parent.remove(element)
+
+
+def _remove_shape(slide: Any, slot_id: str) -> None:
+    found = _find(slide.shapes, slot_id)
+    if found is not None:
+        element = found[0]._element
+        element.getparent().remove(element)
+
+
 #: Draws one table or chart element onto a slide's shape tree; the API passes the visuals layer's.
 type DrawVisual = Callable[[Any, dict[str, Any]], None]
 
@@ -221,6 +295,16 @@ def export_compositions(
                 _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:
             _replace_with_visual(slide, item["visual"], draw_visual)
+        # Every image slot gets its picture or leaves the slide: an empty frame or a blank card
+        # reads as a slide nobody finished.
+        pictures = {p["slotId"]: p for p in item.get("images") or []}
+        for image_slot in pattern.get("imageSlots") or []:
+            chosen = pictures.get(image_slot["slotId"])
+            if chosen is None:
+                _remove_shape(slide, image_slot["slotId"])
+            else:
+                file = _picture_file(output.parent, chosen["path"])
+                _place_picture(slide, image_slot["slotId"], file, chosen["fit"])
         _drop_empty_placeholders(slide)
         notes = slide.notes_slide.notes_text_frame
         if notes is not None:

@@ -3,6 +3,7 @@ import type { ElementRole, SlideElement, SlideIr } from '@lct/contracts';
 import {
   MAX_CONTEXT_REFS,
   addRef,
+  chatContextOf,
   contextAttachments,
   contextMentions,
   createSlideRef,
@@ -181,6 +182,14 @@ describe('снимок для агента', () => {
       elements: [(deck[0] as SlideIr).elements[0]],
     });
     expect(attachments[1]?.context).toEqual({ scope: 'slide', slideNumber: 2, slide: edited[1] });
+  });
+
+  it('агент получает id объектов: по ним он правит текст (edit_slide)', () => {
+    const [attachment] = contextAttachments(deck, [ref('s1', ['title'])]);
+    if (!attachment) throw new Error('Нет вложения.');
+    expect(chatContextOf('run-1', attachment, 'Заголовок').elements).toEqual([
+      expect.objectContaining({ elementId: 'title', kind: 'text', role: 'title' }),
+    ]);
   });
 
   it('закреплённое и тот же призрак уходят один раз', () => {

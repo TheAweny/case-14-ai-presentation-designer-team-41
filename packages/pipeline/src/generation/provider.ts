@@ -42,9 +42,11 @@ interface Completion {
  */
 const MAX_CONCURRENT = Math.max(1, Number(process.env.MODEL_MAX_CONCURRENCY) || 8);
 
-class RequestLimiter {
+export class RequestLimiter {
   private active = 0;
   private readonly waiting: (() => void)[] = [];
+
+  constructor(private readonly limit = MAX_CONCURRENT) {}
 
   async acquire(signal: AbortSignal): Promise<() => void> {
     signal.throwIfAborted();
@@ -59,7 +61,7 @@ class RequestLimiter {
         if (index >= 0) this.waiting.splice(index, 1);
         reject(signal.reason);
       };
-      if (this.active < MAX_CONCURRENT) grant();
+      if (this.active < this.limit) grant();
       else {
         this.waiting.push(grant);
         signal.addEventListener('abort', abort, { once: true });

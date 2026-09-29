@@ -38,10 +38,26 @@ export interface GenerationDependencies {
   onWarning?: (message: string) => void | Promise<void>;
   /** What the template indexer read about each composition; absent when never indexed. */
   notes?: readonly CompositionNote[];
-  /** True only when the run can put a new image into a required image area. */
-  imagesAvailable?: boolean;
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
+  /**
+   * Whether pictures can be drawn for image slots. Without them the planner is not offered a
+   * composition with a place for a picture, so no slide is left with an empty frame.
+   */
+  imagesAvailable?: boolean;
+  /** The laid-out slides, as soon as the plan is made: pictures are drawn while copy is written. */
+  onPlan?: (slides: readonly PlannedSlide[]) => void;
+}
+
+/** A planned slide with its composition, as the illustrator needs it. */
+export interface PlannedSlide {
+  index: number;
+  purpose: string;
+  imageQuery: string;
+  title: string;
+  audience: string;
+  goal: string;
+  composition: GenerationProfile['compositions'][number];
 }
 const inputSchema = z.object({
   brief: z.string(),
@@ -538,6 +554,8 @@ export function plannerComposition(
     ...(note?.special ? { special: true } : {}),
     ...(note ? { requiredContent: note.requiredContent } : {}),
     imageCount: pattern.imageCount,
+    /** Places this composition has for a generated picture. */
+    imageSlots: pattern.imageSlots?.length ?? 0,
     contentSlots: slots.filter((slot) => slot.role !== 'title').length,
     slots: slotBriefs(slots).map((slot) => ({
       role: slot.role,
@@ -838,8 +856,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       // too little to build a deck from, which means it misread the template.
       const compositions = inputData.profile.compositions.map(withCardHeadings);
       const all = distinctCompositions(compositions);
-      // The current exporter cannot replace an image, a partner asset or a product screenshot.
-      // A slide that requires one must not enter the planner catalog or become a variant layout.
+      // A partner asset or a product screenshot cannot be supplied, and a required picture only
+      // when an image model draws them: a slide needing one must not reach the planner.
       const hasMissingAsset = (pattern: (typeof all)[number]) =>
         notes
           .get(pattern.patternId)
@@ -850,7 +868,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ) ?? false;
       const assetSafe = all.filter((pattern) => !hasMissingAsset(pattern));
       const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
-      const distinct = usable.length >= 3 ? usable : assetSafe;
+      const readable = usable.length >= 3 ? usable : assetSafe;
+      // Without an image model a place for a picture would be removed on export and leave a
+      // hole, so such compositions are not offered while the rest can carry the deck.
+      const textOnly = readable.filter((pattern) => !pattern.imageSlots?.length);
+      const distinct = deps.imagesAvailable || textOnly.length < 3 ? readable : textOnly;
       if (!distinct.length)
         throw new Error('Template has no composition usable without an external image or asset.');
       // A title on a pill holds a short claim, not a sentence, so the floor is a few words.
@@ -903,9 +925,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.plannerInstructions,
             {
               brief: inputData.brief,
-              imagesAvailable: deps.imagesAvailable ?? false,
               slideCount,
               ...(outline ? { outline } : {}),
+              imagesAvailable: deps.imagesAvailable === true,
               catalog: full.map((pattern) =>
                 plannerComposition(pattern, notes.get(pattern.patternId)),
               ),
@@ -992,7 +1014,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         covers,
         notes,
       );
-      return result.slides.map((slide, index) => {
+      const tasks = result.slides.map((slide, index) => {
         const composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
         return {
@@ -1009,6 +1031,10 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           composition,
         };
       });
+      // A special composition frames a QR code, a device screen or code: content the brief
+      // brings, never a drawn picture. Its frame gets nothing and leaves the slide on export.
+      deps.onPlan?.(tasks.filter((task) => !notes.get(task.composition.patternId)?.special));
+      return tasks;
     },
   });
   const write = createStep({
