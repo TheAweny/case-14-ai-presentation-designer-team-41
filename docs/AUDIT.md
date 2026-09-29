@@ -54,6 +54,7 @@
 | `raster-slide` | Slides are editable objects | blocker | Reports slides whose content is a single picture covering the slide, which is a slide exported as an image rather than as native objects. |
 | `duplicate-slide` | Slides do not repeat each other | major | Compares the words of every two slides of a variant and reports pairs that say almost the same thing. |
 | `placeholder-text` | No placeholder text is left | blocker | Scans the deck for filler strings that must never reach a user, listed per profile in configs/audit.yaml, and for text boxes left empty. |
+| `template-leftover` | No copy is left from the template sample | major | Compares each text element with the text its template sample showed. A past year the source content does not name is stale: the sample's year kept or one made up. Text equal to the sample is the template's label left in place of content. |
 
 ## Контекстные проверки (TypeScript, `packages/pipeline`)
 

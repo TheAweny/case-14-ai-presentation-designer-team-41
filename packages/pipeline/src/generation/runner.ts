@@ -24,6 +24,8 @@ import {
   type SharedPlan,
   repairedSlideSchema,
   type repairTaskSchema,
+  briefYears,
+  withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
@@ -35,7 +37,13 @@ type EventData = {
   >;
 }[JobEvent['type']];
 /** Checks of the deterministic audit whose findings a rewrite of the slot's copy can fix. */
-const REWRITABLE = new Set(['placeholder-text', 'bullet-length', 'bullet-count', 'text-clipped']);
+const REWRITABLE = new Set([
+  'placeholder-text',
+  'bullet-length',
+  'bullet-count',
+  'text-clipped',
+  'template-leftover',
+]);
 
 export interface GenerateOptions {
   runId: string;
@@ -56,6 +64,8 @@ export interface GenerateOptions {
   variant?: DeckVariant;
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
+  /** The day the deck is dated by. Absent: today. */
+  today?: Date;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
 }
@@ -81,6 +91,11 @@ export async function generatePresentation(options: GenerateOptions) {
     return events;
   };
   await mkdir(options.outputDir, { recursive: true });
+  // A card heading the template placed highest reads as a heading everywhere: in the plan, the
+  // writer, the critic and the repair.
+  const profile = withCardHeadingProfile(options.profile);
+  // One date for the whole run: the writer and the audit judge years by the same day.
+  const today = options.today ?? new Date();
   try {
     // Warnings collected from repairs and audits; recorded in the deck and streamed as events.
     const reviewWarnings: string[] = [];
@@ -111,6 +126,7 @@ export async function generatePresentation(options: GenerateOptions) {
       repairInstructions: rewriter.instructions,
       variant: options.variant ?? 'balanced',
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
+      today,
       signal,
       concurrency: 3,
       ...(options.notes ? { notes: options.notes } : {}),
@@ -133,6 +149,7 @@ export async function generatePresentation(options: GenerateOptions) {
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
       variant: options.variant ?? 'balanced',
+      today,
       signal,
       concurrency: 3,
       onWarning: async (message) => {
@@ -150,7 +167,7 @@ export async function generatePresentation(options: GenerateOptions) {
       inputData: {
         brief: options.brief,
         slideCount: options.slideCount,
-        profile: options.profile,
+        profile,
         outline: options.outline ?? null,
       },
     });
@@ -173,6 +190,13 @@ export async function generatePresentation(options: GenerateOptions) {
       templatePath: options.templatePath,
       outputPath: join(options.outputDir, 'deck.pptx'),
       slides: written.map((s) => s.slide),
+      // The local day, as the writer dates the deck; toISOString would give the UTC one.
+      today: [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-'),
+      briefYears: briefYears(options.brief),
     });
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -184,9 +208,7 @@ export async function generatePresentation(options: GenerateOptions) {
           {
             brief: options.brief,
             slides: written.map((s) => {
-              const pattern = options.profile.compositions.find(
-                (p) => p.patternId === s.slide.patternId,
-              );
+              const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
               return {
                 slideIndex: s.index,
                 patternId: s.slide.patternId,
@@ -255,9 +277,7 @@ export async function generatePresentation(options: GenerateOptions) {
       for (const current of written) {
         const corrections = issues.filter((i) => i.slideIndex === current.index);
         if (!corrections.length) continue;
-        const pattern = options.profile.compositions.find(
-          (p) => p.patternId === current.slide.patternId,
-        );
+        const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
         if (!pattern) throw new Error('Missing composition during repair.');
         const composition = {
           ...pattern,
@@ -351,9 +371,7 @@ export async function generatePresentation(options: GenerateOptions) {
             slotId: (f.target.elementId ?? '').slice('slot-'.length),
             message: `${f.title}: ${f.detail} (${f.evidence.measured}; ${f.evidence.expected})`,
           }));
-        const pattern = options.profile.compositions.find(
-          (p) => p.patternId === current.slide.patternId,
-        );
+        const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
         if (corrections.length && pattern) {
           tasks.push({
             index: current.index,

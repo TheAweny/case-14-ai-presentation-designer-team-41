@@ -56,6 +56,42 @@ def _replace_text(shape: Any, text: str) -> None:
 
 
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+#: How near the middle of the slide a block must sit to count as centred on it, and how tall it
+#: must be to be a block rather than a line, as shares of the slide height.
+_CENTRE_TOLERANCE = 0.02
+_BLOCK_SHARE = 0.15
+
+
+def _keep_centred(shape: Any, slide_height: int) -> None:
+    """I keep a block the template centred on the slide centred after its text is replaced.
+
+    A statement set large in a panel is often a top-anchored box that grows with its text, sized
+    to the template's sample: three lines centred on the slide. One line of new copy keeps the top
+    of the box, so it rises above the middle. Anchoring the box at its centre and fixing its size
+    puts any number of lines where the sample's middle was.
+    """
+    # A shape in a group is placed in the group's coordinates, not the slide's.
+    if not shape._element.getparent().tag.endswith("}spTree"):
+        return
+    body = shape.text_frame._txBody.find(f"{_A}bodyPr")
+    if body is None or body.find(f"{_A}spAutoFit") is None:
+        return
+    anchor = body.get("anchor")
+    if anchor not in (None, "t") or (anchor is None and shape.is_placeholder):
+        return
+    top, height = int(shape.top or 0), int(shape.height or 0)
+    centre = top + height / 2
+    if height < _BLOCK_SHARE * slide_height:
+        return
+    if abs(centre - slide_height / 2) > _CENTRE_TOLERANCE * slide_height:
+        return
+    auto = body.find(f"{_A}spAutoFit")
+    fixed = OxmlElement("a:noAutofit")
+    body.replace(auto, fixed)
+    body.set("anchor", "ctr")
+
+
 _KEPT_PLACEHOLDERS = {
     PP_PLACEHOLDER.FOOTER,
     PP_PLACEHOLDER.DATE,
@@ -182,6 +218,7 @@ def export_compositions(
         for shape in _all_shapes(slide.shapes):
             if str(shape.shape_id) in texts:
                 _replace_text(shape, texts[str(shape.shape_id)])
+                _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:
             _replace_with_visual(slide, item["visual"], draw_visual)
         _drop_empty_placeholders(slide)

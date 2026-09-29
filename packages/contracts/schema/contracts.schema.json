@@ -2530,6 +2530,15 @@
           ],
           "type": "object"
         },
+        "knownYears": {
+          "description": "Years the source content names; a past year it names is not stale.",
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "type": "array"
+        },
         "mediaSizes": {
           "additionalProperties": {
             "additionalProperties": false,
@@ -4370,6 +4379,28 @@
           },
           "minItems": 1,
           "type": "array"
+        },
+        "slotSamples": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "description": "Text each element showed in the template sample it was built from, by slideId and elementId. Lets the audit tell template copy left in place.",
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "today": {
+          "description": "The day the deck is dated by; earlier years are past. Absent: today.",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+          "type": "string"
         }
       },
       "required": [
@@ -4457,6 +4488,14 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "briefYears": {
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "type": "array"
+        },
         "outputPath": {
           "minLength": 1,
           "type": "string"
@@ -4637,6 +4676,11 @@
         },
         "templatePath": {
           "minLength": 1,
+          "type": "string"
+        },
+        "today": {
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
           "type": "string"
         }
       },
