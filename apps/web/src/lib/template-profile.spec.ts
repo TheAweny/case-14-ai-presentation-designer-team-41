@@ -195,6 +195,46 @@ describe('templateLayoutsFromIr', () => {
     expect(rendered?.elements).toMatchObject([{ kind: 'decor', sourceShapeId: 3 }]);
   });
 
+  it('leaves out inherited shapes lying wholly past the slide edge', () => {
+    const layout = ir.layouts[0];
+    const base = layout?.shapes[0];
+    if (!layout || !base) throw new Error('fixture layout is missing');
+    const shape = (shapeId: number, box: { x: number; y: number; cx: number; cy: number }) => ({
+      ...base,
+      shapeId,
+      box,
+      kind: 'line' as const,
+      placeholder: null,
+      paragraphs: [],
+    });
+    const master = {
+      ...layout,
+      part: '/ppt/slideMasters/slideMaster1.xml',
+      name: 'Master',
+      shapes: [
+        // A designer's ruler above the slide and below it.
+        shape(4, { x: 100, y: -80, cx: 0, cy: 40 }),
+        shape(5, { x: 100, y: 640, cx: 0, cy: 40 }),
+        // A rule along the left edge is on the slide.
+        shape(6, { x: 0, y: 0, cx: 0, cy: 600 }),
+      ],
+    };
+    const slide = {
+      ...layout,
+      part: '/ppt/slides/slide1.xml',
+      name: 'slide1',
+      follows: layout.part,
+      shapes: [],
+    };
+    const rendered = templateSlideFromIr({
+      ...ir,
+      masters: [master],
+      layouts: [{ ...layout, follows: master.part, shapes: [] }],
+      slides: [slide],
+    });
+    expect(rendered?.elements.map((element) => element.sourceShapeId)).toEqual([6]);
+  });
+
   it('preserves real slide backgrounds ahead of inherited backgrounds', () => {
     const layout = ir.layouts[0];
     if (!layout) throw new Error('fixture layout is missing');

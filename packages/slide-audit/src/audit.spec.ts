@@ -183,6 +183,19 @@ describe('off-slide', () => {
     const bleed = auditSlide(slide([image('photo', box(-20, -20, 1000, 580))]), context);
     expect(ofCheck(bleed, 'off-slide')).toEqual([]);
   });
+
+  it('leaves alone template text the layout itself sets past the edge, not once it is moved', () => {
+    // A quotation mark of the layout, larger than the space above it, bleeding off the top.
+    const mark = { ...text('q', box(40, -80, 160, 350), '«', { sizePt: 288 }), sourceShapeId: 7 };
+    const layout = slide([mark], { slideId: 'layout' });
+    const withLayout = { ...context, layoutFor: () => layout };
+    expect(ofCheck(auditSlide(slide([mark]), withLayout), 'off-slide')).toEqual([]);
+
+    const moved = { ...mark, box: box(40, -120, 160, 350) };
+    expect(ofCheck(auditSlide(slide([moved]), withLayout), 'off-slide')).toMatchObject([
+      { kind: 'edge', level: 'error' },
+    ]);
+  });
 });
 
 describe('safe-margins', () => {

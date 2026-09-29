@@ -242,6 +242,15 @@ function shapeOf(
 
 type Owner = 'master' | 'layout' | 'slide';
 
+/** A box lying wholly past an edge of the slide; one touching the edge is still on it. */
+function offCanvas(
+  box: { x: number; y: number; cx: number; cy: number } | null | undefined,
+  ir: TemplateIr,
+): boolean {
+  if (!box) return false;
+  return box.x > ir.slideCx || box.y > ir.slideCy || box.x + box.cx < 0 || box.y + box.cy < 0;
+}
+
 /** Paint order of the parts: the master under the layout, the layout under the slide. */
 const PAINT_ORDER: Record<Owner, number> = { master: 0, layout: 1, slide: 2 };
 
@@ -276,6 +285,9 @@ function slideOf(
   const elements: SlideElement[] = [];
   shapes.forEach(({ shape, owner }, shapeIndex) => {
     if (shape.kind === 'group') return;
+    // A master or a layout may keep a designer's rulers and notes past the slide edge; a show
+    // never paints them, so the slide does not have them either.
+    if (owner !== 'slide' && offCanvas(shape.box, ir)) return;
     const { placeholder } = shape;
     if (placeholder && owner !== framesFrom) return;
     if (placeholder && !child) {

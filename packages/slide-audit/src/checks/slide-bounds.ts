@@ -31,7 +31,8 @@ function overshoot(box: Box, area: Area): number {
  * is a design, a paragraph missing its last words is not.
  *
  * Content inside the slide but past the template margins is a warning. Elements a template layout
- * put where they are stay out of it: the layout is where the margins were measured.
+ * put where they are stay out of both checks: the layout is where the margins were measured, and
+ * its own shapes may bleed off the edge by design.
  */
 export function checkSlideBounds(slide: SlideIr, context: AuditContext): AuditIssue[] {
   const layout = context.layoutFor?.(slide.patternId);
@@ -54,6 +55,10 @@ export function checkSlideBounds(slide: SlideIr, context: AuditContext): AuditIs
         : outline(element.box, element.rotation ?? 0),
     );
     const base = { slideId: slide.slideId, elementId: element.elementId, box: outer };
+    // What the template layout itself puts there is its design, even past the edge: a giant
+    // quotation mark bleeding off the top is drawn so on purpose.
+    const twin = layoutTwin(layout, element);
+    if (twin && sameBox(twin.box, element.box)) continue;
 
     const outside =
       outer.x >= whole.right ||
@@ -96,8 +101,6 @@ export function checkSlideBounds(slide: SlideIr, context: AuditContext): AuditIs
     }
 
     if (EDGE_ROLES.has(element.role)) continue;
-    const twin = layoutTwin(layout, element);
-    if (twin && sameBox(twin.box, element.box)) continue;
     const beyondMargin = overshoot(outer, safe);
     if (beyondMargin > TOLERANCE_EMU) {
       const fix = relocate(slide, element, safe, context);
