@@ -6,6 +6,7 @@ import {
   AnswerWriter,
   chatInstructions,
   loadChatAgent,
+  lenientJson,
   looping,
   mendedArguments,
   modelHistory,
@@ -347,5 +348,14 @@ describe('mendedArguments', () => {
     const broken = { outline: '{"title": ', templateId: null };
     expect(mendedArguments(schema, broken)).toEqual(broken);
     expect(schema.safeParse(mendedArguments(schema, broken)).success).toBe(false);
+  });
+});
+
+describe('lenientJson', () => {
+  it('closes the brackets a model left open, and gives up on anything else', () => {
+    expect(lenientJson('{"slides": [{"title": "Итог", "points": ["a]"]}]')).toEqual({
+      slides: [{ title: 'Итог', points: ['a]'] }],
+    });
+    expect(lenientJson('{"title": "Итог", ')).toBeNull();
   });
 });
