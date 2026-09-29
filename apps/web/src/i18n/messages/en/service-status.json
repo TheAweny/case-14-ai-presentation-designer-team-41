@@ -1,0 +1,16 @@
+{
+  "title": "Some services are unavailable",
+  "checkFailed": "Could not check service status",
+  "description": "Some actions may not work. We'll check again automatically.",
+  "api": "API",
+  "engine": "Presentation engine",
+  "database": "Database",
+  "down": "Unavailable",
+  "degraded": "Degraded",
+  "unknown": "Could not check",
+  "retry": "Check now",
+  "checking": "Checking…",
+  "pageTitle": "Could not load the page",
+  "pageDescription": "A service may be temporarily unavailable. Please try loading the page again.",
+  "reload": "Try again"
+}

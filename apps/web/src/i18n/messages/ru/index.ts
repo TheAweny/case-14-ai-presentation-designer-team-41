@@ -28,6 +28,7 @@ import slideList from './slide-list.json';
 import slideShow from './slide-show.json';
 import splash from './splash.json';
 import speakerNotes from './speaker-notes.json';
+import serviceStatus from './service-status.json';
 import tableMenu from './table-menu.json';
 import tablePanel from './table-panel.json';
 import templatesPage from './templates-page.json';
@@ -49,6 +50,7 @@ const messages = {
   designPanel,
   imageCrop,
   speakerNotes,
+  serviceStatus,
   canvasMenu,
   inspectorFields,
   shortcuts,

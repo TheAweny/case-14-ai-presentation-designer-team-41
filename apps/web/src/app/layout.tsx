@@ -8,6 +8,7 @@ import { EditorPrefsProvider } from '@/components/editor/use-editor-prefs';
 import { AccountProvider } from '@/components/auth/account-context';
 import { NavigationProgress } from '@/components/navigation-progress';
 import { SettingsHost } from '@/components/settings/settings-dialog';
+import { ServiceStatus } from '@/components/service-status';
 import { currentAccount } from './auth-session';
 import './globals.css';
 
@@ -20,7 +21,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const [locale, cookieStore, account] = await Promise.all([
     getLocale(),
     cookies(),
-    currentAccount(),
+    currentAccount().catch(() => null),
   ]);
   const editorPrefs = parseEditorPrefs(cookieStore.get(EDITOR_PREFS_COOKIE)?.value);
 
@@ -33,6 +34,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <EditorPrefsProvider initial={editorPrefs}>
               <NavigationProgress>
                 {children}
+                <ServiceStatus />
                 {/* Окно настроек открывается параметром адреса на любой странице — и в редакторе. */}
                 <Suspense fallback={null}>
                   <SettingsHost />

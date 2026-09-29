@@ -190,7 +190,9 @@ export function ConfirmDeleteDialog({
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="text-sm text-pretty break-words">{body}</DialogDescription>
+          <DialogDescription className="min-w-0 text-sm text-pretty [overflow-wrap:anywhere]">
+            {body}
+          </DialogDescription>
         </DialogHeader>
         <div className="flex justify-end gap-2">
           <Button

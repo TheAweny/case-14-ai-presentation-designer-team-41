@@ -48,7 +48,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-[4500] grid w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2',
+          'fixed top-1/2 left-1/2 z-[4500] grid w-[calc(100%-2rem)] min-w-0 grid-cols-[minmax(0,1fr)] -translate-x-1/2 -translate-y-1/2',
           'gap-3 rounded-xl bg-popover p-4 text-popover-foreground shadow-lg ring-1 ring-border',
           'data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
           'data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
