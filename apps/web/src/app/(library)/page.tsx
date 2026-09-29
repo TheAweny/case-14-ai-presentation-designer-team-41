@@ -24,11 +24,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   ]);
   const projectById = new Map(projects.map((project) => [project.projectId, project]));
   const templateById = new Map(templates.map((template) => [template.templateId, template]));
-  // Обложку рисует профиль шаблона колоды: колоду без шаблона нечем нарисовать.
+  // Обложку рисует профиль колоды, а без него — профиль её шаблона; без обоих рисовать нечем.
   const recent = decks.flatMap((deck) => {
-    const template = templateById.get(deck.templateId);
+    const designSystem = deck.designSystem ?? templateById.get(deck.templateId)?.designSystem;
     const project = deck.projectId === null ? undefined : projectById.get(deck.projectId);
-    return template ? [{ deck, template, project }] : [];
+    return designSystem ? [{ deck, designSystem, project }] : [];
   });
 
   return (
@@ -51,11 +51,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       <LibrarySection id="home-recent" title={t('recent')} count={recent.length}>
         {recent.length > 0 ? (
           <CardGrid>
-            {recent.map(({ deck, template, project }) => (
+            {recent.map(({ deck, designSystem, project }) => (
               <li key={deck.deckId} className="min-w-0">
                 <DeckCard
                   deck={deck}
-                  designSystem={template.designSystem}
+                  designSystem={designSystem}
                   // Вне проектов — так и подписано: в «Недавних» видно, где презентация лежит.
                   projectName={project?.name ?? t('deckCard.noProject')}
                 />

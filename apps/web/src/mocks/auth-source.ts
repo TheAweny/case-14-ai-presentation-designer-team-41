@@ -1,13 +1,10 @@
-import { parseAuthUsers } from '../lib/auth';
-import { createDemoAuth } from './demo-auth';
 import { createApiAuth } from './api-auth';
 
 /**
- * Аккаунты, пока API нет. Отдельно от `sources.ts`: тот попадает и во вкладку (сессия
- * ассистента), а здесь `node:crypto` и пароли — им место только на сервере.
+ * Аккаунты. Отдельно от `sources.ts`: тот попадает и во вкладку (сессия ассистента), а
+ * проверка паролей — дело только сервера.
  *
- * Регистрации нет: пользователей заводит `AUTH_USERS` (формат — в `lib/auth.ts`).
+ * Регистрации нет: аккаунты хранит API, первого администратора создаёт установщик
+ * (`ADMIN_EMAIL`, `ADMIN_PASSWORD`), остальных — администратор в настройках.
  */
-export const authSource = process.env.API_INTERNAL_URL
-  ? createApiAuth()
-  : createDemoAuth(parseAuthUsers(process.env.AUTH_USERS));
+export const authSource = createApiAuth();

@@ -3,14 +3,52 @@ import { randomUUID } from 'node:crypto';
 import { readFile, readdir, rename, writeFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-interface Metadata {
+export interface Metadata {
   templateId: string;
   projectId: string | null;
+  /** The account that generated the deck. Decks made before accounts have none and are hidden. */
+  ownerId?: string;
+  /** The chat the deck was generated in. */
+  chatId?: string | null;
+  variant?: string;
+  /**
+   * The build the deck came from: its three layout variants share it. Decks made before builds
+   * were recorded have none and stand alone.
+   */
+  buildId?: string;
   updatedAt: number;
   title?: string;
   deletedAt?: number;
 }
 const pending = new Map<string, Promise<unknown>>();
+
+/** The build a deck belongs to; a deck without one is a build of its own. */
+export function buildOf(entry: { id: string; metadata: Metadata }): string {
+  return entry.metadata.buildId ?? entry.id;
+}
+
+/**
+ * One deck of every build, in the order of `entries`: the variant `chosen` names, else the
+ * balanced one, else the first. The library shows a build once, as the variant the person picked.
+ */
+export function oneDeckPerBuild<T extends { id: string; metadata: Metadata }>(
+  entries: readonly T[],
+  chosen: ReadonlySet<string>,
+): T[] {
+  const builds = new Map<string, T[]>();
+  for (const entry of entries) {
+    const build = builds.get(buildOf(entry));
+    if (build) build.push(entry);
+    else builds.set(buildOf(entry), [entry]);
+  }
+  return [...builds.values()].flatMap((build) => {
+    const shown =
+      build.find((entry) => chosen.has(entry.id)) ??
+      build.find((entry) => entry.metadata.variant === 'balanced') ??
+      build[0];
+    return shown ? [shown] : [];
+  });
+}
 
 /** I preserve existing run metadata and publish library mutations atomically. */
 export class LibraryMetadata {
@@ -32,13 +70,29 @@ export class LibraryMetadata {
     }
   }
 
-  async visible(id: string): Promise<boolean> {
+  /** Not deleted and, when `ownerId` is given, belonging to that account. */
+  async visible(id: string, ownerId?: string): Promise<boolean> {
     try {
-      return !(await this.read(id)).deletedAt;
+      const metadata = await this.read(id);
+      return !metadata.deletedAt && (ownerId === undefined || metadata.ownerId === ownerId);
     } catch (error) {
       if (error instanceof NotFoundException) return false;
       throw error;
     }
+  }
+
+  /** The decks of the build `id` belongs to that are not deleted, `id` included. */
+  async build(id: string): Promise<string[]> {
+    const metadata = await this.read(id);
+    if (metadata.buildId === undefined) return [id];
+    return (await this.entries())
+      .filter(
+        (entry) =>
+          entry.metadata.buildId === metadata.buildId &&
+          entry.metadata.ownerId === metadata.ownerId &&
+          (entry.id === id || !entry.metadata.deletedAt),
+      )
+      .map((entry) => entry.id);
   }
 
   async entries(): Promise<{ id: string; metadata: Metadata }[]> {

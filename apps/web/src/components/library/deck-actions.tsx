@@ -12,8 +12,10 @@ import {
 } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  deleteChatAction,
   deleteDeckAction,
   moveDeckAction,
+  updateChatAction,
   updateDeckAction,
   type LibraryActionResult,
 } from '@/app/(library)/actions';
@@ -22,7 +24,7 @@ import { useLibraryProjects, type LibraryProject } from '@/components/library/li
 import { ConfirmDeleteDialog, RenameDialog } from '@/components/library/object-dialogs';
 import { focusObject, removalFocusTarget } from '@/components/library/object-focus';
 import { ObjectMenu, type DeckMove, type ObjectMenuAction } from '@/components/library/object-menu';
-import { deckMenu, moveTargets } from '@/lib/library-menu';
+import { chatMenu, deckMenu, moveTargets } from '@/lib/library-menu';
 import { DECK_TITLE_MAX_LENGTH } from '@/lib/library-source';
 
 /** Название, которое видно сейчас: после переименования — новое, ещё до ответа сервера. */
@@ -39,6 +41,37 @@ export function DeckTitle({ children }: { children: string }) {
 const FAILED: LibraryActionResult = { ok: false, reason: 'invalid' };
 
 type Dialog = 'rename' | 'delete' | null;
+
+/** Строки меню: у презентации и у чата они свои, остальное меню общее. */
+const DECK_TEXTS = {
+  menu: 'deckMenu',
+  renameFailed: 'notices.renameDeckFailed',
+  deleted: 'notices.deckDeleted',
+  deleteFailed: 'notices.deleteDeckFailed',
+  moved: 'notices.deckMoved',
+  movedOut: 'notices.deckMovedOut',
+  moveFailed: 'notices.moveDeckFailed',
+  renameTitle: 'renameDeck.title',
+  renameLabel: 'renameDeck.label',
+  deleteTitle: 'deleteDeck.title',
+  deleteBody: 'deleteDeck.body',
+  deleteConfirm: 'deleteDeck.confirm',
+} as const;
+
+const CHAT_TEXTS = {
+  menu: 'chatMenu',
+  renameFailed: 'notices.renameChatFailed',
+  deleted: 'notices.chatDeleted',
+  deleteFailed: 'notices.deleteChatFailed',
+  moved: 'notices.chatMoved',
+  movedOut: 'notices.chatMovedOut',
+  moveFailed: 'notices.moveChatFailed',
+  renameTitle: 'renameChat.title',
+  renameLabel: 'renameChat.label',
+  deleteTitle: 'deleteChat.title',
+  deleteBody: 'deleteChat.body',
+  deleteConfirm: 'deleteChat.confirm',
+} as const satisfies Record<keyof typeof DECK_TEXTS, string>;
 
 /**
  * Где стоит кнопка «⋯»: на карточке — в углу обложки, в строке — справа по центру,
@@ -59,12 +92,19 @@ const BUTTON_PLACE = {
  */
 export function DeckActions({
   deckId,
+  chatId,
   projectId,
   title,
   layout,
   children,
 }: {
-  deckId: string;
+  /** Колода; у чата — та, которую он ведёт, или null, пока колоды нет. */
+  deckId: string | null;
+  /**
+   * Меню чата, а не колоды: открывается чат, а переименование, перенос и удаление — чата
+   * вместе с собранными в нём колодами.
+   */
+  chatId?: string;
   /** Проект, где презентация сейчас; null — вне проектов. Его строка в подменю отмечена. */
   projectId: string | null;
   title: string;
@@ -83,15 +123,23 @@ export function DeckActions({
   const root = useRef<HTMLDivElement>(null);
   /** Куда уйдёт фокус, когда закроется диалог удаления; null — обратно на объект. */
   const focusNext = useRef<HTMLElement | null>(null);
-  const menu = useMemo(() => deckMenu(deckId), [deckId]);
+  const menu = useMemo(
+    () => (chatId !== undefined ? chatMenu(chatId, deckId) : deckMenu(deckId ?? '')),
+    [chatId, deckId],
+  );
+  const texts = chatId !== undefined ? CHAT_TEXTS : DECK_TEXTS;
   const projects = useLibraryProjects();
 
   const rename = (next: string | null) => {
     if (next === null) return;
     startTransition(async () => {
       show({ title: next });
-      const result = await updateDeckAction(deckId, { title: next }).catch(() => FAILED);
-      if (!result.ok) notice.alert(t('notices.renameDeckFailed'));
+      const result = await (
+        chatId !== undefined
+          ? updateChatAction(chatId, { title: next })
+          : updateDeckAction(deckId ?? '', { title: next })
+      ).catch(() => FAILED);
+      if (!result.ok) notice.alert(t(texts.renameFailed));
     });
   };
 
@@ -100,18 +148,25 @@ export function DeckActions({
     focusNext.current = removalFocusTarget(root.current);
     startTransition(async () => {
       show({ removed: true });
-      const result = await deleteDeckAction(deckId).catch(() => FAILED);
-      if (result.ok) notice.status(t('notices.deckDeleted', { title: removedTitle }));
-      else notice.alert(t('notices.deleteDeckFailed'));
+      const result = await (
+        chatId !== undefined ? deleteChatAction(chatId) : deleteDeckAction(deckId ?? '')
+      ).catch(() => FAILED);
+      if (result.ok) notice.status(t(texts.deleted, { title: removedTitle }));
+      else notice.alert(t(texts.deleteFailed));
     });
   };
 
   const moveTo = (project: LibraryProject | null) => {
     startTransition(async () => {
-      const result = await moveDeckAction(deckId, project?.projectId ?? null).catch(() => FAILED);
-      if (!result.ok) notice.alert(t('notices.moveDeckFailed'));
-      else if (project) notice.status(t('notices.deckMoved', { project: project.name }));
-      else notice.status(t('notices.deckMovedOut'));
+      const target = project?.projectId ?? null;
+      const result = await (
+        chatId !== undefined
+          ? updateChatAction(chatId, { projectId: target })
+          : moveDeckAction(deckId ?? '', target)
+      ).catch(() => FAILED);
+      if (!result.ok) notice.alert(t(texts.moveFailed));
+      else if (project) notice.status(t(texts.moved, { project: project.name }));
+      else notice.status(t(texts.movedOut));
     });
   };
 
@@ -134,7 +189,7 @@ export function DeckActions({
       <ObjectMenu
         kind="deck"
         menu={menu}
-        label={t('deckMenu', { title: shown.title })}
+        label={t(texts.menu, { title: shown.title })}
         onAction={onAction}
         move={move}
         removed={shown.removed}
@@ -146,8 +201,8 @@ export function DeckActions({
       <RenameDialog
         open={dialog === 'rename'}
         onOpenChange={(open) => setDialog(open ? 'rename' : null)}
-        title={t('renameDeck.title')}
-        label={t('renameDeck.label')}
+        title={t(texts.renameTitle)}
+        label={t(texts.renameLabel)}
         value={shown.title}
         maxLength={DECK_TITLE_MAX_LENGTH}
         onSave={rename}
@@ -156,9 +211,9 @@ export function DeckActions({
       <ConfirmDeleteDialog
         open={dialog === 'delete'}
         onOpenChange={(open) => setDialog(open ? 'delete' : null)}
-        title={t('deleteDeck.title')}
-        body={t('deleteDeck.body', { title: shown.title })}
-        confirmLabel={t('deleteDeck.confirm')}
+        title={t(texts.deleteTitle)}
+        body={t(texts.deleteBody, { title: shown.title })}
+        confirmLabel={t(texts.deleteConfirm)}
         onConfirm={remove}
         onCloseAutoFocus={restoreFocus}
       />

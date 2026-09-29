@@ -18,6 +18,7 @@ describe('createApiAuth', () => {
       userId: 'a@b.co',
       email: 'a@b.co',
       name: 'Ann',
+      role: 'user',
     });
   });
 

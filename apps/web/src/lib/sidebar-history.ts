@@ -15,7 +15,7 @@ export interface SidebarProjectRef {
 
 /** Что панели нужно о презентации. */
 export interface SidebarDeckRef {
-  readonly deckId: string;
+  readonly id: string;
   readonly title: string;
   readonly projectId: string | null;
   readonly updatedAt: number;
@@ -129,11 +129,11 @@ export function buildSidebarLists<P extends SidebarProjectRef, D extends Sidebar
     const open = searching || input.openProjectIds.has(project.projectId);
     // Имя проекта совпало — видны все его презентации. Совпало название — только оно.
     const visible = !searching || nameHit ? own : matching;
-    if (open) for (const deck of visible) shown.add(deck.deckId);
+    if (open) for (const deck of visible) shown.add(deck.id);
     pinned.push({ project, decks: open ? visible : [], open });
   }
 
-  const history = input.decks.filter((deck) => hit(deck.title, needle) && !shown.has(deck.deckId));
+  const history = input.decks.filter((deck) => hit(deck.title, needle) && !shown.has(deck.id));
   const searchMiss = searching && pinned.length === 0 && history.length === 0;
   return {
     pinned,

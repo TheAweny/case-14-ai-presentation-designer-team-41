@@ -220,3 +220,45 @@ describe('a generated deck read back from its .pptx', () => {
     );
   });
 });
+
+describe('following a run on the server', () => {
+  const server = { runId: 'run-test', variantRunIds: ['run-test'] };
+  const noop = () => undefined;
+
+  it('rides out a restart of the API and finishes the build', async () => {
+    vi.useFakeTimers();
+    let outage = 2;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url) => {
+        const path = String(url);
+        if (path.includes('/runs/run-test') && outage > 0) {
+          outage -= 1;
+          return new Response('Bad gateway', { status: 502 });
+        }
+        if (path.includes('/events')) return Response.json([]);
+        if (path.endsWith('/runs/run-test')) return Response.json({ state: 'done' });
+        if (path.endsWith('/deck')) return Response.json(stored);
+        return new Response('missing', { status: 404 });
+      }),
+    );
+    const { follow } = createHttpGenerator();
+    if (!follow) throw new Error('The HTTP generator follows server runs');
+    const result = follow(server, noop, new AbortController().signal);
+    await vi.runAllTimersAsync();
+    await expect(result).resolves.toMatchObject({ variants: [{ deckId: 'run-test' }] });
+    vi.useRealTimers();
+  });
+
+  it('gives up on an answer that will not change', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ message: 'Run run-test was not found.' }, { status: 404 })),
+    );
+    const { follow } = createHttpGenerator();
+    if (!follow) throw new Error('The HTTP generator follows server runs');
+    await expect(follow(server, noop, new AbortController().signal)).rejects.toThrow(
+      'Run run-test was not found.',
+    );
+  });
+});

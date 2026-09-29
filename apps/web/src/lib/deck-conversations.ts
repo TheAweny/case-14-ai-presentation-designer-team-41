@@ -58,9 +58,40 @@ export interface NewDeckInput {
   readonly audienceLabels: Readonly<Record<AudienceOption, string>>;
 }
 
+/**
+ * Что агент помнит о разговоре, без файлов: так разговор сохраняется в API и продолжается после
+ * обновления страницы. Материалы, уже отправленные на сервер, остаются в сборках по своим id.
+ */
+export interface ConversationSnapshot {
+  readonly request: Omit<DeckDraft, 'files' | 'contentIds'>;
+  readonly projectName: string | null;
+  readonly meta: RequestMeta;
+  readonly returnHref: string;
+  readonly audienceLabels: Readonly<Record<AudienceOption, string>>;
+  readonly templateId: string | null;
+  readonly templateName: string;
+  readonly audience: AudienceOption | null;
+  readonly refinements: readonly string[];
+  readonly contentIds: readonly string[];
+  readonly model: ModelRef | null;
+  readonly runId: string | null;
+}
+
 export interface DeckConversations {
   /** Начать разговор о новой колоде. Отдаёт id разговора — по нему открывается его страница. */
   start(input: NewDeckInput): string;
+  /** Снимок разговора для сохранения; разговор не собирает колоду — undefined. */
+  snapshot(threadId: string): ConversationSnapshot | undefined;
+  /**
+   * Продолжить сохранённый разговор: пожелания снова пересобирают колоду. Разговор, который
+   * агент уже ведёт во вкладке, не трогается.
+   */
+  restore(threadId: string, snapshot: ConversationSnapshot): void;
+  /**
+   * Досмотреть сборку восстановленного разговора, если её прервало обновление страницы: прогон
+   * на сервере идёт дальше, и его итог появится в разговоре. Разговор и сообщения уже во вкладке.
+   */
+  resume(threadId: string): void;
   /**
    * Сообщение из поля панели редактора, когда вопросов нет. `attachments` — то, что человек дал
    * как контекст: объекты и слайды колоды со снимком SlideIR. Они остаются в сообщении человека —
@@ -175,6 +206,8 @@ interface ConversationState {
   readonly refinements: string[];
   /** Материалы, добавленные после старта разговора; входят в следующую сборку. */
   files: readonly File[];
+  /** Материалы, уже лежащие на сервере: сохранённый разговор помнит их по id. */
+  readonly contentIds: readonly string[];
   /** Модель для следующей сборки; null означает модель по умолчанию. */
   model: ModelRef | null;
   /** Номер сборки: сборка, которую сменила новая, уходит молча. */
@@ -191,12 +224,25 @@ function briefOf({ input, audience, refinements }: ConversationState): string {
     .join('\n\n');
 }
 
+/** Запрос сборки по тому, что агент знает сейчас. */
+function requestOf(state: ConversationState, templateId: string): GenerationRequest {
+  return {
+    ...state.input.request,
+    templateId,
+    brief: briefOf(state),
+    files: state.files,
+    contentIds: state.contentIds,
+    model: state.model,
+  };
+}
+
 export function createDeckConversations({
   threads,
   runs,
   imports,
   attachTemplate,
   review,
+  contentIdOf = () => undefined,
 }: {
   threads: AssistantThreads;
   runs: GenerationRuns;
@@ -210,8 +256,30 @@ export function createDeckConversations({
   attachTemplate: AttachTemplate;
   /** Аудит готовых вариантов; без него агент советует без аудита. */
   review?: ReviewVariants;
+  /** Id файла материалов на сервере, если его уже отправили: так снимок помнит материалы. */
+  contentIdOf?: (file: File) => string | undefined;
 }): DeckConversations {
   const states = new Map<string, ConversationState>();
+
+  /**
+   * Сообщения о сборках по прогону вкладки. Когда сервер принимает прогон (и заново — при
+   * повторе), сообщение запоминает его: так сохранённый разговор досмотрит сборку.
+   */
+  const works = new Map<string, { threadId: string; messageId: string }>();
+  const rememberServer = (runId: string) => {
+    const work = works.get(runId);
+    const run = runs.get(runId);
+    if (!work || !run?.server) return;
+    const message = threads.get(work.threadId)?.messages.find((item) => item.id === work.messageId);
+    if (message?.kind !== 'work' || message.server?.runId === run.server.runId) return;
+    threads.setServerRun(work.threadId, work.messageId, {
+      ...run.server,
+      startedAt: run.startedAt,
+    });
+  };
+  runs.subscribe(() => {
+    for (const runId of works.keys()) rememberServer(runId);
+  });
 
   /** Ждать, пока на вопрос ответят. */
   const answerOf = (threadId: string, messageId: string) =>
@@ -370,26 +438,32 @@ export function createDeckConversations({
     if (state.templateId === null) return;
     state.build += 1;
     const ticket = state.build;
-    const current = () => state.build === ticket;
     if (state.runId !== null) runs.cancel(state.runId);
 
     threads.append(threadId, {
       kind: 'agent',
       text: { key: 'building', values: { template: state.templateName } },
     });
-    const runId = runs.start(
-      {
-        ...state.input.request,
-        templateId: state.templateId,
-        brief: briefOf(state),
-        files: state.files,
-        model: state.model,
-      },
-      state.input.returnHref,
-    );
+    const runId = runs.start(requestOf(state, state.templateId), state.input.returnHref);
     state.runId = runId;
-    threads.append(threadId, { kind: 'work', runId });
+    const messageId = threads.append(threadId, { kind: 'work', runId });
+    works.set(runId, { threadId, messageId });
+    // Сервер мог назвать прогон ещё до того, как появилось сообщение о сборке.
+    rememberServer(runId);
+    await settle(threadId, state, runId, ticket);
+  };
 
+  /**
+   * Дождаться сборки и положить итог с аудитом. Сборка, которую сменила новая (`ticket` уже не
+   * последний), уходит молча.
+   */
+  const settle = async (
+    threadId: string,
+    state: ConversationState,
+    runId: string,
+    ticket: number,
+  ) => {
+    const current = () => state.build === ticket;
     let run = await finished(runId);
     while (run.phase !== 'done' || !run.result) {
       if (!current()) return;
@@ -452,6 +526,7 @@ export function createDeckConversations({
         audience: null,
         refinements: [],
         files: input.request.files,
+        contentIds: input.request.contentIds ?? [],
         model: input.request.model,
         build: 0,
         runId: null,
@@ -518,6 +593,77 @@ export function createDeckConversations({
       if (!state || state.runId === null) return;
       threads.append(threadId, { kind: 'user', text, attachments: [], meta: null });
       rebuild(threadId, state);
+    },
+    snapshot(threadId) {
+      const state = states.get(threadId);
+      if (!state) return undefined;
+      const { input } = state;
+      const sent = [...input.request.files, ...state.files]
+        .map((file) => contentIdOf(file))
+        .filter((id): id is string => id !== undefined);
+      return {
+        request: {
+          templateId: input.request.templateId,
+          projectId: input.request.projectId,
+          brief: input.request.brief,
+          slideCount: input.request.slideCount,
+          model: input.request.model,
+        },
+        projectName: input.projectName,
+        meta: input.meta,
+        returnHref: input.returnHref,
+        audienceLabels: input.audienceLabels,
+        templateId: state.templateId,
+        templateName: state.templateName,
+        audience: state.audience,
+        refinements: [...state.refinements],
+        contentIds: [...new Set([...state.contentIds, ...sent])],
+        model: state.model,
+        runId: state.runId,
+      };
+    },
+    restore(threadId, snapshot) {
+      if (states.has(threadId)) return;
+      states.set(threadId, {
+        input: {
+          request: { ...snapshot.request, files: [], contentIds: snapshot.contentIds },
+          templateFile: null,
+          projectName: snapshot.projectName,
+          meta: snapshot.meta,
+          returnHref: snapshot.returnHref,
+          audienceLabels: snapshot.audienceLabels,
+        },
+        templateId: snapshot.templateId,
+        templateName: snapshot.templateName,
+        audience: snapshot.audience,
+        refinements: [...snapshot.refinements],
+        files: [],
+        contentIds: snapshot.contentIds,
+        model: snapshot.model,
+        build: 0,
+        runId: snapshot.runId,
+      });
+    },
+    resume(threadId) {
+      const state = states.get(threadId);
+      const messages = threads.get(threadId)?.messages ?? [];
+      const work = messages.findLast((message) => message.kind === 'work');
+      if (!state || work?.kind !== 'work' || !work.server || runs.get(work.runId)) return;
+      const settled = messages.some(
+        (message) => message.kind === 'result' && message.result.runId === work.runId,
+      );
+      if (settled || state.templateId === null) return;
+      const { startedAt, ...server } = work.server;
+      runs.follow(work.runId, {
+        request: requestOf(state, state.templateId),
+        returnHref: state.input.returnHref,
+        server,
+        startedAt,
+      });
+      state.runId = work.runId;
+      state.build += 1;
+      works.set(work.runId, { threadId, messageId: work.id });
+      void settle(threadId, state, work.runId, state.build);
     },
     returnHref: (threadId) => states.get(threadId)?.input.returnHref,
     modelOf: (threadId) => states.get(threadId)?.model,

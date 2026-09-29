@@ -9,6 +9,7 @@ import {
   PROJECT_NAME_MAX_LENGTH,
   ProjectNotFoundError,
   TemplateNotFoundError,
+  ChatNotFoundError,
   type DeckPatch,
   type DeckSummary,
   type LibrarySource,
@@ -427,6 +428,34 @@ export function createDemoLibrary({ seedDemo = true }: { seedDemo?: boolean } = 
       };
       templates = [...templates, template];
       return structuredClone(template);
+    },
+    async listChats() {
+      return [];
+    },
+    async updateChat(chatId) {
+      throw new ChatNotFoundError(chatId);
+    },
+    async deleteChat(chatId) {
+      throw new ChatNotFoundError(chatId);
+    },
+    async updateTemplate(templateId, patch) {
+      const template = findTemplate(templateId);
+      const name = patch.name?.trim();
+      const next: TemplateSummary = {
+        ...template,
+        ...(name ? { fileName: name } : {}),
+        ...(patch.shared === undefined ? {} : { shared: patch.shared }),
+      };
+      templates = templates.map((item) => (item.templateId === templateId ? next : item));
+      return structuredClone(next);
+    },
+    async deleteTemplate(templateId) {
+      findTemplate(templateId);
+      templates = templates.filter((item) => item.templateId !== templateId);
+      projects = projects.map((project) => ({
+        ...project,
+        templateIds: project.templateIds.filter((id) => id !== templateId),
+      }));
     },
     async listDecks(filter) {
       const projectId = filter?.projectId;

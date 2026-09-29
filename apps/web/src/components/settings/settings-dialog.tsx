@@ -8,6 +8,7 @@ import {
   EditorIcon,
   KeyboardIcon,
   ModelsIcon,
+  PeopleIcon,
   SettingsIcon,
   UserIcon,
   type Icon,
@@ -29,6 +30,7 @@ import { DeckSettingsPanel } from './deck-settings-panel';
 import { EditorSettingsPanel } from './editor-settings-panel';
 import { ModelSettingsPanel } from './model-settings-panel';
 import { ShortcutSettingsPanel } from './shortcut-settings-panel';
+import { UsersSettingsPanel } from './users-settings-panel';
 import { closeSettings, openSettings } from './open-settings';
 import { OWN_ESCAPE_ATTRIBUTE } from './role-row';
 
@@ -39,6 +41,7 @@ const SECTION_ICONS: Readonly<Record<SettingsSection, Icon>> = {
   shortcuts: KeyboardIcon,
   decks: DeckIcon,
   models: ModelsIcon,
+  users: PeopleIcon,
 };
 
 /**
@@ -72,9 +75,11 @@ export function SettingsHost() {
 function SettingsDialogContent({ section }: { section: SettingsSection }) {
   const t = useTranslations('settings');
   const narrow = useMediaQuery(NARROW_SCREEN);
-  // Без аккаунта (страница входа) раздела «Аккаунт» нет.
+  // Без аккаунта (страница входа) раздела «Аккаунт» нет, «Пользователи» — только у администратора.
   const account = useAccount();
-  const sections = SETTINGS_SECTIONS.filter((id) => id !== 'account' || account !== null);
+  const sections = SETTINGS_SECTIONS.filter(
+    (id) => (id !== 'account' || account !== null) && (id !== 'users' || account?.role === 'admin'),
+  );
 
   return (
     <DialogContent
@@ -147,6 +152,11 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
         <TabsContent value="models" className="min-h-0 overflow-y-auto">
           <ModelSettingsPanel />
         </TabsContent>
+        {account?.role === 'admin' ? (
+          <TabsContent value="users" className="min-h-0 overflow-y-auto">
+            <UsersSettingsPanel />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </DialogContent>
   );

@@ -3,6 +3,7 @@ import type { SlideLayout, SlideSize } from './deck-source';
 
 export { DeckNotFoundError } from './deck-source';
 import type { ProjectAppearance } from './project-appearance';
+import type { ChatSummary } from './chat-records';
 
 /**
  * Откуда главное меню берёт проекты и презентации. Как и `DeckSource`, это граница: сейчас за
@@ -20,8 +21,12 @@ import type { ProjectAppearance } from './project-appearance';
 /** Шаблон библиотеки так, как его показывает меню: файл, дата импорта и извлечённый профиль. */
 export interface TemplateSummary {
   readonly templateId: string;
-  /** Имя загруженного файла, как его прислал человек. */
+  /** Имя шаблона в библиотеке: имя загруженного файла, пока шаблон не переименовали. */
   readonly fileName: string;
+  /** Администратор открыл шаблон всем аккаунтам. */
+  readonly shared?: boolean;
+  /** Шаблон загрузил этот аккаунт: может переименовать и удалить. */
+  readonly mine?: boolean;
   /** Когда шаблон импортирован, мс с эпохи. */
   readonly importedAt: number;
   /** Макеты шаблона в порядке файла: по ним рисуется галерея макетов проекта. */
@@ -59,6 +64,8 @@ export interface DeckSummary {
   readonly projectId: string | null;
   /** Шаблон, которым свёрстана колода: по нему рисуется обложка. */
   readonly templateId: string;
+  /** Чат, в котором колода собрана: карточка ведёт туда. null — колода без чата. */
+  readonly chatId?: string | null;
   readonly title: string;
   readonly slideCount: number;
   readonly slideSize: SlideSize;
@@ -66,6 +73,11 @@ export interface DeckSummary {
   readonly cover: SlideIr;
   /** Реальный PNG первого слайда из движка, если он доступен. */
   readonly coverPreviewUrl?: string;
+  /**
+   * Профиль, которым свёрстана колода. Есть — обложка рисуется им, и колоде не нужен шаблон:
+   * шаблон могли удалить из библиотеки, а колода осталась.
+   */
+  readonly designSystem?: DesignSystem;
   /** Последняя правка, мс с эпохи. */
   readonly updatedAt: number;
   /** Замечаний последнего аудита; null — аудит ещё не запускали. */
@@ -80,6 +92,17 @@ export class ProjectNotFoundError extends Error {
   constructor(projectId: string) {
     super(`Project not found: ${projectId}`);
     this.projectId = projectId;
+  }
+}
+
+/** Чата с таким id нет у этого аккаунта. */
+export class ChatNotFoundError extends Error {
+  override readonly name = 'ChatNotFoundError';
+  readonly chatId: string;
+
+  constructor(chatId: string) {
+    super(`Chat not found: ${chatId}`);
+    this.chatId = chatId;
   }
 }
 
@@ -208,6 +231,31 @@ export interface LibrarySource {
    * `ProjectNotFoundError`. Правка проверяется целиком до того, как что-то поменяется.
    */
   updateDeck(deckId: string, patch: DeckPatch): Promise<DeckSummary>;
+  /**
+   * Переименовать шаблон или (администратору) открыть его всем. Шаблона нет —
+   * `TemplateNotFoundError`.
+   */
+  updateTemplate(
+    templateId: string,
+    patch: { readonly name?: string; readonly shared?: boolean },
+  ): Promise<TemplateSummary>;
+  /**
+   * Убрать шаблон из библиотеки и из проектов. Презентации, свёрстанные им, остаются и
+   * открываются. Шаблона нет — `TemplateNotFoundError`.
+   */
+  deleteTemplate(templateId: string): Promise<void>;
+  /** Чаты с ассистентом, недавние первыми. С `projectId` — только этого проекта. */
+  listChats(filter?: { readonly projectId?: string | null }): Promise<readonly ChatSummary[]>;
+  /**
+   * Переименовать чат или перенести его в другой проект вместе с его презентациями. Время
+   * правки не двигается. Чата нет — `ChatNotFoundError`.
+   */
+  updateChat(
+    chatId: string,
+    patch: { readonly title?: string; readonly projectId?: string | null },
+  ): Promise<ChatSummary>;
+  /** Удалить чат вместе с презентациями, которые в нём собраны. */
+  deleteChat(chatId: string): Promise<void>;
   /** Удалить презентацию насовсем. Колоды нет — `DeckNotFoundError`. */
   deleteDeck(deckId: string): Promise<void>;
   /**

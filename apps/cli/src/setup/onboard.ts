@@ -12,14 +12,7 @@ import {
   run,
   waitFor,
 } from './stack.js';
-import {
-  emailProblem,
-  formatUsers,
-  nameProblem,
-  parseUsers,
-  passwordProblem,
-  upsertUser,
-} from './users.js';
+import { emailProblem, formatUsers, nameProblem, parseUsers, passwordProblem } from './users.js';
 import { ensureInstallationSecrets } from './secrets.js';
 
 /** Answers that can come from flags, so the same setup runs without a terminal. */
@@ -119,15 +112,22 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
   return openAiCompatible(baseUrl, apiKey ?? '', model);
 }
 
+/**
+ * The first administrator goes to ADMIN_EMAIL/ADMIN_PASSWORD. The API makes the account at start
+ * and never overwrites its password afterwards; the administrator makes everyone else in the
+ * interface. Accounts from the example file are known to everyone who read it: they are dropped
+ * from the older AUTH_USERS list.
+ */
 async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<string> {
-  // Accounts from the example file are known to everyone who read it: they never survive setup.
   const users = parseUsers(env.get('AUTH_USERS')).filter(
     (u) =>
       u.email !== 'demo@example.com' &&
       !(u.email === 'admin@example.com' && u.password === '123123'),
   );
+  env.set('AUTH_USERS', formatUsers(users));
+  const configured = env.get('ADMIN_EMAIL') ?? '';
   if (options.yes && options.adminEmail === undefined) {
-    if (users.length > 0) return users[0]?.email ?? '';
+    if (configured !== '') return configured;
     throw new Error('Для установки без вопросов укажите --admin-email и --admin-password.');
   }
   const email =
@@ -136,6 +136,7 @@ async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<strin
       p.text({
         message: 'Почта администратора (логин в интерфейс)',
         placeholder: 'admin@example.com',
+        ...(configured ? { initialValue: configured } : {}),
         validate: (v) => emailProblem(v ?? ''),
       }),
     ));
@@ -164,7 +165,9 @@ async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<strin
   }
   const problem = emailProblem(email) ?? passwordProblem(password) ?? nameProblem(name);
   if (problem) throw new Error(problem);
-  env.set('AUTH_USERS', formatUsers(upsertUser(users, { email, password, name })));
+  env.set('ADMIN_EMAIL', email.trim().toLowerCase());
+  env.set('ADMIN_PASSWORD', password);
+  env.set('ADMIN_NAME', name);
   return email;
 }
 
@@ -270,7 +273,7 @@ export async function onboard(options: OnboardOptions = {}): Promise<number> {
     (await waitFor('http://localhost:3001/health')) && (await waitFor('http://localhost:3000'));
   spinner.stop(up ? 'Сервис запущен' : 'Сервис не ответил за 3 минуты');
   p.note(
-    `Интерфейс:  http://localhost:3000\nВход:       ${admin}\nAPI:        http://localhost:3001\n\nlct status · lct logs · lct user add · lct stop`,
+    `Интерфейс:  http://localhost:3000\nВход:       ${admin}\nAPI:        http://localhost:3001\n\nlct status · lct logs · lct stop\nПользователи: Настройки → Пользователи в интерфейсе`,
     up ? 'Готово' : 'Проверьте',
   );
   p.outro(up ? 'Хорошей работы' : 'lct doctor подскажет, что не так');

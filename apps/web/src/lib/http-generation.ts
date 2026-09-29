@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import {
+  type JobEvent,
   designSystemSchema,
   jobEventSchema,
   slideIrSchema,
   templateIrSchema,
 } from '@lct/contracts';
 import { apiFetch, publicApiUrl } from './api';
-import type { DeckGenerator } from './deck-generator';
+import type { DeckGenerator, GenerationResult, ServerRun, StreamedSlide } from './deck-generator';
 import { DeckNotFoundError, type Deck, type DeckSource } from './deck-source';
 import type { DeckExporter } from './deck-export';
 import { templateLayoutsFromIr, templateSlideFromIr } from './template-profile';
@@ -23,13 +24,43 @@ const storedDeckSchema = z.object({
    */
   slides: z.array(slideIrSchema).optional(),
 });
+/** The API answered with an error status. */
+class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 async function request(path: string, init?: RequestInit) {
   const response = await apiFetch(path, init);
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
-    throw new Error(payload.message ?? `Generation API: HTTP ${response.status}`);
+    throw new ApiRequestError(
+      payload.message ?? `Generation API: HTTP ${response.status}`,
+      response.status,
+    );
   }
   return response.json();
+}
+/** Сколько раз подряд опрос прогона переживает обрыв: примерно полминуты. */
+const POLL_ATTEMPTS = 45;
+/**
+ * Опрос прогона. Короткий обрыв — перезапуск API, сбой сети — не сбой сборки: прогон на сервере
+ * идёт дальше или честно завершится ошибкой, и опрос спрашивает снова. Ответ 4xx — окончательный.
+ */
+async function poll(path: string, signal: AbortSignal): Promise<unknown> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await request(path, { signal });
+    } catch (error) {
+      signal.throwIfAborted();
+      const transient = !(error instanceof ApiRequestError) || error.status >= 500;
+      if (!transient || attempt >= POLL_ATTEMPTS) throw error;
+      await wait(signal);
+    }
+  }
 }
 export function decodeGeneratedDeck(data: unknown): Deck {
   const parsed = storedDeckSchema.parse(data);
@@ -83,10 +114,109 @@ function wait(signal: AbortSignal): Promise<void> {
     if (signal.aborted) abort();
   });
 }
+/**
+ * Файлы материалов, уже отправленные на сервер, и их id. Пересборка того же разговора не шлёт
+ * файл заново, а сохранённый разговор помнит материалы по id (`sentContentId`).
+ */
+const sentContent = new WeakMap<File, string>();
+
+/** Id файла материалов на сервере, если его уже отправили. */
+export function sentContentId(file: File): string | undefined {
+  return sentContent.get(file);
+}
+
+/**
+ * Дождаться прогона на сервере: ход — по событиям `run.runId`, остальные варианты — по их
+ * состоянию. Отмена через `signal` останавливает прогон и на сервере.
+ */
+async function followRun(
+  run: ServerRun,
+  onEvent: (event: JobEvent) => void,
+  signal: AbortSignal,
+  onSlide?: (slide: StreamedSlide) => void,
+): Promise<GenerationResult> {
+  const cancel = () => {
+    void request(`/generation/${run.runId}/cancel`, { method: 'POST' }).catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancel, { once: true });
+  let sequence = -1;
+  try {
+    for (;;) {
+      signal.throwIfAborted();
+      const events = z
+        .array(jobEventSchema)
+        .parse(await poll(`/runs/${run.runId}/events?after=${sequence}`, signal));
+      for (const event of events) {
+        sequence = event.seq;
+        onEvent(event);
+        if (event.type === 'failed') throw new Error(event.message);
+      }
+      const status = (await poll(`/runs/${run.runId}`, signal)) as { state: string };
+      if (status.state === 'failed') throw new Error('Генерация завершилась ошибкой.');
+      if (status.state === 'done') break;
+      await wait(signal);
+    }
+    // The API writes three variants of the brief as separate runs. Progress follows the
+    // balanced one; the others are awaited here, and a variant that failed is left out
+    // rather than failing the two that succeeded.
+    const others = run.variantRunIds.filter((id) => id !== run.runId);
+    const settled = await Promise.all(
+      others.map(async (other) => {
+        for (;;) {
+          signal.throwIfAborted();
+          const state = (await poll(`/runs/${other}`, signal)) as { state: string };
+          if (state.state === 'done') return other;
+          if (state.state === 'failed') return null;
+          await wait(signal);
+        }
+      }),
+    );
+    const source = createHttpDeckSource();
+    const decks = await Promise.all(
+      [run.runId, ...settled.filter((id): id is string => id !== null)].map((id) =>
+        source.getDeck(id),
+      ),
+    );
+    const primary = decks[0];
+    if (!primary) throw new Error('The generated deck has no slides.');
+    primary.slides.forEach((slide, index) =>
+      onSlide?.({
+        index,
+        total: primary.slides.length,
+        slide,
+        designSystem: primary.designSystem,
+      }),
+    );
+    const order = ['dense', 'balanced', 'airy'];
+    const variants = decks
+      .flatMap((deck) => {
+        const cover = deck.slides[0];
+        return cover
+          ? [
+              {
+                variant: deck.variant,
+                deckId: deck.deckId,
+                title: deck.title,
+                slideCount: deck.slides.length,
+                cover,
+                coverPreviewUrl: deck.coverPreviewUrl,
+                designSystem: deck.designSystem,
+              },
+            ]
+          : [];
+      })
+      .sort((a, b) => order.indexOf(a.variant) - order.indexOf(b.variant));
+    if (!variants.length) throw new Error('The generated deck has no slides.');
+    return { templateSubstituted: false, variants };
+  } finally {
+    signal.removeEventListener('abort', cancel);
+  }
+}
+
 export function createHttpGenerator(): DeckGenerator {
   return {
     profilesUploadedTemplates: true,
-    async generate(input, onEvent, signal, onSlide) {
+    async generate(input, onEvent, signal, onSlide, onServerRun) {
       await request('/generation/prepare', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -94,16 +224,21 @@ export function createHttpGenerator(): DeckGenerator {
         body: JSON.stringify({ templateId: input.templateId, model: input.model }),
         signal,
       });
-      const contentIds: string[] = [];
+      const contentIds: string[] = [...(input.contentIds ?? [])];
       for (const file of input.files) {
-        const body = new FormData();
-        body.set('file', file);
-        const uploaded = (await request('/files/content', { method: 'POST', body, signal })) as {
-          fileId: string;
-        };
-        contentIds.push(uploaded.fileId);
+        let fileId = sentContent.get(file);
+        if (fileId === undefined) {
+          const body = new FormData();
+          body.set('file', file);
+          const uploaded = (await request('/files/content', { method: 'POST', body, signal })) as {
+            fileId: string;
+          };
+          fileId = uploaded.fileId;
+          sentContent.set(file, fileId);
+        }
+        if (!contentIds.includes(fileId)) contentIds.push(fileId);
       }
-      const run = (await request('/generation', {
+      const created = (await request('/generation', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -116,87 +251,17 @@ export function createHttpGenerator(): DeckGenerator {
         }),
         signal,
       })) as { runId: string; variants?: { variant: string; runId: string }[] };
-      const cancel = () => {
-        void request(`/generation/${run.runId}/cancel`, { method: 'POST' }).catch(() => undefined);
+      const run: ServerRun = {
+        runId: created.runId,
+        variantRunIds: created.variants?.map((variant) => variant.runId) ?? [created.runId],
       };
-      signal.addEventListener('abort', cancel, { once: true });
-      let sequence = -1;
-      try {
-        for (;;) {
-          signal.throwIfAborted();
-          const events = z
-            .array(jobEventSchema)
-            .parse(await request(`/runs/${run.runId}/events?after=${sequence}`, { signal }));
-          for (const event of events) {
-            sequence = event.seq;
-            onEvent(event);
-            if (event.type === 'failed') throw new Error(event.message);
-          }
-          const status = (await request(`/runs/${run.runId}`, { signal })) as { state: string };
-          if (status.state === 'failed') throw new Error('Генерация завершилась ошибкой.');
-          if (status.state === 'done') break;
-          await wait(signal);
-        }
-        // The API writes three variants of the brief as separate runs. Progress follows the
-        // balanced one; the others are awaited here, and a variant that failed is left out
-        // rather than failing the two that succeeded.
-        const others = (run.variants ?? []).filter((v) => v.runId !== run.runId);
-        const settled = await Promise.all(
-          others.map(async (other) => {
-            for (;;) {
-              signal.throwIfAborted();
-              const state = (await request(`/runs/${other.runId}`, { signal })) as {
-                state: string;
-              };
-              if (state.state === 'done') return other.runId;
-              if (state.state === 'failed') return null;
-              await wait(signal);
-            }
-          }),
-        );
-        const source = createHttpDeckSource();
-        const decks = await Promise.all(
-          [run.runId, ...settled.filter((id): id is string => id !== null)].map((id) =>
-            source.getDeck(id),
-          ),
-        );
-        const primary = decks[0];
-        if (!primary) throw new Error('The generated deck has no slides.');
-        primary.slides.forEach((slide, index) =>
-          onSlide?.({
-            index,
-            total: primary.slides.length,
-            slide,
-            designSystem: primary.designSystem,
-          }),
-        );
-        const order = ['dense', 'balanced', 'airy'];
-        const variants = decks
-          .flatMap((deck) => {
-            const cover = deck.slides[0];
-            return cover
-              ? [
-                  {
-                    variant: deck.variant,
-                    deckId: deck.deckId,
-                    title: deck.title,
-                    slideCount: deck.slides.length,
-                    cover,
-                    coverPreviewUrl: deck.coverPreviewUrl,
-                    designSystem: deck.designSystem,
-                  },
-                ]
-              : [];
-          })
-          .sort((a, b) => order.indexOf(a.variant) - order.indexOf(b.variant));
-        if (!variants.length) throw new Error('The generated deck has no slides.');
-        return { templateSubstituted: false, variants };
-      } finally {
-        signal.removeEventListener('abort', cancel);
-      }
+      onServerRun?.(run);
+      return followRun(run, onEvent, signal, onSlide);
     },
+    follow: followRun,
   };
 }
+
 export function createHttpExporter(): DeckExporter {
   return {
     async export(input, onEvent, signal) {

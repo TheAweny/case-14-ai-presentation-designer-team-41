@@ -1,12 +1,15 @@
 import { apiFetch, publicApiUrl } from './api';
 import { decodeGeneratedDeck } from './http-generation';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
-import type { LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
+import type { DeckSummary, LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
 import { templateLayoutsFromIr } from './template-profile';
 import type { ProjectAppearance } from './project-appearance';
 import { DeckNotFoundError } from './deck-source';
+import { chatSummaryOf, type ChatSummary } from './chat-records';
 import {
+  ChatNotFoundError,
   ProjectNotFoundError,
+  TemplateNotFoundError,
   InvalidDeckPatchError,
   DECK_TITLE_MAX_LENGTH,
 } from './library-source';
@@ -14,6 +17,10 @@ import {
 interface StoredTemplate {
   readonly fileId: string;
   readonly fileName?: string;
+  readonly name?: string;
+  readonly shared?: boolean;
+  readonly mine?: boolean;
+  readonly createdAt?: string;
   readonly size?: number;
   readonly profile?: { designSystem?: unknown; templateIr?: unknown; previewDataUrl?: unknown };
 }
@@ -32,8 +39,10 @@ function templateOf(row: StoredTemplate): TemplateSummary {
   const ir = templateIrSchema.parse(row.profile?.templateIr);
   return {
     templateId: row.fileId,
-    fileName: row.fileName ?? 'Шаблон.pptx',
-    importedAt: Date.now(),
+    fileName: row.name ?? row.fileName ?? 'Шаблон.pptx',
+    shared: row.shared ?? false,
+    mine: row.mine ?? true,
+    importedAt: (row.createdAt && Date.parse(row.createdAt)) || Date.now(),
     layouts: templateLayoutsFromIr(ir),
     designSystem: designSystemSchema.parse(row.profile?.designSystem),
     templateIr: ir,
@@ -51,6 +60,48 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
   const templates = async () => {
     const rows = (await request('/files/templates')) as StoredTemplate[];
     return rows.map(templateOf);
+  };
+  /**
+   * Готовые сборки: колода, которой библиотека показывает сборку (вариант, выбранный в чате), и
+   * id всех её вариантов.
+   */
+  const builds = async (): Promise<{ deck: DeckSummary; variants: readonly string[] }[]> => {
+    const rows = (await request('/generation')) as {
+      deck: unknown;
+      metadata: {
+        projectId: string | null;
+        templateId: string;
+        updatedAt: number;
+        chatId?: string | null;
+        variants?: string[];
+      };
+    }[];
+    return rows.flatMap((row) => {
+      const deck = decodeGeneratedDeck(row.deck);
+      const cover = deck.slides[0];
+      if (!cover) return [];
+      return [
+        {
+          deck: {
+            deckId: deck.deckId,
+            title: deck.title,
+            projectId: row.metadata.projectId,
+            templateId: row.metadata.templateId,
+            chatId: row.metadata.chatId ?? null,
+            updatedAt: row.metadata.updatedAt,
+            slideCount: deck.slides.length,
+            slideSize: deck.slideSize,
+            cover,
+            coverPreviewUrl:
+              deck.coverPreviewUrl ??
+              publicApiUrl(`/generation/${encodeURIComponent(deck.deckId)}/artifacts/slide-1.png`),
+            designSystem: deck.designSystem,
+            auditFindings: null,
+          },
+          variants: row.metadata.variants ?? [deck.deckId],
+        },
+      ];
+    });
   };
   return {
     ...fallback,
@@ -70,7 +121,8 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
       });
-      const deck = (await this.listDecks()).find((item) => item.deckId === deckId);
+      // Библиотека показывает сборку одним вариантом, а правят любой: ищем по всей сборке.
+      const deck = (await builds()).find((build) => build.variants.includes(deckId))?.deck;
       if (!deck) throw new DeckNotFoundError(deckId);
       return deck;
     },
@@ -78,38 +130,63 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
       return request('/library/projects/' + encodeURIComponent(projectId), { method: 'DELETE' });
     },
     async listDecks(filter) {
-      const rows = (await request('/generation')) as {
-        deck: unknown;
-        metadata: { projectId: string | null; templateId: string; updatedAt: number };
-      }[];
-      return rows.flatMap((row) => {
-        const deck = decodeGeneratedDeck(row.deck);
-        const cover = deck.slides[0];
-        if (
-          !cover ||
-          (filter && 'projectId' in filter && row.metadata.projectId !== filter.projectId)
-        )
-          return [];
-        return [
-          {
-            deckId: deck.deckId,
-            title: deck.title,
-            projectId: row.metadata.projectId,
-            templateId: row.metadata.templateId,
-            updatedAt: row.metadata.updatedAt,
-            slideCount: deck.slides.length,
-            slideSize: deck.slideSize,
-            cover,
-            coverPreviewUrl:
-              deck.coverPreviewUrl ??
-              publicApiUrl(`/generation/${encodeURIComponent(deck.deckId)}/artifacts/slide-1.png`),
-            auditFindings: null,
-          },
-        ];
+      return (await builds())
+        .map((build) => build.deck)
+        .filter(
+          (deck) => !filter || !('projectId' in filter) || deck.projectId === filter.projectId,
+        );
+    },
+    async listChats(filter) {
+      const query =
+        filter?.projectId !== undefined && filter.projectId !== null
+          ? `?projectId=${encodeURIComponent(filter.projectId)}`
+          : '';
+      const rows = (await request(`/chats${query}`)) as unknown[];
+      const chats = rows.map(chatSummaryOf).filter((chat): chat is ChatSummary => chat !== null);
+      return filter?.projectId === null ? chats.filter((chat) => chat.projectId === null) : chats;
+    },
+    async updateChat(chatId, patch) {
+      const row = await request(`/chats/${encodeURIComponent(chatId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      }).catch((error: unknown) => {
+        if (String(error).includes('404')) throw new ChatNotFoundError(chatId);
+        throw error;
       });
+      const chat = chatSummaryOf(row);
+      if (!chat) throw new ChatNotFoundError(chatId);
+      return chat;
+    },
+    async deleteChat(chatId) {
+      await request(`/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }).catch(
+        (error: unknown) => {
+          if (String(error).includes('404')) throw new ChatNotFoundError(chatId);
+          throw error;
+        },
+      );
     },
     async listTemplates() {
       return templates();
+    },
+    async updateTemplate(templateId, patch) {
+      const row = (await request(`/files/templates/${encodeURIComponent(templateId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      }).catch((error: unknown) => {
+        if (String(error).includes('404')) throw new TemplateNotFoundError(templateId);
+        throw error;
+      })) as StoredTemplate;
+      return templateOf(row);
+    },
+    async deleteTemplate(templateId) {
+      await request(`/files/templates/${encodeURIComponent(templateId)}`, {
+        method: 'DELETE',
+      }).catch((error: unknown) => {
+        if (String(error).includes('404')) throw new TemplateNotFoundError(templateId);
+        throw error;
+      });
     },
     async getTemplate(templateId) {
       return (

@@ -4,9 +4,13 @@
   "back": "Back",
   "log": "Conversation about the presentation",
   "notFound": {
-    "title": "Conversation not found",
-    "body": "A conversation lives while the tab is open: it cannot be restored after a page reload. Start again from the field on the home page or in a project.",
+    "title": "Chat not found",
+    "body": "It was deleted or belongs to another account. Start a new presentation from the field on the home page or in a project.",
     "home": "Go home"
+  },
+  "header": {
+    "template": "“{template}” template",
+    "openEditor": "Open in editor"
   },
   "next": {
     "title": "Rebuild it",

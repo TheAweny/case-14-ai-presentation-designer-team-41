@@ -27,7 +27,7 @@ import {
 } from '@/lib/composer-templates';
 import { apiFetch } from '@/lib/api';
 import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-generator';
-import { newDeckHref } from '@/lib/library-menu';
+import { chatHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
@@ -184,7 +184,7 @@ export function DeckComposer({
         team: tAudience('team'),
       },
     });
-    router.push(newDeckHref(threadId));
+    router.push(chatHref(threadId));
   };
 
   return (

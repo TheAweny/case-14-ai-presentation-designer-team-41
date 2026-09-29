@@ -90,6 +90,13 @@ export const modelConnectionSchema = z.object({
   lastCheck: connectionCheckSchema.nullable(),
   /** Configured on the server through the environment: it can be checked, not edited. */
   managed: z.boolean(),
+  /**
+   * Shared with every account by an administrator. Everyone can pick its models; only an
+   * administrator changes it, and nobody else sees its key hint.
+   */
+  shared: z.boolean().optional(),
+  /** The account asking may edit and delete it. */
+  editable: z.boolean().optional(),
 });
 export type ModelConnection = z.infer<typeof modelConnectionSchema>;
 
@@ -117,6 +124,16 @@ export type ModelRef = z.infer<typeof modelRefSchema>;
 export const modelSettingsSchema = z.object({
   connections: z.array(modelConnectionSchema),
   roles: z.array(roleAssignmentSchema),
+  /**
+   * Roles whose model comes from the defaults for everyone (set by an administrator, or the
+   * server connection) rather than the account's own choice.
+   */
+  inheritedRoles: z.array(pipelineRoleSchema).optional(),
+  /**
+   * The account asking is an administrator: its connections may be shared, and its role choices
+   * are the defaults for everyone.
+   */
+  managesShared: z.boolean().optional(),
 });
 export type ModelSettings = z.infer<typeof modelSettingsSchema>;
 
@@ -137,6 +154,8 @@ export const connectionInputSchema = z.object({
     .max(API_KEY_MAX_LENGTH * 2)
     .optional(),
   lastCheck: connectionCheckSchema.nullable().optional(),
+  /** Share with every account; only an administrator's request may set it. */
+  shared: z.boolean().optional(),
 });
 export type ConnectionInput = z.infer<typeof connectionInputSchema>;
 

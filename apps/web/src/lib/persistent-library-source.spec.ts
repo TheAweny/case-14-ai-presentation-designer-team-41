@@ -95,4 +95,29 @@ describe('persistent library mutations', () => {
       expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ projectId: 'p' }) }),
     );
   });
+  it('renames a variant the library shows its build by another one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url, init) =>
+        init?.method === 'PATCH'
+          ? Response.json({ ok: true })
+          : Response.json([
+              {
+                deck,
+                metadata: {
+                  projectId: null,
+                  templateId: 't',
+                  updatedAt: 1,
+                  variants: ['run-dense', 'run-live', 'run-airy'],
+                },
+              },
+            ]),
+      ),
+    );
+    const result = await createPersistentLibrarySource(createDemoLibrary().library).updateDeck(
+      'run-dense',
+      { title: 'Итоги' },
+    );
+    expect(result.deckId).toBe('run-live');
+  });
 });

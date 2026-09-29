@@ -9,6 +9,8 @@
 export const deckHref = (deckId: string) => `/decks/${encodeURIComponent(deckId)}`;
 /** Все проекты. Страница одного проекта — `projectHref`. */
 export const PROJECTS_HREF = '/projects';
+/** Библиотека шаблонов аккаунта: свои и общие. */
+export const TEMPLATES_HREF = '/templates';
 export const projectHref = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
 /**
  * Параметр адреса главной и страницы проекта: с ним страница открывается с полем генерации в
@@ -32,8 +34,11 @@ export const TAB_PARAM = 'tab';
 /** Шаблоны проекта: вкладка, где их прикрепляют и открепляют. */
 export const projectTemplatesHref = (projectId: string) =>
   `${projectHref(projectId)}?${TAB_PARAM}=templates`;
-/** Разговор о новой колоде: агент собирает её там, по id разговора. */
-export const newDeckHref = (threadId: string) => `/decks/new/${encodeURIComponent(threadId)}`;
+/** Чат с ассистентом: агент собирает колоду там; из истории открывается он, а не редактор. */
+export const chatHref = (chatId: string) => `/chats/${encodeURIComponent(chatId)}`;
+/** Куда ведёт карточка презентации: в чат, где её собрали, а колода без чата — в редактор. */
+export const deckOpenHref = (deck: { readonly deckId: string; readonly chatId?: string | null }) =>
+  deck.chatId ? chatHref(deck.chatId) : deckHref(deck.deckId);
 
 /** Параметр адреса редактора: с ним колода открывается сразу в режиме показа. */
 export const PRESENT_PARAM = 'present';
@@ -95,6 +100,23 @@ export function deckMenu(deckId: string): LibraryMenu {
       { id: 'moveToProject' },
       { id: 'copyLink', href },
     ],
+    [{ id: 'delete', destructive: true, key: 'Delete' }],
+  ];
+}
+
+/**
+ * Меню чата в истории боковой панели: открыть ведёт в чат, показ — колоды, которую ведёт чат
+ * (пока её нет, пункта нет). Переименование, перенос и удаление — чата вместе с его колодами.
+ */
+export function chatMenu(chatId: string, deckId: string | null): LibraryMenu {
+  const href = chatHref(chatId);
+  return [
+    [
+      { id: 'open', href, key: 'Enter' },
+      { id: 'openInNewTab', href },
+      ...(deckId === null ? [] : [{ id: 'present' as const, href: presentHref(deckId) }]),
+    ],
+    [{ id: 'rename', key: 'F2' }, { id: 'moveToProject' }, { id: 'copyLink', href }],
     [{ id: 'delete', destructive: true, key: 'Delete' }],
   ];
 }

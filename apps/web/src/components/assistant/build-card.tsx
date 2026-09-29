@@ -28,9 +28,26 @@ import { useRunStatusText } from './thread-messages';
  *
  * Сборку, которую сменила новая, повторять незачем: она подписана и без кнопки повтора.
  */
-export function BuildCard({ runId, latest }: { runId: string; latest: boolean }) {
+export function BuildCard({
+  runId,
+  latest,
+  unfinished = false,
+}: {
+  runId: string;
+  latest: boolean;
+  /**
+   * Сборка ещё не отдала итог. Если её прогона во вкладке нет — страницу обновили посреди
+   * сборки, и следить за ней отсюда нельзя: карточка честно говорит, где искать результат.
+   */
+  unfinished?: boolean;
+}) {
+  const t = useTranslations('assistant.work');
   const run = useRun(runId);
-  if (!run) return null;
+  if (!run) {
+    return unfinished ? (
+      <p className="text-xs text-pretty text-muted-foreground">{t('lostAfterReload')}</p>
+    ) : null;
+  }
   return <BuildCardView run={run} latest={latest} />;
 }
 

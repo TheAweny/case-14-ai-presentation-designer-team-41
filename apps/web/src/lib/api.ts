@@ -28,15 +28,39 @@ export function publicApiUrl(path: string): string {
 }
 
 export interface ApiFetchOptions {
-  /** The signed-in account the request is made for; the API records it for model settings. */
+  /**
+   * The account the request is made for. The API answers every route for an account and hands
+   * out only what belongs to it. Left out on the server, it is the account of the current
+   * session (`app/auth-session.ts` tells this module how to find it); null sends none, for
+   * sign-in, which comes before a session.
+   */
   readonly userId?: string | null;
+}
+
+type ActingUserResolver = () => Promise<string | null>;
+
+/**
+ * Kept on `globalThis`: Next evaluates this module separately for pages, actions and route
+ * handlers, and the resolver registered by one must serve all of them.
+ */
+const RESOLVER = Symbol.for('lct.api.actingUser');
+
+/** How server code finds the signed-in account. Registered by `app/auth-session.ts`. */
+export function setActingUserResolver(resolver: ActingUserResolver): void {
+  (globalThis as { [RESOLVER]?: ActingUserResolver })[RESOLVER] = resolver;
+}
+
+async function actingUser(options: ApiFetchOptions): Promise<string | null> {
+  if (options.userId !== undefined) return options.userId;
+  const resolver = (globalThis as { [RESOLVER]?: ActingUserResolver })[RESOLVER];
+  return resolver ? resolver() : null;
 }
 
 /**
  * `fetch` to the API. `path` starts with `/` and names an API route, such as `/generation`.
  * On the server the answer is never cached: it is someone's library, not a public page.
  */
-export function apiFetch(
+export async function apiFetch(
   path: string,
   init: RequestInit = {},
   options: ApiFetchOptions = {},
@@ -44,6 +68,7 @@ export function apiFetch(
   if (typeof window !== 'undefined') return fetch(publicApiUrl(path), init);
   const headers = new Headers(init.headers);
   headers.set(SERVICE_TOKEN_HEADER, process.env.API_SERVICE_TOKEN ?? '');
-  if (options.userId) headers.set(USER_HEADER, options.userId);
+  const userId = await actingUser(options);
+  if (userId) headers.set(USER_HEADER, userId);
   return fetch(`${internalApiUrl()}${path}`, { ...init, headers, cache: 'no-store' });
 }

@@ -23,6 +23,15 @@ import { checkModelConnection, isPrivateHost, type CheckOptions } from './connec
 import { KeyDecryptionError, type KeyVault } from './key-vault.js';
 import type { ModelSettingsStore, StoredConnection, StoredRole } from './model-settings-store.js';
 
+/**
+ * Who asks. An administrator shares connections with everyone and sets the roles everyone starts
+ * with; everyone else adds connections of their own and picks roles for themselves.
+ */
+export interface SettingsActor {
+  readonly userId: string;
+  readonly admin: boolean;
+}
+
 /** No such connection: removed in another tab, or a wrong id. */
 export class ModelConnectionNotFoundError extends Error {
   override readonly name = 'ModelConnectionNotFoundError';
@@ -39,11 +48,16 @@ export class InvalidModelSettingsInputError extends Error {
   }
 }
 
-/** The connection comes from the server environment and cannot be changed here. */
+/**
+ * The connection cannot be changed by whoever asks: it comes from the server environment, or an
+ * administrator shared it.
+ */
 export class ManagedConnectionError extends Error {
   override readonly name = 'ManagedConnectionError';
-  constructor() {
-    super('The server connection is configured in .env and cannot be changed from the interface.');
+  constructor(
+    message = 'The server connection is configured in .env and cannot be changed from the interface.',
+  ) {
+    super(message);
   }
 }
 
@@ -132,66 +146,112 @@ export class ModelSettingsService {
     }
   }
 
-  private publicView(stored: StoredConnection): ModelConnection {
+  private static visible(stored: StoredConnection, actor: SettingsActor): boolean {
+    return stored.ownerId === null || stored.ownerId === actor.userId;
+  }
+
+  private static editable(stored: StoredConnection, actor: SettingsActor): boolean {
+    return stored.ownerId === actor.userId || (stored.ownerId === null && actor.admin);
+  }
+
+  private publicView(stored: StoredConnection, actor: SettingsActor): ModelConnection {
     // A key that no longer decrypts shows as missing: the person enters it again.
     const key = this.keyOf(stored);
+    const editable = ModelSettingsService.editable(stored, actor);
     return {
       connectionId: stored.connectionId,
       name: stored.name,
       preset: stored.preset,
       baseUrl: stored.baseUrl,
       hasKey: key !== null,
-      keyHint: keyHint(key),
+      // Someone else's key is not even hinted at.
+      keyHint: editable ? keyHint(key) : null,
       lastCheck: stored.lastCheck,
       managed: false,
+      shared: stored.ownerId === null,
+      editable,
     };
   }
 
-  private async find(connectionId: string): Promise<StoredConnection> {
+  /**
+   * A stored connection the actor may see; `edit` — may also change. Another account's
+   * connection is answered as missing, a shared one the actor may not change as managed.
+   */
+  private async find(
+    connectionId: string,
+    actor: SettingsActor,
+    edit = false,
+  ): Promise<StoredConnection> {
     if (connectionId === SERVER_CONNECTION_ID) throw new ManagedConnectionError();
     const stored = await this.store.getConnection(connectionId);
-    if (!stored) throw new ModelConnectionNotFoundError(connectionId);
+    if (!stored || !ModelSettingsService.visible(stored, actor)) {
+      throw new ModelConnectionNotFoundError(connectionId);
+    }
+    if (edit && !ModelSettingsService.editable(stored, actor)) {
+      throw new ManagedConnectionError('Only an administrator can change a shared connection.');
+    }
     return stored;
-  }
-
-  private async exists(connectionId: string): Promise<boolean> {
-    if (connectionId === SERVER_CONNECTION_ID) return this.server() !== null;
-    return (await this.store.getConnection(connectionId)) !== null;
   }
 
   private allowPrivateHosts(): boolean {
     return this.checkOptions.allowPrivateHosts ?? false;
   }
 
-  async get(): Promise<ModelSettings> {
+  /**
+   * Settings as the actor sees them: the server connection, shared connections and their own.
+   * A role takes the actor's own choice, else the default an administrator set for everyone,
+   * else the server connection. An administrator's choices are those defaults.
+   */
+  async get(actor: SettingsActor): Promise<ModelSettings> {
     const server = this.serverView();
-    const stored = await this.store.listConnections();
-    const connections = [...(server ? [server] : []), ...stored.map((c) => this.publicView(c))];
+    const stored = await this.store.listConnections(actor.userId);
+    const connections = [
+      ...(server ? [server] : []),
+      ...stored.map((c) => this.publicView(c, actor)),
+    ];
     const ids = new Set(connections.map((connection) => connection.connectionId));
-    const roles = new Map((await this.store.listRoles()).map((role) => [role.role, role]));
-    return {
-      connections,
-      roles: PIPELINE_ROLES.map((role): RoleAssignment => {
-        const assigned = roles.get(role);
-        if (assigned && (assigned.kind === 'disabled' || ids.has(assigned.connectionId))) {
-          return assigned;
-        }
-        const model = this.server()?.model;
-        return model && SERVER_DEFAULT_ROLES.includes(role)
-          ? { role, kind: 'model', connectionId: SERVER_CONNECTION_ID, modelId: model }
-          : { role, kind: 'unassigned' };
-      }),
-    };
+    const byRole = (list: readonly StoredRole[]) => new Map(list.map((role) => [role.role, role]));
+    const defaults = byRole(await this.store.listRoles(null));
+    const own = actor.admin
+      ? new Map<PipelineRole, StoredRole>()
+      : byRole(await this.store.listRoles(actor.userId));
+    const usable = (assigned: StoredRole | undefined): assigned is StoredRole =>
+      assigned !== undefined && (assigned.kind === 'disabled' || ids.has(assigned.connectionId));
+    const inherited: PipelineRole[] = [];
+    const roles = PIPELINE_ROLES.map((role): RoleAssignment => {
+      const mine = own.get(role);
+      if (usable(mine)) return mine;
+      const shared = defaults.get(role);
+      if (usable(shared)) {
+        if (!actor.admin) inherited.push(role);
+        return shared;
+      }
+      const model = this.server()?.model;
+      if (model && SERVER_DEFAULT_ROLES.includes(role)) {
+        inherited.push(role);
+        return { role, kind: 'model', connectionId: SERVER_CONNECTION_ID, modelId: model };
+      }
+      return { role, kind: 'unassigned' };
+    });
+    return { connections, roles, inheritedRoles: inherited, managesShared: actor.admin };
   }
 
-  async saveConnection(raw: unknown, userId: string | null): Promise<ModelConnection> {
+  async saveConnection(raw: unknown, actor: SettingsActor): Promise<ModelConnection> {
     const parsed = connectionInputSchema.safeParse(raw);
     if (!parsed.success) throw new InvalidModelSettingsInputError();
     const input = parsed.data;
     const problems = connectionInputProblems(input);
     if (hasProblems(problems)) throw new InvalidModelSettingsInputError(problems);
 
-    const previous = input.connectionId === undefined ? null : await this.find(input.connectionId);
+    const previous =
+      input.connectionId === undefined ? null : await this.find(input.connectionId, actor, true);
+    // Sharing is an administrator's: anyone else's connection is their own, whatever they ask.
+    const ownerId =
+      actor.admin && input.shared !== undefined
+        ? input.shared
+          ? null
+          : actor.userId
+        : (previous?.ownerId ?? (actor.admin ? null : actor.userId));
     const connectionId = previous?.connectionId ?? this.newId();
     const baseUrl = normalizeBaseUrl(input.baseUrl);
     const entered = input.apiKey?.trim() || null;
@@ -215,26 +275,31 @@ export class ModelSettingsService {
       baseUrl,
       apiKeyEncrypted,
       lastCheck,
+      ownerId,
     };
     await this.store.saveConnection(stored);
     await this.store.record({
-      userId,
+      userId: actor.userId,
       action: previous ? 'connection-updated' : 'connection-created',
       connectionId,
-      detail: { keyChanged, baseUrlChanged: previous !== null && previous.baseUrl !== baseUrl },
+      detail: {
+        keyChanged,
+        baseUrlChanged: previous !== null && previous.baseUrl !== baseUrl,
+        shared: ownerId === null,
+      },
     });
-    return this.publicView(stored);
+    return this.publicView(stored, actor);
   }
 
-  async deleteConnection(connectionId: string, userId: string | null): Promise<void> {
-    if (connectionId === SERVER_CONNECTION_ID) throw new ManagedConnectionError();
+  async deleteConnection(connectionId: string, actor: SettingsActor): Promise<void> {
+    await this.find(connectionId, actor, true);
     if (!(await this.store.deleteConnection(connectionId))) {
       throw new ModelConnectionNotFoundError(connectionId);
     }
-    await this.store.record({ userId, action: 'connection-deleted', connectionId });
+    await this.store.record({ userId: actor.userId, action: 'connection-deleted', connectionId });
   }
 
-  async checkConnection(connectionId: string): Promise<ModelConnection> {
+  async checkConnection(connectionId: string, actor: SettingsActor): Promise<ModelConnection> {
     if (connectionId === SERVER_CONNECTION_ID) {
       const server = this.server();
       if (!server) throw new ModelConnectionNotFoundError(connectionId);
@@ -247,7 +312,7 @@ export class ModelSettingsService {
       if (!view) throw new ModelConnectionNotFoundError(connectionId);
       return view;
     }
-    const stored = await this.find(connectionId);
+    const stored = await this.find(connectionId, actor);
     const lastCheck = await checkModelConnection(
       { baseUrl: stored.baseUrl, apiKey: this.keyOf(stored) },
       this.checkOptions,
@@ -256,20 +321,21 @@ export class ModelSettingsService {
     const current = await this.store.getConnection(connectionId);
     if (!current) throw new ModelConnectionNotFoundError(connectionId);
     if (current.baseUrl !== stored.baseUrl || current.apiKeyEncrypted !== stored.apiKeyEncrypted) {
-      return this.publicView(current);
+      return this.publicView(current, actor);
     }
     const checked = { ...current, lastCheck };
     await this.store.saveConnection(checked);
-    return this.publicView(checked);
+    return this.publicView(checked, actor);
   }
 
-  async probe(raw: unknown): Promise<ConnectionCheck> {
+  async probe(raw: unknown, actor: SettingsActor): Promise<ConnectionCheck> {
     const parsed = probeInputSchema.safeParse(raw);
     if (!parsed.success) throw new InvalidModelSettingsInputError();
     const input = parsed.data;
     const problem = baseUrlProblem(input.baseUrl);
     if (problem) throw new InvalidModelSettingsInputError({ baseUrl: problem });
-    const saved = input.connectionId === undefined ? null : await this.find(input.connectionId);
+    const saved =
+      input.connectionId === undefined ? null : await this.find(input.connectionId, actor, true);
     const apiKey = input.apiKey?.trim() || (saved ? this.keyOf(saved) : null);
     return checkModelConnection(
       { baseUrl: normalizeBaseUrl(input.baseUrl), apiKey },
@@ -277,20 +343,30 @@ export class ModelSettingsService {
     );
   }
 
-  async setRole(raw: unknown, userId: string | null): Promise<void> {
+  /**
+   * Assign a role for the actor. An administrator assigns the default for everyone, so only
+   * with a connection everyone can use: a shared one or the server's.
+   */
+  async setRole(raw: unknown, actor: SettingsActor): Promise<void> {
     const parsed = roleAssignmentSchema.safeParse(raw);
     if (!parsed.success) throw new InvalidModelSettingsInputError();
     const assignment = parsed.data;
     if (assignment.kind === 'disabled' && !isRoleOptional(assignment.role)) {
       throw new InvalidModelSettingsInputError();
     }
-    if (assignment.kind === 'model' && !(await this.exists(assignment.connectionId))) {
-      throw new ModelConnectionNotFoundError(assignment.connectionId);
+    if (assignment.kind === 'model') {
+      if (assignment.connectionId === SERVER_CONNECTION_ID) {
+        if (this.server() === null) throw new ModelConnectionNotFoundError(assignment.connectionId);
+      } else {
+        const stored = await this.find(assignment.connectionId, actor);
+        if (actor.admin && stored.ownerId !== null) throw new InvalidModelSettingsInputError();
+      }
     }
-    if (assignment.kind === 'unassigned') await this.store.clearRole(assignment.role);
-    else await this.store.setRole(assignment satisfies StoredRole);
+    const owner = actor.admin ? null : actor.userId;
+    if (assignment.kind === 'unassigned') await this.store.clearRole(assignment.role, owner);
+    else await this.store.setRole(assignment satisfies StoredRole, owner);
     await this.store.record({
-      userId,
+      userId: actor.userId,
       action: 'role-set',
       connectionId: assignment.kind === 'model' ? assignment.connectionId : null,
       detail: { role: assignment.role, kind: assignment.kind },
@@ -302,10 +378,10 @@ export class ModelSettingsService {
    * writer role, else the server connection. The result holds the key and must go nowhere but
    * into the provider.
    */
-  async resolve(picked: ModelRef | null): Promise<ResolvedModel> {
+  async resolve(picked: ModelRef | null, actor: SettingsActor): Promise<ResolvedModel> {
     let ref = picked;
     if (ref === null) {
-      const writer = (await this.get()).roles.find((role) => role.role === 'writer');
+      const writer = (await this.get(actor)).roles.find((role) => role.role === 'writer');
       if (writer?.kind === 'model')
         ref = { connectionId: writer.connectionId, modelId: writer.modelId };
     }
@@ -315,20 +391,23 @@ export class ModelSettingsService {
           'LLM_MODEL и MODEL_API_KEY в .env и перезапустите API.',
       );
     }
-    return this.resolveRef(ref);
+    return this.resolveRef(ref, actor);
   }
 
   /**
    * The model assigned to a role, or null when the role has none and the run falls back to the
    * writer's model. Like `resolve`, the result holds the key.
    */
-  async resolveRole(role: PipelineRole): Promise<ResolvedModel | null> {
-    const assigned = (await this.get()).roles.find((item) => item.role === role);
+  async resolveRole(role: PipelineRole, actor: SettingsActor): Promise<ResolvedModel | null> {
+    const assigned = (await this.get(actor)).roles.find((item) => item.role === role);
     if (assigned?.kind !== 'model') return null;
-    return this.resolveRef({ connectionId: assigned.connectionId, modelId: assigned.modelId });
+    return this.resolveRef(
+      { connectionId: assigned.connectionId, modelId: assigned.modelId },
+      actor,
+    );
   }
 
-  private async resolveRef(ref: ModelRef): Promise<ResolvedModel> {
+  private async resolveRef(ref: ModelRef, actor: SettingsActor): Promise<ResolvedModel> {
     if (ref.connectionId === SERVER_CONNECTION_ID) {
       const server = this.server();
       if (!server) {
@@ -339,7 +418,8 @@ export class ModelSettingsService {
       return { connectionId: SERVER_CONNECTION_ID, ...server, model: ref.modelId };
     }
     const stored = await this.store.getConnection(ref.connectionId);
-    if (!stored) {
+    // Someone else's connection is as good as removed: its key is not the actor's to use.
+    if (!stored || !ModelSettingsService.visible(stored, actor)) {
       throw new ModelNotConfiguredError('Подключение выбранной модели удалено: выберите другую.');
     }
     if (

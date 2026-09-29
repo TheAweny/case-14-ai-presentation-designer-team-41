@@ -5,10 +5,16 @@ interface ApiAccount {
   readonly id: string;
   readonly email: string;
   readonly name: string;
+  readonly role?: string;
 }
 
 function account(row: ApiAccount): Account {
-  return { userId: row.id, email: row.email, name: row.name };
+  return {
+    userId: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role === 'admin' ? 'admin' : 'user',
+  };
 }
 
 /**
@@ -29,21 +35,29 @@ async function accountOf(response: Response): Promise<Account | null> {
 export function createApiAuth(): AuthSource {
   return {
     async hasAccounts() {
-      const response = await apiFetch('/auth/accounts');
+      const response = await apiFetch('/auth/accounts', {}, { userId: null });
       if (!response.ok) return false;
       const payload = (await response.json()) as { hasAccounts?: unknown };
       return payload.hasAccounts === true;
     },
     async verifyPassword(email, password) {
-      const response = await apiFetch('/auth/verify', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await apiFetch(
+        '/auth/verify',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        },
+        { userId: null },
+      );
       return accountOf(response);
     },
     async getAccount(userId) {
-      const response = await apiFetch(`/auth/accounts/${encodeURIComponent(userId)}`);
+      const response = await apiFetch(
+        `/auth/accounts/${encodeURIComponent(userId)}`,
+        {},
+        { userId: null },
+      );
       return accountOf(response);
     },
   };
