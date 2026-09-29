@@ -164,13 +164,15 @@ describe('real generation orchestration with offline dependencies', () => {
   it('repairs just the affected slide through the Mastra repair workflow', async () => {
     const run = await exercise('repair');
     await run.result;
-    expect(run.counters()).toEqual({ checks: 2, exports: 1, repairs: 1 });
+    // One more check settles the fit before the export.
+    expect(run.counters()).toEqual({ checks: 3, exports: 1, repairs: 1 });
   });
   it('still exports the deck when fit fails after bounded repair, warning instead of dropping the variant', async () => {
     const run = await exercise('unfixable');
     await run.result;
     // Three variants are mandatory: an unfixable overflow is reported, not fatal.
-    expect(run.counters()).toEqual({ checks: 3, exports: 1, repairs: 2 });
+    // An engine that never accepts the slot gets every cut the fit settling tries, then the export.
+    expect(run.counters()).toEqual({ checks: 11, exports: 1, repairs: 2 });
     expect(run.events.at(-1)).toBe('done');
     expect(JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'))).toHaveLength(3);
     expect(run.warnings.some((w) => w.code === 'content-review-required')).toBe(true);

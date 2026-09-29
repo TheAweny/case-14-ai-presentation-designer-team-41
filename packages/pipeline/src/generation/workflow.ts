@@ -169,7 +169,7 @@ export function missingRequiredContent(
 
 /** Reading order of a composition's slots. Row and column are indexes, not coordinates. */
 /** Share of a text block's room each variant fills at least: a nearly empty card is a defect. */
-const FILL_FLOOR: Record<DeckVariant, number> = { dense: 0.6, balanced: 0.45, airy: 0.3 };
+const FILL_FLOOR: Record<DeckVariant, number> = { dense: 0.5, balanced: 0.4, airy: 0.25 };
 
 /**
  * The fewest characters a text block carries for its box not to read as empty. Only a block the

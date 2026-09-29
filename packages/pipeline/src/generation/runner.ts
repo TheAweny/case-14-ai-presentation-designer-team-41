@@ -33,6 +33,7 @@ import {
   writtenSchema,
 } from './workflow.js';
 import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
+import { shortened } from './fit.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 
@@ -270,6 +271,42 @@ export async function generatePresentation(options: GenerateOptions) {
       ].join('-'),
       briefYears: briefYears(options.brief),
     });
+    // The last copy of each slot the engine measured as fitting, by slide and slot.
+    const lastFit = new Map<string, string>();
+    const remember = (
+      findings: readonly { slideIndex: number; slotId: string; severity: string }[],
+    ) => {
+      const failing = new Set(
+        findings.filter((f) => f.severity === 'error').map((f) => `${f.slideIndex}:${f.slotId}`),
+      );
+      for (const s of written)
+        for (const t of s.slide.texts)
+          if (!failing.has(`${s.index}:${t.slotId}`)) lastFit.set(`${s.index}:${t.slotId}`, t.text);
+    };
+    // The export refuses a slot its text overflows, which would cost the whole variant: every
+    // such slot goes back to its last fitting copy, or is cut by lines and words until it fits.
+    const settleFit = async () => {
+      for (let pass = 0; pass < 8; pass++) {
+        const { findings } = await options.engine.checkCompositions(exportRequest(), signal);
+        remember(findings);
+        const errors = findings.filter((f) => f.severity === 'error');
+        if (!errors.length) return;
+        for (const finding of errors) {
+          const binding = written
+            .find((s) => s.index === finding.slideIndex)
+            ?.slide.texts.find((t) => t.slotId === finding.slotId);
+          if (!binding) continue;
+          const fitted = lastFit.get(`${finding.slideIndex}:${finding.slotId}`);
+          binding.text =
+            fitted !== undefined && fitted !== binding.text
+              ? fitted
+              : shortened(binding.text, finding);
+        }
+        reviewWarnings.push(
+          `Сокращено ${errors.length} полей, которые не помещались в рамки шаблона.`,
+        );
+      }
+    };
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
       const [fit, critique] = await Promise.all([
@@ -341,6 +378,7 @@ export async function generatePresentation(options: GenerateOptions) {
           }),
         ),
       ];
+      remember(fit.findings);
       auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues, repeats });
       // A card heading is a short name; a critic asking it for a claim would have the rewriter
       // turn every card into a sentence.
@@ -504,6 +542,7 @@ export async function generatePresentation(options: GenerateOptions) {
     stage = 'exporting';
     const exportStarted = Date.now();
     await emit({ type: 'stage-started', stage });
+    await settleFit();
     let output = await options.engine.exportCompositions(exportRequest(), signal);
     signal.throwIfAborted();
     // The written file goes through the deterministic audit. Problems in a slot's copy that a
@@ -547,6 +586,7 @@ export async function generatePresentation(options: GenerateOptions) {
             const current = written.find((s) => s.index === update.index);
             if (current) current.slide = update.slide;
           }
+          await settleFit();
           output = await options.engine.exportCompositions(exportRequest(), signal);
           report = await options.engine.auditCompositions(exportRequest(), signal);
         }
