@@ -61,9 +61,10 @@ export interface AccountPatch {
  * returns one.
  *
  * On start the administrator named in `.env` (`ADMIN_EMAIL`, `ADMIN_PASSWORD`) is made if that
- * account does not exist yet. An existing account keeps its password: after the first sign-in
- * the password lives in the database and is changed in the interface. `.env` can still bring an
- * administrator back — the account named there is made an administrator and switched on again.
+ * account does not exist yet. After the first sign-in the password lives in the database and is
+ * changed in the interface; a new `ADMIN_PASSWORD` in `.env` replaces it at the next start, which
+ * resets a forgotten one. `.env` also brings an administrator back — the account named there is
+ * made an administrator and switched on again.
  * `AUTH_USERS`, the older list of accounts, is read the same way: missing accounts are made,
  * nothing else is touched.
  */
@@ -98,6 +99,7 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
          ON CONFLICT (email) DO UPDATE SET role = 'admin', disabled_at = NULL`,
         [randomUUID(), admin.email, admin.name, admin.password],
       );
+      await this.applyEnvPassword(admin.email, admin.password);
     }
     for (const user of parseAuthUsers(process.env.AUTH_USERS)) {
       await this.pool.query(
@@ -111,6 +113,36 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
     if (admins.rowCount === 0) {
       this.logger.warn('There is no administrator: set ADMIN_EMAIL and ADMIN_PASSWORD in .env.');
     }
+  }
+
+  /**
+   * A password in `.env` other than the one applied last replaces the administrator's password:
+   * that is how a forgotten one is reset. The same one leaves the password set in the interface.
+   * The first start that sees the account only records what `.env` holds.
+   */
+  private async applyEnvPassword(email: string, password: string): Promise<void> {
+    const result = await this.pool.query<{ known: boolean; same: boolean }>(
+      `SELECT env_password_hash IS NOT NULL AS known,
+              COALESCE(env_password_hash = crypt($2, env_password_hash), false) AS same
+       FROM app_users WHERE email = $1`,
+      [email, password],
+    );
+    const row = result.rows[0];
+    if (!row || row.same) return;
+    if (!row.known) {
+      await this.pool.query(
+        `UPDATE app_users SET env_password_hash = crypt($2, gen_salt('bf')) WHERE email = $1`,
+        [email, password],
+      );
+      return;
+    }
+    await this.pool.query(
+      `WITH next AS (SELECT crypt($2, gen_salt('bf')) AS hash)
+       UPDATE app_users SET password_hash = next.hash, env_password_hash = next.hash
+       FROM next WHERE email = $1`,
+      [email, password],
+    );
+    this.logger.log(`The password of ${email} was reset from ADMIN_PASSWORD in .env.`);
   }
 
   async hasAccounts(): Promise<boolean> {

@@ -24,7 +24,8 @@ function env(): EnvFile {
  * `lct user admin [почта]` — the administrator of the installation. Other accounts are made in
  * the interface (Settings → Users); this is the way in when there is nobody to make them: the API
  * makes the account named here at start, or makes an existing one an administrator again and
- * switches it on. An existing account keeps the password it has in the database.
+ * switches it on. A password other than the one already in `.env` replaces the account's
+ * password, so this also resets a forgotten one.
  */
 export async function user(
   args: readonly string[],
@@ -70,7 +71,9 @@ export async function user(
   file.set('ADMIN_PASSWORD', password);
   file.set('ADMIN_NAME', name);
   file.save();
-  p.log.success(`Администратор ${email} записан в .env`);
+  p.log.success(
+    `Администратор ${email} записан в .env. Новый пароль заменит прежний при перезапуске API.`,
+  );
   if (composeCommand() !== null) {
     const running = await compose(['ps', '--status', 'running', '--services'], { quiet: true })
       .then((code) => code === 0)
