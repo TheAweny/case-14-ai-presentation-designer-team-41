@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LibraryMetadata } from './library-metadata.js';
+import { LibraryMetadata, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 const id = 'run-11111111-1111-4111-8111-111111111111';
 const roots: string[] = [];
 async function setup() {
@@ -43,5 +43,54 @@ describe('persistent library metadata', () => {
     await store.remove(id);
     await store.remove(id);
     expect(await store.visible(id)).toBe(false);
+  });
+});
+
+describe('builds of three variants', () => {
+  const deck = (id: string, metadata: Partial<Metadata>) => ({
+    id,
+    metadata: { templateId: 't', projectId: null, updatedAt: 1, ...metadata },
+  });
+  const build = [
+    deck('dense', { buildId: 'b', variant: 'dense' }),
+    deck('balanced', { buildId: 'b', variant: 'balanced' }),
+    deck('airy', { buildId: 'b', variant: 'airy' }),
+  ];
+
+  it('shows a build once, as the balanced variant until one is chosen', () => {
+    expect(oneDeckPerBuild(build, new Set()).map((entry) => entry.id)).toEqual(['balanced']);
+    expect(oneDeckPerBuild(build, new Set(['airy'])).map((entry) => entry.id)).toEqual(['airy']);
+  });
+
+  it('keeps decks made before builds were recorded apart', () => {
+    const older = [deck('old-1', {}), deck('old-2', {})];
+    expect(oneDeckPerBuild([...older, ...build], new Set()).map((entry) => entry.id)).toEqual([
+      'old-1',
+      'old-2',
+      'balanced',
+    ]);
+  });
+
+  it('finds the other variants of a deck, and none of another account', async () => {
+    const { root, store } = await setup();
+    const ids = [1, 2, 3].map((n) => `run-${String(n).repeat(8)}-0000-4000-8000-000000000000`);
+    const owners = ['me', 'me', 'someone'];
+    await Promise.all(
+      ids.map(async (other, index) => {
+        await mkdir(join(root, other));
+        await writeFile(
+          join(root, other, 'metadata.json'),
+          JSON.stringify({
+            templateId: 't',
+            projectId: null,
+            updatedAt: 1,
+            buildId: 'b',
+            ownerId: owners[index],
+          }),
+        );
+      }),
+    );
+    expect((await store.build(ids[0] ?? '')).sort()).toEqual([ids[0], ids[1]].sort());
+    expect(await store.build(id)).toEqual([id]);
   });
 });

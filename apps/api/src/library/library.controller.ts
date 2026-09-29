@@ -14,7 +14,7 @@ import { Pool } from 'pg';
 import { join, resolve } from 'node:path';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
-import { LibraryMetadata } from '../generation/library-metadata.js';
+import { buildOf, LibraryMetadata } from '../generation/library-metadata.js';
 import { visibleFile } from '../files/template-visibility.js';
 
 interface ProjectInput {
@@ -50,13 +50,18 @@ export class LibraryController {
     const entries = await this.library.entries();
     return result.rows.map((row) => ({
       ...row,
-      deckCount: entries.filter(
-        (entry) =>
-          completed.has(entry.id) &&
-          !entry.metadata.deletedAt &&
-          entry.metadata.ownerId === account.id &&
-          entry.metadata.projectId === row.projectId,
-      ).length,
+      // A build counts once, however many of its variants are done.
+      deckCount: new Set(
+        entries
+          .filter(
+            (entry) =>
+              completed.has(entry.id) &&
+              !entry.metadata.deletedAt &&
+              entry.metadata.ownerId === account.id &&
+              entry.metadata.projectId === row.projectId,
+          )
+          .map(buildOf),
+      ).size,
     }));
   }
 

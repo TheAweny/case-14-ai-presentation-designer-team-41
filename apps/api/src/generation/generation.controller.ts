@@ -15,6 +15,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
@@ -41,7 +42,7 @@ import {
 import type { RunRepository } from '@lct/run-store';
 import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
-import { LibraryMetadata } from './library-metadata.js';
+import { buildOf, LibraryMetadata, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
@@ -246,6 +247,8 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
       run: Awaited<ReturnType<RunRepository['create']>>;
       variant: (typeof VARIANTS)[number];
     }[] = [];
+    // The variants are one build: the library shows it once.
+    const buildId = randomUUID();
     for (const variant of VARIANTS) {
       const run = await this.repository.create();
       await mkdir(this.directory(run.runId), { recursive: true });
@@ -256,6 +259,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
           projectId: input.projectId,
           ownerId: account.id,
           variant,
+          buildId,
           updatedAt: Date.now(),
         }),
       );
@@ -316,27 +320,46 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
   @Get()
   async list(@CurrentAccount() account: Account): Promise<unknown[]> {
     await mkdir(this.root, { recursive: true });
-    const results: unknown[] = [];
-    // A deck leads back to the chat it was generated in.
-    const chats = await this.pool.query<{ id: string; deck_ids: string[] }>(
-      'SELECT id, deck_ids FROM chats WHERE owner_id = $1',
+    // A deck leads back to the chat it was generated in, and the variant the chat settled on
+    // stands for its build.
+    const chats = await this.pool.query<{
+      id: string;
+      deck_ids: string[];
+      primary: string | null;
+    }>(
+      `SELECT id, deck_ids, conversation->>'primaryDeckId' AS primary
+       FROM chats WHERE owner_id = $1`,
       [account.id],
     );
     const chatOf = new Map(
       chats.rows.flatMap((chat) => chat.deck_ids.map((deck) => [deck, chat.id])),
     );
+    const chosen = new Set(chats.rows.flatMap((chat) => (chat.primary ? [chat.primary] : [])));
+    const finished: { id: string; metadata: Metadata }[] = [];
     for (const id of await readdir(this.root)) {
       if (!/^run-[0-9a-f-]{36}$/i.test(id)) continue;
       const run = await this.repository.get(id);
       if (run?.state !== 'done') continue;
-      const deck = JSON.parse(await readFile(join(this.directory(id), 'deck.json'), 'utf8'));
       const metadata = JSON.parse(
         await readFile(join(this.directory(id), 'metadata.json'), 'utf8'),
-      );
+      ) as Metadata;
       if (metadata.deletedAt || metadata.ownerId !== account.id) continue;
+      finished.push({ id, metadata });
+    }
+    const results: unknown[] = [];
+    for (const entry of oneDeckPerBuild(finished, chosen)) {
+      const { id, metadata } = entry;
+      const deck = JSON.parse(await readFile(join(this.directory(id), 'deck.json'), 'utf8'));
       results.push({
         deck: { ...deck, title: metadata.title ?? deck.title },
-        metadata: { ...metadata, chatId: chatOf.get(id) ?? null },
+        metadata: {
+          ...metadata,
+          chatId: chatOf.get(id) ?? null,
+          // Every finished variant of the build: the web finds the build by any of them.
+          variants: finished
+            .filter((other) => buildOf(other) === buildOf(entry))
+            .map((other) => other.id),
+        },
       });
     }
     return results;
@@ -498,7 +521,8 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
   @HttpCode(204)
   async remove(@Param('id') id: string, @CurrentAccount() account: Account): Promise<void> {
     await this.completed(id, account);
-    await this.library.remove(id);
+    // A deck in the library stands for its build: the other variants go with it.
+    for (const deck of await this.library.build(id)) await this.library.remove(deck);
   }
 
   @Patch(':id')
@@ -522,7 +546,8 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
       patch.projectId = body.projectId;
     }
     if (!Object.keys(patch).length) throw new BadRequestException('Empty deck patch.');
-    await this.library.patch(id, patch);
+    // The variants of a build are renamed and moved together, so the build stays one deck.
+    for (const deck of await this.library.build(id)) await this.library.patch(deck, patch);
     return { ok: true };
   }
 }

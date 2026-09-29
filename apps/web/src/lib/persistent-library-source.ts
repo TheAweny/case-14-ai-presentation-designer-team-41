@@ -1,7 +1,7 @@
 import { apiFetch, publicApiUrl } from './api';
 import { decodeGeneratedDeck } from './http-generation';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
-import type { LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
+import type { DeckSummary, LibrarySource, ProjectSummary, TemplateSummary } from './library-source';
 import { templateLayoutsFromIr } from './template-profile';
 import type { ProjectAppearance } from './project-appearance';
 import { DeckNotFoundError } from './deck-source';
@@ -61,6 +61,47 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
     const rows = (await request('/files/templates')) as StoredTemplate[];
     return rows.map(templateOf);
   };
+  /**
+   * Готовые сборки: колода, которой библиотека показывает сборку (вариант, выбранный в чате), и
+   * id всех её вариантов.
+   */
+  const builds = async (): Promise<{ deck: DeckSummary; variants: readonly string[] }[]> => {
+    const rows = (await request('/generation')) as {
+      deck: unknown;
+      metadata: {
+        projectId: string | null;
+        templateId: string;
+        updatedAt: number;
+        chatId?: string | null;
+        variants?: string[];
+      };
+    }[];
+    return rows.flatMap((row) => {
+      const deck = decodeGeneratedDeck(row.deck);
+      const cover = deck.slides[0];
+      if (!cover) return [];
+      return [
+        {
+          deck: {
+            deckId: deck.deckId,
+            title: deck.title,
+            projectId: row.metadata.projectId,
+            templateId: row.metadata.templateId,
+            chatId: row.metadata.chatId ?? null,
+            updatedAt: row.metadata.updatedAt,
+            slideCount: deck.slides.length,
+            slideSize: deck.slideSize,
+            cover,
+            coverPreviewUrl:
+              deck.coverPreviewUrl ??
+              publicApiUrl(`/generation/${encodeURIComponent(deck.deckId)}/artifacts/slide-1.png`),
+            auditFindings: null,
+          },
+          variants: row.metadata.variants ?? [deck.deckId],
+        },
+      ];
+    });
+  };
   return {
     ...fallback,
     async deleteDeck(deckId) {
@@ -79,7 +120,8 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
       });
-      const deck = (await this.listDecks()).find((item) => item.deckId === deckId);
+      // Библиотека показывает сборку одним вариантом, а правят любой: ищем по всей сборке.
+      const deck = (await builds()).find((build) => build.variants.includes(deckId))?.deck;
       if (!deck) throw new DeckNotFoundError(deckId);
       return deck;
     },
@@ -87,41 +129,11 @@ export function createPersistentLibrarySource(fallback: LibrarySource): LibraryS
       return request('/library/projects/' + encodeURIComponent(projectId), { method: 'DELETE' });
     },
     async listDecks(filter) {
-      const rows = (await request('/generation')) as {
-        deck: unknown;
-        metadata: {
-          projectId: string | null;
-          templateId: string;
-          updatedAt: number;
-          chatId?: string | null;
-        };
-      }[];
-      return rows.flatMap((row) => {
-        const deck = decodeGeneratedDeck(row.deck);
-        const cover = deck.slides[0];
-        if (
-          !cover ||
-          (filter && 'projectId' in filter && row.metadata.projectId !== filter.projectId)
-        )
-          return [];
-        return [
-          {
-            deckId: deck.deckId,
-            title: deck.title,
-            projectId: row.metadata.projectId,
-            templateId: row.metadata.templateId,
-            chatId: row.metadata.chatId ?? null,
-            updatedAt: row.metadata.updatedAt,
-            slideCount: deck.slides.length,
-            slideSize: deck.slideSize,
-            cover,
-            coverPreviewUrl:
-              deck.coverPreviewUrl ??
-              publicApiUrl(`/generation/${encodeURIComponent(deck.deckId)}/artifacts/slide-1.png`),
-            auditFindings: null,
-          },
-        ];
-      });
+      return (await builds())
+        .map((build) => build.deck)
+        .filter(
+          (deck) => !filter || !('projectId' in filter) || deck.projectId === filter.projectId,
+        );
     },
     async listChats(filter) {
       const query =
