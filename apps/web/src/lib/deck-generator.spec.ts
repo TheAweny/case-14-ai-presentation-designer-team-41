@@ -111,6 +111,26 @@ describe('generationProgress', () => {
     expect(progress.finished).toBe(false);
   });
 
+  it('иллюстрации встают между планом и вёрсткой и считают картинки', () => {
+    const progress = generationProgress(
+      planned,
+      events(
+        { type: 'stage-started', stage: 'planning' },
+        { type: 'stage-started', stage: 'illustrating' },
+        { type: 'stage-progress', stage: 'illustrating', done: 2, total: 5, note: '' },
+      ),
+    );
+    expect(progress.stages.map((stage) => stage.stage)).toEqual([
+      'queued',
+      'planning',
+      'illustrating',
+      'laying-out',
+      'rendering',
+      'auditing',
+    ]);
+    expect(progress.stages[2]).toMatchObject({ state: 'running', done: 2, total: 5 });
+  });
+
   it('до события done прогресс не доходит до 100', () => {
     const progress = generationProgress(
       planned,
