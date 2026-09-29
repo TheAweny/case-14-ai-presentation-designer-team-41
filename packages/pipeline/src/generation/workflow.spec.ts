@@ -689,6 +689,7 @@ describe('one plan, three layouts', () => {
           kind: 'statement' as const,
           items: 1,
           useFor: 'code',
+          title: 'Code',
           skip: false,
           special: true,
         },

@@ -202,6 +202,8 @@ export const compositionNoteSchema = z.object({
   /** Parallel content items the slide shows: cards, steps, columns, list rows. */
   items: z.number().int().min(0).max(12),
   useFor: z.string().max(200),
+  /** A short name for people: what sets this variant apart within its kind. */
+  title: z.string().max(80).default(''),
   /** A page about the template itself (instructions, fonts, icons, links): never a deck slide. */
   skip: z.boolean(),
   /**

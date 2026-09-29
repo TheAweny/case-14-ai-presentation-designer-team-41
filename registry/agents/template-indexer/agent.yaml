@@ -1,7 +1,7 @@
 # Reads what every composition of an uploaded template is for, once, while the template is
 # prepared. Runs outside the timed generation stage; its notes are cached with the profile.
 id: template-indexer
-version: 1.1.0
+version: 1.2.1
 description: Describes each template composition for the planner and marks reference pages.
 modelId: planner-default
 generation:

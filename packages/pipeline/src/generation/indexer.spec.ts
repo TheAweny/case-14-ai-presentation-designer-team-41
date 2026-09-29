@@ -33,6 +33,7 @@ const note = (patternId: string, extra: Partial<CompositionNote> = {}): Composit
   kind: 'statement',
   items: 1,
   useFor: 'one claim',
+  title: 'One claim',
   skip: false,
   special: false,
   ...extra,
@@ -125,6 +126,17 @@ describe('settleNotes', () => {
     ]);
     expect(notes.map((item) => item.special)).toEqual([false, true, true, false, false]);
     expect(notes.map((item) => item.skip)).toEqual([true, false, false, true, false]);
+  });
+
+  it('ends a special group at people or a closing slide when its heading was missed', () => {
+    const notes = settle([
+      answer('pattern-0', { kind: 'reference', special: true }),
+      answer('pattern-1'),
+      answer('pattern-2', { kind: 'other' }),
+      answer('pattern-3', { kind: 'team', items: 4 }),
+      answer('pattern-4'),
+    ]);
+    expect(notes.map((item) => item.special)).toEqual([false, true, true, false, false]);
   });
 
   it('holds the counts to what the composition can show', () => {

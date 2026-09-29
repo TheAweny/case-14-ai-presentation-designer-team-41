@@ -23,6 +23,7 @@ type Pattern = GenerationProfile['compositions'][number];
  * small model that has to keep two fields in agreement gets one of them wrong.
  */
 const answerNoteSchema = compositionNoteSchema.omit({ skip: true }).extend({
+  title: z.string().max(80),
   special: z.boolean(),
 });
 type AnswerNote = z.infer<typeof answerNoteSchema>;
@@ -43,11 +44,15 @@ export function settleNote(
   const single = ['cover', 'section', 'statement'].includes(answer.kind);
   return {
     ...answer,
+    title: answer.title.replace(/\s+/g, ' ').trim(),
     items: single ? 1 : Math.min(answer.items, Math.max(blocks, 1)),
     skip: reference,
     special: !reference && (answer.special || inSpecialGroup),
   };
 }
+
+/** Kinds that open or close a part of a deck, or show people: a group of their own. */
+const FRAMING_KINDS = new Set<AnswerNote['kind']>(['cover', 'section', 'team', 'closing']);
 
 /**
  * Notes in template order. Catalog templates group their sample slides under headings; a heading
@@ -65,6 +70,9 @@ export function settleNotes(
     const answer = answers.get(pattern.patternId);
     if (!answer) return [];
     if (answer.kind === 'reference') specialGroup = answer.special;
+    // A cover, a section break, people or a closing slide is never a screenshot frame or a
+    // pictured chart: it starts another group when the heading before it was missed.
+    else if (FRAMING_KINDS.has(answer.kind)) specialGroup = false;
     return [settleNote(answer, pattern, specialGroup)];
   });
 }
