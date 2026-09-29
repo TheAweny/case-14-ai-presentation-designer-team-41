@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRunRepository, type RunRepository } from '@lct/run-store';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
 import { GenerationController } from './generation.controller.js';
+import { GenerationService } from './generation.service.js';
 import type { Account } from '../accounts/account-rules.js';
 
 const RUN = 'run-00000000-0000-4000-8000-000000000001';
@@ -37,6 +38,12 @@ const repository = {
 let root: string;
 let posted: { path: string; body: unknown }[];
 let controller: GenerationController | undefined;
+let service: GenerationService | undefined;
+
+function controllerOf(runs: RunRepository, models: ModelSettingsService): GenerationController {
+  service = new GenerationService(runs, models);
+  return new GenerationController(service);
+}
 
 /** The controller against an engine that answers `deck-import` with `answer`, or fails. */
 function withEngine(answer: unknown | null): GenerationController {
@@ -46,7 +53,7 @@ function withEngine(answer: unknown | null): GenerationController {
     if (path === '/v1/deck-import' && answer !== null) return Response.json(answer);
     return new Response('not here', { status: 503 });
   });
-  controller = new GenerationController(repository, {} as ModelSettingsService);
+  controller = controllerOf(repository, {} as ModelSettingsService);
   return controller;
 }
 
@@ -73,7 +80,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await controller?.onApplicationShutdown();
+  await service?.onApplicationShutdown();
+  service = undefined;
   controller = undefined;
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -182,9 +190,9 @@ describe('runs cut short by a restart', () => {
       type: 'stage-started',
       stage: 'planning',
     });
-    controller = new GenerationController(runs, {} as ModelSettingsService);
+    controller = controllerOf(runs, {} as ModelSettingsService);
 
-    await controller.onApplicationBootstrap();
+    await service?.onApplicationBootstrap();
 
     expect((await runs.get(LIVE))?.state).toBe('failed');
     const failed = (await runs.events(LIVE)).at(-1);
@@ -216,13 +224,13 @@ describe('preparing a template', () => {
       });
     });
     const stored: { profile: Record<string, unknown> } = { profile: {} };
-    controller = new GenerationController(repository, {
+    controller = controllerOf(repository, {
       // No model is set up: the index is not made, which only leaves the planner without notes.
       resolveRole: async () => {
         throw new Error('No model.');
       },
     } as unknown as ModelSettingsService);
-    (controller as unknown as { pool: unknown }).pool = {
+    (service as unknown as { pool: unknown }).pool = {
       query: async (sql: string) =>
         sql.startsWith('SELECT')
           ? { rows: [{ storage_path: '/t.pptx', ...stored }] }

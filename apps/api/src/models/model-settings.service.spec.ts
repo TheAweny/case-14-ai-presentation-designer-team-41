@@ -56,7 +56,7 @@ describe('ModelSettingsService', () => {
   it('starts empty without a server model: no connections, every role unassigned', async () => {
     const settings = await setup().service.get(ADMIN);
     expect(settings.connections).toEqual([]);
-    expect(settings.roles.map((role) => role.kind)).toEqual(Array(5).fill('unassigned'));
+    expect(settings.roles.map((role) => role.kind)).toEqual(Array(6).fill('unassigned'));
   });
 
   it('never lets the key out and stores it only encrypted', async () => {
@@ -211,6 +211,7 @@ describe('ModelSettingsService', () => {
     const settings = await service.get(ADMIN);
     expect(settings.connections.map((item) => item.name)).toEqual(['B']);
     expect(settings.roles).toEqual([
+      { role: 'assistant', kind: 'unassigned' },
       { role: 'planner', kind: 'unassigned' },
       { role: 'writer', kind: 'model', connectionId: b.connectionId, modelId: 'w' },
       { role: 'critic', kind: 'unassigned' },
@@ -239,15 +240,15 @@ describe('the server connection', () => {
     ]);
     expect(JSON.stringify(settings)).not.toContain(SERVER_KEY);
     // The text roles default to it until someone assigns another model.
-    expect(settings.roles.slice(0, 3)).toEqual(
-      ['planner', 'writer', 'critic'].map((role) => ({
+    expect(settings.roles.slice(0, 4)).toEqual(
+      ['assistant', 'planner', 'writer', 'critic'].map((role) => ({
         role,
         kind: 'model',
         connectionId: 'server',
         modelId: SERVER_ENV.LLM_MODEL,
       })),
     );
-    expect(settings.roles[3]).toEqual({ role: 'vision', kind: 'unassigned' });
+    expect(settings.roles[4]).toEqual({ role: 'vision', kind: 'unassigned' });
   });
 
   it('can be checked but not edited, removed or probed from the interface', async () => {

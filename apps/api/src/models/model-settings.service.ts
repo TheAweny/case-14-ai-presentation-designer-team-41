@@ -77,7 +77,7 @@ export interface ResolvedModel {
 }
 
 /** Roles the server connection performs until someone assigns another model. */
-const SERVER_DEFAULT_ROLES: readonly PipelineRole[] = ['planner', 'writer', 'critic'];
+const SERVER_DEFAULT_ROLES: readonly PipelineRole[] = ['assistant', 'planner', 'writer', 'critic'];
 
 type Env = Readonly<Record<string, string | undefined>>;
 
