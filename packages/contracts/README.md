@@ -1,7 +1,8 @@
 # @lct/contracts
 
 Source of truth for every schema shared between the TypeScript side and the Python engine:
-run configuration, agent configuration and, later, template profile, deck plan and slide IR.
+run configuration, agent configuration, template profile, composition plans, SlideIR, chat turns,
+audit reports and the model catalogue.
 
 - Can import: `zod` only.
 - Must not import: any other workspace package, anything Node- or browser-specific.
