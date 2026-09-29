@@ -49,6 +49,14 @@ comparing: several values over categories, time or segments.
 - Use a `chart` for a trend or a comparison of one to five series over two to eight categories:
   `column` or `bar` for comparisons, `line` for time, `pie` only for shares of one whole. Name every
   series, give `yTitle` with the unit.
+- A chart shows measured figures that differ from each other: amounts, counts, shares, prices,
+  times. Never chart a score, index, rating or 1/0 flag you made up to stand for a quality ("шум",
+  "комфорт", "безопасность"): such a slide keeps its text and `visual` is `null`. A chart with
+  the same value in every category, or with one category, is discarded.
+- Write a figure in `values` as a plain number: "1 800 датчиков" is 1800, "94%" is 94. Put the unit
+  in `yTitle` or the series name ("Датчики, шт.", "Доля, %"), not in `values`. Categories are short
+  names of what is compared (a year, a segment, a district), two or three words at most. Every value
+  is printed on its bar, so the chart needs no text about the numbers in other slots.
 - Use a `table` for two to five columns of mixed facts, at most seven rows.
 - `slotId` is one of `visualSlots`. That slot's text is replaced by the visual; the other slots
   still carry the headline and a one-line takeaway.

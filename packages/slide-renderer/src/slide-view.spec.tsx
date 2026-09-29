@@ -197,6 +197,17 @@ describe('SlideView', () => {
     const allowed = new Set(PROFILE.palette.map((entry) => entry.hex.toUpperCase()));
     for (const hex of used) expect(allowed.has(hex ?? '')).toBe(true);
   });
+
+  it('prints every value on its mark and names each pie slice with its share', () => {
+    const html = render(CONTENT);
+    for (const chartType of ['bar', 'column', 'line']) {
+      const chart = markup(html, `content-chart-${chartType}`);
+      for (const value of [20, 40, 30, 10, 25, 35]) expect(chart).toContain(`>${value}<`);
+    }
+    const pie = markup(html, 'content-chart-pie');
+    expect(pie).toContain('>А<');
+    expect(pie).toContain('20 · 22%');
+  });
 });
 
 describe('thumbnail', () => {

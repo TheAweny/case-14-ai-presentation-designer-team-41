@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION
 from pptx.shapes.shapetree import SlideShapes
 from pptx.util import Emu, Pt
 
@@ -217,6 +217,7 @@ def _draw_chart(
     palette = _palette(design_system)
     colours = [RGBColor.from_string(palette[role]) for role in _SERIES_ROLES if role in palette]
     plot = chart.plots[0]
+    _label_values(plot, kind, style, palette)
     if kind == "pie":
         for point, colour in zip(plot.series[0].points, cycle(colours), strict=False):
             point.format.fill.solid()
@@ -236,3 +237,31 @@ def _draw_chart(
         if title:
             axis.has_title = True
             axis.axis_title.text_frame.text = title
+    rule = next((palette[role] for role in _RULE_COLORS if role in palette), None)
+    if rule is not None:
+        chart.value_axis.has_major_gridlines = True
+        chart.value_axis.major_gridlines.format.line.color.rgb = RGBColor.from_string(rule)
+        chart.value_axis.major_gridlines.format.line.width = Emu(_HAIRLINE_EMU)
+
+
+def _label_values(plot: Any, kind: str, style: dict[str, Any], palette: dict[str, str]) -> None:
+    """Print every value on its mark: a chart on a slide is read, not measured against an axis.
+
+    A pie shows each slice's value and its share of the whole.
+    """
+    plot.has_data_labels = True
+    labels = plot.data_labels
+    labels.show_value = True
+    labels.number_format = "General"
+    labels.number_format_is_linked = False
+    labels.font.size = Pt(float(style["sizePt"]))
+    colour = _resolve(style["colorRole"], palette)
+    if colour is not None and kind != "pie":
+        labels.font.color.rgb = colour
+    if kind == "pie":
+        labels.show_percentage = True
+        labels.position = XL_LABEL_POSITION.BEST_FIT
+    elif kind in ("column", "bar"):
+        labels.position = XL_LABEL_POSITION.OUTSIDE_END
+    elif kind == "line":
+        labels.position = XL_LABEL_POSITION.ABOVE

@@ -804,6 +804,23 @@ describe('groundedVisual', () => {
     ).toBeNull();
   });
 
+  it('drops a chart where every value is the same', () => {
+    expect(
+      groundedVisual({ ...chart, series: [{ name: 'Индекс', values: [1, 1, 1] }] }, brief),
+    ).toBeNull();
+  });
+
+  it('reads a figure with a thousands space as one number', () => {
+    const sensors = { ...chart, series: [{ name: 'Датчики', values: [1, 800, 10] }] };
+    expect(groundedVisual(sensors, 'Установлено 1 800 датчиков за 10 месяцев.')).toBeNull();
+    expect(
+      groundedVisual(
+        { ...sensors, series: [{ name: 'Датчики', values: [1800, 10, 12] }] },
+        'Установлено 1 800 датчиков за 10 месяцев, 12 домов.',
+      ),
+    ).not.toBeNull();
+  });
+
   it('drops a table whose rows do not match its header', () => {
     expect(
       groundedVisual({ kind: 'table', slotId: '5', headers: ['A', 'B'], rows: [['94%']] }, brief),

@@ -707,28 +707,36 @@ function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) 
   });
 }
 
-const FIGURE = /\d+(?:[.,]\d+)?/g;
+/** A figure as a brief writes it: "1 800" with a (thin, no-break) space between thousands is one number. */
+const FIGURE = /\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/g;
+
+function figuresOf(text: string): number[] {
+  return (text.match(FIGURE) ?? []).map((n) =>
+    Number(n.replace(/[ \u00a0\u202f]/g, '').replace(',', '.')),
+  );
+}
 
 /**
  * A visual only when every figure in it is in the brief: a chart is where an invented number
  * would do most harm, so a visual that cannot be traced to the source is dropped and the slot
- * keeps its text.
+ * keeps its text. A chart that compares nothing — one category, or the same value everywhere —
+ * is a made-up score rather than data, and is dropped too.
  */
 export function groundedVisual(
   visual: SlotVisual | null | undefined,
   brief: string,
 ): SlotVisual | null {
   if (!visual) return null;
-  const known = new Set((brief.match(FIGURE) ?? []).map((n) => Number(n.replace(',', '.'))));
+  const known = new Set(figuresOf(brief));
   const figures =
     visual.kind === 'chart'
       ? visual.series.flatMap((series) => series.values)
-      : visual.rows
-          .flat()
-          .flatMap((cell) => (cell.match(FIGURE) ?? []).map((n) => Number(n.replace(',', '.'))));
+      : visual.rows.flat().flatMap(figuresOf);
   if (
     visual.kind === 'chart' &&
-    visual.series.some((s) => s.values.length !== visual.categories.length)
+    (visual.categories.length < 2 ||
+      visual.series.some((s) => s.values.length !== visual.categories.length) ||
+      new Set(figures).size < 2)
   )
     return null;
   if (visual.kind === 'table' && visual.rows.some((row) => row.length !== visual.headers.length))

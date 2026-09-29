@@ -199,6 +199,9 @@ def test_export_writes_a_native_table_and_chart(
     assert [list(s.values) for s in chart.plots[0].series] == [[10, 12, 15], [8, 9, 9]]
     assert chart.value_axis.axis_title.text_frame.text == "Revenue, mln RUB"
     assert chart.has_legend
+    # Every value is printed on its mark, not left to be read off the axis.
+    assert chart.plots[0].has_data_labels
+    assert chart.plots[0].data_labels.show_value
     assert not any(s.shape_type == 13 for s in shapes)  # MSO_SHAPE_TYPE.PICTURE
 
 

@@ -50,6 +50,13 @@ function extent(element: ChartElement): { min: number; max: number } {
   return { min, max };
 }
 
+const numbers = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+
+/** A value as it is printed on its mark: a chart on a slide is read, not measured. */
+function valueText(value: number): string {
+  return numbers.format(value);
+}
+
 function ids(element: ChartElement): string[] {
   return element.categories.map((_, index) => String(index));
 }
@@ -157,7 +164,8 @@ function plotOf(
   left: number,
   labelLines = 1,
 ): Plot {
-  const top = metrics.size * (element.yTitle || element.series.length > 1 ? 2.4 : 0.6);
+  // A line of room over the tallest mark for its value.
+  const top = metrics.size * (element.yTitle || element.series.length > 1 ? 3.4 : 1.6);
   const labels = (labelLines - 1) * LABEL_LINE;
   const bottom = box.cy - metrics.size * ((element.xTitle ? 3.2 : 2) + labels);
   return {
@@ -238,15 +246,25 @@ function Columns({
           const amount = valueAt(element, series, Number(id));
           const y0 = y(0) ?? plot.bottom;
           const y1 = y(amount) ?? y0;
+          const left = (x0(id) ?? 0) + (x1(key) ?? 0);
           return (
-            <Bar
-              key={`${id}-${key}`}
-              x={(x0(id) ?? 0) + (x1(key) ?? 0)}
-              y={Math.min(y0, y1)}
-              width={Math.max(x1.bandwidth(), 0)}
-              height={Math.abs(y1 - y0)}
-              fill={seriesPaint(profile.palette, series)}
-            />
+            <g key={`${id}-${key}`}>
+              <Bar
+                x={left}
+                y={Math.min(y0, y1)}
+                width={Math.max(x1.bandwidth(), 0)}
+                height={Math.abs(y1 - y0)}
+                fill={seriesPaint(profile.palette, series)}
+              />
+              <Label
+                x={left + x1.bandwidth() / 2}
+                y={amount < 0 ? y1 + metrics.size * 0.25 : y1 - metrics.size * 0.25}
+                text={valueText(amount)}
+                metrics={metrics}
+                anchor="middle"
+                baseline={amount < 0 ? 'hanging' : 'auto'}
+              />
+            </g>
           );
         }),
       )}
@@ -287,7 +305,19 @@ function Bars({
     ...element.categories.map((name) => textWidthEmu(name, metrics.size * EMU_PER_PT) / EMU_PER_PT),
   );
   const gutter = Math.min(widest + metrics.size * 0.6, box.cx * 0.46);
-  const plot = plotOf(element, box, metrics, gutter);
+  const values = element.series.flatMap((series) => series.values);
+  const valueWidth = Math.max(
+    0,
+    ...values.map(
+      (value) => textWidthEmu(valueText(value), metrics.size * EMU_PER_PT) / EMU_PER_PT,
+    ),
+  );
+  const base = plotOf(element, box, metrics, gutter);
+  // The longest bar keeps room past its end for its value.
+  const plot = {
+    ...base,
+    right: Math.max(base.right - valueWidth - metrics.size * 0.4, gutter + metrics.size),
+  };
   const { min, max } = extent(element);
   const y0 = scaleBand({ domain, range: [plot.top, plot.bottom], padding: 0.22 });
   const y1 = scaleBand({ domain: keys, range: [0, y0.bandwidth()], padding: 0.12 });
@@ -309,15 +339,25 @@ function Bars({
           const amount = valueAt(element, series, Number(id));
           const x0 = x(0) ?? plot.left;
           const x1 = x(amount) ?? x0;
+          const top = (y0(id) ?? 0) + (y1(key) ?? 0);
           return (
-            <Bar
-              key={`${id}-${key}`}
-              x={Math.min(x0, x1)}
-              y={(y0(id) ?? 0) + (y1(key) ?? 0)}
-              width={Math.abs(x1 - x0)}
-              height={Math.max(y1.bandwidth(), 0)}
-              fill={seriesPaint(profile.palette, series)}
-            />
+            <g key={`${id}-${key}`}>
+              <Bar
+                x={Math.min(x0, x1)}
+                y={top}
+                width={Math.abs(x1 - x0)}
+                height={Math.max(y1.bandwidth(), 0)}
+                fill={seriesPaint(profile.palette, series)}
+              />
+              <Label
+                x={amount < 0 ? x1 - metrics.size * 0.25 : x1 + metrics.size * 0.25}
+                y={top + y1.bandwidth() / 2}
+                text={valueText(amount)}
+                metrics={metrics}
+                anchor={amount < 0 ? 'end' : 'start'}
+                baseline="middle"
+              />
+            </g>
           );
         }),
       )}
@@ -392,6 +432,16 @@ function Trend({
               strokeWidth={metrics.stroke * 1.6}
               fill="none"
             />
+            {points.map((point, at) => (
+              <Label
+                key={`value-${at}`}
+                x={point.x}
+                y={point.y - metrics.size * 0.4}
+                text={valueText(series.values[at] ?? 0)}
+                metrics={metrics}
+                anchor="middle"
+              />
+            ))}
           </Group>
         );
       })}
@@ -418,10 +468,12 @@ function PieChart({
   element,
   profile,
   box,
+  metrics,
 }: {
   element: ChartElement;
   profile: DesignSystem;
   box: Box;
+  metrics: Metrics;
 }): JSX.Element {
   const series = element.series[0];
   const slices = element.categories.map((label, index) => ({
@@ -429,7 +481,8 @@ function PieChart({
     value: Math.max(series?.values[index] ?? 0, 0),
   }));
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
-  const radius = Math.min(box.cx, box.cy) * 0.42;
+  // Room around the pie for each slice's name and value.
+  const radius = Math.min(box.cx * 0.28, box.cy * 0.34);
   if (total <= 0) {
     return (
       <Circle
@@ -453,7 +506,23 @@ function PieChart({
           pie.arcs.map((arc) => {
             const d = pie.path(arc);
             if (!d) return null;
-            return <path key={arc.index} d={d} fill={seriesPaint(profile.palette, arc.index)} />;
+            // The centroid sits at half the radius; the label goes just outside the slice.
+            const [cx, cy] = pie.path.centroid(arc);
+            const share = Math.round((arc.data.value / total) * 100);
+            return (
+              <g key={arc.index}>
+                <path d={d} fill={seriesPaint(profile.palette, arc.index)} />
+                <Label
+                  x={cx * 2.3}
+                  y={cy * 2.3}
+                  text={`${arc.data.label}: ${valueText(arc.data.value)} (${share}%)`}
+                  lines={[arc.data.label, `${valueText(arc.data.value)} · ${share}%`]}
+                  metrics={metrics}
+                  anchor={Math.abs(cx) < radius * 0.1 ? 'middle' : cx > 0 ? 'start' : 'end'}
+                  baseline="middle"
+                />
+              </g>
+            );
           })
         }
       </Pie>
@@ -498,7 +567,7 @@ export function ChartMark({
           style={{ display: 'block', overflow: 'visible' }}
         >
           {element.chartType === 'pie' ? (
-            <PieChart element={element} profile={profile} box={frame} />
+            <PieChart element={element} profile={profile} box={frame} metrics={metrics} />
           ) : element.chartType === 'bar' ? (
             <Bars element={element} profile={profile} box={frame} metrics={metrics} />
           ) : element.chartType === 'column' ? (
