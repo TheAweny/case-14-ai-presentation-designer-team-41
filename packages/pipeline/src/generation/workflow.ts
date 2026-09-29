@@ -964,7 +964,14 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               ? !deps.imagesAvailable
               : item === 'brand-asset' || item === 'screenshot',
           ) ?? false;
-      const assetSafe = all.filter((pattern) => !hasMissingAsset(pattern));
+      // A special layout (a chart sample, a screen) is never illustrated, so its sample photos
+      // would stay: pictures of a chart with made-up series under the deck's own figures.
+      const keepsSamplePhotos = (pattern: (typeof all)[number]) =>
+        notes.get(pattern.patternId)?.special === true &&
+        (pattern.imageSlots ?? []).some((slot) => slot.kind === 'photo');
+      const assetSafe = all.filter(
+        (pattern) => !hasMissingAsset(pattern) && !keepsSamplePhotos(pattern),
+      );
       const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
       const readable = usable.length >= 3 ? usable : assetSafe;
       // Without an image model a place for a picture would be removed on export and leave a

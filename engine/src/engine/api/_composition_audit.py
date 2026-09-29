@@ -37,8 +37,11 @@ def composition_slides(
     for index, (slide, composed) in enumerate(zip(ir["slides"], request, strict=False)):
         pattern = patterns.get(composed["patternId"], {"slots": []})
         roles = {str(s["slotId"]): s["role"] for s in pattern["slots"]}
-        # An image slot still in the written file got no picture: a frame left for one.
-        frames = {str(s["slotId"]) for s in pattern.get("imageSlots") or []}
+        # An image slot still in the written file got no picture: a frame left for one. A sample
+        # photo left in place is a picture, not an empty frame.
+        frames = {
+            str(s["slotId"]) for s in pattern.get("imageSlots") or [] if s.get("kind") != "photo"
+        }
         visual = composed.get("visual") or None
         elements: list[dict[str, Any]] = []
         for shape in slide["shapes"]:
