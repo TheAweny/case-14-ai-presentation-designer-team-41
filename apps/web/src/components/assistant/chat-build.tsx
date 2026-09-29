@@ -124,7 +124,10 @@ export function ChatResult({
               runId: part.buildId,
               variants,
               reviews,
-              recommended: variants.length ? recommendVariant(variants, reviews) : part.recommended,
+              // Совет — тот, что агент назвал в чате: карточка и его слова не расходятся.
+              recommended: variants.some((item) => item.variant === part.recommended)
+                ? part.recommended
+                : recommendVariant(variants, reviews),
               templateSubstituted: false,
               elapsedMs: part.elapsedMs,
             },
