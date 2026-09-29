@@ -9,6 +9,7 @@ import pytest
 from engine.api.app import app
 from fastapi.testclient import TestClient
 from pptx import Presentation
+from pptx.util import Emu
 
 from engine import render
 
@@ -120,3 +121,47 @@ def test_upload_keeps_all_slides_and_bounds_optional_preview(tmp_path, monkeypat
         else "data:image/png;base64," + base64.b64encode(b"thumbnail").decode("ascii")
     )
     assert response.json()["previewDataUrl"] == expected
+
+
+def test_template_previews_draw_every_slide_at_the_requested_width(tmp_path, monkeypatch):
+    source = tmp_path / "template.pptx"
+    deck = Presentation()
+    deck.slide_width = Emu(914400 * 20)
+    deck.save(source)
+    seen = {}
+
+    def draw(path, output_dir, dpi, **kwargs):
+        seen["dpi"] = dpi
+        output_dir.mkdir(parents=True, exist_ok=True)
+        images = [output_dir / f"slide-{n}.png" for n in (1, 2)]
+        for image in images:
+            image.write_bytes(b"png")
+        return images
+
+    monkeypatch.setattr(render, "render_to_png", draw)
+    response = TestClient(app).post(
+        "/v1/template-previews",
+        json={
+            "schemaVersion": 1,
+            "templatePath": str(source),
+            "outputDir": str(tmp_path / "previews"),
+            "widthPx": 640,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["previews"] == ["slide-1.png", "slide-2.png"]
+    # 640 pixels over a 20-inch slide.
+    assert seen["dpi"] == 32
+
+
+def test_template_previews_refuse_a_missing_template(tmp_path):
+    response = TestClient(app).post(
+        "/v1/template-previews",
+        json={
+            "schemaVersion": 1,
+            "templatePath": str(tmp_path / "missing.pptx"),
+            "outputDir": str(tmp_path / "previews"),
+            "widthPx": 640,
+        },
+    )
+    assert response.status_code == 404
