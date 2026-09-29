@@ -317,6 +317,19 @@ describe('placeholder-text', () => {
 });
 
 describe('contrast', () => {
+  it("leaves the template's page number and footer alone, not body text of the same colour", () => {
+    const quiet = { color: 'EEEEEE' };
+    const issues = auditSlide(
+      slide([
+        text('n', box(60, 60, 40, 20), '3', { ...quiet, role: 'page-number' }),
+        text('f', box(160, 60, 200, 20), 'Company', { ...quiet, role: 'footer' }),
+        text('b', box(60, 200, 400, 40), 'Faint', quiet),
+      ]),
+      context,
+    );
+    expect(ofCheck(issues, 'contrast').map((found) => found.elementId)).toEqual(['b']);
+  });
+
   it('flags light text on a light slide as an error and offers the text role', () => {
     const issues = auditSlide(
       slide([text('t', box(60, 60, 400, 40), 'Faint', { color: 'EEEEEE' })]),

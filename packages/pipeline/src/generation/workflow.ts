@@ -1508,8 +1508,14 @@ async function rewriteSlide(
   deps: GenerationDependencies,
   task: z.infer<typeof repairTaskSchema>,
 ): Promise<ComposedSlide> {
-  const slots = task.composition.slots.filter((s) =>
-    task.corrections.some((c) => c.slotId === s.slotId),
+  // Numbering and dates are written by code: a critic that asks to change them (a model sure of
+  // another year) is not followed, and the slot keeps what code wrote.
+  const owned = new Set([
+    ...numberedSlots(task.composition).keys(),
+    ...datedSlots(task.composition).keys(),
+  ]);
+  const slots = task.composition.slots.filter(
+    (s) => !owned.has(s.slotId) && task.corrections.some((c) => c.slotId === s.slotId),
   );
   if (!slots.length) return task.previous;
   const schema = slotRewriteChoicesSchema.extend({

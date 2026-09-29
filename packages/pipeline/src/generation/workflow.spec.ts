@@ -448,6 +448,44 @@ describe('slot fit and reading order', () => {
     expect(fitChars({ role: 'body', sample: 'Тег', maxChars: 12, maxLines: 1 })).toBe(8);
   });
 
+  it('never lets a repair rewrite a date or a number code wrote', async () => {
+    const base = composition.slots[0];
+    if (!base) throw new Error('Fixture slot missing');
+    const date = { ...base, slotId: 'd', role: 'body' as const, sample: 'Дата' };
+    const pattern = { ...composition, slots: [date] };
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate() {
+        throw new Error('The rewriter must not be asked.');
+      },
+    };
+    const workflow = createRepairWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const run = await workflow.createRun();
+    const result = await run.start({
+      inputData: [
+        {
+          index: 0,
+          brief: '',
+          composition: pattern,
+          previous: {
+            patternId: pattern.patternId,
+            texts: [{ slotId: 'd', text: '2026' }],
+            speakerNotes: '',
+          },
+          corrections: [{ slotId: 'd', message: 'Заменить «2026» на «2025»' }],
+        },
+      ],
+    });
+    expect(result.status).toBe('success');
+    if (result.status === 'success')
+      expect(result.result[0]?.slide.texts).toEqual([{ slotId: 'd', text: '2026' }]);
+  });
+
   it('keeps copy that fits when no rewrite of it does', async () => {
     const base = composition.slots[0];
     if (!base) throw new Error('Fixture slot missing');
