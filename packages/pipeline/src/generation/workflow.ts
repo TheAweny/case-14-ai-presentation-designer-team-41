@@ -1226,6 +1226,9 @@ export class SharedPlan {
   }
 }
 
+/** Kinds that frame a deck rather than carry its points. */
+const FRAMING_KINDS: ReadonlySet<string> = new Set(['cover', 'section', 'closing']);
+
 /**
  * The composition each planned slide gets in a variant. Balanced keeps the planner's. Dense and
  * airy take, from their own catalog, a composition with as many text blocks as the planned one,
@@ -1254,6 +1257,9 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   // A layout for code or a device screen is never a stand-in for an ordinary slide, and the
   // planner chose a special one for its content, so that one stays in every variant.
   const pool = catalog.filter((p) => !coverIds.has(p.patternId) && !special(p.patternId));
+  // A cover, a divider or a closing frames the deck and holds a line or two; a content slide
+  // laid out on one loses its points, and a divider laid out as cards gains made-up ones.
+  const framing = (id: string) => FRAMING_KINDS.has(notes.get(id)?.kind ?? 'other');
   const used = new Map<string, number>();
   return patternIds.map((id, index) => {
     const planned = full.find((p) => p.patternId === id);
@@ -1265,14 +1271,22 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
       pool.length === 0
     )
       return id;
-    const compatible = pool.filter((p) => !addsRequirements(p.patternId, id));
+    const compatible = pool.filter(
+      (p) => !addsRequirements(p.patternId, id) && framing(p.patternId) === framing(id),
+    );
     if (!compatible.length) return id;
+    // The same number of blocks, or one more or fewer: the planned points still fit. Without
+    // such a layout in this variant's set the slide keeps the one the planner chose for it.
     const sameCount = compatible.filter((p) => blocks(p) === blocks(planned));
+    const near = sameCount.length
+      ? sameCount
+      : compatible.filter((p) => blocks(p) > 0 && Math.abs(blocks(p) - blocks(planned)) <= 1);
+    if (!near.length) return id;
     // The indexer's kind keeps a process a process and cards cards when the template has both.
     const kind = notes.get(planned.patternId)?.kind;
-    const sameKind = sameCount.filter((p) => kind && notes.get(p.patternId)?.kind === kind);
-    const same = sameKind.length ? sameKind : sameCount;
-    const ranked = [...(same.length ? same : compatible)].sort((a, b) =>
+    const sameKind = near.filter((p) => kind && notes.get(p.patternId)?.kind === kind);
+    const same = sameKind.length ? sameKind : near;
+    const ranked = [...same].sort((a, b) =>
       variant === 'dense' ? capacity(b) - capacity(a) : capacity(a) - capacity(b),
     );
     const choice = ranked

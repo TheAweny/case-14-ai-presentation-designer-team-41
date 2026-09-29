@@ -1124,6 +1124,46 @@ describe('one plan, three layouts', () => {
     expect(airy[4]?.startsWith('two-')).toBe(true);
   });
 
+  it('never lays a content slide out on a divider or a closing, nor on a far block count', () => {
+    const note = (patternId: string, kind: CompositionNote['kind']) =>
+      [
+        patternId,
+        {
+          patternId,
+          kind,
+          items: 1,
+          useFor: '',
+          title: '',
+          skip: false,
+          special: false,
+          requiredContent: [] as CompositionNote['requiredContent'],
+        },
+      ] as const;
+    // The lightest one-block layouts are a divider and a closing: airy would take them.
+    const notes = new Map<string, CompositionNote>([
+      note('one-150', 'section'),
+      note('one-300', 'closing'),
+      note('one-450', 'statement'),
+      note('one-600', 'statement'),
+      note('one-900', 'statement'),
+      note('one-1200', 'statement'),
+    ]);
+    const four = composition('four', [100, 100, 100, 100]);
+    const catalog = variantCatalog([...full, four], 'airy', [cover]);
+    const layouts = remapPlan(
+      ['cover', 'one-450', 'four', 'one-150'],
+      [...full, four],
+      catalog,
+      'airy',
+      [cover],
+      notes,
+    );
+    expect(['one-450', 'one-600', 'one-900', 'one-1200']).toContain(layouts[1]);
+    // No other layout of four or of three to five blocks: the slide keeps its own.
+    expect(layouts[2]).toBe('four');
+    expect(['one-150', 'one-300']).toContain(layouts[3]);
+  });
+
   it('never swaps an ordinary slide onto a special layout, nor a special one away', () => {
     const special = (patternId: string) =>
       [
