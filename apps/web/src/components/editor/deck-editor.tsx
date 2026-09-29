@@ -23,7 +23,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { keepCanvasFocus } from '@/components/editor/chrome-focus';
 import type { EditorLayout } from '@/components/editor/editor-layout';
 import { AssistantPanel } from '@/components/assistant/assistant-panel';
-import { loadChatForDeck, useThreadForDeck } from '@/components/assistant/session';
+import { chatStore } from '@/components/assistant/session';
+import type { TemplateSummary } from '@/lib/library-source';
 import { EditorChatContext } from '@/components/editor/editor-chat';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { SLIDE_PARAM, slideIndexFromParam } from '@/components/editor/slide-navigation';
@@ -46,19 +47,30 @@ export function DeckEditor({
   media,
   layout,
   present = false,
+  templates = [],
 }: {
   deck: Deck;
   media?: Readonly<Record<string, string>>;
   layout?: EditorLayout;
   /** Открыть колоду сразу в показе с первого слайда: так просит пункт «Начать показ» в меню. */
   present?: boolean;
+  /** Шаблоны библиотеки: для плана в чате колоды. */
+  templates?: readonly TemplateSummary[];
 }) {
-  // Разговор с агентом, который собрал эту колоду: его продолжает панель «Ассистент».
-  const thread = useThreadForDeck(deck.deckId);
-  // После обновления страницы разговора во вкладке нет — его приносит API.
+  // Чат, в котором собрана эта колода: его продолжает панель «Ассистент».
+  const [chatId, setChatId] = useState<string | null>(null);
   useEffect(() => {
-    if (!thread) void loadChatForDeck(deck.deckId).catch(() => null);
-  }, [thread, deck.deckId]);
+    let live = true;
+    chatStore.forDeck(deck.deckId).then(
+      (found) => {
+        if (live) setChatId(found);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [deck.deckId]);
   const base = useMemo(() => deckFingerprint(deck.slides), [deck.slides]);
   // Блокировка шаблона — как в настройках при открытии; оболочка получает то же значение.
   const { lockTemplate: lockPref } = useEditorPrefs();
@@ -234,7 +246,7 @@ export function DeckEditor({
     <>
       {ready ? (
         <FontAvailabilityProvider families={fonts} fontsReady={assets.fonts}>
-          <EditorChatContext value={thread?.threadId ?? null}>
+          <EditorChatContext value={chatId}>
             <EditorShell
               key={opened.generation}
               deck={shown}
@@ -245,8 +257,15 @@ export function DeckEditor({
               presentOnOpen={present && opened.generation === 0}
               onSlidesChange={onSlidesChange}
               saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
-              assistant={<AssistantPanel thread={thread} deckId={deck.deckId} />}
-              openAssistant={thread !== undefined}
+              assistant={
+                <AssistantPanel
+                  chatId={chatId}
+                  deckId={deck.deckId}
+                  projectId={null}
+                  templates={templates}
+                />
+              }
+              openAssistant={chatId !== null}
             />
           </EditorChatContext>
           {restored ? (

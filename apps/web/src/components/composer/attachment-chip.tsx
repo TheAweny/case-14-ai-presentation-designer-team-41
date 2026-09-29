@@ -2,15 +2,21 @@
 
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { CloseIcon, FileIcon, TemplateIcon } from '@/components/ui/icons';
+import { CloseIcon, FileIcon, SlideIcon, TemplateIcon } from '@/components/ui/icons';
 import { useAssistantDeck, type AssistantDeckBridge } from '@/components/assistant/deck-context';
 import { refIcon, useSlideRefLabels } from '@/components/assistant/slide-ref-label';
 import { useFileSize } from '@/components/library/file-size';
 import { Button } from '@/components/ui/button';
-import type { MessageAttachment } from '@/lib/assistant-threads';
 import { contentFileKind } from '@/lib/deck-generator';
 import { resolveRef, type SlideRef } from '@/lib/slide-context';
 import { cn } from '@/lib/utils';
+
+/** Файл, приложенный к сообщению: материал или шаблон. Размер шаблона из библиотеки неизвестен. */
+export interface FileAttachment {
+  readonly kind: 'file' | 'template' | 'context';
+  readonly name: string;
+  readonly size?: number;
+}
 
 /**
  * Вложение чипом: иконка вида, имя, чем файл станет и размер. Один и тот же чип стоит в поле
@@ -29,7 +35,7 @@ export function AttachmentChip({
   className,
 }: {
   /** Вложение сообщения или ссылка на объекты слайда в поле ассистента. */
-  attachment: MessageAttachment | SlideRef;
+  attachment: FileAttachment | SlideRef;
   /** Убрать вложение; нет — чип только показывает. */
   onRemove?: () => void;
   /**
@@ -59,7 +65,7 @@ function FileChip({
   onRemove,
   className,
 }: {
-  attachment: Extract<MessageAttachment, { kind: 'file' | 'template' }>;
+  attachment: FileAttachment;
   onRemove?: () => void;
   className?: string;
 }) {
@@ -79,13 +85,14 @@ function FileChip({
     >
       {kind === 'template' ? (
         <TemplateIcon size={14} className="shrink-0 text-foreground" aria-hidden />
+      ) : kind === 'context' ? (
+        <SlideIcon size={14} className="shrink-0 text-muted-foreground" aria-hidden />
       ) : (
         <FileIcon size={14} className="shrink-0 text-muted-foreground" aria-hidden />
       )}
       <span className="max-w-48 truncate text-foreground">{name}</span>
       <span className="shrink-0 text-muted-foreground tabular-nums">
-        {label ? `${label} · ` : ''}
-        {fileSize(size)}
+        {[label, size ? fileSize(size) : null].filter(Boolean).join(' · ')}
       </span>
       {onRemove ? <RemoveButton label={t('removeFile', { name })} onRemove={onRemove} /> : null}
     </li>

@@ -4,6 +4,7 @@ import {
   enabledModelIds,
   isModelEnabled,
   isRoleOptional,
+  usesWriterModelByDefault,
   type ConnectionModelsInput,
   type ConnectionCheck,
   type ConnectionInput,
@@ -54,6 +55,7 @@ export {
   hasProblems,
   isModelEnabled,
   isRoleOptional,
+  usesWriterModelByDefault,
   keyHint,
   modelConnectionSchema as ModelConnectionSchema,
   modelFamily,
@@ -89,6 +91,7 @@ export {
 export type ModelKind = 'llm' | 'vlm' | 'text-to-image';
 
 export const ROLE_MODEL_KIND: Readonly<Record<PipelineRole, ModelKind>> = {
+  assistant: 'llm',
   planner: 'llm',
   writer: 'llm',
   critic: 'llm',
@@ -164,7 +167,10 @@ export function assignmentFor(settings: ModelSettings, role: PipelineRole): Role
 /** Обязательные роли без модели: пока они есть, колоду собрать нечем. */
 export function unassignedRequiredRoles(settings: ModelSettings): readonly PipelineRole[] {
   return PIPELINE_ROLES.filter(
-    (role) => !isRoleOptional(role) && assignmentFor(settings, role).kind === 'unassigned',
+    (role) =>
+      !isRoleOptional(role) &&
+      !usesWriterModelByDefault(role) &&
+      assignmentFor(settings, role).kind === 'unassigned',
   );
 }
 

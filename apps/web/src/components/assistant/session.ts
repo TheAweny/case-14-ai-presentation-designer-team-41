@@ -1,18 +1,13 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { attachTemplateAction, refreshLibraryAction } from '@/app/(library)/actions';
-import { createAssistantThreads, type AssistantThread } from '@/lib/assistant-threads';
-import { createDeckConversations } from '@/lib/deck-conversations';
+import { refreshLibraryAction } from '@/app/(library)/actions';
+import { createChatStore, type ChatView } from '@/lib/chat-store';
 import { createGenerationRuns, type GenerationRun } from '@/lib/generation-runs';
 import type { TemplateSummary } from '@/lib/library-source';
 import { createTemplateImports, type TemplateImport } from '@/lib/template-imports';
-import { createVariantReview } from '@/lib/variant-review';
-import { createHttpGenerator, sentContentId } from '@/lib/http-generation';
-import { chatDocumentOf, chatSummaryOf, threadOfChat, type ChatSave } from '@/lib/chat-records';
-import { createChatSync } from '@/lib/chat-sync';
+import { createHttpGenerator } from '@/lib/http-generation';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
-import { deckSource } from '@/mocks/sources';
 import { apiFetch } from '@/lib/api';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
 import { templateLayoutsFromIr } from '@/lib/template-profile';
@@ -87,79 +82,59 @@ const deckGenerator: typeof httpGenerator = {
 };
 
 /**
- * Сессия ассистента во вкладке: прогоны генерации, разговоры и агент, который их ведёт. Одна на
- * приложение — поле ввода начинает разговор, редактор его продолжает, и переход между
- * страницами ничего не обрывает. Разговоры сохраняются в API (`chatSync`) и после обновления
- * страницы возвращаются во вкладку (`loadChat`); идущую сборку такой разговор досматривает по
- * прогону на сервере.
+ * Прогоны генерации во вкладке. Сборку в чате запускает агент на сервере, а вкладка досматривает
+ * её прогон (`followBuild`) — отсюда ход сборки в карточке.
  */
 export const generationRuns = createGenerationRuns(deckGenerator);
-export const assistantThreads = createAssistantThreads();
-export const deckConversations = createDeckConversations({
-  threads: assistantThreads,
-  runs: generationRuns,
-  imports: templateImports,
-  // Серверным действием: проект, к которому прикрепили шаблон, видят серверные страницы.
-  attachTemplate: attachTemplateAction,
-  review: createVariantReview(deckSource),
-  contentIdOf: sentContentId,
+
+/** Загрузить материал: чат получает его id и имя. */
+async function uploadContent(file: File) {
+  const body = new FormData();
+  body.set('file', file);
+  const response = await apiFetch('/files/content', { method: 'POST', body });
+  if (!response.ok) throw new Error(`Content upload failed (${response.status})`);
+  const uploaded = (await response.json()) as { fileId: string; fileName?: string };
+  return { fileId: uploaded.fileId, name: uploaded.fileName ?? file.name, size: file.size };
+}
+
+/**
+ * Чаты во вкладке. Разговор ведёт агент на сервере; вкладка отправляет ходы и читает ответ
+ * событиями. Ход закончился — серверные страницы обновляются: в истории новый чат или колода.
+ */
+export const chatStore = createChatStore({
+  request: (path, init) => apiFetch(path, init),
+  uploadContent,
+  async uploadTemplate(file) {
+    const template = await registerTemplate(file);
+    return { templateId: template.templateId, name: template.fileName };
+  },
+  onTurnEnd: () => void refreshLibraryAction(),
 });
 
-async function saveChat(chatId: string, chat: ChatSave): Promise<void> {
-  const response = await apiFetch(`/chats/${encodeURIComponent(chatId)}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(chat),
+/**
+ * Досмотреть сборку, которую запустил агент: её прогон во вкладке ведёт карточку хода. Прогон
+ * уже во вкладке — ничего не делает. Повторить такую сборку из карточки нельзя: её перезапускает
+ * агент.
+ */
+export function followBuild(build: {
+  readonly runId: string;
+  readonly variantRunIds: readonly string[];
+  readonly templateId: string;
+  readonly startedAt: number;
+}): void {
+  generationRuns.follow(build.runId, {
+    request: {
+      templateId: build.templateId,
+      projectId: null,
+      brief: '',
+      files: [],
+      slideCount: null,
+      model: null,
+    },
+    returnHref: '/',
+    server: { runId: build.runId, variantRunIds: build.variantRunIds },
+    startedAt: build.startedAt,
   });
-  if (!response.ok) throw new Error(`Chat save failed (${response.status})`);
-}
-
-/**
- * Разговоры сохраняются в API по ходу дела: чат переживает обновление страницы и виден с
- * другого устройства. Когда меняется то, что видно в истории, серверные страницы обновляются.
- */
-export const chatSync =
-  typeof window === 'undefined'
-    ? null
-    : createChatSync({
-        threads: assistantThreads,
-        conversations: deckConversations,
-        save: saveChat,
-        onSaved: (_chatId, listChanged) => {
-          if (listChanged) void refreshLibraryAction();
-        },
-      });
-
-/**
- * Вернуть сохранённый чат во вкладку. Уже открытый во вкладке разговор новее сохранённого и
- * остаётся как есть. Чата нет или он чужой — false.
- */
-export async function loadChat(chatId: string): Promise<boolean> {
-  if (assistantThreads.get(chatId)) return true;
-  const response = await apiFetch(`/chats/${encodeURIComponent(chatId)}`);
-  if (response.status === 404 || response.status === 400) return false;
-  if (!response.ok) throw new Error(`Chat load failed (${response.status})`);
-  const chat = chatDocumentOf(await response.json());
-  if (!chat) return false;
-  if (assistantThreads.get(chatId)) return true;
-  if (chat.conversation?.agent) deckConversations.restore(chatId, chat.conversation.agent);
-  const thread = threadOfChat(chat);
-  chatSync?.markSaved(thread);
-  assistantThreads.hydrate(thread);
-  deckConversations.resume(chatId);
-  return true;
-}
-
-/** Чат, в котором собрана колода, — во вкладку; его id или null, если колода собрана без чата. */
-export async function loadChatForDeck(deckId: string): Promise<string | null> {
-  const open = assistantThreads.forDeck(deckId);
-  if (open) return open.threadId;
-  const response = await apiFetch(`/chats?deckId=${encodeURIComponent(deckId)}`);
-  if (!response.ok) return null;
-  const rows = (await response.json()) as unknown;
-  const chat = Array.isArray(rows) ? chatSummaryOf(rows[0]) : null;
-  if (!chat) return null;
-  return (await loadChat(chat.chatId)) ? chat.chatId : null;
 }
 
 const noSubscribe = () => () => undefined;
@@ -173,19 +148,10 @@ export function useHydrated(): boolean {
   );
 }
 
-export function useThread(threadId: string | null): AssistantThread | undefined {
+export function useChat(chatId: string | null): ChatView | undefined {
   return useSyncExternalStore(
-    assistantThreads.subscribe,
-    () => (threadId ? assistantThreads.get(threadId) : undefined),
-    () => undefined,
-  );
-}
-
-/** Разговор, который открыл эту колоду: его продолжает панель редактора. */
-export function useThreadForDeck(deckId: string): AssistantThread | undefined {
-  return useSyncExternalStore(
-    assistantThreads.subscribe,
-    () => assistantThreads.forDeck(deckId),
+    chatStore.subscribe,
+    () => (chatId ? chatStore.get(chatId) : undefined),
     () => undefined,
   );
 }

@@ -308,7 +308,8 @@
         }
       },
       "descriptionShared": "You are an administrator: these roles are the defaults for every user. Only shared connections are offered here; anyone can pick their own.",
-      "inherited": "Default for everyone — pick a model to use your own."
+      "inherited": "Default for everyone — pick a model to use your own.",
+      "writerDefault": "The writer’s model"
     }
   },
   "users": {

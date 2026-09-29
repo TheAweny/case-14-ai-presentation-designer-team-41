@@ -32,6 +32,7 @@ export function BuildCard({
   runId,
   latest,
   unfinished = false,
+  retry = true,
 }: {
   runId: string;
   latest: boolean;
@@ -40,6 +41,8 @@ export function BuildCard({
    * сборки, и следить за ней отсюда нельзя: карточка честно говорит, где искать результат.
    */
   unfinished?: boolean;
+  /** Повтор из карточки. Сборку, которую запустил агент, перезапускает он, а не карточка. */
+  retry?: boolean;
 }) {
   const t = useTranslations('assistant.work');
   const run = useRun(runId);
@@ -48,10 +51,18 @@ export function BuildCard({
       <p className="text-xs text-pretty text-muted-foreground">{t('lostAfterReload')}</p>
     ) : null;
   }
-  return <BuildCardView run={run} latest={latest} />;
+  return <BuildCardView run={run} latest={latest} retry={retry} />;
 }
 
-function BuildCardView({ run, latest }: { run: GenerationRun; latest: boolean }) {
+function BuildCardView({
+  run,
+  latest,
+  retry,
+}: {
+  run: GenerationRun;
+  latest: boolean;
+  retry: boolean;
+}) {
   const t = useTranslations('assistant.work');
   const tb = useTranslations('assistant.build');
   const statusText = useRunStatusText();
@@ -71,7 +82,8 @@ function BuildCardView({ run, latest }: { run: GenerationRun; latest: boolean })
       : statusText(runStatus(run, latest));
   const failure = phase === 'failed' ? run.failure?.message || t('failedUnknown') : null;
   const retryable =
-    (phase === 'cancelled' && !superseded) || (phase === 'failed' && run.failure?.retryable);
+    retry &&
+    ((phase === 'cancelled' && !superseded) || (phase === 'failed' && run.failure?.retryable));
 
   return (
     <section className={cn('flex flex-col gap-1', superseded && 'opacity-60')}>
