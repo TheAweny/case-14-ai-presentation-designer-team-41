@@ -6,6 +6,7 @@ import {
   clearEchoes,
   copyDefects,
   createGenerationWorkflow,
+  createRepairWorkflow,
   datedSlots,
   deckYear,
   repeatsHeading,
@@ -364,6 +365,47 @@ describe('slot fit and reading order', () => {
     expect(fitChars({ role: 'title', sample: 'Logic', maxChars: 200 })).toBe(36);
     expect(fitChars({ role: 'body', sample: 'Context', maxChars: 400 })).toBe(9);
     expect(fitChars({ role: 'title', sample: '', maxChars: 80 })).toBe(80);
+    // A one-word heading over a step in a wide one-line box holds a two-word name.
+    expect(fitChars({ role: 'body', sample: 'Работа', maxChars: 39, maxLines: 1 })).toBe(13);
+    expect(fitChars({ role: 'body', sample: 'Тег', maxChars: 12, maxLines: 1 })).toBe(8);
+  });
+
+  it('keeps copy that fits when no rewrite of it does', async () => {
+    const base = composition.slots[0];
+    if (!base) throw new Error('Fixture slot missing');
+    const label = { ...base, slotId: 'h', role: 'body' as const, sample: 'Работа' };
+    const pattern = { ...composition, slots: [{ ...label, maxChars: 39, maxLines: 1 }] };
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(_a: string, _i: string, _input: unknown, schema: z.ZodType<T>) {
+        return schema.parse({
+          rewrites: { h: ['Эко-аудит офиса и всех его зон', 'x'.repeat(20), 'y'.repeat(14)] },
+        });
+      },
+    };
+    const workflow = createRepairWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const run = await workflow.createRun();
+    const result = await run.start({
+      inputData: [
+        {
+          index: 0,
+          brief: '',
+          composition: pattern,
+          previous: {
+            patternId: pattern.patternId,
+            texts: [{ slotId: 'h', text: 'Аудит' }],
+            speakerNotes: '',
+          },
+          corrections: [{ slotId: 'h', message: 'Заменить «Аудит» на «Эко-аудит офиса»' }],
+        },
+      ],
+    });
+    expect(result.status).toBe('success');
   });
 
   it('puts slots that share a vertical band on one row', () => {

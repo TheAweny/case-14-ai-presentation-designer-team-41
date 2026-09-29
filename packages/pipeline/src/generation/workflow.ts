@@ -73,19 +73,23 @@ const VISUAL_MIN_CHARS = 120;
  * `maxChars` is a font-metric ceiling and is often wider than the visible shape, so a title
  * written to that ceiling is clipped by a pill or runs into the next card. The sample is the
  * phrase the template itself set in the box. Stay near it, and let a title grow only as far as
- * a short assertion.
+ * a short assertion. A one-line label may take a third of its line: a one-word sample in a wide
+ * box («Работа» over a step) must still hold the step's name in two words, and a third of a line
+ * is still short of any pill drawn around the sample.
  */
 export function fitChars(slot: {
   role: string;
   sample: string;
   maxChars: number;
+  maxLines?: number;
   prompt?: boolean;
 }): number {
   const sampleLen = slot.sample.trim().length;
   // A layout prompt names the box but was never sized to it: the box itself is the measure.
   if (sampleLen === 0 || slot.prompt) return slot.maxChars;
   const scaled = Math.ceil(sampleLen * 1.25);
-  const floor = Math.min(slot.maxChars, slot.role === 'title' ? 36 : 8);
+  const label = slot.maxLines === 1 ? Math.floor(slot.maxChars / 3) : 0;
+  const floor = Math.min(slot.maxChars, slot.role === 'title' ? 36 : Math.max(8, label));
   return Math.max(4, Math.min(slot.maxChars, Math.max(scaled, floor)));
 }
 
@@ -1253,8 +1257,18 @@ async function rewriteSlide(
       )
       .sort((a, b) => b.length - a.length)[0];
     const before = task.previous.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
-    // An empty card that no alternative fits stays empty: a visible gap, not a failed deck.
+    // An empty card that no alternative fits stays empty: a visible gap, not a failed deck. Copy
+    // that already fits stays when no rewrite does: a critic's wish for a longer label is not a
+    // reason to fail the deck.
     if (text === undefined && !before.trim() && slot.role !== 'title') continue;
+    if (
+      text === undefined &&
+      before.trim() &&
+      before.length <= fitChars(slot) &&
+      before.length <= slot.maxChars &&
+      before.split('\n').length <= slot.maxLines
+    )
+      continue;
     if (text === undefined)
       throw new Error(
         `No complete rewrite fits slot ${slot.slotId} (${fitChars(slot)} chars; alternatives: ${alternatives.map((t) => t.length).join(',')}).`,
