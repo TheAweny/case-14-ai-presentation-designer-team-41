@@ -40,6 +40,11 @@ class AuditContext:
     patterns: dict[str, dict[str, Any]] | None
     media_sizes: dict[str, dict[str, int]]
     deck: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    #: Template sample text by slide id and element id; empty when the caller has none.
+    samples: dict[str, dict[str, str]] = field(default_factory=dict[str, dict[str, str]])
+    #: The current year and the years the source content names, for telling a stale year.
+    year: int = 0
+    known_years: frozenset[int] = frozenset()
     params: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
 
 
@@ -981,6 +986,52 @@ def placeholder_text(
     return out.findings
 
 
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+_NUMBERING = re.compile(r"^\s*\d{1,2}[.)]?\s*$")
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split())
+
+
+def template_leftover(
+    check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext
+) -> list[Finding]:
+    out = _Emitter(check, slide)
+    samples = ctx.samples.get(slide["slideId"], {})
+    for element in slide["elements"]:
+        if element["kind"] != "text":
+            continue
+        text = " ".join(element_texts(element))
+        stale = sorted(
+            {int(y) for y in _YEAR.findall(text)} - ctx.known_years - set(range(ctx.year, 2100))
+        )
+        sample = samples.get(element["elementId"], "")
+        if stale and ctx.year:
+            out.add(
+                title="Устаревший год",
+                detail=f"В блоке год {stale[0]}: он прошёл, а в исходных материалах его нет. "
+                "Скорее всего, это год из образца шаблона.",
+                element=element,
+                quote=text,
+                measured=str(stale[0]),
+                expected=f"год из материалов или {ctx.year}",
+                assisted=True,
+            )
+        elif sample and not _NUMBERING.match(sample) and _plain(text) == _plain(sample):
+            out.add(
+                title="Остался текст образца",
+                detail=f"В блоке осталось «{sample.strip()}» из образца шаблона вместо содержания.",
+                element=element,
+                quote=text,
+                measured=sample.strip(),
+                expected="содержание вместо текста образца",
+                assisted=True,
+                severity="minor",
+            )
+    return out.findings
+
+
 RULES: dict[str, Rule] = {
     "slide-bounds": slide_bounds,
     "text-clipped": text_clipped,
@@ -1005,4 +1056,5 @@ RULES: dict[str, Rule] = {
     "raster-slide": raster_slide,
     "duplicate-slide": duplicate_slide,
     "placeholder-text": placeholder_text,
+    "template-leftover": template_leftover,
 }

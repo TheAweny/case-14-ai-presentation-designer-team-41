@@ -290,6 +290,10 @@ def _placeholder_text(s: dict[str, Any]) -> None:
     _run(s, "list")["text"] = f"{pattern} сюда"
 
 
+def _template_leftover(s: dict[str, Any]) -> None:
+    _run(s, "list")["text"] = "Итоги 2019 года"
+
+
 _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] = {
     "slide-bounds": _slide_bounds,
     "text-clipped": _text_clipped,
@@ -314,6 +318,7 @@ _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] 
     "raster-slide": _raster_slide,
     "duplicate-slide": _duplicate_slide,
     "placeholder-text": _placeholder_text,
+    "template-leftover": _template_leftover,
 }
 
 _IDS = [check.id for check in DETERMINISTIC_CHECKS]
@@ -384,3 +389,27 @@ def test_strict_profile_inherits_and_tightens_the_default() -> None:
     assert strict["bullet-count"]["maxBulletsPerSlide"] == 5
     assert strict["contrast"]["minContrastRatio"] == 7
     assert strict["table-size"]["maxRows"] == 7
+
+
+def _leftovers(slide: dict[str, Any], **extra: Any) -> list[dict[str, Any]]:
+    request = {**_request(slide, _MEDIA), **extra}
+    report = audit_deck(request, "default", deterministic_profile("default"))
+    return [f for f in report["findings"] if f["checkId"] == "template-leftover"]
+
+
+def test_a_past_year_is_stale_unless_the_content_names_it() -> None:
+    slide = _clean_slide()
+    _run(slide, "title")["text"] = "Зелёный офис 2024"
+    assert [f["severity"] for f in _leftovers(slide, today="2026-09-29")] == ["major"]
+    assert _leftovers(slide, today="2026-09-29", knownYears=[2024]) == []
+    assert _leftovers(slide, today="2024-05-01") == []
+
+
+def test_the_sample_left_in_a_slot_is_flagged_and_new_copy_is_not() -> None:
+    slide = _clean_slide()
+    samples = {"s1": {"list": "Обычно вы сначала найдёте вопрос", "title": "01"}}
+    assert _leftovers(slide, slotSamples=samples) == []
+    _run(slide, "list")["text"] = "Обычно вы сначала найдёте вопрос"
+    _element(slide, "list")["paragraphs"] = _element(slide, "list")["paragraphs"][:1]
+    found = _leftovers(slide, slotSamples=samples)
+    assert [(f["target"]["elementId"], f["severity"]) for f in found] == [("list", "minor")]

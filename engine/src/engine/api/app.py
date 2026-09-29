@@ -481,13 +481,25 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
     slides = composition_slides(
         parser.parse_template(output), [s.model_dump(mode="json") for s in request.slides], patterns
     )
-    payload = {
+    payload: dict[str, Any] = {
         "schemaVersion": 1,
         "deckId": output.parent.name,
         "slides": slides,
         "designSystem": parser.design_system_of(source),
         "patternCatalog": None,
+        # What each slot showed in the template, so copy left from the sample is told apart.
+        "slotSamples": {
+            f"s{index + 1}": {
+                f"slot-{slot['slotId']}": slot["sample"]
+                for slot in patterns.get(slide.patternId, {"slots": []})["slots"]
+            }
+            for index, slide in enumerate(request.slides)
+        },
     }
+    if request.today is not None:
+        payload["today"] = request.today.isoformat()
+    if request.briefYears is not None:
+        payload["knownYears"] = request.briefYears
     try:
         profile = deterministic_profile("composition")
     except UnknownProfileError:

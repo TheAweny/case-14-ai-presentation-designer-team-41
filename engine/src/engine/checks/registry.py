@@ -268,6 +268,17 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         severity="blocker",
         defaults={"forbiddenPatterns": []},
     ),
+    CheckDefinition(
+        id="template-leftover",
+        category="integrity",
+        title="No copy is left from the template sample",
+        description=(
+            "Compares each text element with the text its template sample showed. A past year the "
+            "source content does not name is stale: the sample's year kept or one made up. Text "
+            "equal to the sample is the template's label left in place of content."
+        ),
+        severity="major",
+    ),
 )
 
 

@@ -9,6 +9,7 @@ profile, and returns an AuditReport as JSON: findings with evidence and, where t
 computed, a patch.
 """
 
+from datetime import date
 from typing import Any
 
 from engine.checks._geometry import Template
@@ -63,6 +64,11 @@ def run_deterministic_checks(
         patterns={p["patternId"]: p for p in catalog["patterns"]} if catalog else None,
         media_sizes=dict(request.get("mediaSizes") or {}),
         deck=list(request["slides"]),
+        samples=dict(request.get("slotSamples") or {}),
+        year=date.fromisoformat(request["today"]).year
+        if request.get("today")
+        else date.today().year,
+        known_years=frozenset(request.get("knownYears") or ()),
     )
     active: list[CheckDefinition] = []
     for check in DETERMINISTIC_CHECKS:
