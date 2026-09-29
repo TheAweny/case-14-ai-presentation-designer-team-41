@@ -89,7 +89,8 @@
       "read_audit": "Looking at the audit…",
       "ask_user": "Putting a question…",
       "propose_plan": "Drafting the plan…",
-      "build_deck": "Starting the build…"
+      "build_deck": "Starting the build…",
+      "edit_slide": "Editing the text…"
     },
     "failed": "Didn’t work: {name}"
   },
@@ -140,5 +141,15 @@
     "failedWith": "The build failed: {reason}",
     "cancelled": "The build was stopped"
   },
-  "error": "Couldn’t answer: {message}"
+  "error": "Couldn’t answer: {message}",
+  "edit": {
+    "title": {
+      "applied": "Slide {slide}: text changed",
+      "changed": "Slide {slide}: the text on the slide has changed",
+      "missing": "Slide {slide}: the object is gone",
+      "elsewhere": "Edit for slide {slide}: open the deck in the editor"
+    },
+    "undo": "Undo with Ctrl+Z in the editor.",
+    "apply": "Apply anyway"
+  }
 }

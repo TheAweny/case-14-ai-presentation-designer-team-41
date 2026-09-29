@@ -46,6 +46,8 @@ export const chatAttachmentSchema = z.discriminatedUnion('kind', [
     elements: z
       .array(
         z.object({
+          /** The element in the deck's SlideIR: what `edit_slide` names to change its text. */
+          elementId: z.string().min(1).max(100).optional(),
           kind: z.string().max(20),
           role: z.string().max(40),
           text: z.string().max(4000).default(''),
@@ -133,9 +135,25 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     recommended: layoutVariantSchema,
     elapsedMs: z.number().int().nonnegative().nullable(),
   }),
+  /**
+   * New text for one object of a deck open in the editor. The editor writes it into the draft
+   * through its edit journal, so the person sees it on the slide and can undo it. `before` is the
+   * text the agent saw: an edit is applied only while the object still says it.
+   */
+  z.object({
+    type: z.literal('slide-edit'),
+    callId: z.string().min(1),
+    editId: z.string().uuid(),
+    deckId: z.string().min(1).max(100),
+    slideNumber: z.number().int().positive(),
+    elementId: z.string().min(1).max(100),
+    before: z.string().max(4000),
+    text: z.string().max(4000),
+  }),
   z.object({ type: z.literal('error'), message: z.string().max(2000) }),
 ]);
 export type ChatPart = z.infer<typeof chatPartSchema>;
+export type SlideEditPart = Extract<ChatPart, { type: 'slide-edit' }>;
 
 export const chatMessageSchema = z.discriminatedUnion('role', [
   z.object({

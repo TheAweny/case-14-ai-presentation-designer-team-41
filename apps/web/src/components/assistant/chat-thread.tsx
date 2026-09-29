@@ -11,12 +11,13 @@ import { cn } from '@/lib/utils';
 import { ChatBuild, ChatResult } from './chat-build';
 import { MessageMarkdown } from './message-markdown';
 import { PlanCard } from './plan-card';
+import { SlideEditCard } from '@/components/assistant/slide-edit-card';
 import { QuestionCard } from './question-card';
 import { chatStore } from './session';
 import { ThinkingLine, UserMessage, useMessageText } from './thread-messages';
 
 /** Инструменты, которые показывают себя своей карточкой: плана, вопроса, сборки. */
-const CARD_TOOLS = new Set(['ask_user', 'propose_plan', 'build_deck']);
+const CARD_TOOLS = new Set(['ask_user', 'propose_plan', 'build_deck', 'edit_slide']);
 
 type ToolPart = Extract<ChatPart, { type: 'tool' }>;
 
@@ -204,6 +205,8 @@ function AssistantMessage({
               compact={compact}
               currentDeckId={currentDeckId}
             />
+          ) : part.type === 'slide-edit' ? (
+            <SlideEditCard key={part.editId} part={part} currentDeckId={currentDeckId} />
           ) : part.type === 'error' ? (
             <p className="flex items-start gap-2 text-[0.8125rem] text-destructive">
               <WarningIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -234,7 +237,7 @@ function isReadTool(name: string): name is ReadTool {
   return (READ_TOOLS as readonly string[]).includes(name);
 }
 
-type CardTool = 'ask_user' | 'propose_plan' | 'build_deck';
+type CardTool = 'ask_user' | 'propose_plan' | 'build_deck' | 'edit_slide';
 
 function isCardTool(name: string): name is CardTool {
   return CARD_TOOLS.has(name);

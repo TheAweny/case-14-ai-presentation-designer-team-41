@@ -10,7 +10,13 @@ import {
   redoDeck,
   undoDeck,
 } from './journal.js';
-import { commitImageCrop, commitShapeText, commitSlideNotes, normalCrop } from './content-ops.js';
+import {
+  commitImageCrop,
+  commitShapeText,
+  commitSlideNotes,
+  normalCrop,
+  paragraphsForText,
+} from './content-ops.js';
 import { commitElementProps } from './element-ops.js';
 
 function words(text: string): Paragraph[] {
@@ -289,5 +295,34 @@ describe('commitSlideNotes', () => {
     expect(cleared.slides[0]).not.toHaveProperty('notes');
     expect(commitSlideNotes(deck(), { slideId: 'one', notes: '' }).change).toBeNull();
     expect(commitSlideNotes(deck(), { slideId: 'missing', notes: 'Нет' }).change).toBeNull();
+  });
+});
+
+describe('paragraphsForText', () => {
+  const styled = (text: string, bold: boolean) => ({
+    level: 0,
+    runs: [{ text, font: 'Inter', sizePt: 24, bold, italic: null, color: '111111' }],
+    lineSpacing: 1.1,
+  });
+
+  it('keeps the look of each paragraph and gives extra lines the look of the last one', () => {
+    const current = [styled('Заголовок карточки', true), styled('Пояснение', false)];
+    const next = paragraphsForText(current, 'Эко-аудит\nЗамер CO2\nПодбор растений');
+    expect(next.map((p) => p.runs.map((r) => [r.text, r.bold]))).toEqual([
+      [['Эко-аудит', true]],
+      [['Замер CO2', false]],
+      [['Подбор растений', false]],
+    ]);
+    expect(next[2]).toMatchObject({ lineSpacing: 1.1, runs: [{ font: 'Inter', sizePt: 24 }] });
+  });
+
+  it('writes plain text into an element that had none', () => {
+    expect(paragraphsForText([], 'Текст')).toEqual([
+      {
+        level: 0,
+        runs: [{ text: 'Текст', font: '', sizePt: null, bold: null, italic: null, color: '' }],
+        lineSpacing: null,
+      },
+    ]);
   });
 });
