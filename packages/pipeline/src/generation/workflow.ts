@@ -612,8 +612,9 @@ export function emptySlots(
   slide: ComposedSlide,
   pattern: GenerationProfile['compositions'][number],
 ): string[] {
+  const facts = factSlots(pattern);
   return writableSlots(pattern)
-    .filter((slot) => slot.slotId !== slide.visual?.slotId)
+    .filter((slot) => slot.slotId !== slide.visual?.slotId && !facts.has(slot.slotId))
     .filter((slot) => !(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '').trim())
     .map((slot) => slot.slotId);
 }
@@ -623,6 +624,39 @@ const EMPTY_SLOT_MESSAGE =
   'that supports the slide purpose and does not repeat any other slot. Follow the sample: a short ' +
   'label stays a short label, a numbering sample like 01 continues the numbering. A field for ' +
   'facts the brief does not give (a contact, a name, a date) stays empty: return empty strings.';
+
+/**
+ * Slots for facts about the talk: their sample names the field («Спикер», «Контакт»). Such a
+ * fact is never inferred from the subject, so the slot shows only what the brief states.
+ */
+export function factSlots(pattern: GenerationProfile['compositions'][number]): Set<string> {
+  return new Set(
+    writableSlots(pattern)
+      .filter((slot) => slot.role !== 'title')
+      .filter((slot) => {
+        const label = normalized(slot.sample).replace(/\s*\d+$/, '');
+        return FIELD_LABELS.has(label) && !DATE_FIELDS.has(label);
+      })
+      .map((slot) => slot.slotId),
+  );
+}
+
+/** The slide with every fact slot holding words the brief does not state emptied. */
+export function keepStatedFacts(
+  slide: ComposedSlide,
+  pattern: GenerationProfile['compositions'][number],
+  brief: string,
+): ComposedSlide {
+  const facts = factSlots(pattern);
+  if (!facts.size) return slide;
+  const stated = ` ${normalized(brief)} `;
+  return {
+    ...slide,
+    texts: slide.texts.map((t) =>
+      facts.has(t.slotId) && !stated.includes(` ${normalized(t.text)} `) ? { ...t, text: '' } : t,
+    ),
+  };
+}
 
 /** The slide with every non-title slot that still shows the template's own label emptied. */
 export function clearEchoes(
@@ -960,6 +994,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         })),
         visual,
       };
+      slide = keepStatedFacts(slide, inputData.composition, inputData.brief);
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!validateBindings(slide, inputData.composition, context).length) break;
         const current: ComposedSlide = slide;
@@ -1276,5 +1311,6 @@ async function rewriteSlide(
     const binding = slide.texts.find((t) => t.slotId === slot.slotId);
     if (binding) binding.text = text;
   }
-  return slide;
+  // A rewrite of a speaker or contact field keeps only what the brief states.
+  return keepStatedFacts(slide, task.composition, task.brief);
 }

@@ -9,6 +9,8 @@ import {
   createRepairWorkflow,
   datedSlots,
   deckYear,
+  emptySlots,
+  keepStatedFacts,
   repeatsHeading,
   withCardHeadings,
   fitChars,
@@ -760,6 +762,25 @@ describe('copyDefects', () => {
     const speaker = { ...composition, slots: [{ ...slot('a', 40, 1), sample: 'Спикер' }] };
     expect(copyDefects(slide({ a: 'Контакт' }), speaker, { brief: 'Офисы' }).has('a')).toBe(true);
     expect(copyDefects(slide({ a: 'Анна Петрова' }), speaker, { brief: 'Офисы' }).size).toBe(0);
+  });
+
+  it('keeps in a speaker or contact field only what the brief states', () => {
+    const speaker = { ...slot('s', 40, 1), sample: 'Спикер' };
+    const body = slot('b', 80, 2);
+    const pattern = { ...composition, slots: [speaker, body] };
+    const brief = 'Докладчик: Анна Петрова, отдел продаж';
+    expect(
+      keepStatedFacts(slide({ s: 'Контакт', b: 'Озеленение офиса' }), pattern, brief).texts,
+    ).toEqual([
+      { slotId: 's', text: '' },
+      { slotId: 'b', text: 'Озеленение офиса' },
+    ]);
+    expect(keepStatedFacts(slide({ s: 'Анна Петрова', b: 'x' }), pattern, brief).texts[0]).toEqual({
+      slotId: 's',
+      text: 'Анна Петрова',
+    });
+    // An empty speaker field is not a card to fill.
+    expect(emptySlots(slide({ s: '', b: 'Озеленение' }), pattern)).toEqual([]);
   });
 
   it('flags a bare number in a field whose sample is words', () => {
