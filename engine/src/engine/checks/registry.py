@@ -279,6 +279,16 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         ),
         severity="major",
     ),
+    CheckDefinition(
+        id="empty-image-slot",
+        category="integrity",
+        title="No picture frame is left empty",
+        description=(
+            "Reports a place the template left for a picture that the deck shows without one: an "
+            "empty picture placeholder or a blank card meant for an illustration."
+        ),
+        severity="major",
+    ),
 )
 
 

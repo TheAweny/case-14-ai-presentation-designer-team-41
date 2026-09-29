@@ -78,9 +78,9 @@ _IMAGE_PLACEHOLDERS = {
 }
 #: More pictures than this on one slide is an icon or logo sheet, not a slide design.
 _PICTURE_SHEET = 12
-#: Empty picture frames covering more of the slide than this make it a photo design. Pictures are
-#: not generated, so such a slide would ship a blank screen or frame; a small logo box is fine.
-_PHOTO_DESIGN = 0.1
+#: An empty filled card covering this share of the slide, with nothing drawn on it, is a place the
+#: template left for a picture; a smaller one is a pill or a badge.
+_PANEL_SHARE = 0.08
 _NS_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 _NS_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 _FILLS = ("solidFill", "gradFill", "pattFill", "blipFill")
@@ -132,6 +132,43 @@ def _backdrop_width(box: dict[str, int], backdrops: list[dict[str, int]]) -> int
         return None
     narrowest = min(fitting, key=lambda b: b["x"] + b["cx"])
     return narrowest["x"] + narrowest["cx"] - box["x"]
+
+
+def _centre_inside(box: dict[str, int], frame: dict[str, int]) -> bool:
+    x, y = box["x"] + box["cx"] / 2, box["y"] + box["cy"] / 2
+    return (
+        frame["x"] <= x <= frame["x"] + frame["cx"] and frame["y"] <= y <= frame["y"] + frame["cy"]
+    )
+
+
+def _image_slots(placed: list[Any], slide_area: int) -> list[dict[str, Any]]:
+    """I find where a picture goes: picture placeholders and large empty cards.
+
+    A picture placeholder says so itself. A large filled card with no copy and nothing drawn on it
+    is the other kind: the template left a white frame where its author meant to put a picture,
+    and a deck that keeps it shows a blank card. The template's own photos and brand art are its
+    design, not slots.
+    """
+    boxes = [(shape, _slide_box(shape, transform)) for shape, transform in placed]
+    slots = []
+    for shape, box in boxes:
+        # A small frame is a portrait, an icon or a QR code: nothing to illustrate.
+        if box["cx"] * box["cy"] < _PANEL_SHARE * slide_area:
+            continue
+        if shape.is_placeholder and shape.placeholder_format.type in _IMAGE_PLACEHOLDERS:
+            slots.append({"slotId": str(shape.shape_id), "kind": "placeholder", "box": box})
+            continue
+        if shape.shape_type != MSO_SHAPE_TYPE.AUTO_SHAPE or not _is_filled_backdrop(shape):
+            continue
+        drawn_on = any(
+            other is not shape
+            and _centre_inside(other_box, box)
+            and other_box["cx"] * other_box["cy"] < box["cx"] * box["cy"]
+            for other, other_box in boxes
+        )
+        if not drawn_on:
+            slots.append({"slotId": str(shape.shape_id), "kind": "panel", "box": box})
+    return slots
 
 
 def _prompt(shape: Any, slide: Any) -> str | None:
@@ -202,15 +239,6 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
         if any(s.has_text_frame and _URL.search(s.text) for s in shapes):
             continue
         slide_area = (presentation.slide_width or 1) * slide_height
-        photo_area = sum(
-            (s.width or 0) * (s.height or 0)
-            for s in shapes
-            if s.is_placeholder
-            and s.placeholder_format.type in _IMAGE_PLACEHOLDERS
-            and s._element.tag.endswith("}sp")
-        )
-        if photo_area > slide_area * _PHOTO_DESIGN:
-            continue
         backdrops = _backdrops(slide)
         for shape, transform in placed:
             if not shape.has_text_frame:
@@ -294,6 +322,7 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
                     "name": slide.slide_layout.name,
                     "slots": slots,
                     "imageCount": image_count,
+                    "imageSlots": _image_slots(placed, slide_area),
                 }
             )
     if not patterns:
