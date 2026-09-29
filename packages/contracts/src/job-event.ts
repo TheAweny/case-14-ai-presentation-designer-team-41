@@ -19,6 +19,8 @@ export const jobStageSchema = z.enum([
   'parsing-template',
   'profiling-template',
   'planning',
+  // Pictures for the image slots, drawn once per brief while the copy is written.
+  'illustrating',
   'laying-out',
   'rendering',
   'auditing',

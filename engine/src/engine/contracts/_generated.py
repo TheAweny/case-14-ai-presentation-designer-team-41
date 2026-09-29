@@ -130,6 +130,7 @@ class Stage(StrEnum):
     parsing_template = "parsing-template"
     profiling_template = "profiling-template"
     planning = "planning"
+    illustrating = "illustrating"
     laying_out = "laying-out"
     rendering = "rendering"
     auditing = "auditing"
@@ -2263,6 +2264,32 @@ class CompositionCheckResponse(BaseModel):
     schemaVersion: Literal[1]
 
 
+class Fit1(StrEnum):
+    """
+    cover crops the picture to fill the box; contain fits it whole inside.
+    """
+
+    cover = "cover"
+    contain = "contain"
+
+
+class Image(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    fit: Fit1 = Field(
+        ...,
+        description="cover crops the picture to fill the box; contain fits it whole inside.",
+    )
+    path: constr(pattern=r"^media\/[\w.-]+\.(?:png|jpe?g)$") = Field(
+        ...,
+        description="The picture file, relative to the run directory: media/<name>.png.",
+    )
+    slotId: constr(min_length=1) = Field(
+        ..., description="An imageSlots id of the composition."
+    )
+
+
 class Text(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2324,6 +2351,10 @@ class Visual1(BaseModel):
 class Slide1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
+    )
+    images: list[Image] | None = Field(
+        None,
+        description="Generated pictures for image slots. An image slot without one is removed on export, so no empty frame or blank card is left.",
     )
     patternId: constr(min_length=1)
     speakerNotes: str
@@ -3497,6 +3528,15 @@ class Elements5(BaseModel):
     )
 
 
+class Fit2(StrEnum):
+    """
+    Never stretch: the audit looks for distortion.
+    """
+
+    contain = "contain"
+    cover = "cover"
+
+
 class Elements6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -3507,7 +3547,7 @@ class Elements6(BaseModel):
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
     elementId: constr(min_length=1)
-    fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
+    fit: Fit2 = Field(..., description="Never stretch: the audit looks for distortion.")
     groupIds: list[GroupId] | None = Field(
         None,
         description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
@@ -4166,7 +4206,7 @@ class Elements11(BaseModel):
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
     elementId: constr(min_length=1)
-    fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
+    fit: Fit2 = Field(..., description="Never stretch: the audit looks for distortion.")
     groupIds: list[GroupId] | None = Field(
         None,
         description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
@@ -5466,6 +5506,20 @@ class Box26(BaseModel):
     )
 
 
+class Kind9(StrEnum):
+    placeholder = "placeholder"
+    panel = "panel"
+
+
+class ImageSlot(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box26
+    kind: Kind9
+    slotId: constr(min_length=1)
+
+
 class Role25(StrEnum):
     title = "title"
     body = "body"
@@ -5496,6 +5550,7 @@ class Composition(BaseModel):
         extra="forbid",
     )
     imageCount: conint(ge=0, le=9007199254740991)
+    imageSlots: list[ImageSlot] | None = None
     name: str
     patternId: constr(min_length=1)
     slots: list[Slot1] = Field(..., min_length=1)
@@ -5594,7 +5649,7 @@ class PaletteItem2(BaseModel):
     role: Role26
 
 
-class Box27(BaseModel):
+class Box28(BaseModel):
     """
     Where it sits, in EMU.
     """
@@ -5648,7 +5703,7 @@ class ProtectedZone2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box27 = Field(..., description="Where it sits, in EMU.")
+    box: Box28 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
@@ -6060,7 +6115,7 @@ class JobEvent3(BaseModel):
     type: Literal["stage-finished"]
 
 
-class Kind9(StrEnum):
+class Kind10(StrEnum):
     deck_plan = "deck-plan"
     slide_ir = "slide-ir"
     preview = "preview"
@@ -6086,7 +6141,7 @@ class JobEvent4(BaseModel):
         extra="forbid",
     )
     at: constr(min_length=1) = Field(..., description="ISO 8601 timestamp, UTC.")
-    kind: Kind9
+    kind: Kind10
     path: constr(min_length=1) = Field(
         ..., description="Relative to the run directory."
     )
@@ -6508,7 +6563,7 @@ class ProtectedZone3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box27 = Field(..., description="Where it sits, in EMU.")
+    box: Box28 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
@@ -6835,7 +6890,7 @@ class DesignSystem3(BaseModel):
     )
 
 
-class Box29(BaseModel):
+class Box30(BaseModel):
     """
     Where the template puts it, in EMU.
     """
@@ -6882,7 +6937,7 @@ class Slot2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box29 = Field(..., description="Where the template puts it, in EMU.")
+    box: Box30 = Field(..., description="Where the template puts it, in EMU.")
     maxChars: conint(le=9007199254740991, gt=0) | None = Field(
         ...,
         description="Rough capacity at the template size. Null when the slot is not textual.",
@@ -6942,7 +6997,7 @@ class PatternCatalog2(BaseModel):
     )
 
 
-class Box30(BaseModel):
+class Box31(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7041,7 +7096,7 @@ class Elements15(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box30
+    box: Box31
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -7081,13 +7136,13 @@ class Elements16(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box30
+    box: Box31
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
     elementId: constr(min_length=1)
-    fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
+    fit: Fit2 = Field(..., description="Never stretch: the audit looks for distortion.")
     groupIds: list[GroupId] | None = Field(
         None,
         description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
@@ -7209,7 +7264,7 @@ class Elements17(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box30
+    box: Box31
     cellStyles: list[list[CellStyles3 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -7264,7 +7319,7 @@ class Elements18(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box30
+    box: Box31
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -7420,7 +7475,7 @@ class Elements19(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box30
+    box: Box31
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -7546,7 +7601,7 @@ class LayoutVariantsResponse(BaseModel):
     )
 
 
-class Box35(BaseModel):
+class Box36(BaseModel):
     """
     Where the template puts it, in EMU.
     """
@@ -7593,7 +7648,7 @@ class Slot3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box35 = Field(..., description="Where the template puts it, in EMU.")
+    box: Box36 = Field(..., description="Where the template puts it, in EMU.")
     maxChars: conint(le=9007199254740991, gt=0) | None = Field(
         ...,
         description="Rough capacity at the template size. Null when the slot is not textual.",
@@ -7723,7 +7778,7 @@ class RunConfig(BaseModel):
     )
 
 
-class Box36(BaseModel):
+class Box37(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7822,7 +7877,7 @@ class Elements20(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box36
+    box: Box37
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -7862,13 +7917,13 @@ class Elements21(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box36
+    box: Box37
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
     elementId: constr(min_length=1)
-    fit: Fit = Field(..., description="Never stretch: the audit looks for distortion.")
+    fit: Fit2 = Field(..., description="Never stretch: the audit looks for distortion.")
     groupIds: list[GroupId] | None = Field(
         None,
         description="Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group.",
@@ -7990,7 +8045,7 @@ class Elements22(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box36
+    box: Box37
     cellStyles: list[list[CellStyles4 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -8037,7 +8092,7 @@ class Elements23(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box36
+    box: Box37
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -8193,7 +8248,7 @@ class Elements24(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box36
+    box: Box37
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -8364,7 +8419,7 @@ class Color24(BaseModel):
     )
 
 
-class Kind10(StrEnum):
+class Kind11(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -8398,13 +8453,13 @@ class Background8(BaseModel):
         extra="forbid",
     )
     color: Color24 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind10
+    kind: Kind11
     stops: list[Stop6] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
-class Box41(BaseModel):
+class Box42(BaseModel):
     """
     Null when the shape inherits its position from a layout.
     """
@@ -8473,7 +8528,7 @@ class Fill13(BaseModel):
         extra="forbid",
     )
     color: Color25 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind10
+    kind: Kind11
     stops: list[Stop7] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8551,7 +8606,7 @@ class Shape8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box41 | None = Field(
+    box: Box42 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -8678,7 +8733,7 @@ class Background9(BaseModel):
         extra="forbid",
     )
     color: Color27 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind10
+    kind: Kind11
     stops: list[Stop8] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8731,7 +8786,7 @@ class Fill14(BaseModel):
         extra="forbid",
     )
     color: Color28 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind10
+    kind: Kind11
     stops: list[Stop9] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8809,7 +8864,7 @@ class Shape9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box41 | None = Field(
+    box: Box42 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -8936,7 +8991,7 @@ class Background10(BaseModel):
         extra="forbid",
     )
     color: Color30 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind10
+    kind: Kind11
     stops: list[Stop10] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8989,7 +9044,7 @@ class Fill15(BaseModel):
         extra="forbid",
     )
     color: Color31 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind10
+    kind: Kind11
     stops: list[Stop11] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9067,7 +9122,7 @@ class Shape10(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box41 | None = Field(
+    box: Box42 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
