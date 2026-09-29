@@ -18,7 +18,7 @@ import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/comm
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import type { z } from 'zod';
 import {
@@ -52,6 +52,9 @@ function actorOf(account: Account) {
   return { userId: account.id, admin: account.role === 'admin' };
 }
 
+/** Width of a sample slide picture in the library: sharp in a card, light on the page. */
+const TEMPLATE_PREVIEW_WIDTH = 640;
+
 /** The renderings of every brief, generated in parallel. */
 const VARIANTS = ['dense', 'balanced', 'airy'] as const;
 
@@ -62,6 +65,11 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
   private readonly engine = new EngineClient({
     baseUrl: process.env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 120000,
+  });
+  /** Drawing a large template takes the office suite about a minute. */
+  private readonly drawingEngine = new EngineClient({
+    baseUrl: process.env.ENGINE_URL ?? 'http://localhost:8000',
+    timeoutMs: 900000,
   });
   private readonly active = new Map<string, AbortController>();
   private readonly library = new LibraryMetadata(this.root);
@@ -82,6 +90,8 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     @CurrentAccount() account: Account,
   ): Promise<{ ready: true }> {
     const row = await this.template(body.templateId ?? '', account);
+    // The pictures of the sample slides are for the library, not the deck: never waited for.
+    void this.drawPreviews(body.templateId ?? '', row);
     const profile = await this.engine.generationProfile(row.storage_path);
     await this.pool.query(
       "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
@@ -93,6 +103,40 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
       .parse(body.model ?? null);
     await this.indexTemplate(body.templateId ?? '', profile, row.profile?.index, model, account);
     return { ready: true };
+  }
+
+  /** Templates whose slides are being drawn right now: a second request does not start again. */
+  private readonly drawing = new Set<string>();
+
+  /**
+   * Draw every slide of the template once, for the library to show the sample slides a deck is
+   * built from as they are. The file names go into the profile; a failure is logged and the
+   * library falls back to the slides it draws itself.
+   */
+  private async drawPreviews(
+    templateId: string,
+    row: { storage_path: string; profile: { previews?: unknown } },
+  ): Promise<void> {
+    if (Array.isArray(row.profile?.previews) || this.drawing.has(templateId)) return;
+    this.drawing.add(templateId);
+    try {
+      const drawn = await this.drawingEngine.templatePreviews({
+        schemaVersion: 1,
+        templatePath: row.storage_path,
+        outputDir: join(dirname(row.storage_path), 'previews'),
+        widthPx: TEMPLATE_PREVIEW_WIDTH,
+      });
+      await this.pool.query(
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('previews', $2::jsonb) WHERE id = $1",
+        [templateId, JSON.stringify(drawn.previews)],
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Slides of template ${templateId} were not drawn: ${error instanceof Error ? error.message : error}`,
+      );
+    } finally {
+      this.drawing.delete(templateId);
+    }
   }
 
   /**
@@ -156,7 +200,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Invalid template id.');
     const result = await this.pool.query<{
       storage_path: string;
-      profile: { generation?: GenerationProfile; index?: unknown };
+      profile: { generation?: GenerationProfile; index?: unknown; previews?: unknown };
     }>(
       `SELECT storage_path, profile FROM stored_files
        WHERE id = $1 AND kind = 'template' AND ${visibleFile(2)}`,

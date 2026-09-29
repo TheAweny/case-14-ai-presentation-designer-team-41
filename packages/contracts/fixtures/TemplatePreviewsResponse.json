@@ -1,0 +1,23 @@
+{
+  "contract": "TemplatePreviewsResponse",
+  "valid": [
+    {
+      "name": "three slides drawn",
+      "payload": {
+        "schemaVersion": 1,
+        "previews": ["slide-1.png", "slide-2.png", "slide-3.png"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a nameless picture",
+      "why": "the API serves each picture by its file name",
+      "path": ["previews", 0],
+      "payload": {
+        "schemaVersion": 1,
+        "previews": [""]
+      }
+    }
+  ]
+}

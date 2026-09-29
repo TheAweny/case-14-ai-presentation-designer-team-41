@@ -211,6 +211,12 @@ export {
   type DeckImportRequest,
   type DeckImportResponse,
 } from './deck-import.js';
+export {
+  templatePreviewsRequestSchema,
+  templatePreviewsResponseSchema,
+  type TemplatePreviewsRequest,
+  type TemplatePreviewsResponse,
+} from './template-previews.js';
 export { contractRegistry, type ContractName } from './registry.js';
 export {
   editableDeckRequestSchema,
