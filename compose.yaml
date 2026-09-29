@@ -70,6 +70,8 @@ services:
       MODEL_JSON_MODE: ${MODEL_JSON_MODE:-schema}
       VLM_MODEL: ${VLM_MODEL:-}
       IMAGE_MODEL: ${IMAGE_MODEL:-}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-}
+      IMAGE_MAX_CONCURRENCY: ${IMAGE_MAX_CONCURRENCY:-3}
       RECORDINGS_DIR: /app/registry/recordings
     volumes:
       - ./data:/app/data
