@@ -14,6 +14,11 @@ export interface StoredConnection {
   readonly baseUrl: string;
   readonly apiKeyEncrypted: string | null;
   readonly lastCheck: ConnectionCheck | null;
+  /**
+   * Models this connection offers. Null: any model. A row written before the column existed has
+   * null.
+   */
+  readonly enabledModels: readonly string[] | null;
   /** The account the connection belongs to; null — shared with everyone by an administrator. */
   readonly ownerId: string | null;
 }
@@ -45,6 +50,12 @@ export interface ModelSettingsStore {
   setRole(role: StoredRole, owner: RoleOwner): Promise<void>;
   clearRole(role: PipelineRole, owner: RoleOwner): Promise<void>;
   record(event: SettingsEvent): Promise<void>;
+  /**
+   * Models the connection from the server environment offers, by its address. Null: any model,
+   * also when nothing was stored for this address.
+   */
+  getServerModels(baseUrl: string): Promise<readonly string[] | null>;
+  setServerModels(baseUrl: string, enabledModels: readonly string[] | null): Promise<void>;
 }
 
 interface ConnectionRow {
@@ -54,6 +65,7 @@ interface ConnectionRow {
   base_url: string;
   api_key_encrypted: string | null;
   last_check: ConnectionCheck | null;
+  enabled_models: string[] | null;
   owner_id: string | null;
 }
 
@@ -72,6 +84,7 @@ function connectionOf(row: ConnectionRow): StoredConnection {
     baseUrl: row.base_url,
     apiKeyEncrypted: row.api_key_encrypted,
     lastCheck: row.last_check,
+    enabledModels: row.enabled_models,
     ownerId: row.owner_id,
   };
 }
@@ -88,7 +101,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
 
   async listConnections(ownerId: string) {
     const result = await this.pool.query<ConnectionRow>(
-      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, owner_id
+      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id
        FROM model_connections WHERE owner_id IS NULL OR owner_id = $1
        ORDER BY created_at, id`,
       [ownerId],
@@ -98,7 +111,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
 
   async getConnection(connectionId: string) {
     const result = await this.pool.query<ConnectionRow>(
-      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, owner_id
+      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id
        FROM model_connections WHERE id = $1`,
       [connectionId],
     );
@@ -109,12 +122,12 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   async saveConnection(connection: StoredConnection) {
     await this.pool.query(
       `INSERT INTO model_connections
-         (id, name, preset, base_url, api_key_encrypted, last_check, owner_id)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+         (id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, preset = EXCLUDED.preset, base_url = EXCLUDED.base_url,
          api_key_encrypted = EXCLUDED.api_key_encrypted, last_check = EXCLUDED.last_check,
-         owner_id = EXCLUDED.owner_id, updated_at = now()`,
+         enabled_models = EXCLUDED.enabled_models, owner_id = EXCLUDED.owner_id, updated_at = now()`,
       [
         connection.connectionId,
         connection.name,
@@ -122,6 +135,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
         connection.baseUrl,
         connection.apiKeyEncrypted,
         connection.lastCheck === null ? null : JSON.stringify(connection.lastCheck),
+        connection.enabledModels === null ? null : JSON.stringify(connection.enabledModels),
         connection.ownerId,
       ],
     );
@@ -187,6 +201,23 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
       [event.userId, event.action, event.connectionId, JSON.stringify(event.detail ?? {})],
     );
   }
+
+  async getServerModels(baseUrl: string) {
+    const result = await this.pool.query<{ enabled_models: string[] | null }>(
+      'SELECT enabled_models FROM model_server_connection WHERE base_url = $1',
+      [baseUrl],
+    );
+    return result.rows[0]?.enabled_models ?? null;
+  }
+
+  async setServerModels(baseUrl: string, enabledModels: readonly string[] | null) {
+    await this.pool.query(
+      `INSERT INTO model_server_connection (base_url, enabled_models) VALUES ($1, $2::jsonb)
+       ON CONFLICT (base_url) DO UPDATE SET
+         enabled_models = EXCLUDED.enabled_models, updated_at = now()`,
+      [baseUrl, enabledModels === null ? null : JSON.stringify(enabledModels)],
+    );
+  }
 }
 
 /** Settings in memory, for tests. Behaves like the PostgreSQL store. */
@@ -195,6 +226,7 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
   /** Roles by owner: '' — the defaults for everyone. */
   readonly roles = new Map<string, Map<PipelineRole, StoredRole>>();
   readonly events: SettingsEvent[] = [];
+  readonly serverModels = new Map<string, readonly string[] | null>();
 
   private rolesOf(owner: RoleOwner) {
     const key = owner ?? '';
@@ -244,5 +276,13 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
 
   async record(event: SettingsEvent) {
     this.events.push(event);
+  }
+
+  async getServerModels(baseUrl: string) {
+    return this.serverModels.get(baseUrl) ?? null;
+  }
+
+  async setServerModels(baseUrl: string, enabledModels: readonly string[] | null) {
+    this.serverModels.set(baseUrl, enabledModels);
   }
 }

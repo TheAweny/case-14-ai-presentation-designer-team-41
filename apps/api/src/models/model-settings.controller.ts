@@ -86,6 +86,17 @@ export class ModelSettingsController {
     return this.settings.checkConnection(connectionId, actorOf(account)).catch(refuse);
   }
 
+  @Put('connections/:id/models')
+  setConnectionModels(
+    @Param('id') connectionId: string,
+    @Body() body: unknown,
+    @CurrentAccount() account: Account,
+  ): Promise<ModelConnection> {
+    const input =
+      body !== null && typeof body === 'object' ? { ...body, connectionId } : { connectionId };
+    return this.settings.setConnectionModels(input, actorOf(account)).catch(refuse);
+  }
+
   @Post('probe')
   @HttpCode(200)
   probe(@Body() body: unknown, @CurrentAccount() account: Account): Promise<ConnectionCheck> {

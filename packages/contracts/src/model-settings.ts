@@ -88,6 +88,12 @@ export const modelConnectionSchema = z.object({
   keyHint: z.string().nullable(),
   /** Null: the connection has not been checked yet. */
   lastCheck: connectionCheckSchema.nullable(),
+  /**
+   * Models this connection offers. Null or missing: any model, the whole list the check reported
+   * and ids typed by hand. A list offers only those ids, so a shared gateway can offer one model
+   * instead of hundreds; for a shared key it applies to every account.
+   */
+  enabledModels: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH).nullable().optional(),
   /** Configured on the server through the environment: it can be checked, not edited. */
   managed: z.boolean(),
   /**
@@ -169,6 +175,18 @@ export const probeInputSchema = z.object({
     .optional(),
 });
 export type ProbeInput = z.infer<typeof probeInputSchema>;
+
+/**
+ * Which models of one connection stay available. `null` lifts the limit, an empty list switches
+ * every model off. Only whoever may edit the connection can send this — for a shared connection
+ * and the one from the server environment that is an administrator; everyone else just sees the
+ * shorter list.
+ */
+export const connectionModelsInputSchema = z.object({
+  connectionId: z.string().min(1),
+  enabledModels: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH).nullable(),
+});
+export type ConnectionModelsInput = z.infer<typeof connectionModelsInputSchema>;
 
 // Input checks. Each returns a reason, not a text: the words live in the interface dictionary.
 

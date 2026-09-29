@@ -3,9 +3,11 @@ import {
   PIPELINE_ROLES,
   SERVER_CONNECTION_ID,
   baseUrlProblem,
+  connectionModelsInputSchema,
   connectionInputProblems,
   connectionInputSchema,
   hasProblems,
+  isModelEnabled,
   isRoleOptional,
   keyHint,
   normalizeBaseUrl,
@@ -120,9 +122,14 @@ export class ModelSettingsService {
     };
   }
 
-  private serverView(): ModelConnection | null {
+  /**
+   * The server connection as everyone sees it. Which of its models are offered is stored by its
+   * address, so the limit outlives the process and follows the gateway, not the name.
+   */
+  private async serverView(): Promise<ModelConnection | null> {
     const server = this.server();
     if (!server) return null;
+    const enabledModels = await this.store.getServerModels(server.baseUrl);
     return {
       connectionId: SERVER_CONNECTION_ID,
       name: new URL(server.baseUrl).hostname,
@@ -131,6 +138,7 @@ export class ModelSettingsService {
       hasKey: server.apiKey !== '',
       keyHint: keyHint(server.apiKey || null),
       lastCheck: this.serverCheck,
+      enabledModels: enabledModels === null ? null : [...enabledModels],
       managed: true,
     };
   }
@@ -167,6 +175,7 @@ export class ModelSettingsService {
       // Someone else's key is not even hinted at.
       keyHint: editable ? keyHint(key) : null,
       lastCheck: stored.lastCheck,
+      enabledModels: stored.enabledModels === null ? null : [...stored.enabledModels],
       managed: false,
       shared: stored.ownerId === null,
       editable,
@@ -203,7 +212,7 @@ export class ModelSettingsService {
    * else the server connection. An administrator's choices are those defaults.
    */
   async get(actor: SettingsActor): Promise<ModelSettings> {
-    const server = this.serverView();
+    const server = await this.serverView();
     const stored = await this.store.listConnections(actor.userId);
     const connections = [
       ...(server ? [server] : []),
@@ -226,8 +235,13 @@ export class ModelSettingsService {
         if (!actor.admin) inherited.push(role);
         return shared;
       }
+      // The model from .env is the fallback only while an administrator has not switched it off.
       const model = this.server()?.model;
-      if (model && SERVER_DEFAULT_ROLES.includes(role)) {
+      if (
+        model &&
+        SERVER_DEFAULT_ROLES.includes(role) &&
+        isModelEnabled(model, server?.enabledModels ?? null)
+      ) {
         inherited.push(role);
         return { role, kind: 'model', connectionId: SERVER_CONNECTION_ID, modelId: model };
       }
@@ -276,6 +290,7 @@ export class ModelSettingsService {
       apiKeyEncrypted,
       lastCheck,
       ownerId,
+      enabledModels: previous?.enabledModels ?? null,
     };
     await this.store.saveConnection(stored);
     await this.store.record({
@@ -289,6 +304,50 @@ export class ModelSettingsService {
       },
     });
     return this.publicView(stored, actor);
+  }
+
+  /**
+   * Limit which models of one connection stay available. Null lifts the limit, an empty list
+   * switches every model off. The limit belongs to the connection, so for a shared one it applies
+   * to every account; the server connection keeps it by its address.
+   */
+  async setConnectionModels(raw: unknown, actor: SettingsActor): Promise<ModelConnection> {
+    const parsed = connectionModelsInputSchema.safeParse(raw);
+    if (!parsed.success) throw new InvalidModelSettingsInputError();
+    const { connectionId } = parsed.data;
+    const enabledModels =
+      parsed.data.enabledModels === null
+        ? null
+        : parsed.data.enabledModels.filter((modelId, at, all) => all.indexOf(modelId) === at);
+    if (connectionId === SERVER_CONNECTION_ID) {
+      const server = this.server();
+      if (!server) throw new ModelConnectionNotFoundError(connectionId);
+      // The address and key stay in .env. Which of its models are offered is an administrator's
+      // choice, the same as a shared connection: everyone else only sees the shorter list.
+      if (!actor.admin) {
+        throw new ManagedConnectionError('Only an administrator can change a shared connection.');
+      }
+      await this.store.setServerModels(server.baseUrl, enabledModels);
+      await this.store.record({
+        userId: actor.userId,
+        action: 'models-enabled',
+        connectionId,
+        detail: { enabled: enabledModels === null ? 'all' : enabledModels.length },
+      });
+      const view = await this.serverView();
+      if (!view) throw new ModelConnectionNotFoundError(connectionId);
+      return view;
+    }
+    const stored = await this.find(connectionId, actor, true);
+    const saved = { ...stored, enabledModels };
+    await this.store.saveConnection(saved);
+    await this.store.record({
+      userId: actor.userId,
+      action: 'models-enabled',
+      connectionId,
+      detail: { enabled: enabledModels === null ? 'all' : enabledModels.length },
+    });
+    return this.publicView(saved, actor);
   }
 
   async deleteConnection(connectionId: string, actor: SettingsActor): Promise<void> {
@@ -308,7 +367,7 @@ export class ModelSettingsService {
         { baseUrl: server.baseUrl, apiKey: server.apiKey || null },
         { ...this.checkOptions, allowPrivateHosts: true },
       );
-      const view = this.serverView();
+      const view = await this.serverView();
       if (!view) throw new ModelConnectionNotFoundError(connectionId);
       return view;
     }
@@ -415,6 +474,11 @@ export class ModelSettingsService {
           'Серверное подключение к модели больше не настроено: выберите другую модель.',
         );
       }
+      if (!isModelEnabled(ref.modelId, await this.store.getServerModels(server.baseUrl))) {
+        throw new ModelNotConfiguredError(
+          'Эта модель выключена в настройках подключения: выберите другую.',
+        );
+      }
       return { connectionId: SERVER_CONNECTION_ID, ...server, model: ref.modelId };
     }
     const stored = await this.store.getConnection(ref.connectionId);
@@ -435,6 +499,11 @@ export class ModelSettingsService {
     if (stored.apiKeyEncrypted !== null && apiKey === null) {
       throw new ModelNotConfiguredError(
         `Ключ подключения «${stored.name}» не читается: введите его заново в настройках.`,
+      );
+    }
+    if (!isModelEnabled(ref.modelId, stored.enabledModels)) {
+      throw new ModelNotConfiguredError(
+        'Эта модель выключена в настройках подключения: выберите другую.',
       );
     }
     return {

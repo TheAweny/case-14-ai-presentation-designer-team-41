@@ -12,6 +12,8 @@ import {
 const SECRET = 'q4mR9v2LxT7pWc1nZ8bK3sHd6fJ0yGaE5uNo=';
 /** Settings as an administrator sets them up: shared with everyone, the way they worked before accounts. */
 const ADMIN = { userId: 'u1', admin: true };
+/** Anyone else: uses shared connections, changes only their own. */
+const ANN = { userId: 'ann', admin: false };
 const KEY = 'sk-proj-very-secret-0123456789WXYZ';
 const SERVER_KEY = 'yc-server-key-000000000000ABCD';
 const SERVER_ENV = {
@@ -231,6 +233,7 @@ describe('the server connection', () => {
         hasKey: true,
         keyHint: 'ABCD',
         lastCheck: null,
+        enabledModels: null,
         managed: true,
       },
     ]);
@@ -261,6 +264,47 @@ describe('the server connection', () => {
       service.probe({ connectionId: 'server', baseUrl: 'https://evil.example/v1' }, ADMIN),
     ).rejects.toBeInstanceOf(ManagedConnectionError);
   });
+
+  it('lets an administrator limit which of its models stay available', async () => {
+    const { service } = setup({ env: SERVER_ENV });
+    await service.checkConnection('server', ADMIN);
+    const limited = await service.setConnectionModels(
+      { connectionId: 'server', enabledModels: ['qwen'] },
+      ADMIN,
+    );
+    expect(limited.enabledModels).toEqual(['qwen']);
+    await expect(
+      service.setConnectionModels(
+        { connectionId: 'server', enabledModels: ['qwen'] },
+        { userId: 'ann', admin: false },
+      ),
+    ).rejects.toBeInstanceOf(ManagedConnectionError);
+  });
+
+  it('keeps its limit after a restart, for its own address only', async () => {
+    const { service, store } = setup({ env: SERVER_ENV });
+    await service.setConnectionModels({ connectionId: 'server', enabledModels: ['qwen'] }, ADMIN);
+    const vault = createKeyVault(SECRET);
+    const restarted = new ModelSettingsService(store, vault, { env: SERVER_ENV });
+    expect((await restarted.get(ANN)).connections[0]?.enabledModels).toEqual(['qwen']);
+    await expect(
+      restarted.resolve({ connectionId: 'server', modelId: SERVER_ENV.LLM_MODEL }, ANN),
+    ).rejects.toThrow(/выключена/);
+    const moved = new ModelSettingsService(store, vault, {
+      env: { ...SERVER_ENV, LLM_BASE_URL: 'https://gateway.example.com/v1' },
+    });
+    expect((await moved.get(ANN)).connections[0]?.enabledModels).toBeNull();
+  });
+
+  it('stops being the default of the text roles once its model is switched off', async () => {
+    const { service } = setup({ env: SERVER_ENV });
+    await service.setConnectionModels({ connectionId: 'server', enabledModels: [] }, ADMIN);
+    const settings = await service.get(ANN);
+    expect(settings.roles.slice(0, 3).map((role) => role.kind)).toEqual(
+      Array(3).fill('unassigned'),
+    );
+    expect(await service.resolveRole('writer', ANN)).toBeNull();
+  });
 });
 
 describe('resolve', () => {
@@ -285,6 +329,56 @@ describe('resolve', () => {
       connectionId: 'server',
       model: 'other',
     });
+  });
+
+  it('refuses a model that was switched off, and an id typed by hand past the list', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.checkConnection(connectionId, ADMIN);
+    await service.setConnectionModels({ connectionId, enabledModels: ['other'] }, ADMIN);
+    await expect(service.resolve({ connectionId, modelId: 'qwen' }, ADMIN)).rejects.toThrow(
+      /выключена/,
+    );
+    await expect(
+      service.resolve({ connectionId, modelId: 'typed-by-hand' }, ADMIN),
+    ).rejects.toThrow(/выключена/);
+    await expect(service.resolve({ connectionId, modelId: 'other' }, ADMIN)).resolves.toMatchObject(
+      { connectionId, model: 'other' },
+    );
+    const opened = await service.setConnectionModels({ connectionId, enabledModels: null }, ADMIN);
+    expect(opened.enabledModels).toBeNull();
+    await expect(service.resolve({ connectionId, modelId: 'qwen' }, ADMIN)).resolves.toMatchObject({
+      model: 'qwen',
+    });
+  });
+
+  it('keeps a model switched off when a later check fails', async () => {
+    let up = true;
+    const fetchMock = vi.fn(async () =>
+      up
+        ? Response.json({ data: [{ id: 'qwen' }, { id: 'big' }] })
+        : new Response('', { status: 503 }),
+    );
+    const { service } = setup({ fetch: fetchMock as never });
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.checkConnection(connectionId, ADMIN);
+    await service.setConnectionModels({ connectionId, enabledModels: ['qwen'] }, ADMIN);
+    up = false;
+    expect((await service.checkConnection(connectionId, ADMIN)).lastCheck?.ok).toBe(false);
+    await expect(service.resolve({ connectionId, modelId: 'big' }, ADMIN)).rejects.toThrow(
+      /выключена/,
+    );
+  });
+
+  it('keeps the model list when the connection is renamed', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setConnectionModels({ connectionId, enabledModels: ['qwen'] }, ADMIN);
+    const renamed = await service.saveConnection(
+      { ...cloud(''), connectionId, name: 'Cloud renamed' },
+      ADMIN,
+    );
+    expect(renamed.enabledModels).toEqual(['qwen']);
   });
 
   it('gives each role its own model, and nothing for a role left without one', async () => {
@@ -321,7 +415,6 @@ describe('resolve', () => {
 });
 
 describe('shared and personal connections', () => {
-  const ANN = { userId: 'ann', admin: false };
   const BOB = { userId: 'bob', admin: false };
 
   it('shares what an administrator adds and keeps what a person adds to them', async () => {
@@ -359,6 +452,25 @@ describe('shared and personal connections', () => {
     const own = await service.saveConnection(cloud(KEY), ANN);
     await expect(service.deleteConnection(own.connectionId, BOB)).rejects.toThrow(
       ModelConnectionNotFoundError,
+    );
+  });
+
+  it('lets only an administrator change which models a shared connection offers', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.checkConnection(connectionId, ADMIN);
+    await expect(
+      service.setConnectionModels({ connectionId, enabledModels: ['qwen'] }, ANN),
+    ).rejects.toThrow(ManagedConnectionError);
+    const limited = await service.setConnectionModels(
+      { connectionId, enabledModels: ['qwen'] },
+      ADMIN,
+    );
+    expect(limited.enabledModels).toEqual(['qwen']);
+    expect((await service.get(ANN)).connections[0]?.enabledModels).toEqual(['qwen']);
+    // The limit is on the shared key, not on the administrator's view of it.
+    await expect(service.resolve({ connectionId, modelId: 'big' }, ANN)).rejects.toThrow(
+      /выключена/,
     );
   });
 

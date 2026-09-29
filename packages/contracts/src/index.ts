@@ -340,10 +340,20 @@ export {
   type ModelRef,
   type ModelSettings,
   type ConnectionInput,
+  connectionModelsInputSchema,
   type ProbeInput,
+  type ConnectionModelsInput,
   type ConnectionNameProblem,
   type BaseUrlProblem,
   type ApiKeyProblem,
   type ConnectionProblems,
   type ModelSettingsError,
 } from './model-settings.js';
+export {
+  MODEL_FAMILIES,
+  modelFamilySchema,
+  modelFamily,
+  enabledModelIds,
+  isModelEnabled,
+  type ModelFamily,
+} from './model-families.js';
