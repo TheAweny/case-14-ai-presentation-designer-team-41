@@ -16,8 +16,9 @@ import {
 } from '@nestjs/common';
 import type { OnApplicationShutdown } from '@nestjs/common';
 import { existsSync } from 'node:fs';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, rm, rename } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import type { z } from 'zod';
 import {
@@ -25,10 +26,11 @@ import {
   generationProfileSchema,
   generationRequestSchema,
   modelRefSchema,
+  slideIrSchema,
   storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
-import type { GenerationProfile, StoredTemplateIndex } from '@lct/contracts';
+import type { GenerationProfile, SlideIr, StoredTemplateIndex } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
   currentTemplateIndexRevision,
@@ -386,6 +388,79 @@ export class GenerationController implements OnApplicationShutdown {
     return new StreamableFile(await readFile(path), {
       type,
       disposition: `attachment; filename="${basename(path)}"`,
+    });
+  }
+
+  @Post(':id/export')
+  async exportEdited(
+    @Param('id') id: string,
+    @Body() body: { slides?: unknown; variant?: unknown; format?: unknown },
+  ): Promise<{ exportId: string; previews: string[] }> {
+    await this.completed(id);
+    const slides = Array.isArray(body.slides)
+      ? body.slides.map((slide) => slideIrSchema.parse(slide))
+      : [];
+    if (!slides.length) throw new BadRequestException('At least one slide is required.');
+    const variant = body.variant === 'dense' || body.variant === 'airy' ? body.variant : 'balanced';
+    // The requested download decides what the engine builds: a PPTX pays for neither PDF nor
+    // previews, PDF skips previews, PNG and HTML are built from the rendered previews.
+    const format =
+      body.format === 'pdf' || body.format === 'png' || body.format === 'html'
+        ? body.format
+        : 'pptx';
+    const formats: ('pptx' | 'pdf')[] = format === 'pdf' ? ['pptx', 'pdf'] : ['pptx'];
+    const previews = format === 'png' || format === 'html';
+    const exportId = randomUUID();
+    const outputDir = join(this.directory(id), 'exports', exportId);
+    await mkdir(outputDir, { recursive: true });
+    try {
+      await this.engine.exportDeck({
+        schemaVersion: 1,
+        templatePath: join(this.directory(id), 'deck.pptx'),
+        variant,
+        slides: slides as SlideIr[],
+        outputDir,
+        formats,
+        previews,
+      });
+      await rename(join(outputDir, `${variant}.pptx`), join(outputDir, 'deck.pptx'));
+      if (format === 'pdf')
+        await rename(join(outputDir, `${variant}.pdf`), join(outputDir, 'deck.pdf'));
+      const previewNames = previews
+        ? (await readdir(join(outputDir, 'previews'))).filter((name) =>
+            /^slide-\d+\.png$/.test(name),
+          )
+        : [];
+      if (previews && !previewNames.length) throw new Error('Engine produced no export previews.');
+      return { exportId, previews: previewNames };
+    } catch (error) {
+      await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
+      throw new ServiceUnavailableException(
+        error instanceof Error ? error.message : 'Edited deck export failed.',
+      );
+    }
+  }
+
+  @Get(':id/exports/:exportId/:name')
+  async editedArtifact(
+    @Param('id') id: string,
+    @Param('exportId') exportId: string,
+    @Param('name') name: string,
+  ): Promise<StreamableFile> {
+    await this.completed(id);
+    if (!/^[0-9a-f-]{36}$/i.test(exportId) || !/^(deck\.(pptx|pdf)|slide-\d+\.png)$/.test(name))
+      throw new NotFoundException('Artifact not found.');
+    const root = join(this.directory(id), 'exports', exportId);
+    const path = name.startsWith('slide-') ? join(root, 'previews', name) : join(root, name);
+    if (!existsSync(path)) throw new NotFoundException('Artifact not found.');
+    const type = name.endsWith('.pptx')
+      ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      : name.endsWith('.pdf')
+        ? 'application/pdf'
+        : 'image/png';
+    return new StreamableFile(await readFile(path), {
+      type,
+      disposition: `attachment; filename="${name}"`,
     });
   }
 

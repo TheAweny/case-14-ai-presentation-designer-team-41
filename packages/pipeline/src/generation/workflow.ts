@@ -1,19 +1,19 @@
-import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { z } from 'zod';
 import {
   composedSlideSchema,
   compositionPlanSchema,
-  templateSlotCopySchema,
+  compositionSchema,
+  generationProfileSchema,
   slotChartSchema,
   slotRewriteChoicesSchema,
   slotTableSchema,
-  type SlotVisual,
-  compositionSchema,
-  generationProfileSchema,
+  templateSlotCopySchema,
   type ComposedSlide,
   type CompositionNote,
   type GenerationProfile,
+  type SlotVisual,
 } from '@lct/contracts';
+import { createStep, createWorkflow } from '@mastra/core/workflows';
+import { z } from 'zod';
 import type { TextProvider } from './provider.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
@@ -32,6 +32,8 @@ export interface GenerationDependencies {
   signal: AbortSignal;
   concurrency?: number;
   onProgress?: (done: number, total: number) => Promise<void>;
+  /** Leftover defects a repair could not cure; reported, never fatal, so every variant finishes. */
+  onWarning?: (message: string) => void | Promise<void>;
   /** What the template indexer read about each composition; absent when never indexed. */
   notes?: readonly CompositionNote[];
 }
@@ -618,10 +620,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           previous: current,
           corrections: slotCorrections(current, inputData.composition),
         });
+        // A rewrite that changed nothing means the model cannot cure the slide: stop drawing and
+        // keep the copy, so the variant still completes and the audit reports what is left.
+        if (slide.texts.every((t, index) => t.text === current.texts[index]?.text)) break;
       }
-      const problems = blockingProblems(slide, inputData.composition);
-      if (!slide || problems.length)
-        throw new Error(`Slide ${inputData.index + 1}: ${problems.join('; ')}`);
+      if (!slide) throw new Error(`Slide ${inputData.index + 1} was never written.`);
+      // The rewriter could not cure every blocking defect, but the deck must still be produced:
+      // three variants are mandatory, so a stubborn slide becomes a warning, not a failed run.
+      for (const problem of blockingProblems(slide, inputData.composition))
+        await deps.onWarning?.(`Slide ${inputData.index + 1}: ${problem}`);
       completed++;
       await deps.onProgress?.(completed, inputData.total);
       return {
@@ -779,8 +786,10 @@ export function createRepairWorkflow(deps: GenerationDependencies) {
     outputSchema: repairedSlideSchema,
     execute: async ({ inputData }) => {
       const slide = await rewriteSlide(deps, inputData);
-      const problems = blockingProblems(slide, inputData.composition);
-      if (problems.length) throw new Error(`Repair ${inputData.index + 1}: ${problems.join('; ')}`);
+      // Same guarantee as the write step: an uncured slide is reported through onWarning, not
+      // fatal, so the run keeps all three variants.
+      for (const problem of blockingProblems(slide, inputData.composition))
+        await deps.onWarning?.(`Repair slide ${inputData.index + 1}: ${problem}`);
       return { index: inputData.index, slide };
     },
   });
@@ -793,6 +802,25 @@ export function createRepairWorkflow(deps: GenerationDependencies) {
     .foreach(repair, { concurrency: deps.concurrency ?? 3 })
     .commit();
 }
+
+/** The longest alternative that still fits the slot, or undefined when none of them do. */
+function bestFittingAlternative(
+  slot: { role: string; sample: string; maxChars: number; maxLines: number; prompt?: boolean },
+  alternatives: readonly string[],
+): string | undefined {
+  return alternatives
+    .filter(
+      (t) =>
+        t.length <= fitChars(slot) &&
+        t.length <= slot.maxChars &&
+        t.split('\n').length <= slot.maxLines &&
+        (slot.role !== 'title' || t.trim()),
+    )
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+/** How many times the rewriter may be asked to fix one slide before the deck fails. */
+const MAX_REWRITE_ATTEMPTS = 5;
 
 async function rewriteSlide(
   deps: GenerationDependencies,
@@ -812,54 +840,90 @@ async function rewriteSlide(
       ),
     ),
   });
-  const result = await deps.provider.generate(
-    'rewriter',
-    deps.repairInstructions ?? deps.writerInstructions,
-    {
-      brief: task.brief,
-      ...(task.purpose ? { purpose: task.purpose } : {}),
-      // The filled slots of the same slide, so a new point does not repeat them.
-      otherSlots: task.previous.texts
-        .filter((t) => t.text.trim() && !slots.some((s) => s.slotId === t.slotId))
-        .map((t) => t.text),
-      slots: slots.map((s) => ({
-        slotId: s.slotId,
-        role: s.role,
-        sample: s.sample,
-        ...(s.prompt ? { prompt: true } : {}),
-        maxChars: s.maxChars,
-        fitChars: fitChars(s),
-        maxLines: s.maxLines,
-        text: task.previous.texts.find((t) => t.slotId === s.slotId)?.text,
-        correction: task.corrections
-          .filter((c) => c.slotId === s.slotId)
-          .map((c) => c.message)
-          .join('; '),
-      })),
-    },
-    schema,
-    deps.signal,
-  );
+  const input = (feedback?: string) => ({
+    brief: task.brief,
+    ...(task.purpose ? { purpose: task.purpose } : {}),
+    // The filled slots of the same slide, so a new point does not repeat them.
+    otherSlots: task.previous.texts
+      .filter((t) => t.text.trim() && !slots.some((s) => s.slotId === t.slotId))
+      .map((t) => t.text),
+    ...(feedback ? { feedback } : {}),
+    slots: slots.map((s) => ({
+      slotId: s.slotId,
+      role: s.role,
+      sample: s.sample,
+      ...(s.prompt ? { prompt: true } : {}),
+      maxChars: s.maxChars,
+      fitChars: fitChars(s),
+      maxLines: s.maxLines,
+      text: task.previous.texts.find((t) => t.slotId === s.slotId)?.text,
+      correction: task.corrections
+        .filter((c) => c.slotId === s.slotId)
+        .map((c) => c.message)
+        .join('; '),
+    })),
+  });
+  const mustFit = (slot: (typeof slots)[number]) => {
+    const before = task.previous.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
+    return before.trim() !== '' || slot.role === 'title';
+  };
+  let result: z.infer<typeof schema> | undefined;
+  let feedback: string | undefined;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_REWRITE_ATTEMPTS; attempt++) {
+    deps.signal.throwIfAborted();
+    try {
+      result = await deps.provider.generate(
+        'rewriter',
+        deps.repairInstructions ?? deps.writerInstructions,
+        input(feedback),
+        schema,
+        deps.signal,
+      );
+    } catch (error) {
+      // A broken answer is one more draw, not the end of the deck: keep the last error and retry.
+      if (attempt + 1 >= MAX_REWRITE_ATTEMPTS) throw error;
+      lastError = error;
+      continue;
+    }
+    const rewrites = result.rewrites;
+    // The model may still return alternatives longer than fitChars despite the prompt: tell it
+    // exactly which slots overflowed and by how much, then ask again.
+    const tooLong = slots.filter(
+      (slot) =>
+        mustFit(slot) && bestFittingAlternative(slot, rewrites[slot.slotId] ?? []) === undefined,
+    );
+    if (tooLong.length === 0) break;
+    feedback = tooLong
+      .map((slot) => {
+        const lengths = (rewrites[slot.slotId] ?? []).map((t) => t.length).join(', ');
+        return (
+          `Слот ${slot.slotId} (${slot.role}): все три варианта длиннее лимита ` +
+          `${fitChars(slot)} символов (получено: ${lengths}). Каждую альтернативу напиши ` +
+          `не длиннее ${fitChars(slot)} символов с пробелами.`
+        );
+      })
+      .join('\n');
+  }
+  if (!result) {
+    // The rewriter could not answer at all (every draw failed): keep the previous copy. A broken
+    // model session must not drop the variant — all three presentations are mandatory, and the
+    // audit reports what remains.
+    await deps.onWarning?.(
+      `Рерайтер не ответил для слайда ${task.index + 1}: ` +
+        `${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    );
+    return task.previous;
+  }
   const slide = { ...task.previous, texts: task.previous.texts.map((t) => ({ ...t })) };
   for (const slot of slots) {
     const alternatives = result.rewrites[slot.slotId] ?? [];
-    const text = alternatives
-      .filter(
-        (t) =>
-          t.length <= fitChars(slot) &&
-          t.length <= slot.maxChars &&
-          t.split('\n').length <= slot.maxLines &&
-          (slot.role !== 'title' || t.trim()),
-      )
-      .sort((a, b) => b.length - a.length)[0];
-    const before = task.previous.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
-    // An empty card that no alternative fits stays empty: a visible gap, not a failed deck.
-    if (text === undefined && !before.trim() && slot.role !== 'title') continue;
-    if (text === undefined)
-      throw new Error(
-        `No complete rewrite fits slot ${slot.slotId} (${fitChars(slot)} chars; alternatives: ${alternatives.map((t) => t.length).join(',')}).`,
-      );
+    const text = bestFittingAlternative(slot, alternatives);
     const binding = slide.texts.find((t) => t.slotId === slot.slotId);
+    // No alternative fits the box. The slot keeps its previous copy (or stays empty when it was
+    // an unfillable card): a flagged slide costs one finding, a failed variant would cost the
+    // whole deck, and all three variants are mandatory.
+    if (text === undefined) continue;
     if (binding) binding.text = text;
   }
   return slide;

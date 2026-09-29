@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { SlideIr } from '@lct/contracts';
 import { DEMO_DECK } from '../mocks/demo-deck';
 import { createDraft, deckFingerprint, draftKey, mediaKey } from './deck-draft';
-import { createDraftStorage, type DraftMedia, type KeyValueStore } from './draft-storage';
+import {
+  createDraftStorage,
+  editedSlidesOf,
+  type DraftMedia,
+  type KeyValueStore,
+} from './draft-storage';
 
 /** IndexedDB в памяти: те же четыре операции. */
 function memoryStore() {
@@ -109,5 +114,46 @@ describe('draft storage', () => {
     // После очистки картинка пишется снова: черновик начат заново.
     await storage.save(createDraft('demo', base, withUpload('upload/a.png'), 2), media);
     expect(data.has(mediaKey('demo', 'upload/a.png'))).toBe(true);
+  });
+});
+
+describe('editedSlidesOf', () => {
+  /** Первый слайд без первого объекта: так выглядит удаление в редакторе. */
+  function deletedFirstElement(): SlideIr[] {
+    const [first, ...rest] = DEMO_DECK.slides;
+    if (!first) throw new Error('demo deck is empty');
+    return [{ ...first, elements: first.elements.slice(1) }, ...rest];
+  }
+
+  it('без черновика отдаёт null — в экспорт идёт исходная колода', async () => {
+    const { store } = memoryStore();
+    expect(await editedSlidesOf(store, 'demo', DEMO_DECK.slides)).toBeNull();
+  });
+
+  it('без хранилища IndexedDB отдаёт null', async () => {
+    expect(await editedSlidesOf(null, 'demo', DEMO_DECK.slides)).toBeNull();
+  });
+
+  it('отдаёт слайды черновика: удаление и перестановка доезжают до экспорта', async () => {
+    const { store } = memoryStore();
+    const edited = deletedFirstElement();
+    await createDraftStorage(store).save(createDraft('demo', base, edited, 1), memoryMedia().media);
+    expect(await editedSlidesOf(store, 'demo', DEMO_DECK.slides)).toEqual(edited);
+  });
+
+  it('черновик другой сборки колоды не применяется', async () => {
+    const { store } = memoryStore();
+    await createDraftStorage(store).save(
+      createDraft('demo', base, DEMO_DECK.slides, 1),
+      memoryMedia().media,
+    );
+    // Колода пересобрана: отпечаток исходных слайдов уже другой, черновик ей не принадлежит.
+    expect(await editedSlidesOf(store, 'demo', DEMO_DECK.slides.slice(0, -1))).toBeNull();
+  });
+
+  it('битую запись пропускает и экспортирует исходную колоду', async () => {
+    const { store } = memoryStore();
+    await store.set(draftKey('demo'), { version: 1, deckId: 'demo', base, slides: 'oops' });
+    expect(await editedSlidesOf(store, 'demo', DEMO_DECK.slides)).toBeNull();
   });
 });

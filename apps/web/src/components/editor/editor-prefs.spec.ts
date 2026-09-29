@@ -28,7 +28,6 @@ describe('parseEditorPrefs', () => {
       slideCount: 12,
       exportFormat: 'pdf',
       exportName: 'title-date',
-      exportAudit: true,
     };
     expect(parseEditorPrefs(serializeEditorPrefs(prefs))).toEqual(prefs);
   });

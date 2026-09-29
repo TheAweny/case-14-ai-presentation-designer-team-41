@@ -7229,6 +7229,10 @@
           "minLength": 1,
           "type": "string"
         },
+        "previews": {
+          "description": "Render slide previews from the written file. Absent: true. The edited-deck export sets it per format, so a PPTX download does not pay for PNG rendering.",
+          "type": "boolean"
+        },
         "schemaVersion": {
           "const": 1,
           "description": "Incremented by any incompatible change.",

@@ -79,6 +79,10 @@ export async function generatePresentation(options: GenerateOptions) {
   };
   await mkdir(options.outputDir, { recursive: true });
   try {
+    // Warnings collected from repairs and audits; recorded in the deck and streamed as events.
+    const reviewWarnings: string[] = [];
+    const warn = (message: string) =>
+      emit({ type: 'warning', stage, code: 'content-review-required', message });
     const planner = await loadAgent(join(options.registryDir, 'deck-planner'));
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
@@ -115,6 +119,10 @@ export async function generatePresentation(options: GenerateOptions) {
           total,
           note: 'Подготовлено содержание слайда',
         }),
+      onWarning: async (message) => {
+        reviewWarnings.push(message);
+        await warn(message);
+      },
     });
     const repairWorkflow = createRepairWorkflow({
       provider: options.provider,
@@ -124,6 +132,10 @@ export async function generatePresentation(options: GenerateOptions) {
       variant: options.variant ?? 'balanced',
       signal,
       concurrency: 3,
+      onWarning: async (message) => {
+        reviewWarnings.push(message);
+        await warn(message);
+      },
     });
     const mastra = createMastra({
       storageUrl: `file:${join(options.outputDir, 'mastra.db')}`,
@@ -155,7 +167,6 @@ export async function generatePresentation(options: GenerateOptions) {
       slides: written.map((s) => s.slide),
     });
     const auditHistory = [];
-    const reviewWarnings: string[] = [];
     for (let attempt = 0; attempt < 3; attempt++) {
       const [fit, critique] = await Promise.all([
         options.engine.checkCompositions(exportRequest(), signal),
@@ -215,8 +226,16 @@ export async function generatePresentation(options: GenerateOptions) {
       ];
       if (!issues.length) break;
       if (attempt === 2) {
-        if (fit.findings.length)
-          throw new Error(`Quality gate failed: ${JSON.stringify(fit.findings)}`);
+        // The bounded repair could not cure every defect, yet the deck is still produced: the
+        // remaining findings become warnings. Three variants are mandatory, so a stuck quality
+        // gate must not drop one of them.
+        for (const finding of fit.findings) {
+          const message =
+            `Слайд ${finding.slideIndex + 1}, ${finding.slotId}: ${finding.message} ` +
+            `Maximum ${finding.maxChars} characters, ${finding.maxLines} lines.`;
+          reviewWarnings.push(message);
+          await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        }
         for (const issue of critique.issues) {
           const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
           reviewWarnings.push(message);
@@ -251,10 +270,29 @@ export async function generatePresentation(options: GenerateOptions) {
           corrections,
         });
       }
-      if (!tasks.length) throw new Error('Critic returned invalid slide references.');
+      if (!tasks.length) {
+        // The critic named slides the deck does not have: report the issues and finish instead
+        // of failing the variant, which would leave the user with fewer than three decks.
+        for (const issue of issues) {
+          const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
+          reviewWarnings.push(message);
+          await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        }
+        break;
+      }
       const repairRun = await mastra.getWorkflow('repair').createRun();
       const repaired = await repairRun.start({ inputData: tasks });
-      if (repaired.status !== 'success') throw new Error(`Repair workflow ${repaired.status}`);
+      if (repaired.status !== 'success') {
+        // A failed repair keeps the previous copy: the run goes on with a warning instead of
+        // failing, so the variant still reaches the export with the other two.
+        const message =
+          repaired.status === 'failed'
+            ? repaired.error.message
+            : `Repair workflow ${repaired.status}`;
+        reviewWarnings.push(message);
+        await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        continue;
+      }
       for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
         const current = written.find((s) => s.index === update.index);
         if (current) current.slide = update.slide;

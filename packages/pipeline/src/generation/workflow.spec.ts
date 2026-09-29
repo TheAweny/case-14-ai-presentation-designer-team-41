@@ -445,6 +445,130 @@ describe('slot fit and reading order', () => {
     expect(result.status).toBe('success');
   });
 
+  it('asks the rewriter again with feedback when every alternative exceeds the slot limit', async () => {
+    const inputs: unknown[] = [];
+    let calls = 0;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        const { title, pattern } = withLabel();
+        if (agent === 'planner')
+          return schema.parse({
+            title: 'Overlong label',
+            slides: Array.from({ length: 10 }, () => ({
+              patternId: pattern.patternId,
+              purpose: 'Point',
+              imageQuery: '',
+            })),
+          });
+        if (agent === 'rewriter') {
+          inputs.push(input);
+          calls += 1;
+          // First answer ignores the limit, the retry obeys it.
+          const rewrites =
+            calls === 1
+              ? { '8': ['way too long text', 'still too long', 'much too long'] }
+              : { '8': ['Speed', 'Go', 'Ok'] };
+          return schema.parse({ rewrites });
+        }
+        const first =
+          typeof input === 'object' &&
+          input !== null &&
+          'index' in input &&
+          (input as { index?: number }).index === 0;
+        return schema.parse({
+          patternId: pattern.patternId,
+          textsBySlot: {
+            [title.slotId]: 'Point',
+            // Only the first slide overflows, so the rewriter runs once.
+            '8': first ? 'an overlong label text' : 'Speed',
+          },
+          speakerNotes: '',
+          visual: null,
+        });
+      },
+    };
+    const result = await runLabel(provider);
+    expect(result.status).toBe('success');
+    expect(calls).toBe(2);
+    const second = inputs[1] as {
+      feedback?: string;
+      slots?: { slotId: string; fitChars: number }[];
+    };
+    expect(second.feedback).toMatch(/8/);
+    expect(second.feedback).toMatch(/не длиннее/);
+    if (result.status !== 'success') return;
+    for (const written of result.result)
+      expect(written.slide.texts.find((t) => t.slotId === '8')?.text).toBe('Speed');
+  });
+
+  it('keeps the previous copy and still completes when every rewrite attempt overflows the slot limit', async () => {
+    const inputs: unknown[] = [];
+    let calls = 0;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        const { title, pattern } = withLabel();
+        if (agent === 'planner')
+          return schema.parse({
+            title: 'Stubborn label',
+            slides: Array.from({ length: 10 }, () => ({
+              patternId: pattern.patternId,
+              purpose: 'Point',
+              imageQuery: '',
+            })),
+          });
+        if (agent === 'rewriter') {
+          inputs.push(input);
+          calls += 1;
+          // The model never obeys the limit: every draw stays too long.
+          return schema.parse({
+            rewrites: { '8': ['way too long text', 'still too long', 'again too long'] },
+          });
+        }
+        const first =
+          typeof input === 'object' &&
+          input !== null &&
+          'index' in input &&
+          (input as { index?: number }).index === 0;
+        return schema.parse({
+          patternId: pattern.patternId,
+          textsBySlot: {
+            [title.slotId]: 'Point',
+            // Only the first slide overflows, so the rewriter runs once.
+            '8': first ? 'an overlong label text' : 'Speed',
+          },
+          speakerNotes: '',
+          visual: null,
+        });
+      },
+    };
+    const result = await runLabel(provider);
+    // All three variants are mandatory, so a slot the model cannot shorten costs a warning,
+    // not the whole deck.
+    expect(result.status).toBe('success');
+    expect(calls).toBe(5);
+    // Every draw after the first carries the accumulated feedback.
+    for (const input of inputs.slice(1)) {
+      expect((input as { feedback?: string }).feedback).toMatch(/не длиннее/);
+    }
+    if (result.status !== 'success') return;
+    const first = result.result[0];
+    expect(first?.slide.texts.find((t) => t.slotId === '8')?.text).toBe('an overlong label text');
+    for (const written of result.result.slice(1))
+      expect(written.slide.texts.find((t) => t.slotId === '8')?.text).toBe('Speed');
+  });
+
   it('reports an empty card but not a mirrored twin of a filled slot', () => {
     const { pattern } = withLabel();
     const title = { ...withLabel().title, box: { x: 10, y: 10, cx: 100, cy: 20 } };

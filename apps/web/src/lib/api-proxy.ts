@@ -9,9 +9,11 @@
 const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] = [
   { method: 'POST', pattern: /^files\/(template|content)$/ },
   { method: 'POST', pattern: /^generation(\/prepare)?$/ },
+  { method: 'POST', pattern: /^generation\/[\w-]+\/export$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/cancel$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|previews)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
+  { method: 'GET', pattern: /^generation\/[\w-]+\/exports\/[\w-]+\/[\w.-]+$/ },
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },
 ];
 

@@ -4,6 +4,7 @@ import {
   jobEventSchema,
   slideIrSchema,
   templateIrSchema,
+  type JobEvent,
 } from '@lct/contracts';
 import { apiFetch, publicApiUrl } from './api';
 import type { DeckGenerator } from './deck-generator';
@@ -138,8 +139,9 @@ export function createHttpGenerator(): DeckGenerator {
           await wait(signal);
         }
         // The API writes three variants of the brief as separate runs. Progress follows the
-        // balanced one; the others are awaited here, and a variant that failed is left out
-        // rather than failing the two that succeeded.
+        // balanced one; the others are awaited here. Every variant must reach 'done': the ТЗ
+        // requires all three presentations, so a failed one fails the request instead of
+        // silently returning two.
         const others = (run.variants ?? []).filter((v) => v.runId !== run.runId);
         const settled = await Promise.all(
           others.map(async (other) => {
@@ -149,17 +151,17 @@ export function createHttpGenerator(): DeckGenerator {
                 state: string;
               };
               if (state.state === 'done') return other.runId;
-              if (state.state === 'failed') return null;
+              if (state.state === 'failed')
+                throw new Error(
+                  `Вариант «${other.variant}» не был сгенерирован. ` +
+                    'Повторите генерацию, чтобы получить все три презентации.',
+                );
               await wait(signal);
             }
           }),
         );
         const source = createHttpDeckSource();
-        const decks = await Promise.all(
-          [run.runId, ...settled.filter((id): id is string => id !== null)].map((id) =>
-            source.getDeck(id),
-          ),
-        );
+        const decks = await Promise.all([run.runId, ...settled].map((id) => source.getDeck(id)));
         const primary = decks[0];
         if (!primary) throw new Error('The generated deck has no slides.');
         primary.slides.forEach((slide, index) =>
@@ -201,79 +203,113 @@ export function createHttpExporter(): DeckExporter {
   return {
     async export(input, onEvent, signal) {
       signal.throwIfAborted();
-      const fail = (message: string): never => {
+      const startedAt = Date.now();
+      let seq = 0;
+      // The dialog draws its progress from the same JobEvents the generation stream emits, so
+      // the exporter reports its two real phases: the server building the file, then the client
+      // downloading the artifacts.
+      const push = (
+        event: DistributiveOmit<JobEvent, 'schemaVersion' | 'runId' | 'seq' | 'at'>,
+      ) => {
         onEvent({
+          ...event,
           schemaVersion: 1,
           runId: input.deckId,
-          seq: 0,
+          seq: seq++,
           at: new Date().toISOString(),
-          type: 'failed',
-          stage: 'exporting',
-          code: 'internal',
-          message,
-          retryable: false,
-        });
+        } as JobEvent);
+      };
+      const fail = (message: string): never => {
+        push({ type: 'failed', stage: 'exporting', code: 'internal', message, retryable: false });
         throw new Error(message);
       };
-      if (input.audit)
-        fail(
-          'Повторный аудит при скачивании пока недоступен. Отчёт генерации сохранён в audit.json.',
+      if (!input.slides.length) fail('Нельзя экспортировать колоду без слайдов.');
+      push({ type: 'stage-started', stage: 'rendering' });
+      const exported = z
+        // A PPTX or PDF download needs no previews: the server skips rendering them.
+        .object({ exportId: z.string(), previews: z.array(z.string()) })
+        .parse(
+          await request(`/generation/${encodeURIComponent(input.deckId)}/export`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            // The format lets the server build exactly what the download needs: a PPTX export
+            // does not pay for a PDF conversion or slide previews it will never return.
+            body: JSON.stringify({
+              slides: input.slides,
+              variant: input.variant,
+              format: input.format,
+            }),
+            signal,
+          }),
         );
-      const original = await createHttpDeckSource().getDeck(input.deckId);
-      const content = (slides: typeof input.slides) =>
-        JSON.stringify(
-          slides.map((slide) => ({
-            ...slide,
-            elements: slide.elements.map(({ locked: _locked, ...element }) => element),
-          })),
-        );
-      if (
-        content(original.slides) !== content(input.slides) ||
-        JSON.stringify(original.designSystem) !== JSON.stringify(input.designSystem)
-      )
-        fail('Экспорт правок редактора пока не подключён. Доступен исходный сгенерированный файл.');
+      push({
+        type: 'stage-progress',
+        stage: 'rendering',
+        done: input.slides.length,
+        total: input.slides.length,
+        note: '',
+      });
+      push({ type: 'stage-finished', stage: 'rendering', durationMs: Date.now() - startedAt });
+      push({ type: 'stage-started', stage: 'exporting' });
       const artifact = (name: string) =>
-        publicApiUrl(`/generation/${encodeURIComponent(input.deckId)}/artifacts/${name}`);
-      const previews = async () =>
-        z
-          .array(z.string())
-          .parse(
-            await request(`/generation/${encodeURIComponent(input.deckId)}/previews`, { signal }),
-          );
-      const previewFiles = async () =>
-        await Promise.all(
-          (await previews()).map(async (name) => ({
-            name,
-            blob: await artifactBlob(artifact(name), signal),
-          })),
+        publicApiUrl(
+          `/generation/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exported.exportId)}/${name}`,
         );
-      if (input.format === 'html') {
-        const images = await Promise.all(
-          (await previewFiles()).map(async ({ name, blob }) => ({
-            name,
-            data: await dataUrl(blob),
-          })),
-        );
-        return {
-          fileName: `${input.fileName}.html`,
-          url: URL.createObjectURL(
-            new Blob([standaloneHtml(input.fileName, images)], { type: 'text/html;charset=utf-8' }),
-          ),
-        };
-      }
-      if (input.format === 'png') {
-        return {
-          fileName: `${input.fileName}.zip`,
-          url: URL.createObjectURL(await zipPreviews(await previewFiles())),
-        };
-      }
-      const blob = await artifactBlob(artifact(`deck.${input.format}`), signal);
-      return {
-        fileName: `${input.fileName}.${input.format}`,
-        url: URL.createObjectURL(blob),
+      const previewFiles = async () => {
+        const files: { name: string; blob: Blob }[] = [];
+        const total = Math.max(1, exported.previews.length);
+        for (let index = 0; index < exported.previews.length; index += 1) {
+          const name = exported.previews[index];
+          if (name === undefined) continue;
+          files.push({ name, blob: await artifactBlob(artifact(name), signal) });
+          push({ type: 'stage-progress', stage: 'exporting', done: index + 1, total, note: '' });
+        }
+        return files;
       };
+      const result =
+        input.format === 'html'
+          ? {
+              fileName: `${input.fileName}.html`,
+              url: URL.createObjectURL(
+                new Blob([standaloneHtml(input.fileName, await htmlImages(previewFiles()))], {
+                  type: 'text/html;charset=utf-8',
+                }),
+              ),
+            }
+          : input.format === 'png'
+            ? {
+                fileName: `${input.fileName}.zip`,
+                url: URL.createObjectURL(await zipPreviews(await previewFiles())),
+              }
+            : (() => {
+                const blobPromise = artifactBlob(artifact(`deck.${input.format}`), signal);
+                // One unit: the whole file downloads in a single fetch.
+                push({ type: 'stage-progress', stage: 'exporting', done: 1, total: 1, note: '' });
+                return blobPromise.then((blob) => ({
+                  fileName: `${input.fileName}.${input.format}`,
+                  url: URL.createObjectURL(blob),
+                }));
+              })();
+      push({ type: 'stage-finished', stage: 'exporting', durationMs: Date.now() - startedAt });
+      push({
+        type: 'done',
+        totalMs: Date.now() - startedAt,
+        manifestPath: `exports/${exported.exportId}`,
+      });
+      return result;
     },
   };
+}
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+async function htmlImages(
+  previews: Promise<{ name: string; blob: Blob }[]>,
+): Promise<{ name: string; data: string }[]> {
+  const files = await previews;
+  return await Promise.all(
+    files.map(async ({ name, blob }) => ({ name, data: await dataUrl(blob) })),
+  );
 }
 
 async function artifactBlob(url: string, signal: AbortSignal): Promise<Blob> {
@@ -357,12 +393,10 @@ interface ZipEntry {
 }
 
 async function dataUrl(blob: Blob): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Cannot read preview.'));
-    reader.readAsDataURL(blob);
-  });
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`;
 }
 
 function standaloneHtml(title: string, images: readonly { name: string; data: string }[]): string {

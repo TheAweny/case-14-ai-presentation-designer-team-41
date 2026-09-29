@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-__all__ = ["missing_fonts", "render_to_png", "require_fonts"]
+__all__ = ["missing_fonts", "rasterize_pdf", "render_to_png", "require_fonts"]
 
 
 def missing_fonts(families: set[str]) -> list[str]:
@@ -49,6 +49,69 @@ def require_fonts(families: set[str]) -> None:
         raise ValueError(
             f"Install the original template fonts before rendering: {', '.join(missing)}"
         )
+
+
+def rasterize_pdf(
+    pdf_path: Path,
+    output_dir: Path,
+    dpi: int = 144,
+    *,
+    first_slide_only: bool = False,
+    timeout_seconds: float | None = None,
+) -> list[Path]:
+    """Rasterise an existing PDF of a deck into one PNG per slide, without LibreOffice.
+
+    The edited-deck export produces a PDF for the download anyway, so its previews reuse that
+    file instead of converting the presentation a second time.
+
+    Args:
+        pdf_path: PDF to rasterise.
+        output_dir: Directory that receives the images.
+        dpi: Raster resolution.
+        first_slide_only: Rasterise only the first page.
+        timeout_seconds: Optional shared subprocess deadline, not a budget per command.
+
+    Returns:
+        Paths of the rendered images, one per page, in page order.
+    """
+    if not pdf_path.is_file():
+        raise FileNotFoundError(pdf_path)
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
+
+    def remaining_timeout() -> float:
+        if deadline is None or timeout_seconds is None:
+            return 120
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired("deck-preview", timeout_seconds)
+        return min(120, remaining)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="deck-raster-", dir=output_dir.resolve()) as workspace:
+        temp = Path(workspace)
+        subprocess.run(
+            [
+                "pdftoppm",
+                "-png",
+                "-r",
+                str(dpi),
+                *(["-f", "1", "-l", "1"] if first_slide_only else []),
+                str(pdf_path),
+                str(temp / "slide"),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=remaining_timeout(),
+        )
+        images = list(temp.glob("slide-*.png"))
+        if not images:
+            raise ValueError("PDF renderer did not produce slide previews.")
+        for stale in output_dir.glob("slide-*.png"):
+            stale.unlink()
+        for image in images:
+            image.replace(output_dir / image.name)
+    return sorted(output_dir.glob("slide-*.png"), key=lambda p: int(p.stem.rsplit("-", 1)[1]))
 
 
 def render_to_png(

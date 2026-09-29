@@ -9,12 +9,7 @@
   "deckCard": {
     "edited": "Изменена {time}",
     "slides": "{count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
-    "noProject": "Без проекта",
-    "audit": {
-      "notRun": "Аудит не запускали",
-      "clean": "Без замечаний",
-      "findings": "{count, plural, one {# замечание} few {# замечания} many {# замечаний} other {# замечания}}"
-    }
+    "noProject": "Без проекта"
   },
   "projectCard": {
     "decks": "{count, plural, =0 {Нет презентаций} one {# презентация} few {# презентации} many {# презентаций} other {# презентации}}",

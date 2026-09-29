@@ -34,8 +34,6 @@ export interface ExportRequest {
   /** Уже отобранные слайды, в порядке показа. */
   readonly slides: readonly SlideIr[];
   readonly designSystem: DesignSystem;
-  /** Прогнать аудит перед сборкой файла. */
-  readonly audit: boolean;
 }
 
 export interface ExportResult {
@@ -57,9 +55,9 @@ export interface DeckExporter {
   ): Promise<ExportResult>;
 }
 
-/** Этапы, которые экспорт пройдёт. Аудит — только если его попросили. */
-export function plannedStages(request: Pick<ExportRequest, 'audit'>): readonly JobStage[] {
-  return request.audit ? ['rendering', 'auditing', 'exporting'] : ['rendering', 'exporting'];
+/** Этапы, которые экспорт пройдёт: сервер собирает файл, клиент скачивает его. */
+export function plannedStages(): readonly JobStage[] {
+  return ['rendering', 'exporting'];
 }
 
 export type StageState = 'pending' | 'running' | 'done';

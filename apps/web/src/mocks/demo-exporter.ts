@@ -74,7 +74,7 @@ export function eventsFor(request: ExportRequest, runId: string): JobEvent[] {
   const slides = Math.max(1, request.slides.length);
   const unitsOf = (stage: JobStage) => (stage === 'exporting' ? 1 : slides);
 
-  for (const stage of plannedStages(request)) {
+  for (const stage of plannedStages()) {
     push({ type: 'stage-started', stage });
     const total = unitsOf(stage);
     for (let done = 1; done <= total; done += 1) {

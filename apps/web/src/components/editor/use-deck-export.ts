@@ -103,7 +103,7 @@ export function useDeckExport(exporter: DeckExporter | undefined): DeckExportJob
   }, [stop]);
 
   const progress = useMemo(
-    () => (request ? exportProgress(plannedStages(request), events) : null),
+    () => (request ? exportProgress(plannedStages(), events) : null),
     [request, events],
   );
   // Сервер сообщил причину — она важнее общей ошибки клиента.

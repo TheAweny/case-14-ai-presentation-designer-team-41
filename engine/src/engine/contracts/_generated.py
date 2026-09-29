@@ -3994,6 +3994,10 @@ class DeckExportRequest(BaseModel):
     outputDir: constr(min_length=1) = Field(
         ..., description="Local directory the files are written to."
     )
+    previews: bool | None = Field(
+        None,
+        description="Render slide previews from the written file. Absent: true. The edited-deck export sets it per format, so a PPTX download does not pay for PNG rendering.",
+    )
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
     )

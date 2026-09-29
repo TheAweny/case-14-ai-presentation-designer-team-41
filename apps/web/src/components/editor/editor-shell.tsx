@@ -947,7 +947,6 @@ export function EditorShell({
       variant: deck.variant,
       slides: chosen,
       designSystem,
-      audit: options.audit,
     });
   };
 
@@ -1316,19 +1315,6 @@ export function EditorShell({
                     exportJob.phase === 'running' ? (exportJob.progress?.percent ?? 0) : null
                   }
                 />
-                {deck.renderedPdfUrl && (
-                  <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-                    {t('generatedNotice')}{' '}
-                    <a
-                      href={deck.renderedPdfUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline"
-                    >
-                      {t('generatedPdf')}
-                    </a>
-                  </div>
-                )}
                 <ExportDialog
                   open={exportOpen}
                   onOpenChange={setExportOpen}
@@ -1339,7 +1325,6 @@ export function EditorShell({
                       ? datedFileName(safeFileName(title, t('untitled')), new Date())
                       : safeFileName(title, t('untitled'))
                   }
-                  defaultAudit={prefs.exportAudit}
                   slideCount={slides.length}
                   currentIndex={index}
                   variant={deck.variant}

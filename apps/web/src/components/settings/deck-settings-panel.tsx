@@ -5,7 +5,7 @@ import { EXPORT_NAMES } from '@/components/editor/editor-prefs';
 import { useEditorPrefs, useUpdateEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { EXPORT_FORMATS } from '@/lib/deck-export';
 import { SLIDE_COUNT_RANGE } from '@/lib/deck-generator';
-import { ChoiceRow, Group, SectionHeader, SwitchRow } from './settings-rows';
+import { ChoiceRow, Group, SectionHeader } from './settings-rows';
 
 /** «Авто» и каждое число из контракта прогона. */
 const SLIDE_COUNTS = [
@@ -57,12 +57,6 @@ export function DeckSettingsPanel() {
           value={prefs.exportName}
           options={EXPORT_NAMES.map((id) => ({ id, label: t(`export.names.${id}`) }))}
           onChange={(exportName) => update({ exportName })}
-        />
-        <SwitchRow
-          label={t('export.audit')}
-          hint={t('export.auditHint')}
-          checked={prefs.exportAudit}
-          onChange={(exportAudit) => update({ exportAudit })}
         />
       </Group>
     </div>

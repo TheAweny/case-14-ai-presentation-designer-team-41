@@ -9,12 +9,7 @@
   "deckCard": {
     "edited": "Edited {time}",
     "slides": "{count, plural, one {# slide} other {# slides}}",
-    "noProject": "No project",
-    "audit": {
-      "notRun": "Audit not run",
-      "clean": "No findings",
-      "findings": "{count, plural, one {# finding} other {# findings}}"
-    }
+    "noProject": "No project"
   },
   "projectCard": {
     "decks": "{count, plural, =0 {No presentations} one {# presentation} other {# presentations}}",

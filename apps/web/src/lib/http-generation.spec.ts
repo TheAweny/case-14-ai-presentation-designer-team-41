@@ -36,7 +36,6 @@ function input(): ExportRequest {
     variant: 'balanced',
     slides: deck.slides,
     designSystem: deck.designSystem,
-    audit: false,
   };
 }
 afterEach(() => vi.unstubAllGlobals());
@@ -45,6 +44,8 @@ const source = () =>
     'fetch',
     vi.fn(async (url) => {
       const path = String(url);
+      if (path.endsWith('/export'))
+        return Response.json({ exportId: 'export-test', previews: ['slide-1.png'] });
       if (path.endsWith('/deck')) return Response.json(stored);
       if (path.endsWith('/previews')) return Response.json(['slide-1.png']);
       if (path.endsWith('.png'))
@@ -105,6 +106,42 @@ describe('generated artifact download', () => {
       AbortSignal.timeout(2000),
     );
   });
+  it('fails the generation when one of the three variants ends in a failed state', async () => {
+    const fetcher = vi.fn(async (url) => {
+      const path = String(url);
+      if (path.endsWith('/generation/prepare')) return Response.json({ ready: true });
+      if (path.endsWith('/generation')) {
+        return Response.json({
+          runId: 'run-primary',
+          variants: [
+            { variant: 'dense', runId: 'run-dense' },
+            { variant: 'balanced', runId: 'run-primary' },
+            { variant: 'airy', runId: 'run-airy' },
+          ],
+        });
+      }
+      if (path.includes('/events')) return Response.json([]);
+      if (/\/runs\/run-airy$/.test(path)) return Response.json({ state: 'failed' });
+      if (/\/runs\/[^/]+$/.test(path)) return Response.json({ state: 'done' });
+      if (path.endsWith('/deck')) return Response.json(stored);
+      return Response.json({ state: 'done' });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    await expect(
+      createHttpGenerator().generate(
+        {
+          templateId: 't',
+          projectId: null,
+          brief: 'Test briefing',
+          files: [],
+          slideCount: null,
+          model: null,
+        },
+        vi.fn(),
+        AbortSignal.timeout(2000),
+      ),
+    ).rejects.toThrow(/Вариант «airy» не был сгенерирован/);
+  });
   it('downloads the native PPTX through a local blob URL', async () => {
     source();
     const objectUrl = vi.fn(() => 'blob:pptx');
@@ -126,23 +163,15 @@ describe('generated artifact download', () => {
       createHttpExporter().export(request, vi.fn(), AbortSignal.timeout(1000)),
     ).resolves.toHaveProperty('url');
   });
-  it('rejects real geometry edits with a visible failure event', async () => {
+  it('exports real geometry edits instead of rejecting them', async () => {
     source();
     const request = {
       ...input(),
       slides: deck.slides.map((s) => ({ ...s, slideCx: s.slideCx + 1 })),
     };
-    const events: JobEvent[] = [];
     await expect(
-      createHttpExporter().export(
-        request,
-        (e) => {
-          events.push(e);
-        },
-        AbortSignal.timeout(1000),
-      ),
-    ).rejects.toThrow('правок');
-    expect(events.at(-1)).toMatchObject({ type: 'failed', retryable: false });
+      createHttpExporter().export(request, vi.fn(), AbortSignal.timeout(1000)),
+    ).resolves.toHaveProperty('url');
   });
   it('packages rendered PNG slides in a client-side ZIP archive', async () => {
     source();
@@ -172,8 +201,11 @@ describe('generated artifact download', () => {
   it('builds a downloadable standalone HTML document from saved previews', async () => {
     const fetcher = vi.fn(async (url) => {
       const path = String(url);
+      if (path.endsWith('/export'))
+        return Response.json({ exportId: 'export-test', previews: ['slide-1.png'] });
       if (path.endsWith('/deck')) return Response.json(stored);
-      if (path.endsWith('/previews')) return Response.json([]);
+      if (path.endsWith('slide-1.png'))
+        return new Response('png', { headers: { 'content-type': 'image/png' } });
       throw new Error(`Unexpected request: ${path}`);
     });
     vi.stubGlobal('fetch', fetcher);
@@ -190,6 +222,51 @@ describe('generated artifact download', () => {
     await expect(
       createHttpExporter().export({ ...input(), slides: [] }, vi.fn(), AbortSignal.timeout(1000)),
     ).rejects.toThrow();
+  });
+  it('reports the two export stages as events, so the progress bar fills', async () => {
+    const fetcher = vi.fn(async (url: URL | Request | string) => {
+      const path = String(url);
+      if (path.endsWith('/export')) return Response.json({ exportId: 'export-test', previews: [] });
+      if (path.endsWith('deck.pptx'))
+        return new Response('pptx', { headers: { 'content-type': 'application/octet-stream' } });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const events: JobEvent[] = [];
+    await createHttpExporter().export(
+      { ...input(), format: 'pptx' },
+      (event) => events.push(event),
+      AbortSignal.timeout(1000),
+    );
+    expect(events.at(-1)?.type).toBe('done');
+    expect(
+      events
+        .filter(
+          (event): event is JobEvent & { type: 'stage-started' } => event.type === 'stage-started',
+        )
+        .map((event) => event.stage),
+    ).toEqual(['rendering', 'exporting']);
+  });
+  it('tells the server the format, so a PPTX export does not pay for PDF or previews', async () => {
+    let sent: unknown = null;
+    const fetcher = vi.fn(async (url: URL | Request | string, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith('/export')) {
+        sent = JSON.parse(String(init?.body));
+        return Response.json({ exportId: 'export-test', previews: [] });
+      }
+      if (path.endsWith('deck.pptx'))
+        return new Response('pptx', { headers: { 'content-type': 'application/octet-stream' } });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const result = await createHttpExporter().export(
+      { ...input(), format: 'pptx' },
+      vi.fn(),
+      AbortSignal.timeout(1000),
+    );
+    expect(result.fileName).toBe('pilot.pptx');
+    expect(sent).toMatchObject({ format: 'pptx' });
   });
 });
 

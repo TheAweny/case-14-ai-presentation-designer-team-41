@@ -405,6 +405,9 @@ def export_deck(request: DeckExportRequest) -> DeckExportResponse:
         for slide in request.slides
     ]
     formats = [str(getattr(f, "value", f)) for f in request.formats or ["pptx", "pdf"]]
+    # A PPTX download does not need PNG previews, and a PDF download needs no second pass:
+    # the API sets this per requested format so an export pays only for what it returns.
+    previews = request.previews is not False
     output_dir = Path(request.outputDir).resolve()
     pptx_path = export.export_pptx(
         _styled(slides, design_system),
@@ -420,6 +423,18 @@ def export_deck(request: DeckExportRequest) -> DeckExportResponse:
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         files.append({"format": "pdf", "path": str(pdf_path)})
+        if previews:
+            # The previews reuse the PDF the download already paid for: one LibreOffice pass.
+            try:
+                render.rasterize_pdf(pdf_path, output_dir / "previews", dpi=110)
+            except (ValueError, FileNotFoundError, subprocess.SubprocessError) as error:
+                raise HTTPException(status_code=503, detail=str(error)) from error
+    elif previews:
+        # HTML and PNG downloads are built from the previews; the PDF is only the render stage.
+        try:
+            render.render_to_png(pptx_path, output_dir / "previews", dpi=110)
+        except (ValueError, FileNotFoundError, subprocess.SubprocessError) as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
     return DeckExportResponse.model_validate(
         {"schemaVersion": 1, "variant": variant, "files": files}
     )

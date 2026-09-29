@@ -10,18 +10,17 @@ function event(body: Record<string, unknown>): JobEvent {
 }
 
 describe('plannedStages', () => {
-  it('аудит — только если его попросили', () => {
-    expect(plannedStages({ audit: false })).toEqual(['rendering', 'exporting']);
-    expect(plannedStages({ audit: true })).toEqual(['rendering', 'auditing', 'exporting']);
+  it('экспорт проходит два этапа: сервер собирает, клиент скачивает', () => {
+    expect(plannedStages()).toEqual(['rendering', 'exporting']);
   });
 });
 
 describe('exportProgress', () => {
-  const planned = plannedStages({ audit: true });
+  const planned = plannedStages();
 
   it('до первого события все этапы ждут, прогресс ноль', () => {
     const progress = exportProgress(planned, []);
-    expect(progress.stages.map((stage) => stage.state)).toEqual(['pending', 'pending', 'pending']);
+    expect(progress.stages.map((stage) => stage.state)).toEqual(['pending', 'pending']);
     expect(progress.percent).toBe(0);
     expect(progress.finished).toBe(false);
   });
@@ -37,8 +36,8 @@ describe('exportProgress', () => {
       done: 6,
       total: 12,
     });
-    // Половина первого из трёх этапов.
-    expect(progress.percent).toBe(16);
+    // Половина первого из двух этапов.
+    expect(progress.percent).toBe(25);
   });
 
   it('законченный этап засчитан целиком, следующий идёт', () => {
@@ -46,17 +45,16 @@ describe('exportProgress', () => {
       event({ type: 'stage-started', stage: 'rendering' }),
       event({ type: 'stage-progress', stage: 'rendering', done: 3, total: 12, note: '' }),
       event({ type: 'stage-finished', stage: 'rendering', durationMs: 10 }),
-      event({ type: 'stage-started', stage: 'auditing' }),
+      event({ type: 'stage-started', stage: 'exporting' }),
     ]);
-    expect(progress.stages.map((stage) => stage.state)).toEqual(['done', 'running', 'pending']);
+    expect(progress.stages.map((stage) => stage.state)).toEqual(['done', 'running']);
     expect(progress.stages[0]?.done).toBe(12);
-    expect(progress.percent).toBe(33);
+    expect(progress.percent).toBe(50);
   });
 
   it('до события done не показывает 100 %', () => {
     const progress = exportProgress(planned, [
       event({ type: 'stage-finished', stage: 'rendering', durationMs: 1 }),
-      event({ type: 'stage-finished', stage: 'auditing', durationMs: 1 }),
       event({ type: 'stage-finished', stage: 'exporting', durationMs: 1 }),
     ]);
     expect(progress.percent).toBe(99);

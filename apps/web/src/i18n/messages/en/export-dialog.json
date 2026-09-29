@@ -30,8 +30,6 @@
   "allSlides": "All · {count}",
   "currentSlide": "Current · {number}",
   "fileName": "File name",
-  "audit": "Run the audit before export",
-  "auditHint": "The findings report comes with the file",
   "cancel": "Cancel",
   "start": "Download {extension}",
   "runningFile": "{file} · {count, plural, one {# slide} other {# slides}}",
