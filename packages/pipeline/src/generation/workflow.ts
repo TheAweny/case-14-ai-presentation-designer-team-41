@@ -36,6 +36,8 @@ export interface GenerationDependencies {
   onProgress?: (done: number, total: number) => Promise<void>;
   /** What the template indexer read about each composition; absent when never indexed. */
   notes?: readonly CompositionNote[];
+  /** The day the deck is dated by. Absent: today. */
+  today?: Date;
 }
 const inputSchema = z.object({
   brief: z.string(),
@@ -229,10 +231,262 @@ export function numberedSlots(pattern: GenerationProfile['compositions'][number]
   return numbers;
 }
 
-/** Slots whose copy the model writes: everything visible but mirrors and numbering. */
+type Slot = GenerationProfile['compositions'][number]['slots'][number];
+
+/** Two slots drawn as one kind of shape: the same type size and nearly the same box. */
+function sameShape(a: Slot, b: Slot): boolean {
+  if (!a.box || !b.box || Math.abs(a.fontSize - b.fontSize) > 1) return false;
+  const near = (x: number, y: number) => Math.abs(x - y) <= 0.1 * Math.max(x, y, 1);
+  return near(a.box.cx, b.box.cx) && near(a.box.cy, b.box.cy);
+}
+
+/**
+ * The composition with its title where a reader sees it. A slide of steps draws the same heading
+ * over each step, and the first of them sits highest, so the template reads it as the title. A
+ * title drawn exactly like a body slot is one heading of a row: it is written as its siblings are,
+ * and the slot in the largest type becomes the title. The writer would otherwise give the first
+ * step the slide's claim and squeeze the claim into a line meant for a short label.
+ */
+export function withCardHeadings<T extends GenerationProfile['compositions'][number]>(
+  pattern: T,
+): T {
+  const title = pattern.slots.find((slot) => slot.role === 'title');
+  if (!title || !pattern.slots.some((s) => s.role !== 'title' && sameShape(title, s)))
+    return pattern;
+  const largest = pattern.slots
+    .filter((slot) => slot.role !== 'title' && !sameShape(title, slot))
+    .sort((a, b) => b.fontSize - a.fontSize)[0];
+  if (!largest || largest.fontSize <= title.fontSize) return pattern;
+  return {
+    ...pattern,
+    slots: pattern.slots.map((slot) =>
+      slot === title
+        ? { ...slot, role: 'body' as const }
+        : slot === largest
+          ? { ...slot, role: 'title' as const }
+          : slot,
+    ),
+  };
+}
+
+/** A profile whose compositions all read their card headings as headings. */
+export function withCardHeadingProfile(profile: GenerationProfile): GenerationProfile {
+  return { ...profile, compositions: profile.compositions.map(withCardHeadings) };
+}
+
+const YEAR = /\b(?:19|20)\d{2}\b/g;
+const MONTHS = {
+  ru: [
+    'январь',
+    'февраль',
+    'март',
+    'апрель',
+    'май',
+    'июнь',
+    'июль',
+    'август',
+    'сентябрь',
+    'октябрь',
+    'ноябрь',
+    'декабрь',
+  ],
+  en: [
+    'january',
+    'february',
+    'march',
+    'april',
+    'may',
+    'june',
+    'july',
+    'august',
+    'september',
+    'october',
+    'november',
+    'december',
+  ],
+};
+const MONTH_NAMES = [...MONTHS.ru, ...MONTHS.en];
+/** A year, a numeric date in any order, or a month and a year: the whole of the sample. */
+const DATE_SAMPLE = new RegExp(
+  '^\\s*(?:(?:19|20)\\d{2}|\\d{1,2}[./-]\\d{1,2}[./-](?:19|20)\\d{2}|(?:19|20)\\d{2}-\\d{2}-\\d{2}|' +
+    `(?:${MONTH_NAMES.join('|')})\\s+(?:19|20)\\d{2})\\s*(?:г\\.?|года?)?\\s*$`,
+  'i',
+);
+
+/** What a date in the deck is judged against: the brief and the day it is made. */
+export interface CopyContext {
+  brief?: string;
+  today?: Date;
+}
+
+/** Years the brief names; a deck may speak of them. */
+export function briefYears(brief: string): number[] {
+  return [...new Set((brief.match(YEAR) ?? []).map(Number))].sort((a, b) => a - b);
+}
+
+/**
+ * The year a deck is dated: the first year from this one on that the brief names (a plan for
+ * next year is dated so), otherwise the current year. Never the year of the template's sample.
+ */
+export function deckYear(brief: string, today: Date): number {
+  const current = today.getFullYear();
+  return briefYears(brief).find((year) => year >= current) ?? current;
+}
+
+/**
+ * Date slots and the dates code writes into them. A template's cover carries the year or the
+ * date it was drawn, and a model asked to keep the form of the sample keeps its year too. A slot
+ * whose whole sample is a date gets the deck's date in the sample's own format.
+ */
+export function datedSlots(
+  pattern: GenerationProfile['compositions'][number],
+  context: CopyContext = {},
+) {
+  const today = context.today ?? new Date();
+  const year = deckYear(context.brief ?? '', today);
+  const dates = new Map<string, string>();
+  for (const slot of writableSlots(pattern)) {
+    if (slot.role === 'title') continue;
+    // A field labelled «Дата» on a cover holds the year the deck is shown.
+    if (DATE_FIELDS.has(normalized(slot.sample))) dates.set(slot.slotId, String(year));
+    else if (DATE_SAMPLE.test(slot.sample))
+      dates.set(slot.slotId, formatLike(slot.sample.trim(), today, year));
+  }
+  return dates;
+}
+
+const DATE_FIELDS = new Set(['дата', 'date', 'год', 'year']);
+/**
+ * Names of fields a template marks for facts about the talk, not its subject: who speaks, how to
+ * reach them, when. Words of the language, not of a template: any template labels such a field
+ * so, and a writer with no fact for it writes the label back.
+ */
+const FIELD_LABELS = new Set([
+  ...DATE_FIELDS,
+  'спикер',
+  'докладчик',
+  'выступающий',
+  'автор',
+  'контакт',
+  'контакты',
+  'телефон',
+  'почта',
+  'email',
+  'e mail',
+  'имя',
+  'фамилия',
+  'имя фамилия',
+  'фио',
+  'должность',
+  'speaker',
+  'presenter',
+  'author',
+  'contact',
+  'contacts',
+  'phone',
+  'name',
+  'full name',
+  'position',
+]);
+
+function formatLike(sample: string, today: Date, year: number): string {
+  const pad = (n: number, width: number) => String(n).padStart(width, '0');
+  const numeric = /^(\d{1,2})([./-])(\d{1,2})\2((?:19|20)\d{2})(.*)$/.exec(sample);
+  if (numeric) {
+    const [, day = '', sep = '.', month = ''] = numeric;
+    // A year the brief moved forward keeps no day of today: the date would be invented.
+    if (year !== today.getFullYear()) return String(year);
+    return `${pad(today.getDate(), day.length)}${sep}${pad(today.getMonth() + 1, month.length)}${sep}${year}${numeric[5] ?? ''}`;
+  }
+  const iso = /^((?:19|20)\d{2})-(\d{2})-(\d{2})$/.exec(sample);
+  if (iso) {
+    if (year !== today.getFullYear()) return String(year);
+    return `${year}-${pad(today.getMonth() + 1, 2)}-${pad(today.getDate(), 2)}`;
+  }
+  const monthWord = MONTH_NAMES.find((name) => sample.toLowerCase().startsWith(name));
+  if (monthWord) {
+    const names = MONTHS.ru.includes(monthWord) ? MONTHS.ru : MONTHS.en;
+    const name = names[today.getMonth()] ?? monthWord;
+    const cased =
+      sample[0] === sample[0]?.toUpperCase() ? name[0]?.toUpperCase() + name.slice(1) : name;
+    if (year !== today.getFullYear()) return sample.replace(YEAR, String(year));
+    return sample.replace(new RegExp(monthWord, 'i'), cased).replace(YEAR, String(year));
+  }
+  return sample.replace(YEAR, String(year));
+}
+
+/**
+ * Years in written copy that are already past and that the brief does not name: the year of the
+ * template's sample kept by the writer, or one it made up.
+ */
+export function staleYears(text: string, context: CopyContext = {}): number[] {
+  const current = (context.today ?? new Date()).getFullYear();
+  const named = new Set(briefYears(context.brief ?? ''));
+  return [...new Set((text.match(YEAR) ?? []).map(Number))].filter(
+    (year) => year < current && !named.has(year),
+  );
+}
+
+const normalized = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/**
+ * A label where content belongs: the slot says the template's own words, or names a field
+ * («Контакт», «Спикер») instead of filling it, and the brief never says those words. Such a field
+ * was left for facts the brief did not give.
+ */
+export function echoesSample(text: string, slot: Slot, brief = ''): boolean {
+  const said = normalized(text);
+  if (!said || NUMBERING.test(slot.sample)) return false;
+  const label = said === normalized(slot.sample) || FIELD_LABELS.has(said.replace(/\s*\d+$/, ''));
+  return label && !` ${normalized(brief)} `.includes(` ${said} `);
+}
+
+/** Word stems of a phrase, long enough to tell «Результат» from «Результаты» as one word. */
+function stems(text: string): Set<string> {
+  return new Set(
+    normalized(text)
+      .split(' ')
+      .filter((word) => word.length >= 4)
+      .map((word) => word.slice(0, 5)),
+  );
+}
+
+/**
+ * The heading of the card a slot sits in: a slot above it in the same column. A list that opens
+ * with its own card's heading reads the heading twice.
+ */
+function headingAbove(slot: Slot, slots: readonly Slot[]): Slot[] {
+  const box = slot.box;
+  if (!box) return slots.filter((other) => other.slotId !== slot.slotId);
+  return slots.filter((other) => {
+    const above = other.box;
+    if (!above || other.slotId === slot.slotId) return false;
+    const overlap = Math.min(above.x + above.cx, box.x + box.cx) - Math.max(above.x, box.x);
+    return above.y + above.cy <= box.y + box.cy * 0.1 && overlap > 0.5 * Math.min(above.cx, box.cx);
+  });
+}
+
+/** Whether the first point of a list says what its heading already says. */
+export function repeatsHeading(point: string, heading: string): boolean {
+  const a = normalized(point);
+  const b = normalized(heading);
+  if (!a || !b) return false;
+  if (a === b || ` ${a} `.includes(` ${b} `) || ` ${b} `.includes(` ${a} `)) return true;
+  const sa = stems(point);
+  return [...stems(heading)].some((stem) => sa.has(stem));
+}
+
+/** Slots whose copy the model writes: everything visible but mirrors, numbering and dates. */
 export function writerSlots(pattern: GenerationProfile['compositions'][number]) {
   const numbers = numberedSlots(pattern);
-  return writableSlots(pattern).filter((slot) => !numbers.has(slot.slotId));
+  const dates = datedSlots(pattern);
+  return writableSlots(pattern).filter(
+    (slot) => !numbers.has(slot.slotId) && !dates.has(slot.slotId),
+  );
 }
 
 /**
@@ -363,7 +617,29 @@ export function emptySlots(
 const EMPTY_SLOT_MESSAGE =
   'This slot is empty, but its card or frame stays visible on the slide. Write a distinct point ' +
   'that supports the slide purpose and does not repeat any other slot. Follow the sample: a short ' +
-  'label stays a short label, a numbering sample like 01 continues the numbering.';
+  'label stays a short label, a numbering sample like 01 continues the numbering. A field for ' +
+  'facts the brief does not give (a contact, a name, a date) stays empty: return empty strings.';
+
+/** The slide with every non-title slot that still shows the template's own label emptied. */
+export function clearEchoes(
+  slide: ComposedSlide,
+  pattern: GenerationProfile['compositions'][number],
+  brief: string,
+): ComposedSlide {
+  const labels = new Set(
+    writerSlots(pattern)
+      .filter((slot) => slot.role !== 'title')
+      .filter((slot) =>
+        echoesSample(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '', slot, brief),
+      )
+      .map((slot) => slot.slotId),
+  );
+  if (!labels.size) return slide;
+  return {
+    ...slide,
+    texts: slide.texts.map((t) => (labels.has(t.slotId) ? { ...t, text: '' } : t)),
+  };
+}
 
 /** Title and fit problems block a slide; an empty body slot is repaired but does not block. */
 /**
@@ -374,12 +650,16 @@ const EMPTY_SLOT_MESSAGE =
 export function copyDefects(
   slide: ComposedSlide,
   pattern: GenerationProfile['compositions'][number],
+  context: CopyContext = {},
 ): Map<string, string> {
   const defects = new Map<string, string>();
   const seen = new Map<string, string>();
-  for (const slot of writerSlots(pattern)) {
+  const slots = writerSlots(pattern);
+  const textOf = (slotId: string) =>
+    slide.texts.find((t) => t.slotId === slotId)?.text.trim() ?? '';
+  for (const slot of slots) {
     if (slot.slotId === slide.visual?.slotId) continue;
-    const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
+    const text = textOf(slot.slotId);
     if (!text) continue;
     const key = text.toLowerCase().replace(/\s+/g, ' ');
     const first = seen.get(key);
@@ -391,6 +671,44 @@ export function copyDefects(
       continue;
     }
     seen.set(key, slot.slotId);
+    if (NUMBERING.test(text) && !NUMBERING.test(slot.sample)) {
+      defects.set(
+        slot.slotId,
+        `"${text}" is a bare number, but this field holds words: the template's sample was ` +
+          `"${slot.sample.trim()}". Numbering is drawn elsewhere; write the name of this point.`,
+      );
+      continue;
+    }
+    const stale = staleYears(text, context);
+    if (stale.length) {
+      defects.set(
+        slot.slotId,
+        `The year ${stale.join(', ')} is past and the brief does not name it: it is the ` +
+          "template's sample or made up. Remove it, or use a year the brief names.",
+      );
+      continue;
+    }
+    if (slot.role !== 'title' && echoesSample(text, slot, context.brief)) {
+      defects.set(
+        slot.slotId,
+        `"${text}" is the template's own label for this field, not content. Write what the ` +
+          'brief says for it; if the brief has nothing for it (a contact, a name), return an ' +
+          'empty string.',
+      );
+      continue;
+    }
+    const [point = '', ...rest] = text.split('\n');
+    const heading = rest.length
+      ? headingAbove(slot, slots).find((other) => repeatsHeading(point, textOf(other.slotId)))
+      : undefined;
+    if (heading) {
+      defects.set(
+        slot.slotId,
+        `The first point "${point.trim()}" repeats the heading "${textOf(heading.slotId)}" of ` +
+          'its card. Drop it and start the list with a real point.',
+      );
+      continue;
+    }
     const perLine = Math.floor(slot.maxChars / Math.max(1, slot.maxLines));
     const long = text.split(/\s+/).find((word) => word.length > perLine);
     if (perLine >= 6 && long)
@@ -406,15 +724,20 @@ export function copyDefects(
 function blockingProblems(
   slide: ComposedSlide,
   pattern: GenerationProfile['compositions'][number],
+  context: CopyContext = {},
 ): string[] {
-  return validateBindings(slide, pattern).filter(
+  return validateBindings(slide, pattern, context).filter(
     (problem) => !problem.startsWith('Fill empty slot') && !problem.startsWith('Revise slot'),
   );
 }
 
-function slotCorrections(slide: ComposedSlide, pattern: GenerationProfile['compositions'][number]) {
+function slotCorrections(
+  slide: ComposedSlide,
+  pattern: GenerationProfile['compositions'][number],
+  context: CopyContext = {},
+) {
   const empty = new Set(emptySlots(slide, pattern));
-  const defects = copyDefects(slide, pattern);
+  const defects = copyDefects(slide, pattern, context);
   return writableSlots(pattern)
     .filter((slot) => {
       const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
@@ -445,7 +768,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const notes = new Map((deps.notes ?? []).map((note) => [note.patternId, note]));
       // Pages about the template itself are not slides. Keep them only if the indexer left
       // too little to build a deck from, which means it misread the template.
-      const all = distinctCompositions(inputData.profile.compositions);
+      const compositions = inputData.profile.compositions.map(withCardHeadings);
+      const all = distinctCompositions(compositions);
       const usable = all.filter((pattern) => !notes.get(pattern.patternId)?.skip);
       const distinct = usable.length >= 3 ? usable : all;
       // A title on a pill holds a short claim, not a sentence, so the floor is a few words.
@@ -576,9 +900,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         notes,
       );
       return result.slides.map((slide, index) => {
-        const composition = inputData.profile.compositions.find(
-          (p) => p.patternId === layouts[index],
-        );
+        const composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
         return {
           ...slide,
@@ -615,22 +937,27 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       );
       const visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
       const texts = raw.textsBySlot as Record<string, string | undefined>;
+      const context = { brief: inputData.brief, ...(deps.today ? { today: deps.today } : {}) };
       const numbers = numberedSlots(inputData.composition);
+      const dates = datedSlots(inputData.composition, context);
       slide = {
         patternId: raw.patternId,
         speakerNotes: raw.speakerNotes,
-        // Numbering comes from code; mirrors and the slot a visual replaces carry no text.
+        // Numbering and dates come from code; mirrors and the slot a visual replaces carry no
+        // text.
         texts: inputData.composition.slots.map((slot) => ({
           slotId: slot.slotId,
           text:
             visual?.slotId === slot.slotId
               ? ''
-              : (numbers.get(slot.slotId) ?? (texts[slot.slotId] ?? '').trim()),
+              : (numbers.get(slot.slotId) ??
+                dates.get(slot.slotId) ??
+                (texts[slot.slotId] ?? '').trim()),
         })),
         visual,
       };
       for (let attempt = 0; attempt < 2; attempt++) {
-        if (!validateBindings(slide, inputData.composition).length) break;
+        if (!validateBindings(slide, inputData.composition, context).length) break;
         const current: ComposedSlide = slide;
         slide = await rewriteSlide(deps, {
           index: inputData.index,
@@ -638,10 +965,21 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           purpose: inputData.purpose,
           composition: inputData.composition,
           previous: current,
-          corrections: slotCorrections(current, inputData.composition),
+          corrections: slotCorrections(current, inputData.composition, context),
         });
       }
-      const problems = blockingProblems(slide, inputData.composition);
+      // The opening and the closing carry fields for facts a brief rarely has: a contact, a
+      // speaker, a place. Such a field still showing the template's label is cleared: an empty
+      // line reads as nothing, a label reads as a slide nobody finished.
+      const kind = deps.notes?.find((n) => n.patternId === inputData.composition.patternId)?.kind;
+      if (
+        kind === 'cover' ||
+        kind === 'closing' ||
+        inputData.index === 0 ||
+        inputData.index === inputData.total - 1
+      )
+        slide = clearEchoes(slide, inputData.composition, inputData.brief);
+      const problems = blockingProblems(slide, inputData.composition, context);
       if (!slide || problems.length)
         throw new Error(`Slide ${inputData.index + 1}: ${problems.join('; ')}`);
       completed++;
@@ -781,6 +1119,7 @@ export function variantCatalog<T extends GenerationProfile['compositions'][numbe
 export function validateBindings(
   slide: ComposedSlide,
   pattern: GenerationProfile['compositions'][number],
+  context: CopyContext = {},
 ): string[] {
   const errors: string[] = [];
   if (slide.patternId !== pattern.patternId) errors.push('Use the selected patternId');
@@ -791,7 +1130,7 @@ export function validateBindings(
     errors.push('Bind every slot exactly once');
   const mirrored = mirroredSlots(pattern);
   const empty = new Set(emptySlots(slide, pattern));
-  const defects = copyDefects(slide, pattern);
+  const defects = copyDefects(slide, pattern, context);
   for (const slot of pattern.slots) {
     const binding = slide.texts.find((t) => t.slotId === slot.slotId);
     if (!binding) errors.push(`Missing slot ${slot.slotId}`);
@@ -837,7 +1176,10 @@ export function createRepairWorkflow(deps: GenerationDependencies) {
     outputSchema: repairedSlideSchema,
     execute: async ({ inputData }) => {
       const slide = await rewriteSlide(deps, inputData);
-      const problems = blockingProblems(slide, inputData.composition);
+      const problems = blockingProblems(slide, inputData.composition, {
+        brief: inputData.brief,
+        ...(deps.today ? { today: deps.today } : {}),
+      });
       if (problems.length) throw new Error(`Repair ${inputData.index + 1}: ${problems.join('; ')}`);
       return { index: inputData.index, slide };
     },
