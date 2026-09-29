@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { generationProfileSchema, type CompositionNote } from '@lct/contracts';
-import { indexTemplate, settleNotes, templateIndexRevision } from './indexer.js';
+import {
+  indexTemplate,
+  settleNotes,
+  templateIndexRevision,
+  type IndexProgress,
+} from './indexer.js';
 import type { TextProvider } from './provider.js';
 import { createGenerationWorkflow } from './workflow.js';
 
@@ -93,14 +98,22 @@ describe('indexTemplate', () => {
         });
       },
     };
+    const progress: IndexProgress[] = [];
     const notes = await indexTemplate({
       provider,
       instructions: '',
       profile,
       signal: AbortSignal.timeout(1000),
+      onProgress: (step) => progress.push(step),
     });
     expect(asked).toEqual([profile.compositions.map((c) => c.patternId), ['pattern-2']]);
     expect(notes).toHaveLength(5);
+    // Before the first answer, after it and after asking again about what it left out.
+    expect(progress).toEqual([
+      { described: 0, total: 5 },
+      { described: 4, total: 5 },
+      { described: 5, total: 5 },
+    ]);
   });
 
   it('changes its revision when the instructions change', () => {

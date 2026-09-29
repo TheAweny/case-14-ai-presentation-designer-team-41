@@ -75,9 +75,17 @@
     "specialHint": "Code, formulas, device mockups, references: the agent uses them only when the material has such content.",
     "referenceHint": "Instructions, palettes, catalogue headings. They never go into a presentation.",
     "untitled": "Untitled",
-    "pending": "Sorting the template slides by kind. This takes up to a couple of minutes.",
-    "drawing": "Drawing the template slides — schematics are shown for now.",
-    "prepareFailed": "The template could not be analysed: check the model in settings."
+    "progress": {
+      "label": "Template analysis",
+      "read": "Reading the template file",
+      "index": "Sorting the slides by kind",
+      "indexCount": "{described} of {total}",
+      "draw": "Drawing the slides",
+      "indexHint": "The model looks at every slide of the template: a large one takes a few minutes. The layouts from the file are shown for now.",
+      "drawHint": "This usually takes about a minute. Slide schematics are shown for now.",
+      "indexFailed": "The template could not be analysed: check the model in settings.",
+      "drawFailed": "The slides could not be drawn — schematics are shown."
+    }
   },
   "templates": {
     "label": "Project templates",

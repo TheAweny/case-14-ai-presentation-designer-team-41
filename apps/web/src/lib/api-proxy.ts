@@ -9,6 +9,8 @@
 const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] = [
   { method: 'POST', pattern: /^files\/(template|content)$/ },
   { method: 'POST', pattern: /^generation(\/prepare)?$/ },
+  // How far the preparation of a template has got.
+  { method: 'GET', pattern: /^generation\/prepare\/[\w-]+$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/cancel$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|previews)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },

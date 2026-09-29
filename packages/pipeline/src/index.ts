@@ -81,4 +81,5 @@ export {
   indexTemplate,
   indexTemplateWithAgent,
   templateIndexRevision,
+  type IndexProgress,
 } from './generation/indexer.js';

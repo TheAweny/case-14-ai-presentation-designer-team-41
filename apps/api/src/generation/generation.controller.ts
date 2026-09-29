@@ -38,6 +38,7 @@ import {
   indexTemplateWithAgent,
   RoutedTextProvider,
   SharedPlan,
+  type IndexProgress,
 } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
@@ -54,6 +55,27 @@ function actorOf(account: Account) {
 
 /** Width of a sample slide picture in the library: sharp in a card, light on the page. */
 const TEMPLATE_PREVIEW_WIDTH = 640;
+
+/** A preparation under way: reading the template's profile, then describing its compositions. */
+interface PrepareProgress {
+  stage: 'profile' | 'index';
+  described: number;
+  total: number;
+}
+
+/** What `GET /generation/prepare/:templateId` answers. */
+export interface TemplatePreparation {
+  /** The stage of a preparation under way; `null` — none runs. */
+  stage: PrepareProgress['stage'] | null;
+  /** Compositions described so far, of `total`; both 0 until indexing starts. */
+  described: number;
+  total: number;
+  /** The template has notes of the indexer. */
+  indexed: boolean;
+  /** Its slides are being drawn right now; `drawn` — the pictures are there. */
+  drawing: boolean;
+  drawn: boolean;
+}
 
 /** The renderings of every brief, generated in parallel. */
 const VARIANTS = ['dense', 'balanced', 'airy'] as const;
@@ -89,20 +111,57 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     @Body() body: { templateId?: string; model?: unknown },
     @CurrentAccount() account: Account,
   ): Promise<{ ready: true }> {
-    const row = await this.template(body.templateId ?? '', account);
+    const templateId = body.templateId ?? '';
+    const row = await this.template(templateId, account);
     // The pictures of the sample slides are for the library, not the deck: never waited for.
-    void this.drawPreviews(body.templateId ?? '', row);
-    const profile = await this.engine.generationProfile(row.storage_path);
-    await this.pool.query(
-      "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
-      [body.templateId, JSON.stringify(profile)],
-    );
-    const model = modelRefSchema
-      .nullable()
-      .catch(null)
-      .parse(body.model ?? null);
-    await this.indexTemplate(body.templateId ?? '', profile, row.profile?.index, model, account);
-    return { ready: true };
+    void this.drawPreviews(templateId, row);
+    const progress: PrepareProgress = { stage: 'profile', described: 0, total: 0 };
+    this.preparing.set(templateId, progress);
+    try {
+      const profile = await this.engine.generationProfile(row.storage_path);
+      await this.pool.query(
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
+        [templateId, JSON.stringify(profile)],
+      );
+      const model = modelRefSchema
+        .nullable()
+        .catch(null)
+        .parse(body.model ?? null);
+      progress.stage = 'index';
+      await this.indexTemplate(templateId, profile, row.profile?.index, model, account, (step) => {
+        progress.described = step.described;
+        progress.total = step.total;
+      });
+      return { ready: true };
+    } finally {
+      // A later request for the same template reports on its own.
+      if (this.preparing.get(templateId) === progress) this.preparing.delete(templateId);
+    }
+  }
+
+  /** Templates being prepared right now, and how far each has got. */
+  private readonly preparing = new Map<string, PrepareProgress>();
+
+  /**
+   * How far the preparation of a template has got, for the library to show while it waits: the
+   * stage and the compositions described so far, and whether the slides are drawn. A page that
+   * opens while a preparation runs follows it instead of starting another.
+   */
+  @Get('prepare/:templateId')
+  async preparation(
+    @Param('templateId') templateId: string,
+    @CurrentAccount() account: Account,
+  ): Promise<TemplatePreparation> {
+    const row = await this.template(templateId, account);
+    const running = this.preparing.get(templateId);
+    return {
+      stage: running?.stage ?? null,
+      described: running?.described ?? 0,
+      total: running?.total ?? 0,
+      indexed: storedTemplateIndexSchema.safeParse(row.profile?.index).success,
+      drawing: this.drawing.has(templateId),
+      drawn: Array.isArray(row.profile?.previews),
+    };
   }
 
   /** Templates whose slides are being drawn right now: a second request does not start again. */
@@ -150,6 +209,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     stored: unknown,
     model: z.infer<typeof modelRefSchema> | null,
     account: Account,
+    onProgress: (progress: IndexProgress) => void,
   ): Promise<void> {
     try {
       const registryDir = this.registryDir();
@@ -173,6 +233,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
         provider,
         registryDir,
         profile,
+        onProgress,
         // Outside the generation budget, and a large template on a slow model takes minutes:
         // the indexer asks again about what an answer left out.
         signal: AbortSignal.timeout(600000),
