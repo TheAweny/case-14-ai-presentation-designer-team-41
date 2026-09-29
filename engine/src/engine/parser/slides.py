@@ -1011,6 +1011,28 @@ def _children(tree: Any) -> Iterator[Any]:
         yield child
 
 
+def _on_canvas(elements: list[dict[str, Any]], size: tuple[int, int]) -> list[dict[str, Any]]:
+    """Leave out inherited graphics lying wholly past the slide edge.
+
+    A master or a layout may keep a designer's rulers and notes off the slide; a show never paints
+    them, so the slide does not carry them. A shape touching the edge is still on the slide.
+    """
+    width, height = size
+
+    def seen(element: dict[str, Any]) -> bool:
+        box = element.get("box")
+        if not isinstance(box, dict):
+            return True
+        return not (
+            box["x"] > width
+            or box["y"] > height
+            or box["x"] + box["cx"] < 0
+            or box["y"] + box["cy"] < 0
+        )
+
+    return [element for element in elements if seen(element)]
+
+
 def _walk(tree: Any, origin: _Origin, scope: _Scope, slide: _Slide) -> list[dict[str, Any]]:
     elements: list[dict[str, Any]] = []
     if tree is None:
@@ -1201,11 +1223,15 @@ def read_deck(
         elements: list[dict[str, Any]] = []
         if slide._element.get("showMasterSp") != "0":
             if layout._element.get("showMasterSp") != "0":
-                elements += _walk(
-                    _tree(master._element), _Origin("master", master.part), _Scope(), context
+                elements += _on_canvas(
+                    _walk(
+                        _tree(master._element), _Origin("master", master.part), _Scope(), context
+                    ),
+                    context.size,
                 )
-            elements += _walk(
-                _tree(layout._element), _Origin("layout", layout.part), _Scope(), context
+            elements += _on_canvas(
+                _walk(_tree(layout._element), _Origin("layout", layout.part), _Scope(), context),
+                context.size,
             )
         elements += _walk(_tree(slide._element), _Origin("slide", slide.part), _Scope(), context)
 

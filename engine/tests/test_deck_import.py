@@ -744,6 +744,22 @@ def test_master_and_layout_graphics_sit_under_the_slide_unless_hidden(tmp_path: 
     assert [e["elementId"] for e in first["elements"]] == ["layout-91", "slide-2"]
 
 
+def test_inherited_graphics_past_the_slide_edge_are_left_out(tmp_path: Path) -> None:
+    prs = Presentation()
+    fill = '<a:solidFill><a:srgbClr val="123456"/></a:solidFill>'
+    height = int(prs.slide_height or 0)
+    master = prs.slide_masters[0]
+    # A designer's ruler above the slide and below it, and a rule along the top edge.
+    _add(master, _sp(90, box=(100, -800, 0, 400), props=fill))
+    _add(master, _sp(91, box=(100, height + 100, 0, 400), props=fill))
+    _add(master, _sp(92, box=(0, 0, 1000, 0), props=fill))
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    # The slide's own shape off the slide stays: the audit reports it.
+    _add(slide, _sp(2, box=(100, -800, 100, 400), props=fill))
+    [ir] = import_deck(_save(prs, tmp_path / "deck.pptx"))
+    assert [e["elementId"] for e in ir["elements"]] == ["master-92", "slide-2"]
+
+
 def test_slide_number_field_shows_the_number_of_its_slide(tmp_path: Path) -> None:
     prs = Presentation()
     layout = prs.slide_layouts[6]
