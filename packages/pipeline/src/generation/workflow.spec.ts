@@ -32,6 +32,7 @@ import {
   SharedPlan,
   validateBindings,
   variantCatalog,
+  withoutMissingContent,
 } from './workflow.js';
 import type { TextProvider } from './provider.js';
 
@@ -1274,6 +1275,50 @@ describe('composition requirements', () => {
     expect(missingRequiredContent(plan('Анна'), notes, source)).toHaveLength(1);
     expect(missingRequiredContent(plan('Иван Петров'), notes, source)).toHaveLength(1);
     expect(missingRequiredContent(plan('Анна Иванова'), notes, source)).toEqual([]);
+  });
+
+  it('moves a slide whose layout needs a missing name to a free layout, keeping the rest', () => {
+    const layout = (patternId: string) => ({
+      ...composition,
+      patternId,
+      slots: composition.slots.map((slot) => ({ ...slot })),
+    });
+    const catalog = [layout('speaker'), layout('statement'), layout('quote')];
+    const withKinds = new Map<string, CompositionNote>([
+      ...notes,
+      ...(['statement', 'quote'] as const).map(
+        (id) =>
+          [
+            id,
+            {
+              patternId: id,
+              kind: 'statement' as const,
+              items: 1,
+              useFor: '',
+              title: '',
+              skip: false,
+              special: false,
+              requiredContent: [] as CompositionNote['requiredContent'],
+            },
+          ] as const,
+      ),
+    ]);
+    const source = 'Пилот прошёл в четырёх районах.';
+    const planned = plan('Анна Иванова');
+    const fixed = withoutMissingContent(
+      planned,
+      missingRequiredContent(planned, withKinds, source),
+      catalog,
+      withKinds,
+      false,
+    );
+    expect(fixed.slides[1]?.patternId).not.toBe('speaker');
+    expect(missingRequiredContent(fixed, withKinds, source)).toEqual([]);
+    expect(fixed.slides.filter((_, index) => index !== 1)).toEqual(
+      planned.slides.filter((_, index) => index !== 1),
+    );
+    // Nothing missing: the plan is left as it is.
+    expect(withoutMissingContent(planned, [], catalog, withKinds, false)).toBe(planned);
   });
 });
 

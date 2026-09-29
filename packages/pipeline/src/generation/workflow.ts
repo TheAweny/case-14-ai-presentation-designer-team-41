@@ -167,6 +167,55 @@ export function missingRequiredContent(
   });
 }
 
+/**
+ * The plan with every slide whose composition asks for material the source lacks moved to the
+ * closest composition that asks for nothing missing: the same family (framing or content), the
+ * nearest number of blocks, the least used. A slide with no such composition keeps its own; its
+ * fields for missing facts stay empty. A deck is never lost to one layout the planner insisted on.
+ */
+export function withoutMissingContent<T extends GenerationProfile['compositions'][number]>(
+  plan: z.infer<typeof compositionPlanSchema>,
+  missing: readonly { slideIndex: number }[],
+  catalog: readonly T[],
+  notes: ReadonlyMap<string, CompositionNote>,
+  imagesAvailable: boolean,
+): z.infer<typeof compositionPlanSchema> {
+  if (!missing.length) return plan;
+  const framing = (id: string) => FRAMING_KINDS.has(notes.get(id)?.kind ?? 'other');
+  const blocks = (p: T) => writerSlots(p).filter((s) => s.role !== 'title').length;
+  const free = catalog.filter(
+    (p) =>
+      !notes.get(p.patternId)?.skip &&
+      (notes.get(p.patternId)?.requiredContent ?? []).every(
+        (item) => item === 'image' && imagesAvailable,
+      ),
+  );
+  const used = new Map<string, number>();
+  for (const slide of plan.slides) used.set(slide.patternId, (used.get(slide.patternId) ?? 0) + 1);
+  const moved = new Set(missing.map((item) => item.slideIndex));
+  return {
+    ...plan,
+    slides: plan.slides.map((slide, index) => {
+      const planned = catalog.find((p) => p.patternId === slide.patternId);
+      if (!moved.has(index) || !planned) return slide;
+      const kind = notes.get(slide.patternId)?.kind;
+      const choice = free
+        .filter((p) => framing(p.patternId) === framing(slide.patternId))
+        .filter((p) => index > 0 || notes.get(p.patternId)?.kind === 'cover' || kind !== 'cover')
+        .sort(
+          (a, b) =>
+            Math.abs(blocks(a) - blocks(planned)) - Math.abs(blocks(b) - blocks(planned)) ||
+            Number(notes.get(b.patternId)?.kind === kind) -
+              Number(notes.get(a.patternId)?.kind === kind) ||
+            (used.get(a.patternId) ?? 0) - (used.get(b.patternId) ?? 0),
+        )[0];
+      if (!choice) return slide;
+      used.set(choice.patternId, (used.get(choice.patternId) ?? 0) + 1);
+      return { ...slide, patternId: choice.patternId, sourceEvidence: {} };
+    }),
+  };
+}
+
 /** Reading order of a composition's slots. Row and column are indexes, not coordinates. */
 /** Share of a text block's room each variant fills at least: a nearly empty card is a defect. */
 const FILL_FLOOR: Record<DeckVariant, number> = { dense: 0.5, balanced: 0.4, airy: 0.25 };
@@ -1048,8 +1097,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           throw new Error('Planner returned the wrong slide count.');
         if (coverCorrections(result))
           throw new Error('Planner did not select a cover composition.');
-        if (evidenceCorrections(result))
-          throw new Error('Planner selected a composition without its required source content.');
+        // Still a layout for a speaker, a contact or a screenshot the source does not have: the
+        // slide moves to one that needs none, instead of the deck failing.
+        result = withoutMissingContent(
+          result,
+          missingRequiredContent(result, notes, source),
+          full,
+          notes,
+          deps.imagesAvailable === true,
+        );
         return outline ? keepOutline(result, outline) : result;
       };
       const result = deps.sharedPlan
