@@ -160,6 +160,7 @@ yarn docs:audit                                          # пересборка 
 
 ## Документация
 
+- [DOCUMENTATION.md](DOCUMENTATION.md) — вся документация одним файлом с оглавлением по разделам.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — пайплайн и границы слоёв.
 - [docs/GENERATION.md](docs/GENERATION.md) — реальный путь генерации, API, иллюстрации, замеры.
 - [docs/COMPLIANCE.md](docs/COMPLIANCE.md) — соответствие требованиям кейса.
