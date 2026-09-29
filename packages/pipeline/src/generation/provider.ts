@@ -78,7 +78,15 @@ class RequestLimiter {
 // I share the HTTP slots across all runs and variants in this process, not per deck.
 const requests = new RequestLimiter();
 
-function backoff(ms: number, signal: AbortSignal): Promise<void> {
+/**
+ * Take one of the process-wide model request slots; the answer releases it. The chat shares them
+ * with the generation, so a chat turn waits behind a deck rather than overloading the provider.
+ */
+export function acquireModelSlot(signal: AbortSignal): Promise<() => void> {
+  return requests.acquire(signal);
+}
+
+export function backoff(ms: number, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const abort = () => {
