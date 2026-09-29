@@ -11,12 +11,17 @@ export interface TextProvider {
     signal: AbortSignal,
   ): Promise<T>;
 }
+/**
+ * The JSON object of a model answer. Models that ignore the JSON mode wrap it: a reasoning block,
+ * a Markdown fence, a sentence before or after. The object is the text from the first `{` to the
+ * last `}` once the reasoning is dropped; anything else is not an answer.
+ */
 export function parseModelJson<T>(text: string, schema: z.ZodType<T>): T {
-  const clean = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '');
-  return schema.parse(JSON.parse(clean));
+  const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const start = answer.indexOf('{');
+  const end = answer.lastIndexOf('}');
+  if (start < 0 || end < start) throw new SyntaxError('The model answer holds no JSON object.');
+  return schema.parse(JSON.parse(answer.slice(start, end + 1)));
 }
 interface Options {
   apiKey: string;
