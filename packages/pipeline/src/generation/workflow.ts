@@ -168,7 +168,45 @@ export function missingRequiredContent(
 }
 
 /** Reading order of a composition's slots. Row and column are indexes, not coordinates. */
-export function slotBriefs(slots: GenerationProfile['compositions'][number]['slots']) {
+/** Share of a text block's room each variant fills at least: a nearly empty card is a defect. */
+const FILL_FLOOR: Record<DeckVariant, number> = { dense: 0.6, balanced: 0.45, airy: 0.3 };
+
+/**
+ * The fewest characters a text block carries for its box not to read as empty. Only a block the
+ * template filled with several lines, or a prompt box of four lines or more, has a floor: labels,
+ * headings and one-line fields are short by design.
+ */
+export function minChars(
+  slot: {
+    role: string;
+    sample: string;
+    maxChars: number;
+    maxLines: number;
+    prompt?: boolean;
+  },
+  variant: DeckVariant = 'balanced',
+): number {
+  if (slot.role !== 'body') return 0;
+  // A paragraph break and a line break inside one (a vertical tab in the pptx) both start a line.
+  const sampleLines = slot.sample.split(/[\n\v]/).filter((line) => line.trim()).length;
+  const block = slot.prompt ? slot.maxLines >= 4 : sampleLines >= 2 && slot.maxLines >= 3;
+  return block ? Math.floor(fitChars(slot) * FILL_FLOOR[variant]) : 0;
+}
+
+/** What the writer and the rewriter are told when a block is too thin for its box. */
+export function thinMessage(length: number, least: number, room: number): string {
+  return (
+    `The text has ${length} characters in a box made for about ${room}: the slide looks empty. ` +
+    `Write ${least} to ${room} characters: add lines that explain, prove or illustrate this ` +
+    'point — a cause, a consequence, an example, a step, a criterion — from the brief or common ' +
+    'knowledge of the subject, one point per line. Add no figures the brief does not state.'
+  );
+}
+
+export function slotBriefs(
+  slots: GenerationProfile['compositions'][number]['slots'],
+  variant?: DeckVariant,
+) {
   const heights = slots
     .map((slot) => slot.box?.cy ?? 0)
     .filter((height) => height > 0)
@@ -209,6 +247,7 @@ export function slotBriefs(slots: GenerationProfile['compositions'][number]['slo
       maxLines: slot.maxLines,
       fontSize: slot.fontSize,
       fitChars: fitChars(slot),
+      ...(variant && minChars(slot, variant) ? { minChars: minChars(slot, variant) } : {}),
       row,
       column,
     };
@@ -366,6 +405,8 @@ const DATE_SAMPLE = new RegExp(
 export interface CopyContext {
   brief?: string;
   today?: Date;
+  /** The rendering the copy is for: it sets how full a text block must be. */
+  variant?: DeckVariant;
 }
 
 /** Years the brief names; a deck may speak of them. */
@@ -646,12 +687,15 @@ export function groundedVisual(
   return figures.length > 0 && figures.every((n) => known.has(n)) ? visual : null;
 }
 
-function writingComposition(pattern: GenerationProfile['compositions'][number]) {
+function writingComposition(
+  pattern: GenerationProfile['compositions'][number],
+  variant: DeckVariant,
+) {
   return {
     patternId: pattern.patternId,
     name: pattern.name,
     imageCount: pattern.imageCount,
-    slots: slotBriefs(writerSlots(pattern)),
+    slots: slotBriefs(writerSlots(pattern), variant),
   };
 }
 
@@ -802,6 +846,11 @@ export function copyDefects(
         slot.slotId,
         `The word "${long}" is longer than one line of this box (${perLine} characters) and ` +
           'breaks mid-word. Rephrase with shorter words.',
+      );
+    else if (context.variant && text.length < minChars(slot, context.variant))
+      defects.set(
+        slot.slotId,
+        thinMessage(text.length, minChars(slot, context.variant), fitChars(slot)),
       );
   }
   return defects;
@@ -1053,7 +1102,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...task,
           deckTitle,
           variant: deps.variant ?? 'balanced',
-          composition: writingComposition(inputData.composition),
+          composition: writingComposition(inputData.composition, deps.variant ?? 'balanced'),
           visualSlots: visualSlots(inputData.composition),
         },
         boundedSlideSchema(inputData.composition),
@@ -1061,7 +1110,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       );
       const visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
       const texts = raw.textsBySlot as Record<string, string | undefined>;
-      const context = { brief: inputData.brief, ...(deps.today ? { today: deps.today } : {}) };
+      const context: CopyContext = {
+        brief: inputData.brief,
+        variant: deps.variant ?? 'balanced',
+        ...(deps.today ? { today: deps.today } : {}),
+      };
       const numbers = numberedSlots(inputData.composition);
       const dates = datedSlots(inputData.composition, context);
       slide = {
@@ -1385,6 +1438,7 @@ async function rewriteSlide(
       ...(s.prompt ? { prompt: true } : {}),
       maxChars: s.maxChars,
       fitChars: fitChars(s),
+      ...(minChars(s, deps.variant) ? { minChars: minChars(s, deps.variant) } : {}),
       maxLines: s.maxLines,
       text: task.previous.texts.find((t) => t.slotId === s.slotId)?.text,
       correction: task.corrections

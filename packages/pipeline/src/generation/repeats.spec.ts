@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Composition } from '@lct/contracts';
-import { type DeckSlide, deckRepeats, figuresOf } from './repeats.js';
+import { type DeckSlide, deckRepeats, figuresOf, slideFigureDefects } from './repeats.js';
 
 const slot = (slotId: string, role: 'title' | 'body', fontSize: number) => ({
   slotId,
@@ -130,6 +130,30 @@ describe('deckRepeats', () => {
         ],
         ['Итог', 'Пилот готов к масштабу', '42% и 24%', '60 компаний в 2026'],
       ]),
+      BRIEF,
+    );
+    expect(findings).toEqual([]);
+  });
+});
+
+describe('slideFigureDefects', () => {
+  it('flags a figure the source lacks and the same figure in a second body slot', () => {
+    const findings = slideFigureDefects(
+      deck([
+        ['Затраты — снизились на 24%', 'Затраты ниже на 24%', 'Экономия 24%', 'Затраты −24%'],
+        ['Охват', 'Пилот прошёл в 12 компаниях', '100% пилота завершено', 'Отчёт 29.09.2026'],
+      ]),
+      BRIEF,
+    );
+    expect(findings.map((f) => [f.slideIndex, f.slotId, f.category])).toEqual([
+      [0, 'b', 'duplicate-text'],
+      [1, 'a', 'factual-error'],
+    ]);
+  });
+
+  it('passes a slide whose headline and one card share a figure of the source', () => {
+    const findings = slideFigureDefects(
+      deck([['Затраты', 'Затраты ниже на 24%', 'Затраты снизились на 24%', 'Экономия на рутине']]),
       BRIEF,
     );
     expect(findings).toEqual([]);

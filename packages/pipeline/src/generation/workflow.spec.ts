@@ -20,6 +20,7 @@ import {
   fitChars,
   groundedVisual,
   keepOutline,
+  minChars,
   missingRequiredContent,
   mirroredSlots,
   numberedSlots,
@@ -1245,5 +1246,59 @@ describe('keepOutline', () => {
       'Рынок растёт — 12% в год',
       'Мы быстрее — в 2 раза; без простоя',
     ]);
+  });
+});
+
+describe('text blocks too thin for their box', () => {
+  const sample = [
+    'здесь текст в две строки или более (любые детали проекта)',
+    'ещё строка',
+    'и ещё одна',
+  ].join('\n');
+  const block = {
+    slotId: 'b',
+    role: 'body' as const,
+    sample,
+    maxChars: 672,
+    maxLines: 16,
+    font: 'Play',
+    fontSize: 16,
+  };
+  const label = { ...block, slotId: 'l', sample: 'Подпись', maxChars: 40, maxLines: 1 };
+  const pattern = {
+    patternId: 'two-columns',
+    sourceIndex: 23,
+    name: 'Две колонки',
+    slots: [block, label],
+    imageCount: 0,
+  };
+  const slide = (text: string) => ({
+    patternId: 'two-columns',
+    speakerNotes: '',
+    texts: [
+      { slotId: 'b', text },
+      { slotId: 'l', text: 'Итог' },
+    ],
+  });
+
+  it('gives a multi-line block a floor by variant and a label none', () => {
+    expect(minChars(block, 'dense')).toBeGreaterThan(minChars(block, 'balanced'));
+    expect(minChars(block, 'balanced')).toBeGreaterThan(minChars(block, 'airy'));
+    expect(minChars(block, 'airy')).toBeGreaterThan(0);
+    expect(minChars(label, 'dense')).toBe(0);
+  });
+
+  it('sends a block with one short line back for more, and passes a full one', () => {
+    const thin = copyDefects(slide('Подключено: 320 зданий'), pattern, { variant: 'balanced' });
+    expect(thin.get('b')).toMatch(/looks empty/);
+    const full = Array.from(
+      { length: 4 },
+      () => 'Датчики в каждом подъезде передают показания в диспетчерскую без обходов',
+    )
+      .map((line, index) => `${line} ${index + 1}`)
+      .join('\n');
+    expect(copyDefects(slide(full), pattern, { variant: 'balanced' }).has('b')).toBe(false);
+    // Without a variant nothing is measured, as for the old callers.
+    expect(copyDefects(slide('Подключено: 320 зданий'), pattern).has('b')).toBe(false);
   });
 });

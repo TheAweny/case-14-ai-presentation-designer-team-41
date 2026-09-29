@@ -1,5 +1,5 @@
 id: slide-writer
-version: 2.4.0
+version: 2.5.0
 description: Template-grounded writer
 modelId: writer-default
 generation:

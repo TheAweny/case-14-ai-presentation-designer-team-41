@@ -7,6 +7,7 @@ import type { z } from 'zod';
 import { generationProfileSchema } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import { generatePresentation } from './runner.js';
+import { minChars } from './workflow.js';
 import type { TextProvider } from './provider.js';
 
 const fixture = (name: string) =>
@@ -64,8 +65,13 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
         patternId: pattern.patternId,
         // Slides of a real deck differ; the same text on all of them is a repeat the deck-wide
         // check would send to repair.
+        // A text block is written to the fill its variant asks for, as a real writer does.
         textsBySlot: Object.fromEntries(
-          pattern.slots.map((s) => [s.slotId, `Slide ${(input as { index: number }).index + 1}`]),
+          pattern.slots.map((s) => {
+            // A letter, not a number: a figure the brief lacks is a defect the runner repairs.
+            const text = `Slide ${String.fromCharCode(65 + (input as { index: number }).index)}`;
+            return [s.slotId, text.padEnd(minChars(s), ' point').trim()];
+          }),
         ),
         speakerNotes: 'Proposal',
       });

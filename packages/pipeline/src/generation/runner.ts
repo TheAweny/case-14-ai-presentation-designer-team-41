@@ -22,6 +22,8 @@ import {
   critiqueSchema,
   type DeckVariant,
   fitChars,
+  minChars,
+  thinMessage,
   type SharedPlan,
   repairedSlideSchema,
   type repairTaskSchema,
@@ -30,7 +32,7 @@ import {
   withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
-import { deckRepeats, headlineSlot } from './repeats.js';
+import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 
@@ -311,14 +313,34 @@ export async function generatePresentation(options: GenerateOptions) {
       ]);
       // Slides are written one by one, so a figure or a title repeated across the deck is seen
       // only here, over all of them.
-      const repeats = deckRepeats(
-        written[0]?.title ?? '',
-        written.flatMap((s) => {
-          const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
-          return composition ? [{ ...s, composition }] : [];
-        }),
-        options.brief,
-      );
+      const deck = written.flatMap((s) => {
+        const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
+        return composition ? [{ ...s, composition }] : [];
+      });
+      // Defects code sees for certain, whatever the critic said: a figure or a title repeated
+      // across the deck, a figure said twice on one slide or missing from the source, and a text
+      // block too thin for its box, which leaves the slide looking empty.
+      const variant = options.variant ?? 'balanced';
+      const repeats = [
+        ...deckRepeats(written[0]?.title ?? '', deck, options.brief),
+        ...slideFigureDefects(deck, options.brief),
+        ...deck.flatMap((s) =>
+          s.composition.slots.flatMap((slot) => {
+            const least = minChars(slot, variant);
+            const text = s.slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
+            return least && text && text.length < least && slot.slotId !== s.slide.visual?.slotId
+              ? [
+                  {
+                    slideIndex: s.index,
+                    slotId: slot.slotId,
+                    category: 'incomplete-text' as const,
+                    message: thinMessage(text.length, least, fitChars(slot)),
+                  },
+                ]
+              : [];
+          }),
+        ),
+      ];
       auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues, repeats });
       // A card heading is a short name; a critic asking it for a claim would have the rewriter
       // turn every card into a sentence.

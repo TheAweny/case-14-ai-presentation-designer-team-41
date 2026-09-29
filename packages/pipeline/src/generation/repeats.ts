@@ -156,3 +156,64 @@ export function deckRepeats(
   }
   return findings;
 }
+
+/** Dates and times a slot may carry: their parts are not figures of the brief. */
+const DATE_OR_TIME = /\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?|\d{1,2}:\d{2}/g;
+
+/** Figures of one text, without dates, times and numbering like 01. */
+function statedFigures(text: string): Set<string> {
+  return new Set(
+    [...figuresOf(text.replace(DATE_OR_TIME, ' '))].filter((figure) => !/^0\d/.test(figure)),
+  );
+}
+
+/**
+ * Figures within one slide: a figure the source does not state, and a figure said again in a
+ * second body slot of the same slide. The headline may repeat the figure of one body slot: that
+ * is the claim and its proof, anything more is the same line twice.
+ */
+export function slideFigureDefects(
+  slides: readonly DeckSlide[],
+  brief: string,
+): (Omit<RepeatFinding, 'category'> & { category: 'duplicate-text' | 'factual-error' })[] {
+  const source = figuresOf(brief);
+  const findings: (Omit<RepeatFinding, 'category'> & {
+    category: 'duplicate-text' | 'factual-error';
+  })[] = [];
+  for (const slide of slides) {
+    const headline = headlineSlot(slide.composition);
+    const said = new Map<string, string>();
+    for (const text of slide.slide.texts) {
+      if (!text.text.trim() || text.slotId === slide.slide.visual?.slotId) continue;
+      const figures = [...statedFigures(text.text)];
+      const unsourced = figures.filter((figure) => !source.has(figure));
+      if (unsourced.length) {
+        findings.push({
+          slideIndex: slide.index,
+          slotId: text.slotId,
+          category: 'factual-error',
+          message:
+            `${unsourced.map((f) => `"${f}"`).join(', ')} is not in the source material. ` +
+            'Remove it or use a figure the brief states; do not compute or round figures.',
+        });
+        continue;
+      }
+      if (text.slotId === headline) continue;
+      const again = figures.filter((figure) => said.has(figure));
+      if (again.length) {
+        findings.push({
+          slideIndex: slide.index,
+          slotId: text.slotId,
+          category: 'duplicate-text',
+          message:
+            `${again.map((f) => `"${f}"`).join(', ')} is already in slot ${said.get(again[0] ?? '')} ` +
+            'of this slide. Write a different point here: what the figure means, what it ' +
+            'changed, or what follows from it, without repeating it.',
+        });
+        continue;
+      }
+      for (const figure of figures) said.set(figure, text.slotId);
+    }
+  }
+  return findings;
+}
