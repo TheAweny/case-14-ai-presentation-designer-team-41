@@ -18,7 +18,7 @@ import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/comm
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import type { z } from 'zod';
 import {
@@ -38,6 +38,7 @@ import {
   indexTemplateWithAgent,
   RoutedTextProvider,
   SharedPlan,
+  type IndexProgress,
 } from '@lct/pipeline';
 import type { RunRepository } from '@lct/run-store';
 import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
@@ -52,6 +53,30 @@ function actorOf(account: Account) {
   return { userId: account.id, admin: account.role === 'admin' };
 }
 
+/** Width of a sample slide picture in the library: sharp in a card, light on the page. */
+const TEMPLATE_PREVIEW_WIDTH = 640;
+
+/** A preparation under way: reading the template's profile, then describing its compositions. */
+interface PrepareProgress {
+  stage: 'profile' | 'index';
+  described: number;
+  total: number;
+}
+
+/** What `GET /generation/prepare/:templateId` answers. */
+export interface TemplatePreparation {
+  /** The stage of a preparation under way; `null` — none runs. */
+  stage: PrepareProgress['stage'] | null;
+  /** Compositions described so far, of `total`; both 0 until indexing starts. */
+  described: number;
+  total: number;
+  /** The template has notes of the indexer. */
+  indexed: boolean;
+  /** Its slides are being drawn right now; `drawn` — the pictures are there. */
+  drawing: boolean;
+  drawn: boolean;
+}
+
 /** The renderings of every brief, generated in parallel. */
 const VARIANTS = ['dense', 'balanced', 'airy'] as const;
 
@@ -62,6 +87,11 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
   private readonly engine = new EngineClient({
     baseUrl: process.env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 120000,
+  });
+  /** Drawing a large template takes the office suite about a minute. */
+  private readonly drawingEngine = new EngineClient({
+    baseUrl: process.env.ENGINE_URL ?? 'http://localhost:8000',
+    timeoutMs: 900000,
   });
   private readonly active = new Map<string, AbortController>();
   private readonly library = new LibraryMetadata(this.root);
@@ -81,18 +111,91 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     @Body() body: { templateId?: string; model?: unknown },
     @CurrentAccount() account: Account,
   ): Promise<{ ready: true }> {
-    const row = await this.template(body.templateId ?? '', account);
-    const profile = await this.engine.generationProfile(row.storage_path);
-    await this.pool.query(
-      "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
-      [body.templateId, JSON.stringify(profile)],
-    );
-    const model = modelRefSchema
-      .nullable()
-      .catch(null)
-      .parse(body.model ?? null);
-    await this.indexTemplate(body.templateId ?? '', profile, row.profile?.index, model, account);
-    return { ready: true };
+    const templateId = body.templateId ?? '';
+    const row = await this.template(templateId, account);
+    // The pictures of the sample slides are for the library, not the deck: never waited for.
+    void this.drawPreviews(templateId, row);
+    const progress: PrepareProgress = { stage: 'profile', described: 0, total: 0 };
+    this.preparing.set(templateId, progress);
+    try {
+      const profile = await this.engine.generationProfile(row.storage_path);
+      await this.pool.query(
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb) WHERE id = $1",
+        [templateId, JSON.stringify(profile)],
+      );
+      const model = modelRefSchema
+        .nullable()
+        .catch(null)
+        .parse(body.model ?? null);
+      progress.stage = 'index';
+      await this.indexTemplate(templateId, profile, row.profile?.index, model, account, (step) => {
+        progress.described = step.described;
+        progress.total = step.total;
+      });
+      return { ready: true };
+    } finally {
+      // A later request for the same template reports on its own.
+      if (this.preparing.get(templateId) === progress) this.preparing.delete(templateId);
+    }
+  }
+
+  /** Templates being prepared right now, and how far each has got. */
+  private readonly preparing = new Map<string, PrepareProgress>();
+
+  /**
+   * How far the preparation of a template has got, for the library to show while it waits: the
+   * stage and the compositions described so far, and whether the slides are drawn. A page that
+   * opens while a preparation runs follows it instead of starting another.
+   */
+  @Get('prepare/:templateId')
+  async preparation(
+    @Param('templateId') templateId: string,
+    @CurrentAccount() account: Account,
+  ): Promise<TemplatePreparation> {
+    const row = await this.template(templateId, account);
+    const running = this.preparing.get(templateId);
+    return {
+      stage: running?.stage ?? null,
+      described: running?.described ?? 0,
+      total: running?.total ?? 0,
+      indexed: storedTemplateIndexSchema.safeParse(row.profile?.index).success,
+      drawing: this.drawing.has(templateId),
+      drawn: Array.isArray(row.profile?.previews),
+    };
+  }
+
+  /** Templates whose slides are being drawn right now: a second request does not start again. */
+  private readonly drawing = new Set<string>();
+
+  /**
+   * Draw every slide of the template once, for the library to show the sample slides a deck is
+   * built from as they are. The file names go into the profile; a failure is logged and the
+   * library falls back to the slides it draws itself.
+   */
+  private async drawPreviews(
+    templateId: string,
+    row: { storage_path: string; profile: { previews?: unknown } },
+  ): Promise<void> {
+    if (Array.isArray(row.profile?.previews) || this.drawing.has(templateId)) return;
+    this.drawing.add(templateId);
+    try {
+      const drawn = await this.drawingEngine.templatePreviews({
+        schemaVersion: 1,
+        templatePath: row.storage_path,
+        outputDir: join(dirname(row.storage_path), 'previews'),
+        widthPx: TEMPLATE_PREVIEW_WIDTH,
+      });
+      await this.pool.query(
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('previews', $2::jsonb) WHERE id = $1",
+        [templateId, JSON.stringify(drawn.previews)],
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Slides of template ${templateId} were not drawn: ${error instanceof Error ? error.message : error}`,
+      );
+    } finally {
+      this.drawing.delete(templateId);
+    }
   }
 
   /**
@@ -106,6 +209,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     stored: unknown,
     model: z.infer<typeof modelRefSchema> | null,
     account: Account,
+    onProgress: (progress: IndexProgress) => void,
   ): Promise<void> {
     try {
       const registryDir = this.registryDir();
@@ -129,6 +233,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
         provider,
         registryDir,
         profile,
+        onProgress,
         // Outside the generation budget, and a large template on a slow model takes minutes:
         // the indexer asks again about what an answer left out.
         signal: AbortSignal.timeout(600000),
@@ -156,7 +261,7 @@ export class GenerationController implements OnApplicationBootstrap, OnApplicati
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new BadRequestException('Invalid template id.');
     const result = await this.pool.query<{
       storage_path: string;
-      profile: { generation?: GenerationProfile; index?: unknown };
+      profile: { generation?: GenerationProfile; index?: unknown; previews?: unknown };
     }>(
       `SELECT storage_path, profile FROM stored_files
        WHERE id = $1 AND kind = 'template' AND ${visibleFile(2)}`,

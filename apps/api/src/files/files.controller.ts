@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
   BadRequestException,
@@ -17,8 +18,9 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { createReadStream } from 'node:fs';
+import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import { EngineClient } from '@lct/engine-client';
 import { decodeMultipartFilename } from './filename.js';
@@ -187,6 +189,36 @@ export class FilesController implements OnApplicationShutdown {
       [account.id],
     );
     return result.rows.map((row) => templateOf(row, account));
+  }
+
+  /**
+   * A picture of one slide of a template the account may use, drawn when the template was
+   * prepared. It is asked for by its number, however the renderer padded the file name.
+   */
+  @Get('templates/:id/previews/:name')
+  async templatePreview(
+    @Param('id') id: string,
+    @Param('name') name: string,
+    @CurrentAccount() account: Account,
+  ): Promise<StreamableFile> {
+    const number = /^slide-(\d+)\.png$/.exec(name)?.[1];
+    if (!/^[0-9a-f-]{36}$/i.test(id) || number === undefined)
+      throw new NotFoundException('Preview not found.');
+    const result = await this.pool.query<{ storage_path: string }>(
+      `SELECT storage_path FROM stored_files
+       WHERE id = $1 AND kind = 'template' AND ${visibleFile(2)}`,
+      [id, account.id],
+    );
+    const row = result.rows[0];
+    if (!row) throw new NotFoundException('Preview not found.');
+    const directory = join(dirname(row.storage_path), 'previews');
+    const found = (await readdir(directory).catch(() => [])).find(
+      (file) => /^slide-\d+\.png$/.test(file) && Number(/\d+/.exec(file)?.[0]) === Number(number),
+    );
+    if (!found) throw new NotFoundException('Preview not found.');
+    return new StreamableFile(createReadStream(join(directory, found)), {
+      type: 'image/png',
+    });
   }
 
   /**

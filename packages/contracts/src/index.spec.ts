@@ -82,6 +82,8 @@ describe('contract registry', () => {
       'SlideIR',
       'SlideReview',
       'TemplateIR',
+      'TemplatePreviewsRequest',
+      'TemplatePreviewsResponse',
     ]);
   });
 

@@ -23,6 +23,7 @@ import {
   usePromptBox,
 } from '@/components/composer/prompt-box';
 import { promptAction } from '@/components/composer/prompt-keys';
+import { ChatSkeleton } from '@/components/library/page-skeletons';
 import { ProjectIcon } from '@/components/library/project-icon';
 import { useLibraryProjects } from '@/components/library/library-projects';
 import { PaletteStrip } from '@/components/library/template-swatch';
@@ -100,6 +101,7 @@ export function DeckChat({
   templates: readonly TemplateSummary[];
 }) {
   const t = useTranslations('deckChat');
+  const tSplash = useTranslations('splash');
   const hydrated = useHydrated();
   const thread = useThread(threadId);
   const projects = useLibraryProjects();
@@ -129,7 +131,8 @@ export function DeckChat({
   }, [hydrated, thread, threadId]);
 
   const loading = !thread && (stored === null || stored.chatId !== threadId);
-  if (!hydrated || loading) return <div className="min-h-dvh md:h-full md:min-h-0" />;
+  // Разговор читается из API после гидрации: до тех пор — та же заготовка, что у маршрута.
+  if (!hydrated || loading) return <ChatSkeleton label={tSplash('page')} />;
   if (!thread) {
     return (
       <div className="grid min-h-dvh place-items-center px-6 md:h-full md:min-h-0">

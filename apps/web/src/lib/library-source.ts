@@ -1,4 +1,4 @@
-import type { DesignSystem, SlideIr, TemplateIr } from '@lct/contracts';
+import type { CompositionNote, DesignSystem, SlideIr, TemplateIr } from '@lct/contracts';
 import type { SlideLayout, SlideSize } from './deck-source';
 
 export { DeckNotFoundError } from './deck-source';
@@ -19,6 +19,27 @@ import type { ChatSummary } from './chat-records';
  */
 
 /** Шаблон библиотеки так, как его показывает меню: файл, дата импорта и извлечённый профиль. */
+/**
+ * Образец слайда из файла шаблона — то, из чего собираются слайды презентации, — как его прочёл
+ * индексатор шаблона: вид, название для человека и для чего годится.
+ */
+export interface TemplateSample {
+  readonly patternId: string;
+  /** Номер слайда в файле шаблона, с нуля. */
+  readonly slideIndex: number;
+  readonly kind: CompositionNote['kind'];
+  /** Короткое название варианта; пусто — индексатор его не дал. */
+  readonly title: string;
+  /** Какое содержание сюда класть. */
+  readonly useFor: string;
+  /** Годится только для особого содержания: код, формулы, мокап устройства. */
+  readonly special: boolean;
+  /** Страница о самом шаблоне — инструкция, палитра, рубрика, — а не слайд презентации. */
+  readonly reference: boolean;
+  /** Настоящая картинка слайда; нет — её ещё не нарисовали. */
+  readonly previewUrl?: string;
+}
+
 export interface TemplateSummary {
   readonly templateId: string;
   /** Имя шаблона в библиотеке: имя загруженного файла, пока шаблон не переименовали. */
@@ -37,6 +58,8 @@ export interface TemplateSummary {
   readonly templateIr?: TemplateIr;
   /** Настоящий PNG первого слайда, отрендеренный Python engine, если доступен. */
   readonly previewDataUrl?: string;
+  /** Образцы слайдов в порядке файла; нет — шаблон ещё не разобран. */
+  readonly samples?: readonly TemplateSample[];
 }
 
 export interface ProjectSummary {

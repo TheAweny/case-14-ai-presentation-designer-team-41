@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createPersistentLibrarySource } from './persistent-library-source';
+import { createPersistentLibrarySource, samplesOf } from './persistent-library-source';
 import { createDemoLibrary } from '../mocks/demo-library';
 const fixture = (name: string) =>
   JSON.parse(
@@ -119,5 +119,51 @@ describe('persistent library mutations', () => {
       { title: 'Итоги' },
     );
     expect(result.deckId).toBe('run-live');
+  });
+});
+
+describe('samples of a template', () => {
+  const note = (patternId: string, extra: Record<string, unknown> = {}) => ({
+    patternId,
+    kind: 'cards',
+    items: 3,
+    useFor: 'three points',
+    title: 'Три карточки',
+    skip: false,
+    special: false,
+    ...extra,
+  });
+  const profile = (previews?: string[]) => ({
+    generation: {
+      compositions: [
+        { patternId: 'p-cover', sourceIndex: 4 },
+        { patternId: 'p-cards', sourceIndex: 9 },
+        { patternId: 'p-guide', sourceIndex: 0 },
+      ],
+    },
+    index: {
+      notes: [
+        note('p-cards'),
+        note('p-cover', { kind: 'cover', title: 'С фото' }),
+        note('p-guide', { kind: 'reference', skip: true }),
+        { patternId: 'p-broken' },
+      ],
+    },
+    ...(previews ? { previews } : {}),
+  });
+
+  it('lists the described sample slides in file order, with the pictures once they are drawn', () => {
+    const samples = samplesOf('t-1', profile(['slide-01.png']));
+    expect(samples?.map((sample) => [sample.slideIndex, sample.kind, sample.reference])).toEqual([
+      [0, 'reference', true],
+      [4, 'cover', false],
+      [9, 'cards', false],
+    ]);
+    expect(samples?.[1]?.previewUrl).toBe('/api/backend/files/templates/t-1/previews/slide-5.png');
+  });
+
+  it('has no samples before the template is analysed, and no pictures before they are drawn', () => {
+    expect(samplesOf('t-1', {})).toBeUndefined();
+    expect(samplesOf('t-1', profile())?.every((sample) => !sample.previewUrl)).toBe(true);
   });
 });

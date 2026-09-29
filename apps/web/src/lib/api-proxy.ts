@@ -9,10 +9,14 @@
 const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] = [
   { method: 'POST', pattern: /^files\/(template|content)$/ },
   { method: 'POST', pattern: /^generation(\/prepare)?$/ },
+  // How far the preparation of a template has got.
+  { method: 'GET', pattern: /^generation\/prepare\/[\w-]+$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/cancel$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|previews)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },
+  // Pictures of a template's sample slides in the library.
+  { method: 'GET', pattern: /^files\/templates\/[\w-]+\/previews\/slide-\d+\.png$/ },
   // Chats are saved as the conversation goes on and read back after a reload.
   { method: 'GET', pattern: /^chats(\/[\w-]+)?$/ },
   { method: 'PUT', pattern: /^chats\/[\w-]+$/ },

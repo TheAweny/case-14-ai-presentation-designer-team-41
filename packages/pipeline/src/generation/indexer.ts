@@ -18,11 +18,18 @@ const ROUNDS = 3;
 
 type Pattern = GenerationProfile['compositions'][number];
 
+/** Indexing so far: compositions with a note, of the distinct compositions of the template. */
+export interface IndexProgress {
+  described: number;
+  total: number;
+}
+
 /**
  * What the model answers for a composition. `skip` is not asked: it follows from `kind`, and a
  * small model that has to keep two fields in agreement gets one of them wrong.
  */
 const answerNoteSchema = compositionNoteSchema.omit({ skip: true }).extend({
+  title: z.string().max(80),
   special: z.boolean(),
 });
 type AnswerNote = z.infer<typeof answerNoteSchema>;
@@ -43,11 +50,15 @@ export function settleNote(
   const single = ['cover', 'section', 'statement'].includes(answer.kind);
   return {
     ...answer,
+    title: answer.title.replace(/\s+/g, ' ').trim(),
     items: single ? 1 : Math.min(answer.items, Math.max(blocks, 1)),
     skip: reference,
     special: !reference && (answer.special || inSpecialGroup),
   };
 }
+
+/** Kinds that open or close a part of a deck, or show people: a group of their own. */
+const FRAMING_KINDS = new Set<AnswerNote['kind']>(['cover', 'section', 'team', 'closing']);
 
 /**
  * Notes in template order. Catalog templates group their sample slides under headings; a heading
@@ -65,6 +76,9 @@ export function settleNotes(
     const answer = answers.get(pattern.patternId);
     if (!answer) return [];
     if (answer.kind === 'reference') specialGroup = answer.special;
+    // A cover, a section break, people or a closing slide is never a screenshot frame or a
+    // pictured chart: it starts another group when the heading before it was missed.
+    else if (FRAMING_KINDS.has(answer.kind)) specialGroup = false;
     return [settleNote(answer, pattern, specialGroup)];
   });
 }
@@ -85,9 +99,13 @@ export async function indexTemplate(options: {
   instructions: string;
   profile: GenerationProfile;
   signal: AbortSignal;
+  /** How many compositions have a note so far, of how many: after every answer. */
+  onProgress?: (progress: IndexProgress) => void;
 }): Promise<CompositionNote[]> {
   const catalog = distinctCompositions(options.profile.compositions);
   const notes = new Map<string, AnswerNote>();
+  const report = () => options.onProgress?.({ described: notes.size, total: catalog.length });
+  report();
   const ask = async (batch: Pattern[]) => {
     const ids = batch.map((pattern) => pattern.patternId) as [string, ...string[]];
     const schema = z.object({
@@ -120,10 +138,18 @@ export async function indexTemplate(options: {
     for (let start = 0; start < missing.length; start += BATCH)
       batches.push(missing.slice(start, start + BATCH));
     // A batch whose answer never parsed is asked again in the next round, not fatal.
-    const answers = await Promise.all(batches.map((batch) => ask(batch).catch(() => [])));
+    await Promise.all(
+      batches.map((batch) =>
+        ask(batch)
+          .catch(() => [])
+          .then((answers) => {
+            for (const answer of answers)
+              if (!notes.has(answer.patternId)) notes.set(answer.patternId, answer);
+            report();
+          }),
+      ),
+    );
     options.signal.throwIfAborted();
-    for (const answer of answers.flat())
-      if (!notes.has(answer.patternId)) notes.set(answer.patternId, answer);
     missing = catalog.filter((pattern) => !notes.has(pattern.patternId));
   }
   if (notes.size === 0) throw new Error('The template indexer described no composition.');
@@ -136,6 +162,7 @@ export async function indexTemplateWithAgent(options: {
   registryDir: string;
   profile: GenerationProfile;
   signal: AbortSignal;
+  onProgress?: (progress: IndexProgress) => void;
 }): Promise<StoredTemplateIndex> {
   const agent = await loadAgent(join(options.registryDir, 'template-indexer'));
   if (
@@ -148,6 +175,7 @@ export async function indexTemplateWithAgent(options: {
     instructions: agent.instructions,
     profile: options.profile,
     signal: options.signal,
+    onProgress: options.onProgress,
   });
   return {
     templateHash: options.profile.templateHash,

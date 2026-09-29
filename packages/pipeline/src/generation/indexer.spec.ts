@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { generationProfileSchema, type CompositionNote } from '@lct/contracts';
-import { indexTemplate, settleNotes, templateIndexRevision } from './indexer.js';
+import {
+  indexTemplate,
+  settleNotes,
+  templateIndexRevision,
+  type IndexProgress,
+} from './indexer.js';
 import type { TextProvider } from './provider.js';
 import { createGenerationWorkflow } from './workflow.js';
 
@@ -33,6 +38,7 @@ const note = (patternId: string, extra: Partial<CompositionNote> = {}): Composit
   kind: 'statement',
   items: 1,
   useFor: 'one claim',
+  title: 'One claim',
   skip: false,
   special: false,
   ...extra,
@@ -92,14 +98,22 @@ describe('indexTemplate', () => {
         });
       },
     };
+    const progress: IndexProgress[] = [];
     const notes = await indexTemplate({
       provider,
       instructions: '',
       profile,
       signal: AbortSignal.timeout(1000),
+      onProgress: (step) => progress.push(step),
     });
     expect(asked).toEqual([profile.compositions.map((c) => c.patternId), ['pattern-2']]);
     expect(notes).toHaveLength(5);
+    // Before the first answer, after it and after asking again about what it left out.
+    expect(progress).toEqual([
+      { described: 0, total: 5 },
+      { described: 4, total: 5 },
+      { described: 5, total: 5 },
+    ]);
   });
 
   it('changes its revision when the instructions change', () => {
@@ -125,6 +139,17 @@ describe('settleNotes', () => {
     ]);
     expect(notes.map((item) => item.special)).toEqual([false, true, true, false, false]);
     expect(notes.map((item) => item.skip)).toEqual([true, false, false, true, false]);
+  });
+
+  it('ends a special group at people or a closing slide when its heading was missed', () => {
+    const notes = settle([
+      answer('pattern-0', { kind: 'reference', special: true }),
+      answer('pattern-1'),
+      answer('pattern-2', { kind: 'other' }),
+      answer('pattern-3', { kind: 'team', items: 4 }),
+      answer('pattern-4'),
+    ]);
+    expect(notes.map((item) => item.special)).toEqual([false, true, true, false, false]);
   });
 
   it('holds the counts to what the composition can show', () => {

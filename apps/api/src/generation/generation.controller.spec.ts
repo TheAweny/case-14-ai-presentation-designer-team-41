@@ -193,3 +193,61 @@ describe('runs cut short by a restart', () => {
     expect(await runs.events(RUN)).toEqual([]);
   });
 });
+
+const generationProfile = JSON.parse(
+  await readFile(
+    new URL('../../../../packages/contracts/fixtures/GenerationProfile.json', import.meta.url),
+    'utf8',
+  ),
+).valid[0].payload;
+
+describe('preparing a template', () => {
+  const TEMPLATE = '00000000-0000-4000-8000-0000000000aa';
+
+  it('reports the stage while it runs and what is stored once it is over', async () => {
+    let answerProfile!: () => void;
+    const profileAsked = new Promise<void>((asked) => {
+      vi.stubGlobal('fetch', async (url: string | URL | Request) => {
+        const path = new URL(String(url)).pathname;
+        if (path !== '/v1/generation-profile') return new Response('not here', { status: 503 });
+        asked();
+        await new Promise<void>((answer) => (answerProfile = answer));
+        return Response.json(generationProfile);
+      });
+    });
+    const stored: { profile: Record<string, unknown> } = { profile: {} };
+    controller = new GenerationController(repository, {
+      // No model is set up: the index is not made, which only leaves the planner without notes.
+      resolveRole: async () => {
+        throw new Error('No model.');
+      },
+    } as unknown as ModelSettingsService);
+    (controller as unknown as { pool: unknown }).pool = {
+      query: async (sql: string) =>
+        sql.startsWith('SELECT')
+          ? { rows: [{ storage_path: '/t.pptx', ...stored }] }
+          : { rows: [] },
+      end: async () => undefined,
+    };
+
+    const prepared = controller.prepare({ templateId: TEMPLATE }, owner);
+    await profileAsked;
+    expect(await controller.preparation(TEMPLATE, owner)).toMatchObject({
+      stage: 'profile',
+      indexed: false,
+      drawn: false,
+    });
+
+    answerProfile();
+    await prepared;
+    stored.profile = { previews: ['slide-1.png'] };
+    expect(await controller.preparation(TEMPLATE, owner)).toEqual({
+      stage: null,
+      described: 0,
+      total: 0,
+      indexed: false,
+      drawing: false,
+      drawn: true,
+    });
+  });
+});

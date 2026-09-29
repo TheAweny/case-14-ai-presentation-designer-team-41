@@ -25,6 +25,10 @@ import { jobEventSchema } from './job-event.js';
 import { artifactManifestSchema } from './artifact-manifest.js';
 import { editableDeckRequestSchema, editableDeckResponseSchema } from './editable-deck.js';
 import { deckImportRequestSchema, deckImportResponseSchema } from './deck-import.js';
+import {
+  templatePreviewsRequestSchema,
+  templatePreviewsResponseSchema,
+} from './template-previews.js';
 
 /**
  * Every schema that gets exported to JSON Schema and, from there, to Pydantic.
@@ -45,6 +49,8 @@ export const contractRegistry = {
   EditableDeckRequest: editableDeckRequestSchema,
   EditableDeckResponse: editableDeckResponseSchema,
   TemplateIR: templateIrSchema,
+  TemplatePreviewsRequest: templatePreviewsRequestSchema,
+  TemplatePreviewsResponse: templatePreviewsResponseSchema,
   ContentPack: contentPackSchema,
   DesignSystem: designSystemSchema,
   PatternCatalog: patternCatalogSchema,
