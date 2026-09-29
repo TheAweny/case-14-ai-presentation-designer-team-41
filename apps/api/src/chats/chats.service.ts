@@ -585,6 +585,7 @@ export class ChatsService implements OnApplicationShutdown {
         specs: toolSpecs(agent, tools),
         writer,
         signal,
+        loopNudge: agent.loopNudge,
       });
       status = 'done';
     } catch (error) {

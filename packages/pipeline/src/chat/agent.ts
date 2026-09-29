@@ -44,6 +44,8 @@ export interface ChatAgent {
   readonly modes: Readonly<Record<ChatMode, string>>;
   readonly tools: Readonly<Record<string, string>>;
   readonly jsonMode: string;
+  /** Said to the model after an answer that looped was cut off. */
+  readonly loopNudge: string;
 }
 
 export const CHAT_AGENT_ID = 'chat-assistant';
@@ -52,11 +54,12 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
   const directory = join(registryDir, CHAT_AGENT_ID);
   const agent = await loadAgent(directory);
   const read = (...path: string[]) => readFile(join(directory, ...path), 'utf8');
-  const [chat, plan, auto, jsonMode] = await Promise.all([
+  const [chat, plan, auto, jsonMode, loopNudge] = await Promise.all([
     read('modes', 'chat.md'),
     read('modes', 'plan.md'),
     read('modes', 'auto.md'),
     read('json-mode.md'),
+    read('loop-nudge.md'),
   ]);
   const toolFiles = (await readdir(join(directory, 'tools'))).filter((name) =>
     name.endsWith('.md'),
@@ -66,7 +69,7 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
       toolFiles.map(async (file) => [file.slice(0, -3), (await read('tools', file)).trim()]),
     ),
   );
-  return { agent, modes: { chat, plan, auto }, tools, jsonMode };
+  return { agent, modes: { chat, plan, auto }, tools, jsonMode, loopNudge: loopNudge.trim() };
 }
 
 /** The system prompt of a turn: the agent, its mode, and the facts of this chat as data. */
@@ -135,6 +138,38 @@ export class AnswerWriter {
     this.parts[index] = part;
     this.emit({ type: 'part', messageId: this.messageId, index, part });
   }
+
+  /** The text part being written and what it says; null when the next text starts a new one. */
+  get openText(): { index: number; text: string } | null {
+    const index = this.textIndex;
+    const part = index === null ? undefined : this.parts[index];
+    return index !== null && part?.type === 'text' ? { index, text: part.text } : null;
+  }
+
+  /** Take back what streamed into a text part after `text`: the part says `text` again. */
+  retract(index: number, text: string): void {
+    this.update(index, { type: 'text', text });
+    this.textIndex = text ? index : null;
+  }
+}
+
+/** How long a stretch must be to count as the model saying it again. */
+const LOOP_CHARS = 160;
+
+/**
+ * The answer began repeating itself: its last stretch already appears earlier. A model that
+ * reasons aloud can circle through the same paragraph until its token limit.
+ */
+export function looping(text: string): boolean {
+  if (text.length < LOOP_CHARS * 2) return false;
+  const tail = text.slice(-LOOP_CHARS);
+  return text.lastIndexOf(tail, text.length - LOOP_CHARS - 1) >= 0;
+}
+
+class LoopCut extends Error {
+  constructor() {
+    super('The answer repeated itself and was cut off.');
+  }
 }
 
 export interface ChatTurnOptions {
@@ -148,6 +183,8 @@ export interface ChatTurnOptions {
   readonly signal: AbortSignal;
   /** Model answers in one turn: a model looping over tools stops here. */
   readonly maxSteps?: number;
+  /** Said to the model once when its answer loops; without it a looping answer ends the turn. */
+  readonly loopNudge?: string;
 }
 
 export interface ChatTurnResult {
@@ -173,15 +210,31 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
   const maxSteps = options.maxSteps ?? 8;
   let inputTokens = 0;
   let outputTokens = 0;
+  let nudged = false;
   for (let step = 1; step <= maxSteps; step++) {
     signal.throwIfAborted();
     // Calls shown while the model was still writing them, in the order they began.
     const begun: { name: string; index: number }[] = [];
-    const answer = await options.model.step({
+    // A step of its own: an answer circling through the same paragraph is cut off here, while
+    // the turn goes on.
+    const stepControl = new AbortController();
+    const stopStep = () => stepControl.abort(signal.reason);
+    signal.addEventListener('abort', stopStep, { once: true });
+    const before = writer.openText;
+    let said = '';
+    const step$ = options.model.step({
       messages,
       tools: options.specs,
-      signal,
-      onText: (delta) => writer.text(delta),
+      signal: stepControl.signal,
+      onText: (delta) => {
+        if (stepControl.signal.aborted) return;
+        said += delta;
+        if (looping(said)) {
+          stepControl.abort(new LoopCut());
+          return;
+        }
+        writer.text(delta);
+      },
       onToolCall: (name) =>
         begun.push({
           name,
@@ -194,6 +247,31 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
           }),
         }),
     });
+    let answer: Awaited<typeof step$>;
+    try {
+      answer = await step$;
+    } catch (error) {
+      if (!(stepControl.signal.reason instanceof LoopCut) || signal.aborted) throw error;
+      // The person never sees the loop: the text part goes back to what it said before it.
+      const open = writer.openText;
+      if (open) writer.retract(open.index, before?.index === open.index ? before.text : '');
+      for (const early of begun.splice(0))
+        writer.update(early.index, {
+          type: 'tool',
+          callId: `call-${crypto.randomUUID()}`,
+          name: early.name,
+          input: null,
+          status: 'failed',
+          output: { error: 'The call was cut off.' },
+        });
+      if (nudged || !options.loopNudge)
+        return { steps: step, inputTokens, outputTokens, end: 'answer' };
+      nudged = true;
+      messages.push({ role: 'user', content: options.loopNudge });
+      continue;
+    } finally {
+      signal.removeEventListener('abort', stopStep);
+    }
     const cutOff = () => {
       for (const early of begun.splice(0)) {
         writer.update(early.index, {

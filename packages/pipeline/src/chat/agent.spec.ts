@@ -6,6 +6,7 @@ import {
   AnswerWriter,
   chatInstructions,
   loadChatAgent,
+  looping,
   modelHistory,
   runChatTurn,
   toolSpecs,
@@ -179,6 +180,60 @@ describe('runChatTurn', () => {
     expect(tools[0]).toMatchObject({ callId: 'c1', status: 'done' });
     const first = events.find((event) => event.type === 'part');
     expect(first).toMatchObject({ part: { type: 'tool', status: 'running', input: null } });
+  });
+
+  it('cuts off an answer that loops, hides it, and nudges the model once to act', async () => {
+    const paragraph =
+      'Пользователь хочет четыре изображения на разных слайдах, но в шаблоне только один макет ' +
+      'с фото. Возможно, стоит выбрать другие макеты. Давайте перечитаю инструкции. ';
+    const requests: ModelStepRequest[] = [];
+    const model: ChatModel = {
+      model: 'looping',
+      async step(request) {
+        requests.push({ ...request, messages: [...request.messages] });
+        if (requests.length === 1) {
+          // Reasoning aloud, round and round, until the stream is stopped.
+          for (let round = 0; round < 50; round++) {
+            if (request.signal.aborted) throw request.signal.reason;
+            request.onText?.(paragraph);
+          }
+          throw new Error('The loop was never cut off.');
+        }
+        request.onText?.('Собираю план.');
+        return {
+          text: 'Собираю план.',
+          toolCalls: [],
+          truncated: false,
+          inputTokens: 1,
+          outputTokens: 1,
+        };
+      },
+    };
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [echo],
+      specs: [],
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      loopNudge: 'Сделай следующий шаг.',
+    });
+    expect(result.end).toBe('answer');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.messages.at(-1)).toEqual({
+      role: 'user',
+      content: 'Сделай следующий шаг.',
+    });
+    const text = answer.parts.flatMap((part) => (part.type === 'text' ? [part.text] : []));
+    expect(text.join('')).toBe('Собираю план.');
+  });
+
+  it('keeps an answer that says different things, however long', () => {
+    const varied = Array.from({ length: 40 }, (_, index) => `Пункт ${index}: своё содержание.`);
+    expect(looping(varied.join(' '))).toBe(false);
+    expect(looping('Одно и то же предложение повторяется снова. '.repeat(12))).toBe(true);
   });
 
   it('stops after the step limit when the model keeps calling tools', async () => {
