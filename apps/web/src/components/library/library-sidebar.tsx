@@ -15,6 +15,7 @@ import {
   ChevronRightIcon,
   CloseIcon,
   FolderIcon,
+  TemplateIcon,
   MenuIcon,
   PlusIcon,
   SearchIcon,
@@ -28,6 +29,7 @@ import {
   newDeckInProjectHref,
   PROJECTS_HREF,
   projectHref,
+  TEMPLATES_HREF,
 } from '@/lib/library-menu';
 import { PROJECT_NAME_MAX_LENGTH, type ProjectSummary } from '@/lib/library-source';
 import { EXPANDED_PROJECTS_KEY, parseExpandedProjects } from '@/lib/sidebar-expanded';
@@ -258,6 +260,14 @@ function SidebarBody({
             icon={<FolderIcon size={16} />}
           >
             {t('projects')}
+          </NavRow>
+          <NavRow
+            href={TEMPLATES_HREF}
+            active={pathname === TEMPLATES_HREF}
+            onNavigate={onNavigate}
+            icon={<TemplateIcon size={16} />}
+          >
+            {t('templates')}
           </NavRow>
         </nav>
       </div>

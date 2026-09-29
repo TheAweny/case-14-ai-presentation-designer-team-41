@@ -9,6 +9,8 @@
 export const deckHref = (deckId: string) => `/decks/${encodeURIComponent(deckId)}`;
 /** Все проекты. Страница одного проекта — `projectHref`. */
 export const PROJECTS_HREF = '/projects';
+/** Библиотека шаблонов аккаунта: свои и общие. */
+export const TEMPLATES_HREF = '/templates';
 export const projectHref = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
 /**
  * Параметр адреса главной и страницы проекта: с ним страница открывается с полем генерации в

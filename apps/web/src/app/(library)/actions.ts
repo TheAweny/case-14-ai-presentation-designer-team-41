@@ -335,3 +335,54 @@ export async function deleteChatAction(chatId: string): Promise<LibraryActionRes
   revalidatePath('/', 'layout');
   return { ok: true };
 }
+
+/**
+ * Переименовать шаблон или (администратору) открыть его всем аккаунтам — со страницы «Шаблоны».
+ * Чужой шаблон и чужое право API отклоняет: тогда `notFound`.
+ */
+export async function updateTemplateAction(
+  templateId: string,
+  patch: { name?: string; shared?: boolean },
+): Promise<LibraryActionResult> {
+  const account = await requireAccount();
+  if (typeof templateId !== 'string' || typeof patch !== 'object' || patch === null) {
+    return { ok: false, reason: 'invalid' };
+  }
+  const next: { name?: string; shared?: boolean } = {};
+  if (patch.name !== undefined) {
+    if (typeof patch.name !== 'string' || patch.name.trim() === '') {
+      return { ok: false, reason: 'invalid' };
+    }
+    next.name = patch.name.trim();
+  }
+  if (patch.shared !== undefined) {
+    if (typeof patch.shared !== 'boolean' || account.role !== 'admin') {
+      return { ok: false, reason: 'invalid' };
+    }
+    next.shared = patch.shared;
+  }
+  try {
+    await librarySource.updateTemplate(templateId, next);
+  } catch (error) {
+    if (error instanceof TemplateNotFoundError) return { ok: false, reason: 'notFound' };
+    return { ok: false, reason: 'invalid' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * Убрать шаблон из библиотеки и из проектов. Презентации, свёрстанные им, остаются.
+ */
+export async function deleteTemplateAction(templateId: string): Promise<LibraryActionResult> {
+  await requireAccount();
+  if (typeof templateId !== 'string') return { ok: false, reason: 'invalid' };
+  try {
+    await librarySource.deleteTemplate(templateId);
+  } catch (error) {
+    if (error instanceof TemplateNotFoundError) return { ok: false, reason: 'notFound' };
+    return { ok: false, reason: 'invalid' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
