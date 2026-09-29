@@ -28,7 +28,7 @@ import {
   withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
-import { deckRepeats } from './repeats.js';
+import { deckRepeats, headlineSlot } from './repeats.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 
 type EventData = {
@@ -210,6 +210,7 @@ export async function generatePresentation(options: GenerateOptions) {
             brief: options.brief,
             slides: written.map((s) => {
               const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
+              const headline = pattern ? headlineSlot(pattern) : undefined;
               return {
                 slideIndex: s.index,
                 patternId: s.slide.patternId,
@@ -223,7 +224,10 @@ export async function generatePresentation(options: GenerateOptions) {
                     const slot = pattern?.slots.find((item) => item.slotId === t.slotId);
                     return {
                       ...t,
-                      role: slot?.role,
+                      // Only the headline states the slide's claim; the other title slots
+                      // head a card or a column and are short names by design.
+                      role:
+                        slot?.role === 'title' && slot.slotId !== headline ? 'heading' : slot?.role,
                       sample: slot?.sample,
                       maxChars: slot?.maxChars,
                       fitChars: slot ? fitChars(slot) : undefined,
@@ -247,6 +251,14 @@ export async function generatePresentation(options: GenerateOptions) {
         options.brief,
       );
       auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues, repeats });
+      // A card heading is a short name; a critic asking it for a claim would have the rewriter
+      // turn every card into a sentence.
+      const namesAHeading = (issue: (typeof critique.issues)[number]) => {
+        if (issue.category !== 'label-title') return false;
+        const slide = written.find((s) => s.index === issue.slideIndex);
+        const pattern = profile.compositions.find((p) => p.patternId === slide?.slide.patternId);
+        return pattern !== undefined && headlineSlot(pattern) !== issue.slotId;
+      };
       await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
       await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
       const issues = [
@@ -257,7 +269,7 @@ export async function generatePresentation(options: GenerateOptions) {
         // A critic that names several slots in one issue ("6,8") gets one issue per slot:
         // the repair addresses slots by id, and a joined id would silently match none.
         ...critique.issues
-          .filter((i) => i.category !== 'style')
+          .filter((i) => i.category !== 'style' && !namesAHeading(i))
           .flatMap((issue) =>
             issue.slotId
               .split(/[\s,;]+/)
@@ -278,7 +290,7 @@ export async function generatePresentation(options: GenerateOptions) {
           reviewWarnings.push(message);
           await emit({ type: 'warning', stage, code: 'content-review-required', message });
         }
-        for (const issue of [...critique.issues, ...repeats]) {
+        for (const issue of [...critique.issues.filter((i) => !namesAHeading(i)), ...repeats]) {
           const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
           reviewWarnings.push(message);
           await emit({ type: 'warning', stage, code: 'content-review-required', message });

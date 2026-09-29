@@ -73,7 +73,7 @@ function containment(a: string, b: string): number {
 }
 
 /** The slide's headline: its title slot with the largest type. */
-function headlineSlot(composition: Composition): string | undefined {
+export function headlineSlot(composition: Composition): string | undefined {
   return [...composition.slots]
     .filter((slot) => slot.role === 'title')
     .sort((a, b) => b.fontSize - a.fontSize)[0]?.slotId;
