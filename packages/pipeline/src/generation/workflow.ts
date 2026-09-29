@@ -980,7 +980,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           composition,
         };
       });
-      deps.onPlan?.(tasks);
+      // A special composition frames a QR code, a device screen or code: content the brief
+      // brings, never a drawn picture. Its frame gets nothing and leaves the slide on export.
+      deps.onPlan?.(tasks.filter((task) => !notes.get(task.composition.patternId)?.special));
       return tasks;
     },
   });

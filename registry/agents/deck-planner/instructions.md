@@ -89,7 +89,8 @@ Return exactly this JSON shape:
   false, choose compositions with `imageSlots` 0.
 - `imageQuery` describes the picture for a slide with `imageSlots` above 0: a concrete scene or
   object in a few words (`living plants on desks of an open-space IT office`), never text, a
-  chart, a logo or a named person. Use an empty string for a slide without a picture.
+  chart, a logo, a QR code, a screen of an app or a named person. A composition for a QR code, a
+  device screen or code is not a place for a picture. Use an empty string for a slide without a picture.
 - Read `sample` before you assign content. Short step labels take short labels; paragraph samples
   take a full sentence each. Do not put a paragraph into a label slot.
 - Tell the story for the audience: the answer first, then the situation the room accepts, the
