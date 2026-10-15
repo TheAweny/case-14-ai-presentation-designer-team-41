@@ -3,6 +3,7 @@ import { Mastra } from '@mastra/core';
 import { LibSQLStore } from '@mastra/libsql';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { NodeSqliteClient } from './sqlite-client.js';
 
 export interface PipelineOptions {
   readonly generationWorkflow?: ReturnType<typeof createGenerationWorkflow>;
@@ -36,7 +37,9 @@ export function createMastra(options: PipelineOptions = {}): Mastra {
   return new Mastra({
     storage: new LibSQLStore({
       id: 'pipeline-storage',
-      url: storageUrl,
+      ...(storageUrl.startsWith('file:')
+        ? { client: new NodeSqliteClient(storageUrl.slice('file:'.length)) }
+        : { url: storageUrl }),
     }),
     agents: {},
     workflows: {
@@ -44,4 +47,9 @@ export function createMastra(options: PipelineOptions = {}): Mastra {
       ...(options.repairWorkflow ? { repair: options.repairWorkflow } : {}),
     },
   });
+}
+
+/** The run owns this storage and must close it even when a workflow fails. */
+export async function closeMastra(mastra: Mastra): Promise<void> {
+  await mastra.shutdown();
 }
