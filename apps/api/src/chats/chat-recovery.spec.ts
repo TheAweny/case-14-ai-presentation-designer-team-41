@@ -26,6 +26,11 @@ afterEach(async () => {
 });
 
 function database(messages: ChatMessage[] = []) {
+  let deleted = false;
+  const sessions = new Set<{
+    listening: boolean;
+    listeners: Map<string, (value: { channel: string; payload: string }) => void>;
+  }>();
   const row = {
     id: chatId,
     owner_id: account.id,
@@ -40,10 +45,25 @@ function database(messages: ChatMessage[] = []) {
   };
   const locks = new Set<string>();
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
-    if (sql.includes('INSERT INTO chats'))
+    if (sql.includes('pg_notify')) {
+      for (const session of sessions)
+        if (session.listening)
+          session.listeners.get('notification')?.({
+            channel: 'chat_turn_cancel',
+            payload: String(values[0]),
+          });
+      return { rows: [], rowCount: 0 };
+    }
+    if (sql.includes('INSERT INTO chats')) {
+      deleted = false;
+      row.messages = JSON.parse(String(values[7])) as ChatMessage[];
+    }
+    if (deleted) return { rows: [], rowCount: 0 };
+    if (sql.includes('UPDATE chats SET mode'))
       row.messages = JSON.parse(String(values[7])) as ChatMessage[];
     if (sql.includes('DELETE FROM chats') && values[1] !== account.id)
       return { rows: [], rowCount: 0 };
+    if (sql.includes('DELETE FROM chats')) deleted = true;
     if (sql.includes('WHERE id = $1 AND owner_id = $2') && values[1] !== account.id)
       return { rows: [], rowCount: 0 };
     return { rows: [row], rowCount: 1 };
@@ -53,8 +73,21 @@ function database(messages: ChatMessage[] = []) {
     end: async () => undefined,
     connect: vi.fn(async () => {
       let held: string | null = null;
+      const session = {
+        listening: false,
+        listeners: new Map<string, (value: { channel: string; payload: string }) => void>(),
+      };
+      sessions.add(session);
       return {
         query: async (sql: string, values: unknown[] = []) => {
+          if (sql === 'LISTEN chat_turn_cancel') {
+            session.listening = true;
+            return { rows: [] };
+          }
+          if (sql === 'UNLISTEN chat_turn_cancel') {
+            session.listening = false;
+            return { rows: [] };
+          }
           if (sql.includes('pg_try_advisory_lock')) {
             const key = String(values[0]);
             if (locks.has(key)) return { rows: [{ acquired: false }] };
@@ -69,15 +102,17 @@ function database(messages: ChatMessage[] = []) {
           }
           return query(sql, values);
         },
-        on: () => undefined,
-        off: () => undefined,
+        on: (event: string, listener: (value: { channel: string; payload: string }) => void) =>
+          session.listeners.set(event, listener),
+        off: (event: string) => session.listeners.delete(event),
         release: () => {
           if (held) locks.delete(held);
+          sessions.delete(session);
         },
       };
     }),
   };
-  return { row, pool };
+  return { row, pool, exists: () => !deleted };
 }
 
 function service(db: ReturnType<typeof database>) {
@@ -90,6 +125,46 @@ function service(db: ReturnType<typeof database>) {
 }
 
 describe('durable chat execution regressions', () => {
+  it('attaches from another API process and streams snapshots until the owner finishes', async () => {
+    const db = database();
+    const owner = service(db),
+      viewer = service(db);
+    await owner.instance.startTurn(chatId, request(), account);
+    const stream = await viewer.instance.attach(chatId, account);
+    expect(stream).not.toBeNull();
+    if (!stream) return;
+    const events: string[] = [];
+    const stop = stream.watch((event) => events.push(event.type), true);
+    pending.shift()?.();
+    await vi.waitFor(() => expect(events).toContain('turn-end'), { timeout: 2000 });
+    stop();
+    expect(events).toContain('message');
+  });
+
+  it('cancels the turn owned by another API process after checking ownership', async () => {
+    const db = database();
+    const owner = service(db),
+      remote = service(db);
+    const turn = await owner.instance.startTurn(chatId, request(), account);
+    await remote.instance.cancel(chatId, account);
+    expect(turn.controller.signal.aborted).toBe(true);
+  });
+
+  it('never recreates a deleted chat from a delayed progress save', async () => {
+    const db = database();
+    const f = service(db);
+    const state = Reflect.apply(Reflect.get(f.instance, 'stateOf'), f.instance, [
+      db.row,
+      account.id,
+    ]);
+    await f.instance.remove(chatId, account);
+    const result = await Reflect.apply(Reflect.get(f.instance, 'save'), f.instance, [state]).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(result).toBeInstanceOf(Error);
+    expect(db.exists()).toBe(false);
+  });
   it('rejects oversized UTF-8 chat documents before acknowledging a saved message', async () => {
     const db = database();
     const f = service(db);
