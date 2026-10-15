@@ -87,7 +87,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [{ ...echo, run }],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -105,7 +109,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -133,7 +141,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [{ ...echo, run }],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: control.signal,
     });
@@ -151,7 +163,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [{ role: 'user', content: 'Скажи да' }],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -188,7 +204,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -212,7 +232,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo, ask],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -236,7 +260,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -280,7 +308,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
       loopNudge: 'Сделай следующий шаг.',
@@ -309,7 +341,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
       maxSteps: 3,

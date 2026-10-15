@@ -4,6 +4,9 @@ import { z } from 'zod';
 import type { ChatEvent, ChatMessage, ChatMode, ChatPart } from '@lct/contracts';
 import { loadAgent, type LoadedAgent } from '@lct/registry';
 import type { ChatModel, ModelMessage, ToolSpec } from './chat-model.js';
+import { ChatToolDispatcher } from './tool-runtime.js';
+import { parseArguments } from './tool-arguments.js';
+export { lenientJson, mendedArguments } from './tool-arguments.js';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 /** An event before the chat numbers it. */
@@ -184,7 +187,7 @@ export interface ChatTurnOptions {
   /** Model answers in one turn: a model looping over tools stops here. */
   readonly maxSteps?: number;
   /** Rechecked by the runtime before each dispatch, independently of model instructions. */
-  readonly mode?: ChatMode;
+  readonly mode: ChatMode;
   /** Said to the model once when its answer loops; without it a looping answer ends the turn. */
   readonly loopNudge?: string;
 }
@@ -206,11 +209,7 @@ export interface ChatTurnResult {
  */
 export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnResult> {
   const { writer, signal } = options;
-  const byName = new Map(
-    options.tools
-      .filter((tool) => !options.mode || tool.modes.includes(options.mode))
-      .map((tool) => [tool.name, tool]),
-  );
+  const dispatcher = new ChatToolDispatcher(options);
   const messages: ModelMessage[] = [
     { role: 'system', content: options.instructions },
     ...options.history,
@@ -262,6 +261,8 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     let answer: Awaited<typeof step$>;
     try {
       answer = await step$;
+      // Some providers return a partial step when the reader is aborted instead of throwing.
+      if (stepControl.signal.reason instanceof LoopCut) throw stepControl.signal.reason;
     } catch (error) {
       if (!(stepControl.signal.reason instanceof LoopCut) || signal.aborted) throw error;
       // The person never sees the loop: the text part goes back to what it said before it.
@@ -330,7 +331,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
             output: { skipped: 'The turn waits for the person; call it again later.' },
             failed: true,
           }
-        : await runTool(byName.get(call.name), input, {
+        : await dispatcher.dispatch(call.name, call.arguments, {
             signal,
             callId: call.id,
             show: (shown) => writer.show(shown),
@@ -345,125 +346,6 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     if (waiting) return { steps: step, inputTokens, outputTokens, end: 'waiting' };
   }
   return { steps: maxSteps, inputTokens, outputTokens, end: 'limit' };
-}
-
-function parseArguments(text: string): { ok: true; value: unknown } | { ok: false } {
-  try {
-    return { ok: true, value: text.trim() ? JSON.parse(text) : {} };
-  } catch {
-    return { ok: false };
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** The object schema under optional, nullable and default wrappers, if there is one. */
-function objectShape(schema: unknown): Record<string, unknown> | undefined {
-  let current = schema;
-  for (let depth = 0; depth < 4; depth++) {
-    if (current instanceof z.ZodObject) return current.shape as Record<string, unknown>;
-    const unwrap = (current as { unwrap?: () => unknown } | undefined)?.unwrap;
-    if (typeof unwrap !== 'function') return undefined;
-    current = unwrap.call(current);
-  }
-  return undefined;
-}
-
-/**
- * JSON a model wrote, even when it left the last brackets open: they are closed in the order
- * they were opened. Null when it still does not read.
- */
-export function lenientJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const open: string[] = [];
-    let quoted = false;
-    for (let index = 0; index < text.length; index++) {
-      const char = text[index];
-      if (quoted) {
-        if (char === '\\') index++;
-        else if (char === '"') quoted = false;
-      } else if (char === '"') quoted = true;
-      else if (char === '{') open.push('}');
-      else if (char === '[') open.push(']');
-      else if (char === '}' || char === ']') open.pop();
-    }
-    if (quoted || !open.length) return null;
-    try {
-      return JSON.parse(text + open.reverse().join(''));
-    } catch {
-      return null;
-    }
-  }
-}
-
-/** A value with every string of JSON in it read as what it says, at any depth. */
-function unstrung(value: unknown, depth = 0): unknown {
-  if (depth > 4) return value;
-  if (typeof value === 'string' && /^\s*[[{]/.test(value)) {
-    const read = lenientJson(value);
-    return read === null ? value : unstrung(read, depth + 1);
-  }
-  if (Array.isArray(value)) return value.map((item) => unstrung(item, depth + 1));
-  if (isRecord(value))
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, unstrung(item, depth + 1)]),
-    );
-  return value;
-}
-
-/**
- * Arguments as the model meant them. Open models often send a nested object as a string of
- * JSON, or spread its fields over the top level; both are read back into the object before the
- * schema judges them. Anything else is left for the schema to reject with its reasons.
- */
-export function mendedArguments(schema: z.ZodType, value: unknown): unknown {
-  const shape = objectShape(schema);
-  if (!isRecord(value) || !shape) return value;
-  const out = unstrung(value) as Record<string, unknown>;
-  for (const [key, field] of Object.entries(shape)) {
-    if (out[key] !== undefined) continue;
-    const inner = objectShape(field);
-    if (!inner) continue;
-    const spread = Object.keys(inner).filter((name) => name in out && !(name in shape));
-    if (!spread.length) continue;
-    out[key] = Object.fromEntries(spread.map((name) => [name, out[name]]));
-    for (const name of spread) delete out[name];
-  }
-  return out;
-}
-
-async function runTool(
-  tool: ChatTool | undefined,
-  input: { ok: true; value: unknown } | { ok: false },
-  context: ToolContext,
-): Promise<ToolOutcome> {
-  context.signal.throwIfAborted();
-  if (!tool) return { output: { error: 'There is no such tool here.' }, failed: true };
-  if (!input.ok) return { output: { error: 'The arguments are not valid JSON.' }, failed: true };
-  let parsed = tool.input.safeParse(input.value);
-  if (!parsed.success) {
-    // The mended reading is what the model meant: its errors are the ones worth reporting.
-    parsed = tool.input.safeParse(mendedArguments(tool.input, input.value));
-  }
-  if (!parsed.success) {
-    return {
-      output: { error: 'Invalid arguments.', issues: z.treeifyError(parsed.error) },
-      failed: true,
-    };
-  }
-  try {
-    return await tool.run(parsed.data, context);
-  } catch (error) {
-    context.signal.throwIfAborted();
-    return {
-      output: { error: error instanceof Error ? error.message : 'The tool failed.' },
-      failed: true,
-    };
-  }
 }
 
 /** How much of the conversation the model rereads; older tool results give way first. */

@@ -454,6 +454,8 @@ async function readCompletion(
     text += rest;
     onText?.(rest);
   }
+  if ((finish === 'stop' && calls.length > 0) || (finish === 'tool_calls' && calls.length === 0))
+    protocolError = true;
   const finishReason = protocolError
     ? 'protocol_error'
     : interrupted
