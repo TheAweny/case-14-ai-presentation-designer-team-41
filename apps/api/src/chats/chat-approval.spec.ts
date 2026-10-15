@@ -4,6 +4,7 @@ import type { Account } from '../accounts/account-rules.js';
 import type { GenerationService } from '../generation/generation.service.js';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
 import { ChatsService } from './chats.service.js';
+import { chatTools, type ChatToolScope } from './chat-tools.js';
 
 const account = { id: 'owner' } as Account;
 const templateId = '00000000-0000-4000-8000-000000000001';
@@ -22,7 +23,17 @@ const plan = (planId: string, status: 'proposed' | 'approved', title: string): C
   id: crypto.randomUUID(),
   createdAt: 1,
   status: 'done',
-  parts: [{ type: 'plan', callId: planId, planId, outline: outline(title), templateId, status }],
+  parts: [
+    {
+      type: 'plan',
+      callId: planId,
+      planId,
+      revision: 1,
+      outline: outline(title),
+      templateId,
+      status,
+    },
+  ],
 });
 const services: ChatsService[] = [];
 afterEach(async () => {
@@ -123,5 +134,76 @@ describe('approved plan snapshot regressions', () => {
     expect(f.state.messages[0]).toMatchObject({
       parts: [{ outline: { title: 'Original' }, status: 'proposed' }],
     });
+  });
+});
+
+describe('build tool operation replay', () => {
+  it('returns an existing completed operation instead of starting another build', async () => {
+    const id = crypto.randomUUID(),
+      buildId = crypto.randomUUID();
+    const approved = plan(id, 'approved', 'Approved');
+    if (approved.role !== 'assistant') throw new Error('Invalid fixture');
+    const messages: ChatMessage[] = [
+      approved,
+      {
+        role: 'assistant',
+        id: crypto.randomUUID(),
+        createdAt: 2,
+        status: 'done',
+        parts: [
+          {
+            type: 'build',
+            callId: 'original',
+            buildId,
+            templateId,
+            templateName: 'Template',
+            runId: 'existing',
+            variantRunIds: ['existing'],
+            startedAt: 1,
+            finishedAt: 2,
+            status: 'done',
+            error: null,
+            ...{ planId: id, planRevision: 1 },
+          },
+          {
+            type: 'result',
+            buildId,
+            variants: [{ variant: 'balanced', deckId: 'existing' }],
+            reviews: null,
+            recommended: 'balanced',
+            elapsedMs: 1,
+          },
+        ],
+      },
+    ];
+    const generation = {
+      template: vi.fn(async () => {
+        throw new Error('A replay must not prepare a template');
+      }),
+    } as unknown as GenerationService;
+    const scope: ChatToolScope = {
+      account,
+      chatId: 'chat',
+      projectId: null,
+      mode: 'plan',
+      model: null,
+      messages: () => messages,
+      updatePart: () => undefined,
+      addDecks: () => undefined,
+    };
+    const build = chatTools(generation, scope).find((tool) => tool.name === 'build_deck');
+    if (!build) throw new Error('Missing build tool');
+    const outcome = await build.run(build.input.parse({ templateId, planId: id }), {
+      callId: 'retry',
+      signal: new AbortController().signal,
+      show: () => 0,
+      update: () => undefined,
+    });
+    expect(outcome.output).toMatchObject({
+      status: 'done',
+      reused: true,
+      variants: [{ variant: 'balanced', deckId: 'existing' }],
+    });
+    expect(generation.template).not.toHaveBeenCalled();
   });
 });
