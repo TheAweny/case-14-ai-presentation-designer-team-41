@@ -231,7 +231,8 @@ describe('real generation orchestration with offline dependencies', () => {
     const result = await run.result;
     expect(run.events.at(-1)).toBe('done');
     expect(result.manifest.artifacts.map((a) => a.kind)).toContain('audit');
-    expect(JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'))).toHaveLength(1);
+    const history = JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'));
+    expect(history.at(-1).contentHash).toBe(result.manifest.contentHash);
   });
   it('repairs just the affected slide through the Mastra repair workflow', async () => {
     const run = await exercise('repair');

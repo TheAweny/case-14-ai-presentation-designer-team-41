@@ -90,6 +90,16 @@ function service(db: ReturnType<typeof database>) {
 }
 
 describe('durable chat execution regressions', () => {
+  it('rejects oversized UTF-8 chat documents before acknowledging a saved message', async () => {
+    const db = database();
+    const f = service(db);
+    const result = await f.instance.startTurn(chatId, request('я'.repeat(2200000)), account).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(result instanceof Error && /large|объём|размер/i.test(result.message)).toBe(true);
+    expect(f.answer).not.toHaveBeenCalled();
+  });
   it('rejects a second API process while another process holds the chat turn', async () => {
     const db = database();
     const first = service(db),
