@@ -183,6 +183,8 @@ export interface ChatTurnOptions {
   readonly signal: AbortSignal;
   /** Model answers in one turn: a model looping over tools stops here. */
   readonly maxSteps?: number;
+  /** Rechecked by the runtime before each dispatch, independently of model instructions. */
+  readonly mode?: ChatMode;
   /** Said to the model once when its answer loops; without it a looping answer ends the turn. */
   readonly loopNudge?: string;
 }
@@ -192,7 +194,9 @@ export interface ChatTurnResult {
   readonly inputTokens: number;
   readonly outputTokens: number;
   /** Why the turn ended: the model answered, a tool waits for the person, or the step limit. */
-  readonly end: 'answer' | 'waiting' | 'limit';
+  readonly end: 'answer' | 'waiting' | 'limit' | 'incomplete';
+  readonly reason?:
+    'length' | 'content_filter' | 'protocol_error' | 'interrupted' | 'loop' | 'empty';
 }
 
 /**
@@ -202,12 +206,18 @@ export interface ChatTurnResult {
  */
 export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnResult> {
   const { writer, signal } = options;
-  const byName = new Map(options.tools.map((tool) => [tool.name, tool]));
+  const byName = new Map(
+    options.tools
+      .filter((tool) => !options.mode || tool.modes.includes(options.mode))
+      .map((tool) => [tool.name, tool]),
+  );
   const messages: ModelMessage[] = [
     { role: 'system', content: options.instructions },
     ...options.history,
   ];
   const maxSteps = options.maxSteps ?? 8;
+  if (!Number.isSafeInteger(maxSteps) || maxSteps < 1)
+    throw new Error('A positive bounded step limit is required.');
   let inputTokens = 0;
   let outputTokens = 0;
   let nudged = false;
@@ -235,7 +245,8 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
         }
         writer.text(delta);
       },
-      onToolCall: (name) =>
+      onToolCall: (name) => {
+        if (stepControl.signal.aborted) return;
         begun.push({
           name,
           index: writer.show({
@@ -245,7 +256,8 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
             input: null,
             status: 'running',
           }),
-        }),
+        });
+      },
     });
     let answer: Awaited<typeof step$>;
     try {
@@ -265,7 +277,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
           output: { error: 'The call was cut off.' },
         });
       if (nudged || !options.loopNudge)
-        return { steps: step, inputTokens, outputTokens, end: 'answer' };
+        return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: 'loop' };
       nudged = true;
       messages.push({ role: 'user', content: options.loopNudge });
       continue;
@@ -286,13 +298,22 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     };
     inputTokens += answer.inputTokens;
     outputTokens += answer.outputTokens;
+    signal.throwIfAborted();
+    const finish = answer.truncated ? 'length' : answer.finishReason;
+    if (finish && finish !== 'stop' && finish !== 'tool_calls') {
+      cutOff();
+      return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: finish };
+    }
     if (answer.toolCalls.length === 0) {
       cutOff();
+      if (!answer.text.trim())
+        return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: 'empty' };
       return { steps: step, inputTokens, outputTokens, end: 'answer' };
     }
     messages.push({ role: 'assistant', content: answer.text, toolCalls: answer.toolCalls });
     let waiting = false;
     for (const call of answer.toolCalls) {
+      signal.throwIfAborted();
       const input = parseArguments(call.arguments);
       const part: Extract<ChatPart, { type: 'tool' }> = {
         type: 'tool',
@@ -305,7 +326,10 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       const index = early ? early.index : writer.show(part);
       if (early) writer.update(index, part);
       const outcome = waiting
-        ? { output: { skipped: 'The turn waits for the person; call it again later.' } }
+        ? {
+            output: { skipped: 'The turn waits for the person; call it again later.' },
+            failed: true,
+          }
         : await runTool(byName.get(call.name), input, {
             signal,
             callId: call.id,
@@ -417,6 +441,7 @@ async function runTool(
   input: { ok: true; value: unknown } | { ok: false },
   context: ToolContext,
 ): Promise<ToolOutcome> {
+  context.signal.throwIfAborted();
   if (!tool) return { output: { error: 'There is no such tool here.' }, failed: true };
   if (!input.ok) return { output: { error: 'The arguments are not valid JSON.' }, failed: true };
   let parsed = tool.input.safeParse(input.value);

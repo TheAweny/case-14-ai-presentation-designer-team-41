@@ -63,7 +63,8 @@ describe('applyChatEvent', () => {
 describe('readChatEvents', () => {
   it('reports EOF without turn-end as an interrupted turn', async () => {
     const response = sse([{ type: 'message', seq: 0, message: answer }]);
-    await expect(readChatEvents(response.body!, () => undefined)).rejects.toThrow();
+    if (!response.body) throw new Error('Missing test stream.');
+    await expect(readChatEvents(response.body, () => undefined)).rejects.toThrow();
   });
   it('reads events split between chunks and skips broken lines', async () => {
     const text = `data: ${JSON.stringify({ type: 'ping', seq: 0 })}\n\ndata: {broken\n\ndata: ${JSON.stringify({ type: 'turn-end', seq: 1 })}\n\n`;

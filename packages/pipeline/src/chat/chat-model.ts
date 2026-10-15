@@ -32,6 +32,9 @@ export interface ModelStep {
   readonly toolCalls: readonly ToolCall[];
   /** The answer hit the token limit. */
   readonly truncated: boolean;
+  /** Missing only for legacy scripted providers. An incomplete step cannot authorize a tool. */
+  readonly finishReason?:
+    'stop' | 'tool_calls' | 'length' | 'content_filter' | 'protocol_error' | 'interrupted';
   readonly inputTokens: number;
   readonly outputTokens: number;
 }
@@ -228,20 +231,24 @@ export class OpenAICompatibleChatModel implements ChatModel {
     const choice = data.choices?.[0];
     const content = choice?.message?.content ?? '';
     let answer: z.infer<typeof schema>;
+    let finishReason = completionReason(choice?.finish_reason);
     try {
       answer = parseModelJson(content, schema);
     } catch {
       // A model that ignored the format still said something: show it, call nothing.
       answer = { say: stripThinking(content), tool: '', arguments: '' };
+      finishReason = 'protocol_error';
     }
     if (answer.say) request.onText?.(answer.say);
-    const tool = names.includes(answer.tool) ? answer.tool : '';
+    if (answer.tool && !names.includes(answer.tool)) finishReason = 'protocol_error';
+    const tool = finishReason === 'stop' && names.includes(answer.tool) ? answer.tool : '';
     return {
       text: answer.say,
       toolCalls: tool
         ? [{ id: `call-${crypto.randomUUID()}`, name: tool, arguments: answer.arguments || '{}' }]
         : [],
       truncated: choice?.finish_reason === 'length',
+      finishReason,
       inputTokens: data.usage?.prompt_tokens ?? 0,
       outputTokens: data.usage?.completion_tokens ?? 0,
     };
@@ -272,6 +279,17 @@ interface Chunk {
     finish_reason?: string | null;
   }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+}
+
+function completionReason(reason: unknown): NonNullable<ModelStep['finishReason']> {
+  if (
+    reason === 'stop' ||
+    reason === 'tool_calls' ||
+    reason === 'length' ||
+    reason === 'content_filter'
+  )
+    return reason;
+  return 'protocol_error';
 }
 
 function openAiMessage(message: ModelMessage): Record<string, unknown> {
@@ -335,6 +353,8 @@ async function readCompletion(
   const calls: { id: string; name: string; arguments: string }[] = [];
   let finish: string | null | undefined;
   let usage: Chunk['usage'];
+  let protocolError = false;
+  let interrupted = false;
 
   if (!(response.headers.get('content-type') ?? '').includes('text/event-stream')) {
     const data = (await response.json()) as Completion;
@@ -354,52 +374,99 @@ async function readCompletion(
     if (!reader) throw new Error('The model answer has no body.');
     const decoder = new TextDecoder();
     let buffer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let newline = buffer.indexOf('\n');
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim();
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf('\n');
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (payload === '[DONE]') continue;
-        let chunk: Chunk;
-        try {
-          chunk = JSON.parse(payload) as Chunk;
-        } catch {
+    let ended = false;
+    const take = (line: string) => {
+      if (!line.startsWith('data:')) return;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') {
+        ended = true;
+        return;
+      }
+      if (!payload) return;
+      let chunk: Chunk;
+      try {
+        const value: unknown = JSON.parse(payload);
+        if (
+          !value ||
+          typeof value !== 'object' ||
+          !('choices' in value) ||
+          !Array.isArray(value.choices)
+        )
+          throw new Error('Invalid completion chunk.');
+        chunk = value as Chunk;
+      } catch {
+        protocolError = true;
+        return;
+      }
+      if (ended) {
+        protocolError = true;
+        return;
+      }
+      if (chunk.usage) usage = chunk.usage;
+      const choice = chunk.choices?.[0];
+      if (!choice) return;
+      if (choice.finish_reason) finish = choice.finish_reason;
+      if (choice.delta?.content) say(choice.delta.content);
+      for (const part of choice.delta?.tool_calls ?? []) {
+        const index = part.index;
+        if (
+          index === undefined ||
+          !Number.isSafeInteger(index) ||
+          index < 0 ||
+          index > calls.length
+        ) {
+          protocolError = true;
           continue;
         }
-        if (chunk.usage) usage = chunk.usage;
-        const choice = chunk.choices?.[0];
-        if (!choice) continue;
-        if (choice.finish_reason) finish = choice.finish_reason;
-        if (choice.delta?.content) say(choice.delta.content);
-        for (const part of choice.delta?.tool_calls ?? []) {
-          const index = part.index ?? calls.length;
-          const call = (calls[index] ??= { id: '', name: '', arguments: '' });
-          if (part.id) call.id = part.id;
-          const named = call.name !== '';
-          if (part.function?.name) call.name += part.function.name;
-          if (!named && call.name !== '') onToolCall?.(call.name);
-          if (part.function?.arguments) call.arguments += part.function.arguments;
+        const call = (calls[index] ??= { id: '', name: '', arguments: '' });
+        if (part.id) call.id = part.id;
+        const named = call.name !== '';
+        if (part.function?.name) call.name += part.function.name;
+        if (!named && call.name !== '') onToolCall?.(call.name);
+        if (part.function?.arguments) call.arguments += part.function.arguments;
+      }
+    };
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          buffer += decoder.decode();
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let newline = buffer.indexOf('\n');
+        while (newline >= 0) {
+          take(buffer.slice(0, newline).trim());
+          buffer = buffer.slice(newline + 1);
+          newline = buffer.indexOf('\n');
         }
       }
+      take(buffer.trim());
+    } catch {
+      interrupted = true;
+    } finally {
+      reader.releaseLock();
     }
+    if (!ended) interrupted = true;
   }
   const rest = thinking.flush();
   if (rest) {
     text += rest;
     onText?.(rest);
   }
+  const finishReason = protocolError
+    ? 'protocol_error'
+    : interrupted
+      ? 'interrupted'
+      : completionReason(finish);
+  const complete = finishReason === 'tool_calls' || finishReason === 'stop';
   return {
     text,
-    toolCalls: calls
+    toolCalls: (complete ? calls : [])
       .filter((call) => call.name !== '')
       .map((call) => ({ ...call, id: call.id || `call-${crypto.randomUUID()}` })),
     truncated: finish === 'length',
+    finishReason,
     inputTokens: usage?.prompt_tokens ?? 0,
     outputTokens: usage?.completion_tokens ?? 0,
   };

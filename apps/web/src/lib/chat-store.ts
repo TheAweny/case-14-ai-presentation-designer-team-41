@@ -88,7 +88,13 @@ export interface ChatStore {
   draft(chatId: string, chat: ChatStart): void;
   send(chatId: string, message: ComposedMessage): void;
   answer(chatId: string, questionId: string, answer: ChatAnswer): void;
-  approve(chatId: string, planId: string, outline: DeckOutline, templateId: string): void;
+  approve(
+    chatId: string,
+    planId: string,
+    outline: DeckOutline,
+    templateId: string,
+    revision?: number,
+  ): void;
   cancel(chatId: string): void;
   setMode(chatId: string, mode: ChatMode): void;
   setModel(chatId: string, model: ModelRef | null): void;
@@ -131,18 +137,51 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
 
   /** Читать ход, пока он не кончится. Сообщение человека от сервера сменяет черновик. */
   const follow = async (chatId: string, response: Response) => {
-    if (!response.body) return;
     update(chatId, () => ({ running: true }));
+    let current = response;
+    let finished = false;
     try {
-      await readChatEvents(response.body, (event) =>
-        update(chatId, (chat) => ({
-          messages: applyChatEvent(chat.messages, event),
-          ...(event.type === 'message' && event.message.role === 'user' ? { pending: null } : {}),
-        })),
-      );
+      // Reattach only to the existing turn. Retrying POST here could repeat a mutation.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          if (!current.body) throw new Error('Сервер не передал поток ответа.');
+          await readChatEvents(current.body, (event) =>
+            update(chatId, (chat) => ({
+              messages: applyChatEvent(chat.messages, event),
+              ...(event.type === 'message' && event.message.role === 'user'
+                ? { pending: null }
+                : {}),
+            })),
+          );
+          finished = true;
+          break;
+        } catch (error) {
+          const saved = await deps.request(`/chats/${encodeURIComponent(chatId)}`);
+          const document = saved.ok ? chatDocumentOf(await saved.json()) : null;
+          if (!document) throw error;
+          update(chatId, () => ({
+            messages: document.messages,
+            title: document.title,
+            deckId: document.deckId,
+            running: document.running,
+            pending: null,
+          }));
+          if (!document.running) {
+            finished = true;
+            break;
+          }
+          if (attempt >= 2)
+            throw new Error(
+              'Не удалось восстановить соединение. Обновите чат, чтобы проверить состояние ответа.',
+              { cause: error },
+            );
+          current = await deps.request(`/chats/${encodeURIComponent(chatId)}/stream`);
+          if (!current.ok) throw new Error(await failureOf(current), { cause: error });
+        }
+      }
     } finally {
       update(chatId, () => ({ running: false }));
-      deps.onTurnEnd?.(chatId);
+      if (finished) deps.onTurnEnd?.(chatId);
     }
   };
 
@@ -212,8 +251,8 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
     })().catch((error: unknown) =>
       update(chatId, (chat) => ({
         running: false,
-        pending: chat.pending && {
-          ...chat.pending,
+        pending: {
+          ...(chat.pending ?? { text: '', attachments: [] }),
           failed: error instanceof Error ? error.message : '',
         },
       })),
@@ -320,8 +359,8 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
     answer(chatId, questionId, answer) {
       act(chatId, { type: 'answer', questionId, answer });
     },
-    approve(chatId, planId, outline, templateId) {
-      act(chatId, { type: 'approve-plan', planId, outline, templateId });
+    approve(chatId, planId, outline, templateId, revision = 1) {
+      act(chatId, { type: 'approve-plan', planId, outline, templateId, revision });
     },
     cancel(chatId) {
       void deps.request(`/chats/${encodeURIComponent(chatId)}/cancel`, { method: 'POST' });
