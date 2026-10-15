@@ -50,6 +50,17 @@ function build(messages: ChatMessage[], outline: DeckOutline | null = null) {
 }
 
 describe('generation brief regressions', () => {
+  it('never promotes a model summary to factual source material', async () => {
+    const { start, result } = build([user('Актуальный бюджет 9 млн')]);
+    await result;
+    expect(start.mock.calls[0]?.[0].brief.includes('бюджет 3 млн')).toBe(false);
+  });
+
+  it('asks for source requirements instead of building from model assertions alone', async () => {
+    const { start, result } = build([]);
+    expect(await result).toBeInstanceOf(Error);
+    expect(start).not.toHaveBeenCalled();
+  });
   it('preserves the newest correction after 50,000 characters of earlier requirements', async () => {
     const { start, result } = build([
       user('А'.repeat(51000)),
