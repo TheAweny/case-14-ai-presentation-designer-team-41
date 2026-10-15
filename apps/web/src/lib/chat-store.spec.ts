@@ -61,6 +61,10 @@ describe('applyChatEvent', () => {
 });
 
 describe('readChatEvents', () => {
+  it('reports EOF without turn-end as an interrupted turn', async () => {
+    const response = sse([{ type: 'message', seq: 0, message: answer }]);
+    await expect(readChatEvents(response.body!, () => undefined)).rejects.toThrow();
+  });
   it('reads events split between chunks and skips broken lines', async () => {
     const text = `data: ${JSON.stringify({ type: 'ping', seq: 0 })}\n\ndata: {broken\n\ndata: ${JSON.stringify({ type: 'turn-end', seq: 1 })}\n\n`;
     const bytes = new TextEncoder().encode(text);
@@ -78,6 +82,51 @@ describe('readChatEvents', () => {
 });
 
 describe('chat store', () => {
+  it('reconciles an interrupted stream with the saved server document without resending the turn', async () => {
+    const chatId = '00000000-0000-4000-8000-0000000000cc';
+    const request = vi.fn(async (path: string) => {
+      if (path.endsWith('/turns'))
+        return sse([
+          { type: 'message', seq: 0, message: user },
+          { type: 'message', seq: 1, message: answer },
+        ]);
+      return Response.json({
+        chatId,
+        title: 'Чат',
+        projectId: null,
+        deckIds: [],
+        deckId: null,
+        mode: 'chat',
+        createdAt: '2026-09-29T00:00:00.000Z',
+        updatedAt: '2026-09-29T00:00:00.000Z',
+        messages: [
+          user,
+          { ...answer, status: 'done', parts: [{ type: 'text', text: 'Сохранённый ответ.' }] },
+        ],
+        running: false,
+      });
+    });
+    const onTurnEnd = vi.fn();
+    const store = createChatStore({
+      request,
+      uploadContent: async () => ({ fileId: 'f', name: 'f', size: 0 }),
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+      onTurnEnd,
+    });
+    store.start(
+      chatId,
+      { projectId: null, mode: 'chat', model: null },
+      { text: 'Привет', files: [] },
+    );
+    await vi.waitFor(() =>
+      expect(store.get(chatId)?.messages[1]).toMatchObject({
+        status: 'done',
+        parts: [{ text: 'Сохранённый ответ.' }],
+      }),
+    );
+    expect(request.mock.calls.filter(([path]) => path.endsWith('/turns'))).toHaveLength(1);
+    expect(onTurnEnd).toHaveBeenCalledTimes(1);
+  });
   it('starts a chat: uploads files, sends the turn and follows its answer', async () => {
     const request = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(async () =>
       sse([

@@ -32,6 +32,88 @@ describe('ThinkingFilter', () => {
 });
 
 describe('OpenAICompatibleChatModel', () => {
+  it.each(['length', 'content_filter', null])(
+    'does not expose tool calls from an unfinished native answer (%s)',
+    async (finish) => {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          stream([
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
+                    ],
+                  },
+                },
+              ],
+            },
+            ...(finish ? [{ choices: [{ delta: {}, finish_reason: finish }] }] : []),
+          ]),
+        );
+      const step = await model(fetchImpl).step({
+        messages: [],
+        tools,
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(step.toolCalls).toEqual([]);
+    },
+  );
+
+  it('rejects malformed SSE instead of executing a call assembled around it', async () => {
+    const body =
+      'data: {broken\n\ndata: ' +
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [{ index: 0, function: { name: 'list_templates', arguments: '{}' } }],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      }) +
+      '\n\ndata: [DONE]\n\n';
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+    const step = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(step.toolCalls).toEqual([]);
+  });
+
+  it('does not execute a valid-looking JSON fallback truncated by the provider', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('tools unsupported', { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  say: 'Смотрю.',
+                  tool: 'list_templates',
+                  arguments: '{}',
+                }),
+              },
+              finish_reason: 'length',
+            },
+          ],
+        }),
+      );
+    const step = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(step.toolCalls).toEqual([]);
+  });
   it('streams text and assembles tool calls from their fragments', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       stream([
