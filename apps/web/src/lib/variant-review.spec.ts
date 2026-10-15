@@ -70,6 +70,12 @@ describe('resultOfBuild', () => {
     elapsedMs: 325000,
   };
 
+  it('does not present old counts without a verified revision as a complete audit', () => {
+    const result = resultOfBuild(part, decks);
+    expect(result.reviews).toBeNull();
+    expect(result.recommended).toBe('balanced');
+  });
+
   it('показывает сохранённый аудит сборки даже когда аудит импортированных слайдов другой', () => {
     const dense = decks[0];
     if (!dense) throw new Error('Dense fixture is missing');

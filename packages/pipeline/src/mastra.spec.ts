@@ -21,6 +21,17 @@ describe('Mastra storage setup', () => {
     await closeMastra(mastra);
     rmSync(root, { force: true, recursive: true });
   });
+  it('initializes local storage concurrently and releases it after shutdown', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lct-mastra-concurrent-'));
+    temporaryDirectories.push(root);
+    const mastra = createMastra({ storageUrl: `file:${join(root, 'mastra.db')}` });
+    try {
+      await Promise.all([mastra.getStorage()?.init(), mastra.getStorage()?.init()]);
+    } finally {
+      await closeMastra(mastra);
+    }
+    rmSync(root, { force: true, recursive: true });
+  });
   it('creates the parent directory for a local LibSQL file', () => {
     const root = mkdtempSync(join(tmpdir(), 'lct-mastra-'));
     temporaryDirectories.push(root);
