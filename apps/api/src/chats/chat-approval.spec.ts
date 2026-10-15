@@ -92,6 +92,31 @@ function fixture(messages: ChatMessage[]) {
 }
 
 describe('approved plan snapshot regressions', () => {
+  it('records explicit user approval as the source of the accepted outline', async () => {
+    const id = crypto.randomUUID();
+    const f = fixture([plan(id, 'proposed', 'New')]);
+    await f.invoke('acceptInput', f.state, f.approve(id), account, f.turn);
+    expect(f.state.messages[0]).toMatchObject({ parts: [{ approvalSource: 'user' }] });
+  });
+
+  it('rejects an approval of an older plan after a newer plan exists', async () => {
+    const old = crypto.randomUUID(),
+      latest = crypto.randomUUID();
+    const f = fixture([plan(old, 'approved', 'Old'), plan(latest, 'approved', 'Latest')]);
+    await expect(
+      f.invoke('acceptInput', f.state, f.approve(old, outline('Old')), account, f.turn),
+    ).rejects.toThrow(/newer|replaced|latest/i);
+  });
+
+  it('never builds an approval submitted in read-only chat mode', async () => {
+    const id = crypto.randomUUID();
+    const f = fixture([plan(id, 'proposed', 'New')]);
+    const input = { ...f.approve(id), mode: 'chat' };
+    await expect(f.invoke('acceptInput', f.state, input, account, f.turn)).rejects.toThrow(
+      /mode|режим/i,
+    );
+    expect(f.build).not.toHaveBeenCalled();
+  });
   it('builds the second approved plan with the exact edited outline', async () => {
     const first = crypto.randomUUID(),
       second = crypto.randomUUID();

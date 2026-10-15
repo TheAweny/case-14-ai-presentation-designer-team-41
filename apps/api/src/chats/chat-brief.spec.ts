@@ -13,7 +13,11 @@ const user = (text: string): ChatMessage => ({
   mode: 'plan',
   createdAt: Date.now(),
 });
-function build(messages: ChatMessage[], outline: DeckOutline | null = null) {
+function build(
+  messages: ChatMessage[],
+  outline: DeckOutline | null = null,
+  outlineSource: 'user' | 'model' = 'user',
+) {
   const start = vi.fn(async (_input: { brief: string }) => {
     throw new Error('Captured build input');
   });
@@ -43,6 +47,7 @@ function build(messages: ChatMessage[], outline: DeckOutline | null = null) {
     result: runBuild(generation, scope, context, {
       templateId: crypto.randomUUID(),
       outline,
+      ...{ outlineSource },
       brief: 'Модель: бюджет 3 млн',
       fileIds: [],
     }).catch((error: unknown) => error),
@@ -50,6 +55,21 @@ function build(messages: ChatMessage[], outline: DeckOutline | null = null) {
 }
 
 describe('generation brief regressions', () => {
+  it('does not treat an automatic model outline as human-approved factual material', async () => {
+    const automatic: DeckOutline = {
+      title: 'Модель: бюджет 3 млн',
+      audience: '',
+      goal: '',
+      slides: Array.from({ length: 10 }, () => ({
+        title: 'Пилот',
+        points: ['Модель: бюджет 3 млн'],
+        kind: 'statement',
+      })),
+    };
+    const { start, result } = build([user('Актуальный бюджет 9 млн')], automatic, 'model');
+    await result;
+    expect(start.mock.calls[0]?.[0].brief.includes('бюджет 3 млн')).toBe(false);
+  });
   it('never promotes a model summary to factual source material', async () => {
     const { start, result } = build([user('Актуальный бюджет 9 млн')]);
     await result;
