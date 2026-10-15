@@ -6,6 +6,7 @@ import type { EngineClient } from '@lct/engine-client';
 import { loadAgent, toManifestEntry } from '@lct/registry';
 import {
   artifactManifestSchema,
+  finalReviewSchema,
   type CompositionNote,
   type DeckOutline,
   type GenerationProfile,
@@ -15,7 +16,7 @@ import {
   type StageTiming,
   type RunArtifact,
 } from '@lct/contracts';
-import { createMastra } from '../mastra.js';
+import { createMastra, closeMastra } from '../mastra.js';
 import {
   createGenerationWorkflow,
   createRepairWorkflow,
@@ -33,7 +34,7 @@ import {
   writtenSchema,
 } from './workflow.js';
 import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
-import { shortened } from './fit.js';
+import { approvedCoverage } from './final-review.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 
@@ -60,6 +61,7 @@ export interface GenerateOptions {
   slideCount: number | null;
   /** The approved outline; the planner lays out its slides instead of planning its own. */
   outline?: DeckOutline | null;
+  outlineSource?: 'user' | 'model';
   profile: GenerationProfile;
   /** The template indexer's notes for this profile, if the template was indexed. */
   notes?: readonly CompositionNote[];
@@ -87,6 +89,15 @@ const EXPORT_RESERVE_MS = 60_000;
 /** The run's own deadline, under the five minutes the three variants share. */
 const RUN_DEADLINE_MS = 290_000;
 
+export class ContentFitError extends Error {
+  readonly code = 'content-overflow';
+  readonly requiresReview = true;
+  constructor(readonly findings: readonly unknown[]) {
+    super('Текст не помещается в шаблон после исправлений. Требуется проверка содержания.');
+    this.name = 'ContentFitError';
+  }
+}
+
 interface PendingPicture {
   index: number;
   slotId: string;
@@ -107,9 +118,12 @@ export async function generatePresentation(options: GenerateOptions) {
   ]);
   let seq = 0;
   let events = Promise.resolve();
+  let terminal = false;
   const timings: StageTiming[] = [];
   let stage: JobStage = 'planning';
   const emit = (data: EventData) => {
+    if (terminal) return events;
+    if (data.type === 'done' || data.type === 'failed') terminal = true;
     const event = {
       ...data,
       schemaVersion: 1 as const,
@@ -126,6 +140,11 @@ export async function generatePresentation(options: GenerateOptions) {
   const profile = withCardHeadingProfile(options.profile);
   // One date for the whole run: the writer and the audit judge years by the same day.
   const today = options.today ?? new Date();
+  const sourceBrief =
+    options.outline && options.outlineSource !== 'model'
+      ? JSON.stringify({ brief: options.brief, approvedOutline: options.outline })
+      : options.brief;
+  let ownedMastra: ReturnType<typeof createMastra> | undefined;
   try {
     // Warnings collected from repairs and audits; recorded in the deck and streamed as events.
     const reviewWarnings: string[] = [];
@@ -199,6 +218,7 @@ export async function generatePresentation(options: GenerateOptions) {
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
       today,
       imagesAvailable: illustrations !== null,
+      outlineIsSource: options.outlineSource !== 'model',
       onPlan,
       signal,
       concurrency: 3,
@@ -235,10 +255,11 @@ export async function generatePresentation(options: GenerateOptions) {
       generationWorkflow: workflow,
       repairWorkflow,
     });
+    ownedMastra = mastra;
     const run = await mastra.getWorkflow('generation').createRun();
     const result = await run.start({
       inputData: {
-        brief: options.brief,
+        brief: sourceBrief,
         slideCount: options.slideCount,
         profile,
         outline: options.outline ?? null,
@@ -269,84 +290,68 @@ export async function generatePresentation(options: GenerateOptions) {
         String(today.getMonth() + 1).padStart(2, '0'),
         String(today.getDate()).padStart(2, '0'),
       ].join('-'),
-      briefYears: briefYears(options.brief),
+      briefYears: briefYears(sourceBrief),
     });
-    // The last copy of each slot the engine measured as fitting, by slide and slot.
-    const lastFit = new Map<string, string>();
-    const remember = (
-      findings: readonly { slideIndex: number; slotId: string; severity: string }[],
-    ) => {
-      const failing = new Set(
-        findings.filter((f) => f.severity === 'error').map((f) => `${f.slideIndex}:${f.slotId}`),
-      );
-      for (const s of written)
-        for (const t of s.slide.texts)
-          if (!failing.has(`${s.index}:${t.slotId}`)) lastFit.set(`${s.index}:${t.slotId}`, t.text);
-    };
-    // The export refuses a slot its text overflows, which would cost the whole variant: every
-    // such slot goes back to its last fitting copy, or is cut by lines and words until it fits.
+    // Geometry cannot authorize deleting content or restoring an older, unaudited wording.
     const settleFit = async () => {
-      for (let pass = 0; pass < 8; pass++) {
-        const { findings } = await options.engine.checkCompositions(exportRequest(), signal);
-        remember(findings);
-        const errors = findings.filter((f) => f.severity === 'error');
-        if (!errors.length) return;
-        for (const finding of errors) {
-          const binding = written
-            .find((s) => s.index === finding.slideIndex)
-            ?.slide.texts.find((t) => t.slotId === finding.slotId);
-          if (!binding) continue;
-          const fitted = lastFit.get(`${finding.slideIndex}:${finding.slotId}`);
-          binding.text =
-            fitted !== undefined && fitted !== binding.text
-              ? fitted
-              : shortened(binding.text, finding);
-        }
-        reviewWarnings.push(
-          `Сокращено ${errors.length} полей, которые не помещались в рамки шаблона.`,
-        );
-      }
+      const { findings } = await options.engine.checkCompositions(exportRequest(), signal);
+      const errors = findings.filter((f) => f.severity === 'error');
+      if (errors.length) throw new ContentFitError(errors);
     };
+    let contentRevision = 1;
+    let previousHash = '';
+    const contentHash = () => {
+      const next = createHash('sha256').update(JSON.stringify(written)).digest('hex');
+      if (previousHash && previousHash !== next) contentRevision++;
+      previousHash = next;
+      return next;
+    };
+    const critiqueInput = () => ({
+      brief: sourceBrief,
+      approvedOutline: options.outlineSource === 'model' ? null : (options.outline ?? null),
+      proposedOutline: options.outlineSource === 'model' ? (options.outline ?? null) : null,
+      contentHash: contentHash(),
+      contentRevision,
+      slides: written.map((s) => {
+        const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
+        const headline = pattern ? headlineSlot(pattern) : undefined;
+        return {
+          slideIndex: s.index,
+          approvedSlide:
+            options.outlineSource === 'model'
+              ? null
+              : (s.approvedSlide ?? options.outline?.slides[s.index] ?? null),
+          patternId: s.slide.patternId,
+          speakerNotes: s.slide.speakerNotes,
+          visual: s.slide.visual ?? null,
+          texts: s.slide.texts
+            .filter((t) => t.slotId !== s.slide.visual?.slotId)
+            .map((t) => {
+              const slot = pattern?.slots.find((item) => item.slotId === t.slotId);
+              return {
+                ...t,
+                role: slot?.role === 'title' && slot.slotId !== headline ? 'heading' : slot?.role,
+                sample: slot?.sample,
+                maxChars: slot?.maxChars,
+                fitChars: slot ? fitChars(slot) : undefined,
+              };
+            }),
+        };
+      }),
+    });
+    const critiqueCurrent = () =>
+      options.provider.generate(
+        'critic',
+        critic.instructions,
+        critiqueInput(),
+        critiqueSchema,
+        signal,
+      );
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
       const [fit, critique] = await Promise.all([
         options.engine.checkCompositions(exportRequest(), signal),
-        options.provider.generate(
-          'critic',
-          critic.instructions,
-          {
-            brief: options.brief,
-            slides: written.map((s) => {
-              const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
-              const headline = pattern ? headlineSlot(pattern) : undefined;
-              return {
-                slideIndex: s.index,
-                patternId: s.slide.patternId,
-                speakerNotes: s.slide.speakerNotes,
-                // The slot a table or chart replaced has no text on purpose; the critic sees the
-                // visual instead.
-                visual: s.slide.visual ?? null,
-                texts: s.slide.texts
-                  .filter((t) => t.slotId !== s.slide.visual?.slotId)
-                  .map((t) => {
-                    const slot = pattern?.slots.find((item) => item.slotId === t.slotId);
-                    return {
-                      ...t,
-                      // Only the headline states the slide's claim; the other title slots
-                      // head a card or a column and are short names by design.
-                      role:
-                        slot?.role === 'title' && slot.slotId !== headline ? 'heading' : slot?.role,
-                      sample: slot?.sample,
-                      maxChars: slot?.maxChars,
-                      fitChars: slot ? fitChars(slot) : undefined,
-                    };
-                  }),
-              };
-            }),
-          },
-          critiqueSchema,
-          signal,
-        ),
+        critiqueCurrent(),
       ]);
       // Slides are written one by one, so a figure or a title repeated across the deck is seen
       // only here, over all of them.
@@ -359,8 +364,8 @@ export async function generatePresentation(options: GenerateOptions) {
       // block too thin for its box, which leaves the slide looking empty.
       const variant = options.variant ?? 'balanced';
       const repeats = [
-        ...deckRepeats(written[0]?.title ?? '', deck, options.brief),
-        ...slideFigureDefects(deck, options.brief),
+        ...deckRepeats(written[0]?.title ?? '', deck, sourceBrief),
+        ...slideFigureDefects(deck, sourceBrief),
         ...deck.flatMap((s) =>
           s.composition.slots.flatMap((slot) => {
             const least = minChars(slot, variant);
@@ -378,8 +383,14 @@ export async function generatePresentation(options: GenerateOptions) {
           }),
         ),
       ];
-      remember(fit.findings);
-      auditHistory.push({ attempt, fit: fit.findings, critique: critique.issues, repeats });
+      auditHistory.push({
+        attempt,
+        contentRevision,
+        contentHash: contentHash(),
+        fit: fit.findings,
+        critique: critique.issues,
+        repeats,
+      });
       // A card heading is a short name; a critic asking it for a claim would have the rewriter
       // turn every card into a sentence.
       const namesAHeading = (issue: (typeof critique.issues)[number]) => {
@@ -445,7 +456,8 @@ export async function generatePresentation(options: GenerateOptions) {
         };
         tasks.push({
           index: current.index,
-          brief: options.brief,
+          brief: sourceBrief,
+          ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
           purpose: current.purpose,
           composition,
           previous: current.slide,
@@ -570,7 +582,8 @@ export async function generatePresentation(options: GenerateOptions) {
         if (corrections.length && pattern) {
           tasks.push({
             index: current.index,
-            brief: options.brief,
+            brief: sourceBrief,
+            ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
             purpose: current.purpose,
             composition: pattern,
             previous: current.slide,
@@ -599,9 +612,66 @@ export async function generatePresentation(options: GenerateOptions) {
       reviewWarnings.push(message);
       await emit({ type: 'warning', stage, code: 'content-review-required', message });
     }
+    const finalContentHash = contentHash();
     await writeFile(
       join(options.outputDir, 'audit-deterministic.json'),
-      JSON.stringify(report, null, 2),
+      JSON.stringify({ ...report, contentRevision, contentHash: finalContentHash }, null, 2),
+    );
+    // The final semantic check runs after every possible copy mutation and describes the export.
+    const finalCritique = await critiqueCurrent();
+    const coverage = approvedCoverage(options.outline, written, finalCritique.coverage);
+    const semanticErrors = finalCritique.issues.filter((i) => i.category !== 'style');
+    const deterministicErrors = report.findings.filter(
+      (f) => f.severity === 'blocker' || f.severity === 'major',
+    ).length;
+    const finalReview = finalReviewSchema.parse({
+      schemaVersion: 1,
+      contentRevision,
+      contentHash: contentHash(),
+      status:
+        semanticErrors.length || deterministicErrors || coverage.missing.length
+          ? 'requires-review'
+          : 'complete',
+      deterministic: {
+        errors: deterministicErrors,
+        warnings: report.findings.length - deterministicErrors,
+      },
+      contextual: {
+        errors: semanticErrors.length,
+        warnings: finalCritique.issues.length - semanticErrors.length,
+      },
+      coverage,
+      issues: finalCritique.issues,
+      errors: deterministicErrors + semanticErrors.length + coverage.missing.length,
+      warnings:
+        report.findings.length -
+        deterministicErrors +
+        finalCritique.issues.length -
+        semanticErrors.length,
+    });
+    for (const missing of coverage.missing) {
+      const message = `Слайд ${missing.slideIndex + 1}: не подтверждено сохранение утверждения «${missing.text}».`;
+      reviewWarnings.push(message);
+      await warn(message);
+    }
+    if (semanticErrors.length) {
+      const message = `Итоговая смысловая проверка: замечаний ${semanticErrors.length}. Требуется проверка.`;
+      reviewWarnings.push(message);
+      await warn(message);
+    }
+    auditHistory.push({
+      attempt: auditHistory.length,
+      contentRevision,
+      contentHash: contentHash(),
+      fit: [],
+      critique: finalCritique.issues,
+      repeats: [],
+    });
+    await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
+    await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
+    await writeFile(
+      join(options.outputDir, 'final-review.json'),
+      JSON.stringify(finalReview, null, 2),
     );
     signal.throwIfAborted();
     if (output.missingFonts.length > 0) {
@@ -634,6 +704,7 @@ export async function generatePresentation(options: GenerateOptions) {
       ['deck-plan', join(options.outputDir, 'plan.json')],
       ['audit', join(options.outputDir, 'audit.json')],
       ['audit', join(options.outputDir, 'audit-deterministic.json')],
+      ['audit', join(options.outputDir, 'final-review.json')],
       ...output.previews.map((p) => ['preview', p]),
     ] as const) {
       const bytes = await readFile(path);
@@ -651,8 +722,10 @@ export async function generatePresentation(options: GenerateOptions) {
       startedAt: new Date(started).toISOString(),
       finishedAt: new Date().toISOString(),
       templateHash: options.profile.templateHash,
-      contentPackId: createHash('sha256').update(options.brief).digest('hex'),
+      contentPackId: createHash('sha256').update(sourceBrief).digest('hex'),
       planId: options.runId,
+      contentRevision,
+      contentHash: contentHash(),
       seed: options.seed ?? 42,
       revisions: [
         planner,
@@ -701,6 +774,8 @@ export async function generatePresentation(options: GenerateOptions) {
       totalMs: Date.now() - started,
       appliedPatchIds: [],
     });
+    await closeMastra(mastra);
+    ownedMastra = undefined;
     await writeFile(join(options.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     signal.throwIfAborted();
     await emit({ type: 'done', totalMs: Date.now() - started, manifestPath: 'manifest.json' });
@@ -709,7 +784,13 @@ export async function generatePresentation(options: GenerateOptions) {
     const message = error instanceof Error ? error.message : 'Generation failed.';
     await writeFile(
       join(options.outputDir, 'failure.json'),
-      JSON.stringify({ message, elapsedMs: Date.now() - started }),
+      JSON.stringify({
+        message,
+        elapsedMs: Date.now() - started,
+        ...(error instanceof ContentFitError
+          ? { requiresReview: true, code: error.code, findings: error.findings }
+          : {}),
+      }),
     );
     await emit({
       type: 'failed',
@@ -723,5 +804,7 @@ export async function generatePresentation(options: GenerateOptions) {
       retryable: true,
     });
     throw error;
+  } finally {
+    if (ownedMastra) await closeMastra(ownedMastra);
   }
 }

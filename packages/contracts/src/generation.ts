@@ -171,6 +171,8 @@ export const deckOutlineSchema = z.object({
 export type DeckOutline = z.infer<typeof deckOutlineSchema>;
 
 export const generationRequestSchema = z.object({
+  /** A model draft guides the story but cannot independently substantiate its facts. */
+  outlineSource: z.enum(['user', 'model']).optional(),
   templateId: z.string().uuid(),
   brief: z.string().trim().min(10).max(60000),
   slideCount: z.number().int().min(10).max(15).nullable().default(null),
@@ -236,6 +238,15 @@ export const compositionPlanSchema = z.object({
 });
 
 export const compositionCritiqueSchema = z.object({
+  coverage: z
+    .array(
+      z.object({
+        slideIndex: z.number().int().nonnegative(),
+        claimIndex: z.number().int().nonnegative(),
+        quote: z.string().min(1),
+      }),
+    )
+    .default([]),
   issues: z
     .array(
       z.object({

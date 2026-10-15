@@ -25,3 +25,4 @@ export {
   type ToolContext,
   type ToolOutcome,
 } from './agent.js';
+export { ChatToolDispatcher, type ToolDispatcherOptions } from './tool-runtime.js';

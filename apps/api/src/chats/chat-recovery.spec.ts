@@ -60,7 +60,7 @@ function database(messages: ChatMessage[] = []) {
     }
     if (deleted) return { rows: [], rowCount: 0 };
     if (sql.includes('UPDATE chats SET mode'))
-      row.messages = JSON.parse(String(values[7])) as ChatMessage[];
+      row.messages = JSON.parse(String(values[5])) as ChatMessage[];
     if (sql.includes('DELETE FROM chats') && values[1] !== account.id)
       return { rows: [], rowCount: 0 };
     if (sql.includes('DELETE FROM chats')) deleted = true;
@@ -118,6 +118,7 @@ function database(messages: ChatMessage[] = []) {
 function service(db: ReturnType<typeof database>) {
   const instance = new ChatsService({} as GenerationService, {} as ModelSettingsService);
   Reflect.set(instance, 'pool', db.pool);
+  Reflect.set(instance, 'lockPool', db.pool);
   const answer = vi.fn(async () => new Promise<void>((resolve) => pending.push(resolve)));
   Reflect.set(instance, 'answer', answer);
   services.push(instance);
@@ -158,7 +159,9 @@ describe('durable chat execution regressions', () => {
       account.id,
     ]);
     await f.instance.remove(chatId, account);
-    const result = await Reflect.apply(Reflect.get(f.instance, 'save'), f.instance, [state]).then(
+    const result = await (
+      Reflect.apply(Reflect.get(f.instance, 'save'), f.instance, [state]) as Promise<void>
+    ).then(
       () => null,
       (error: unknown) => error,
     );

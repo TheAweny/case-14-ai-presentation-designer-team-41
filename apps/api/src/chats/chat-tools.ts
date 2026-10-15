@@ -12,6 +12,7 @@ import {
   type DeckOutline,
   type LayoutVariant,
   type ModelRef,
+  type FinalReview,
 } from '@lct/contracts';
 import type { ChatTool, ToolContext, ToolOutcome } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
@@ -21,6 +22,8 @@ import {
   type StartedBuild,
   type VariantEnd,
 } from '../generation/generation.service.js';
+import { generationBrief } from './chat-brief.js';
+import { readFinalReview } from './final-review.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -36,6 +39,8 @@ export interface ChatToolScope {
   updatePart(messageId: string, index: number, part: ChatPart): void;
   /** Decks the chat produced, and the one it leads to. */
   addDecks(deckIds: readonly string[], primary: string | null): void;
+  /** Persist operation intent and confirm the execution lease before a side effect. */
+  persist?(): Promise<void>;
 }
 
 type BuildPart = Extract<ChatPart, { type: 'build' }>;
@@ -88,13 +93,6 @@ export function pointedElement(
   return null;
 }
 
-/** What the person said in the chat: every fact the deck may use is in there. */
-function peopleSaid(messages: readonly ChatMessage[]): string {
-  return messages
-    .flatMap((message) => (message.role === 'user' && message.text.trim() ? [message.text] : []))
-    .join('\n\n');
-}
-
 /** Order the agent recommends variants in when their audit is equal. */
 const PREFERENCE: readonly LayoutVariant[] = ['balanced', 'dense', 'airy'];
 
@@ -103,6 +101,7 @@ interface VariantOutcome {
   readonly deckId: string;
   readonly errors: number | null;
   readonly warnings: number | null;
+  readonly review?: FinalReview;
 }
 
 /** Fewer errors first, then fewer warnings, then the balanced one. */
@@ -118,7 +117,7 @@ export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
 }
 
 const TEXT_FILE = /\.(txt|md|csv|tsv)$/i;
-const MAX_FILE_CHARS = 20000;
+const MAX_FILE_CHARS = 8000;
 
 /**
  * The tools of the chat agent for one turn. They read and build through the same services as the
@@ -172,10 +171,8 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
         await readFile(join(generation.directory(deckId), 'audit-deterministic.json'), 'utf8'),
       ),
     );
-    const errors = report.findings.filter(
-      (f) => f.severity === 'blocker' || f.severity === 'major',
-    );
-    return { report, errors: errors.length, warnings: report.findings.length - errors.length };
+    const review = await readFinalReview(generation.directory(deckId));
+    return { report, review, errors: review?.errors ?? null, warnings: review?.warnings ?? null };
   };
 
   const listTemplates: ChatTool = {
@@ -248,10 +245,18 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
 
   const readFileTool: ChatTool = {
     name: 'read_file',
-    input: z.object({ fileId: z.string().uuid() }),
+    input: z.object({
+      fileId: z.string().uuid(),
+      offset: z.number().int().nonnegative().default(0),
+      limit: z.number().int().positive().max(MAX_FILE_CHARS).default(MAX_FILE_CHARS),
+    }),
     modes: ['chat', 'plan', 'auto'],
     async run(input) {
-      const { fileId } = input as { fileId: string };
+      const {
+        fileId,
+        offset = 0,
+        limit = MAX_FILE_CHARS,
+      } = input as { fileId: string; offset?: number; limit?: number };
       const result = await pool.query<{ file_name: string; storage_path: string }>(
         `SELECT file_name, storage_path FROM stored_files
          WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
@@ -265,8 +270,11 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
       return {
         output: {
           name: row.file_name,
-          text: text.slice(0, MAX_FILE_CHARS),
-          ...(text.length > MAX_FILE_CHARS ? { cut: true, length: text.length } : {}),
+          text: text.slice(offset, offset + limit),
+          offset,
+          nextOffset: offset + limit < text.length ? offset + limit : null,
+          hasMore: offset + limit < text.length,
+          totalChars: text.length,
         },
       };
     },
@@ -308,11 +316,17 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
     async run(input) {
       const deckId = (input as { deckId: string }).deckId;
       await chatDeck(deckId);
-      const { report, errors, warnings } = await auditOf(deckId);
+      const { report, review, errors, warnings } = await auditOf(deckId);
       return {
         output: {
           errors,
           warnings,
+          auditAvailable: review !== null,
+          status: review?.status ?? 'unknown',
+          contentRevision: review?.contentRevision ?? null,
+          contentHash: review?.contentHash ?? null,
+          coverage: review?.coverage ?? null,
+          contextual: review?.issues ?? null,
           findings: report.findings.slice(0, 40).map((finding) => ({
             slide: finding.target.slideId,
             severity: finding.severity,
@@ -373,6 +387,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
         type: 'plan',
         callId: context.callId,
         planId,
+        revision: 1,
         outline,
         templateId,
         status: 'proposed',
@@ -413,8 +428,19 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
           throw new Error('This plan is not approved. Wait for the person to approve it.');
       }
       if (request.planId !== null && !plan) throw new Error('There is no plan with this planId.');
+      if (plan?.part.status === 'superseded')
+        throw new Error('This plan was replaced by a newer one.');
+      if (plan?.part.status === 'approved' && plan.part.templateId !== request.templateId)
+        throw new Error(
+          'The template of an approved revision cannot be changed. Approve a new revision.',
+        );
       if (plan && plan.part.status !== 'approved')
-        scope.updatePart(plan.messageId, plan.index, { ...plan.part, status: 'approved' });
+        scope.updatePart(plan.messageId, plan.index, {
+          ...plan.part,
+          templateId: request.templateId,
+          status: 'approved',
+          approvalSource: 'model',
+        });
       // A model may list the template among the materials; as content it would fail the build.
       const templates = new Set([
         request.templateId,
@@ -430,7 +456,10 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
       ]);
       return runBuild(generation, scope, context, {
         templateId: request.templateId,
+        planId: plan?.part.planId ?? null,
+        planRevision: plan?.part.revision ?? (plan ? 1 : null),
         outline: plan?.part.outline ?? null,
+        outlineSource: plan?.part.approvalSource === 'user' ? 'user' : 'model',
         brief: request.brief,
         fileIds: request.fileIds.filter((id) => !templates.has(id)),
       });
@@ -508,16 +537,54 @@ export async function runBuild(
   request: {
     templateId: string;
     outline: DeckOutline | null;
+    outlineSource?: 'user' | 'model';
     brief: string;
     fileIds: readonly string[];
+    planId?: string | null;
+    planRevision?: number | null;
   },
 ): Promise<ToolOutcome> {
+  if (request.planId) {
+    const parts = scope
+      .messages()
+      .flatMap((message) => (message.role === 'assistant' ? message.parts : []));
+    const existing = parts.find(
+      (part): part is BuildPart =>
+        part.type === 'build' &&
+        part.planId === request.planId &&
+        part.planRevision === request.planRevision,
+    );
+    if (existing) {
+      if (existing.templateId !== request.templateId)
+        throw new Error(
+          'The template of this build operation has changed. Approve a new revision.',
+        );
+      const result = parts.find(
+        (part) => part.type === 'result' && part.buildId === existing.buildId,
+      );
+      if (existing.status === 'done' && result?.type === 'result') {
+        return {
+          output: {
+            status: 'done',
+            reused: true,
+            variants: result.variants,
+            recommended: result.recommended,
+          },
+        };
+      }
+      throw new Error(
+        'This plan revision already has a build operation. Review its result before approving a new revision.',
+      );
+    }
+  }
   const template = await generation.template(request.templateId, scope.account);
   const startedAt = Date.now();
   let part: BuildPart = {
     type: 'build',
     callId: context.callId,
     buildId: crypto.randomUUID(),
+    planId: request.planId ?? null,
+    planRevision: request.planRevision ?? null,
     templateId: request.templateId,
     templateName: template.file_name,
     runId: null,
@@ -527,28 +594,31 @@ export async function runBuild(
     status: 'preparing',
     error: null,
   };
+  const outlineSource = request.outlineSource ?? 'model';
+  const brief = generationBrief(scope.messages(), request.outline, outlineSource, request.fileIds);
   const index = context.show(part);
   const set = (patch: Partial<BuildPart>) => {
     part = { ...part, ...patch };
     context.update(index, part);
   };
+  let startedRunId: string | null = null;
+  let detachAbort: () => void = () => undefined;
   try {
+    context.signal.throwIfAborted();
+    await scope.persist?.();
     if (!GenerationService.prepared(template)) {
       await generation.prepare(request.templateId, scope.model, scope.account);
       context.signal.throwIfAborted();
     }
-    const brief = [request.brief, peopleSaid(scope.messages()), request.outline?.title ?? '']
-      .map((text) => text.trim())
-      .filter(Boolean)
-      .join('\n\n')
-      .slice(0, 50000)
-      .padEnd(10, '.');
+    context.signal.throwIfAborted();
+    await scope.persist?.();
     const build = await generation.start(
       {
         templateId: request.templateId,
         brief,
         slideCount: null,
         outline: request.outline,
+        outlineSource,
         projectId: scope.projectId,
         contentIds: [...request.fileIds],
         seed: 42,
@@ -556,17 +626,20 @@ export async function runBuild(
       },
       scope.account,
     );
+    startedRunId = build.runId;
+    const stop = () => generation.cancel(build.runId);
+    context.signal.addEventListener('abort', stop, { once: true });
+    detachAbort = () => context.signal.removeEventListener('abort', stop);
+    if (context.signal.aborted) stop();
+    context.signal.throwIfAborted();
     set({
       status: 'running',
       runId: build.runId,
       variantRunIds: build.variants.map((variant) => variant.runId),
       startedAt: Date.now(),
     });
-    const stop = () => generation.cancel(build.runId);
-    context.signal.addEventListener('abort', stop, { once: true });
-    const settled = await settleWithGrace(build).finally(() =>
-      context.signal.removeEventListener('abort', stop),
-    );
+    await scope.persist?.();
+    const settled = await settleWithGrace(build);
     context.signal.throwIfAborted();
     const done = settled.filter((variant) => variant.state === 'done');
     if (done.length === 0) {
@@ -590,6 +663,7 @@ export async function runBuild(
         deckId: variant.runId,
         errors: audit?.errors ?? null,
         warnings: audit?.warnings ?? null,
+        ...(audit ? { review: audit } : {}),
       });
     }
     const recommended = recommend(outcomes);
@@ -601,9 +675,15 @@ export async function runBuild(
       variants: outcomes.map(({ variant, deckId }) => ({ variant, deckId })),
       reviews: audited
         ? Object.fromEntries(
-            outcomes.map(({ deckId, errors, warnings }) => [
+            outcomes.map(({ deckId, errors, warnings, review }) => [
               deckId,
-              { errors: errors ?? 0, warnings: warnings ?? 0 },
+              {
+                errors: errors ?? 0,
+                warnings: warnings ?? 0,
+                status: review?.status,
+                contentHash: review?.contentHash,
+                contentRevision: review?.contentRevision,
+              },
             ]),
           )
         : null,
@@ -625,6 +705,7 @@ export async function runBuild(
       },
     };
   } catch (error) {
+    if (startedRunId !== null) generation.cancel(startedRunId);
     if (context.signal.aborted) {
       set({ status: 'cancelled', finishedAt: Date.now() });
       throw error;
@@ -632,6 +713,8 @@ export async function runBuild(
     const message = error instanceof Error ? error.message : 'The build failed.';
     set({ status: 'failed', finishedAt: Date.now(), error: message });
     throw error;
+  } finally {
+    detachAbort();
   }
 }
 
@@ -688,17 +771,6 @@ async function failureReasons(
 }
 
 async function readAuditCounts(generation: GenerationService, deckId: string) {
-  try {
-    const report = auditReportSchema.parse(
-      JSON.parse(
-        await readFile(join(generation.directory(deckId), 'audit-deterministic.json'), 'utf8'),
-      ),
-    );
-    const errors = report.findings.filter(
-      (finding) => finding.severity === 'blocker' || finding.severity === 'major',
-    ).length;
-    return { errors, warnings: report.findings.length - errors };
-  } catch {
-    return null;
-  }
+  const review = await readFinalReview(generation.directory(deckId));
+  return review;
 }

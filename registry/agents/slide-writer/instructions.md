@@ -64,3 +64,4 @@ comparing: several values over categories, time or segments.
   discarded. Never estimate, round or compute.
 - Do not invent a process diagram, arrows or cards. A sequence lives in the slots the composition
   already has, one step per row.
+  approvedSlide, если передан, содержит утверждённые человеком заголовок и все обязательные points. Сохрани каждый пункт, включая отрицания, условия, даты, значения и единицы измерения. Не заменяй содержание одобренного плана общими словами. Если brief содержит userRequirements, используй последние явные исправления пользователя; derivedModelBrief не является источником новых фактов. Не скрывай обязательные пункты только в заметках докладчика.

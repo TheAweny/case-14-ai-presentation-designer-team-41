@@ -318,6 +318,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   }
 
   async start(input: GenerationRequest, account: Account): Promise<StartedBuild> {
+    const buildStartedAt = Date.now();
     // Every generation runs three variants, each counted as one active run.
     if (this.active.size >= 2 * VARIANTS.length)
       throw new BadRequestException('Two generations are already running.');
@@ -389,6 +390,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     // The three variants of one brief are separate runs, so every deck endpoint serves each of
     // them as it is, and they share one cancellation.
     const controller = new AbortController();
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(Math.max(1, 290000 - (Date.now() - buildStartedAt))),
+    ]);
     // One plan for the three variants: the story is decided once, the layouts per variant.
     const sharedPlan = new SharedPlan();
     // Pictures too are drawn once per brief. Without an image model the planner is not offered
@@ -402,7 +407,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             text: provider,
             designSystem: prepared.data.designSystem,
             seed: input.seed ?? 42,
-            signal: controller.signal,
+            signal,
           },
           registryDir,
         )
@@ -440,6 +445,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           brief,
           slideCount: input.outline ? null : input.slideCount,
           outline: input.outline,
+          outlineSource: input.outlineSource,
           profile: prepared.data,
           ...(notes ? { notes } : {}),
           registryDir,
@@ -449,7 +455,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           variant,
           sharedPlan,
           illustrations,
-          signal: controller.signal,
+          signal,
           onEvent: (event) => this.repository.appendEvent(run.runId, event),
         });
         if (input.projectId !== null) {
@@ -473,7 +479,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       runId: entry.run.runId,
       state: await work(entry),
     }));
-    const settled = Promise.all(each);
+    const settled = Promise.all(each).finally(() => controller.abort());
     const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
     if (!primary) throw new BadRequestException('No variant could be started.');
     return {

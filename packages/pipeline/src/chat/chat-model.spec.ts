@@ -33,24 +33,22 @@ describe('ThinkingFilter', () => {
 
 describe('OpenAICompatibleChatModel', () => {
   it('rejects tool calls paired with a stop finish reason instead of tool_calls', async () => {
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        stream([
-          {
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
-                  ],
-                },
-                finish_reason: 'stop',
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      stream([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
+                ],
               },
-            ],
-          },
-        ]),
-      );
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ]),
+    );
     const step = await model(fetchImpl).step({
       messages: [],
       tools,
@@ -119,13 +117,11 @@ describe('OpenAICompatibleChatModel', () => {
         },
       ],
     };
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        new Response('data: ' + JSON.stringify(data) + '\n\n', {
-          headers: { 'content-type': 'text/event-stream' },
-        }),
-      );
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('data: ' + JSON.stringify(data) + '\n\n', {
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+    );
     const step = await model(fetchImpl).step({
       messages: [],
       tools,

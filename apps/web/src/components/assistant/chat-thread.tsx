@@ -185,7 +185,7 @@ function AssistantMessage({
               active={part.status === 'proposed' && part.planId === activePlanId && !busy}
               busy={busy}
               onApprove={(outline, templateId) =>
-                chatStore.approve(chatId, part.planId, outline, templateId)
+                chatStore.approve(chatId, part.planId, outline, templateId, part.revision)
               }
               onRefine={onRefine}
             />

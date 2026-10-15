@@ -77,6 +77,9 @@ export type BuildStatus = z.infer<typeof buildStatusSchema>;
 export const variantReviewSchema = z.object({
   errors: z.number().int().nonnegative(),
   warnings: z.number().int().nonnegative(),
+  status: z.enum(['complete', 'requires-review', 'unknown']).optional(),
+  contentRevision: z.number().int().positive().optional(),
+  contentHash: z.string().length(64).optional(),
 });
 
 /**
@@ -98,6 +101,10 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     type: z.literal('plan'),
     callId: z.string().min(1),
     planId: z.string().uuid(),
+    /** Revision approved by the person; older stored cards start at revision one. */
+    revision: z.number().int().positive().default(1),
+    /** Only an explicit approval request makes the outline factual source material. */
+    approvalSource: z.enum(['user', 'model']).optional(),
     outline: deckOutlineSchema,
     /** The template the agent means to build with; null — not chosen yet. */
     templateId: z.string().uuid().nullable(),
@@ -116,6 +123,9 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     type: z.literal('build'),
     callId: z.string().min(1),
     buildId: z.string().uuid(),
+    /** A plan revision is an idempotent build operation inside the chat. */
+    planId: z.string().uuid().nullable().default(null),
+    planRevision: z.number().int().positive().nullable().default(null),
     templateId: z.string().uuid(),
     templateName: z.string(),
     /** The balanced run the progress follows, and all three; empty while the template prepares. */
@@ -195,6 +205,7 @@ export const chatTurnInputSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('approve-plan'),
     planId: z.string().uuid(),
+    revision: z.number().int().positive().default(1),
     /** The plan as the person left it in the card: they may have edited it. */
     outline: deckOutlineSchema,
     templateId: z.string().uuid(),
@@ -203,6 +214,8 @@ export const chatTurnInputSchema = z.discriminatedUnion('type', [
 export type ChatTurnInput = z.infer<typeof chatTurnInputSchema>;
 
 export const chatTurnRequestSchema = z.object({
+  /** Stable across transport retries. Older clients can omit it. */
+  requestId: z.string().uuid().optional(),
   mode: chatModeSchema,
   /** The model the agent answers with; null — the model of the assistant role. */
   model: modelRefSchema.nullable().default(null),

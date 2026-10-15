@@ -66,6 +66,7 @@ function planMessage(status: 'proposed' | 'approved'): ChatMessage {
         type: 'plan',
         callId: 'c0',
         planId: '00000000-0000-4000-8000-000000000001',
+        revision: 1,
         outline,
         templateId: null,
         status,
@@ -128,7 +129,20 @@ describe('chat tools by mode', () => {
         throw new Error('Stop after the request.');
       },
     } as unknown as GenerationService;
-    const { tool, context } = chat('auto', [], generation);
+    const { tool, context } = chat(
+      'auto',
+      [
+        {
+          role: 'user',
+          id: crypto.randomUUID(),
+          text: 'Подготовь пилот',
+          attachments: [],
+          mode: 'auto',
+          createdAt: 1,
+        },
+      ],
+      generation,
+    );
     const build = tool('build_deck');
     await build
       .run(

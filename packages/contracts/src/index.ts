@@ -400,3 +400,4 @@ export {
   type ChatSummary,
   type ChatDocument,
 } from './chat.js';
+export { finalReviewSchema, type FinalReview } from './generation-review.js';

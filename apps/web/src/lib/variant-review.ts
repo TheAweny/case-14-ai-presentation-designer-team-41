@@ -7,6 +7,9 @@ import type { Deck } from './deck-source';
 export interface VariantReview {
   readonly errors: number;
   readonly warnings: number;
+  readonly status?: 'complete' | 'requires-review' | 'unknown';
+  readonly contentRevision?: number;
+  readonly contentHash?: string;
 }
 
 /** Итог сборки: три варианта вёрстки одного плана, аудит каждого и совет агента. */
@@ -47,12 +50,24 @@ export function resultOfBuild(
         ]
       : [];
   });
+  const reviews = variants.every(({ deckId }) => {
+    const review = part.reviews?.[deckId];
+    return (
+      review &&
+      review.status !== undefined &&
+      review.status !== 'unknown' &&
+      review.contentRevision !== undefined &&
+      review.contentHash?.length === 64
+    );
+  })
+    ? part.reviews
+    : null;
   return {
     runId: part.buildId,
     variants,
-    reviews: part.reviews,
+    reviews,
     // Проверяем и старые сохранённые советы по тем же числам, которые показывает карточка.
-    recommended: variants.length ? recommendVariant(variants, part.reviews) : part.recommended,
+    recommended: variants.length ? recommendVariant(variants, reviews) : part.recommended,
     templateSubstituted: false,
     elapsedMs: part.elapsedMs,
   };
