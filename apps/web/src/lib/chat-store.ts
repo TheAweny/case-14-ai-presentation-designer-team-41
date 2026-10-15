@@ -197,6 +197,7 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        requestId: crypto.randomUUID(),
         mode: chat.mode,
         model: chat.model,
         projectId: chat.projectId,

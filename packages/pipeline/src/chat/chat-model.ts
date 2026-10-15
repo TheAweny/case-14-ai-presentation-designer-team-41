@@ -55,6 +55,8 @@ export interface ModelStepRequest {
 /** The model a chat turn talks to. Tests replace it with recorded steps. */
 export interface ChatModel {
   readonly model: string;
+  /** Extra fallback instructions that also occupy the context window. */
+  readonly contextOverheadChars?: number;
   step(request: ModelStepRequest): Promise<ModelStep>;
 }
 
@@ -91,6 +93,10 @@ export class OpenAICompatibleChatModel implements ChatModel {
   readonly model: string;
   private readonly endpoint: string;
   private readonly fetchImpl: typeof fetch;
+
+  get contextOverheadChars(): number {
+    return this.options.jsonModeInstructions.length;
+  }
 
   constructor(private readonly options: OpenAICompatibleChatOptions) {
     if (!options.baseUrl.trim()) throw new Error('The model server address is required.');

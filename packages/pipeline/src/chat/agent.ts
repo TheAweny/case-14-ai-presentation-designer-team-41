@@ -6,6 +6,7 @@ import { loadAgent, type LoadedAgent } from '@lct/registry';
 import type { ChatModel, ModelMessage, ToolSpec } from './chat-model.js';
 import { ChatToolDispatcher } from './tool-runtime.js';
 import { parseArguments } from './tool-arguments.js';
+import { ContextBudgetExceededError, fitChatContext } from './context-budget.js';
 export { lenientJson, mendedArguments } from './tool-arguments.js';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -199,7 +200,13 @@ export interface ChatTurnResult {
   /** Why the turn ended: the model answered, a tool waits for the person, or the step limit. */
   readonly end: 'answer' | 'waiting' | 'limit' | 'incomplete';
   readonly reason?:
-    'length' | 'content_filter' | 'protocol_error' | 'interrupted' | 'loop' | 'empty';
+    | 'length'
+    | 'content_filter'
+    | 'protocol_error'
+    | 'interrupted'
+    | 'loop'
+    | 'empty'
+    | 'context_budget';
 }
 
 /**
@@ -222,6 +229,24 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
   let nudged = false;
   for (let step = 1; step <= maxSteps; step++) {
     signal.throwIfAborted();
+    let context: ModelMessage[];
+    try {
+      context = fitChatContext(
+        messages,
+        options.specs,
+        undefined,
+        options.model.contextOverheadChars ?? 0,
+      );
+    } catch (error) {
+      if (!(error instanceof ContextBudgetExceededError)) throw error;
+      return {
+        steps: step - 1,
+        inputTokens,
+        outputTokens,
+        end: 'incomplete',
+        reason: 'context_budget',
+      };
+    }
     // Calls shown while the model was still writing them, in the order they began.
     const begun: { name: string; index: number }[] = [];
     // A step of its own: an answer circling through the same paragraph is cut off here, while
@@ -232,7 +257,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     const before = writer.openText;
     let said = '';
     const step$ = options.model.step({
-      messages,
+      messages: context,
       tools: options.specs,
       signal: stepControl.signal,
       onText: (delta) => {
@@ -348,9 +373,6 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
   return { steps: maxSteps, inputTokens, outputTokens, end: 'limit' };
 }
 
-/** How much of the conversation the model rereads; older tool results give way first. */
-const HISTORY_BUDGET_CHARS = 90000;
-
 /**
  * The stored chat as the model reads it. A user message is its text and, as data, what it
  * attached. An assistant message is its text and its tool calls, each followed by what the tool
@@ -407,15 +429,6 @@ export function modelHistory(messages: readonly ChatMessage[]): ModelMessage[] {
     }
     flush();
   }
-  return fitHistory(history);
-}
-
-function fitHistory(history: ModelMessage[]): ModelMessage[] {
-  let size = history.reduce((total, message) => total + message.content.length, 0);
-  return history.map((message) => {
-    if (size <= HISTORY_BUDGET_CHARS || message.role !== 'tool') return message;
-    const omitted = '{"omitted":"An older tool result, left out to save room."}';
-    size -= message.content.length - omitted.length;
-    return { ...message, content: omitted };
-  });
+  // Fit alongside instructions and tool schemas at the runtime boundary, before every model step.
+  return history;
 }
