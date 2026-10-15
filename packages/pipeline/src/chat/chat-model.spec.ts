@@ -32,27 +32,126 @@ describe('ThinkingFilter', () => {
 });
 
 describe('OpenAICompatibleChatModel', () => {
+  it('rejects tool calls paired with a stop finish reason instead of tool_calls', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        stream([
+          {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
+                  ],
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          },
+        ]),
+      );
+    const step = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(step.toolCalls).toEqual([]);
+    expect(step.finishReason).toBe('protocol_error');
+  });
+
+  it('keeps visible partial text but discards tools when the provider transport fails', async () => {
+    const encoder = new TextEncoder();
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulls++ === 0)
+          controller.enqueue(
+            encoder.encode(
+              'data: ' +
+                JSON.stringify({
+                  choices: [
+                    {
+                      delta: {
+                        content: 'Часть ответа',
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: 'c1',
+                            function: { name: 'list_templates', arguments: '{}' },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                }) +
+                '\n\n',
+            ),
+          );
+        else controller.error(new TypeError('Connection lost.'));
+      },
+    });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(body, { headers: { 'content-type': 'text/event-stream' } }));
+    const step = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(step).toMatchObject({
+      text: 'Часть ответа',
+      toolCalls: [],
+      finishReason: 'interrupted',
+    });
+  });
+
+  it('requires the stream terminal marker even after a complete-looking tool call', async () => {
+    const data = {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
+            ],
+          },
+          finish_reason: 'tool_calls',
+        },
+      ],
+    };
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response('data: ' + JSON.stringify(data) + '\n\n', {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+      );
+    const step = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(step).toMatchObject({ toolCalls: [], finishReason: 'interrupted' });
+  });
   it.each(['length', 'content_filter', null])(
     'does not expose tool calls from an unfinished native answer (%s)',
     async (finish) => {
-      const fetchImpl = vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          stream([
-            {
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [
-                      { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
-                    ],
-                  },
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+        stream([
+          {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    { index: 0, id: 'c1', function: { name: 'list_templates', arguments: '{}' } },
+                  ],
                 },
-              ],
-            },
-            ...(finish ? [{ choices: [{ delta: {}, finish_reason: finish }] }] : []),
-          ]),
-        );
+              },
+            ],
+          },
+          ...(finish ? [{ choices: [{ delta: {}, finish_reason: finish }] }] : []),
+        ]),
+      );
       const step = await model(fetchImpl).step({
         messages: [],
         tools,
