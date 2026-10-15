@@ -92,6 +92,26 @@ function fixture(messages: ChatMessage[]) {
 }
 
 describe('approved plan snapshot regressions', () => {
+  it('never announces a successful answer when its final state could not be saved', async () => {
+    const id = crypto.randomUUID();
+    const f = fixture([plan(id, 'proposed', 'New')]);
+    const request = f.approve(id);
+    const prepared = await f.invoke('acceptInput', f.state, request, account, f.turn);
+    Reflect.set(
+      f.service,
+      'save',
+      vi.fn().mockResolvedValueOnce(undefined).mockRejectedValue(new Error('Storage unavailable')),
+    );
+    f.turn.emit.mockClear();
+    await expect(f.invoke('answer', f.state, request, account, f.turn, prepared)).rejects.toThrow(
+      'Storage unavailable',
+    );
+    const messages = f.turn.emit.mock.calls.map(
+      ([event]) => event as { type: string; message?: { status: string } },
+    );
+    expect(messages.some((event) => event.message?.status === 'done')).toBe(false);
+    expect(messages.at(-1)?.message?.status).toBe('failed');
+  });
   it('records explicit user approval as the source of the accepted outline', async () => {
     const id = crypto.randomUUID();
     const f = fixture([plan(id, 'proposed', 'New')]);
