@@ -21,6 +21,8 @@ export interface ManagedUser {
   readonly disabled: boolean;
   /** Мс с эпохи. */
   readonly createdAt: number;
+  /** Картинка аккаунта, как в `Account.avatar`. */
+  readonly avatar: string | null;
 }
 
 /** Что не так с полем: ключ словаря `settings.users.problems`, null — всё в порядке. */
@@ -53,6 +55,7 @@ export function managedUserOf(row: unknown): ManagedUser | null {
     role: value.role === 'admin' ? 'admin' : 'user',
     disabled: value.disabled === true,
     createdAt: Date.parse(String(value.createdAt)) || 0,
+    avatar: typeof value.avatar === 'string' ? value.avatar : null,
   };
 }
 

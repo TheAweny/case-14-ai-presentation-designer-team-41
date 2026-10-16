@@ -234,10 +234,7 @@ function UserRow({
         user.disabled && 'opacity-60',
       )}
     >
-      <AccountAvatar
-        account={{ userId: user.userId, email: user.email, name: user.name, role: user.role }}
-        className="size-8 text-xs"
-      />
+      <AccountAvatar account={user} className="size-8" />
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-sm font-medium">{user.name}</span>

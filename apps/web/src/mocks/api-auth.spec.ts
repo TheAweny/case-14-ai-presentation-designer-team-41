@@ -19,6 +19,7 @@ describe('createApiAuth', () => {
       email: 'a@b.co',
       name: 'Ann',
       role: 'user',
+      avatar: null,
     });
   });
 

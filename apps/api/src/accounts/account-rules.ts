@@ -19,6 +19,44 @@ export interface Account {
   readonly role: AccountRole;
   readonly disabled: boolean;
   readonly createdAt: string;
+  /** The picture: null — the mark the id gives, `preset:N` — a mark picked, or an image. */
+  readonly avatar?: string | null;
+}
+
+/** How many abstract marks there are to pick from. */
+export const AVATAR_PRESETS = 10;
+/**
+ * An uploaded picture as the browser sends it: a square of 256 px, a few tens of kilobytes. The
+ * cap leaves room for a busy photo and keeps an account row small.
+ */
+export const MAX_AVATAR_LENGTH = 200_000;
+
+const IMAGE_SIGNATURES: Readonly<Record<string, (bytes: Buffer) => boolean>> = {
+  png: (b) => b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+  jpeg: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  webp: (b) =>
+    b.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    b.subarray(8, 12).toString('latin1') === 'WEBP',
+};
+
+/**
+ * Why a value cannot be an avatar, or null when it can. An image must be what it says it is: a
+ * PNG, JPEG or WebP data URL whose bytes start like one, so nothing else is shown as a picture.
+ */
+export function avatarProblem(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== 'string') return 'Avatar must be a string or null.';
+  const preset = /^preset:(\d+)$/.exec(value);
+  if (preset) {
+    return Number(preset[1]) < AVATAR_PRESETS ? null : 'No such avatar.';
+  }
+  if (value.length > MAX_AVATAR_LENGTH) return 'The picture is too large.';
+  const image = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  const check = image ? IMAGE_SIGNATURES[image[1] ?? ''] : undefined;
+  if (!image || !check || !check(Buffer.from(image[2] ?? '', 'base64'))) {
+    return 'The picture must be a PNG, JPEG or WebP image.';
+  }
+  return null;
 }
 
 export function normalizeEmail(email: string): string {
