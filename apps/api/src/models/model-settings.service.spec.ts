@@ -8,6 +8,7 @@ import {
   ModelNotConfiguredError,
   ModelSettingsService,
 } from './model-settings.service.js';
+import { VK_AI_SPACE_BASE_URL } from '@lct/contracts';
 
 const SECRET = 'q4mR9v2LxT7pWc1nZ8bK3sHd6fJ0yGaE5uNo=';
 /** Settings as an administrator sets them up: shared with everyone, the way they worked before accounts. */
@@ -599,5 +600,88 @@ describe('headers of a connection', () => {
     );
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(init.headers).toMatchObject({ 'Project-ID': PROJECT });
+  });
+});
+
+describe('a VK AI Space connection', () => {
+  const vk = (shared?: boolean) => ({
+    name: 'VK AI Space',
+    preset: 'vk-ai-space' as const,
+    baseUrl: VK_AI_SPACE_BASE_URL,
+    apiKey: KEY,
+    headers: [{ name: 'Project-ID', value: 'f0000000-0000-4000-8000-000000000001' }],
+    ...(shared === undefined ? {} : { shared }),
+  });
+
+  it('takes the text roles and vision at once, as the default for everyone', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(vk(), ADMIN);
+    const forAnn = await service.get(ANN);
+    for (const role of ['assistant', 'planner', 'writer', 'critic', 'vision'] as const) {
+      expect(forAnn.roles.find((item) => item.role === role)).toEqual({
+        role,
+        kind: 'model',
+        connectionId,
+        modelId: 'qwen38-27b-fp8',
+      });
+    }
+    expect(forAnn.roles.find((item) => item.role === 'image')?.kind).toBe('unassigned');
+    expect(await service.resolve(null, ANN)).toMatchObject({
+      model: 'qwen38-27b-fp8',
+      headers: { 'Project-ID': 'f0000000-0000-4000-8000-000000000001' },
+    });
+  });
+
+  it('takes the roles of the person who added it for themselves, and no one else', async () => {
+    const { service } = setup();
+    const { connectionId } = await service.saveConnection(vk(), ANN);
+    expect((await service.get(ANN)).roles.find((item) => item.role === 'writer')).toMatchObject({
+      connectionId,
+    });
+    expect((await service.get(ADMIN)).roles.find((item) => item.role === 'writer')?.kind).toBe(
+      'unassigned',
+    );
+  });
+
+  it('leaves the roles alone when it is edited', async () => {
+    const { service } = setup({ env: SERVER_ENV });
+    const { connectionId } = await service.saveConnection(vk(), ADMIN);
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId: 'server', modelId: 'other' },
+      ADMIN,
+    );
+    await service.saveConnection({ ...vk(), connectionId }, ADMIN);
+    expect((await service.get(ADMIN)).roles.find((item) => item.role === 'writer')).toMatchObject({
+      connectionId: 'server',
+    });
+  });
+});
+
+describe('the vision role of the server connection', () => {
+  it('goes to VLM_MODEL when it is served by the same server, as on VK AI Space', async () => {
+    const { service } = setup({
+      env: {
+        LLM_BASE_URL: VK_AI_SPACE_BASE_URL,
+        LLM_MODEL: 'qwen38-27b-fp8',
+        VLM_BASE_URL: `${VK_AI_SPACE_BASE_URL}/`,
+        VLM_MODEL: 'qwen38-27b-fp8',
+        MODEL_API_KEY: SERVER_KEY,
+      },
+    });
+    expect((await service.get(ADMIN)).roles.find((item) => item.role === 'vision')).toEqual({
+      role: 'vision',
+      kind: 'model',
+      connectionId: 'server',
+      modelId: 'qwen38-27b-fp8',
+    });
+  });
+
+  it('waits for a connection when the vision model runs on another server', async () => {
+    const { service } = setup({
+      env: { ...SERVER_ENV, VLM_BASE_URL: 'http://localhost:8081/v1', VLM_MODEL: 'qwen-vl' },
+    });
+    expect((await service.get(ADMIN)).roles.find((item) => item.role === 'vision')?.kind).toBe(
+      'unassigned',
+    );
   });
 });

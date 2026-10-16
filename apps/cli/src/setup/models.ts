@@ -1,5 +1,13 @@
+import {
+  VK_AI_SPACE_BASE_URL,
+  VK_AI_SPACE_MODEL,
+  VK_PROJECT_HEADER,
+  headerRecord,
+  parseHeaderEnv,
+} from '@lct/contracts';
+
 /**
- * Where the models come from. A preset fills the four settings the pipeline reads; the service
+ * Where the models come from. A preset fills the settings the pipeline reads; the service
  * works with any OpenAI-compatible runtime, the presets only save typing.
  */
 export interface ModelSettings {
@@ -9,6 +17,8 @@ export interface ModelSettings {
   readonly MODEL_API_KEY: string;
   readonly LLM_MODEL: string;
   readonly VLM_MODEL: string;
+  /** Headers besides the key, `Name=value` pairs separated by commas. */
+  readonly MODEL_HEADERS: string;
 }
 
 export const AI_STUDIO_URL = 'https://llm.api.cloud.yandex.net/v1';
@@ -26,7 +36,31 @@ export function aiStudio(apiKey: string, folderId: string): ModelSettings {
     MODEL_API_KEY: apiKey.trim(),
     LLM_MODEL: model,
     VLM_MODEL: model,
+    MODEL_HEADERS: '',
   };
+}
+
+/**
+ * VK AI Space, where the finals are judged: Qwen 3.8 27B reads text and slide images, so one
+ * model serves every role. The gateway wants the project in a header besides the key.
+ */
+export function vkAiSpace(apiKey: string, projectId: string): ModelSettings {
+  return {
+    MODEL_PROVIDER: '',
+    LLM_BASE_URL: VK_AI_SPACE_BASE_URL,
+    VLM_BASE_URL: VK_AI_SPACE_BASE_URL,
+    MODEL_API_KEY: apiKey.trim(),
+    LLM_MODEL: VK_AI_SPACE_MODEL,
+    VLM_MODEL: VK_AI_SPACE_MODEL,
+    MODEL_HEADERS: `${VK_PROJECT_HEADER}=${projectId.trim()}`,
+  };
+}
+
+/** A VK AI Space project id: a UUID. */
+export function projectIdProblem(value: string): string | undefined {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim())
+    ? undefined
+    : 'Project ID — UUID вида 0b5e…-…-…-…-…';
 }
 
 /** Any OpenAI-compatible runtime: vLLM, llama.cpp, a hosted provider of open-weight models. */
@@ -44,6 +78,7 @@ export function openAiCompatible(
     MODEL_API_KEY: apiKey.trim(),
     LLM_MODEL: model.trim(),
     VLM_MODEL: (visionModel ?? model).trim(),
+    MODEL_HEADERS: '',
   };
 }
 
@@ -56,6 +91,7 @@ export function offline(): ModelSettings {
     MODEL_API_KEY: '',
     LLM_MODEL: '',
     VLM_MODEL: '',
+    MODEL_HEADERS: '',
   };
 }
 
@@ -79,6 +115,7 @@ export async function checkModel(
     const response = await doFetch(`${settings.LLM_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
+        ...headerRecord(parseHeaderEnv(settings.MODEL_HEADERS)),
         'content-type': 'application/json',
         authorization: `Bearer ${settings.MODEL_API_KEY}`,
       },

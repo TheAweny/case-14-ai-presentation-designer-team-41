@@ -51,13 +51,21 @@ curl -fsSL <raw-url>/install.sh | bash     # или ./install.sh из клона
 запустит мастер `lct onboard`:
 
 1. как запускать: Docker Compose или локально для разработки;
-2. откуда брать модель: Yandex AI Studio (ключ и ID каталога), любой OpenAI-совместимый API
-   или офлайн на записанных ответах; соединение сразу проверяется;
+2. откуда брать модель: VK AI Space с Qwen 3.8 27B, моделью финала (нужны только API-ключ и
+   Project ID), Yandex AI Studio (ключ и ID каталога), любой OpenAI-совместимый API или офлайн на
+   записанных ответах; соединение сразу проверяется;
 3. администратор интерфейса: почта, имя, пароль; ключ подписи сессий создаётся сам;
 4. проверка портов, запись `.env` (доступен только владельцу), сборка, запуск и ожидание
    `/health`.
 
-Без вопросов, например в CI:
+Без вопросов, например в CI. Модель финала, VK AI Space:
+
+```bash
+./install.sh --yes --provider vk --api-key KEY --project-id PROJECT_UUID \
+  --admin-email admin@example.com --admin-password '...'
+```
+
+Yandex AI Studio:
 
 ```bash
 ./install.sh --yes --provider ai-studio --api-key KEY --folder-id b1g... \
@@ -80,6 +88,23 @@ curl -fsSL <raw-url>/install.sh | bash     # или ./install.sh из клона
 Сервис говорит с любым рантаймом с OpenAI chat API: свой vLLM или llama.cpp либо внешний
 провайдер моделей с открытыми весами. В `.env` задаются `LLM_BASE_URL`, `VLM_BASE_URL`,
 `MODEL_API_KEY` и, если провайдер называет модели по-своему, `LLM_MODEL` и `VLM_MODEL`.
+Шлюзы, которым кроме ключа нужны заголовки, получают их из `MODEL_HEADERS` (`Имя=значение`
+через запятую).
+
+**VK AI Space** проще всего подключить мастером: `lct onboard` → «VK AI Space», ключ и Project
+ID. Вручную это четыре строки `.env`; картинки слайдов читает та же модель, поэтому `VLM_BASE_URL`
+и `VLM_MODEL` повторяют `LLM_BASE_URL` и `LLM_MODEL`:
+
+```bash
+LLM_BASE_URL=https://ai-demo.platformpreview.ru/api/inference-providers-router/00000000-0000-0000-0000-000000000001/v1
+LLM_MODEL=qwen38-27b-fp8
+MODEL_API_KEY=<API-ключ>
+MODEL_HEADERS=Project-ID=<Project ID>
+```
+
+В интерфейсе: «Настройки → Модели → Добавить подключение → VK AI Space», ключ и Project ID. Модель
+сама назначится ролям.
+
 `MODEL_PROVIDER=fake` отвечает записанными ответами из `registry/recordings/` без сети и GPU,
 `MODEL_PROVIDER=record` записывает ответы настоящей модели.
 

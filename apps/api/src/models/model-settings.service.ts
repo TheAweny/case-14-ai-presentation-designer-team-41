@@ -3,6 +3,8 @@ import {
   PIPELINE_ROLES,
   SERVER_CONNECTION_ID,
   baseUrlProblem,
+  VK_AI_SPACE_MODEL,
+  VK_AI_SPACE_ROLES,
   headerRecord,
   headersProblem,
   normalizeHeaders,
@@ -139,6 +141,19 @@ export class ModelSettingsService {
   }
 
   /**
+   * The vision model of the server connection: `VLM_MODEL` when `VLM_BASE_URL` is the same
+   * server as `LLM_BASE_URL`, as with a model that reads text and images alike. A vision model on
+   * another server is not a connection of its own, so the role then waits for one.
+   */
+  private serverVisionModel(): string | undefined {
+    const server = this.server();
+    const visionUrl = this.env.VLM_BASE_URL?.trim() ?? '';
+    const model = this.env.VLM_MODEL?.trim() ?? '';
+    if (!server || !model || !visionUrl || baseUrlProblem(visionUrl)) return undefined;
+    return normalizeBaseUrl(visionUrl) === server.baseUrl ? model : undefined;
+  }
+
+  /**
    * The server connection as everyone sees it. Which of its models are offered is stored by its
    * address, so the limit outlives the process and follows the gateway, not the name.
    */
@@ -254,12 +269,13 @@ export class ModelSettingsService {
         return shared;
       }
       // The model from .env is the fallback only while an administrator has not switched it off.
-      const model = this.server()?.model;
-      if (
-        model &&
-        SERVER_DEFAULT_ROLES.includes(role) &&
-        isModelEnabled(model, server?.enabledModels ?? null)
-      ) {
+      const model =
+        role === 'vision'
+          ? this.serverVisionModel()
+          : SERVER_DEFAULT_ROLES.includes(role)
+            ? this.server()?.model
+            : undefined;
+      if (model && isModelEnabled(model, server?.enabledModels ?? null)) {
         inherited.push(role);
         return { role, kind: 'model', connectionId: SERVER_CONNECTION_ID, modelId: model };
       }
@@ -319,6 +335,18 @@ export class ModelSettingsService {
       headers,
     };
     await this.store.saveConnection(stored);
+    // A new VK AI Space connection is the model of the finals: a key and a project are all the
+    // person enters, and its model takes the roles it can perform at once. Shared, it becomes the
+    // default for everyone; someone else's own choices stay theirs.
+    const roleOwner = ownerId === null ? null : actor.admin ? undefined : actor.userId;
+    if (previous === null && input.preset === 'vk-ai-space' && roleOwner !== undefined) {
+      for (const role of VK_AI_SPACE_ROLES) {
+        await this.store.setRole(
+          { role, kind: 'model', connectionId, modelId: VK_AI_SPACE_MODEL },
+          roleOwner,
+        );
+      }
+    }
     await this.store.record({
       userId: actor.userId,
       action: previous ? 'connection-updated' : 'connection-created',

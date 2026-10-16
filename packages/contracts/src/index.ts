@@ -370,6 +370,10 @@ export {
   headerRecord,
   type ConnectionHeader,
   type HeadersProblem,
+  VK_AI_SPACE_BASE_URL,
+  VK_AI_SPACE_MODEL,
+  VK_AI_SPACE_ROLES,
+  VK_PROJECT_HEADER,
 } from './model-settings.js';
 export {
   MODEL_FAMILIES,

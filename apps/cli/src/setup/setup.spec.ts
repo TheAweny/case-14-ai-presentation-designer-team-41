@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseArgs } from './args.js';
 import { EnvFile } from './env-file.js';
-import { aiStudio, checkModel, offline } from './models.js';
+import { aiStudio, checkModel, offline, projectIdProblem, vkAiSpace } from './models.js';
 import { ensureInstallationSecrets, isUsableSecret } from './secrets.js';
 import { emailProblem, formatUsers, parseUsers, passwordProblem, upsertUser } from './users.js';
 
@@ -124,6 +124,34 @@ describe('models', () => {
     );
     expect(bad).toMatchObject({ ok: false });
     expect(bad.detail).toMatch(/401/);
+  });
+
+  it('fills the VK AI Space preset from a key and a project id alone', () => {
+    const settings = vkAiSpace(' key ', ' 0b5e0000-0000-4000-8000-000000000001 ');
+    expect(settings).toMatchObject({
+      LLM_MODEL: 'qwen38-27b-fp8',
+      VLM_MODEL: 'qwen38-27b-fp8',
+      MODEL_API_KEY: 'key',
+      MODEL_HEADERS: 'Project-ID=0b5e0000-0000-4000-8000-000000000001',
+    });
+    expect(settings.LLM_BASE_URL).toMatch(/^https:\/\/ai-demo\.platformpreview\.ru\/.*\/v1$/);
+    expect(settings.VLM_BASE_URL).toBe(settings.LLM_BASE_URL);
+    expect(projectIdProblem('0b5e0000-0000-4000-8000-000000000001')).toBeUndefined();
+    expect(projectIdProblem('not a project')).toMatch(/UUID/);
+  });
+
+  it('checks VK AI Space with its project header', async () => {
+    let headers: HeadersInit | undefined;
+    await checkModel(vkAiSpace('k', '0b5e0000-0000-4000-8000-000000000001'), (_url, init) => {
+      headers = init?.headers;
+      return Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: '{"ok": true}' } }] })),
+      );
+    });
+    expect(headers).toMatchObject({
+      'Project-ID': '0b5e0000-0000-4000-8000-000000000001',
+      authorization: 'Bearer k',
+    });
   });
 
   it('needs nothing to check offline', async () => {

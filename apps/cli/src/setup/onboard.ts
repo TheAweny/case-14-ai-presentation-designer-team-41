@@ -1,7 +1,15 @@
 import { join } from 'node:path';
 import * as p from '@clack/prompts';
 import { EnvFile } from './env-file.js';
-import { aiStudio, checkModel, offline, openAiCompatible, type ModelSettings } from './models.js';
+import {
+  aiStudio,
+  checkModel,
+  offline,
+  openAiCompatible,
+  projectIdProblem,
+  vkAiSpace,
+  type ModelSettings,
+} from './models.js';
 import {
   BUILDX_HINT,
   buildxOk,
@@ -19,8 +27,10 @@ import { ensureInstallationSecrets } from './secrets.js';
 export interface OnboardOptions {
   readonly yes?: boolean;
   readonly mode?: 'docker' | 'local';
-  readonly provider?: 'ai-studio' | 'openai' | 'offline';
+  readonly provider?: 'vk' | 'ai-studio' | 'openai' | 'offline';
   readonly apiKey?: string;
+  /** VK AI Space: the project the key belongs to. */
+  readonly projectId?: string;
   readonly folderId?: string;
   readonly baseUrl?: string;
   readonly model?: string;
@@ -53,6 +63,11 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
             message: 'Откуда брать модель?',
             options: [
               {
+                value: 'vk',
+                label: 'VK AI Space',
+                hint: 'Qwen 3.8 27B для финала ЛЦТ, API-ключ и Project ID',
+              },
+              {
                 value: 'ai-studio',
                 label: 'Yandex AI Studio',
                 hint: 'Qwen3-30B-A3B (30.5B), ключ и ID каталога',
@@ -67,6 +82,30 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
           }),
         ));
   if (provider === 'offline') return offline();
+  if (provider === 'vk') {
+    const apiKey =
+      options.apiKey ??
+      (await ask(() =>
+        p.password({
+          message: 'API-ключ VK AI Space',
+          validate: (v) => (v && v.trim().length > 10 ? undefined : 'Вставьте ключ целиком'),
+        }),
+      ));
+    const configured = env.get('MODEL_HEADERS')?.match(/Project-ID=([^,]+)/)?.[1];
+    const projectId =
+      options.projectId ??
+      (await ask(() =>
+        p.text({
+          message: 'Project ID',
+          placeholder: '0b5e…-…-…-…-…',
+          ...(configured ? { defaultValue: configured } : {}),
+          validate: (v) => (v === '' && configured ? undefined : projectIdProblem(v ?? '')),
+        }),
+      ));
+    const problem = projectIdProblem(projectId || configured || '');
+    if (problem) throw new Error(problem);
+    return vkAiSpace(apiKey, projectId || configured || '');
+  }
   if (provider === 'ai-studio') {
     const apiKey =
       options.apiKey ??
@@ -281,5 +320,11 @@ export async function onboard(options: OnboardOptions = {}): Promise<number> {
 }
 
 function chooseModelAgain(options: OnboardOptions): Promise<number> {
-  return onboard({ ...options, provider: undefined, apiKey: undefined, folderId: undefined });
+  return onboard({
+    ...options,
+    provider: undefined,
+    apiKey: undefined,
+    folderId: undefined,
+    projectId: undefined,
+  });
 }

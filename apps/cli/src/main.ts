@@ -20,7 +20,11 @@ const HELP = `lct — цифровой дизайнер презентаций
   lct doctor                  проверить окружение, модель и сервис
   lct generate <config.yaml>  сгенерировать колоды по конфигу прогона
 
-Установка без вопросов:
+Установка без вопросов, модель финала VK AI Space:
+  lct onboard --yes --provider vk --api-key KEY --project-id UUID \\
+    --admin-email admin@example.com --admin-password '…'
+
+Или Yandex AI Studio:
   lct onboard --yes --provider ai-studio --api-key KEY --folder-id b1g… \\
     --admin-email you@example.com --admin-password '…'
 `;
@@ -31,8 +35,9 @@ const COMMANDS: Record<string, (args: string[], flags: Record<string, string>) =
       onboard({
         yes: f.yes === 'true',
         mode: f.mode as 'docker' | 'local' | undefined,
-        provider: f.provider as 'ai-studio' | 'openai' | 'offline' | undefined,
+        provider: f.provider as 'vk' | 'ai-studio' | 'openai' | 'offline' | undefined,
         apiKey: f['api-key'],
+        projectId: f['project-id'],
         folderId: f['folder-id'],
         baseUrl: f['base-url'],
         model: f.model,

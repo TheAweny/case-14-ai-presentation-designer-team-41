@@ -141,6 +141,7 @@ export async function doctor(): Promise<number> {
     MODEL_API_KEY: file.get('MODEL_API_KEY') ?? '',
     LLM_MODEL: file.get('LLM_MODEL') ?? '',
     VLM_MODEL: file.get('VLM_MODEL') ?? '',
+    MODEL_HEADERS: file.get('MODEL_HEADERS') ?? '',
   } satisfies ModelSettings;
   const spinner = p.spinner();
   spinner.start('Проверяю модель');

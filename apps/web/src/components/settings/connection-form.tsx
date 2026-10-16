@@ -23,6 +23,7 @@ import {
   normalizeHeaders,
   parseHeaderLines,
   suggestedConnectionName,
+  VK_PROJECT_HEADER,
   type ConnectionCheck,
   type ConnectionHeader,
   type ConnectionPreset,
@@ -84,8 +85,8 @@ export function ConnectionForm({
   const tModels = useTranslations('settings.models');
   const errorText = useCheckErrorText();
   const ids = { name: useId(), url: useId(), key: useId(), headers: useId() };
-  const [preset, setPreset] = useState<ConnectionPreset>(connection?.preset ?? 'ollama');
-  const [baseUrl, setBaseUrl] = useState(connection?.baseUrl ?? PRESET_BASE_URLS.ollama);
+  const [preset, setPreset] = useState<ConnectionPreset>(connection?.preset ?? 'vk-ai-space');
+  const [baseUrl, setBaseUrl] = useState(connection?.baseUrl ?? PRESET_BASE_URLS['vk-ai-space']);
   // null — имя не трогали: его предлагает форма по пресету и адресу.
   const [nameDraft, setNameDraft] = useState<string | null>(connection?.name ?? null);
   const [replacingKey, setReplacingKey] = useState(connection?.hasKey !== true);
@@ -96,20 +97,33 @@ export function ConnectionForm({
   const [failure, setFailure] = useState<string | null>(null);
   const [shared, setShared] = useState(connection ? connection.shared === true : canShare);
   const [headersText, setHeadersText] = useState(headerLines(connection?.headers ?? []));
+  // У VK AI Space из заголовков нужен только проект: он вводится отдельным полем.
+  const [projectId, setProjectId] = useState(
+    connection?.headers?.find((header) => header.name === VK_PROJECT_HEADER)?.value ?? '',
+  );
   const checkRun = useRef(0);
   const nameInput = useRef<HTMLInputElement>(null);
   const urlInput = useRef<HTMLInputElement>(null);
   const keyInput = useRef<HTMLInputElement>(null);
   const firstPreset = useRef<HTMLInputElement>(null);
   const headersInput = useRef<HTMLTextAreaElement>(null);
+  const projectInput = useRef<HTMLInputElement>(null);
 
   const name = nameDraft ?? suggestedConnectionName(preset, baseUrl);
   const enteredKey = replacingKey ? apiKey : undefined;
   const problems = connectionInputProblems({ name, baseUrl, apiKey: enteredKey });
   const visible = showProblems ? problems : {};
   const location = baseUrlProblem(baseUrl) === null ? connectionLocation(baseUrl) : null;
-  const headers = normalizeHeaders(parseHeaderLines(headersText));
+  const vk = preset === 'vk-ai-space';
+  const headers = vk
+    ? projectId.trim()
+      ? [{ name: VK_PROJECT_HEADER, value: projectId.trim() }]
+      : []
+    : normalizeHeaders(parseHeaderLines(headersText));
   const headerIssue = headersProblem(headers);
+  const projectIdMissing = vk && projectId.trim() === '';
+  const formIssue = projectIdMissing || headerIssue !== null;
+  const focusHeaders = () => (vk ? projectInput : headersInput).current?.focus();
   // По нему проверка помнит, с какими заголовками она прошла.
   const headersKey = JSON.stringify(headers);
 
@@ -144,7 +158,7 @@ export function ConnectionForm({
     if (problems.name) nameInput.current?.focus();
     else if (problems.baseUrl) urlInput.current?.focus();
     else if (problems.apiKey) keyInput.current?.focus();
-    else if (headerIssue) headersInput.current?.focus();
+    else if (formIssue) focusHeaders();
   };
 
   const runCheck = () => {
@@ -155,9 +169,9 @@ export function ConnectionForm({
       else keyInput.current?.focus();
       return;
     }
-    if (headerIssue) {
+    if (formIssue) {
       setShowProblems(true);
-      headersInput.current?.focus();
+      focusHeaders();
       return;
     }
     const run = ++checkRun.current;
@@ -196,7 +210,7 @@ export function ConnectionForm({
     event.preventDefault();
     if (saving) return;
     setFailure(null);
-    if (hasProblems(problems) || headerIssue) {
+    if (hasProblems(problems) || formIssue) {
       setShowProblems(true);
       focusFirstProblem();
       return;
@@ -255,11 +269,13 @@ export function ConnectionForm({
       <fieldset className="grid gap-2">
         <legend className="mb-2 text-xs text-muted-foreground">{t('preset.label')}</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* VK AI Space — модель финала: отдельной строкой сверху, остальные под ней. */}
           {CONNECTION_PRESETS.map((option, index) => (
             <label
               key={option}
               className={cn(
                 'relative flex min-h-14 cursor-pointer flex-col justify-center gap-0.5 rounded-lg px-3 py-2',
+                option === 'vk-ai-space' && 'col-span-2 sm:col-span-4',
                 'ring-1 ring-border transition-[box-shadow,background-color] duration-100',
                 'motion-reduce:transition-none hover:bg-muted/50',
                 'has-checked:bg-muted has-checked:ring-2 has-checked:ring-foreground/40',
@@ -278,9 +294,9 @@ export function ConnectionForm({
               <span className="text-sm leading-tight font-medium">
                 {option === 'custom' ? t('preset.custom') : PRESET_NAMES[option]}
               </span>
-              {option === 'custom' ? (
+              {option === 'custom' || option === 'vk-ai-space' ? (
                 <span className="text-[0.6875rem] leading-tight text-muted-foreground">
-                  {t('preset.customHint')}
+                  {option === 'custom' ? t('preset.customHint') : t('preset.vkHint')}
                 </span>
               ) : (
                 <span className="truncate font-mono text-[0.6875rem] text-muted-foreground">
@@ -351,8 +367,13 @@ export function ConnectionForm({
         id={ids.key}
         label={
           <>
-            {t('apiKey.label')}{' '}
-            <span className="text-muted-foreground/70">· {t('apiKey.optional')}</span>
+            {t('apiKey.label')}
+            {vk ? null : (
+              <>
+                {' '}
+                <span className="text-muted-foreground/70">· {t('apiKey.optional')}</span>
+              </>
+            )}
           </>
         }
         hint={t('apiKey.hint')}
@@ -418,38 +439,64 @@ export function ConnectionForm({
         )}
       </Field>
 
-      <Field
-        id={ids.headers}
-        label={
-          <>
-            {t('headers.label')}{' '}
-            <span className="text-muted-foreground/70">· {t('apiKey.optional')}</span>
-          </>
-        }
-        hint={t('headers.hint')}
-        problem={
-          showProblems &&
-          headerIssue !== null &&
-          t(`problems.headers.${headerIssue}`, { max: CONNECTION_HEADERS_MAX })
-        }
-      >
-        <textarea
-          ref={headersInput}
+      {vk ? (
+        <Field
           id={ids.headers}
-          value={headersText}
-          rows={2}
-          placeholder={t('headers.placeholder')}
-          autoComplete="off"
-          spellCheck={false}
-          aria-invalid={showProblems && headerIssue ? true : undefined}
-          aria-describedby={`${ids.headers}-hint${showProblems && headerIssue ? ` ${ids.headers}-problem` : ''}`}
-          onChange={(event) => {
-            setHeadersText(event.currentTarget.value);
-            forgetCheck();
-          }}
-          className={cn(inputClass, 'h-auto min-h-16 resize-y py-2 font-mono text-xs')}
-        />
-      </Field>
+          label={t('projectId.label')}
+          hint={t('projectId.hint')}
+          problem={showProblems && projectIdMissing && t('projectId.missing')}
+        >
+          <input
+            ref={projectInput}
+            id={ids.headers}
+            value={projectId}
+            maxLength={200}
+            placeholder={t('projectId.placeholder')}
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={showProblems && projectIdMissing ? true : undefined}
+            aria-describedby={`${ids.headers}-hint${showProblems && projectIdMissing ? ` ${ids.headers}-problem` : ''}`}
+            onChange={(event) => {
+              setProjectId(event.currentTarget.value);
+              forgetCheck();
+            }}
+            className={cn(inputClass, 'font-mono text-xs')}
+          />
+        </Field>
+      ) : (
+        <Field
+          id={ids.headers}
+          label={
+            <>
+              {t('headers.label')}{' '}
+              <span className="text-muted-foreground/70">· {t('apiKey.optional')}</span>
+            </>
+          }
+          hint={t('headers.hint')}
+          problem={
+            showProblems &&
+            headerIssue !== null &&
+            t(`problems.headers.${headerIssue}`, { max: CONNECTION_HEADERS_MAX })
+          }
+        >
+          <textarea
+            ref={headersInput}
+            id={ids.headers}
+            value={headersText}
+            rows={2}
+            placeholder={t('headers.placeholder')}
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={showProblems && headerIssue ? true : undefined}
+            aria-describedby={`${ids.headers}-hint${showProblems && headerIssue ? ` ${ids.headers}-problem` : ''}`}
+            onChange={(event) => {
+              setHeadersText(event.currentTarget.value);
+              forgetCheck();
+            }}
+            className={cn(inputClass, 'h-auto min-h-16 resize-y py-2 font-mono text-xs')}
+          />
+        </Field>
+      )}
 
       <div className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3 ring-1 ring-border">
         <div className="flex flex-wrap items-center gap-3">

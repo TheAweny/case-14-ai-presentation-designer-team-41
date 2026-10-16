@@ -44,9 +44,24 @@ export function usesWriterModelByDefault(role: PipelineRole): boolean {
  * Where a connection was started from. A preset only fills in the address and the name; after
  * that it is an ordinary OpenAI-compatible server.
  */
-export const CONNECTION_PRESETS = ['ollama', 'lm-studio', 'vllm', 'custom'] as const;
+export const CONNECTION_PRESETS = ['vk-ai-space', 'ollama', 'lm-studio', 'vllm', 'custom'] as const;
 export const connectionPresetSchema = z.enum(CONNECTION_PRESETS);
 export type ConnectionPreset = z.infer<typeof connectionPresetSchema>;
+
+/**
+ * VK AI Space, the gateway the finals of the case are judged on. It serves Qwen 3.8 27B and wants
+ * the project besides the key, in a `Project-ID` header: a key and a project id are all a person
+ * enters. The address is the same for every project.
+ */
+export const VK_AI_SPACE_BASE_URL =
+  'https://ai-demo.platformpreview.ru/api/inference-providers-router/00000000-0000-0000-0000-000000000001/v1';
+export const VK_AI_SPACE_MODEL = 'qwen38-27b-fp8';
+export const VK_PROJECT_HEADER = 'Project-ID';
+/**
+ * Roles a new VK AI Space connection takes at once: the model reads text and images, so it
+ * writes, plans, criticises, talks in the chat and looks at slides.
+ */
+export const VK_AI_SPACE_ROLES = ['assistant', 'planner', 'writer', 'critic', 'vision'] as const;
 
 /**
  * Id of the connection the server is configured with (`LLM_BASE_URL`, `LLM_MODEL`,

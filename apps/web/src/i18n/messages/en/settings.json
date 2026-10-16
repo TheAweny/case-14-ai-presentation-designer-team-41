@@ -205,7 +205,8 @@
       "preset": {
         "label": "Server",
         "custom": "Other",
-        "customHint": "OpenAI-compatible"
+        "customHint": "OpenAI-compatible",
+        "vkHint": "Qwen 3.8 27B for the LCT finals · needs only a key and a Project ID"
       },
       "name": {
         "label": "Name",
@@ -267,6 +268,12 @@
         "label": "Headers",
         "placeholder": "Project-ID: 0b5e…",
         "hint": "When the server asks for more than the key, such as a project. One per line: “Name: value”. Do not put the key here; it has its own field above."
+      },
+      "projectId": {
+        "label": "Project ID",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "hint": "Issued together with the VK AI Space API key. Once saved, Qwen 3.8 27B is assigned to the roles.",
+        "missing": "Enter the Project ID: VK AI Space refuses requests without it."
       }
     },
     "roles": {

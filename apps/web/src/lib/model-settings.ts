@@ -1,6 +1,7 @@
 import {
   CONNECTION_NAME_MAX_LENGTH,
   PIPELINE_ROLES,
+  VK_AI_SPACE_BASE_URL,
   enabledModelIds,
   isModelEnabled,
   isRoleOptional,
@@ -43,6 +44,8 @@ export {
   PIPELINE_ROLES,
   SERVER_CONNECTION_ID,
   CONNECTION_HEADERS_MAX,
+  VK_AI_SPACE_MODEL,
+  VK_PROJECT_HEADER,
   apiKeyProblem,
   baseUrlProblem,
   headersProblem,
@@ -107,6 +110,7 @@ export const ROLE_MODEL_KIND: Readonly<Record<PipelineRole, ModelKind>> = {
 
 /** Адрес по умолчанию: стандартный порт каждого рантайма и его OpenAI-совместимый префикс. */
 export const PRESET_BASE_URLS: Readonly<Record<ConnectionPreset, string>> = {
+  'vk-ai-space': VK_AI_SPACE_BASE_URL,
   ollama: 'http://localhost:11434/v1',
   'lm-studio': 'http://localhost:1234/v1',
   vllm: 'http://localhost:8000/v1',
@@ -115,6 +119,7 @@ export const PRESET_BASE_URLS: Readonly<Record<ConnectionPreset, string>> = {
 
 /** Имя по умолчанию — название рантайма; у своего сервера имени нет, его придумывает человек. */
 export const PRESET_NAMES: Readonly<Record<ConnectionPreset, string>> = {
+  'vk-ai-space': 'VK AI Space',
   ollama: 'Ollama',
   'lm-studio': 'LM Studio',
   vllm: 'vLLM',
