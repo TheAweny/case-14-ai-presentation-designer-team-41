@@ -1,0 +1,49 @@
+import { describe, expect, it } from 'vitest';
+import { SERVER_ONLY_EXTENSION, browserDocument, type OpenApiDocument } from './api-docs';
+
+const pathParam = (name: string, example: string) => ({
+  name,
+  in: 'path',
+  schema: { type: 'string', example },
+});
+
+const document: OpenApiDocument = {
+  openapi: '3.0.0',
+  paths: {
+    '/chats': { get: { description: 'Чаты.' } },
+    '/files/templates/{id}/previews/{name}': {
+      get: { parameters: [pathParam('id', 't-1'), pathParam('name', 'slide-3.png')] },
+    },
+    '/model-settings': { get: { description: 'Настройки.' } },
+    '/generation/{id}': {
+      get: { parameters: [pathParam('id', 'run-1')] },
+      delete: { parameters: [pathParam('id', 'run-1')] },
+    },
+  },
+};
+
+describe('browserDocument', () => {
+  it('offers the proxy as the only server', () => {
+    expect(browserDocument(document).servers).toEqual([
+      { url: '/api/backend', description: expect.any(String) },
+    ]);
+  });
+
+  it('leaves the routes the proxy forwards as they are', () => {
+    const paths = browserDocument(document).paths ?? {};
+    expect(paths['/chats']?.get).toEqual({ description: 'Чаты.' });
+    expect(paths['/files/templates/{id}/previews/{name}']?.get?.[SERVER_ONLY_EXTENSION]).toBe(
+      undefined,
+    );
+  });
+
+  it('marks the routes only the web server may call', () => {
+    const paths = browserDocument(document).paths ?? {};
+    const settings = paths['/model-settings']?.get;
+    expect(settings?.[SERVER_ONLY_EXTENSION]).toBe(true);
+    expect(settings?.description).toMatch(/^\*\*Только для сервера веба\.\*\*/);
+    expect(settings?.description).toContain('Настройки.');
+    // The same path can be open for one method and closed for another.
+    expect(paths['/generation/{id}']?.delete?.[SERVER_ONLY_EXTENSION]).toBe(true);
+  });
+});

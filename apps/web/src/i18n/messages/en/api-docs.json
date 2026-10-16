@@ -1,0 +1,21 @@
+{
+  "title": "API",
+  "eyebrow": "REST API · OpenAPI 3.0",
+  "heading": "Digital Presentation Designer — API",
+  "subtitle": "Everything the interface does: templates, generation of three variants, the assistant chat, the editor and export. Request and response schemas come from the same Zod contracts that check data in the code.",
+  "openApp": "Open the app",
+  "download": "openapi.json",
+  "signIn": "Sign in to try requests",
+  "signedIn": "“Try it out” requests go as {name}",
+  "facts": {
+    "version": "Version",
+    "operations": "Routes",
+    "schemas": "Schemas",
+    "server": "Server"
+  },
+  "loading": "Loading the API description…",
+  "unavailable": {
+    "title": "The API is not answering",
+    "description": "The API builds this description when it starts. The page shows it as soon as the API is up."
+  }
+}

@@ -141,6 +141,11 @@ docker compose up --build
 и доступен только для API. PostgreSQL хранит состояния прогонов и метаданные артефактов в
 именованном volume; PPTX, превью и входные файлы остаются в `runs/`.
 
+Описание API открыто без входа: страница Swagger — `/api/docs` (локально
+http://localhost:3000/api/docs, на демостенде https://lct-demo.awenylab.com/api/docs), сам
+документ OpenAPI — `/api/docs-json`. Вошедший пользователь может выполнять запросы прямо со
+страницы: они идут через `/api/backend` с его сессией.
+
 ## Запуск по конфигу
 
 ```bash
@@ -196,6 +201,7 @@ yarn docs:audit                                          # пересборка 
 - [DOCUMENTATION.md](DOCUMENTATION.md) — вся документация одним файлом с оглавлением по разделам.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — пайплайн и границы слоёв.
 - [docs/GENERATION.md](docs/GENERATION.md) — реальный путь генерации, API, иллюстрации, замеры.
+- `/api/docs` — Swagger: все маршруты API с примерами, в теме интерфейса; JSON — `/api/docs-json`.
 - [docs/COMPLIANCE.md](docs/COMPLIANCE.md) — соответствие требованиям кейса.
 - [docs/MODELS.md](docs/MODELS.md) — какие модели используются и под какими лицензиями.
 - [docs/AUDIT.md](docs/AUDIT.md) — список проверок (генерируется утилитой из `tools`).

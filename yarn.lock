@@ -2959,6 +2959,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@microsoft/tsdoc@npm:0.17.0":
+  version: 0.17.0
+  resolution: "@microsoft/tsdoc@npm:0.17.0"
+  checksum: 10/fe4b8f93cf7396fe7e448a2b9d4fad7b93e3d7d340b424691f21be0d4ff5bdde28ca435b4ac08c97bb5d6b6608b8bd476b37e550cfd78307d313faff082011fc
+  languageName: node
+  linkType: hard
+
 "@modelcontextprotocol/core@npm:2.0.0":
   version: 2.0.0
   resolution: "@modelcontextprotocol/core@npm:2.0.0"
@@ -3149,6 +3156,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@nestjs/mapped-types@npm:12.0.0":
+  version: 12.0.0
+  resolution: "@nestjs/mapped-types@npm:12.0.0"
+  peerDependencies:
+    "@nestjs/common": ^10.0.0 || ^11.0.0 || ^12.0.0
+    class-transformer: ^0.4.0 || ^0.5.0
+    class-validator: ^0.13.0 || ^0.14.0 || ^0.15.0
+    reflect-metadata: ^0.1.12 || ^0.2.0
+  peerDependenciesMeta:
+    class-transformer:
+      optional: true
+    class-validator:
+      optional: true
+  checksum: 10/c10c0a7a84a72b189862240a2fec216b7fb23310db8a83051f740e3b0c6791c30c3637dc3b4326a8fd32c4a411d9593b37b9b4afc86e1ef764613f6293d74d17
+  languageName: node
+  linkType: hard
+
 "@nestjs/platform-express@npm:^12.0.0":
   version: 12.0.3
   resolution: "@nestjs/platform-express@npm:12.0.3"
@@ -3181,6 +3205,38 @@ __metadata:
     prettier:
       optional: true
   checksum: 10/8794c30e7e9dfd095b5446d83d3a42745761ce4dfccea40a5b939a2e4919a32cd676ec6b10fb1519ef3143420ab623ce32992e3935b73bca32358488300e9d07
+  languageName: node
+  linkType: hard
+
+"@nestjs/swagger@npm:12.0.2":
+  version: 12.0.2
+  resolution: "@nestjs/swagger@npm:12.0.2"
+  dependencies:
+    "@microsoft/tsdoc": "npm:0.17.0"
+    "@nestjs/mapped-types": "npm:12.0.0"
+    "@standard-schema/spec": "npm:1.1.0"
+    es-toolkit: "npm:1.52.0"
+    js-yaml: "npm:5.4.2"
+    path-to-regexp: "npm:8.4.2"
+    swagger-ui-dist: "npm:5.33.0"
+  peerDependencies:
+    "@fastify/static": ^8.0.0 || ^9.0.0 || ^10.0.0
+    "@nestjs/common": ^12.0.0
+    "@nestjs/core": ^12.0.0
+    class-transformer: "*"
+    class-validator: "*"
+    reflect-metadata: ^0.1.12 || ^0.2.0
+    typescript: ^5.5.0 || ^6.0.0
+  peerDependenciesMeta:
+    "@fastify/static":
+      optional: true
+    class-transformer:
+      optional: true
+    class-validator:
+      optional: true
+    typescript:
+      optional: true
+  checksum: 10/0eec9d78e325d4130951e480a13a09a96d49d76b54c1e6198e86976525c2af18decc1a4ea6cc91e4712712e50cd26b57eeba767cf57d521f2166529450d67ff4
   languageName: node
   linkType: hard
 
@@ -5108,6 +5164,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@scarf/scarf@npm:=1.4.0":
+  version: 1.4.0
+  resolution: "@scarf/scarf@npm:1.4.0"
+  checksum: 10/1b39a18fa29e91cfbc134c588e20c5f01a1b21ec4473614123801155b48378e9c3bf72adaca8c67e433ae951ab653268e9502cc5733230d8927532f74a6b89c9
+  languageName: node
+  linkType: hard
+
 "@scena/dragscroll@npm:^1.4.0":
   version: 1.4.0
   resolution: "@scena/dragscroll@npm:1.4.0"
@@ -6493,6 +6556,7 @@ __metadata:
     "@nestjs/core": "npm:^12.0.0"
     "@nestjs/platform-express": "npm:^12.0.0"
     "@nestjs/schematics": "npm:^12.0.0"
+    "@nestjs/swagger": "npm:12.0.2"
     "@nestjs/testing": "npm:^12.0.0"
     pg: "npm:^8.16.3"
     reflect-metadata: "npm:^0.2.2"
@@ -7879,6 +7943,20 @@ __metadata:
     has-tostringtag: "npm:^1.0.2"
     hasown: "npm:^2.0.2"
   checksum: 10/86814bf8afbcd8966653f731415888019d4bc4aca6b6c354132a7a75bb87566751e320369654a101d23a91c87a85c79b178bcf40332839bd347aff437c4fb65f
+  languageName: node
+  linkType: hard
+
+"es-toolkit@npm:1.52.0":
+  version: 1.52.0
+  resolution: "es-toolkit@npm:1.52.0"
+  dependenciesMeta:
+    "@trivago/prettier-plugin-sort-imports@4.3.0":
+      unplugged: true
+    prettier-plugin-sort-re-exports@0.0.1:
+      unplugged: true
+    vitepress-plugin-sandpack@1.1.4:
+      unplugged: true
+  checksum: 10/d36768a16c17cedc3255c108176a8472d56b3b7e51d909c22905fb9ba163296d058ad17a82d6e65883d5aa65aedf8c268c1b31d7979353968e030c9d104b15c0
   languageName: node
   linkType: hard
 
@@ -9386,6 +9464,17 @@ __metadata:
   version: 4.0.0
   resolution: "js-tokens@npm:4.0.0"
   checksum: 10/af37d0d913fb56aec6dc0074c163cc71cd23c0b8aad5c2350747b6721d37ba118af35abdd8b33c47ec2800de07dedb16a527ca9c530ee004093e04958bd0cbf2
+  languageName: node
+  linkType: hard
+
+"js-yaml@npm:5.4.2":
+  version: 5.4.2
+  resolution: "js-yaml@npm:5.4.2"
+  dependencies:
+    argparse: "npm:^2.0.1"
+  bin:
+    js-yaml: bin/js-yaml.mjs
+  checksum: 10/f2461abd1d6268fb226733f0a0e0aa48004bb824116e3dfa75f1a1279001936343b672066dfecdb852ac3ca883452706c383a760aa90430cb68ba395aa2cbc84
   languageName: node
   linkType: hard
 
@@ -13234,6 +13323,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"swagger-ui-dist@npm:5.33.0":
+  version: 5.33.0
+  resolution: "swagger-ui-dist@npm:5.33.0"
+  dependencies:
+    "@scarf/scarf": "npm:=1.4.0"
+  checksum: 10/0d169d528e732f8abb1f9cea21d020d29a7cd8527a01b35d80b21857964bfc5c74d9063cd67fea7d9d7037f8108f7f0233986d4bc9aee2e73f4e371113b77000
+  languageName: node
+  linkType: hard
+
 "systeminformation@npm:^5.22.11":
   version: 5.33.13
   resolution: "systeminformation@npm:5.33.13"
@@ -13971,6 +14069,7 @@ __metadata:
     react-zoom-pan-pinch: "npm:4.2.0"
     remark-gfm: "npm:4.0.1"
     shadcn: "npm:4.21.0"
+    swagger-ui-dist: "npm:5.33.0"
     tailwindcss: "npm:4.3.3"
     tw-animate-css: "npm:1.4.0"
     zod: "npm:^4.6.0"

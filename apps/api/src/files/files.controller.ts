@@ -17,6 +17,16 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiAcceptedResponse,
+  ApiBody,
+  ApiConsumes,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+} from '@nestjs/swagger';
+import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
@@ -28,6 +38,8 @@ import { templateUploadError } from './template-upload-error.js';
 import { visibleFile } from './template-visibility.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
+import { ApiAccountRoutes, ApiErrors, ApiFile, ApiJsonBody } from '../docs/decorators.js';
+import { storedFileSchema, templatePatchSchema } from '../docs/schemas.js';
 
 interface UploadedFile {
   readonly originalname: string;
@@ -54,11 +66,32 @@ export interface StoredFile {
 
 const TEMPLATE_NAME_MAX_LENGTH = 200;
 
+const UPLOAD_BODY = {
+  schema: {
+    type: 'object',
+    required: ['file'],
+    properties: { file: { type: 'string', format: 'binary' } },
+  },
+};
+
+const TEMPLATE_EXAMPLE = {
+  fileId: '11d8fefa-d032-4a95-84e5-77efd69569c2',
+  kind: 'template',
+  fileName: 'VK Tech шаблон.pptx',
+  name: 'VK Tech шаблон',
+  size: 2483112,
+  sha256: '9f2c4e1a7b3d5f6081c2e4a6b8d0f1e3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5',
+  shared: true,
+  mine: false,
+  createdAt: '2026-10-14T08:30:00.000Z',
+};
+
 /**
  * Uploads of the template `.pptx` and of the content pack, plus downloads of run artifacts.
  * Storage lives in `runs/`; template uploads are parsed by the Python engine before the response.
  */
 @Controller('files')
+@ApiAccountRoutes('files')
 export class FilesController implements OnApplicationShutdown {
   private readonly logger = new Logger(FilesController.name);
   private readonly root = resolve(process.env.RUNS_DIR ?? join(process.cwd(), 'runs'));
@@ -70,6 +103,18 @@ export class FilesController implements OnApplicationShutdown {
   @Post('template')
   @HttpCode(202)
   @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: 'Загрузить шаблон',
+    description:
+      'Принимает `.pptx` или `.potx`. Движок разбирает файл до ответа: в `profile` — палитра, шрифты, сетка и макеты шаблона.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody(UPLOAD_BODY)
+  @ApiAcceptedResponse({
+    standardSchema: storedFileSchema,
+    example: { ...TEMPLATE_EXAMPLE, shared: false, mine: true },
+  })
+  @ApiErrors(400, 422, 503, 504)
   async uploadTemplate(
     @CurrentAccount() account: Account,
     @UploadedFile() file?: UploadedFile,
@@ -119,6 +164,23 @@ export class FilesController implements OnApplicationShutdown {
   @Post('content')
   @HttpCode(202)
   @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: 'Загрузить материалы',
+    description: 'Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.csv`, `.tsv`, `.xlsx`.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody(UPLOAD_BODY)
+  @ApiAcceptedResponse({
+    standardSchema: storedFileSchema,
+    example: {
+      fileId: '3c9e1b7a-5d2f-4e8a-b6c4-0f1a2d3e4b5c',
+      kind: 'content',
+      fileName: 'выручка-2026.xlsx',
+      size: 18234,
+      sha256: '4a71c3e5f7a9b1d3e5f7a9c1b3d5e7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1',
+    },
+  })
+  @ApiErrors(400)
   async uploadContent(
     @CurrentAccount() account: Account,
     @UploadedFile() file?: UploadedFile,
@@ -157,6 +219,11 @@ export class FilesController implements OnApplicationShutdown {
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'Все файлы аккаунта',
+    description: 'Шаблоны и материалы, новые сверху.',
+  })
+  @ApiOkResponse({ standardSchema: z.array(storedFileSchema) })
   async list(@CurrentAccount() account: Account): Promise<readonly StoredFile[]> {
     const result = await this.pool.query<{
       id: string;
@@ -182,6 +249,8 @@ export class FilesController implements OnApplicationShutdown {
 
   /** The templates the account may use: its own and those shared with everyone. */
   @Get('templates')
+  @ApiOperation({ summary: 'Шаблоны', description: 'Свои и открытые всем администратором.' })
+  @ApiOkResponse({ standardSchema: z.array(storedFileSchema), example: [TEMPLATE_EXAMPLE] })
   async listTemplates(@CurrentAccount() account: Account): Promise<readonly StoredFile[]> {
     const result = await this.pool.query<TemplateRow>(
       `SELECT ${TEMPLATE_COLUMNS} FROM stored_files
@@ -196,6 +265,14 @@ export class FilesController implements OnApplicationShutdown {
    * prepared. It is asked for by its number, however the renderer padded the file name.
    */
   @Get('templates/:id/previews/:name')
+  @ApiOperation({
+    summary: 'Превью слайда шаблона',
+    description: 'Нарисовано при подготовке шаблона.',
+  })
+  @ApiParam({ name: 'id', example: TEMPLATE_EXAMPLE.fileId })
+  @ApiParam({ name: 'name', example: 'slide-3.png' })
+  @ApiFile('PNG слайда.', 'image/png')
+  @ApiErrors(404)
   async templatePreview(
     @Param('id') id: string,
     @Param('name') name: string,
@@ -226,6 +303,17 @@ export class FilesController implements OnApplicationShutdown {
    * administrator's, who may also rename a shared template.
    */
   @Patch('templates/:id')
+  @ApiOperation({
+    summary: 'Переименовать или открыть шаблон всем',
+    description: 'Переименовывает владелец; `shared` меняет только администратор.',
+  })
+  @ApiParam({ name: 'id', example: TEMPLATE_EXAMPLE.fileId })
+  @ApiJsonBody(templatePatchSchema, {
+    Переименовать: { name: 'VK Tech — квартальный отчёт' },
+    'Открыть всем': { shared: true },
+  })
+  @ApiOkResponse({ standardSchema: storedFileSchema, example: TEMPLATE_EXAMPLE })
+  @ApiErrors(400, 404)
   async updateTemplate(
     @Param('id') id: string,
     @Body() body: { name?: unknown; shared?: unknown },
@@ -270,6 +358,13 @@ export class FilesController implements OnApplicationShutdown {
    */
   @Delete('templates/:id')
   @HttpCode(204)
+  @ApiOperation({
+    summary: 'Убрать шаблон из библиотеки',
+    description: 'Файл остаётся: колоды на этом шаблоне открываются и экспортируются.',
+  })
+  @ApiParam({ name: 'id', example: TEMPLATE_EXAMPLE.fileId })
+  @ApiNoContentResponse({ description: 'Шаблон убран.' })
+  @ApiErrors(404)
   async deleteTemplate(@Param('id') id: string, @CurrentAccount() account: Account): Promise<void> {
     const row = await this.visibleTemplate(id, account);
     if (row.owner_id !== account.id && account.role !== 'admin') {

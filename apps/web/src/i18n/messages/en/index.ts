@@ -1,4 +1,5 @@
 import type { Messages } from 'next-intl';
+import apiDocs from './api-docs.json';
 import assistant from './assistant.json';
 import auth from './auth.json';
 import auditPanel from './audit-panel.json';
@@ -72,6 +73,7 @@ const messages = {
   splash,
   settings,
   auth,
+  apiDocs,
 } satisfies Messages;
 
 export default messages;

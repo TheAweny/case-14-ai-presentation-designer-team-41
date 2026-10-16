@@ -1,4 +1,5 @@
 import {
+  applyDecorators,
   BadRequestException,
   Body,
   Controller,
@@ -9,6 +10,8 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { join, resolve } from 'node:path';
@@ -16,6 +19,28 @@ import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { buildOf, LibraryMetadata } from '../generation/library-metadata.js';
 import { visibleFile } from '../files/template-visibility.js';
+import { ApiAccountRoutes, ApiErrors, ApiJsonBody } from '../docs/decorators.js';
+import {
+  listedProjectSchema,
+  okSchema,
+  projectInputSchema,
+  projectSchema,
+} from '../docs/schemas.js';
+
+const PROJECT_ID = '2e4a6c8e-0b1d-4f3a-8c5e-7a9b1d3f5e70';
+const PROJECT_EXAMPLE = {
+  projectId: PROJECT_ID,
+  name: 'Совет директоров',
+  appearance: { icon: 'folder', color: 'blue' },
+  createdAt: '2026-10-10T12:00:00.000Z',
+  updatedAt: '2026-10-16T10:04:12.000Z',
+  pinnedAt: null,
+};
+const projectParam = ApiParam({ name: 'id', example: PROJECT_ID });
+const templateLink = [
+  ApiParam({ name: 'projectId', example: PROJECT_ID }),
+  ApiParam({ name: 'templateId', example: '11d8fefa-d032-4a95-84e5-77efd69569c2' }),
+];
 
 interface ProjectInput {
   readonly name?: unknown;
@@ -24,6 +49,7 @@ interface ProjectInput {
 }
 
 @Controller('library')
+@ApiAccountRoutes('library')
 export class LibraryController {
   private readonly pool = new Pool({ connectionString: process.env.DATABASE_URL });
   private readonly library = new LibraryMetadata(
@@ -32,6 +58,11 @@ export class LibraryController {
 
   /** Projects belong to one account; every route answers only for the owner's. */
   @Get('projects')
+  @ApiOperation({ summary: 'Проекты', description: 'С шаблонами проекта и числом колод.' })
+  @ApiOkResponse({
+    standardSchema: z.array(listedProjectSchema),
+    example: [{ ...PROJECT_EXAMPLE, templateIds: [], deckCount: 3 }],
+  })
   async listProjects(@CurrentAccount() account: Account): Promise<readonly unknown[]> {
     const result = await this.pool.query(
       `SELECT p.id AS "projectId", p.name, p.appearance, p.created_at AS "createdAt", p.updated_at AS "updatedAt",
@@ -66,6 +97,12 @@ export class LibraryController {
   }
 
   @Post('projects')
+  @ApiOperation({ summary: 'Создать проект' })
+  @ApiJsonBody(projectInputSchema, {
+    'Новый проект': { name: 'Совет директоров', appearance: { icon: 'folder', color: 'blue' } },
+  })
+  @ApiCreatedResponse({ standardSchema: projectSchema, example: PROJECT_EXAMPLE })
+  @ApiErrors(400)
   async createProject(
     @Body() body: ProjectInput,
     @CurrentAccount() account: Account,
@@ -89,6 +126,17 @@ export class LibraryController {
   }
 
   @Patch('projects/:id')
+  @ApiOperation({
+    summary: 'Изменить проект',
+    description: 'Имя, значок с цветом или закрепление в меню. Закрепление не двигает дату правки.',
+  })
+  @projectParam
+  @ApiJsonBody(projectInputSchema, {
+    Переименовать: { name: 'Совет директоров — Q4' },
+    Закрепить: { pinned: true },
+  })
+  @ApiOkResponse({ standardSchema: projectSchema, example: PROJECT_EXAMPLE })
+  @ApiErrors(400, 404)
   async updateProject(
     @Param('id') id: string,
     @Body() body: ProjectInput,
@@ -120,6 +168,13 @@ export class LibraryController {
   }
 
   @Delete('projects/:id')
+  @ApiOperation({ summary: 'Удалить проект', description: 'Вместе с его колодами.' })
+  @projectParam
+  @ApiOkResponse({
+    standardSchema: z.object({ deletedDecks: z.number().int() }),
+    example: { deletedDecks: 3 },
+  })
+  @ApiErrors(404)
   async deleteProject(
     @Param('id') id: string,
     @CurrentAccount() account: Account,
@@ -141,6 +196,10 @@ export class LibraryController {
   }
 
   @Post('projects/:projectId/templates/:templateId')
+  @ApiOperation({ summary: 'Добавить шаблон в проект' })
+  @applyDecorators(...templateLink)
+  @ApiCreatedResponse({ standardSchema: okSchema, example: { ok: true } })
+  @ApiErrors(404)
   async attachTemplate(
     @Param('projectId') projectId: string,
     @Param('templateId') templateId: string,
@@ -164,6 +223,13 @@ export class LibraryController {
   }
 
   @Delete('projects/:projectId/templates/:templateId')
+  @ApiOperation({
+    summary: 'Убрать шаблон из проекта',
+    description: 'Сам шаблон остаётся в библиотеке.',
+  })
+  @applyDecorators(...templateLink)
+  @ApiOkResponse({ standardSchema: okSchema, example: { ok: true } })
+  @ApiErrors(404)
   async detachTemplate(
     @Param('projectId') projectId: string,
     @Param('templateId') templateId: string,
