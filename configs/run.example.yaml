@@ -1,15 +1,17 @@
 # Example run configuration. Validated against RunConfig from packages/contracts.
-# Copy it, point the paths at your own files and pass the copy to the CLI:
-#   node apps/cli/dist/main.js generate configs/run.example.yaml
+# It builds the decks the way the interface does, on the model the service is set up with
+# (.env, see `lct onboard`). Run it as is, or copy it and point the paths at your own files:
+#   lct generate configs/run.example.yaml
+# The decks land in runs/<run>/<variant>/deck.pptx, with the PDF in previews/.
 
 # Any .pptx works: the template is read as a set of rules, never matched against a known list.
-templatePath: data/templates/example.pptx
+templatePath: examples/template.pptx
 
-# Content pack the deck is built from: text, figures, tables.
-contentPath: data/content/example.md
+# Content the deck is built from: text, figures, tables, as Markdown or plain text.
+contentPath: examples/brief.md
 
 # Number of slides in the produced deck. The contract allows 10 to 15.
-slideCount: 12
+slideCount: 10
 
 # Layout variants built from one deck plan. The plan is computed once and reused by all of them.
 layoutVariants:
@@ -20,7 +22,8 @@ layoutVariants:
 # Audit profile from configs/audit.yaml.
 auditProfile: default
 
-# Models bound to pipeline roles. Every id must exist in configs/models.yaml.
+# Catalogue entries of the roles, recorded with the run. The model that answers is the one the
+# service is connected to (LLM_BASE_URL, LLM_MODEL and MODEL_HEADERS in .env).
 models:
   - role: planner
     modelId: planner-default
@@ -39,6 +42,6 @@ outputDir: runs
 
 # What the deck has to achieve and for whom. Without goal the first paragraph of the content
 # file is taken as the goal.
-goal: Показать жюри, что сервис собирает презентацию в стиле любого шаблона.
-audience: Жюри хакатона
+goal: Получить решение правления о масштабировании чат-бота на 8 регионов.
+audience: Правление банка
 language: ru

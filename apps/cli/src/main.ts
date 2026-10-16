@@ -5,7 +5,7 @@ import type { JobEvent } from '@lct/contracts';
 import { PostgresRunRepository, type RunRecord } from '@lct/run-store';
 import { validateLocalRunInputs } from '@lct/input-validation';
 import { readRunConfig } from './config.js';
-import { generateFromConfig } from './generate.js';
+import { generateCommand } from './generate-command.js';
 import { parseArgs } from './setup/args.js';
 import { doctor, stack, user } from './setup/commands.js';
 import { onboard } from './setup/onboard.js';
@@ -18,7 +18,7 @@ const HELP = `lct — цифровой дизайнер презентаций
   lct logs [сервис]           логи
   lct user admin [почта]      администратор (остальные — в интерфейсе)
   lct doctor                  проверить окружение, модель и сервис
-  lct generate <config.yaml>  сгенерировать колоды по конфигу прогона
+  lct generate <config.yaml>  собрать колоды по конфигу прогона, как в интерфейсе
 
 Установка без вопросов, модель финала VK AI Space:
   lct onboard --yes --provider vk --api-key KEY --project-id UUID \\
@@ -109,13 +109,12 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   if (argv[2] === 'generate') {
     const path = argv[3];
-    if (path === undefined) {
+    if (!path) {
       process.stderr.write('Usage: lct generate <path-to-run-config.yaml>\n');
       return 2;
     }
     try {
-      const result = await generateFromConfig({ config: readRunConfig(path), configPath: path });
-      return result.variants.length > 0 ? 0 : 1;
+      return await generateCommand(path);
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;

@@ -18,7 +18,8 @@ COPY configs configs
 
 RUN yarn install --immutable
 
-RUN yarn nx run api:build
+# The CLI too: `lct generate` on the host runs it here, where the engine is reachable.
+RUN yarn nx run-many -t build -p api cli
 
 FROM node:22.13-bookworm-slim AS runtime
 
