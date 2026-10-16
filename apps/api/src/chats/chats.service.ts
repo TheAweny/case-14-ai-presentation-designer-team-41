@@ -681,6 +681,7 @@ export class ChatsService implements OnApplicationShutdown {
       apiKey: resolved.apiKey,
       baseUrl: resolved.baseUrl,
       model: resolved.model,
+      headers: resolved.headers,
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
     });

@@ -233,6 +233,7 @@ describe('the server connection', () => {
         baseUrl: 'https://llm.api.cloud.yandex.net/v1',
         hasKey: true,
         keyHint: 'ABCD',
+        headers: [],
         lastCheck: null,
         enabledModels: null,
         managed: true,
@@ -316,6 +317,7 @@ describe('resolve', () => {
       baseUrl: 'https://llm.api.cloud.yandex.net/v1',
       apiKey: SERVER_KEY,
       model: SERVER_ENV.LLM_MODEL,
+      headers: {},
     });
     const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
     await service.setRole({ role: 'writer', kind: 'model', connectionId, modelId: 'w' }, ADMIN);
@@ -507,5 +509,95 @@ describe('shared and personal connections', () => {
         ADMIN,
       ),
     ).rejects.toThrow(InvalidModelSettingsInputError);
+  });
+});
+
+describe('headers of a connection', () => {
+  const PROJECT = 'f0000000-0000-4000-8000-000000000001';
+
+  it('sends the headers of the server connection from MODEL_HEADERS with every request', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ data: [{ id: 'qwen38-27b-fp8' }] }));
+    const { service } = setup({
+      env: { ...SERVER_ENV, MODEL_HEADERS: `Project-ID=${PROJECT}` },
+      fetch: fetchMock as never,
+    });
+    const settings = await service.get(ADMIN);
+    expect(settings.connections[0]?.headers).toEqual([{ name: 'Project-ID', value: PROJECT }]);
+    expect(await service.resolve(null, ADMIN)).toMatchObject({
+      headers: { 'Project-ID': PROJECT },
+    });
+    await service.checkConnection('server', ADMIN);
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(init.headers).toMatchObject({
+      'Project-ID': PROJECT,
+      authorization: `Bearer ${SERVER_KEY}`,
+    });
+  });
+
+  it('sends no MODEL_HEADERS that do not read as headers', async () => {
+    const { service } = setup({ env: { ...SERVER_ENV, MODEL_HEADERS: 'Authorization=Bearer x' } });
+    expect(await service.resolve(null, ADMIN)).toMatchObject({ headers: {} });
+  });
+
+  it('keeps the headers of a saved connection, shows them, and drops an old check when they change', async () => {
+    const { service } = setup();
+    const saved = await service.saveConnection(
+      {
+        ...cloud(KEY),
+        headers: [{ name: ' Project-ID ', value: ` ${PROJECT} ` }],
+        lastCheck: { ok: true, at: '2026-09-26T10:00:00.000Z', models: ['qwen'] },
+      },
+      ADMIN,
+    );
+    expect(saved.headers).toEqual([{ name: 'Project-ID', value: PROJECT }]);
+    const resolvedRef = { connectionId: saved.connectionId, modelId: 'qwen' };
+    expect(await service.resolve(resolvedRef, ADMIN)).toMatchObject({
+      headers: { 'Project-ID': PROJECT },
+    });
+    // An edit without headers keeps them, and keeps the check.
+    const kept = await service.saveConnection(
+      { ...cloud(), connectionId: saved.connectionId },
+      ADMIN,
+    );
+    expect(kept.headers).toEqual(saved.headers);
+    expect(kept.lastCheck).not.toBeNull();
+    // Other headers make the old check say nothing.
+    const changed = await service.saveConnection(
+      { ...cloud(), connectionId: saved.connectionId, headers: [] },
+      ADMIN,
+    );
+    expect(changed.headers).toEqual([]);
+    expect(changed.lastCheck).toBeNull();
+  });
+
+  it('refuses a header the provider sets itself, such as the key', async () => {
+    const { service } = setup();
+    await expect(
+      service.saveConnection(
+        { ...cloud(KEY), headers: [{ name: 'Authorization', value: 'Bearer x' }] },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(InvalidModelSettingsInputError);
+    await expect(
+      service.probe(
+        { baseUrl: 'https://llm.example.com/v1', headers: [{ name: 'Bad Name', value: 'x' }] },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(InvalidModelSettingsInputError);
+  });
+
+  it('checks an unsaved connection with the headers typed in the form', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ data: [{ id: 'qwen' }] }));
+    const { service } = setup({ fetch: fetchMock as never });
+    await service.probe(
+      {
+        baseUrl: 'https://llm.example.com/v1',
+        apiKey: KEY,
+        headers: [{ name: 'Project-ID', value: PROJECT }],
+      },
+      ADMIN,
+    );
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(init.headers).toMatchObject({ 'Project-ID': PROJECT });
   });
 });

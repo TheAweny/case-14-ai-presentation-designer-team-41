@@ -133,7 +133,12 @@ class CheckTimeout extends Error {
 
 /** Check a server at an address: the models found, or why it did not work. */
 export async function checkModelConnection(
-  target: { readonly baseUrl: string; readonly apiKey: string | null },
+  target: {
+    readonly baseUrl: string;
+    readonly apiKey: string | null;
+    /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
+    readonly headers?: Readonly<Record<string, string>>;
+  },
   options: CheckOptions = {},
 ): Promise<ConnectionCheck> {
   const run = options.fetch ?? fetch;
@@ -160,7 +165,7 @@ export async function checkModelConnection(
     }, timeoutMs);
   });
 
-  const headers: Record<string, string> = { accept: 'application/json' };
+  const headers: Record<string, string> = { ...target.headers, accept: 'application/json' };
   if (target.apiKey) headers.authorization = `Bearer ${target.apiKey}`;
 
   const request = async () => {

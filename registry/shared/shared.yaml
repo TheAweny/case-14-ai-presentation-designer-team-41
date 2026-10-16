@@ -1,0 +1,7 @@
+# Prompts every generation agent shares, outside any one agent. A model that ignores structured
+# output (response_format json_schema) still gets the schema of its answer in the instructions,
+# and one request to repair an answer that misses it. Bump the version when their meaning changes.
+
+version: 1.0.0
+answerFormatFile: answer-format.md
+answerRepairFile: answer-repair.md

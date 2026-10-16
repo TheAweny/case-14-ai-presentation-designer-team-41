@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type {
   ConnectionCheck,
+  ConnectionHeader,
   ConnectionPreset,
   PipelineRole,
   RoleAssignment,
@@ -19,6 +20,8 @@ export interface StoredConnection {
    * null.
    */
   readonly enabledModels: readonly string[] | null;
+  /** Headers sent with every request besides the key; none for a row written before them. */
+  readonly headers: readonly ConnectionHeader[];
   /** The account the connection belongs to; null — shared with everyone by an administrator. */
   readonly ownerId: string | null;
 }
@@ -66,6 +69,7 @@ interface ConnectionRow {
   api_key_encrypted: string | null;
   last_check: ConnectionCheck | null;
   enabled_models: string[] | null;
+  headers: ConnectionHeader[] | null;
   owner_id: string | null;
 }
 
@@ -85,6 +89,7 @@ function connectionOf(row: ConnectionRow): StoredConnection {
     apiKeyEncrypted: row.api_key_encrypted,
     lastCheck: row.last_check,
     enabledModels: row.enabled_models,
+    headers: row.headers ?? [],
     ownerId: row.owner_id,
   };
 }
@@ -101,7 +106,8 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
 
   async listConnections(ownerId: string) {
     const result = await this.pool.query<ConnectionRow>(
-      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id
+      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, headers,
+              owner_id
        FROM model_connections WHERE owner_id IS NULL OR owner_id = $1
        ORDER BY created_at, id`,
       [ownerId],
@@ -111,7 +117,8 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
 
   async getConnection(connectionId: string) {
     const result = await this.pool.query<ConnectionRow>(
-      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id
+      `SELECT id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, headers,
+              owner_id
        FROM model_connections WHERE id = $1`,
       [connectionId],
     );
@@ -122,12 +129,14 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   async saveConnection(connection: StoredConnection) {
     await this.pool.query(
       `INSERT INTO model_connections
-         (id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
+         (id, name, preset, base_url, api_key_encrypted, last_check, enabled_models, owner_id,
+          headers)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9::jsonb)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, preset = EXCLUDED.preset, base_url = EXCLUDED.base_url,
          api_key_encrypted = EXCLUDED.api_key_encrypted, last_check = EXCLUDED.last_check,
-         enabled_models = EXCLUDED.enabled_models, owner_id = EXCLUDED.owner_id, updated_at = now()`,
+         enabled_models = EXCLUDED.enabled_models, owner_id = EXCLUDED.owner_id,
+         headers = EXCLUDED.headers, updated_at = now()`,
       [
         connection.connectionId,
         connection.name,
@@ -137,6 +146,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
         connection.lastCheck === null ? null : JSON.stringify(connection.lastCheck),
         connection.enabledModels === null ? null : JSON.stringify(connection.enabledModels),
         connection.ownerId,
+        JSON.stringify(connection.headers),
       ],
     );
   }

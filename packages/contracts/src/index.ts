@@ -360,6 +360,16 @@ export {
   type ApiKeyProblem,
   type ConnectionProblems,
   type ModelSettingsError,
+  CONNECTION_HEADERS_MAX,
+  HEADER_VALUE_MAX_LENGTH,
+  connectionHeaderSchema,
+  headersProblem,
+  normalizeHeaders,
+  parseHeaderLines,
+  parseHeaderEnv,
+  headerRecord,
+  type ConnectionHeader,
+  type HeadersProblem,
 } from './model-settings.js';
 export {
   MODEL_FAMILIES,

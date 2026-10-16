@@ -81,6 +81,20 @@ export type CheckError = z.infer<typeof checkErrorSchema>;
 
 export const modelIdSchema = z.string().trim().min(1).max(MODEL_ID_MAX_LENGTH);
 
+/** Headers one connection may add to every request. */
+export const CONNECTION_HEADERS_MAX = 8;
+export const HEADER_VALUE_MAX_LENGTH = 500;
+
+/**
+ * A header the server of a connection asks for besides the key, such as a gateway's `Project-ID`.
+ * It is settings, not a secret: the browser sees it, and a key belongs in the key field.
+ */
+export const connectionHeaderSchema = z.object({
+  name: z.string().max(100),
+  value: z.string().max(HEADER_VALUE_MAX_LENGTH * 2),
+});
+export type ConnectionHeader = z.infer<typeof connectionHeaderSchema>;
+
 /** Outcome of the last check: when, and either the models found or why it failed. */
 export const connectionCheckSchema = z.discriminatedUnion('ok', [
   z.object({
@@ -101,6 +115,8 @@ export const modelConnectionSchema = z.object({
   hasKey: z.boolean(),
   /** Last characters of the key, to tell one key from another; null for a short key. */
   keyHint: z.string().nullable(),
+  /** Headers sent with every request besides the key. Missing in settings saved before them. */
+  headers: z.array(connectionHeaderSchema).max(CONNECTION_HEADERS_MAX).optional(),
   /** Null: the connection has not been checked yet. */
   lastCheck: connectionCheckSchema.nullable(),
   /**
@@ -177,6 +193,11 @@ export const connectionInputSchema = z.object({
   lastCheck: connectionCheckSchema.nullable().optional(),
   /** Share with every account; only an administrator's request may set it. */
   shared: z.boolean().optional(),
+  /** Missing on an edit keeps the stored headers; an empty list removes them. */
+  headers: z
+    .array(connectionHeaderSchema)
+    .max(CONNECTION_HEADERS_MAX * 2)
+    .optional(),
 });
 export type ConnectionInput = z.infer<typeof connectionInputSchema>;
 
@@ -187,6 +208,11 @@ export const probeInputSchema = z.object({
   apiKey: z
     .string()
     .max(API_KEY_MAX_LENGTH * 2)
+    .optional(),
+  /** Missing with `connectionId`: the stored headers are used. */
+  headers: z
+    .array(connectionHeaderSchema)
+    .max(CONNECTION_HEADERS_MAX * 2)
     .optional(),
 });
 export type ProbeInput = z.infer<typeof probeInputSchema>;
@@ -248,10 +274,89 @@ export function apiKeyProblem(key: string): ApiKeyProblem | null {
   return null;
 }
 
+/**
+ * `name` — not a header name; `reserved` — a header the provider sets itself (the key goes in the
+ * key field); `value` — empty, too long or with a line break; `duplicate`, `tooMany` — as said.
+ */
+export type HeadersProblem = 'name' | 'reserved' | 'value' | 'duplicate' | 'tooMany';
+
+/** Headers the provider sets or the transport owns: a connection cannot replace them. */
+const RESERVED_HEADERS = new Set([
+  'authorization',
+  'content-type',
+  'content-length',
+  'host',
+  'cookie',
+  'connection',
+  'transfer-encoding',
+  'accept-encoding',
+]);
+/** RFC 9110 token. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+export function headersProblem(headers: readonly ConnectionHeader[]): HeadersProblem | null {
+  if (headers.length > CONNECTION_HEADERS_MAX) return 'tooMany';
+  const seen = new Set<string>();
+  for (const { name, value } of headers) {
+    const key = name.trim().toLowerCase();
+    if (!HEADER_NAME.test(name.trim())) return 'name';
+    if (RESERVED_HEADERS.has(key)) return 'reserved';
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed.length > HEADER_VALUE_MAX_LENGTH || /[\r\n\0]/.test(value))
+      return 'value';
+    if (seen.has(key)) return 'duplicate';
+    seen.add(key);
+  }
+  return null;
+}
+
+/** Headers as they are stored and sent: names and values trimmed. */
+export function normalizeHeaders(headers: readonly ConnectionHeader[]): ConnectionHeader[] {
+  return headers.map(({ name, value }) => ({ name: name.trim(), value: value.trim() }));
+}
+
+/**
+ * Headers written one per line as `Name: value`, the way they are typed in the form. A line
+ * without a colon is a header with no value, which `headersProblem` then names.
+ */
+export function parseHeaderLines(text: string): ConnectionHeader[] {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '')
+    .map((line) => {
+      const colon = line.indexOf(':');
+      return colon < 0
+        ? { name: line.trim(), value: '' }
+        : { name: line.slice(0, colon).trim(), value: line.slice(colon + 1).trim() };
+    });
+}
+
+/**
+ * Headers of the server connection from `MODEL_HEADERS`: `Name=value` pairs separated by commas,
+ * a format a `.env` file and `source` both read without quoting.
+ */
+export function parseHeaderEnv(value: string | undefined): ConnectionHeader[] {
+  return (value ?? '')
+    .split(',')
+    .filter((pair) => pair.trim() !== '')
+    .map((pair) => {
+      const equals = pair.indexOf('=');
+      return equals < 0
+        ? { name: pair.trim(), value: '' }
+        : { name: pair.slice(0, equals).trim(), value: pair.slice(equals + 1).trim() };
+    });
+}
+
+/** Headers as a fetch takes them. */
+export function headerRecord(headers: readonly ConnectionHeader[]): Record<string, string> {
+  return Object.fromEntries(headers.map(({ name, value }) => [name, value]));
+}
+
 export interface ConnectionProblems {
   readonly name?: ConnectionNameProblem;
   readonly baseUrl?: BaseUrlProblem;
   readonly apiKey?: ApiKeyProblem;
+  readonly headers?: HeadersProblem;
 }
 
 /** Every problem of the form at once: an empty object means it can be saved. */
@@ -259,14 +364,17 @@ export function connectionInputProblems(input: {
   name: string;
   baseUrl: string;
   apiKey?: string;
+  headers?: readonly ConnectionHeader[];
 }): ConnectionProblems {
   const name = connectionNameProblem(input.name);
   const baseUrl = baseUrlProblem(input.baseUrl);
   const apiKey = input.apiKey === undefined ? null : apiKeyProblem(input.apiKey);
+  const headers = input.headers === undefined ? null : headersProblem(input.headers);
   return {
     ...(name ? { name } : {}),
     ...(baseUrl ? { baseUrl } : {}),
     ...(apiKey ? { apiKey } : {}),
+    ...(headers ? { headers } : {}),
   };
 }
 
@@ -315,6 +423,7 @@ export const modelSettingsErrorSchema = z.object({
       name: z.enum(['empty', 'tooLong']).optional(),
       baseUrl: z.enum(['empty', 'tooLong', 'invalid', 'protocol', 'credentials']).optional(),
       apiKey: z.enum(['tooLong', 'whitespace']).optional(),
+      headers: z.enum(['name', 'reserved', 'value', 'duplicate', 'tooMany']).optional(),
     })
     .default({}),
 });

@@ -41,8 +41,13 @@ import {
   type ImageProvider,
   type IndexProgress,
 } from '@lct/pipeline';
+import { loadAnswerFormat } from '@lct/registry';
 import type { RunRepository } from '@lct/run-store';
-import { ModelNotConfiguredError, ModelSettingsService } from '../models/model-settings.service.js';
+import {
+  ModelNotConfiguredError,
+  ModelSettingsService,
+  type ResolvedModel,
+} from '../models/model-settings.service.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -258,6 +263,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
         model: resolved.model,
+        headers: resolved.headers,
+        answerFormat: await loadAnswerFormat(registryDir),
       });
       const index: StoredTemplateIndex = await indexTemplateWithAgent({
         provider,
@@ -411,12 +418,17 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         this.models.resolveRole('critic', actor),
       ]),
     );
-    const providerOf = (model: { apiKey: string; baseUrl: string; model: string }) =>
+    // The schema of each answer goes into the instructions too: a model that ignores structured
+    // output still answers in shape.
+    const answerFormat = await loadAnswerFormat(this.registryDir());
+    const providerOf = (model: ResolvedModel) =>
       new GenerationProvider({
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
         model: model.model,
+        headers: model.headers,
         seed: input.seed,
+        answerFormat,
       });
     const fallback = providerOf(writer);
     const provider = new RoutedTextProvider(

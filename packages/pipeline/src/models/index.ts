@@ -1,4 +1,4 @@
-import type { ModelCatalog } from '@lct/contracts';
+import { headerRecord, headersProblem, parseHeaderEnv, type ModelCatalog } from '@lct/contracts';
 import { resolveModel } from '@lct/registry';
 import { OpenAICompatibleProvider } from './openai-compatible.js';
 import { RecordedProvider } from './recorded.js';
@@ -26,6 +26,8 @@ export interface ProviderEnv {
   readonly MODEL_API_KEY?: string;
   readonly MODEL_JSON_MODE?: string;
   readonly MODEL_MAX_CONCURRENCY?: string;
+  /** Headers besides the key, as `Name=value` pairs separated by commas. */
+  readonly MODEL_HEADERS?: string;
   readonly RECORDINGS_DIR?: string;
   readonly [name: string]: string | undefined;
 }
@@ -58,12 +60,17 @@ export function createProvider(
   // A hosted provider names models its own way; LLM_MODEL, VLM_MODEL and IMAGE_MODEL override
   // the served name without touching the pinned catalogue entry.
   const servedName = env[model.baseUrlEnv.replace(/_BASE_URL$/, '_MODEL')];
+  const headers = parseHeaderEnv(env.MODEL_HEADERS);
+  if (headersProblem(headers)) {
+    throw new Error('MODEL_HEADERS must be Name=value pairs separated by commas.');
+  }
   const live = new OpenAICompatibleProvider({
     model: servedName ? { ...model, servedName } : model,
     baseUrl,
     apiKey: env.MODEL_API_KEY ?? '',
     jsonMode: jsonModeOf(env.MODEL_JSON_MODE),
     ...(env.MODEL_MAX_CONCURRENCY ? { maxConcurrent: Number(env.MODEL_MAX_CONCURRENCY) } : {}),
+    ...(headers.length ? { headers: headerRecord(headers) } : {}),
   });
   if (mode === 'record') {
     return new RecordedProvider({ dir: env.RECORDINGS_DIR, mode: 'record', live });

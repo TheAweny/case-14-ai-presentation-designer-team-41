@@ -240,6 +240,13 @@
         "apiKey": {
           "tooLong": "The key is longer than {max} characters.",
           "whitespace": "The key contains a space or line break — make sure you copied all of it and nothing else."
+        },
+        "headers": {
+          "name": "A header name is Latin letters, digits and hyphens, without spaces.",
+          "reserved": "The app sets this header itself. Put the key in the key field.",
+          "value": "Each header needs a one-line value of up to 500 characters.",
+          "duplicate": "The same header is listed twice.",
+          "tooMany": "No more than {max} headers."
         }
       },
       "check": "Check connection",
@@ -255,6 +262,11 @@
       "shared": {
         "label": "Available to every user",
         "hint": "Every account sees the models of this connection; only administrators see its address and key."
+      },
+      "headers": {
+        "label": "Headers",
+        "placeholder": "Project-ID: 0b5e…",
+        "hint": "When the server asks for more than the key, such as a project. One per line: “Name: value”. Do not put the key here; it has its own field above."
       }
     },
     "roles": {

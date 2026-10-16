@@ -3,6 +3,10 @@ import {
   PIPELINE_ROLES,
   SERVER_CONNECTION_ID,
   baseUrlProblem,
+  headerRecord,
+  headersProblem,
+  normalizeHeaders,
+  parseHeaderEnv,
   connectionModelsInputSchema,
   connectionInputProblems,
   connectionInputSchema,
@@ -14,6 +18,7 @@ import {
   probeInputSchema,
   roleAssignmentSchema,
   type ConnectionCheck,
+  type ConnectionHeader,
   type ConnectionProblems,
   type ModelConnection,
   type ModelRef,
@@ -74,6 +79,8 @@ export interface ResolvedModel {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly model: string;
+  /** Headers the connection sends besides the key. */
+  readonly headers: Readonly<Record<string, string>>;
 }
 
 /** Roles the server connection performs until someone assigns another model. */
@@ -111,14 +118,23 @@ export class ModelSettingsService {
   }
 
   /** The connection configured in the environment, or null when the server has none. */
-  private server(): { baseUrl: string; model: string; apiKey: string } | null {
+  private server(): {
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+    headers: ConnectionHeader[];
+  } | null {
     const baseUrl = this.env.LLM_BASE_URL?.trim() ?? '';
     const model = this.env.LLM_MODEL?.trim() ?? '';
     if (!baseUrl || !model || baseUrlProblem(baseUrl)) return null;
+    // `MODEL_HEADERS` that do not read as headers are not sent: the check of the connection then
+    // shows what the server answers without them.
+    const headers = parseHeaderEnv(this.env.MODEL_HEADERS);
     return {
       baseUrl: normalizeBaseUrl(baseUrl),
       model,
       apiKey: this.env.MODEL_API_KEY?.trim() ?? '',
+      headers: headersProblem(headers) ? [] : normalizeHeaders(headers),
     };
   }
 
@@ -137,6 +153,7 @@ export class ModelSettingsService {
       baseUrl: server.baseUrl,
       hasKey: server.apiKey !== '',
       keyHint: keyHint(server.apiKey || null),
+      headers: server.headers,
       lastCheck: this.serverCheck,
       enabledModels: enabledModels === null ? null : [...enabledModels],
       managed: true,
@@ -174,6 +191,7 @@ export class ModelSettingsService {
       hasKey: key !== null,
       // Someone else's key is not even hinted at.
       keyHint: editable ? keyHint(key) : null,
+      headers: [...stored.headers],
       lastCheck: stored.lastCheck,
       enabledModels: stored.enabledModels === null ? null : [...stored.enabledModels],
       managed: false,
@@ -278,8 +296,15 @@ export class ModelSettingsService {
           ? (previous?.apiKeyEncrypted ?? null)
           : null;
     const keyChanged = entered !== null && entered !== previousKey;
-    // The old check speaks of the old address and key: after either changes it is no longer true.
-    const unchanged = previous !== null && previous.baseUrl === baseUrl && !keyChanged;
+    const headers =
+      input.headers !== undefined
+        ? normalizeHeaders(input.headers)
+        : [...(previous?.headers ?? [])];
+    const headersChanged = JSON.stringify(headers) !== JSON.stringify(previous?.headers ?? []);
+    // The old check speaks of the old address, key and headers: after any changes it is no
+    // longer true.
+    const unchanged =
+      previous !== null && previous.baseUrl === baseUrl && !keyChanged && !headersChanged;
     const lastCheck = input.lastCheck ?? (unchanged ? previous.lastCheck : null);
 
     const stored: StoredConnection = {
@@ -291,6 +316,7 @@ export class ModelSettingsService {
       lastCheck,
       ownerId,
       enabledModels: previous?.enabledModels ?? null,
+      headers,
     };
     await this.store.saveConnection(stored);
     await this.store.record({
@@ -364,7 +390,11 @@ export class ModelSettingsService {
       if (!server) throw new ModelConnectionNotFoundError(connectionId);
       // The server connection is set by whoever runs the product, so its address is trusted.
       this.serverCheck = await checkModelConnection(
-        { baseUrl: server.baseUrl, apiKey: server.apiKey || null },
+        {
+          baseUrl: server.baseUrl,
+          apiKey: server.apiKey || null,
+          headers: headerRecord(server.headers),
+        },
         { ...this.checkOptions, allowPrivateHosts: true },
       );
       const view = await this.serverView();
@@ -373,13 +403,21 @@ export class ModelSettingsService {
     }
     const stored = await this.find(connectionId, actor);
     const lastCheck = await checkModelConnection(
-      { baseUrl: stored.baseUrl, apiKey: this.keyOf(stored) },
+      {
+        baseUrl: stored.baseUrl,
+        apiKey: this.keyOf(stored),
+        headers: headerRecord(stored.headers),
+      },
       this.checkOptions,
     );
     // The connection may have been edited or removed meanwhile: the outcome belongs to the same one.
     const current = await this.store.getConnection(connectionId);
     if (!current) throw new ModelConnectionNotFoundError(connectionId);
-    if (current.baseUrl !== stored.baseUrl || current.apiKeyEncrypted !== stored.apiKeyEncrypted) {
+    if (
+      current.baseUrl !== stored.baseUrl ||
+      current.apiKeyEncrypted !== stored.apiKeyEncrypted ||
+      JSON.stringify(current.headers) !== JSON.stringify(stored.headers)
+    ) {
       return this.publicView(current, actor);
     }
     const checked = { ...current, lastCheck };
@@ -396,8 +434,15 @@ export class ModelSettingsService {
     const saved =
       input.connectionId === undefined ? null : await this.find(input.connectionId, actor, true);
     const apiKey = input.apiKey?.trim() || (saved ? this.keyOf(saved) : null);
+    const headers = input.headers ?? saved?.headers ?? [];
+    const headerIssue = headersProblem(headers);
+    if (headerIssue) throw new InvalidModelSettingsInputError({ headers: headerIssue });
     return checkModelConnection(
-      { baseUrl: normalizeBaseUrl(input.baseUrl), apiKey },
+      {
+        baseUrl: normalizeBaseUrl(input.baseUrl),
+        apiKey,
+        headers: headerRecord(normalizeHeaders(headers)),
+      },
       this.checkOptions,
     );
   }
@@ -479,7 +524,13 @@ export class ModelSettingsService {
           'Эта модель выключена в настройках подключения: выберите другую.',
         );
       }
-      return { connectionId: SERVER_CONNECTION_ID, ...server, model: ref.modelId };
+      return {
+        connectionId: SERVER_CONNECTION_ID,
+        baseUrl: server.baseUrl,
+        apiKey: server.apiKey,
+        model: ref.modelId,
+        headers: headerRecord(server.headers),
+      };
     }
     const stored = await this.store.getConnection(ref.connectionId);
     // Someone else's connection is as good as removed: its key is not the actor's to use.
@@ -511,6 +562,7 @@ export class ModelSettingsService {
       baseUrl: stored.baseUrl,
       apiKey: apiKey ?? '',
       model: ref.modelId,
+      headers: headerRecord(stored.headers),
     };
   }
 }

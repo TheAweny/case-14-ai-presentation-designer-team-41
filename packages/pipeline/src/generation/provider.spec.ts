@@ -379,3 +379,83 @@ describe('busy provider', () => {
     expect(refused).toBeGreaterThan(0);
   });
 });
+
+describe('a model that ignores structured output', () => {
+  const answerFormat = {
+    format: 'Answer in JSON by this schema:\n{{schema}}',
+    repair: 'Fix these problems:\n{{problems}}',
+  };
+  const reply = (content: string) =>
+    new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }));
+  const bodyOf = (call: unknown[] | undefined) =>
+    JSON.parse(String((call?.[1] as RequestInit | undefined)?.body)) as {
+      messages: { role: string; content: string }[];
+    };
+
+  it('gets the schema of its answer in the instructions', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      answerFormat,
+      limiter: new RequestLimiter(8),
+    });
+    await provider.generate('writer', 'Write a slide.', {}, schema, AbortSignal.timeout(1000));
+    const system = bodyOf(fetchImpl.mock.calls[0]).messages[0]?.content ?? '';
+    expect(system.startsWith('Write a slide.\n\nAnswer in JSON by this schema:\n{')).toBe(true);
+    expect(system).toContain('"required":["ok"]');
+  });
+
+  it('is asked once to repair an answer off the schema, with what is wrong', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(reply('{"title":"Итоги","points":[]}'))
+      .mockResolvedValueOnce(answer());
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      answerFormat,
+      limiter: new RequestLimiter(8),
+    });
+    await expect(
+      provider.generate('writer', 'Write.', { slide: 1 }, schema, AbortSignal.timeout(1000)),
+    ).resolves.toEqual({ ok: true });
+    const repair = bodyOf(fetchImpl.mock.calls[1]).messages;
+    expect(repair.map((message) => message.role)).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(repair[2]?.content).toBe('{"title":"Итоги","points":[]}');
+    expect(repair[3]?.content).toMatch(/^Fix these problems:\n- ok: /);
+  });
+
+  it('draws afresh when the repair misses too, and gives up after the budget', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => reply('{"wrong":1}'));
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      answerFormat,
+      limiter: new RequestLimiter(8),
+    });
+    await expect(
+      provider.generate('writer', 'Write.', {}, schema, AbortSignal.timeout(1000)),
+    ).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // The first retry repairs, the second draws again without the bad answer.
+    expect(bodyOf(fetchImpl.mock.calls[1]).messages).toHaveLength(4);
+    expect(bodyOf(fetchImpl.mock.calls[2]).messages).toHaveLength(2);
+  });
+
+  it('sends the headers of its connection, and never lets them replace the key', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      headers: { 'Project-ID': 'p-1', Authorization: 'Bearer forged' },
+      limiter: new RequestLimiter(8),
+    });
+    await provider.generate('writer', '', {}, schema, AbortSignal.timeout(1000));
+    const init = fetchImpl.mock.calls[0]?.[1];
+    expect(init?.headers).toMatchObject({
+      'Project-ID': 'p-1',
+      Authorization: 'Bearer test-secret',
+    });
+  });
+});

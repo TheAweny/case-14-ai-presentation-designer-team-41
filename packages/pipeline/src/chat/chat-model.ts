@@ -73,6 +73,8 @@ export interface OpenAICompatibleChatOptions {
    * JSON mode. It is a prompt, so it comes from the registry.
    */
   readonly jsonModeInstructions: string;
+  /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
+  readonly headers?: Readonly<Record<string, string>>;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -131,6 +133,7 @@ export class OpenAICompatibleChatModel implements ChatModel {
         response = await this.fetchImpl(this.endpoint, {
           method: 'POST',
           headers: {
+            ...this.options.headers,
             ...(this.options.apiKey.trim()
               ? { Authorization: `Bearer ${this.options.apiKey}` }
               : {}),

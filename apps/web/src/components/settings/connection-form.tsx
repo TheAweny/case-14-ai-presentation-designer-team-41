@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   API_KEY_MAX_LENGTH,
   BASE_URL_MAX_LENGTH,
+  CONNECTION_HEADERS_MAX,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_PRESETS,
   PRESET_BASE_URLS,
@@ -17,9 +18,13 @@ import {
   connectionInputProblems,
   connectionLocation,
   hasProblems,
+  headersProblem,
   normalizeBaseUrl,
+  normalizeHeaders,
+  parseHeaderLines,
   suggestedConnectionName,
   type ConnectionCheck,
+  type ConnectionHeader,
   type ConnectionPreset,
   type ModelConnection,
   type ModelSettings,
@@ -36,9 +41,15 @@ type CheckState =
       /** Для каких адреса и ключа проверка: сохранится с подключением, только если они те же. */
       readonly baseUrl: string;
       readonly apiKey: string;
+      readonly headers: string;
     };
 
 const IDLE: CheckState = { state: 'idle' };
+
+/** Заголовки так, как их пишут в поле: по одному на строку, «Имя: значение». */
+function headerLines(headers: readonly ConnectionHeader[]): string {
+  return headers.map(({ name, value }) => `${name}: ${value}`).join('\n');
+}
 
 const inputClass = cn(
   'h-9 w-full rounded-md bg-background px-2.5 text-sm text-foreground outline-none',
@@ -72,7 +83,7 @@ export function ConnectionForm({
   const t = useTranslations('settings.models.form');
   const tModels = useTranslations('settings.models');
   const errorText = useCheckErrorText();
-  const ids = { name: useId(), url: useId(), key: useId() };
+  const ids = { name: useId(), url: useId(), key: useId(), headers: useId() };
   const [preset, setPreset] = useState<ConnectionPreset>(connection?.preset ?? 'ollama');
   const [baseUrl, setBaseUrl] = useState(connection?.baseUrl ?? PRESET_BASE_URLS.ollama);
   // null — имя не трогали: его предлагает форма по пресету и адресу.
@@ -84,17 +95,23 @@ export function ConnectionForm({
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [shared, setShared] = useState(connection ? connection.shared === true : canShare);
+  const [headersText, setHeadersText] = useState(headerLines(connection?.headers ?? []));
   const checkRun = useRef(0);
   const nameInput = useRef<HTMLInputElement>(null);
   const urlInput = useRef<HTMLInputElement>(null);
   const keyInput = useRef<HTMLInputElement>(null);
   const firstPreset = useRef<HTMLInputElement>(null);
+  const headersInput = useRef<HTMLTextAreaElement>(null);
 
   const name = nameDraft ?? suggestedConnectionName(preset, baseUrl);
   const enteredKey = replacingKey ? apiKey : undefined;
   const problems = connectionInputProblems({ name, baseUrl, apiKey: enteredKey });
   const visible = showProblems ? problems : {};
   const location = baseUrlProblem(baseUrl) === null ? connectionLocation(baseUrl) : null;
+  const headers = normalizeHeaders(parseHeaderLines(headersText));
+  const headerIssue = headersProblem(headers);
+  // По нему проверка помнит, с какими заголовками она прошла.
+  const headersKey = JSON.stringify(headers);
 
   useEffect(() => {
     // Новое подключение начинают с выбора сервера, правку — с имени.
@@ -127,6 +144,7 @@ export function ConnectionForm({
     if (problems.name) nameInput.current?.focus();
     else if (problems.baseUrl) urlInput.current?.focus();
     else if (problems.apiKey) keyInput.current?.focus();
+    else if (headerIssue) headersInput.current?.focus();
   };
 
   const runCheck = () => {
@@ -137,18 +155,24 @@ export function ConnectionForm({
       else keyInput.current?.focus();
       return;
     }
+    if (headerIssue) {
+      setShowProblems(true);
+      headersInput.current?.focus();
+      return;
+    }
     const run = ++checkRun.current;
     const target = { baseUrl: normalizeBaseUrl(baseUrl), apiKey: enteredKey ?? '' };
     setCheck({ state: 'running' });
     probeConnectionAction({
       connectionId: connection?.connectionId,
       baseUrl: target.baseUrl,
+      headers,
       apiKey: enteredKey,
     })
       .then((result) => {
         if (run !== checkRun.current) return;
         if (result.ok) {
-          setCheck({ state: 'done', result: result.check, ...target });
+          setCheck({ state: 'done', result: result.check, ...target, headers: headersKey });
           return;
         }
         setCheck(IDLE);
@@ -172,7 +196,7 @@ export function ConnectionForm({
     event.preventDefault();
     if (saving) return;
     setFailure(null);
-    if (hasProblems(problems)) {
+    if (hasProblems(problems) || headerIssue) {
       setShowProblems(true);
       focusFirstProblem();
       return;
@@ -180,6 +204,7 @@ export function ConnectionForm({
     const lastCheck =
       check.state === 'done' &&
       check.baseUrl === normalizeBaseUrl(baseUrl) &&
+      check.headers === headersKey &&
       check.apiKey === (enteredKey ?? '')
         ? check.result
         : undefined;
@@ -191,6 +216,7 @@ export function ConnectionForm({
       baseUrl,
       apiKey: enteredKey,
       lastCheck,
+      headers,
       ...(canShare ? { shared } : {}),
     })
       .then((result) => {
@@ -390,6 +416,39 @@ export function ConnectionForm({
             </Button>
           </div>
         )}
+      </Field>
+
+      <Field
+        id={ids.headers}
+        label={
+          <>
+            {t('headers.label')}{' '}
+            <span className="text-muted-foreground/70">· {t('apiKey.optional')}</span>
+          </>
+        }
+        hint={t('headers.hint')}
+        problem={
+          showProblems &&
+          headerIssue !== null &&
+          t(`problems.headers.${headerIssue}`, { max: CONNECTION_HEADERS_MAX })
+        }
+      >
+        <textarea
+          ref={headersInput}
+          id={ids.headers}
+          value={headersText}
+          rows={2}
+          placeholder={t('headers.placeholder')}
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={showProblems && headerIssue ? true : undefined}
+          aria-describedby={`${ids.headers}-hint${showProblems && headerIssue ? ` ${ids.headers}-problem` : ''}`}
+          onChange={(event) => {
+            setHeadersText(event.currentTarget.value);
+            forgetCheck();
+          }}
+          className={cn(inputClass, 'h-auto min-h-16 resize-y py-2 font-mono text-xs')}
+        />
       </Field>
 
       <div className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3 ring-1 ring-border">

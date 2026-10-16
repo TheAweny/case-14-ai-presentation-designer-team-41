@@ -31,3 +31,13 @@ export interface RunManifest {
   readonly agents: readonly AgentManifestEntry[];
   readonly models: readonly ModelManifestEntry[];
 }
+
+/**
+ * The prompts every generation agent shares: the answer format, with `{{schema}}` for the JSON
+ * Schema of the answer, and the request to repair an answer, with `{{problems}}`.
+ */
+export interface AnswerFormat {
+  readonly version: string;
+  readonly format: string;
+  readonly repair: string;
+}

@@ -31,6 +31,25 @@ interface Options {
   seed?: number;
   /** Slots to take requests from; the process-wide pool by default. */
   limiter?: RequestLimiter;
+  /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
+  headers?: Readonly<Record<string, string>>;
+  /**
+   * The shared prompts from the registry that carry the JSON Schema of an answer in the
+   * instructions and ask once to repair an answer that misses it: a model that ignores
+   * structured output still answers in shape. Without them only `response_format` holds it.
+   */
+  answerFormat?: { readonly format: string; readonly repair: string };
+}
+
+/** What is wrong with an answer, one problem a line, for the request to repair it. */
+function problemsOf(error: unknown): string {
+  if (error instanceof z.ZodError) {
+    return error.issues
+      .slice(0, 20)
+      .map((issue) => `- ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+      .join('\n');
+  }
+  return `- ${error instanceof Error ? error.message : String(error)}`;
 }
 interface Completion {
   choices?: { message?: { content?: string }; finish_reason?: string }[];
@@ -246,6 +265,14 @@ export class OpenAICompatibleProvider implements TextProvider {
   ): Promise<T> {
     const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
     const generation = this.generation.get(agent);
+    const answerFormat = this.options.answerFormat;
+    const system = answerFormat
+      ? `${instructions}\n\n${answerFormat.format.replace('{{schema}}', JSON.stringify(outputSchema))}`
+      : instructions;
+    // An answer that missed the schema, with what is wrong, while it is being repaired. A model
+    // is asked to repair once; after that a miss is drawn again from scratch.
+    let repair: { answer: string; problems: string } | null = null;
+    let repaired = false;
     // Two budgets: `attempt` counts draws that came back unusable (empty, truncated, off-schema,
     // timed out, dropped) and grows the token budget; `busy` counts refusals for load, which say
     // nothing about the answer and only cost a wait.
@@ -261,6 +288,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         const response = await this.fetchImpl(this.endpoint, {
           method: 'POST',
           headers: {
+            ...this.options.headers,
             ...(this.options.apiKey.trim()
               ? { Authorization: `Bearer ${this.options.apiKey}` }
               : {}),
@@ -285,8 +313,17 @@ export class OpenAICompatibleProvider implements TextProvider {
               },
             },
             messages: [
-              { role: 'system', content: instructions },
+              { role: 'system', content: system },
               { role: 'user', content: JSON.stringify(input) },
+              ...(repair && answerFormat
+                ? [
+                    { role: 'assistant', content: repair.answer },
+                    {
+                      role: 'user',
+                      content: answerFormat.repair.replace('{{problems}}', repair.problems),
+                    },
+                  ]
+                : []),
             ],
           }),
         });
@@ -314,9 +351,15 @@ export class OpenAICompatibleProvider implements TextProvider {
           try {
             result = parseModelJson(choice.message.content, schema);
           } catch (error) {
-            // Malformed or off-schema JSON is a sampling accident; one more draw usually fixes it.
-            if (attempt++ < 2) continue;
-            throw error;
+            // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
+            // miss is a sampling accident, and a fresh draw follows.
+            if (attempt++ >= 2) throw error;
+            repair =
+              answerFormat && !repaired
+                ? { answer: choice.message.content.slice(0, 20000), problems: problemsOf(error) }
+                : null;
+            if (repair) repaired = true;
+            continue;
           }
           this.limiter.succeeded();
           this.calls.push({

@@ -246,6 +246,28 @@ describe('createProvider', () => {
     expect(model).toBe('qwen/qwen3-30b-a3b');
   });
 
+  it('sends MODEL_HEADERS with every request and refuses ones that do not read as headers', async () => {
+    let sent: HeadersInit | undefined;
+    const env = { LLM_BASE_URL: 'http://x/v1', MODEL_HEADERS: 'Project-ID=p-1' };
+    const provider = createProvider(catalog, 'planner-default', env);
+    const original = globalThis.fetch;
+    globalThis.fetch = (_url, init) => {
+      sent = init?.headers;
+      return Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] })),
+      );
+    };
+    try {
+      await provider.complete(request);
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(sent).toMatchObject({ 'Project-ID': 'p-1' });
+    expect(() =>
+      createProvider(catalog, 'planner-default', { ...env, MODEL_HEADERS: 'Host=evil' }),
+    ).toThrow(/MODEL_HEADERS/);
+  });
+
   it('reaches a live runtime at the URL of its variable', () => {
     const provider = createProvider(catalog, 'planner-default', { LLM_BASE_URL: 'http://x/v1' });
     expect(provider.name).toBe('openai-compatible:planner-default');

@@ -16,6 +16,8 @@ export interface OpenAICompatibleOptions {
   readonly fetch?: typeof fetch;
   /** Requests to this runtime at once, shared by every provider that talks to it. */
   readonly maxConcurrent?: number;
+  /** Headers the runtime asks for besides the key, such as a gateway's `Project-ID`. */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 interface ChatResponse {
@@ -134,7 +136,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
       const response = await gate.run(() =>
         doFetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+          headers: {
+            ...this.options.headers,
+            'content-type': 'application/json',
+            authorization: `Bearer ${apiKey}`,
+          },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
         }),
