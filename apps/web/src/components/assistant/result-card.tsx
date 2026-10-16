@@ -9,6 +9,8 @@ import {
   ErrorIcon,
   GridIcon,
   PlayIcon,
+  RetryIcon,
+  SpinnerIcon,
   SuccessIcon,
   WarningIcon,
 } from '@/components/ui/icons';
@@ -19,7 +21,8 @@ import { SlideShow } from '@/components/editor/slide-show';
 import { useDeckExport } from '@/components/editor/use-deck-export';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { Button } from '@/components/ui/button';
-import type { DeckResult, VariantReview } from '@/lib/variant-review';
+import { LAYOUT_VARIANTS } from '@/lib/deck-generator';
+import type { DeckResult, FailedVariant, VariantReview } from '@/lib/variant-review';
 import { datedFileName, safeFileName } from '@/lib/deck-export';
 import { browserDraftStore, editedSlidesOf } from '@/lib/draft-storage';
 import { createHttpExporter } from '@/lib/http-generation';
@@ -39,12 +42,15 @@ import { mediaResolver, useVariantDeck, type VariantDeck } from './use-variant-d
  */
 export function ResultCard({
   onChoose,
+  onRetry,
   result,
   compact = false,
   currentDeckId,
 }: {
   /** Человек открыл вариант: чат теперь ведёт к нему. */
   onChoose: (deckId: string) => void;
+  /** Пересобрать вариант, который не собрался; нет — пересборка здесь недоступна. */
+  onRetry?: (variant: LayoutVariant) => Promise<void>;
   result: DeckResult;
   compact?: boolean;
   /** Колода, открытая в редакторе сейчас: её вариант помечен, открыть его второй раз нельзя. */
@@ -74,10 +80,25 @@ export function ResultCard({
       : recommendedReview.errors === 0 && recommendedReview.warnings === 0
         ? t('reasonClean')
         : t('reasonFewest');
+  const failed = result.failed ?? [];
+  // Не собрался вариант — карточка не говорит «все три собраны».
   const lead =
-    result.elapsedMs === null
-      ? t('lead', { variant: recommendedName })
-      : t('leadTimed', { variant: recommendedName, time: formatElapsed(result.elapsedMs) });
+    failed.length > 0
+      ? result.elapsedMs === null
+        ? t('leadPartial', {
+            variant: recommendedName,
+            done: result.variants.length,
+            total: result.variants.length + failed.length,
+          })
+        : t('leadPartialTimed', {
+            variant: recommendedName,
+            done: result.variants.length,
+            total: result.variants.length + failed.length,
+            time: formatElapsed(result.elapsedMs),
+          })
+      : result.elapsedMs === null
+        ? t('lead', { variant: recommendedName })
+        : t('leadTimed', { variant: recommendedName, time: formatElapsed(result.elapsedMs) });
 
   const open = (deckId: string) => {
     if (deckId === currentDeckId) return;
@@ -130,7 +151,20 @@ export function ResultCard({
           compact ? 'gap-1.5 p-3' : 'gap-2 p-4 sm:grid-cols-3 sm:gap-3',
         )}
       >
-        {result.variants.map((item) => {
+        {/* Варианты на своих местах: несобранный стоит там, где стоял бы готовый. */}
+        {LAYOUT_VARIANTS.map((variant) => {
+          const item = result.variants.find((entry) => entry.variant === variant);
+          if (!item) {
+            const missing = failed.find((entry) => entry.variant === variant);
+            return missing ? (
+              <FailedTile
+                key={variant}
+                item={missing}
+                compact={compact}
+                {...(onRetry ? { onRetry } : {})}
+              />
+            ) : null;
+          }
           const checked = item.variant === picked;
           const review = result.reviews?.[item.deckId] ?? null;
           return (
@@ -290,6 +324,99 @@ export function ResultCard({
 function reviewOf(result: DeckResult, variant: LayoutVariant): VariantReview | null {
   const deckId = result.variants.find((item) => item.variant === variant)?.deckId;
   return deckId ? (result.reviews?.[deckId] ?? null) : null;
+}
+
+/**
+ * Вариант, который не собрался: на месте превью пустая рамка, рядом — пересборка по тому же
+ * плану. Пока она идёт, кнопку сменяет строка хода: второй раз её не нажать.
+ */
+function FailedTile({
+  item,
+  compact,
+  onRetry,
+}: {
+  item: FailedVariant;
+  compact: boolean;
+  onRetry?: (variant: LayoutVariant) => Promise<void>;
+}) {
+  const t = useTranslations('assistant.result');
+  const tv = useTranslations('assistant.variants');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(false);
+  const retrying = sending || item.status === 'retrying';
+
+  const retry = async () => {
+    if (!onRetry || retrying) return;
+    setSending(true);
+    setError(false);
+    try {
+      await onRetry(item.variant);
+    } catch {
+      setError(true);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div
+      data-variant={item.variant}
+      data-state={retrying ? 'retrying' : 'failed'}
+      className={cn(
+        'flex min-w-0 gap-2 rounded-xl bg-muted/20 p-1.5 ring-1 ring-border',
+        compact ? 'flex-row items-center' : 'flex-row items-center sm:flex-col sm:items-stretch',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'flex aspect-video shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-background text-muted-foreground',
+          compact ? 'w-20' : 'w-24 sm:w-auto',
+        )}
+      >
+        {retrying ? (
+          <SpinnerIcon className="size-4 animate-spin motion-reduce:animate-none" />
+        ) : (
+          <WarningIcon className="size-4" />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5 pb-0.5">
+        <span className="font-medium text-foreground">{tv(`${item.variant}.name`)}</span>
+        {retrying ? (
+          <span role="status" className="truncate text-xs text-muted-foreground">
+            {t('rebuilding')}
+          </span>
+        ) : (
+          <>
+            <span
+              className="truncate text-xs text-muted-foreground"
+              // Причину пишет прогон, по-английски и технически: она для того, кто разбирается.
+              title={item.reason ?? undefined}
+            >
+              {t('notBuilt')}
+            </span>
+            {onRetry ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1 self-start"
+                onClick={() => void retry()}
+              >
+                <RetryIcon data-icon="inline-start" />
+                {t('rebuild')}
+              </Button>
+            ) : null}
+            {error ? (
+              <span role="alert" className="text-xs text-destructive">
+                {t('rebuildFailed')}
+              </span>
+            ) : null}
+          </>
+        )}
+      </span>
+    </div>
+  );
 }
 
 /** Строка аудита сборки: чисто, ошибки, замечания или проверка недоступна. */

@@ -1292,10 +1292,25 @@ export function keepOutline(
 export class SharedPlan {
   private pending: Promise<z.infer<typeof compositionPlanSchema>> | undefined;
 
+  /**
+   * `known` — the plan the build already settled on: a variant built again tells the same story
+   * and does not call the planner. `onReady` hears the plan once it is made, to keep it.
+   */
+  constructor(
+    known?: z.infer<typeof compositionPlanSchema>,
+    private readonly onReady?: (plan: z.infer<typeof compositionPlanSchema>) => Promise<void>,
+  ) {
+    if (known) this.pending = Promise.resolve(known);
+  }
+
   once(
     compute: () => Promise<z.infer<typeof compositionPlanSchema>>,
   ): Promise<z.infer<typeof compositionPlanSchema>> {
-    this.pending ??= compute();
+    this.pending ??= compute().then(async (plan) => {
+      // Keeping the plan is a convenience: a failed write must not fail the deck.
+      await this.onReady?.(plan).catch(() => undefined);
+      return plan;
+    });
     return this.pending;
   }
 }

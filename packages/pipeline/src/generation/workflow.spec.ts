@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 import {
   compositionPlanSchema,
@@ -1154,6 +1154,31 @@ describe('one plan, three layouts', () => {
     ]);
     expect(calls).toBe(1);
     expect(results.every((r) => r === plan)).toBe(true);
+  });
+
+  it('hands the plan it made to be kept, once', async () => {
+    const plan = { audience: '', goal: '', title: 'T', slides: [] };
+    const kept = vi.fn(() => Promise.resolve());
+    const shared = new SharedPlan(undefined, kept);
+    await Promise.all([
+      shared.once(() => Promise.resolve(plan)),
+      shared.once(() => Promise.resolve(plan)),
+    ]);
+    expect(kept).toHaveBeenCalledTimes(1);
+    expect(kept).toHaveBeenCalledWith(plan);
+  });
+
+  it('tells a rebuilt variant the plan its build kept, without planning again', async () => {
+    const plan = { audience: '', goal: '', title: 'Kept', slides: [] };
+    const compute = vi.fn(() => Promise.resolve({ ...plan, title: 'New' }));
+    await expect(new SharedPlan(plan).once(compute)).resolves.toBe(plan);
+    expect(compute).not.toHaveBeenCalled();
+  });
+
+  it('builds the deck even when keeping the plan fails', async () => {
+    const plan = { audience: '', goal: '', title: 'T', slides: [] };
+    const shared = new SharedPlan(undefined, () => Promise.reject(new Error('disk full')));
+    await expect(shared.once(() => Promise.resolve(plan))).resolves.toBe(plan);
   });
 
   it('keeps the planner layouts for balanced and the cover everywhere', () => {

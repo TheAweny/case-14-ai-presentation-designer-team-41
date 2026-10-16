@@ -11,6 +11,8 @@ import { Pool } from 'pg';
 import {
   chatMessageSchema,
   chatModeSchema,
+  chatPartSchema,
+  layoutVariantSchema,
   type AssistantChatMessage,
   type ChatAttachment,
   type ChatDocument,
@@ -38,7 +40,20 @@ import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { actorOf, GenerationService } from '../generation/generation.service.js';
 import { ModelSettingsService } from '../models/model-settings.service.js';
-import { chatTools, runBuild, type ChatToolScope } from './chat-tools.js';
+import {
+  resultOf,
+  withFailed,
+  withVariant,
+  type FailedVariant,
+  type ResultPart,
+} from './chat-results.js';
+import {
+  chatTools,
+  failureReason,
+  readAuditCounts,
+  runBuild,
+  type ChatToolScope,
+} from './chat-tools.js';
 
 export const CHAT_ID = /^[0-9a-f-]{36}$/i;
 const TITLE_MAX_LENGTH = 200;
@@ -196,9 +211,188 @@ export class ChatsService implements OnApplicationShutdown {
     if (!row) throw new NotFoundException('Chat not found.');
     return {
       ...summaryOf(row),
-      messages: messagesOf(row.messages),
+      messages: messagesOf(row.messages).map((message) => this.withoutStaleRetries(message)),
       running: this.turns.has(id),
     };
+  }
+
+  /** Runs of variants being built again whose result is not written into the chat yet. */
+  private readonly rebuilding = new Set<string>();
+
+  /**
+   * A variant shown as being built again whose run this process no longer builds was cut short by
+   * a restart: it reads as failed, and the person can start it again.
+   */
+  private withoutStaleRetries(message: ChatMessage): ChatMessage {
+    if (message.role !== 'assistant') return message;
+    return {
+      ...message,
+      parts: message.parts.map((part) =>
+        part.type === 'result' && part.failed?.some((item) => this.stale(item))
+          ? {
+              ...part,
+              failed: part.failed.map((item) =>
+                this.stale(item)
+                  ? {
+                      ...item,
+                      status: 'failed' as const,
+                      reason: 'Сервер перезапустился во время сборки. Запустите её ещё раз.',
+                    }
+                  : item,
+              ),
+            }
+          : part,
+      ),
+    };
+  }
+
+  private stale(item: FailedVariant): boolean {
+    return (
+      item.status === 'retrying' &&
+      !this.generation.isRunning(item.runId) &&
+      !this.rebuilding.has(item.runId)
+    );
+  }
+
+  /**
+   * Build again a variant of a build in the chat that failed, from the plan its build kept. The
+   * result shows it as being rebuilt at once; once its run ends, the variant takes its place in
+   * the result, or the result says again why it failed. Answers the result as it is now.
+   */
+  async retryVariant(
+    id: string,
+    body: { buildId?: unknown; variant?: unknown },
+    account: Account,
+  ): Promise<ResultPart> {
+    const variant = layoutVariantSchema.safeParse(body.variant);
+    if (typeof body.buildId !== 'string' || !variant.success)
+      throw new BadRequestException('buildId and variant are required.');
+    const buildId = body.buildId;
+    if (this.turns.has(id))
+      throw new ConflictException('The chat is answering; build the variant once it is done.');
+    const found = resultOf((await this.get(id, account)).messages, buildId);
+    const entry = found?.failed?.find((item) => item.variant === variant.data);
+    if (!found || !entry) throw new NotFoundException('No failed variant to build again.');
+    // A second press while it builds answers the same result instead of a second run.
+    if (entry.status === 'retrying') return found;
+    const build = await this.generation.retryVariant(entry.runId, account);
+    const started = build.variants[0];
+    const ended = build.each[0];
+    if (!started || !ended) throw new ConflictException('The variant could not be started.');
+    this.rebuilding.add(started.runId);
+    const retrying = await this.patchResult(id, account.id, buildId, (part) =>
+      withFailed(part, {
+        variant: variant.data,
+        runId: started.runId,
+        status: 'retrying',
+        reason: null,
+      }),
+    );
+    void ended
+      .then(async (end) => {
+        if (end.state === 'done') {
+          const review = await readAuditCounts(this.generation, end.runId);
+          await this.patchResult(
+            id,
+            account.id,
+            buildId,
+            (part) => withVariant(part, variant.data, end.runId, review),
+            end.runId,
+          );
+        } else {
+          const reason = await failureReason(this.generation, end.runId);
+          await this.patchResult(id, account.id, buildId, (part) =>
+            withFailed(part, { variant: variant.data, runId: end.runId, status: 'failed', reason }),
+          );
+        }
+      })
+      .catch((error: unknown) =>
+        this.logger.warn(`Could not write the rebuilt variant into chat ${id}: ${String(error)}`),
+      )
+      .finally(() => this.rebuilding.delete(started.runId));
+    return retrying ?? found;
+  }
+
+  /** Wait until no turn answers in the chat and its last write is done. */
+  private async whenIdle(id: string): Promise<void> {
+    for (let turn = this.turns.get(id); turn; turn = this.turns.get(id)) {
+      const current = turn;
+      await new Promise<void>((resolve) => {
+        const stop = current.watch((event) => {
+          if (event.type !== 'turn-end') return;
+          queueMicrotask(() => stop());
+          resolve();
+        }, true);
+      });
+    }
+    await this.saving.get(id)?.catch(() => undefined);
+  }
+
+  /**
+   * Change the result of a build where the chat keeps it, outside a turn: after the turn running
+   * now, in line with the chat's other writes. Messages are changed in place as stored, so one
+   * this version cannot read is kept, not dropped. `deckId` joins the decks of the chat.
+   */
+  private async patchResult(
+    id: string,
+    ownerId: string,
+    buildId: string,
+    change: (part: ResultPart) => ResultPart,
+    deckId?: string,
+  ): Promise<ResultPart | null> {
+    await this.whenIdle(id);
+    let changed: ResultPart | null = null;
+    const write = async () => {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const found = await client.query<{ messages: unknown }>(
+          'SELECT messages FROM chats WHERE id = $1 AND owner_id = $2 FOR UPDATE',
+          [id, ownerId],
+        );
+        const stored = found.rows[0]?.messages;
+        if (!Array.isArray(stored)) {
+          await client.query('ROLLBACK');
+          return;
+        }
+        const messages = stored.map((message: unknown) => {
+          if (typeof message !== 'object' || message === null) return message;
+          const parts = (message as { parts?: unknown }).parts;
+          if (!Array.isArray(parts)) return message;
+          return {
+            ...message,
+            parts: parts.map((raw: unknown) => {
+              const part = chatPartSchema.safeParse(raw);
+              if (!part.success || part.data.type !== 'result' || part.data.buildId !== buildId)
+                return raw;
+              changed = change(part.data);
+              return changed;
+            }),
+          };
+        });
+        if (!changed) {
+          await client.query('ROLLBACK');
+          return;
+        }
+        await client.query(
+          `UPDATE chats SET messages = $2::jsonb,
+                  deck_ids = CASE WHEN $3::text IS NULL OR $3 = ANY(deck_ids) THEN deck_ids
+                                  ELSE array_append(deck_ids, $3) END
+           WHERE id = $1`,
+          [id, JSON.stringify(messages), deckId ?? null],
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+    const next = (this.saving.get(id) ?? Promise.resolve()).catch(() => undefined).then(write);
+    this.saving.set(id, next);
+    await next;
+    return changed;
   }
 
   /**

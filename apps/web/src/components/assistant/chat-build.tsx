@@ -90,8 +90,9 @@ export function ChatResult({
     value: { status: 'loading' },
   });
   const [attempt, setAttempt] = useState(0);
-  // SSE may replace `part` with an identical object. Its identity must not restart loading.
-  const key = JSON.stringify(part);
+  // SSE may replace `part` with an identical object. Its identity must not restart loading, and
+  // neither does a failed variant starting to rebuild: the previews loaded stay as they are.
+  const key = JSON.stringify({ ...part, failed: undefined });
   const loadKey = `${key}:${attempt}`;
 
   useEffect(() => {
@@ -116,7 +117,12 @@ export function ChatResult({
     };
   }, [key, attempt]);
 
-  const value = loaded.key === loadKey ? loaded.value : { status: 'loading' as const };
+  // A rebuilt variant joining the result keeps the card on screen while its preview loads, rather
+  // than folding it into a spinner.
+  const value =
+    loaded.key === loadKey || loaded.value.status === 'ready'
+      ? loaded.value
+      : { status: 'loading' as const };
   if (value.status === 'loading') {
     return (
       <p role="status" className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
@@ -149,10 +155,18 @@ export function ChatResult({
         </div>
       ) : null}
       <ResultCard
-        result={value.result}
+        result={{
+          ...value.result,
+          failed: (part.failed ?? []).map(({ variant, status, reason }) => ({
+            variant,
+            status,
+            reason,
+          })),
+        }}
         compact={compact}
         currentDeckId={currentDeckId}
         onChoose={(deckId) => chatStore.choose(chatId, deckId)}
+        onRetry={(variant) => chatStore.retryVariant(chatId, part.buildId, variant)}
       />
     </div>
   );

@@ -96,6 +96,16 @@ export class ChatsController {
     );
   }
 
+  /** Build again a variant of a build in the chat that failed; answers the build's result. */
+  @Post(':id/variants/retry')
+  retryVariant(
+    @Param('id') id: string,
+    @Body() body: { buildId?: unknown; variant?: unknown },
+    @CurrentAccount() account: Account,
+  ) {
+    return this.chats.retryVariant(id, body ?? {}, account);
+  }
+
   @Post(':id/cancel')
   @HttpCode(204)
   async cancel(@Param('id') id: string, @CurrentAccount() account: Account): Promise<void> {

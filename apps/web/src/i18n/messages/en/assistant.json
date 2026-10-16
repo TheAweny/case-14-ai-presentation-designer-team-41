@@ -88,7 +88,13 @@
     "retryLoad": "Retry loading",
     "partialLoad": "{count, plural, one {# variant could not be loaded.} other {# variants could not be loaded.}}",
     "substituted": "Demo mode doesn’t build decks itself: the variants are ready-made demo decks, not laid out with the chosen template.",
-    "edit": "Open in editor"
+    "edit": "Open in editor",
+    "leadPartial": "{done} of {total} built — I recommend “{variant}”.",
+    "leadPartialTimed": "Done in {time}. {done} of {total} built — I recommend “{variant}”.",
+    "notBuilt": "Not built",
+    "rebuild": "Rebuild",
+    "rebuilding": "Rebuilding from the same plan…",
+    "rebuildFailed": "Could not start the rebuild. Try again."
   },
   "slides": {
     "close": "Close",

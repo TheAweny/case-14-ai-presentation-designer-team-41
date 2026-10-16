@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -13,9 +14,13 @@ import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import {
+  compositionPlanSchema,
   generationProfileSchema,
+  generationRequestSchema,
+  layoutVariantSchema,
   modelRefSchema,
   storedTemplateIndexSchema,
+  type CompositionPlan,
   type GenerationProfile,
   type GenerationRequest,
   type LayoutVariant,
@@ -317,7 +322,51 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     return imageProviderOf(await this.models.resolveRole('image', actorOf(account))) !== null;
   }
 
-  async start(input: GenerationRequest, account: Account): Promise<StartedBuild> {
+  /**
+   * Build again one variant of a build that failed, as a new run of the same build. It writes
+   * from the request and the plan the build kept, so it tells the same story as the variants
+   * that made it, without calling the planner again.
+   */
+  async retryVariant(runId: string, account: Account): Promise<StartedBuild> {
+    if (!/^run-[0-9a-f-]{36}$/i.test(runId)) throw new NotFoundException('Run not found.');
+    const directory = this.directory(runId);
+    const read = async (name: string): Promise<unknown> =>
+      JSON.parse(await readFile(join(directory, name), 'utf8'));
+    const metadata = await read('metadata.json').catch(() => null);
+    const owned =
+      typeof metadata === 'object' && metadata !== null && 'ownerId' in metadata
+        ? (metadata as { ownerId?: unknown; variant?: unknown; buildId?: unknown })
+        : null;
+    if (!owned || owned.ownerId !== account.id) throw new NotFoundException('Run not found.');
+    const variant = layoutVariantSchema.safeParse(owned.variant);
+    if (!variant.success || typeof owned.buildId !== 'string')
+      throw new ConflictException('This run is not a variant of a build.');
+    if ((await this.repository.get(runId))?.state !== 'failed')
+      throw new ConflictException('Only a failed variant can be built again.');
+    const request = generationRequestSchema.safeParse(await read('request.json').catch(() => null));
+    if (!request.success)
+      throw new ConflictException('This build predates rebuilding a variant; build it again.');
+    // A build that failed before its plan was made has none: the variant plans anew.
+    const plan = compositionPlanSchema.safeParse(
+      await read('composition-plan.json').catch(() => null),
+    );
+    return this.start(request.data, account, {
+      variant: variant.data,
+      buildId: owned.buildId,
+      ...(plan.success ? { plan: plan.data } : {}),
+    });
+  }
+
+  /** The run is still being built in this process. */
+  isRunning(runId: string): boolean {
+    return this.active.has(runId);
+  }
+
+  async start(
+    input: GenerationRequest,
+    account: Account,
+    retry?: { variant: LayoutVariant; buildId: string; plan?: CompositionPlan },
+  ): Promise<StartedBuild> {
     // Every generation runs three variants, each counted as one active run.
     if (this.active.size >= 2 * VARIANTS.length)
       throw new BadRequestException('Two generations are already running.');
@@ -389,8 +438,16 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     // The three variants of one brief are separate runs, so every deck endpoint serves each of
     // them as it is, and they share one cancellation.
     const controller = new AbortController();
-    // One plan for the three variants: the story is decided once, the layouts per variant.
-    const sharedPlan = new SharedPlan();
+    // One plan for the three variants: the story is decided once, the layouts per variant. Each
+    // run keeps it, so a variant that fails can be built again on the same story.
+    const sharedPlan = new SharedPlan(retry?.plan, async (plan) => {
+      for (const { run } of runs) {
+        await writeFile(
+          join(this.directory(run.runId), 'composition-plan.json'),
+          JSON.stringify(plan),
+        );
+      }
+    });
     // Pictures too are drawn once per brief. Without an image model the planner is not offered
     // a place for a picture, so no slide is left with an empty frame.
     const imageModel = await settle(this.models.resolveRole('image', actor));
@@ -411,9 +468,9 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       run: Awaited<ReturnType<RunRepository['create']>>;
       variant: LayoutVariant;
     }[] = [];
-    // The variants are one build: the library shows it once.
-    const buildId = randomUUID();
-    for (const variant of VARIANTS) {
+    // The variants are one build: the library shows it once. A variant built again joins it.
+    const buildId = retry?.buildId ?? randomUUID();
+    for (const variant of retry ? [retry.variant] : VARIANTS) {
       const run = await this.repository.create();
       await mkdir(this.directory(run.runId), { recursive: true });
       await writeFile(
@@ -427,6 +484,14 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           updatedAt: Date.now(),
         }),
       );
+      // What the build was asked for, to build a failed variant again from it.
+      await writeFile(join(this.directory(run.runId), 'request.json'), JSON.stringify(input));
+      if (retry?.plan) {
+        await writeFile(
+          join(this.directory(run.runId), 'composition-plan.json'),
+          JSON.stringify(retry.plan),
+        );
+      }
       this.active.set(run.runId, controller);
       runs.push({ run, variant });
     }

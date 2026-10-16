@@ -81,6 +81,23 @@ describe('resultOfBuild', () => {
     expect(result.variants.map(({ deckId }) => deckId)).toEqual(['d', 'b', 'a']);
   });
 
+  it('показывает несобранный вариант, чтобы его можно было пересобрать', () => {
+    const result = resultOfBuild(
+      {
+        ...part,
+        variants: variants.slice(1),
+        failed: [{ variant: 'dense', runId: 'run-x', status: 'failed', reason: 'HTTP 429' }],
+      },
+      decks,
+    );
+    expect(result.variants.map(({ variant }) => variant)).toEqual(['balanced', 'airy']);
+    expect(result.failed).toEqual([{ variant: 'dense', status: 'failed', reason: 'HTTP 429' }]);
+  });
+
+  it('у сохранённого до пересборки итога несобранных нет', () => {
+    expect(resultOfBuild(part, decks).failed).toEqual([]);
+  });
+
   it('исправляет устаревший совет по показанным числам из скриншота', () => {
     const result = resultOfBuild(
       {

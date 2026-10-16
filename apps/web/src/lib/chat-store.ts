@@ -1,11 +1,14 @@
-import type {
-  ChatAnswer,
-  ChatAttachment,
-  ChatMessage,
-  ChatMode,
-  ChatTurnInput,
-  DeckOutline,
-  ModelRef,
+import {
+  chatPartSchema,
+  type ChatAnswer,
+  type ChatAttachment,
+  type ChatMessage,
+  type ChatMode,
+  type ChatPart,
+  type ChatTurnInput,
+  type DeckOutline,
+  type LayoutVariant,
+  type ModelRef,
 } from '@lct/contracts';
 import { chatDocumentOf, chatSummaryOf } from './chat-records';
 import { applyChatEvent, readChatEvents } from './chat-stream';
@@ -96,7 +99,15 @@ export interface ChatStore {
   choose(chatId: string, deckId: string): void;
   /** Чат, в котором собрана колода, во вкладке; его id или null. */
   forDeck(deckId: string): Promise<string | null>;
+  /**
+   * Пересобрать вариант сборки, который не собрался, по её же плану. Итог сразу показывает
+   * пересборку и сам обновится, когда она закончится. Отказ API — исключение с его причиной.
+   */
+  retryVariant(chatId: string, buildId: string, variant: LayoutVariant): Promise<void>;
 }
+
+/** Как часто вкладка спрашивает, пересобрался ли вариант. */
+const REBUILD_POLL_MS = 4000;
 
 /** Название нового чата — его первые слова, как их назовёт и сервер. */
 function draftTitle(text: string, attachments: readonly LocalAttachment[]): string {
@@ -282,6 +293,14 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
           deckId: document.deckId,
         });
         notify();
+        // Страницу открыли посреди пересборки варианта — досматриваем её.
+        for (const message of document.messages) {
+          if (message.role !== 'assistant') continue;
+          for (const part of message.parts) {
+            if (part.type === 'result' && part.failed?.some((item) => item.status === 'retrying'))
+              watchRebuild(chatId, part.buildId);
+          }
+        }
         if (document.running) await attach(chatId);
       })().finally(() => loading.delete(chatId));
       loading.set(chatId, work);
@@ -352,6 +371,65 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
       await store.load(chat.chatId);
       return chat.chatId;
     },
+    async retryVariant(chatId, buildId, variant) {
+      const response = await deps.request(`/chats/${encodeURIComponent(chatId)}/variants/retry`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ buildId, variant }),
+      });
+      if (!response.ok) throw new Error(await failureOf(response));
+      const part = chatPartSchema.safeParse(await response.json());
+      if (part.success && part.data.type === 'result') putResult(chatId, part.data);
+      watchRebuild(chatId, buildId);
+    },
   };
+
+  type ResultPart = Extract<ChatPart, { type: 'result' }>;
+
+  /** Заменить итог сборки в чате вкладки, не трогая остальной разговор. */
+  const putResult = (chatId: string, result: ResultPart) => {
+    update(chatId, (chat) => ({
+      messages: chat.messages.map((message) =>
+        message.role === 'assistant'
+          ? {
+              ...message,
+              parts: message.parts.map((part) =>
+                part.type === 'result' && part.buildId === result.buildId ? result : part,
+              ),
+            }
+          : message,
+      ),
+    }));
+  };
+
+  const rebuilding = new Set<string>();
+
+  /** Спрашивать сервер, пока вариант сборки пересобирается; итог сменяет тот, что во вкладке. */
+  const watchRebuild = (chatId: string, buildId: string) => {
+    const key = `${chatId}:${buildId}`;
+    if (rebuilding.has(key)) return;
+    rebuilding.add(key);
+    const poll = async () => {
+      try {
+        const response = await deps.request(`/chats/${encodeURIComponent(chatId)}`);
+        const document = response.ok ? chatDocumentOf(await response.json()) : null;
+        const result = document?.messages
+          .flatMap((message) => (message.role === 'assistant' ? message.parts : []))
+          .find((part): part is ResultPart => part.type === 'result' && part.buildId === buildId);
+        if (result) putResult(chatId, result);
+        // Чата больше нет или итог дописан — спрашивать нечего.
+        if (!result || !result.failed?.some((item) => item.status === 'retrying')) {
+          rebuilding.delete(key);
+          if (result) deps.onTurnEnd?.(chatId);
+          return;
+        }
+      } catch {
+        // Сеть моргнула: спросим в следующий раз.
+      }
+      setTimeout(() => void poll(), REBUILD_POLL_MS);
+    };
+    setTimeout(() => void poll(), REBUILD_POLL_MS);
+  };
+
   return store;
 }

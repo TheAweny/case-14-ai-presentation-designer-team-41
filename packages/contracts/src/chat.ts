@@ -134,6 +134,20 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     reviews: z.record(z.string(), variantReviewSchema).nullable(),
     recommended: layoutVariantSchema,
     elapsedMs: z.number().int().nonnegative().nullable(),
+    /**
+     * Variants of the build that did not make it. The person builds one again from the result:
+     * `retrying` — its new run is under way. Absent in results saved before it.
+     */
+    failed: z
+      .array(
+        z.object({
+          variant: layoutVariantSchema,
+          runId: z.string().min(1).max(100),
+          status: z.enum(['failed', 'retrying']),
+          reason: z.string().max(500).nullable(),
+        }),
+      )
+      .optional(),
   }),
   /**
    * New text for one object of a deck open in the editor. The editor writes it into the draft

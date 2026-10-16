@@ -171,4 +171,103 @@ describe('chat store', () => {
     expect(store.get(running)).toMatchObject({ status: 'ready', mode: 'auto', running: false });
     expect(store.get(running)?.messages).toHaveLength(2);
   });
+
+  it('rebuilds a failed variant: shows it rebuilding, then the result the server finished', async () => {
+    vi.useFakeTimers();
+    const chatId = '00000000-0000-4000-8000-0000000000c1';
+    const buildId = '00000000-0000-4000-8000-0000000000b1';
+    const base = {
+      type: 'result' as const,
+      buildId,
+      variants: [{ variant: 'balanced' as const, deckId: 'run-balanced' }],
+      reviews: null,
+      recommended: 'balanced' as const,
+      elapsedMs: 1000,
+    };
+    const failed = {
+      ...base,
+      failed: [
+        { variant: 'dense' as const, runId: 'run-dense', status: 'failed' as const, reason: null },
+      ],
+    };
+    const retrying = {
+      ...base,
+      failed: [
+        {
+          variant: 'dense' as const,
+          runId: 'run-dense-2',
+          status: 'retrying' as const,
+          reason: null,
+        },
+      ],
+    };
+    const finished = {
+      ...base,
+      variants: [
+        { variant: 'dense' as const, deckId: 'run-dense-2' },
+        { variant: 'balanced' as const, deckId: 'run-balanced' },
+      ],
+    };
+    const chat = (result: object) =>
+      Response.json({
+        chatId,
+        title: 'Чат',
+        projectId: null,
+        deckIds: [],
+        deckId: null,
+        mode: 'auto',
+        createdAt: '2026-10-16T00:00:00.000Z',
+        updatedAt: '2026-10-16T00:00:00.000Z',
+        messages: [user, { ...answer, status: 'done', parts: [result] }],
+        running: false,
+      });
+    let reads = 0;
+    const request = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path === `/chats/${chatId}/variants/retry`) {
+        expect(JSON.parse(String(init?.body))).toEqual({ buildId, variant: 'dense' });
+        return Response.json(retrying);
+      }
+      reads += 1;
+      // Первое чтение — открыть чат, второе — пересборка ещё идёт, третье — готово.
+      return chat(reads === 1 ? failed : reads === 2 ? retrying : finished);
+    });
+    const onTurnEnd = vi.fn();
+    const store = createChatStore({
+      request,
+      uploadContent: async () => ({ fileId: 'f', name: 'f', size: 0 }),
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+      onTurnEnd,
+    });
+    const resultIn = () => {
+      const message = store.get(chatId)?.messages[1];
+      return message?.role === 'assistant' ? message.parts[0] : undefined;
+    };
+    await store.load(chatId);
+    await store.retryVariant(chatId, buildId, 'dense');
+    expect(resultIn()).toMatchObject({ failed: [{ status: 'retrying', runId: 'run-dense-2' }] });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(resultIn()).toMatchObject({ failed: [{ status: 'retrying' }] });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(resultIn()).toEqual(finished);
+    expect(onTurnEnd).toHaveBeenCalledWith(chatId);
+    // Итог дописан — больше не спрашиваем.
+    const after = request.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(request.mock.calls.length).toBe(after);
+    vi.useRealTimers();
+  });
+
+  it('passes on why the server refused to rebuild a variant', async () => {
+    const request = vi.fn(async () =>
+      Response.json({ message: 'Only a failed variant can be built again.' }, { status: 409 }),
+    );
+    const store = createChatStore({
+      request,
+      uploadContent: async () => ({ fileId: 'f', name: 'f', size: 0 }),
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+    });
+    await expect(
+      store.retryVariant('00000000-0000-4000-8000-0000000000c1', 'b', 'dense'),
+    ).rejects.toThrow('Only a failed variant can be built again.');
+  });
 });

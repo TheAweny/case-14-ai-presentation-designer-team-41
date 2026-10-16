@@ -22,6 +22,16 @@ export interface DeckResult {
   readonly templateSubstituted: boolean;
   /** От запуска прогона до готовности; null — неизвестно. */
   readonly elapsedMs: number | null;
+  /** Варианты, которые не собрались: их можно пересобрать из карточки. Нет — собрались все. */
+  readonly failed?: readonly FailedVariant[];
+}
+
+/** Вариант сборки, который не собрался или пересобирается сейчас. */
+export interface FailedVariant {
+  readonly variant: LayoutVariant;
+  readonly status: 'failed' | 'retrying';
+  /** Причина, как её записал прогон; null — не записал. */
+  readonly reason: string | null;
 }
 
 /** Карточка и агент сравнивают один сохранённый аудит сборки, а не аудит импортированных слайдов. */
@@ -55,6 +65,7 @@ export function resultOfBuild(
     recommended: variants.length ? recommendVariant(variants, part.reviews) : part.recommended,
     templateSubstituted: false,
     elapsedMs: part.elapsedMs,
+    failed: (part.failed ?? []).map(({ variant, status, reason }) => ({ variant, status, reason })),
   };
 }
 

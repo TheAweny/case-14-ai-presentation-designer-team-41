@@ -20,9 +20,9 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   // Pictures of a template's sample slides in the library.
   { method: 'GET', pattern: /^files\/templates\/[\w-]+\/previews\/slide-\d+\.png$/ },
   // Chats: read one or the list, send a turn and stream its answer, watch a turn still running,
-  // stop it, pick the deck a chat leads to.
+  // stop it, pick the deck a chat leads to, build again a variant that failed.
   { method: 'GET', pattern: /^chats(\/[\w-]+(\/stream)?)?$/ },
-  { method: 'POST', pattern: /^chats\/[\w-]+\/(turns|cancel)$/ },
+  { method: 'POST', pattern: /^chats\/[\w-]+\/(turns|cancel|variants\/retry)$/ },
   { method: 'PATCH', pattern: /^chats\/[\w-]+$/ },
 ];
 

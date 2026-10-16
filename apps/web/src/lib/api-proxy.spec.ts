@@ -11,6 +11,9 @@ describe('proxiedApiPath', () => {
     );
     expect(proxiedApiPath(['generation', 'prepare', 't-1'], 'GET')).toBe('/generation/prepare/t-1');
     expect(proxiedApiPath(['runs', 'run-1', 'events'], 'GET')).toBe('/runs/run-1/events');
+    expect(proxiedApiPath(['chats', 'c-1', 'variants', 'retry'], 'POST')).toBe(
+      '/chats/c-1/variants/retry',
+    );
     expect(proxiedApiPath(['files', 'templates', 't-1', 'previews', 'slide-12.png'], 'GET')).toBe(
       '/files/templates/t-1/previews/slide-12.png',
     );

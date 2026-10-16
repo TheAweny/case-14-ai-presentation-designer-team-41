@@ -595,9 +595,21 @@ export async function runBuild(
     const recommended = recommend(outcomes);
     const finishedAt = Date.now();
     set({ status: 'done', finishedAt });
+    // A variant that failed stays in the result, so the person sees it and can build it again.
+    const failed = await Promise.all(
+      settled
+        .filter((variant) => variant.state === 'failed')
+        .map(async ({ variant, runId }) => ({
+          variant,
+          runId,
+          status: 'failed' as const,
+          reason: await failureReason(generation, runId),
+        })),
+    );
     context.show({
       type: 'result',
       buildId: part.buildId,
+      ...(failed.length ? { failed } : {}),
       variants: outcomes.map(({ variant, deckId }) => ({ variant, deckId })),
       reviews: audited
         ? Object.fromEntries(
@@ -673,21 +685,28 @@ async function failureReasons(
 ): Promise<string[]> {
   const reasons = new Set<string>();
   for (const runId of runIds) {
-    try {
-      const failure = z
-        .object({ message: z.string() })
-        .parse(
-          JSON.parse(await readFile(join(generation.directory(runId), 'failure.json'), 'utf8')),
-        );
-      reasons.add(failure.message.slice(0, 500));
-    } catch {
-      // A run that wrote no reason adds none.
-    }
+    const reason = await failureReason(generation, runId);
+    if (reason) reasons.add(reason);
   }
   return [...reasons];
 }
 
-async function readAuditCounts(generation: GenerationService, deckId: string) {
+/** Why one run failed, as it wrote it down; null — it wrote no reason. */
+export async function failureReason(
+  generation: GenerationService,
+  runId: string,
+): Promise<string | null> {
+  try {
+    const failure = z
+      .object({ message: z.string() })
+      .parse(JSON.parse(await readFile(join(generation.directory(runId), 'failure.json'), 'utf8')));
+    return failure.message.slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+export async function readAuditCounts(generation: GenerationService, deckId: string) {
   try {
     const report = auditReportSchema.parse(
       JSON.parse(
