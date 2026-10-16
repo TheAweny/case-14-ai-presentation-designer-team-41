@@ -26,3 +26,5 @@ export {
   type ToolOutcome,
 } from './agent.js';
 export { ChatToolDispatcher, type ToolDispatcherOptions } from './tool-runtime.js';
+
+export { ModelRequestError, modelHttpFailure, modelFailureOf } from './model-failure.js';

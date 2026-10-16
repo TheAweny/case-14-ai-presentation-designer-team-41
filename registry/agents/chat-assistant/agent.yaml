@@ -3,7 +3,7 @@
 # json-mode.md and loop-nudge.md are part of the agent and share its version.
 
 id: chat-assistant
-version: 1.6.0
+version: 1.7.0
 description: 'Chat assistant of the deck designer: conversation, deck outline, build.'
 modelId: assistant-default
 

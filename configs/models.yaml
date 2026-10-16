@@ -16,9 +16,9 @@
 #
 # Text roles share one open MoE under the case cap of 35B: 30.5B weights, 3.3B active per token,
 # so a 10-15 slide deck stays inside the 5 minute budget. Qwen3.6-35B-A3B is about 35.95B and is
-# not eligible. Slide images are read by a separate 8.8B vision-language model. Thinking is
-# switched off: the answers are JSON checked against a schema, and reasoning tokens would only
-# spend the budget. The served name is LLM_MODEL / VLM_MODEL in .env, not this file.
+# not eligible. Slide images are read by a separate 8.8B vision-language model. Hybrid Qwen3
+# checkpoints use thinking; non-thinking Instruct checkpoints keep their native behavior.
+# The served name is LLM_MODEL / VLM_MODEL in .env, not this file.
 
 models:
   # The chat talks and calls tools: the same MoE, served with a tool-call parser (vLLM
@@ -31,9 +31,6 @@ models:
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
-    extraBody:
-      chat_template_kwargs:
-        enable_thinking: false
 
   - id: planner-default
     repo: Qwen/Qwen3-30B-A3B-Instruct-2507
@@ -43,9 +40,6 @@ models:
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
-    extraBody:
-      chat_template_kwargs:
-        enable_thinking: false
 
   - id: writer-default
     repo: Qwen/Qwen3-30B-A3B-Instruct-2507
@@ -55,9 +49,6 @@ models:
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
-    extraBody:
-      chat_template_kwargs:
-        enable_thinking: false
 
   - id: critic-default
     repo: Qwen/Qwen3-30B-A3B-Instruct-2507
@@ -67,9 +58,6 @@ models:
     type: llm
     provider: openai-compatible
     baseUrlEnv: LLM_BASE_URL
-    extraBody:
-      chat_template_kwargs:
-        enable_thinking: false
 
   - id: vision-default
     repo: Qwen/Qwen3-VL-8B-Instruct

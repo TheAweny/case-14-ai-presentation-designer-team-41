@@ -40,6 +40,7 @@ function database(messages: ChatMessage[] = []) {
     primary_deck_id: null,
     mode: 'plan',
     messages,
+    model: null as { connectionId: string; modelId: string } | null,
     created_at: new Date(),
     updated_at: new Date(),
   };
@@ -57,8 +58,11 @@ function database(messages: ChatMessage[] = []) {
     if (sql.includes('INSERT INTO chats')) {
       deleted = false;
       row.messages = JSON.parse(String(values[7])) as ChatMessage[];
+      row.model = JSON.parse(String(values[8] ?? null)) as typeof row.model;
     }
     if (deleted) return { rows: [], rowCount: 0 };
+    if (sql.includes('UPDATE chats SET title') && values[6] === true)
+      row.model = JSON.parse(String(values[7])) as typeof row.model;
     if (sql.includes('UPDATE chats SET mode'))
       row.messages = JSON.parse(String(values[5])) as ChatMessage[];
     if (sql.includes('DELETE FROM chats') && values[1] !== account.id)
@@ -237,5 +241,28 @@ describe('durable chat execution regressions', () => {
     const turn = await owner.instance.startTurn(chatId, request(), account);
     await expect(owner.instance.remove(chatId, { id: 'attacker' } as Account)).rejects.toThrow();
     expect(turn.controller.signal.aborted).toBe(false);
+  });
+});
+
+describe('durable chat model selection', () => {
+  it('validates the selection, returns it after reload, and never overwrites it with streamed messages', async () => {
+    const db = database();
+    const { instance } = service(db);
+    const primary = { connectionId: 'server', modelId: 'primary' };
+    await instance.update(chatId, { model: primary }, account);
+    expect((await instance.get(chatId, account)).model).toEqual(primary);
+    const state = Reflect.apply(Reflect.get(instance, 'stateOf'), instance, [db.row, account.id]);
+    const other = { connectionId: 'server', modelId: 'other' };
+    await instance.update(chatId, { model: other }, account);
+    await Reflect.apply(Reflect.get(instance, 'save'), instance, [state]);
+    expect((await instance.get(chatId, account)).model).toEqual(other);
+    await instance.update(chatId, { model: null }, account);
+    expect((await instance.get(chatId, account)).model).toBeNull();
+    await expect(
+      instance.update(chatId, { model: { modelId: 'missing-connection' } }, account),
+    ).rejects.toThrow('Invalid model selection');
+    await expect(
+      instance.update(chatId, { model: primary }, { id: 'other' } as Account),
+    ).rejects.toThrow('Chat not found');
   });
 });

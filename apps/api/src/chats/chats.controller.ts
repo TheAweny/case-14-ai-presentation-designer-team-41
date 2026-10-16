@@ -109,7 +109,7 @@ export class ChatsController {
   @Patch(':id')
   update(
     @Param('id') id: string,
-    @Body() body: { title?: unknown; projectId?: unknown; deckId?: unknown },
+    @Body() body: { title?: unknown; projectId?: unknown; deckId?: unknown; model?: unknown },
     @CurrentAccount() account: Account,
   ): Promise<ChatSummary> {
     return this.chats.update(id, body ?? {}, account);

@@ -198,7 +198,7 @@ export interface ChatTurnResult {
   readonly inputTokens: number;
   readonly outputTokens: number;
   /** Why the turn ended: the model answered, a tool waits for the person, or the step limit. */
-  readonly end: 'answer' | 'waiting' | 'limit' | 'incomplete';
+  readonly end: 'answer' | 'waiting' | 'failed' | 'limit' | 'incomplete';
   readonly reason?:
     | 'length'
     | 'content_filter'
@@ -338,6 +338,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     }
     messages.push({ role: 'assistant', content: answer.text, toolCalls: answer.toolCalls });
     let waiting = false;
+    let terminalFailure = false;
     for (const call of answer.toolCalls) {
       signal.throwIfAborted();
       const input = parseArguments(call.arguments);
@@ -365,10 +366,19 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       const output = clipped(outcome.output);
       writer.update(index, { ...part, status: outcome.failed ? 'failed' : 'done', output });
       messages.push({ role: 'tool', callId: call.id, content: JSON.stringify(output) });
-      if (outcome.stop) waiting = true;
+      if (outcome.stop) {
+        waiting = true;
+        terminalFailure ||= outcome.failed === true;
+      }
     }
     cutOff();
-    if (waiting) return { steps: step, inputTokens, outputTokens, end: 'waiting' };
+    if (waiting)
+      return {
+        steps: step,
+        inputTokens,
+        outputTokens,
+        end: terminalFailure ? 'failed' : 'waiting',
+      };
   }
   return { steps: maxSteps, inputTokens, outputTokens, end: 'limit' };
 }

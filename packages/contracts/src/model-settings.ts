@@ -37,7 +37,7 @@ export function isRoleOptional(role: PipelineRole): boolean {
 
 /** A role that, without a model of its own, works with the writer's: the chat assistant. */
 export function usesWriterModelByDefault(role: PipelineRole): boolean {
-  return role === 'assistant';
+  return role === 'assistant' || role === 'planner' || role === 'critic';
 }
 
 /**
@@ -130,6 +130,7 @@ export const roleAssignmentSchema = z.discriminatedUnion('kind', [
     modelId: modelIdSchema,
   }),
   z.object({ role: pipelineRoleSchema, kind: z.literal('disabled') }),
+  z.object({ role: pipelineRoleSchema, kind: z.literal('default') }),
   z.object({ role: pipelineRoleSchema, kind: z.literal('unassigned') }),
 ]);
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;

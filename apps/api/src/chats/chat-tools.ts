@@ -33,6 +33,7 @@ export interface ChatToolScope {
   readonly mode: ChatMode;
   /** The model the person picked for the chat; the deck is written with it too. */
   readonly model: ModelRef | null;
+  readonly currentMessageId?: string;
   /** The chat as it is now, the answer of this turn included. */
   messages(): readonly ChatMessage[];
   /** Replace a part of an earlier message: a plan superseded or approved. */
@@ -411,6 +412,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
       planId: z.string().uuid().nullable().default(null),
       brief: z.string().trim().max(8000).default(''),
       fileIds: z.array(z.string().uuid()).max(10).default([]),
+      retry: z.boolean().default(false),
     }),
     modes: ['plan', 'auto'],
     async run(input, context) {
@@ -419,6 +421,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
         planId: string | null;
         brief: string;
         fileIds: string[];
+        retry: boolean;
       };
       const plan = plansOf(scope.messages()).find((item) => item.part.planId === request.planId);
       if (scope.mode === 'plan') {
@@ -462,6 +465,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
         outlineSource: plan?.part.approvalSource === 'user' ? 'user' : 'model',
         brief: request.brief,
         fileIds: request.fileIds.filter((id) => !templates.has(id)),
+        retry: request.retry,
       });
     },
   };
@@ -542,18 +546,22 @@ export async function runBuild(
     fileIds: readonly string[];
     planId?: string | null;
     planRevision?: number | null;
+    retry?: boolean;
   },
 ): Promise<ToolOutcome> {
   if (request.planId) {
-    const parts = scope
-      .messages()
-      .flatMap((message) => (message.role === 'assistant' ? message.parts : []));
-    const existing = parts.find(
-      (part): part is BuildPart =>
-        part.type === 'build' &&
-        part.planId === request.planId &&
-        part.planRevision === request.planRevision,
+    const messages = scope.messages();
+    const parts = messages.flatMap((message) =>
+      message.role === 'assistant' ? message.parts : [],
     );
+    const existing = [...parts]
+      .reverse()
+      .find(
+        (part): part is BuildPart =>
+          part.type === 'build' &&
+          part.planId === request.planId &&
+          part.planRevision === request.planRevision,
+      );
     if (existing) {
       if (existing.templateId !== request.templateId)
         throw new Error(
@@ -572,9 +580,47 @@ export async function runBuild(
           },
         };
       }
-      throw new Error(
-        'This plan revision already has a build operation. Review its result before approving a new revision.',
+      if (existing.status === 'preparing' || existing.status === 'running') {
+        context.show({
+          type: 'text',
+          text: 'Сборка ещё выполняется. Её ход показан в карточке сборки.',
+        });
+        return {
+          output: {
+            status: existing.status,
+            active: true,
+            reused: true,
+            buildId: existing.buildId,
+            runId: existing.runId,
+          },
+          stop: true,
+        };
+      }
+      const terminalFailure = existing.status === 'failed' || existing.status === 'cancelled';
+      const fromCurrentTurn = messages.some(
+        (message) =>
+          message.role === 'assistant' &&
+          message.id === scope.currentMessageId &&
+          message.parts.includes(existing),
       );
+      if (!terminalFailure || !request.retry || fromCurrentTurn) {
+        const message = terminalFailure
+          ? buildFailureMessage(existing.error)
+          : 'Состояние результата сборки неизвестно. Проверьте библиотеку перед повторным запуском.';
+        context.show({ type: 'error', message });
+        return {
+          output: {
+            status: terminalFailure ? existing.status : 'unknown',
+            active: false,
+            buildId: existing.buildId,
+            runId: existing.runId,
+            error: existing.error,
+            canRetry: terminalFailure && !fromCurrentTurn,
+          },
+          failed: true,
+          stop: true,
+        };
+      }
     }
   }
   const template = await generation.template(request.templateId, scope.account);
@@ -603,15 +649,24 @@ export async function runBuild(
   };
   let startedRunId: string | null = null;
   let detachAbort: () => void = () => undefined;
+  let persistenceFailed = false;
+  const persist = async () => {
+    try {
+      await scope.persist?.();
+    } catch (error) {
+      persistenceFailed = true;
+      throw error;
+    }
+  };
   try {
     context.signal.throwIfAborted();
-    await scope.persist?.();
+    await persist();
     if (!GenerationService.prepared(template)) {
       await generation.prepare(request.templateId, scope.model, scope.account);
       context.signal.throwIfAborted();
     }
     context.signal.throwIfAborted();
-    await scope.persist?.();
+    await persist();
     const build = await generation.start(
       {
         templateId: request.templateId,
@@ -638,7 +693,7 @@ export async function runBuild(
       variantRunIds: build.variants.map((variant) => variant.runId),
       startedAt: Date.now(),
     });
-    await scope.persist?.();
+    await persist();
     const settled = await settleWithGrace(build);
     context.signal.throwIfAborted();
     const done = settled.filter((variant) => variant.state === 'done');
@@ -647,10 +702,20 @@ export async function runBuild(
         generation,
         settled.map((variant) => variant.runId),
       );
-      set({ status: 'failed', finishedAt: Date.now(), error: reasons[0] ?? null });
+      const error = reasons[0] ?? null;
+      set({ status: 'failed', finishedAt: Date.now(), error: buildFailureMessage(error) });
+      context.show({ type: 'error', message: buildFailureMessage(error) });
       return {
-        output: { status: 'failed', error: 'No variant was built.', reasons },
+        output: {
+          status: 'failed',
+          active: false,
+          runId: build.runId,
+          error: 'No variant was built.',
+          reasons,
+          canRetry: true,
+        },
         failed: true,
+        stop: true,
       };
     }
     const outcomes: VariantOutcome[] = [];
@@ -711,11 +776,32 @@ export async function runBuild(
       throw error;
     }
     const message = error instanceof Error ? error.message : 'The build failed.';
-    set({ status: 'failed', finishedAt: Date.now(), error: message });
-    throw error;
+    set({ status: 'failed', finishedAt: Date.now(), error: buildFailureMessage(message) });
+    if (persistenceFailed) throw error;
+    context.show({ type: 'error', message: buildFailureMessage(message) });
+    return {
+      output: {
+        status: 'failed',
+        active: false,
+        runId: startedRunId,
+        error: message,
+        canRetry: true,
+      },
+      failed: true,
+      stop: true,
+    };
   } finally {
     detachAbort();
   }
+}
+
+function buildFailureMessage(reason: string | null): string {
+  if (/HTTP 429\b/.test(reason ?? ''))
+    return (
+      'Провайдер модели отклонил запросы из-за лимита (HTTP 429). Сборка остановлена. ' +
+      'Повторите запуск позже или выберите другую модель в настройках. План сохранён.'
+    );
+  return 'Сборка остановлена, готовых вариантов нет. Можно попросить повторить запуск по сохранённому плану.';
 }
 
 /** How long the other variants may keep the person waiting once the balanced one is ready. */

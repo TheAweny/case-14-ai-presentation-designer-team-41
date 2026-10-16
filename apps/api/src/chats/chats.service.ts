@@ -11,6 +11,8 @@ import { Pool } from 'pg';
 import {
   chatMessageSchema,
   chatModeSchema,
+  modelRefSchema,
+  type ModelRef,
   type AssistantChatMessage,
   type ChatAttachment,
   type ChatDocument,
@@ -24,6 +26,8 @@ import {
 } from '@lct/contracts';
 import {
   AnswerWriter,
+  ModelRequestError,
+  modelFailureOf,
   chatInstructions,
   loadChatAgent,
   modelHistory,
@@ -37,7 +41,7 @@ import {
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { actorOf, GenerationService } from '../generation/generation.service.js';
-import { ModelSettingsService } from '../models/model-settings.service.js';
+import { ModelSettingsService, ModelNotConfiguredError } from '../models/model-settings.service.js';
 import { chatTools, runBuild, type ChatToolScope } from './chat-tools.js';
 import { acquireChatLease, type ChatLease } from './chat-lease.js';
 
@@ -55,13 +59,14 @@ interface ChatRow {
   readonly deck_ids: string[];
   readonly primary_deck_id: string | null;
   readonly mode: string;
+  readonly model?: unknown;
   readonly messages?: unknown;
   readonly created_at: Date;
   readonly updated_at: Date;
 }
 
 const SUMMARY_COLUMNS =
-  'id, title, project_id, deck_ids, primary_deck_id, mode, created_at, updated_at';
+  'id, title, project_id, deck_ids, primary_deck_id, mode, model, created_at, updated_at';
 
 function summaryOf(row: ChatRow): ChatSummary {
   return {
@@ -147,6 +152,7 @@ interface ChatState {
   deckIds: string[];
   primaryDeckId: string | null;
   persisted: boolean;
+  initialModel?: ModelRef | null;
 }
 
 interface ApprovedPlan {
@@ -246,6 +252,7 @@ export class ChatsService implements OnApplicationShutdown {
     }
     return {
       ...summaryOf(row),
+      model: modelRefSchema.nullable().catch(null).parse(row.model),
       messages: messagesOf(row.messages),
       running,
     };
@@ -257,9 +264,12 @@ export class ChatsService implements OnApplicationShutdown {
    */
   async update(
     id: string,
-    body: { title?: unknown; projectId?: unknown; deckId?: unknown },
+    body: { title?: unknown; projectId?: unknown; deckId?: unknown; model?: unknown },
     account: Account,
   ): Promise<ChatSummary> {
+    const selection =
+      body.model === undefined ? undefined : modelRefSchema.nullable().safeParse(body.model);
+    if (selection && !selection.success) throw new BadRequestException('Invalid model selection.');
     const title = body.title === undefined ? null : checkedTitle(body.title);
     const moves = body.projectId !== undefined;
     if (moves && body.projectId !== null && typeof body.projectId !== 'string') {
@@ -273,9 +283,19 @@ export class ChatsService implements OnApplicationShutdown {
       `UPDATE chats SET title = COALESCE($3, title),
               project_id = CASE WHEN $4::boolean THEN $5 ELSE project_id END,
               primary_deck_id = CASE WHEN $6::text IS NOT NULL AND $6 = ANY(deck_ids)
-                                     THEN $6 ELSE primary_deck_id END
+                                     THEN $6 ELSE primary_deck_id END,
+              model = CASE WHEN $7::boolean THEN $8::jsonb ELSE model END
        WHERE id = $1 AND owner_id = $2 RETURNING ${SUMMARY_COLUMNS}`,
-      [id, account.id, title, moves, moves ? body.projectId : null, body.deckId ?? null],
+      [
+        id,
+        account.id,
+        title,
+        moves,
+        moves ? body.projectId : null,
+        body.deckId ?? null,
+        selection !== undefined,
+        selection?.success ? JSON.stringify(selection.data) : null,
+      ],
     );
     const row = result.rows[0];
     if (!row) throw new NotFoundException('Chat not found.');
@@ -457,6 +477,7 @@ export class ChatsService implements OnApplicationShutdown {
       deckIds: deck ? [deck] : [],
       primaryDeckId: deck,
       persisted: false,
+      initialModel: request.model,
     };
   }
 
@@ -745,6 +766,7 @@ export class ChatsService implements OnApplicationShutdown {
       projectId: state.projectId,
       mode: request.mode,
       model: request.model,
+      currentMessageId: message.id,
       messages: () => {
         sync();
         return state.messages;
@@ -793,7 +815,10 @@ export class ChatsService implements OnApplicationShutdown {
         // An approved plan is built without the model; only the comment after it needs one.
       }
       if (prepared.approved) {
-        await this.buildApproved(writer, scope, signal, prepared.approved);
+        if (!(await this.buildApproved(writer, scope, signal, prepared.approved))) {
+          status = 'failed';
+          return;
+        }
         if (!model) return;
       }
       if (!model) return;
@@ -836,9 +861,18 @@ export class ChatsService implements OnApplicationShutdown {
           context_budget:
             'Контекст превышает допустимый объём. Приложите материалы файлом или сократите запрос.',
         };
-        throw new Error(`${explanations[result.reason ?? 'protocol_error']} Ответ не завершён.`);
+        throw new ModelRequestError(
+          `${explanations[result.reason ?? 'protocol_error']} Ответ не завершён.`,
+          {
+            kind:
+              result.reason === 'context_budget' || result.reason === 'length'
+                ? 'context'
+                : 'unavailable',
+            modelId: model.model,
+          },
+        );
       }
-      status = 'done';
+      status = result.end === 'failed' ? 'failed' : 'done';
     } catch (error) {
       if (signal.aborted) status = 'cancelled';
       else {
@@ -849,6 +883,15 @@ export class ChatsService implements OnApplicationShutdown {
         writer.show({
           type: 'error',
           message: (error instanceof Error ? error.message : 'Не удалось ответить.').slice(0, 2000),
+          failure: {
+            ...modelFailureOf(error),
+            ...(error instanceof ModelNotConfiguredError
+              ? { kind: 'not-configured' as const }
+              : {}),
+            ...(request.model
+              ? { modelId: request.model.modelId, connectionId: request.model.connectionId }
+              : {}),
+          },
         });
       }
     } finally {
@@ -862,7 +905,7 @@ export class ChatsService implements OnApplicationShutdown {
     scope: ChatToolScope,
     signal: AbortSignal,
     plan: ApprovedPlan,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const callId = `call-${crypto.randomUUID()}`;
     const input = { templateId: plan.templateId, planId: plan.planId, brief: '', fileIds: [] };
     const part: Extract<ChatPart, { type: 'tool' }> = {
@@ -906,10 +949,7 @@ export class ChatsService implements OnApplicationShutdown {
         status: outcome.failed ? 'failed' : 'done',
         output: outcome.output,
       });
-      if (outcome.failed)
-        throw new Error(
-          'Не удалось собрать презентацию. Проверьте причину ошибки в карточке сборки.',
-        );
+      return !outcome.failed;
     } catch (error) {
       writer.update(index, {
         ...part,
@@ -936,6 +976,26 @@ export class ChatsService implements OnApplicationShutdown {
       mode: state.mode,
       projectId: state.projectId,
       plans,
+      builds: state.messages
+        .flatMap((message) =>
+          message.role === 'assistant'
+            ? message.parts.flatMap((part) =>
+                part.type === 'build'
+                  ? [
+                      {
+                        buildId: part.buildId,
+                        planId: part.planId,
+                        runId: part.runId,
+                        status: part.status,
+                        active: part.status === 'preparing' || part.status === 'running',
+                        error: part.error,
+                      },
+                    ]
+                  : [],
+              )
+            : [],
+        )
+        .slice(-5),
       decks: state.deckIds,
       recommendedDeck: state.primaryDeckId,
     };
@@ -985,8 +1045,8 @@ export class ChatsService implements OnApplicationShutdown {
           return;
         }
         const result = await this.pool.query(
-          `INSERT INTO chats (id, owner_id, title, project_id, mode, deck_ids, primary_deck_id, messages)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+          `INSERT INTO chats (id, owner_id, title, project_id, mode, deck_ids, primary_deck_id, messages, model)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
            ON CONFLICT (id) DO UPDATE SET
              mode = EXCLUDED.mode, deck_ids = EXCLUDED.deck_ids,
              primary_deck_id = EXCLUDED.primary_deck_id,
@@ -1001,6 +1061,7 @@ export class ChatsService implements OnApplicationShutdown {
             state.deckIds,
             state.primaryDeckId,
             messages,
+            JSON.stringify(state.initialModel ?? null),
           ],
         );
         if (!result.rowCount) throw new NotFoundException('Chat not found.');

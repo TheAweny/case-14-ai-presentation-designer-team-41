@@ -239,15 +239,13 @@ describe('the server connection', () => {
       },
     ]);
     expect(JSON.stringify(settings)).not.toContain(SERVER_KEY);
-    // The text roles default to it until someone assigns another model.
-    expect(settings.roles.slice(0, 4)).toEqual(
-      ['assistant', 'planner', 'writer', 'critic'].map((role) => ({
-        role,
-        kind: 'model',
-        connectionId: 'server',
-        modelId: SERVER_ENV.LLM_MODEL,
-      })),
-    );
+    // Other text roles follow the primary selection instead of pinning the environment model.
+    expect(settings.roles.slice(0, 4)).toEqual([
+      { role: 'assistant', kind: 'unassigned' },
+      { role: 'planner', kind: 'unassigned' },
+      { role: 'writer', kind: 'model', connectionId: 'server', modelId: SERVER_ENV.LLM_MODEL },
+      { role: 'critic', kind: 'unassigned' },
+    ]);
     expect(settings.roles[4]).toEqual({ role: 'vision', kind: 'unassigned' });
   });
 
@@ -508,4 +506,39 @@ describe('shared and personal connections', () => {
       ),
     ).rejects.toThrow(InvalidModelSettingsInputError);
   });
+});
+
+describe('primary model inheritance', () => {
+  it('uses the primary for text tasks and preserves explicit role choices', async () => {
+    const { service } = setup({ env: SERVER_ENV });
+    const { connectionId } = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId, modelId: 'primary' },
+      ADMIN,
+    );
+    expect(await service.resolve(null, ANN)).toMatchObject({ connectionId, model: 'primary' });
+    expect(await service.resolveRole('assistant', ANN)).toBeNull();
+    await service.setRole(
+      { role: 'planner', kind: 'model', connectionId, modelId: 'planning' },
+      ADMIN,
+    );
+    expect(await service.resolveRole('planner', ANN)).toMatchObject({ model: 'planning' });
+    await service.setRole({ role: 'planner', kind: 'default' }, ANN);
+    expect(await service.resolveRole('planner', ANN)).toBeNull();
+    expect((await service.get(ANN)).roles.find((role) => role.role === 'planner')).toEqual({
+      role: 'planner',
+      kind: 'default',
+    });
+    expect(await service.resolveRole('planner', ADMIN)).toMatchObject({ model: 'planning' });
+    await service.setRole({ role: 'planner', kind: 'unassigned' }, ANN);
+    expect(await service.resolveRole('planner', ANN)).toMatchObject({ model: 'planning' });
+  });
+  it.each(['writer', 'vision', 'image'])(
+    'does not let %s follow an incompatible primary role',
+    async (role) => {
+      await expect(
+        setup().service.setRole({ role, kind: 'default' }, ADMIN),
+      ).rejects.toBeInstanceOf(InvalidModelSettingsInputError);
+    },
+  );
 });

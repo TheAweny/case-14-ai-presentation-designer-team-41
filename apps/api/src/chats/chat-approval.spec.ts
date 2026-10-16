@@ -61,7 +61,7 @@ function fixture(messages: ChatMessage[]) {
       throw new Error('No model needed');
     }),
   );
-  const build = vi.fn(async () => undefined);
+  const build = vi.fn(async () => true);
   Reflect.set(service, 'buildApproved', build);
   const state = {
     id: crypto.randomUUID(),
@@ -92,6 +92,16 @@ function fixture(messages: ChatMessage[]) {
 }
 
 describe('approved plan snapshot regressions', () => {
+  it('finishes the answer as failed when the approved build fails', async () => {
+    const id = crypto.randomUUID();
+    const f = fixture([plan(id, 'proposed', 'New')]);
+    const request = f.approve(id);
+    const prepared = await f.invoke('acceptInput', f.state, request, account, f.turn);
+    f.build.mockResolvedValueOnce(false);
+    await f.invoke('answer', f.state, request, account, f.turn, prepared);
+    expect(f.state.messages.at(-1)).toMatchObject({ role: 'assistant', status: 'failed' });
+  });
+
   it('never announces a successful answer when its final state could not be saved', async () => {
     const id = crypto.randomUUID();
     const f = fixture([plan(id, 'proposed', 'New')]);

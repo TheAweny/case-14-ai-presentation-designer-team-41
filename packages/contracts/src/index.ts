@@ -379,6 +379,8 @@ export {
   buildStatusSchema,
   variantReviewSchema,
   chatPartSchema,
+  modelFailureSchema,
+  type ModelFailure,
   chatMessageSchema,
   chatTurnInputSchema,
   chatTurnRequestSchema,

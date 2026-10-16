@@ -87,6 +87,23 @@ export const variantReviewSchema = z.object({
  * call with what the model saw back (`output`), so the next turn replays the conversation exactly;
  * the other parts are what a tool showed the person.
  */
+export const modelFailureSchema = z.object({
+  kind: z.enum([
+    'rate-limit',
+    'unauthorized',
+    'unavailable',
+    'timeout',
+    'context',
+    'unsupported',
+    'not-configured',
+    'unknown',
+  ]),
+  modelId: z.string().optional(),
+  connectionId: z.string().optional(),
+  retryAt: z.number().int().optional(),
+});
+export type ModelFailure = z.infer<typeof modelFailureSchema>;
+
 export const chatPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({
@@ -160,7 +177,11 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     before: z.string().max(4000),
     text: z.string().max(4000),
   }),
-  z.object({ type: z.literal('error'), message: z.string().max(2000) }),
+  z.object({
+    type: z.literal('error'),
+    message: z.string().max(2000),
+    failure: modelFailureSchema.optional(),
+  }),
 ]);
 export type ChatPart = z.infer<typeof chatPartSchema>;
 export type SlideEditPart = Extract<ChatPart, { type: 'slide-edit' }>;
@@ -269,6 +290,7 @@ export const chatSummarySchema = z.object({
 export type ChatSummary = z.infer<typeof chatSummarySchema>;
 
 export const chatDocumentSchema = chatSummarySchema.extend({
+  model: modelRefSchema.nullable().optional(),
   messages: z.array(chatMessageSchema),
   /** A turn is being answered right now: the web attaches to its stream. */
   running: z.boolean(),

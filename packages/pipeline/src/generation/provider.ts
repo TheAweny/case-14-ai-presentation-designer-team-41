@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AgentGeneration } from '@lct/contracts';
+import { reasoningRequestFields } from '../models/reasoning.js';
 
 export interface TextProvider {
   readonly model: string;
@@ -176,7 +177,7 @@ export class OpenAICompatibleProvider implements TextProvider {
             temperature: generation?.temperature ?? 0.35,
             top_p: generation?.topP ?? 1,
             max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
-            chat_template_kwargs: { enable_thinking: false },
+            ...reasoningRequestFields(this.model),
             response_format: {
               type: 'json_schema',
               json_schema: {

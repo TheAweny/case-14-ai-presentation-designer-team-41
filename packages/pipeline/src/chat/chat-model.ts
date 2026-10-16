@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { AgentGeneration } from '@lct/contracts';
 import { acquireModelSlot, backoff, parseModelJson } from '../generation/provider.js';
+import { modelHttpFailure } from './model-failure.js';
+import { reasoningRequestFields } from '../models/reasoning.js';
 
 /** A tool as the model sees it: a name, what it is for, and its input as JSON Schema. */
 export interface ToolSpec {
@@ -147,7 +149,7 @@ export class OpenAICompatibleChatModel implements ChatModel {
             temperature: generation?.temperature ?? 0.4,
             top_p: generation?.topP ?? 1,
             max_tokens: generation?.maxOutputTokens ?? 4096,
-            chat_template_kwargs: { enable_thinking: false },
+            ...reasoningRequestFields(this.model),
             ...body,
           }),
         });
@@ -161,9 +163,18 @@ export class OpenAICompatibleChatModel implements ChatModel {
       if (response.ok || ![429, 502, 503].includes(response.status) || attempt >= 2) {
         return response;
       }
+      const failure = modelHttpFailure(
+        response.status,
+        this.model,
+        response.headers.get('retry-after'),
+      );
+      const delay = Math.max(
+        1500 * (attempt + 1),
+        (failure.failure.retryAt ?? Date.now()) - Date.now(),
+      );
+      if (delay > 8000) return response;
       await response.body?.cancel();
-      const retryAfter = Number(response.headers.get('retry-after'));
-      await backoff(Math.min(8000, Math.max(1500 * (attempt + 1), retryAfter * 1000 || 0)), signal);
+      await backoff(delay, signal);
     }
   }
 
@@ -185,7 +196,12 @@ export class OpenAICompatibleChatModel implements ChatModel {
       if ([400, 404, 422, 501].includes(response.status) && /tool|function/i.test(detail)) {
         return 'tools-refused';
       }
-      throw new Error(`Model API HTTP ${response.status} for ${this.model}.`);
+      throw modelHttpFailure(
+        response.status,
+        this.model,
+        response.headers.get('retry-after'),
+        detail,
+      );
     }
     return readCompletion(response, request.onText, request.onToolCall);
   }
@@ -230,8 +246,13 @@ export class OpenAICompatibleChatModel implements ChatModel {
       request.signal,
     );
     if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(`Model API HTTP ${response.status} for ${this.model}.`);
+      const detail = await response.text().catch(() => '');
+      throw modelHttpFailure(
+        response.status,
+        this.model,
+        response.headers.get('retry-after'),
+        detail,
+      );
     }
     const data = (await response.json()) as Completion;
     const choice = data.choices?.[0];

@@ -77,6 +77,37 @@ const ask: ChatTool = {
 };
 
 describe('runChatTurn', () => {
+  it('ends a terminal tool failure before the model can invent a running build or retry it', async () => {
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"build"}' }] },
+      { text: 'Сборка уже запущена.' },
+    ]);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [
+        {
+          ...echo,
+          async run(_input, context) {
+            context.show({ type: 'error', message: 'Сборка остановлена: HTTP 429.' });
+            return { output: { status: 'failed', active: false }, failed: true, stop: true };
+          },
+        },
+      ],
+      specs: [{ name: 'echo', description: 'Build.', parameters: {} }],
+      mode: 'auto',
+      writer: answer,
+      signal: new AbortController().signal,
+    });
+    expect(result.end).toBe('failed');
+    expect(model.requests).toHaveLength(1);
+    expect(answer.parts).not.toContainEqual(
+      expect.objectContaining({ type: 'text', text: 'Сборка уже запущена.' }),
+    );
+  });
+
   it('never dispatches a tool from a truncated model step', async () => {
     const run = vi.fn(echo.run);
     const { writer: answer } = writer();

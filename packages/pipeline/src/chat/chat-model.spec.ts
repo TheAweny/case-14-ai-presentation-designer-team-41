@@ -32,6 +32,38 @@ describe('ThinkingFilter', () => {
 });
 
 describe('OpenAICompatibleChatModel', () => {
+  it.each([true, false])(
+    'keeps thinking enabled in native and JSON requests (tools=%s)',
+    async (native) => {
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json({
+          choices: [
+            {
+              message: {
+                content: native
+                  ? '<think>Internal notes</think>Ответ'
+                  : '<think>Internal notes</think>{"say":"Ответ","tool":"","arguments":""}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        }),
+      );
+      const onText = vi.fn();
+      const step = await model(fetchImpl, 'Qwen/Qwen3.5-27B').step({
+        messages: [],
+        tools: native ? tools : [],
+        signal: AbortSignal.timeout(5000),
+        onText,
+      });
+      expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)).chat_template_kwargs).toEqual({
+        enable_thinking: true,
+      });
+      expect(step.text).toBe('Ответ');
+      expect(onText.mock.calls.flat().join('')).toBe('Ответ');
+    },
+  );
+
   it('rejects tool calls paired with a stop finish reason instead of tool_calls', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       stream([
