@@ -9,4 +9,6 @@ coverage
 data
 runs
 .env
+**/.env
+**/.env.*
 *.log
