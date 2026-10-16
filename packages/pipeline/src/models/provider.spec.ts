@@ -247,7 +247,7 @@ describe('createProvider', () => {
   });
 
   it('sends MODEL_HEADERS with every request and refuses ones that do not read as headers', async () => {
-    let sent: HeadersInit | undefined;
+    let sent: unknown;
     const env = { LLM_BASE_URL: 'http://x/v1', MODEL_HEADERS: 'Project-ID=p-1' };
     const provider = createProvider(catalog, 'planner-default', env);
     const original = globalThis.fetch;

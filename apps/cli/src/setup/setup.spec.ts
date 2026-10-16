@@ -141,7 +141,7 @@ describe('models', () => {
   });
 
   it('checks VK AI Space with its project header', async () => {
-    let headers: HeadersInit | undefined;
+    let headers: unknown;
     await checkModel(vkAiSpace('k', '0b5e0000-0000-4000-8000-000000000001'), (_url, init) => {
       headers = init?.headers;
       return Promise.resolve(
