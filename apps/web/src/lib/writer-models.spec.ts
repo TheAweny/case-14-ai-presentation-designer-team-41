@@ -92,8 +92,8 @@ describe('writerModels', () => {
     );
     expect(list.groups[0]?.models).toEqual(['gpt-4o']);
     expect(list.assigned).toEqual({ connectionId: 'cloud', modelId: 'qwen3:8b' });
-    // The run does not go to the switched-off default: the server would refuse it.
-    expect(effectiveModel(list, null)).toEqual({ connectionId: 'cloud', modelId: 'gpt-4o' });
+    // Keep the unavailable selection visible; only the user may choose a replacement.
+    expect(effectiveModel(list, null)).toEqual({ connectionId: 'cloud', modelId: 'qwen3:8b' });
   });
 });
 
@@ -112,13 +112,13 @@ describe('effectiveModel', () => {
     });
   });
 
-  it('falls back to the writer model, then to the first listed one', () => {
+  it('keeps an unavailable selection and never chooses an arbitrary model', () => {
     expect(effectiveModel(list, { connectionId: 'a', modelId: 'removed' })).toEqual({
-      connectionId: 'b',
-      modelId: 'three',
+      connectionId: 'a',
+      modelId: 'removed',
     });
     const unassigned = writerModels(settings([connection('a', ['one'])]));
-    expect(effectiveModel(unassigned, null)).toEqual({ connectionId: 'a', modelId: 'one' });
+    expect(effectiveModel(unassigned, null)).toBeNull();
   });
 
   it('gives nothing when there are no models', () => {
@@ -136,7 +136,9 @@ describe('writerModelReady', () => {
   });
 
   it('allows generation when at least one checked model is available', () => {
-    expect(writerModelReady(writerModels(settings([connection('local', ['qwen3'])])))).toBe(true);
+    const models = writerModels(settings([connection('local', ['qwen3'])]));
+    expect(writerModelReady(models)).toBe(false);
+    expect(writerModelReady(models, { connectionId: 'local', modelId: 'qwen3' })).toBe(true);
   });
 });
 
@@ -210,5 +212,32 @@ describe('modelRows', () => {
     expect(modelFamilies(mixed)).toEqual(['gpt', 'claude', 'qwen', 'other']);
     expect(models(modelRows(mixed, null, '', 'qwen'))).toEqual(['qwen3:8b']);
     expect(models(modelRows(mixed, null, '', 'other'))).toEqual(['dolphin']);
+  });
+});
+
+describe('chat model defaults', () => {
+  it('shows the assistant override, then follows the primary when requested', () => {
+    const source = settings([connection('cloud', ['primary', 'assistant'])], {
+      connectionId: 'cloud',
+      modelId: 'primary',
+    });
+    source.roles = source.roles.map((role) =>
+      role.role === 'assistant'
+        ? { role: 'assistant', kind: 'model', connectionId: 'cloud', modelId: 'assistant' }
+        : role,
+    );
+    expect(effectiveModel(writerModels(source, 'assistant'), null)?.modelId).toBe('assistant');
+    source.roles = source.roles.map((role) =>
+      role.role === 'assistant' ? { role: 'assistant', kind: 'default' } : role,
+    );
+    expect(effectiveModel(writerModels(source, 'assistant'), null)?.modelId).toBe('primary');
+  });
+});
+
+describe('hosted model display names', () => {
+  it('shows the actual model, preserving the full URI in the stored reference', () => {
+    expect(shortModelName('gpt://folder/qwen3.6-35b-a3b/latest')).toBe('qwen3.6-35b-a3b');
+    expect(shortModelName('gpt://folder/qwen3.6-35b-a3b')).toBe('qwen3.6-35b-a3b');
+    expect(shortModelName('org/model-name')).toBe('model-name');
   });
 });

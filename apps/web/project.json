@@ -41,6 +41,14 @@
         "cwd": "apps/web"
       }
     },
+    "e2e-chat": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "options": {
+        "command": "playwright test --config playwright.chat.config.ts",
+        "cwd": "apps/web"
+      }
+    },
     "e2e": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],

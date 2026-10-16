@@ -27,14 +27,19 @@ export function promptAction({
   running = false,
   sending = false,
   blocked = false,
+  stopWhileTyping = false,
+  stopping = false,
 }: {
   hasInput: boolean;
   running?: boolean;
   sending?: boolean;
   blocked?: boolean;
+  /** Chat turns can be stopped without discarding the next draft. */
+  stopWhileTyping?: boolean;
+  stopping?: boolean;
 }): PromptActionState {
   if (sending) return { action: 'sending', disabled: true };
-  if (running && !hasInput) return { action: 'stop', disabled: false };
+  if (running && (!hasInput || stopWhileTyping)) return { action: 'stop', disabled: stopping };
   return { action: 'send', disabled: !hasInput || blocked };
 }
 

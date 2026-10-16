@@ -10,6 +10,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { useReducedMotion } from 'motion/react';
 import { ChatSkeleton } from '@/components/library/page-skeletons';
 import { ProjectIcon } from '@/components/library/project-icon';
 import { useLibraryProjects } from '@/components/library/library-projects';
@@ -22,13 +23,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AgentIcon,
-  BackIcon,
-  RetryIcon,
-  ScrollDownIcon,
-  TemplateIcon,
-} from '@/components/ui/icons';
+import { AgentIcon, BackIcon, RetryIcon, TemplateIcon } from '@/components/ui/icons';
 import { latestResult, partsOf } from '@/lib/chat-records';
 import type { ChatView } from '@/lib/chat-store';
 import { deckHref, projectHref } from '@/lib/library-menu';
@@ -38,6 +33,7 @@ import { ChatComposer, type EditRequest } from './chat-composer';
 import { ChatThread } from './chat-thread';
 import { chatStore, useChat, useHydrated } from './session';
 import { ThreadDensityContext } from './thread-messages';
+import { JumpToLatest } from './thread-jump';
 
 /** Подсказки после готовой колоды: подпись на кнопке и то, что уйдёт агенту. */
 const SUGGESTIONS = ['shorter', 'numbers', 'simpler'] as const;
@@ -163,6 +159,7 @@ export function DeckChat({
         <div className="mx-auto w-full max-w-3xl">
           <ChatComposer
             chat={chat}
+            templates={templates}
             edit={edit}
             fieldRef={field}
             above={away ? <JumpToLatest onJump={() => jump.current()} /> : null}
@@ -194,6 +191,7 @@ function ChatLog({
   const list = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const reduce = useReducedMotion();
   const follow = (atBottom: boolean) => {
     stick.current = atBottom;
     onAwayChange(!atBottom);
@@ -202,8 +200,8 @@ function ChatLog({
     follow(true);
     const element = list.current;
     if (element && scrollsItself(element)) {
-      element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
-    } else end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      element.scrollTo({ top: element.scrollHeight, behavior: reduce ? 'instant' : 'smooth' });
+    } else end.current?.scrollIntoView({ block: 'end', behavior: reduce ? 'instant' : 'smooth' });
   };
   const { messages } = chat;
   // Новая реплика человека — из поля, из черновика или ответом на вопрос.
@@ -366,26 +364,6 @@ function NextSteps({ chat, templates }: { chat: ChatView; templates: readonly Te
           </Button>
         ))}
       </div>
-    </div>
-  );
-}
-
-/** Кнопка «К последнему сообщению»: висит над полем по центру, не занимая места. */
-function JumpToLatest({ onJump }: { onJump: () => void }) {
-  const t = useTranslations('deckChat');
-  return (
-    <div className="pointer-events-none absolute inset-x-0 -top-12 flex justify-center">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-lg"
-        onClick={onJump}
-        aria-label={t('toBottom')}
-        title={t('toBottom')}
-        className="assistant-rise pointer-events-auto rounded-full bg-background shadow-sm motion-reduce:animate-none"
-      >
-        <ScrollDownIcon />
-      </Button>
     </div>
   );
 }

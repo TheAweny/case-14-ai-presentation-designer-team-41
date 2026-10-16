@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { CheckIcon, CopyIcon, EditIcon } from '@/components/ui/icons';
 import { AttachmentChip, type FileAttachment } from '@/components/composer/attachment-chip';
+import { TaskGlyph } from './task-glyph';
 import { cn } from '@/lib/utils';
 import type { RunStatus } from './run-status';
 
@@ -81,7 +82,17 @@ export function UserMessage({
  * Действия у реплики: видны при наведении и фокусе с клавиатуры, а на сенсорных экранах, где
  * наведения нет, — всегда.
  */
-function MessageActions({ text, onEdit }: { text: string; onEdit?: () => void }) {
+export function MessageActions({
+  text,
+  onEdit,
+  always = false,
+  children,
+}: {
+  text: string;
+  onEdit?: () => void;
+  always?: boolean;
+  children?: ReactNode;
+}) {
   const t = useTranslations('assistant.actions');
   const [copied, setCopied] = useState(false);
 
@@ -103,7 +114,8 @@ function MessageActions({ text, onEdit }: { text: string; onEdit?: () => void })
   return (
     <div
       className={cn(
-        '-mt-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 motion-reduce:transition-none',
+        '-mt-1 flex items-center gap-0.5 transition-opacity duration-150 motion-reduce:transition-none',
+        !always && 'opacity-0',
         'group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100',
       )}
     >
@@ -127,6 +139,7 @@ function MessageActions({ text, onEdit }: { text: string; onEdit?: () => void })
           <EditIcon className="size-3.5" />
         </button>
       ) : null}
+      {children}
       <span role="status" className="sr-only">
         {copied ? t('copied') : ''}
       </span>
@@ -141,9 +154,13 @@ function MessageActions({ text, onEdit }: { text: string; onEdit?: () => void })
 export function ThinkingLine() {
   const t = useTranslations('assistant.actions');
   return (
-    <p role="status" className="assistant-shimmer text-[0.8125rem] motion-reduce:animate-none">
-      {t('thinking')}
-    </p>
+    <div
+      role="status"
+      className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-[0.8125rem] text-muted-foreground"
+    >
+      <TaskGlyph state="running" className="text-foreground" />
+      <span className="assistant-shimmer motion-reduce:animate-none">{t('thinking')}</span>
+    </div>
   );
 }
 

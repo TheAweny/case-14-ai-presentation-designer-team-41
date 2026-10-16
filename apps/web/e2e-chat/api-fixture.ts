@@ -1,9 +1,46 @@
 import { createServer } from 'node:http';
+import { roleAssignmentSchema, type ModelSettings } from '@lct/contracts';
+
+const initialModels = (): ModelSettings => ({
+  connections: [
+    {
+      connectionId: 'fixture',
+      name: 'Test models',
+      preset: 'custom',
+      baseUrl: 'https://models.example.test/v1',
+      hasKey: true,
+      keyHint: null,
+      managed: false,
+      lastCheck: { ok: true, at: '2026-10-15T00:00:00Z', models: ['alpha', 'beta'] },
+    },
+  ],
+  roles: [
+    { role: 'writer', kind: 'model', connectionId: 'fixture', modelId: 'alpha' },
+    { role: 'assistant', kind: 'model', connectionId: 'fixture', modelId: 'beta' },
+    { role: 'planner', kind: 'unassigned' },
+    { role: 'critic', kind: 'unassigned' },
+    { role: 'vision', kind: 'unassigned' },
+    { role: 'image', kind: 'disabled' },
+  ],
+});
+let modelSettings = initialModels();
 
 /** Only fixed test data. Browser chat requests are intercepted by each Playwright scenario. */
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json');
-  if (request.url?.startsWith('/auth/accounts/'))
+  if (request.url === '/__reset-models') {
+    modelSettings = initialModels();
+    response.end('{}');
+  } else if (request.url === '/model-settings/roles' && request.method === 'PUT') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    const assignment = roleAssignmentSchema.parse(JSON.parse(body));
+    modelSettings.roles = modelSettings.roles.map((item) =>
+      item.role === assignment.role ? assignment : item,
+    );
+    response.statusCode = 204;
+    response.end();
+  } else if (request.url?.startsWith('/auth/accounts/'))
     response.end(
       JSON.stringify({
         account: {
@@ -15,8 +52,7 @@ const server = createServer((request, response) => {
       }),
     );
   else if (request.url === '/auth/accounts') response.end(JSON.stringify({ hasAccounts: true }));
-  else if (request.url === '/model-settings')
-    response.end(JSON.stringify({ connections: [], roles: [] }));
+  else if (request.url === '/model-settings') response.end(JSON.stringify(modelSettings));
   else if (request.url?.startsWith('/health'))
     response.end(
       JSON.stringify({

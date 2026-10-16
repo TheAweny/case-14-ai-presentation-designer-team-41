@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { ChatPart } from '@lct/contracts';
+import { jobEventSchema, type ChatPart } from '@lct/contracts';
+import { apiFetch } from '@/lib/api';
+import { generationProgress } from '@/lib/deck-generator';
+import { TaskGlyph } from './task-glyph';
 import { SpinnerIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
 import type { DeckResult } from '@/lib/variant-review';
 import { loadResultVariants } from '@/lib/load-result-variants';
 import { Button } from '@/components/ui/button';
-import { BuildCard } from './build-card';
+import { BuildCard, BuildCardView, type BuildRun } from './build-card';
 import { formatElapsed } from './elapsed';
 import { ResultCard } from './result-card';
 import { chatStore, followBuild, useRun } from './session';
@@ -19,12 +22,43 @@ type ResultPart = Extract<ChatPart, { type: 'result' }>;
 /**
  * Сборка, которую запустил агент. Пока она идёт, вкладка досматривает её прогон, и карточка
  * показывает ход по этапам, как у сборки из поля. Прогона во вкладке нет (страницу открыли после
- * сборки) — остаётся строка итога.
+ * сборки) — этапы восстанавливаются из сохранённых событий прогона.
  */
 export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }) {
   const t = useTranslations('deckChat.build');
+  const tw = useTranslations('assistant.work');
   const run = useRun(part.runId);
   const { runId, status } = part;
+  const [history, setHistory] = useState<BuildRun | null>(null);
+  const { startedAt, finishedAt } = part;
+  // A finished build has no live subscription after reload. Read its saved stages once.
+  useEffect(() => {
+    if (!runId || run || status === 'running' || status === 'preparing') return;
+    const controller = new AbortController();
+    void apiFetch(`/runs/${encodeURIComponent(runId)}/events?after=-1`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const events = jobEventSchema.array().parse(await response.json());
+        if (controller.signal.aborted || events.length === 0) return;
+        const stages = [
+          ...new Set(events.flatMap((event) => ('stage' in event ? [event.stage] : []))),
+        ];
+        const progress = generationProgress(stages, events);
+        setHistory({
+          runId,
+          phase: status,
+          progress,
+          slides: [],
+          startedAt,
+          finishedAt,
+          failure: progress.failure,
+        });
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [runId, run, status, startedAt, finishedAt]);
 
   useEffect(() => {
     if (runId === null || status !== 'running') return;
@@ -33,10 +67,13 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
 
   if (status === 'preparing') {
     return (
-      <p role="status" className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
-        <SpinnerIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-        {t('preparing', { template: part.templateName })}
-      </p>
+      <div
+        role="status"
+        className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-[0.8125rem] text-muted-foreground"
+      >
+        <TaskGlyph state="running" className="text-foreground" />
+        <span className="assistant-shimmer">{t('preparing', { template: part.templateName })}</span>
+      </div>
     );
   }
   if (runId !== null && run) {
@@ -44,6 +81,8 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
       <BuildCard runId={runId} latest={latest} unfinished={status === 'running'} retry={false} />
     );
   }
+  if (history?.runId === runId)
+    return <BuildCardView run={history} latest={latest} retry={false} />;
   const elapsed = part.finishedAt === null ? null : part.finishedAt - part.startedAt;
   const line =
     status === 'done'
@@ -52,7 +91,9 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
         ? t('cancelled')
         : status === 'failed'
           ? part.error
-            ? t('failedWith', { reason: part.error })
+            ? /HTTP 429\b/.test(part.error)
+              ? tw('rateLimited')
+              : t('failedWith', { reason: part.error })
             : t('failed')
           : null;
   if (!line) return null;

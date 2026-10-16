@@ -15,12 +15,12 @@ import {
 } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { SendIcon, SpinnerIcon, StopIcon } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { isSubmitKey, type PromptActionState } from './prompt-keys';
 import { useAurora, type Aurora } from './use-aurora';
+import { SendGlyph } from './send-glyph';
 
 /**
  * Поле запроса к агенту — одно на главной, в чате колоды и в панели редактора. Собирается из
@@ -191,6 +191,12 @@ export function PromptField({
   fieldRef,
   describedBy,
   onKeyDown,
+  onSelect,
+  controls,
+  activeDescendant,
+  expanded,
+  submitOnEnter = true,
+  maxRows = 5,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -200,6 +206,12 @@ export function PromptField({
   describedBy?: string;
   /** Свои клавиши поля — раньше отправки; `preventDefault` отменяет её. */
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSelect?: () => void;
+  controls?: string;
+  activeDescendant?: string;
+  expanded?: boolean;
+  submitOnEnter?: boolean;
+  maxRows?: number;
 }) {
   const { aurora, size } = usePromptBoxContext();
   const own = useRef<HTMLTextAreaElement>(null);
@@ -232,6 +244,13 @@ export function PromptField({
       rows={size === 'large' ? 2 : 1}
       aria-label={label}
       aria-describedby={describedBy}
+      role={controls ? 'combobox' : undefined}
+      aria-autocomplete={controls ? 'list' : undefined}
+      aria-controls={controls}
+      aria-activedescendant={activeDescendant}
+      aria-expanded={expanded}
+      onSelect={onSelect}
+      style={{ maxHeight: `calc(${maxRows}lh + 0.5rem)` }}
       placeholder={placeholder}
       onChange={(event) => {
         onValueChange(event.currentTarget.value);
@@ -242,7 +261,7 @@ export function PromptField({
         if (event.defaultPrevented) return;
         if (!isSubmitKey({ ...event, isComposing: event.nativeEvent.isComposing })) return;
         event.preventDefault();
-        event.currentTarget.form?.requestSubmit();
+        if (submitOnEnter) event.currentTarget.form?.requestSubmit();
       }}
       className={cn(
         'w-full resize-none overflow-y-auto bg-transparent px-1.5 pt-1 text-foreground outline-none placeholder:text-muted-foreground',
@@ -274,6 +293,8 @@ export function PromptSubmit({
   label,
   stopLabel,
   blockedHint,
+  onStop,
+  stoppingLabel,
 }: {
   state: PromptActionState;
   /** Что делает отправка здесь: «Отправить», «Сгенерировать». */
@@ -281,12 +302,20 @@ export function PromptSubmit({
   stopLabel?: string;
   /** Почему отправлять нельзя, хотя текст есть. */
   blockedHint?: string;
+  onStop?: () => void;
+  stoppingLabel?: string;
 }) {
   const t = useTranslations('composer.prompt');
   const { size } = usePromptBoxContext();
   const { action, disabled } = state;
   const name =
-    action === 'stop' ? (stopLabel ?? t('stop')) : action === 'sending' ? t('sending') : label;
+    action === 'stop'
+      ? disabled && stoppingLabel
+        ? stoppingLabel
+        : (stopLabel ?? t('stop'))
+      : action === 'sending'
+        ? t('sending')
+        : label;
 
   return (
     <Tooltip>
@@ -297,7 +326,8 @@ export function PromptSubmit({
       <TooltipTrigger asChild>
         <span className="inline-flex rounded-full">
           <Button
-            type="submit"
+            type={action === 'stop' && onStop ? 'button' : 'submit'}
+            onClick={action === 'stop' ? onStop : undefined}
             size={size === 'compact' ? 'icon' : 'icon-lg'}
             disabled={disabled}
             aria-label={name}
@@ -306,17 +336,12 @@ export function PromptSubmit({
               // Акцент — цвет проекта, как свечение рамки; вне проекта — нейтральный.
               'rounded-full bg-[var(--aurora-color,var(--primary))] text-background hover:bg-[var(--aurora-color,var(--primary))]/85',
               'disabled:opacity-35',
+              'transition-[transform,background-color,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.96] motion-reduce:transform-none motion-reduce:transition-none',
               // Пока запрос уходит, кнопка не блёкнет: это ответ на нажатие, а не запрет.
               action === 'sending' && 'disabled:opacity-100',
             )}
           >
-            {action === 'stop' ? (
-              <StopIcon />
-            ) : action === 'sending' ? (
-              <SpinnerIcon className="animate-spin motion-reduce:animate-none" />
-            ) : (
-              <SendIcon />
-            )}
+            <SendGlyph stopped={action !== 'send'} />
           </Button>
         </span>
       </TooltipTrigger>

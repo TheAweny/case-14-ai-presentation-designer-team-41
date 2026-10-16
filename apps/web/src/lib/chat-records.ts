@@ -4,6 +4,7 @@ import {
   type ChatMessage,
   type ChatMode,
   type ChatPart,
+  type ModelRef,
 } from '@lct/contracts';
 
 /**
@@ -30,6 +31,7 @@ export interface ChatSummary {
 
 /** Чат целиком, как его отдаёт API. */
 export interface ChatDocument extends ChatSummary {
+  readonly model?: ModelRef | null;
   readonly messages: readonly ChatMessage[];
   /** Агент отвечает прямо сейчас: к ходу можно подключиться. */
   readonly running: boolean;

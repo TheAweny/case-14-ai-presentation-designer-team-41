@@ -1,8 +1,10 @@
 'use client';
 
-import { useRef, useState, useTransition, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
 import {
+  ChevronDownIcon,
   CloudIcon,
   ComputerIcon,
   DeleteIcon,
@@ -20,6 +22,7 @@ import {
   type SettingsResult,
 } from '@/app/settings-actions';
 import { ConfirmDeleteDialog } from '@/components/library/object-dialogs';
+import { AnimatedCollapse } from '@/components/ui/animated-collapse';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,13 +32,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  PIPELINE_ROLES,
+  type PIPELINE_ROLES,
   assignmentFor,
   connectionLocation,
   knownModels,
   modelsLimited,
   rolesUsingConnection,
-  unassignedRequiredRoles,
   type ModelConnection,
   type ModelSettings,
   type RoleAssignment,
@@ -58,7 +60,13 @@ type Screen =
 export function ModelSettingsPanel() {
   const t = useTranslations('settings.models');
   const { settings, failed, reload, setSettings } = useModelSettings();
+  const connectionId = useSearchParams().get('modelConnection');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedId = useId();
   const [screen, setScreen] = useState<Screen>({ kind: 'list' });
+  useEffect(() => {
+    if (connectionId) setScreen({ kind: 'form', connectionId });
+  }, [connectionId]);
   const [checking, setChecking] = useState<ReadonlySet<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -155,11 +163,72 @@ export function ModelSettingsPanel() {
     );
   }
 
-  const missing = unassignedRequiredRoles(settings);
+  const connections = settings.managesShared
+    ? settings.connections.filter((item) => item.managed || item.shared)
+    : settings.connections;
+  const changeRole = (next: RoleAssignment) => {
+    void apply(() => setRoleAction(next));
+  };
+  const primary = assignmentFor(settings, 'writer');
+  const separate = settings.roles.some(
+    (item) =>
+      ['assistant', 'planner', 'critic'].includes(item.role) &&
+      item.kind === 'model' &&
+      (primary.kind !== 'model' ||
+        item.connectionId !== primary.connectionId ||
+        item.modelId !== primary.modelId),
+  );
+  const row = (role: (typeof PIPELINE_ROLES)[number]) => (
+    <li key={role}>
+      <RoleRow
+        assignment={assignmentFor(settings, role)}
+        connections={connections}
+        onChange={changeRole}
+      />
+      {settings.inheritedRoles?.includes(role) ? (
+        <p className="-mt-1 px-3 pb-2 text-[0.6875rem] text-muted-foreground">
+          {t('roles.inherited')}
+        </p>
+      ) : null}
+    </li>
+  );
 
   return (
     <PanelBody>
       <PanelHeader />
+
+      <section aria-label={t('roles.primaryName')} className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          {settings.managesShared ? t('primaryShared') : t('primaryPersonal')}
+        </p>
+        <div className="rounded-lg ring-1 ring-border">
+          <RoleRow primary assignment={primary} connections={connections} onChange={changeRole} />
+        </div>
+        <div className="overflow-hidden rounded-xl bg-muted/15 ring-1 ring-border">
+          <button
+            type="button"
+            aria-expanded={advancedOpen}
+            aria-controls={advancedId}
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            className="flex w-full items-center justify-between gap-4 px-3 py-3 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="grid gap-1">
+              <span className="text-sm font-medium">{t('advanced')}</span>
+              <span className="text-xs text-muted-foreground">
+                {separate ? t('separateActive') : t('primaryActive')}
+              </span>
+            </span>
+            <ChevronDownIcon
+              className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none ${advancedOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          <AnimatedCollapse open={advancedOpen} id={advancedId}>
+            <ul className="flex flex-col divide-y divide-border border-t border-border bg-background/50">
+              {(['assistant', 'planner', 'critic'] as const).map(row)}
+            </ul>
+          </AnimatedCollapse>
+        </div>
+      </section>
 
       <section aria-labelledby="settings-connections" className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
@@ -214,59 +283,10 @@ export function ModelSettingsPanel() {
         )}
       </section>
 
-      <section aria-labelledby="settings-roles" className="flex flex-col gap-3">
-        <div className="grid gap-1">
-          <h3 id="settings-roles" className="text-sm font-medium">
-            {t('roles.title')}
-          </h3>
-          <p className="text-xs text-pretty text-muted-foreground">
-            {settings.managesShared ? t('roles.descriptionShared') : t('roles.description')}
-          </p>
-        </div>
-        {settings.connections.length === 0 ? (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <StatusDot tone="warning" />
-            {t('roles.needsConnection')}
-          </p>
-        ) : missing.length > 0 ? (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <StatusDot tone="warning" />
-            {t('roles.missing', { count: missing.length })}
-          </p>
-        ) : null}
+      <section aria-label={t('visualModels')} className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium">{t('visualModels')}</h3>
         <ul className="flex flex-col divide-y divide-border rounded-lg ring-1 ring-border">
-          {PIPELINE_ROLES.map((role) => (
-            <li key={role}>
-              <RoleRow
-                assignment={assignmentFor(settings, role)}
-                // Роли администратора — умолчания для всех: только на подключениях, доступных всем.
-                connections={
-                  settings.managesShared
-                    ? settings.connections.filter((item) => item.managed || item.shared)
-                    : settings.connections
-                }
-                onChange={(next: RoleAssignment) => {
-                  // Выбор виден сразу, не дожидаясь сервера: меню закрылось — роль уже другая.
-                  setSettings((current) =>
-                    current
-                      ? {
-                          ...current,
-                          roles: current.roles.map((item) =>
-                            item.role === next.role ? next : item,
-                          ),
-                        }
-                      : current,
-                  );
-                  void apply(() => setRoleAction(next));
-                }}
-              />
-              {settings.inheritedRoles?.includes(role) ? (
-                <p className="-mt-1 px-3 pb-2 text-[0.6875rem] text-muted-foreground">
-                  {t('roles.inherited')}
-                </p>
-              ) : null}
-            </li>
-          ))}
+          {(['vision', 'image'] as const).map(row)}
         </ul>
       </section>
 

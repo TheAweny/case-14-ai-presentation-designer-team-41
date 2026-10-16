@@ -36,6 +36,7 @@
       "failed": "failed"
     },
     "stageCount": "{done} of {total}",
+    "rateLimited": "The model provider rejected requests due to a limit (HTTP 429). The build has stopped. Retry later or choose another model in settings. Your plan is saved.",
     "failedUnknown": "The run stopped without a reason. Please try again.",
     "lostAfterReload": "A build was running when the page reloaded and can no longer be followed here. The finished deck will appear in the library; to build again here, write a wish."
   },

@@ -2,12 +2,14 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
+import { useReducedMotion } from 'motion/react';
 import { AgentIcon } from '@/components/ui/icons';
 import type { TemplateSummary } from '@/lib/library-source';
 import { ChatComposer, type EditRequest } from './chat-composer';
 import { ChatThread } from './chat-thread';
 import { useLastChatMode } from './mode-menu';
 import { chatStore, useChat } from './session';
+import { JumpToLatest } from './thread-jump';
 
 /**
  * Панель «Ассистент» редактора: чат, который собрал колоду, продолжается здесь — с ходом сборки
@@ -40,6 +42,11 @@ export function AssistantPanel({
   const chat = useChat(id);
   const list = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const [away, setAway] = useState(false);
+  const reduce = useReducedMotion();
+  const latestUser =
+    chat?.pending?.text ?? chat?.messages.findLast((message) => message.role === 'user')?.id;
+  const seenUser = useRef(latestUser);
   const field = useRef<HTMLTextAreaElement>(null);
   // «Изменить» у реплики: текст возвращается в поле. `key` различает два нажатия на одну реплику.
   const [edit, setEdit] = useState<EditRequest | null>(null);
@@ -51,6 +58,11 @@ export function AssistantPanel({
 
   // Лента держится у низа, пока человек сам не прокрутил её вверх.
   useLayoutEffect(() => {
+    if (seenUser.current !== latestUser) {
+      seenUser.current = latestUser;
+      stick.current = true;
+      setAway(false);
+    }
     const element = list.current;
     if (element && stick.current) element.scrollTop = element.scrollHeight;
   });
@@ -69,6 +81,7 @@ export function AssistantPanel({
         onScroll={(event) => {
           const element = event.currentTarget;
           stick.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+          setAway(!stick.current);
         }}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3.5 pt-4 pb-2"
       >
@@ -91,7 +104,28 @@ export function AssistantPanel({
       </div>
       {chat && chat.status === 'ready' ? (
         <div className="shrink-0 px-3 pt-1 pb-3">
-          <ChatComposer chat={chat} edit={edit} fieldRef={field} deckId={deckId} compact />
+          <ChatComposer
+            chat={chat}
+            templates={templates}
+            edit={edit}
+            fieldRef={field}
+            deckId={deckId}
+            compact
+            above={
+              away ? (
+                <JumpToLatest
+                  onJump={() => {
+                    stick.current = true;
+                    setAway(false);
+                    list.current?.scrollTo({
+                      top: list.current.scrollHeight,
+                      behavior: reduce ? 'instant' : 'smooth',
+                    });
+                  }}
+                />
+              ) : null
+            }
+          />
         </div>
       ) : null}
     </div>

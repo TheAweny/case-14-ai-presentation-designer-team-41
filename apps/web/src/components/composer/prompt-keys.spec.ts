@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { isSubmitKey, promptAction } from './prompt-keys';
 
 describe('promptAction', () => {
+  it('keeps stop accessible with the next chat draft and disables it during cancellation', () => {
+    expect(promptAction({ hasInput: true, running: true, stopWhileTyping: true })).toEqual({
+      action: 'stop',
+      disabled: false,
+    });
+    expect(
+      promptAction({ hasInput: true, running: true, stopWhileTyping: true, stopping: true }),
+    ).toEqual({ action: 'stop', disabled: true });
+  });
   it('sends when there is input and nothing blocks it', () => {
     expect(promptAction({ hasInput: true })).toEqual({ action: 'send', disabled: false });
     expect(promptAction({ hasInput: false })).toEqual({ action: 'send', disabled: true });

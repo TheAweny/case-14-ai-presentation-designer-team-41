@@ -14,7 +14,10 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
-import { useWriterModels } from '@/components/settings/model-settings-store';
+import {
+  useWriterModels,
+  useModelSettingsSnapshot,
+} from '@/components/settings/model-settings-store';
 import type { ModelRef } from '@/lib/model-settings';
 import { cn } from '@/lib/utils';
 import {
@@ -30,28 +33,23 @@ import {
 } from '@/lib/writer-models';
 import { PROMPT_PILL } from './prompt-box';
 
-/**
- * Какой моделью писать текст. Стоит у кнопки отправки, как в чатах. Список — модели подключений
- * из настроек, сгруппированные по серверу; модель роли `writer` помечена «по умолчанию». У
- * длинного списка (облачный шлюз отдаёт их сотнями) — поиск, а выбранная и модель по умолчанию
- * закреплены сверху.
- *
- * Одна модель — выбирать не из чего, и кнопки нет. Ни одной — вместо выбора тихая ссылка
- * «Подключить модель» в настройки: без модели колоду собрать нечем.
- */
+/** Role-aware picker shared by composers and error actions. Null always follows the chat default. */
 export function ModelMenu({
   value,
   onChange,
   compact = false,
+  label,
 }: {
   /** Выбранная модель; null — по умолчанию. */
   value: ModelRef | null;
-  onChange: (model: ModelRef) => void;
+  onChange: (model: ModelRef | null) => void;
+  label?: string;
   /** Узкое поле панели редактора: кнопка ниже и уже. */
   compact?: boolean;
 }) {
   const t = useTranslations('composer.model');
-  const models = useWriterModels();
+  const models = useWriterModels('assistant');
+  const settings = useModelSettingsSnapshot();
   const [open, setOpen] = useState(false);
   if (!models) return null;
 
@@ -60,9 +58,10 @@ export function ModelMenu({
     compact ? 'max-w-36' : 'max-w-44 pr-2 pl-3',
   );
 
+  const selected = effectiveModel(models, value);
   if (models.count === 0) {
     // В узкой панели подпись не помещается — значок с подсказкой.
-    if (compact) {
+    if (compact && !label) {
       return (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -71,13 +70,17 @@ export function ModelMenu({
               variant="ghost"
               size="icon"
               className="rounded-full text-muted-foreground"
-              aria-label={t('connect')}
+              aria-label={
+                selected ? t('unavailableHint', { model: selected.modelId }) : t('connect')
+              }
               onClick={() => openSettings('models')}
             >
               <ConnectIcon />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top">{t('connect')}</TooltipContent>
+          <TooltipContent side="top">
+            {selected ? t('unavailableHint', { model: selected.modelId }) : t('connect')}
+          </TooltipContent>
         </Tooltip>
       );
     }
@@ -90,29 +93,20 @@ export function ModelMenu({
         onClick={() => openSettings('models')}
       >
         <ConnectIcon data-icon="inline-start" />
-        <span className="truncate">{t('connect')}</span>
+        <span className="truncate">{label ?? (selected ? t('unavailable') : t('connect'))}</span>
       </Button>
     );
   }
-  const selected = effectiveModel(models, value);
-
-  // Единственную модель выбирать не нужно, но её имя нельзя скрывать: человек должен видеть,
-  // какой provider будет вызван до запуска генерации.
-  if (models.count === 1 && selected) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size={compact ? 'default' : 'lg'}
-        className={trigger}
-        title={selected.modelId}
-        onClick={() => openSettings('models')}
-      >
-        <ServerIcon data-icon="inline-start" />
-        <span className="truncate">{shortModelName(selected.modelId)}</span>
-      </Button>
+  const available =
+    selected === null ||
+    models.groups.some(
+      (group) =>
+        group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
     );
-  }
+  const overrides =
+    settings?.roles.filter(
+      (item) => ['planner', 'critic'].includes(item.role) && item.kind === 'model',
+    ) ?? [];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -122,11 +116,18 @@ export function ModelMenu({
           variant="ghost"
           size={compact ? 'default' : 'lg'}
           className={cn(PROMPT_PILL, compact ? 'max-w-36 px-2.5' : 'max-w-44')}
-          aria-label={selected ? t('change', { model: selected.modelId }) : t('menu')}
+          aria-label={label ?? (selected ? t('change', { model: selected.modelId }) : t('menu'))}
           title={selected?.modelId}
         >
           <span className="truncate">
-            {selected ? shortModelName(selected.modelId) : t('menu')}
+            {label ??
+              (!available
+                ? t('unavailable')
+                : selected
+                  ? value === null
+                    ? t('defaultModel', { model: shortModelName(selected.modelId) })
+                    : shortModelName(selected.modelId)
+                  : t('chooseDefault'))}
           </span>
           <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
         </Button>
@@ -137,12 +138,43 @@ export function ModelMenu({
         // Фокус ставит сам список: в поиск или на список, а не на первую кнопку.
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
+        <div className="grid gap-1 border-b border-border px-3 py-2">
+          <p className="text-xs text-muted-foreground">{t('scope')}</p>
+          {!available ? (
+            <p role="status" className="text-xs text-destructive">
+              {t('unavailableHint', { model: selected?.modelId ?? '' })}
+            </p>
+          ) : null}
+          {overrides.length ? (
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer">{t('separateRoles')}</summary>
+              {overrides.map((item) =>
+                item.kind === 'model' ? (
+                  <p key={item.role} className="mt-1 break-all">
+                    {t(item.role === 'planner' ? 'roles.planner' : 'roles.critic')}: {item.modelId}
+                  </p>
+                ) : null,
+              )}
+            </details>
+          ) : null}
+          <button
+            type="button"
+            className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+          >
+            {t('useDefault')}
+            {models.assigned ? ` · ${shortModelName(models.assigned.modelId)}` : ''}
+          </button>
+        </div>
         <ModelList
           models={models}
           selected={selected}
           onPick={(ref) => {
             setOpen(false);
-            if (!sameModel(ref, selected)) onChange(ref);
+            onChange(ref);
           }}
           onManage={() => {
             setOpen(false);
@@ -157,7 +189,7 @@ export function ModelMenu({
 const firstModel = (rows: readonly ModelRow[]) => rows.findIndex((row) => row.kind === 'model');
 
 /** Содержимое поповера: живёт, только пока он открыт, — поиск каждый раз с нуля. */
-function ModelList({
+export function ModelList({
   models,
   selected,
   onPick,
@@ -316,7 +348,7 @@ function ModelList({
                   at === active && 'bg-accent text-accent-foreground',
                 )}
               >
-                <span className="min-w-0 flex-1 truncate">{row.ref.modelId}</span>
+                <span className="min-w-0 flex-1 truncate">{shortModelName(row.ref.modelId)}</span>
                 {row.connectionName ? (
                   <span className="max-w-24 shrink-0 truncate text-[0.6875rem] text-muted-foreground">
                     {row.connectionName}

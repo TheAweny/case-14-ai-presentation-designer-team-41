@@ -34,6 +34,7 @@ export function ComposerTemplateMenu({
   pendingFile,
   onSelect,
   onUpload,
+  disabled = false,
 }: {
   groups: TemplateGroups;
   /** Поле стоит на странице проекта: группа «В проекте» видна, даже пустая. */
@@ -45,6 +46,7 @@ export function ComposerTemplateMenu({
   onSelect: (templateId: string) => void;
   /** Открыть выбор файла шаблона. */
   onUpload: () => void;
+  disabled?: boolean;
 }) {
   const t = useTranslations('composer.template');
   const { own, others } = groups;
@@ -56,6 +58,7 @@ export function ComposerTemplateMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
+          disabled={disabled}
           variant="ghost"
           size="lg"
           className={cn(
@@ -87,7 +90,7 @@ export function ComposerTemplateMenu({
                 ? templateTitle(selected.fileName)
                 : t('choose')}
           </span>
-          <ChevronDownIcon className="opacity-60" />
+          <ChevronDownIcon className="opacity-60 transition-transform duration-200 group-data-[state=open]/button:rotate-180 motion-reduce:transition-none" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-80 max-w-[calc(100vw-2rem)]" aria-label={t('menu')}>

@@ -420,3 +420,18 @@
     stroke-width: var(--icon-stroke, 2.25);
   }
 }
+
+/* Task indicators keep moving while model and rendering work occupies the main thread. */
+@keyframes task-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.task-orbit {
+  animation: task-orbit 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-orbit {
+    animation: none;
+  }
+}

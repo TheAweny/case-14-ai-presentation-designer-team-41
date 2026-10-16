@@ -6,6 +6,8 @@ const withNextIntl = createNextIntlPlugin();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Isolated browser tests can run alongside an existing development server.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   reactStrictMode: true,
   // Standalone output keeps the runtime image free of the build toolchain.
   output: 'standalone',

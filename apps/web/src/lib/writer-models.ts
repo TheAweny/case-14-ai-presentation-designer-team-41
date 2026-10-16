@@ -7,6 +7,7 @@ import {
   type ModelFamily,
   type ModelRef,
   type ModelSettings,
+  type PipelineRole,
 } from './model-settings';
 
 /**
@@ -26,15 +27,26 @@ export interface WriterModelGroup {
 export interface WriterModels {
   /** Подключения, у которых есть модели. Пустые и непроверенные в списке не нужны. */
   readonly groups: readonly WriterModelGroup[];
-  /** Модель роли `writer`; null — роль не назначена, и прогон возьмёт первую из списка. */
+  /** Role default (primary model unless overridden); null means no default is configured. */
   readonly assigned: ModelRef | null;
   /** Сколько моделей всего: выбор нужен, только когда их больше одной. */
   readonly count: number;
 }
 
 /** Генерацию можно начинать только после загрузки настроек и наличия проверенной модели writer. */
-export function writerModelReady(models: WriterModels | null): models is WriterModels {
-  return models !== null && models.count > 0;
+export function writerModelReady(
+  models: WriterModels | null,
+  picked: ModelRef | null = null,
+): models is WriterModels {
+  const selected = models ? effectiveModel(models, picked) : null;
+  return (
+    models !== null &&
+    selected !== null &&
+    models.groups.some(
+      (group) =>
+        group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
+    )
+  );
 }
 
 export function sameModel(a: ModelRef | null, b: ModelRef | null): boolean {
@@ -45,8 +57,9 @@ export function sameModel(a: ModelRef | null, b: ModelRef | null): boolean {
  * Список для выбора. Модель роли `writer` входит в него, даже если её вписали вручную и
  * проверка подключения её не нашла: это выбор человека в настройках, и он главный.
  */
-export function writerModels(settings: ModelSettings): WriterModels {
-  const writer = assignmentFor(settings, 'writer');
+export function writerModels(settings: ModelSettings, role: PipelineRole = 'writer'): WriterModels {
+  const chosen = assignmentFor(settings, role);
+  const writer = chosen.kind === 'model' ? chosen : assignmentFor(settings, 'writer');
   const assigned: ModelRef | null =
     writer.kind === 'model' &&
     settings.connections.some((connection) => connection.connectionId === writer.connectionId)
@@ -77,22 +90,9 @@ export function writerModels(settings: ModelSettings): WriterModels {
   };
 }
 
-/**
- * Модель, которой уйдёт прогон: выбранная, если она ещё есть в списке, иначе модель роли — тоже
- * если есть в списке, иначе первая в списке. Выключенную модель роли прогон не возьмёт: сервер
- * её отклонит. Моделей нет — null, и сервер решает сам.
- */
+/** Resolve exactly the selected model or the role default. Unavailable choices stay visible. */
 export function effectiveModel(models: WriterModels, picked: ModelRef | null): ModelRef | null {
-  const listed = (ref: ModelRef | null) =>
-    ref !== null &&
-    models.groups.some(
-      (group) => group.connectionId === ref.connectionId && group.models.includes(ref.modelId),
-    );
-  if (listed(picked)) return picked;
-  if (listed(models.assigned)) return models.assigned;
-  const first = models.groups[0];
-  const modelId = first?.models[0];
-  return first && modelId ? { connectionId: first.connectionId, modelId } : null;
+  return picked ?? models.assigned;
 }
 
 /**
@@ -100,6 +100,9 @@ export function effectiveModel(models: WriterModels, picked: ModelRef | null): M
  * `Llama-3.1-8B`). Полное имя остаётся в меню.
  */
 export function shortModelName(modelId: string): string {
+  // Hosted URIs carry a folder and revision, e.g. gpt://folder/qwen3/latest.
+  const hosted = /^[a-z][a-z0-9+.-]*:\/\/[^/]+\/([^/]+)(?:\/[^/]+)?$/i.exec(modelId);
+  if (hosted?.[1]) return hosted[1];
   const tail = modelId.split('/').filter(Boolean).at(-1);
   return tail ?? modelId;
 }
@@ -182,6 +185,9 @@ export function modelRows(
     const top = [selected, models.assigned].filter(
       (ref, at, all): ref is ModelRef =>
         ref !== null &&
+        models.groups.some(
+          (group) => group.connectionId === ref.connectionId && group.models.includes(ref.modelId),
+        ) &&
         (family === 'all' || modelFamily(ref.modelId) === family) &&
         all.findIndex((other) => sameModel(other, ref)) === at,
     );

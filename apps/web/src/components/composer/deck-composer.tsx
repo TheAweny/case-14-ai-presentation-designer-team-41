@@ -18,8 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ConnectIcon, PlusIcon, WarningIcon } from '@/components/ui/icons';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ConnectIcon, WarningIcon } from '@/components/ui/icons';
+import { CHAT_MODES } from '@lct/contracts';
 import {
   COMPOSER_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
@@ -27,12 +27,12 @@ import {
   chosenTemplate,
   templateGroups,
 } from '@/lib/composer-templates';
-import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-generator';
+import { hasContent } from '@/lib/deck-generator';
 import { chatHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
-import { effectiveModel, writerModelReady } from '@/lib/writer-models';
+import { writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
@@ -46,14 +46,8 @@ import {
   usePromptBox,
 } from './prompt-box';
 import { promptAction } from './prompt-keys';
-
-/** Расширения одного вида контента через запятую — для подсказки у скрепки. */
-function extensionsOf(kind: string): string {
-  return Object.entries(CONTENT_FILE_KINDS)
-    .filter(([, value]) => value === kind)
-    .map(([extension]) => extension)
-    .join(', ');
-}
+import { ComposerSourceMenu } from './composer-source-menu';
+import { useComposerSuggestions } from './composer-suggestions';
 
 /**
  * Поле генерации, как у ChatGPT и Claude: написать, о чём презентация, прикрепить материалы и
@@ -88,6 +82,7 @@ export function DeckComposer({
   focusRequested?: boolean;
 }) {
   const t = useTranslations('composer');
+  const tm = useTranslations('deckChat.modes');
   const router = useRouter();
   const pathname = usePathname();
   const rejectedId = useId();
@@ -102,7 +97,7 @@ export function DeckComposer({
   // Число слайдов из настроек — пожелание агенту, а не жёсткое правило.
   const { slideCount } = useEditorPrefs();
   const [model, setModel] = useState<ModelRef | null>(null);
-  const models = useWriterModels();
+  const models = useWriterModels('assistant');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
@@ -114,6 +109,18 @@ export function DeckComposer({
   const ready = hasContent(text, files) || templateFile !== null;
   // Пока настройки моделей не загрузились, неизвестно, есть ли чем писать: отправку придерживаем.
   const box = usePromptBox({ ready: ready && models !== null, busy: sending });
+  const suggestions = useComposerSuggestions({
+    text,
+    field,
+    onText: setText,
+    sources: [],
+    commands: CHAT_MODES.map((mode) => ({
+      key: mode,
+      name: `/${mode}`,
+      description: `${tm(`${mode}.name`)} — ${tm(`${mode}.description`)}`,
+      choose: () => setMode(mode),
+    })),
+  });
   const glowStyle = {
     '--aurora-color': projectColorVar(project?.appearance.color ?? 'gray'),
   } as CSSProperties;
@@ -141,13 +148,13 @@ export function DeckComposer({
 
   const submit = () => {
     if (!ready || sending) return;
-    if (!writerModelReady(models)) {
+    if (!writerModelReady(models, model)) {
       if (models !== null) setModelRequiredOpen(true);
       return;
     }
     setSending(true);
     // Выбор показывают, только когда моделей несколько: подписывать в сообщении есть смысл тогда же.
-    const chosen = models ? effectiveModel(models, model) : null;
+    const chosen = model;
     const chatId = crypto.randomUUID();
     chatStore.start(
       chatId,
@@ -168,7 +175,8 @@ export function DeckComposer({
   };
 
   return (
-    <div>
+    <div className="relative">
+      {suggestions.menu}
       <Dialog open={modelRequiredOpen} onOpenChange={setModelRequiredOpen}>
         <DialogContent closeLabel={t('modelRequired.close')} className="max-w-md">
           <DialogHeader className="pr-8">
@@ -233,12 +241,16 @@ export function DeckComposer({
         ) : null}
         <PromptField
           value={text}
-          onValueChange={setText}
+          {...suggestions.fieldProps}
+          onSelect={suggestions.onSelect}
+          onValueChange={suggestions.onValueChange}
           label={t('label')}
           placeholder={t('placeholder')}
           fieldRef={field}
           describedBy={rejected.length > 0 ? rejectedId : undefined}
           onKeyDown={(event) => {
+            suggestions.onKeyDown(event);
+            if (event.defaultPrevented) return;
             if (event.key !== 'Tab' || !event.shiftKey) return;
             event.preventDefault();
             setMode(nextChatMode(mode));
@@ -286,27 +298,7 @@ export function DeckComposer({
               event.currentTarget.value = '';
             }}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                className="rounded-full text-muted-foreground"
-                aria-label={t('attach')}
-                onClick={() => picker.current?.click()}
-              >
-                <PlusIcon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {t('attachHint', {
-                text: extensionsOf('text'),
-                table: extensionsOf('table'),
-                template: TEMPLATE_EXTENSIONS.join(', '),
-              })}
-            </TooltipContent>
-          </Tooltip>
+          <ComposerSourceMenu onFiles={() => picker.current?.click()} />
           <ComposerTemplateMenu
             groups={groups}
             inProject={project !== null}

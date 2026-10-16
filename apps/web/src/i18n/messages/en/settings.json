@@ -133,7 +133,7 @@
   },
   "models": {
     "title": "Models",
-    "description": "Generation runs on servers with an OpenAI-compatible API — on this machine, on your local network or in the cloud. Connect a server and assign its models to roles.",
+    "description": "Choose a primary model for chat and presentations. Configure individual tasks only when needed.",
     "loading": "Loading settings…",
     "loadFailed": "Couldn’t load model settings.",
     "retry": "Try again",
@@ -280,7 +280,7 @@
       "items": {
         "assistant": {
           "name": "Assistant",
-          "description": "Runs the chat: answers, proposes a deck plan and starts the build. Without a model of its own it talks with the writer’s."
+          "description": "Answers in chat, proposes a plan and starts generation."
         },
         "planner": {
           "name": "Planner",
@@ -307,8 +307,16 @@
       },
       "descriptionShared": "You are an administrator: these roles are the defaults for every user. Only shared connections are offered here; anyone can pick their own.",
       "inherited": "Default for everyone — pick a model to use your own.",
-      "writerDefault": "The writer’s model"
-    }
+      "writerDefault": "Use primary model",
+      "primaryName": "Primary model",
+      "primaryDescription": "Used for chat, planning, writing and text review unless overridden."
+    },
+    "advanced": "Customize models for individual tasks",
+    "separateActive": "Separate task models are configured",
+    "primaryActive": "Text tasks use the primary model unless overridden",
+    "primaryShared": "As administrator, you set the defaults for everyone.",
+    "primaryPersonal": "Your preferences. A model picked in chat applies to that conversation only.",
+    "visualModels": "Images and visual review"
   },
   "users": {
     "title": "Users",

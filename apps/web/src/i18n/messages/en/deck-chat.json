@@ -41,6 +41,14 @@
     "placeholderAnswer": "Or answer in your own words",
     "send": "Send",
     "stop": "Stop",
+    "stopping": "Stopping…",
+    "materials": "Add materials",
+    "materialsHint": "Text, tables, PDFs and images",
+    "templateHint": "Design from your PowerPoint file",
+    "uploadTemplate": "Upload a .pptx template",
+    "templates": "Library templates",
+    "commands": "Working modes",
+    "context": "Slides and objects",
     "attach": "Add materials",
     "files": "Attachments",
     "dropHere": "Drop files to add them to the request",
@@ -72,8 +80,23 @@
     "failedWith": "Not sent: {reason}"
   },
   "status": {
+    "retryAnswer": "Retry answer",
     "cancelled": "Stopped",
     "failed": "The answer was cut short"
+  },
+  "connection": {
+    "uploading": "Uploading attachments…",
+    "sending": "Sending message…",
+    "reconnecting": "Reconnecting…",
+    "stopping": "Stopping the answer…",
+    "failed": "Could not send",
+    "interrupted": "Connection to the chat was interrupted",
+    "cancelFailed": "Could not confirm the stop",
+    "retry": "Retry sending",
+    "reconnect": "Reconnect",
+    "retryCancel": "Retry stopping",
+    "restore": "Return to composer",
+    "selectionFailed": "The selected model is active in this tab, but could not be saved for the next visit."
   },
   "tools": {
     "list_templates": "Looked at the templates",
@@ -151,5 +174,27 @@
     },
     "undo": "Undo with Ctrl+Z in the editor.",
     "apply": "Apply anyway"
+  },
+  "failure": {
+    "reasons": {
+      "rate-limit": "The model is rate limited",
+      "unauthorized": "Model access denied. Check the connection key",
+      "unavailable": "The model is unavailable",
+      "timeout": "The model timed out",
+      "context": "The request or answer exceeded the size limit",
+      "unsupported": "The model does not support this request",
+      "not-configured": "The selected model is unavailable or not configured",
+      "unknown": "Could not complete the answer"
+    },
+    "details": "Details",
+    "retry": "Retry",
+    "retryWith": "Retry with {model}",
+    "retryAfter": "Retry in {seconds}s",
+    "changeModel": "Change model",
+    "settings": "Model settings",
+    "edit": "Edit request",
+    "partial": "Some actions have already run. Their results remain in this chat; continue from the appropriate step.",
+    "continue": "Continue in chat",
+    "connection": "Open connection"
   }
 }
