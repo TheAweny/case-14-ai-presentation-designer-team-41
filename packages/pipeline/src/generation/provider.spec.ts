@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { OpenAICompatibleProvider, parseModelJson, RoutedTextProvider } from './provider.js';
+import {
+  BUSY_RETRIES,
+  OpenAICompatibleProvider,
+  parseModelJson,
+  RequestLimiter,
+  retryDelay,
+  RoutedTextProvider,
+} from './provider.js';
 
 const schema = z.object({ ok: z.boolean() });
 const settings = {
@@ -211,7 +218,11 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '2' } }))
       .mockResolvedValueOnce(answer());
-    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+    });
     const pending = provider.generate('writer', '', {}, schema, new AbortController().signal);
     await vi.advanceTimersByTimeAsync(2000);
     await expect(pending).resolves.toEqual({ ok: true });
@@ -243,5 +254,128 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       outputTokens: 4,
       provider: 'llm.api.cloud.yandex.net',
     });
+  });
+});
+
+describe('busy provider', () => {
+  const busyResponse = (headers: Record<string, string> = {}) =>
+    new Response('', { status: 429, headers });
+  const tokensOf = (init: RequestInit | undefined) => JSON.parse(String(init?.body)).max_tokens;
+
+  it('waits longer after each refusal, with jitter, and never less than Retry-After', () => {
+    expect(retryDelay(0, null, () => 0)).toBe(500);
+    expect(retryDelay(0, null, () => 1)).toBe(1000);
+    expect(retryDelay(3, null, () => 0)).toBe(4000);
+    expect(retryDelay(3, null, () => 1)).toBe(8000);
+    expect(retryDelay(10, null, () => 1)).toBe(16000);
+    expect(retryDelay(0, '5', () => 0)).toBe(5000);
+    expect(retryDelay(0, '600', () => 0)).toBe(30000);
+    const at = new Date(Date.now() + 7000).toUTCString();
+    expect(retryDelay(0, at, () => 0)).toBeGreaterThan(5000);
+    expect(retryDelay(1, 'soon', () => 0)).toBe(1000);
+  });
+
+  it('outlasts a run of refusals without raising the token budget', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn<typeof fetch>();
+    for (let i = 0; i < BUSY_RETRIES; i++) fetchImpl.mockResolvedValueOnce(busyResponse());
+    fetchImpl.mockResolvedValueOnce(answer());
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+    });
+    const pending = provider.generate('writer', '', {}, schema, new AbortController().signal);
+    await vi.runAllTimersAsync();
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(BUSY_RETRIES + 1);
+    const budgets = fetchImpl.mock.calls.map(([, init]) => tokensOf(init));
+    expect(new Set(budgets).size).toBe(1);
+  });
+
+  it('gives up after the retry budget and says how many times it asked', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => busyResponse());
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+    });
+    const pending = provider
+      .generate('writer', '', {}, schema, new AbortController().signal)
+      .catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    const error = await pending;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/^Model API HTTP 429 .* after 5 retries/);
+    expect(fetchImpl).toHaveBeenCalledTimes(BUSY_RETRIES + 1);
+  });
+
+  it('halves the pool once for refusals that arrive together and holds new requests', async () => {
+    vi.useFakeTimers();
+    const limiter = new RequestLimiter(8);
+    limiter.throttle(2000);
+    limiter.throttle(2000);
+    limiter.throttle(3000);
+    expect(limiter.capacity).toBe(4);
+
+    let granted = false;
+    const waiting = limiter.acquire(new AbortController().signal).then((release) => {
+      granted = true;
+      return release;
+    });
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(granted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    (await waiting)();
+    expect(granted).toBe(true);
+  });
+
+  it('grows the pool back by one after a run of answers as long as the pool', () => {
+    vi.useFakeTimers();
+    const limiter = new RequestLimiter(8);
+    limiter.throttle(0);
+    expect(limiter.capacity).toBe(4);
+    for (let i = 0; i < 3; i++) limiter.succeeded();
+    expect(limiter.capacity).toBe(4);
+    limiter.succeeded();
+    expect(limiter.capacity).toBe(5);
+    for (let i = 0; i < 100; i++) limiter.succeeded();
+    expect(limiter.capacity).toBe(8);
+  });
+
+  it('brings all three variants home from a provider that takes two requests at once', async () => {
+    vi.useFakeTimers();
+    const quota = 2;
+    let active = 0;
+    let refused = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async () => {
+      if (active >= quota) {
+        refused++;
+        return busyResponse({ 'retry-after': '1' });
+      }
+      active++;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      active--;
+      return answer();
+    });
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+    });
+    // Three variants writing four slides each, all at once.
+    const variants = Array.from({ length: 3 }, () =>
+      Promise.all(
+        Array.from({ length: 4 }, () =>
+          provider.generate('writer', '', {}, schema, new AbortController().signal),
+        ),
+      ),
+    );
+    const settled = Promise.allSettled(variants);
+    await vi.runAllTimersAsync();
+    const results = await settled;
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled', 'fulfilled']);
+    expect(refused).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import type { AgentGeneration } from '@lct/contracts';
-import { acquireModelSlot, backoff, parseModelJson } from '../generation/provider.js';
+import {
+  acquireModelSlot,
+  backoff,
+  BUSY_STATUSES,
+  parseModelJson,
+  retryDelay,
+  throttleModelSlots,
+} from '../generation/provider.js';
 
 /** A tool as the model sees it: a name, what it is for, and its input as JSON Schema. */
 export interface ToolSpec {
@@ -149,12 +156,13 @@ export class OpenAICompatibleChatModel implements ChatModel {
         await backoff(1000 * (attempt + 1), signal);
         continue;
       }
-      if (response.ok || ![429, 502, 503].includes(response.status) || attempt >= 2) {
+      if (response.ok || !BUSY_STATUSES.has(response.status) || attempt >= 2) {
         return response;
       }
       await response.body?.cancel();
-      const retryAfter = Number(response.headers.get('retry-after'));
-      await backoff(Math.min(8000, Math.max(1500 * (attempt + 1), retryAfter * 1000 || 0)), signal);
+      const wait = retryDelay(attempt, response.headers.get('retry-after'));
+      if (response.status !== 502) throttleModelSlots(wait);
+      await backoff(wait, signal);
     }
   }
 

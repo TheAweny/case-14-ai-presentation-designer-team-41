@@ -29,6 +29,8 @@ interface Options {
   model: string;
   fetchImpl?: typeof fetch;
   seed?: number;
+  /** Slots to take requests from; the process-wide pool by default. */
+  limiter?: RequestLimiter;
 }
 interface Completion {
   choices?: { message?: { content?: string }; finish_reason?: string }[];
@@ -42,11 +44,28 @@ interface Completion {
  */
 const MAX_CONCURRENT = Math.max(1, Number(process.env.MODEL_MAX_CONCURRENCY) || 8);
 
+/**
+ * Request slots, first come first served. A 429 means the provider is over its quota: the pool
+ * halves and holds every new request for as long as the provider asked to wait, so the three
+ * variants stop knocking together. Each run of answers as long as the pool wins a slot back, up
+ * to the configured ceiling.
+ */
 export class RequestLimiter {
   private active = 0;
+  private limit: number;
+  private successes = 0;
+  private pausedUntil = 0;
+  private wake: ReturnType<typeof setTimeout> | undefined;
   private readonly waiting: (() => void)[] = [];
 
-  constructor(private readonly limit = MAX_CONCURRENT) {}
+  constructor(private readonly ceiling = MAX_CONCURRENT) {
+    this.limit = ceiling;
+  }
+
+  /** Requests the pool lets through at once right now. */
+  get capacity(): number {
+    return this.limit;
+  }
 
   async acquire(signal: AbortSignal): Promise<() => void> {
     signal.throwIfAborted();
@@ -61,10 +80,11 @@ export class RequestLimiter {
         if (index >= 0) this.waiting.splice(index, 1);
         reject(signal.reason);
       };
-      if (this.active < this.limit) grant();
+      if (this.waiting.length === 0 && this.open()) grant();
       else {
         this.waiting.push(grant);
         signal.addEventListener('abort', abort, { once: true });
+        this.pump();
       }
     });
     let released = false;
@@ -72,8 +92,43 @@ export class RequestLimiter {
       if (released) return;
       released = true;
       this.active--;
-      this.waiting.shift()?.();
+      this.pump();
     };
+  }
+
+  /**
+   * The provider refused for load and asked to wait `ms`. Requests in flight when it did all come
+   * back refused together, so the pool halves once per pause, not once per refusal.
+   */
+  throttle(ms: number): void {
+    const now = Date.now();
+    if (now >= this.pausedUntil) this.limit = Math.max(1, Math.floor(this.limit / 2));
+    this.successes = 0;
+    this.pausedUntil = Math.max(this.pausedUntil, now + ms);
+    this.pump();
+  }
+
+  /** An answer came back. After as many in a row as the pool holds, it grows by one. */
+  succeeded(): void {
+    if (this.limit >= this.ceiling || ++this.successes < this.limit) return;
+    this.successes = 0;
+    this.limit++;
+    this.pump();
+  }
+
+  private open(): boolean {
+    return this.active < this.limit && Date.now() >= this.pausedUntil;
+  }
+
+  private pump(): void {
+    while (this.waiting.length > 0 && this.open()) this.waiting.shift()?.();
+    const pause = this.pausedUntil - Date.now();
+    if (this.waiting.length > 0 && pause > 0 && !this.wake) {
+      this.wake = setTimeout(() => {
+        this.wake = undefined;
+        this.pump();
+      }, pause);
+    }
   }
 }
 
@@ -86,6 +141,43 @@ const requests = new RequestLimiter();
  */
 export function acquireModelSlot(signal: AbortSignal): Promise<() => void> {
   return requests.acquire(signal);
+}
+
+/** The provider refused a chat turn for load: the whole process slows down, not only the chat. */
+export function throttleModelSlots(ms: number): void {
+  requests.throttle(ms);
+}
+
+/** Answers that mean "busy, ask again", not "wrong request". */
+export const BUSY_STATUSES: ReadonlySet<number> = new Set([429, 502, 503]);
+
+/**
+ * Times a call is asked again after a busy answer. The waits grow 1, 2, 4, 8, 16 s, about half a
+ * minute in all, which the run's own deadline still covers.
+ */
+export const BUSY_RETRIES = 5;
+const MAX_BACKOFF_MS = 16_000;
+/** The longest wait a Retry-After header may impose; a longer one is the run's deadline's call. */
+const MAX_RETRY_AFTER_MS = 30_000;
+
+/** Retry-After as milliseconds: either seconds or an HTTP date. */
+function retryAfterMs(header: string | null): number {
+  if (!header) return 0;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? 0 : Math.max(0, at - Date.now());
+}
+
+/**
+ * The wait before asking again after the `retry`-th busy answer: an exponential step with jitter,
+ * so three variants refused at once do not come back at once, and never less than the provider
+ * asked for.
+ */
+export function retryDelay(retry: number, retryAfter: string | null, random = Math.random): number {
+  const step = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** retry);
+  const jittered = step / 2 + (random() * step) / 2;
+  return Math.min(MAX_RETRY_AFTER_MS, Math.max(retryAfterMs(retryAfter), jittered));
 }
 
 export function backoff(ms: number, signal: AbortSignal): Promise<void> {
@@ -120,6 +212,7 @@ export class OpenAICompatibleProvider implements TextProvider {
   private readonly fetchImpl: typeof fetch;
   private readonly endpoint: string;
   private readonly provider: string;
+  private readonly limiter: RequestLimiter;
 
   constructor(private readonly options: Options) {
     // A key is optional: local runtimes such as Ollama take none. Address and model are not.
@@ -141,6 +234,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     this.provider = url.hostname;
     this.model = options.model;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.limiter = options.limiter ?? requests;
   }
 
   async generate<T>(
@@ -152,11 +246,16 @@ export class OpenAICompatibleProvider implements TextProvider {
   ): Promise<T> {
     const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
     const generation = this.generation.get(agent);
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Two budgets: `attempt` counts draws that came back unusable (empty, truncated, off-schema,
+    // timed out, dropped) and grows the token budget; `busy` counts refusals for load, which say
+    // nothing about the answer and only cost a wait.
+    let attempt = 0;
+    let busy = 0;
+    for (;;) {
       signal.throwIfAborted();
-      const release = await requests.acquire(signal);
+      const release = await this.limiter.acquire(signal);
       const started = Date.now();
-      let retryDelay = 500;
+      let wait = 500;
       try {
         signal.throwIfAborted();
         const response = await this.fetchImpl(this.endpoint, {
@@ -193,19 +292,22 @@ export class OpenAICompatibleProvider implements TextProvider {
         });
         if (!response.ok) {
           await response.body?.cancel();
-          if ([429, 502, 503].includes(response.status) && attempt < 2) {
-            const retryAfter = Number(response.headers.get('retry-after'));
-            retryDelay = Math.min(8000, Math.max(1500 * (attempt + 1), retryAfter * 1000 || 0));
-          } else {
+          if (!BUSY_STATUSES.has(response.status) || busy >= BUSY_RETRIES) {
             throw new Error(
-              `Model API HTTP ${response.status} for ${this.model}; no alternate model was used.`,
+              `Model API HTTP ${response.status} for ${this.model}` +
+                (busy ? ` after ${busy} retries` : '') +
+                '; no alternate model was used.',
             );
           }
+          wait = retryDelay(busy++, response.headers.get('retry-after'));
+          // 502 is a gateway hiccup; 429 and 503 say the provider is overloaded, so every
+          // request in the process backs off, not only this one.
+          if (response.status !== 502) this.limiter.throttle(wait);
         } else {
           const data = (await response.json()) as Completion;
           const choice = data.choices?.[0];
           if (!choice?.message?.content || choice.finish_reason === 'length') {
-            if (attempt < 2) continue;
+            if (attempt++ < 2) continue;
             throw new Error('Model returned empty or truncated JSON.');
           }
           let result: T;
@@ -213,9 +315,10 @@ export class OpenAICompatibleProvider implements TextProvider {
             result = parseModelJson(choice.message.content, schema);
           } catch (error) {
             // Malformed or off-schema JSON is a sampling accident; one more draw usually fixes it.
-            if (attempt < 2) continue;
+            if (attempt++ < 2) continue;
             throw error;
           }
+          this.limiter.succeeded();
           this.calls.push({
             agent,
             ms: Date.now() - started,
@@ -231,13 +334,12 @@ export class OpenAICompatibleProvider implements TextProvider {
         // cancellation of the whole run still stops at once.
         const timedOut = error instanceof Error && error.name === 'TimeoutError';
         const dropped = error instanceof TypeError;
-        if (!(timedOut || dropped) || signal.aborted || attempt >= 2) throw error;
+        if (!(timedOut || dropped) || signal.aborted || attempt++ >= 2) throw error;
       } finally {
         release();
       }
-      await backoff(retryDelay, signal);
+      await backoff(wait, signal);
     }
-    throw new Error('Model retry budget exhausted.');
   }
 }
 
