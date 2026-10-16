@@ -112,3 +112,14 @@ export async function changeOwnPasswordAction(
   const response = await apiFetch('/users/me', json('PATCH', { currentPassword, password }));
   return response.ok ? { ok: true } : failureOf(response);
 }
+
+/**
+ * Сменить свою картинку: `preset:N` — знак, data URL — фото, null — знак по id. Формат и размер
+ * проверяет API.
+ */
+export async function updateOwnAvatarAction(avatar: string | null): Promise<UpdateMeResult> {
+  await requireAccount();
+  if (avatar !== null && typeof avatar !== 'string') return { ok: false, reason: 'invalid' };
+  const response = await apiFetch('/users/me', json('PATCH', { avatar }));
+  return response.ok ? { ok: true } : failureOf(response);
+}

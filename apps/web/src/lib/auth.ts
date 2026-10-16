@@ -1,11 +1,9 @@
-import { PROJECT_COLOR_IDS, type ProjectColorId } from './project-appearance';
-
 /**
  * Аккаунты. Регистрации нет: первого администратора создаёт установщик (`ADMIN_EMAIL` и
  * `ADMIN_PASSWORD` в `.env`), остальных — администратор в настройках. Всё, что человек сделал —
  * проекты, шаблоны, презентации, чаты, — принадлежит его аккаунту; чужого API не отдаёт.
  *
- * Модуль без React и DOM: разбор настроек, адреса возврата и вид аватара проверяются тестами.
+ * Модуль без React и DOM: разбор настроек и адреса возврата проверяются тестами.
  */
 
 /** Cookie сессии. Содержимое — подписанный токен (`session-token.ts`). */
@@ -25,6 +23,8 @@ export interface Account {
   readonly email: string;
   readonly name: string;
   readonly role: AccountRole;
+  /** Картинка: null — знак по id, `preset:N` — выбранный знак, иначе data URL (`avatars.ts`). */
+  readonly avatar?: string | null;
 }
 
 export interface AuthSource {
@@ -74,23 +74,4 @@ export function authSecret(
     throw new Error('AUTH_SECRET is required in production: it signs session cookies.');
   }
   return DEVELOPMENT_SECRET;
-}
-
-/** Инициалы для аватара: первые буквы двух первых слов имени, иначе первая буква почты. */
-export function accountInitials(account: Pick<Account, 'name' | 'email'>): string {
-  const words = account.name.trim().split(/\s+/).filter(Boolean);
-  const letters = words.slice(0, 2).map((word) => [...word][0] ?? '');
-  const initials = letters.join('') || ([...account.email][0] ?? '?');
-  return initials.toUpperCase();
-}
-
-/**
- * Цвет аватара из палитры проектов, постоянный для пользователя. Серый пропускаем: на сером
- * сайдбаре аватар бы потерялся.
- */
-export function accountColor(userId: string): ProjectColorId {
-  const colors = PROJECT_COLOR_IDS.filter((color) => color !== 'gray');
-  let hash = 0;
-  for (const char of userId) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
-  return colors[hash % colors.length] ?? 'blue';
 }

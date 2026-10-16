@@ -9,10 +9,11 @@ import { MAX_PASSWORD_LENGTH, passwordProblem } from '@/lib/users';
 import { cn } from '@/lib/utils';
 import { AccountAvatar } from '@/components/auth/account-menu';
 import { Button } from '@/components/ui/button';
+import { AvatarPicker } from './avatar-picker';
 import type { Account } from '@/lib/auth';
 
 /**
- * «Аккаунт»: кто вошёл, смена своего пароля и выход. Имя и почту меняет администратор в разделе
+ * «Аккаунт»: кто вошёл, своя картинка, смена своего пароля и выход. Имя и почту меняет администратор в разделе
  * «Пользователи».
  */
 export function AccountSettingsPanel({ account }: { account: Account }) {
@@ -24,14 +25,18 @@ export function AccountSettingsPanel({ account }: { account: Account }) {
       <h2 className="text-base font-semibold md:pr-8">{t('title')}</h2>
 
       <div className="flex items-center gap-4">
-        <AccountAvatar account={account} className="size-14 text-lg" />
+        <AccountAvatar account={account} className="size-14" />
         <div className="grid min-w-0 gap-0.5">
           <span className="truncate text-base font-medium">{account.name}</span>
           <span className="truncate text-sm text-muted-foreground">{account.email}</span>
         </div>
       </div>
 
-      <p className="border-b border-border pb-4 text-xs text-muted-foreground">{t('managed')}</p>
+      <p className="text-xs text-muted-foreground">{t('managed')}</p>
+
+      <div className="border-b border-border pb-5">
+        <AvatarPicker account={account} />
+      </div>
 
       <ChangePassword />
 

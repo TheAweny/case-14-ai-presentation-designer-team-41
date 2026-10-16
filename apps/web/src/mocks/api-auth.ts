@@ -6,6 +6,7 @@ interface ApiAccount {
   readonly email: string;
   readonly name: string;
   readonly role?: string;
+  readonly avatar?: string | null;
 }
 
 function account(row: ApiAccount): Account {
@@ -14,6 +15,7 @@ function account(row: ApiAccount): Account {
     email: row.email,
     name: row.name,
     role: row.role === 'admin' ? 'admin' : 'user',
+    avatar: typeof row.avatar === 'string' ? row.avatar : null,
   };
 }
 

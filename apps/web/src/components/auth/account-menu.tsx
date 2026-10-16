@@ -14,22 +14,37 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { accountColor, accountInitials, type Account } from '@/lib/auth';
-import { projectColorVar } from '@/lib/project-appearance';
+import type { Account } from '@/lib/auth';
+import { avatarView } from '@/lib/avatars';
+import { AvatarMark } from './avatar-mark';
 import { cn } from '@/lib/utils';
 
-/** Круг с инициалами. Цвет — из палитры проектов, у пользователя всегда один и тот же. */
-export function AccountAvatar({ account, className }: { account: Account; className?: string }) {
+/**
+ * Аватар аккаунта: загруженная картинка или абстрактный знак, свой у каждого человека. Знак
+ * подбирается по id, пока человек не выбрал другой в настройках.
+ */
+export function AccountAvatar({
+  account,
+  className,
+}: {
+  account: Pick<Account, 'userId' | 'avatar'>;
+  className?: string;
+}) {
+  const view = avatarView(account.avatar, account.userId);
   return (
     <span
       aria-hidden
       className={cn(
-        'grid size-6 shrink-0 place-items-center rounded-full text-[0.625rem] font-semibold text-white',
+        'block size-6 shrink-0 overflow-hidden rounded-full ring-1 ring-black/5 dark:ring-white/10',
         className,
       )}
-      style={{ backgroundColor: projectColorVar(accountColor(account.userId)) }}
     >
-      {accountInitials(account)}
+      {view.kind === 'image' ? (
+        // Картинка — уже квадрат 256 px из браузера: оптимизация Next ей не нужна.
+        <img src={view.src} alt="" className="block size-full object-cover" draggable={false} />
+      ) : (
+        <AvatarMark index={view.index} />
+      )}
     </span>
   );
 }
@@ -78,7 +93,7 @@ export function AccountMenu({
         className="w-60"
       >
         <DropdownMenuLabel className="flex items-center gap-2.5 py-1.5 font-normal">
-          <AccountAvatar account={account} className="size-8 text-xs" />
+          <AccountAvatar account={account} className="size-8" />
           <span className="grid min-w-0">
             <span className="truncate text-sm font-medium text-foreground">{account.name}</span>
             <span className="truncate text-xs text-muted-foreground">{account.email}</span>

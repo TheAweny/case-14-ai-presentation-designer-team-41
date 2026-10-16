@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { configuredAdmin, emailProblem, nameProblem, passwordProblem } from './account-rules.js';
+import {
+  avatarProblem,
+  configuredAdmin,
+  emailProblem,
+  MAX_AVATAR_LENGTH,
+  nameProblem,
+  passwordProblem,
+} from './account-rules.js';
 
 describe('account rules', () => {
   it('accepts an ordinary email, password and name', () => {
@@ -33,5 +40,29 @@ describe('configuredAdmin', () => {
       configuredAdmin({ ADMIN_EMAIL: 'root@example.com', ADMIN_PASSWORD: 'short' }),
     ).toBeNull();
     expect(configuredAdmin({ ADMIN_PASSWORD: 'secret-123' })).toBeNull();
+  });
+});
+
+describe('avatar', () => {
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0]).toString('base64');
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]).toString('base64');
+  const webp = Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1').toString('base64');
+
+  it('takes nothing, a mark of ten, or a small PNG, JPEG or WebP image', () => {
+    expect(avatarProblem(null)).toBeNull();
+    expect(avatarProblem('preset:0')).toBeNull();
+    expect(avatarProblem('preset:9')).toBeNull();
+    expect(avatarProblem(`data:image/png;base64,${png}`)).toBeNull();
+    expect(avatarProblem(`data:image/jpeg;base64,${jpeg}`)).toBeNull();
+    expect(avatarProblem(`data:image/webp;base64,${webp}`)).toBeNull();
+  });
+
+  it('refuses a mark that is not there, other formats and an image that is not what it says', () => {
+    expect(avatarProblem('preset:10')).not.toBeNull();
+    expect(avatarProblem(42)).not.toBeNull();
+    expect(avatarProblem('https://example.com/me.png')).not.toBeNull();
+    expect(avatarProblem('data:image/svg+xml;base64,PHN2Zz4=')).not.toBeNull();
+    expect(avatarProblem(`data:image/png;base64,${jpeg}`)).not.toBeNull();
+    expect(avatarProblem(`data:image/png;base64,${'A'.repeat(MAX_AVATAR_LENGTH)}`)).not.toBeNull();
   });
 });

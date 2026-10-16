@@ -33,13 +33,23 @@ export class UsersController {
   @Patch('me')
   async updateMe(
     @CurrentAccount() account: Account,
-    @Body() body: { name?: unknown; currentPassword?: unknown; password?: unknown },
+    @Body()
+    body: { name?: unknown; currentPassword?: unknown; password?: unknown; avatar?: unknown },
   ): Promise<Account> {
     if (body.password !== undefined) {
       await this.accounts.changeOwnPassword(account.id, body.currentPassword, body.password);
     }
-    if (body.name === undefined) return (await this.accounts.find(account.id)) ?? account;
-    return this.accounts.update(account.id, { name: body.name }, account.id);
+    // Everyone picks their own picture; the name is the administrator's to change.
+    if (body.name === undefined && body.avatar === undefined)
+      return (await this.accounts.find(account.id)) ?? account;
+    return this.accounts.update(
+      account.id,
+      {
+        ...(body.name === undefined ? {} : { name: body.name }),
+        ...(body.avatar === undefined ? {} : { avatar: body.avatar }),
+      },
+      account.id,
+    );
   }
 
   @Get()

@@ -29,6 +29,23 @@
       "failed": "Could not change the password. Try again.",
       "passwordShort": "The new password needs at least 8 characters.",
       "passwordLong": "The new password is at most 200 characters."
+    },
+    "avatar": {
+      "title": "Avatar",
+      "saving": "Saving",
+      "mark": "Mark {number}",
+      "markOwn": "Mark {number}, your default",
+      "photo": "Your photo",
+      "uploadPhoto": "Upload a photo",
+      "replacePhoto": "Upload another photo",
+      "ownHint": "This mark was given to you by default; everyone has their own.",
+      "pickedHint": "Mark saved. The circle with a dot takes you back to your default.",
+      "photoHint": "The photo is cropped to a square from the middle of the frame.",
+      "notImage": "That is not an image: PNG, JPEG, WebP or HEIC will do.",
+      "unreadable": "Could not read the photo. Try another one.",
+      "tooLarge": "The photo is too large. Pick a file under 20 MB.",
+      "rejected": "The server did not accept the picture. Try another photo.",
+      "failed": "Could not save. Try again."
     }
   },
   "general": {

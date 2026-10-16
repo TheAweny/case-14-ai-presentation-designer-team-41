@@ -19,6 +19,7 @@ import {
   nameProblem,
   normalizeEmail,
   passwordProblem,
+  avatarProblem,
 } from './account-rules.js';
 
 interface AccountRow {
@@ -28,9 +29,10 @@ interface AccountRow {
   readonly role: AccountRole;
   readonly disabled_at: Date | null;
   readonly created_at: Date;
+  readonly avatar: string | null;
 }
 
-const COLUMNS = 'id, email, name, role, disabled_at, created_at';
+const COLUMNS = 'id, email, name, role, disabled_at, created_at, avatar';
 
 function accountOf(row: AccountRow): Account {
   return {
@@ -40,6 +42,7 @@ function accountOf(row: AccountRow): Account {
     role: row.role,
     disabled: row.disabled_at !== null,
     createdAt: row.created_at.toISOString(),
+    avatar: row.avatar ?? null,
   };
 }
 
@@ -54,6 +57,8 @@ export interface AccountPatch {
   readonly password?: unknown;
   readonly role?: unknown;
   readonly disabled?: unknown;
+  /** Null — back to the mark the id gives. */
+  readonly avatar?: unknown;
 }
 
 /**
@@ -220,6 +225,7 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
     if (patch.email !== undefined) refuse(emailProblem(patch.email));
     if (patch.name !== undefined) refuse(nameProblem(patch.name));
     if (patch.password !== undefined) refuse(passwordProblem(patch.password));
+    if (patch.avatar !== undefined) refuse(avatarProblem(patch.avatar));
     if (patch.role !== undefined && !isAccountRole(patch.role)) {
       throw new BadRequestException('Unknown role.');
     }
@@ -241,7 +247,8 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
                                 ELSE crypt($4, gen_salt('bf')) END,
            role = COALESCE($5, role),
            disabled_at = CASE WHEN $6::boolean IS NULL THEN disabled_at
-                              WHEN $6::boolean THEN COALESCE(disabled_at, now()) ELSE NULL END
+                              WHEN $6::boolean THEN COALESCE(disabled_at, now()) ELSE NULL END,
+           avatar = CASE WHEN $7::boolean THEN $8::text ELSE avatar END
          WHERE id = $1
          RETURNING ${COLUMNS}`,
         [
@@ -251,6 +258,8 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
           typeof patch.password === 'string' ? patch.password : null,
           typeof patch.role === 'string' ? patch.role : null,
           typeof patch.disabled === 'boolean' ? patch.disabled : null,
+          patch.avatar !== undefined,
+          typeof patch.avatar === 'string' ? patch.avatar : null,
         ],
       )
       .catch((error: unknown) => {
