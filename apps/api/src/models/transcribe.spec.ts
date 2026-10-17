@@ -7,6 +7,7 @@ const model: ResolvedModel = {
   baseUrl: 'https://models.example.test/v1/',
   apiKey: 'secret',
   model: 'whisper',
+  headers: {},
 };
 
 const audio: SpeechAudio = {

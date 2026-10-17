@@ -620,7 +620,7 @@ test('keeps role customization collapsed and separates the primary and visual mo
   await dialog.getByText('Настроить модели для отдельных задач', { exact: false }).click();
   await expect(dialog.getByRole('button', { name: /Модель для роли «Ассистент»/ })).toBeVisible();
   await expect(
-    dialog.getByRole('heading', { name: 'Изображения и визуальная проверка' }),
+    dialog.getByRole('heading', { name: 'Изображения, голос и визуальная проверка' }),
   ).toBeVisible();
 });
 
