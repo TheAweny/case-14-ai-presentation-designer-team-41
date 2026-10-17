@@ -6,6 +6,9 @@ import {
   chatQuestionOptionSchema,
   deckOutlineSchema,
   storedTemplateIndexSchema,
+  materialResearchInputSchema,
+  materialResearchResultSchema,
+  type MaterialResearchSource,
   type ChatMessage,
   type ChatMode,
   type ChatPart,
@@ -24,6 +27,7 @@ import {
 } from '../generation/generation.service.js';
 import { generationBrief } from './chat-brief.js';
 import { readFinalReview } from './final-review.js';
+import { readResearchMaterial, type MaterialResearchDependency } from './material-research.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -124,9 +128,65 @@ const MAX_FILE_CHARS = 8000;
  * The tools of the chat agent for one turn. They read and build through the same services as the
  * generation endpoints, and see only what the account may use.
  */
-export function chatTools(generation: GenerationService, scope: ChatToolScope): ChatTool[] {
+export function chatTools(
+  generation: GenerationService,
+  scope: ChatToolScope,
+  research?: MaterialResearchDependency,
+): ChatTool[] {
   const { pool } = generation;
   const account = scope.account;
+  let researchCalls = 0;
+
+  const researchMaterials: ChatTool = {
+    name: 'research_materials',
+    input: materialResearchInputSchema,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      if (!research) throw new Error('Material research is unavailable.');
+      if (researchCalls >= 2)
+        throw new Error('The material research call limit for this turn was reached.');
+      researchCalls += 1;
+      const request = materialResearchInputSchema.parse(input);
+      const attached = new Set(
+        scope
+          .messages()
+          .flatMap((message) =>
+            message.role === 'user'
+              ? message.attachments.flatMap((item) => (item.kind === 'file' ? [item.fileId] : []))
+              : [],
+          ),
+      );
+      if (request.fileIds.some((id) => !attached.has(id))) {
+        throw new Error('Research may read only materials attached by the person in this chat.');
+      }
+      const sources: MaterialResearchSource[] = [];
+      for (const fileId of new Set(request.fileIds)) {
+        context.signal.throwIfAborted();
+        const result = await pool.query<{ file_name: string; storage_path: string }>(
+          `SELECT file_name, storage_path FROM stored_files
+           WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
+          [fileId, account.id],
+        );
+        const row = result.rows[0];
+        if (!row) throw new Error('There is no such material available to this account.');
+        sources.push(
+          await readResearchMaterial(
+            fileId,
+            row.file_name,
+            row.storage_path,
+            context.signal,
+            request.offsets?.[fileId] ?? 0,
+          ),
+        );
+      }
+      const output = materialResearchResultSchema.parse(
+        await research.run(request.question, sources, context.signal),
+      );
+      context.signal.throwIfAborted();
+      return { output };
+    },
+  };
 
   const templateRow = async (templateId: string) => {
     const result = await pool.query<{
@@ -520,6 +580,7 @@ export function chatTools(generation: GenerationService, scope: ChatToolScope): 
     listTemplates,
     describeTemplate,
     readFileTool,
+    ...(research ? [researchMaterials] : []),
     readDeck,
     readAudit,
     askUser,

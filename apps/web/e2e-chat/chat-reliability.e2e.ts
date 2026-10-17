@@ -45,6 +45,37 @@ test.beforeEach(async ({ context }) => {
 });
 
 test.describe('chat reliability', () => {
+  test('shows a saved material researcher step with its translated label', async ({ page }) => {
+    await page.route('**/api/backend/chats/**', async (route) => {
+      await route.fulfill({
+        json: document([
+          user,
+          {
+            ...assistant,
+            parts: [
+              {
+                type: 'tool',
+                callId: 'research',
+                name: 'research_materials',
+                input: { question: 'Какой бюджет?', fileIds: [USER] },
+                status: 'done',
+                output: { summary: 'Бюджет: 25 рублей.' },
+              },
+              { type: 'text', text: 'В brief.txt указан бюджет 25 рублей.' },
+            ],
+          },
+        ]),
+      });
+    });
+    await page.goto(`/chats/${CHAT}`);
+    await expect(
+      page.getByText('В brief.txt указан бюджет 25 рублей.', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Выполнено 1 действие', exact: true }).click();
+    await expect(page.getByText('Исследовал материалы', { exact: true })).toBeVisible();
+    await expect(page.getByText('research_materials', { exact: true })).toHaveCount(0);
+  });
+
   test('recovers a response after SSE EOF without repeating the submitted turn', async ({
     page,
   }) => {

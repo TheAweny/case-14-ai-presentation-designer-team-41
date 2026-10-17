@@ -1,0 +1,15 @@
+# Isolated child of the chat. One question, attached text materials only, no tools and no network.
+# The server checks every quote against the given source text and keeps only exact matches.
+
+id: material-researcher
+version: 0.2.0
+description: 'Research child of the chat: excerpts and open questions from attached text materials.'
+modelId: assistant-default
+
+generation:
+  temperature: 0.2
+  topP: 0.95
+  maxOutputTokens: 2048
+
+outputSchema: MaterialResearchResult
+instructionsFile: instructions.md

@@ -264,6 +264,7 @@ const READ_TOOLS = [
   'list_templates',
   'describe_template',
   'read_file',
+  'research_materials',
   'read_deck',
   'read_audit',
 ] as const;

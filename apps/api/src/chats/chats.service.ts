@@ -36,6 +36,8 @@ import {
   OpenAICompatibleChatModel,
   runChatTurn,
   toolSpecs,
+  loadMaterialResearchAgent,
+  researchMaterials,
   type ChatAgent,
   type ChatEventBody,
   type ChatModel,
@@ -1019,7 +1021,24 @@ export class ChatsService implements OnApplicationShutdown {
       }
       if (!model) return;
       sync();
-      const tools = chatTools(this.generation, scope);
+      const tools = chatTools(this.generation, scope, {
+        run: async (question, sources, researchSignal) => {
+          const researcher = await loadMaterialResearchAgent(this.generation.registryDir());
+          const researchModel = await this.chatModel(request, account, {
+            ...agent,
+            agent: researcher,
+          });
+          researchSignal.throwIfAborted();
+          return researchMaterials({
+            question,
+            sources,
+            model: researchModel,
+            agent: researcher,
+            signal: researchSignal,
+            seed: 42,
+          });
+        },
+      });
       // The agent tells the person whether the deck gets pictures, and does not promise them
       // when no image model is assigned.
       const imagesAvailable = await this.generation.imagesAvailable(account).catch(() => false);

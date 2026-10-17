@@ -28,3 +28,8 @@ export {
 export { ChatToolDispatcher, type ToolDispatcherOptions } from './tool-runtime.js';
 
 export { ModelRequestError, modelHttpFailure, modelFailureOf } from './model-failure.js';
+export {
+  loadMaterialResearchAgent,
+  researchMaterials,
+  type MaterialResearchOptions,
+} from './material-research.js';
