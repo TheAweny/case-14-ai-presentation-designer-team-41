@@ -19,7 +19,8 @@ env:
 jobs:
   verify:
     name: Lint, types, boundaries, tests, build
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to Ubuntu 26 from 19.10, the day before the stop-code.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -94,7 +95,7 @@ jobs:
 
   licenses:
     name: Dependency license policy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
