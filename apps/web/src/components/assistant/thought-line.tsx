@@ -1,6 +1,7 @@
 'use client';
 
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState, type CSSProperties, type ReactNode } from 'react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { ChevronDownIcon } from '@/components/ui/icons';
 import { AnimatedCollapse } from '@/components/ui/animated-collapse';
 import { cn } from '@/lib/utils';
@@ -19,13 +20,23 @@ export function ThoughtLine({
   children?: ReactNode;
 }) {
   const id = useId();
+  const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState<boolean | null>(null);
   const running = state === 'running';
   const open = expanded ?? running;
   const summary = (
     <>
       <TaskGlyph state={state} />
-      <span className={cn('min-w-0 break-words', running && 'assistant-shimmer')}>{label}</span>
+      <span className="relative grid min-w-0">
+        <AnimatePresence initial={false} mode="sync">
+          <ThoughtLabel
+            key={state + '\0' + label}
+            label={label}
+            running={running}
+            reduce={reduceMotion}
+          />
+        </AnimatePresence>
+      </span>
     </>
   );
   return (
@@ -58,5 +69,34 @@ export function ThoughtLine({
         </p>
       )}
     </section>
+  );
+}
+
+function ThoughtLabel({
+  label,
+  running,
+  reduce,
+}: {
+  label: string;
+  running: boolean;
+  reduce: boolean | null;
+}) {
+  const present = useIsPresent();
+  return (
+    <motion.span
+      aria-hidden={!present || undefined}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={reduce ? { duration: 0 } : { duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+      className={cn(
+        'col-start-1 row-start-1 min-w-0 break-words',
+        !present && 'pointer-events-none',
+        running && present && 'assistant-shimmer',
+      )}
+      style={!present ? ({ position: 'absolute', inset: 0 } satisfies CSSProperties) : undefined}
+    >
+      {label}
+    </motion.span>
   );
 }

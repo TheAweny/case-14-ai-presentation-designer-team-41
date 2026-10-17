@@ -6,7 +6,7 @@ import { jobEventSchema, type ChatPart } from '@lct/contracts';
 import { apiFetch } from '@/lib/api';
 import { generationProgress } from '@/lib/deck-generator';
 import { TaskGlyph } from './task-glyph';
-import { SpinnerIcon, SuccessIcon, WarningIcon } from '@/components/ui/icons';
+import { SpinnerIcon } from '@/components/ui/icons';
 import type { DeckResult } from '@/lib/variant-review';
 import { loadResultVariants } from '@/lib/load-result-variants';
 import { Button } from '@/components/ui/button';
@@ -97,10 +97,9 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
             : t('failed')
           : null;
   if (!line) return null;
-  const Icon = status === 'done' ? SuccessIcon : WarningIcon;
   return (
     <p className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
-      <Icon className="size-4 shrink-0" aria-hidden />
+      <TaskGlyph state={status} />
       {line}
     </p>
   );
