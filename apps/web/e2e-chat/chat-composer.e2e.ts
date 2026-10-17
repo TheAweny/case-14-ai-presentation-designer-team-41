@@ -830,12 +830,6 @@ test('shows animated tool execution and a stable send-to-stop glyph', async ({ p
 });
 
 test.describe('dictation', () => {
-  test.use({
-    launchOptions: {
-      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
-    },
-  });
-
   test('shows the microphone only after a speech model is assigned', async ({ page }) => {
     await page.goto('/');
     const prompt = page.getByRole('textbox', { name: 'О чём новая презентация?' });

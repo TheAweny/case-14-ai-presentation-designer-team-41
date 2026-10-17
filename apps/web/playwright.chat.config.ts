@@ -33,7 +33,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: process.env.E2E_BROWSER_CHANNEL },
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: process.env.E2E_BROWSER_CHANNEL,
+        // Dictation records from a fake microphone. Playwright takes launch options only here.
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+        },
+      },
     },
   ],
 });
