@@ -840,9 +840,15 @@ test.describe('dictation', () => {
     });
     expect(assigned.ok()).toBeTruthy();
     await page.reload();
+    await prompt.fill('Тема:');
     await page.getByRole('button', { name: 'Диктовать' }).click();
     await page.getByRole('button', { name: 'Остановить диктовку' }).click();
-    await expect(prompt).toHaveValue('Голос услышан');
+    // Until the text arrives, the composer says so and neither takes typing nor sends.
+    await expect(page.getByRole('button', { name: 'Расшифровываю запись…' })).toBeVisible();
+    await expect(prompt).toHaveAttribute('readonly', '');
+    await expect(page.getByRole('button', { name: 'Сгенерировать', exact: true })).toBeDisabled();
+    await expect(prompt).toHaveValue('Тема: Голос услышан');
+    await expect(prompt).not.toHaveAttribute('readonly');
   });
 });
 

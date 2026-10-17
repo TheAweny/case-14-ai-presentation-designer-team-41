@@ -32,14 +32,19 @@ export function useSpeechConfigured(): boolean {
   return settings !== null && available;
 }
 
+/** Where dictation is: nothing, recording, or waiting for the text of the recording. */
+export type DictationPhase = 'idle' | 'listening' | 'transcribing';
+
 /**
- * React Bits Voice Pill, adapted: the mic swells into equalizer bars and a timer while recording.
+ * React Bits Voice Pill, adapted: the mic swells into equalizer bars and a timer while recording,
+ * then into a shimmering "transcribing" label until the text arrives.
  * License: docs/third-party/react-bits-license.txt.
  */
 export function VoicePill({
   draft,
   onDraft,
   onError,
+  onPhase,
   disabled = false,
   compact = false,
 }: {
@@ -47,17 +52,27 @@ export function VoicePill({
   onDraft: (next: string) => void;
   /** The error to show under the field, already in words. */
   onError: (message: string) => void;
+  /** The composer locks its field and its send button while the recording is turned into text. */
+  onPhase?: (phase: DictationPhase) => void;
   disabled?: boolean;
   compact?: boolean;
 }) {
   const t = useTranslations('composer.voice');
-  const [listening, setListening] = useState(false);
+  const [phase, setPhaseState] = useState<DictationPhase>('idle');
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [, setTick] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const phaseListener = useRef(onPhase);
+  phaseListener.current = onPhase;
+  const setPhase = (next: DictationPhase) => {
+    setPhaseState(next);
+    phaseListener.current?.(next);
+  };
+  const listening = phase === 'listening';
+  const transcribing = phase === 'transcribing';
 
   useEffect(() => {
     if (!listening || startedAt === null) return;
@@ -69,13 +84,20 @@ export function VoicePill({
     () => () => {
       recorder.current?.stream.getTracks().forEach((track) => track.stop());
       recorder.current = null;
+      phaseListener.current?.('idle');
     },
     [],
   );
 
   const elapsed = listening && startedAt !== null ? Math.floor((Date.now() - startedAt) / 1000) : 0;
 
-  const stop = () => recorder.current?.stop();
+  // The moment the person stops, the pill says the text is on its way: the upload and the model
+  // take seconds, and a pill that went quiet looked like nothing happened.
+  const stop = () => {
+    if (!recorder.current) return;
+    setPhase('transcribing');
+    recorder.current.stop();
+  };
 
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -92,7 +114,6 @@ export function VoicePill({
       rec.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
         recorder.current = null;
-        setListening(false);
         setStartedAt(null);
         const blob = new Blob(chunks.current, { type: rec.mimeType || 'audio/webm' });
         const form = new FormData();
@@ -108,12 +129,13 @@ export function VoicePill({
               );
           })
           // The action itself failed: the recording did not reach the server.
-          .catch(() => onError(t('notSent')));
+          .catch(() => onError(t('notSent')))
+          .finally(() => setPhase('idle'));
       };
       rec.start();
       recorder.current = rec;
       setStartedAt(Date.now());
-      setListening(true);
+      setPhase('listening');
     } catch {
       onError(t('blocked'));
     }
@@ -124,16 +146,29 @@ export function VoicePill({
       type="button"
       variant="ghost"
       size={compact ? 'icon' : 'icon-lg'}
-      disabled={disabled}
+      disabled={disabled || transcribing}
       aria-pressed={listening}
-      aria-label={listening ? t('stop') : t('start')}
+      aria-busy={transcribing}
+      aria-label={transcribing ? t('transcribing') : listening ? t('stop') : t('start')}
       onClick={() => (listening ? stop() : void start())}
+      data-phase={phase}
       className={cn(
-        'rounded-full text-muted-foreground',
-        listening && 'w-auto gap-1.5 px-2.5 text-foreground',
+        'voice-pill rounded-full text-muted-foreground',
+        phase !== 'idle' && 'w-auto gap-1.5 px-2.5 text-foreground',
+        // Disabled buttons fade out; this one is busy, not unavailable.
+        transcribing && 'disabled:opacity-100',
       )}
     >
-      {listening ? (
+      {transcribing ? (
+        <>
+          <span className="voice-dots" aria-hidden>
+            <i />
+            <i />
+            <i />
+          </span>
+          {compact ? null : <span className="voice-shimmer text-xs">{t('transcribingShort')}</span>}
+        </>
+      ) : listening ? (
         <>
           <span className="voice-eq" aria-hidden>
             <i />

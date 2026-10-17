@@ -86,7 +86,10 @@
     "failed": "The recording could not be transcribed.",
     "blocked": "The microphone is unavailable.",
     "failedWith": "Could not transcribe the recording. The provider said: {detail}",
-    "notSent": "The recording did not reach the server. Try again or record a shorter one."
+    "notSent": "The recording did not reach the server. Try again or record a shorter one.",
+    "transcribing": "Transcribing the recording…",
+    "transcribingShort": "Transcribing",
+    "busy": "Wait until the recording turns into text"
   },
   "prompt": {
     "stop": "Stop",

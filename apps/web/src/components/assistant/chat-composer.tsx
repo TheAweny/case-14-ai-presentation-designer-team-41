@@ -5,7 +5,11 @@ import { useTranslations } from 'next-intl';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import { ModelMenu } from '@/components/composer/model-menu';
 import { ThinkingToggle } from '@/components/composer/thinking-toggle';
-import { useSpeechConfigured, VoicePill } from '@/components/composer/voice-pill';
+import {
+  useSpeechConfigured,
+  VoicePill,
+  type DictationPhase,
+} from '@/components/composer/voice-pill';
 import { ComposerSourceMenu } from '@/components/composer/composer-source-menu';
 import { useComposerSuggestions } from '@/components/composer/composer-suggestions';
 import {
@@ -71,7 +75,10 @@ export function ChatComposer({
 }) {
   const t = useTranslations('deckChat.input');
   const speech = useSpeechConfigured();
+  const voice = useTranslations('composer.voice');
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  // While dictating nothing is sent, and while the recording turns into text the field waits too.
+  const [dictation, setDictation] = useState<DictationPhase>('idle');
   const picker = useRef<HTMLInputElement>(null);
   const rejectedId = useId();
   const ownField = useRef<HTMLTextAreaElement>(null);
@@ -136,7 +143,7 @@ export function ChatComposer({
   const action = promptAction({
     hasInput,
     running,
-    blocked: running || chat.recovery !== null,
+    blocked: running || chat.recovery !== null || dictation !== 'idle',
     stopWhileTyping: true,
     stopping: chat.activity === 'stopping',
   });
@@ -187,7 +194,7 @@ export function ChatComposer({
       chatStore.cancel(chat.chatId);
       return;
     }
-    if (!hasInput || running || chat.recovery) return;
+    if (!hasInput || running || chat.recovery || dictation !== 'idle') return;
     const message = text.trim();
     if (question && message) {
       chatStore.answer(chat.chatId, question.questionId, { optionLabels: [], text: message });
@@ -328,13 +335,20 @@ export function ChatComposer({
           value={text}
           {...suggestions.fieldProps}
           onSelect={suggestions.onSelect}
-          submitOnEnter={!running && !chat.recovery}
+          submitOnEnter={!running && !chat.recovery && dictation === 'idle'}
+          readOnly={dictation === 'transcribing'}
           onValueChange={suggestions.onValueChange}
           fieldRef={field}
           label={t('label')}
           describedBy={rejected.length ? rejectedId : undefined}
           placeholder={
-            question ? t('placeholderAnswer') : running ? t('placeholderRunning') : t('placeholder')
+            dictation === 'transcribing'
+              ? voice('transcribing')
+              : question
+                ? t('placeholderAnswer')
+                : running
+                  ? t('placeholderRunning')
+                  : t('placeholder')
           }
           onKeyDown={(event) => {
             suggestions.onKeyDown(event);
@@ -363,6 +377,7 @@ export function ChatComposer({
                     setText(next);
                   }}
                   onError={setVoiceError}
+                  onPhase={setDictation}
                 />
               ) : null}
               <PromptSubmit
@@ -371,7 +386,7 @@ export function ChatComposer({
                 stopLabel={t('stop')}
                 stoppingLabel={t('stopping')}
                 onStop={() => chatStore.cancel(chat.chatId)}
-                blockedHint={t('placeholderRunning')}
+                blockedHint={dictation !== 'idle' ? voice('busy') : t('placeholderRunning')}
               />
             </>
           }

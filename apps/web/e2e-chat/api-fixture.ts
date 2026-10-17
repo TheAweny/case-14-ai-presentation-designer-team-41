@@ -75,9 +75,12 @@ const server = createServer(async (request, response) => {
     );
   else if (request.url === '/auth/accounts') response.end(JSON.stringify({ hasAccounts: true }));
   else if (request.url === '/model-settings') response.end(JSON.stringify(modelSettings));
-  else if (request.url === '/speech/transcriptions' && request.method === 'POST')
+  else if (request.url === '/speech/transcriptions' && request.method === 'POST') {
+    // A real provider takes a moment: long enough for the composer to show it is transcribing.
+    for await (const chunk of request) void chunk;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
     response.end(JSON.stringify({ text: 'Голос услышан' }));
-  else if (request.url?.startsWith('/health'))
+  } else if (request.url?.startsWith('/health'))
     response.end(
       JSON.stringify({
         status: 'ok',

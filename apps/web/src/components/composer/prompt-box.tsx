@@ -207,6 +207,7 @@ export function PromptField({
   activeDescendant,
   expanded,
   submitOnEnter = true,
+  readOnly = false,
   maxRows = 5,
 }: {
   value: string;
@@ -222,6 +223,8 @@ export function PromptField({
   activeDescendant?: string;
   expanded?: boolean;
   submitOnEnter?: boolean;
+  /** Busy with something else for a moment (a recording turning into text): no typing. */
+  readOnly?: boolean;
   maxRows?: number;
 }) {
   const { aurora, size } = usePromptBoxContext();
@@ -263,6 +266,8 @@ export function PromptField({
       onSelect={onSelect}
       style={{ maxHeight: `calc(${maxRows}lh + 0.5rem)` }}
       placeholder={placeholder}
+      readOnly={readOnly}
+      aria-busy={readOnly || undefined}
       onChange={(event) => {
         onValueChange(event.currentTarget.value);
         aurora.kick();
@@ -272,10 +277,10 @@ export function PromptField({
         if (event.defaultPrevented) return;
         if (!isSubmitKey({ ...event, isComposing: event.nativeEvent.isComposing })) return;
         event.preventDefault();
-        if (submitOnEnter) event.currentTarget.form?.requestSubmit();
+        if (submitOnEnter && !readOnly) event.currentTarget.form?.requestSubmit();
       }}
       className={cn(
-        'w-full resize-none overflow-y-auto bg-transparent px-1.5 pt-1 text-foreground outline-none placeholder:text-muted-foreground max-sm:text-base',
+        'w-full resize-none overflow-y-auto bg-transparent px-1.5 pt-1 text-foreground transition-opacity duration-200 outline-none placeholder:text-muted-foreground read-only:opacity-60 max-sm:text-base',
         FIELD_SIZE[size],
       )}
     />
