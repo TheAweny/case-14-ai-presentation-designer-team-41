@@ -1,0 +1,15 @@
+# Answers one question for the chat coordinator. Search stays outside the five-minute
+# generation. Call, output, and deadline caps are enforced by the research delegate.
+
+id: researcher
+version: 0.1.1
+description: 'Research child of the chat: one question, sources, and a short evidence summary.'
+modelId: assistant-default
+
+generation:
+  temperature: 0.3
+  topP: 0.95
+  maxOutputTokens: 4096
+
+outputSchema: ChatTurn
+instructionsFile: instructions.md

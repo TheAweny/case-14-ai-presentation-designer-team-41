@@ -1,0 +1,1 @@
+Search for the one question you were given and pass that question as the query. The result lists addresses and source kinds; an address is not evidence until `fetch_source` reads it, and only an allowed kind may be opened. Do not treat the listing as the answer, and do not start another researcher.

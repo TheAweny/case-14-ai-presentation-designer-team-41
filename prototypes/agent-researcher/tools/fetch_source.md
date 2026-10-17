@@ -1,0 +1,1 @@
+Read one allowed address and take a short quote from that page. `url` is the address returned by search. Cite the claim with that address and the quote, or say the fact is missing when the page does not contain it. The full page is not the answer, and this tool does not search or call another researcher.
