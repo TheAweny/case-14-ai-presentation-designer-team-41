@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AgentGeneration, ReasoningCapability, ReasoningEffort } from '@lct/contracts';
 import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js';
+import { CompatibleRequests, refusedParameter } from '../models/compatibility.js';
 
 export interface TextProvider {
   readonly model: string;
@@ -235,7 +236,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     outputTokens: number;
     provider: string;
   }[] = [];
-  private readonly fetchImpl: typeof fetch;
+  private readonly requests: CompatibleRequests;
   private readonly endpoint: string;
   private readonly provider: string;
   private readonly limiter: RequestLimiter;
@@ -259,7 +260,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     this.provider = url.hostname;
     this.model = options.model;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requests = new CompatibleRequests(options.fetchImpl);
     this.limiter = options.limiter ?? requests;
   }
 
@@ -280,7 +281,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     );
     const system = answerFormat
       ? `${instructions}\n\n${answerFormat.format.replace('{{schema}}', JSON.stringify(outputSchema))}`
-      : instructions;
+      : `${instructions}\n\n${JSON.stringify(outputSchema)}`;
     // An answer that missed the schema, with what is wrong, while it is being repaired. A model
     // is asked to repair once; after that a miss is drawn again from scratch.
     let repair: { answer: string; problems: string } | null = null;
@@ -297,19 +298,21 @@ export class OpenAICompatibleProvider implements TextProvider {
       let wait = 500;
       try {
         signal.throwIfAborted();
-        const response = await this.fetchImpl(this.endpoint, {
-          method: 'POST',
-          headers: {
-            ...this.options.headers,
-            ...(this.options.apiKey.trim()
-              ? { Authorization: `Bearer ${this.options.apiKey}` }
-              : {}),
-            'Content-Type': 'application/json',
+        const response = await this.requests.post(
+          this.endpoint,
+          {
+            headers: {
+              ...this.options.headers,
+              ...(this.options.apiKey.trim()
+                ? { Authorization: `Bearer ${this.options.apiKey}` }
+                : {}),
+              'Content-Type': 'application/json',
+            },
+            // A redirect would carry the key to wherever the server points; refuse it instead.
+            redirect: 'error',
+            signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
           },
-          // A redirect would carry the key to wherever the server points; refuse it instead.
-          redirect: 'error',
-          signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
-          body: JSON.stringify({
+          {
             model: this.model,
             seed: this.options.seed ?? 42,
             ...(samplingAllowed(this.options.reasoning, reasoning)
@@ -338,15 +341,16 @@ export class OpenAICompatibleProvider implements TextProvider {
                   ]
                 : []),
             ],
-          }),
-        });
+          },
+        );
         if (!response.ok) {
-          await response.body?.cancel();
+          const detail = await response.text().catch(() => '');
           if (!BUSY_STATUSES.has(response.status) || busy >= BUSY_RETRIES) {
             throw new Error(
               `Model API HTTP ${response.status} for ${this.model}` +
                 (busy ? ` after ${busy} retries` : '') +
-                '; no alternate model was used.',
+                '; no alternate model was used.' +
+                refusedParameter(detail),
             );
           }
           wait = retryDelay(busy++, response.headers.get('retry-after'));

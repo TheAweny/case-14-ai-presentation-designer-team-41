@@ -73,6 +73,9 @@ export interface ModelSettingsStore {
    */
   getServerModels(baseUrl: string): Promise<readonly string[] | null>;
   setServerModels(baseUrl: string, enabledModels: readonly string[] | null): Promise<void>;
+  /** The last check of the server connection at this address; null — never checked. */
+  getServerCheck(baseUrl: string): Promise<ConnectionCheck | null>;
+  setServerCheck(baseUrl: string, check: ConnectionCheck): Promise<void>;
   getCapability(baseUrl: string, modelId: string): Promise<StoredCapability | null>;
   /** Everything found for the models behind one server address, by model id. */
   listCapabilities(baseUrl: string): Promise<ReadonlyMap<string, StoredCapability>>;
@@ -214,7 +217,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   async setRole(role: StoredRole, owner: RoleOwner) {
     await this.pool.query(
       `INSERT INTO model_role_assignments (role, kind, connection_id, model_id, owner_id)
-       VALUES ($1, $2, $3::jsonb, $4, $5)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (role, COALESCE(owner_id, '')) DO UPDATE SET
          kind = EXCLUDED.kind, connection_id = EXCLUDED.connection_id,
          model_id = EXCLUDED.model_id, updated_at = now()`,
@@ -257,6 +260,22 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
        ON CONFLICT (base_url) DO UPDATE SET
          enabled_models = EXCLUDED.enabled_models, updated_at = now()`,
       [baseUrl, enabledModels === null ? null : JSON.stringify(enabledModels)],
+    );
+  }
+
+  async getServerCheck(baseUrl: string) {
+    const result = await this.pool.query<{ last_check: ConnectionCheck | null }>(
+      'SELECT last_check FROM model_server_connection WHERE base_url = $1',
+      [baseUrl],
+    );
+    return result.rows[0]?.last_check ?? null;
+  }
+
+  async setServerCheck(baseUrl: string, check: ConnectionCheck) {
+    await this.pool.query(
+      `INSERT INTO model_server_connection (base_url, last_check) VALUES ($1, $2::jsonb)
+       ON CONFLICT (base_url) DO UPDATE SET last_check = EXCLUDED.last_check, updated_at = now()`,
+      [baseUrl, JSON.stringify(check)],
     );
   }
 
@@ -324,6 +343,7 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
   readonly roles = new Map<string, Map<PipelineRole, StoredRole>>();
   readonly events: SettingsEvent[] = [];
   readonly serverModels = new Map<string, readonly string[] | null>();
+  readonly serverChecks = new Map<string, ConnectionCheck>();
   /** Probe findings by `${baseUrl} ${modelId}`. */
   readonly capabilities = new Map<string, StoredCapability>();
 
@@ -383,6 +403,14 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
 
   async setServerModels(baseUrl: string, enabledModels: readonly string[] | null) {
     this.serverModels.set(baseUrl, enabledModels);
+  }
+
+  async getServerCheck(baseUrl: string) {
+    return this.serverChecks.get(baseUrl) ?? null;
+  }
+
+  async setServerCheck(baseUrl: string, check: ConnectionCheck) {
+    this.serverChecks.set(baseUrl, check);
   }
 
   async getCapability(baseUrl: string, modelId: string) {

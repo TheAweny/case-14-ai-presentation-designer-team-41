@@ -280,6 +280,24 @@ function PickerValue({
   connections: readonly ModelConnection[];
 }) {
   const t = useTranslations('settings.models.roles');
+  // Dictation without a model of its own takes the first speech model of the connections, as
+  // the API does: the row says which one rather than "not assigned".
+  const auto =
+    assignment.kind === 'unassigned' && assignment.role === 'speech'
+      ? connections
+          .map((connection) => ({ connection, modelId: modelsForRole(connection, 'speech')[0] }))
+          .find((item) => item.modelId !== undefined)
+      : undefined;
+  if (auto?.modelId) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5" title={auto.modelId}>
+        <span className="truncate font-medium">{shortModelName(auto.modelId)}</span>
+        <span className="max-w-24 shrink-0 truncate text-muted-foreground">
+          {t('auto', { connection: auto.connection.name })}
+        </span>
+      </span>
+    );
+  }
   if (assignment.kind === 'disabled') {
     return (
       <span className="truncate text-muted-foreground">

@@ -1069,7 +1069,9 @@ export class ChatsService implements OnApplicationShutdown {
             kind:
               result.reason === 'context_budget' || result.reason === 'length'
                 ? 'context'
-                : 'unavailable',
+                : result.reason === 'protocol_error'
+                  ? 'unsupported'
+                  : 'unavailable',
             modelId: model.model,
           },
         );

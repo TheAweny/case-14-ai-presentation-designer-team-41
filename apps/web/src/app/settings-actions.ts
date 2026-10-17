@@ -114,7 +114,6 @@ export async function setRoleAction(assignment: RoleAssignment): Promise<Setting
   }
 }
 
-/** Какие модели подключения доступны. `null` снимает ограничение. */
 /** Отметить вручную, что умеет модель; `kinds: null` — как говорит провайдер. */
 export async function setModelKindsAction(
   connectionId: string,
@@ -129,6 +128,7 @@ export async function setModelKindsAction(
   }
 }
 
+/** Какие модели подключения доступны. `null` снимает ограничение. */
 export async function setConnectionModelsAction(
   input: ConnectionModelsInput,
 ): Promise<SettingsResult> {

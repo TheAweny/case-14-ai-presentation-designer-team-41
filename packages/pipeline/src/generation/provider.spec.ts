@@ -463,3 +463,70 @@ describe('a model that ignores structured output', () => {
     });
   });
 });
+
+describe('provider format compatibility', () => {
+  it('preserves dictionary keys and validates the original schema after strict-format refusal', async () => {
+    const original = z.object({ sourceEvidence: z.record(z.string(), z.string()) });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ error: { param: 'text.format.schema' } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            { message: { content: '{"sourceEvidence":{"a.b":"source"}}' }, finish_reason: 'stop' },
+          ],
+        }),
+      );
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      answerFormat: { format: '{{schema}}', repair: '{{problems}}' },
+    });
+    expect(await provider.generate('planner', '', {}, original, AbortSignal.timeout(1000))).toEqual(
+      { sourceEvidence: { 'a.b': 'source' } },
+    );
+    const body = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body));
+    expect(body.response_format).toEqual({ type: 'json_object' });
+    expect(body.messages[0].content).toContain('additionalProperties');
+    expect(body.model).toBe(settings.model);
+  });
+
+  it('does not accept invalid content just because the provider rejected the schema', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ error: { param: 'text.format.schema' } }, { status: 400 }),
+      )
+      .mockImplementation(async () =>
+        Response.json({
+          choices: [{ message: { content: '{"ok":"wrong"}' }, finish_reason: 'stop' }],
+        }),
+      );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    await expect(
+      provider.generate('writer', '', {}, schema, AbortSignal.timeout(2000)),
+    ).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  it('reports the rejected parameter without exposing a provider message or key', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { error: { param: 'reasoning_effort', message: 'secret-provider-response' } },
+          { status: 400 },
+        ),
+      );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    const error = await provider
+      .generate('writer', '', {}, schema, AbortSignal.timeout(1000))
+      .catch((error: Error) => error);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('reasoning_effort');
+    expect((error as Error).message).not.toContain('secret-provider-response');
+    expect((error as Error).message).not.toContain(settings.apiKey);
+  });
+});

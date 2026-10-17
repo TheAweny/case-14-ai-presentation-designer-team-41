@@ -1,4 +1,5 @@
 import type { ModelFailure } from '@lct/contracts';
+import { refusedParameter } from '../models/compatibility.js';
 
 /** Public metadata only; provider bodies and credentials never leave this boundary. */
 export class ModelRequestError extends Error {
@@ -49,11 +50,14 @@ export function modelHttpFailure(
       : Number.isFinite(delay)
         ? Date.now() + delay * 1000
         : Date.parse(retryAfter);
-  return new ModelRequestError(`Model API HTTP ${status} for ${modelId}.`, {
-    kind,
-    modelId,
-    ...(Number.isFinite(retryAt) ? { retryAt: Math.max(Date.now(), retryAt) } : {}),
-  });
+  return new ModelRequestError(
+    `Model API HTTP ${status} for ${modelId}.${refusedParameter(body)}`,
+    {
+      kind,
+      modelId,
+      ...(Number.isFinite(retryAt) ? { retryAt: Math.max(Date.now(), retryAt) } : {}),
+    },
+  );
 }
 
 export function modelFailureOf(error: unknown): ModelFailure {

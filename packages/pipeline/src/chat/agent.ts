@@ -256,6 +256,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     signal.addEventListener('abort', stopStep, { once: true });
     const before = writer.openText;
     let said = '';
+    const provisional = new Map<number, string>();
     const step$ = options.model.step({
       messages: context,
       tools: options.specs,
@@ -267,7 +268,16 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
           stepControl.abort(new LoopCut());
           return;
         }
+        const previous = writer.openText;
         writer.text(delta);
+        const current = writer.openText;
+        if (current && !provisional.has(current.index))
+          provisional.set(current.index, previous?.index === current.index ? previous.text : '');
+      },
+      onTextReset: () => {
+        for (const [index, text] of provisional) writer.retract(index, text);
+        provisional.clear();
+        said = '';
       },
       onToolCall: (name) => {
         if (stepControl.signal.aborted) return;

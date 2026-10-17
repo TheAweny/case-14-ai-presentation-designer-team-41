@@ -363,7 +363,7 @@
         },
         "speech": {
           "name": "Voice transcription",
-          "description": "Turns dictation into message text. Without an assignment a Whisper model of a connection is used, if it has one. Off hides the microphone.",
+          "description": "Turns dictation into message text. Without an assignment the first speech model of the connections is used. \"No speech transcription\" hides the microphone.",
           "hint": "Needs a model with an OpenAI-compatible POST /audio/transcriptions."
         }
       },
@@ -371,7 +371,8 @@
       "inherited": "Default for everyone — pick a model to use your own.",
       "writerDefault": "Use primary model",
       "primaryName": "Primary model",
-      "primaryDescription": "Used for chat, planning, writing and text review unless overridden."
+      "primaryDescription": "Used for chat, planning, writing and text review unless overridden.",
+      "auto": "auto · {connection}"
     },
     "advanced": "Customize models for individual tasks",
     "separateActive": "Separate task models are configured",
