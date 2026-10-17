@@ -196,12 +196,29 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: BuildRun }) {
   const tv = useTranslations('assistant.variants');
   const [gallery, setGallery] = useState<{ start: number; key: number } | null>(null);
   const running = stage.state === 'running' && run.phase === 'running';
+  // Уже остановленный прогон не показывает «идёт». Пропуск — этап плана, который успешная
+  // сборка не запускала. Pending на failed/cancelled — «не начат», это не пропуск.
+  const stopped = run.phase === 'failed' || run.phase === 'cancelled';
   const state =
-    stage.state === 'running' && !running
-      ? run.phase === 'failed'
-        ? 'failed'
-        : 'cancelled'
-      : stage.state;
+    stage.state === 'skipped'
+      ? 'cancelled'
+      : stage.state === 'running' && !running
+        ? run.phase === 'failed'
+          ? 'failed'
+          : 'cancelled'
+        : stage.state;
+  const announced =
+    stage.state === 'skipped'
+      ? 'skipped'
+      : stage.state === 'pending' && stopped
+        ? 'notStarted'
+        : stage.state === 'running' && !running
+          ? run.phase === 'failed'
+            ? 'failed'
+            : 'cancelled'
+          : stage.state;
+  const visibleState =
+    announced === 'skipped' || announced === 'notStarted' ? t(`stageStates.${announced}`) : null;
   const count =
     running && stage.total !== null && stage.total > 1
       ? t('stageCount', { done: stage.done ?? 0, total: stage.total })
@@ -213,7 +230,12 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: BuildRun }) {
   const total = slides[0]?.total ?? stage.total ?? null;
   const designSystem = slides[0]?.designSystem;
   const variant = slides[0]?.slide.variant;
-  const showSlides = layingOut && stage.state !== 'pending' && total !== null && designSystem;
+  const showSlides =
+    layingOut &&
+    stage.state !== 'pending' &&
+    stage.state !== 'skipped' &&
+    total !== null &&
+    designSystem;
 
   return (
     <motion.li
@@ -234,7 +256,11 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: BuildRun }) {
         <CallChip active={running} failed={stage.state === 'failed'}>
           <span className="shrink-0">{t(`stages.${stage.stage}`)}</span>
         </CallChip>
-        <span className="sr-only">, {t(`stageStates.${stage.state}`)}</span>
+        {visibleState ? (
+          <span className="min-w-0 truncate text-muted-foreground">{visibleState}</span>
+        ) : (
+          <span className="sr-only">, {t(`stageStates.${announced}`)}</span>
+        )}
         {detail ? (
           <span className="min-w-0 truncate text-muted-foreground">
             <span aria-hidden>· </span>

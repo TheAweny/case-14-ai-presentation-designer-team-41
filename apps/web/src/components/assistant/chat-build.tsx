@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { jobEventSchema, type ChatPart } from '@lct/contracts';
 import { apiFetch } from '@/lib/api';
-import { generationProgress } from '@/lib/deck-generator';
+import { completeProgress, generationProgress, plannedStages } from '@/lib/deck-generator';
 import { TaskGlyph } from './task-glyph';
 import { SpinnerIcon } from '@/components/ui/icons';
 import type { DeckResult } from '@/lib/variant-review';
@@ -31,9 +31,12 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
   const { runId, status } = part;
   const [history, setHistory] = useState<BuildRun | null>(null);
   const { startedAt, finishedAt } = part;
-  // A finished build has no live subscription after reload. Read its saved stages once.
+  // A finished build has no live subscription after reload. Replay saved events on the same
+  // planned stages as a live run. Done without a terminal event still closes unobserved stages;
+  // failed and cancelled stay as observed. Depend on presence, not the run object.
+  const hasLiveRun = run !== undefined;
   useEffect(() => {
-    if (!runId || run || status === 'running' || status === 'preparing') return;
+    if (!runId || hasLiveRun || status === 'running' || status === 'preparing') return;
     const controller = new AbortController();
     void apiFetch(`/runs/${encodeURIComponent(runId)}/events?after=-1`, {
       signal: controller.signal,
@@ -42,10 +45,8 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
         if (!response.ok) return;
         const events = jobEventSchema.array().parse(await response.json());
         if (controller.signal.aborted || events.length === 0) return;
-        const stages = [
-          ...new Set(events.flatMap((event) => ('stage' in event ? [event.stage] : []))),
-        ];
-        const progress = generationProgress(stages, events);
+        const observed = generationProgress(plannedStages(), events);
+        const progress = status === 'done' ? completeProgress(observed) : observed;
         setHistory({
           runId,
           phase: status,
@@ -58,7 +59,7 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
       })
       .catch(() => undefined);
     return () => controller.abort();
-  }, [runId, run, status, startedAt, finishedAt]);
+  }, [runId, hasLiveRun, status, startedAt, finishedAt]);
 
   useEffect(() => {
     if (runId === null || status !== 'running') return;

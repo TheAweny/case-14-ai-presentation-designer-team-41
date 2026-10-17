@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { JobEvent } from '@lct/contracts';
 import { createDemoGenerator } from '../mocks/demo-generator';
 import { createDemoLibrary, createDemoLibrarySource } from '../mocks/demo-library';
-import type { DeckGenerator, GenerationRequest } from './deck-generator';
+import type { DeckGenerator, GenerationRequest, GenerationResult } from './deck-generator';
 import { createGenerationRuns } from './generation-runs';
 
 const request: GenerationRequest = {
@@ -19,6 +20,28 @@ const ids = () => {
 };
 
 const demo = () => createDemoGenerator({ library: createDemoLibrarySource(), stepMs: 10 });
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type Draft = DistributiveOmit<JobEvent, 'schemaVersion' | 'runId' | 'seq' | 'at'>;
+
+function event(seq: number, draft: Draft): JobEvent {
+  return { ...draft, schemaVersion: 1, runId: 'run', seq, at: '2026-09-25T09:00:00Z' } as JobEvent;
+}
+
+const RESULT: GenerationResult = { variants: [], templateSubstituted: false };
+
+function states(
+  run:
+    | {
+        readonly progress: {
+          readonly stages: readonly { readonly stage: string; readonly state: string }[];
+        };
+      }
+    | undefined,
+) {
+  if (!run) throw new Error('Прогон не найден');
+  return run.progress.stages.map((stage) => [stage.stage, stage.state]);
+}
 
 describe('createGenerationRuns', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -92,6 +115,97 @@ describe('createGenerationRuns', () => {
   it('неизвестный прогон — undefined', () => {
     expect(createGenerationRuns(demo(), ids()).get('nope')).toBeUndefined();
   });
+
+  it('успех без события done закрывает идущий этап и пропускает будущие', async () => {
+    const generator: DeckGenerator = {
+      profilesUploadedTemplates: false,
+      generate(_request, onEvent) {
+        onEvent(event(0, { type: 'stage-finished', stage: 'planning', durationMs: 1 }));
+        onEvent(event(1, { type: 'stage-started', stage: 'laying-out' }));
+        return Promise.resolve(RESULT);
+      },
+    };
+    const runs = createGenerationRuns(generator, ids(), () => 50);
+    const runId = runs.start(request, '/');
+    await vi.advanceTimersByTimeAsync(0);
+    const run = runs.get(runId);
+    expect(run?.phase).toBe('done');
+    expect(run?.result).toBe(RESULT);
+    expect(run?.finishedAt).toBe(50);
+    expect(run?.progress).toMatchObject({ finished: true, percent: 100 });
+    expect(states(run)).toEqual([
+      ['planning', 'done'],
+      ['laying-out', 'done'],
+      ['rendering', 'skipped'],
+      ['auditing', 'skipped'],
+      ['exporting', 'skipped'],
+    ]);
+  });
+
+  it('поздний успех после отмены не закрывает ход и не пропускает будущие этапы', async () => {
+    let finish!: (result: GenerationResult) => void;
+    const generator: DeckGenerator = {
+      profilesUploadedTemplates: false,
+      generate(_request, onEvent) {
+        onEvent(event(0, { type: 'stage-started', stage: 'planning' }));
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    };
+    const runs = createGenerationRuns(generator, ids(), () => 20);
+    const runId = runs.start(request, '/');
+    runs.cancel(runId);
+    const cancelled = runs.get(runId);
+    finish(RESULT);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runs.get(runId)).toBe(cancelled);
+    expect(cancelled?.phase).toBe('cancelled');
+    expect(cancelled?.result).toBeNull();
+    expect(cancelled?.progress.finished).toBe(false);
+    expect(states(cancelled)).toEqual([
+      ['planning', 'running'],
+      ['laying-out', 'pending'],
+      ['rendering', 'pending'],
+      ['auditing', 'pending'],
+      ['exporting', 'pending'],
+    ]);
+  });
+
+  it('сбой оставляет будущие этапы в ожидании', async () => {
+    const generator: DeckGenerator = {
+      profilesUploadedTemplates: false,
+      generate(_request, onEvent) {
+        onEvent(event(0, { type: 'stage-finished', stage: 'planning', durationMs: 1 }));
+        onEvent(event(1, { type: 'stage-started', stage: 'laying-out' }));
+        onEvent(
+          event(2, {
+            type: 'failed',
+            stage: 'laying-out',
+            code: 'engine-failed',
+            message: 'Сборка остановилась',
+            retryable: true,
+          }),
+        );
+        return Promise.reject(new Error('engine-failed'));
+      },
+    };
+    const runs = createGenerationRuns(generator, ids(), () => 30);
+    const runId = runs.start(request, '/');
+    await vi.advanceTimersByTimeAsync(0);
+    const run = runs.get(runId);
+    expect(run?.phase).toBe('failed');
+    expect(run?.failure).toMatchObject({ stage: 'laying-out', code: 'engine-failed' });
+    expect(run?.progress.finished).toBe(false);
+    expect(run?.progress.percent).not.toBe(100);
+    expect(states(run)).toEqual([
+      ['planning', 'done'],
+      ['laying-out', 'failed'],
+      ['rendering', 'pending'],
+      ['auditing', 'pending'],
+      ['exporting', 'pending'],
+    ]);
+  });
 });
 
 describe('прогон на сервере', () => {
@@ -133,6 +247,41 @@ describe('прогон на сервере', () => {
     await vi.runAllTimersAsync();
     expect(follow).toHaveBeenCalledTimes(1);
     expect(runs.get('run-old')?.phase).toBe('done');
+  });
+
+  it('follow без события done закрывает идущий этап и пропускает будущие', async () => {
+    const followRun = vi.fn<NonNullable<DeckGenerator['follow']>>((_run, onEvent) => {
+      onEvent(event(0, { type: 'stage-finished', stage: 'planning', durationMs: 1 }));
+      onEvent(event(1, { type: 'stage-started', stage: 'laying-out' }));
+      return Promise.resolve(RESULT);
+    });
+    const runs = createGenerationRuns(
+      {
+        profilesUploadedTemplates: false,
+        generate: () => Promise.reject(new Error('generate')),
+        follow: followRun,
+      },
+      ids(),
+      () => 70,
+    );
+    runs.follow('run-http', { request, returnHref: '/', server: SERVER, startedAt: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    const run = runs.get('run-http');
+    expect(followRun).toHaveBeenCalledTimes(1);
+    expect(run).toMatchObject({
+      phase: 'done',
+      result: RESULT,
+      startedAt: 1000,
+      finishedAt: 70,
+      progress: { finished: true, percent: 100 },
+    });
+    expect(states(run)).toEqual([
+      ['planning', 'done'],
+      ['laying-out', 'done'],
+      ['rendering', 'skipped'],
+      ['auditing', 'skipped'],
+      ['exporting', 'skipped'],
+    ]);
   });
 
   it('генератор без сервера досмотреть не может — прогон с ошибкой, её можно повторить', async () => {

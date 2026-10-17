@@ -138,11 +138,11 @@ export interface DeckGenerator {
 
 /**
  * Этапы, которые пройдёт прогон. Разбора шаблона среди них нет: профиль извлекается один раз
- * при импорте и кешируется. Экспорта тоже нет: результат — колоды для редактора, файлы
- * собираются потом, по запросу.
+ * при импорте и кешируется. Очереди в плане нет: она появляется только по фактическому событию.
+ * Экспорт есть всегда — текущий сервер собирает файлы в том же прогоне.
  */
 export function plannedStages(): readonly JobStage[] {
-  return ['queued', 'planning', 'laying-out', 'rendering', 'auditing'];
+  return ['planning', 'laying-out', 'rendering', 'auditing', 'exporting'];
 }
 
 // Файлы
@@ -221,7 +221,7 @@ export function hasContent(brief: string, files: readonly unknown[]): boolean {
 
 // Ход прогона
 
-export type GenerationStageState = 'pending' | 'running' | 'done' | 'failed';
+export type GenerationStageState = 'pending' | 'running' | 'done' | 'failed' | 'skipped';
 
 export interface GenerationStage {
   readonly stage: JobStage;
@@ -277,8 +277,7 @@ export function initialProgress(planned: readonly JobStage[]): GenerationProgres
 /**
  * Одно событие поверх хода прогона — редьюсер, чистая функция. Событие с уже виденным `seq`
  * пропускается: после переподключения сервер может повторить хвост. Этап, о котором заранее не
- * знали, но сервер о нём сообщил, добавляется в конец: прогресс показывает то, что происходит,
- * а не то, что ждали.
+ * знали, но сервер о нём сообщил, встаёт на своё место в порядке пайплайна, а не в конец списка.
  */
 export function applyEvent(progress: GenerationProgress, event: JobEvent): GenerationProgress {
   if (event.seq <= progress.lastSeq) return progress;
@@ -288,28 +287,37 @@ export function applyEvent(progress: GenerationProgress, event: JobEvent): Gener
     case 'stage-started':
       return withStages(
         next,
-        updateStage(next.stages, event.stage, (stage) => ({ ...stage, state: 'running' })),
+        closeRunningQueue(
+          updateStage(next.stages, event.stage, (stage) => ({ ...stage, state: 'running' })),
+          event.stage,
+        ),
       );
     case 'stage-progress':
       return withStages(
         next,
-        updateStage(next.stages, event.stage, (stage) => ({
-          ...stage,
-          state: stage.state === 'pending' ? 'running' : stage.state,
-          done: Math.min(event.done, event.total),
-          total: event.total,
-          note: event.note,
-        })),
+        closeRunningQueue(
+          updateStage(next.stages, event.stage, (stage) => ({
+            ...stage,
+            state: stage.state === 'pending' ? 'running' : stage.state,
+            done: Math.min(event.done, event.total),
+            total: event.total,
+            note: event.note,
+          })),
+          event.stage,
+        ),
       );
     case 'stage-finished':
       return withStages(
         next,
-        updateStage(next.stages, event.stage, (stage) => ({
-          ...stage,
-          state: 'done',
-          done: stage.total ?? stage.done,
-          note: '',
-        })),
+        closeRunningQueue(
+          updateStage(next.stages, event.stage, (stage) => ({
+            ...stage,
+            state: 'done',
+            done: stage.total ?? stage.done,
+            note: '',
+          })),
+          event.stage,
+        ),
       );
     case 'artifact-ready':
       if (event.kind !== 'preview' || event.variant === null) return next;
@@ -337,15 +345,29 @@ export function applyEvent(progress: GenerationProgress, event: JobEvent): Gener
         updateStage(next.stages, event.stage, (stage) => ({ ...stage, state: 'failed' })),
       );
     case 'done':
-      return {
-        ...next,
-        finished: true,
-        percent: 100,
-        stages: next.stages.map((stage) => ({ ...stage, state: 'done', note: '' })),
-      };
+      return completeProgress(next);
     default:
       return next;
   }
+}
+
+/**
+ * Успешное закрытие хода, в том числе когда терминальное `done` потерялось, а статус прогона
+ * уже успешный. Не начатые этапы — пропуск, а не выдуманный успех. Наблюдавшийся `running`
+ * досматривается. `done` и `failed` не переписываются: сбой нельзя превратить в ложный успех.
+ * Пропуск не выводится из порядка enum — только из состояния `pending` на момент завершения.
+ */
+export function completeProgress(progress: GenerationProgress): GenerationProgress {
+  const stages = progress.stages.map(finishStage);
+  const sameStages = stages.every((stage, index) => stage === progress.stages[index]);
+  if (progress.finished && progress.percent === 100 && sameStages) return progress;
+  return { ...progress, finished: true, percent: 100, stages };
+}
+
+function finishStage(stage: GenerationStage): GenerationStage {
+  if (stage.state === 'pending') return { ...stage, state: 'skipped', note: '' };
+  if (stage.state === 'running') return { ...stage, state: 'done', note: '' };
+  return stage.note === '' ? stage : { ...stage, note: '' };
 }
 
 /** Ход прогона по всем событиям сразу — та же свёртка, что идёт по одному событию. */
@@ -378,6 +400,26 @@ function updateStage(
   return stages.map((item, at) => (at === index ? change(current) : item));
 }
 
+/**
+ * Старый сервер открывает очередь и сразу начинает другой этап, не прислав `stage-finished`.
+ * Реальная работа — `stage-started`, `stage-progress` или `stage-finished` другого этапа —
+ * закрывает только `queued` в `running`. Параллельный этап не трогается. Предупреждение и
+ * прочая диагностика сюда не попадают, а не начатая очередь остаётся `pending`.
+ */
+function closeRunningQueue(
+  stages: readonly GenerationStage[],
+  stage: JobStage,
+): readonly GenerationStage[] {
+  if (stage === 'queued') return stages;
+  const queued = stages.find((item) => item.stage === 'queued');
+  if (queued === undefined || queued.state !== 'running') return stages;
+  return stages.map((item) =>
+    item.stage === 'queued'
+      ? { ...item, state: 'done', done: item.total ?? item.done, note: '' }
+      : item,
+  );
+}
+
 function withStages(
   progress: GenerationProgress,
   stages: readonly GenerationStage[],
@@ -387,12 +429,13 @@ function withStages(
 
 function percentOf(stages: readonly GenerationStage[], finished: boolean): number {
   if (finished) return 100;
-  if (stages.length === 0) return 0;
-  const share = stages.reduce((sum, stage) => {
+  const counted = stages.filter((stage) => stage.state !== 'skipped');
+  if (counted.length === 0) return 0;
+  const share = counted.reduce((sum, stage) => {
     if (stage.state === 'done') return sum + 1;
     if (stage.state !== 'pending' && stage.total) return sum + (stage.done ?? 0) / stage.total;
     return sum;
   }, 0);
   // Не 100, пока сервер не сказал `done`: последний этап может быть длинным.
-  return Math.min(99, Math.floor((share / stages.length) * 100));
+  return Math.min(99, Math.floor((share / counted.length) * 100));
 }

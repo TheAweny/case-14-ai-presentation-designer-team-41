@@ -1,6 +1,7 @@
 import type { JobEvent } from '@lct/contracts';
 import {
   applyEvent,
+  completeProgress,
   initialProgress,
   plannedStages,
   type DeckGenerator,
@@ -121,7 +122,14 @@ export function createGenerationRuns(
       .then((result) => {
         if (!current()) return;
         controllers.delete(runId);
-        update(runId, () => ({ phase: 'done', result, finishedAt: now() }));
+        // follow читает события раньше, чем status становится done, и события done может не быть.
+        // Успешный результат сам закрывает ход. Ошибка и отмена этот путь не берут.
+        update(runId, ({ progress }) => ({
+          phase: 'done',
+          result,
+          finishedAt: now(),
+          progress: completeProgress(progress),
+        }));
       })
       .catch((reason: unknown) => {
         if (!current()) return;

@@ -33,7 +33,10 @@
       "pending": "waiting",
       "running": "in progress",
       "done": "done",
-      "failed": "failed"
+      "failed": "failed",
+      "cancelled": "Stopped",
+      "skipped": "Skipped",
+      "notStarted": "Not started"
     },
     "stageCount": "{done} of {total}",
     "rateLimited": "The model provider rejected requests due to a limit (HTTP 429). The build has stopped. Retry later or choose another model in settings. Your plan is saved.",

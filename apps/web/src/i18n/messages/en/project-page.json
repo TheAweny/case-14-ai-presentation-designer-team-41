@@ -124,7 +124,8 @@
         "pending": "waiting",
         "running": "in progress",
         "done": "done",
-        "failed": "failed"
+        "failed": "failed",
+        "skipped": "skipped"
       }
     },
     "empty": {
