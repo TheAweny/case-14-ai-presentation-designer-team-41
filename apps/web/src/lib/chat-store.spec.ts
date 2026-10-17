@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ChatEvent, ChatMessage } from '@lct/contracts';
-import { createChatStore } from './chat-store';
+import type { AssistantChatMessage, ChatEvent, ChatMessage, UserChatMessage } from '@lct/contracts';
+import { canRetryAnswer, createChatStore } from './chat-store';
 import { applyChatEvent, readChatEvents } from './chat-stream';
 
 const USER = '00000000-0000-4000-8000-000000000001';
 const ANSWER = '00000000-0000-4000-8000-000000000002';
 
-const user: ChatMessage = {
+const user: UserChatMessage = {
   role: 'user',
   id: USER,
   text: 'Привет',
@@ -14,7 +14,7 @@ const user: ChatMessage = {
   mode: 'chat',
   createdAt: 1,
 };
-const answer: ChatMessage = {
+const answer: AssistantChatMessage = {
   role: 'assistant',
   id: ANSWER,
   parts: [],
@@ -22,10 +22,118 @@ const answer: ChatMessage = {
   createdAt: 2,
 };
 
+describe('research turn recovery', () => {
+  it('allows retry after a failed answer that only researched materials', () => {
+    expect(
+      canRetryAnswer([
+        user,
+        {
+          ...answer,
+          status: 'failed',
+          parts: [
+            {
+              type: 'tool',
+              callId: 'research',
+              name: 'research_materials',
+              input: {},
+              status: 'done',
+              output: {},
+            },
+          ],
+        },
+      ]),
+    ).toBe(true);
+  });
+
+  it('refuses answer retry after research followed by a build', () => {
+    expect(
+      canRetryAnswer([
+        user,
+        {
+          ...answer,
+          status: 'failed',
+          parts: [
+            {
+              type: 'tool',
+              callId: 'research',
+              name: 'research_materials',
+              input: {},
+              status: 'done',
+              output: {},
+            },
+            {
+              type: 'tool',
+              callId: 'build',
+              name: 'build_deck',
+              input: {},
+              status: 'done',
+              output: {},
+            },
+          ],
+        },
+      ]),
+    ).toBe(false);
+  });
+});
+
 function sse(events: ChatEvent[]): Response {
   return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
     headers: { 'content-type': 'text/event-stream' },
   });
+}
+
+const CONTINUATION = 'Продолжи с места остановки, учитывая уже выполненные действия.';
+const CHAT_MODEL = { connectionId: 'conn', modelId: 'base' };
+const PICKED_MODEL = { connectionId: 'picked', modelId: 'replacement' };
+
+function failedChat(chatId: string, running = false) {
+  return {
+    chatId,
+    title: 'Чат',
+    projectId: null,
+    deckIds: [] as string[],
+    deckId: null,
+    mode: 'chat' as const,
+    model: CHAT_MODEL,
+    createdAt: '2026-09-29T00:00:00.000Z',
+    updatedAt: '2026-09-29T00:00:00.000Z',
+    messages: [
+      user,
+      {
+        ...answer,
+        status: 'failed' as const,
+        parts: [{ type: 'error' as const, message: 'stopped' }],
+      },
+    ],
+    running,
+  };
+}
+
+function continuationStream(): Response {
+  return sse([
+    {
+      type: 'message',
+      seq: 0,
+      message: {
+        ...user,
+        role: 'user' as const,
+        id: '00000000-0000-4000-8000-000000000011',
+        text: CONTINUATION,
+      },
+    },
+    {
+      type: 'message',
+      seq: 1,
+      message: {
+        ...answer,
+        role: 'assistant' as const,
+        id: '00000000-0000-4000-8000-000000000012',
+        status: 'done',
+        parts: [{ type: 'text', text: 'Дальше.' }],
+      },
+    },
+    { type: 'turn-end', seq: 2 },
+  ]);
 }
 
 describe('applyChatEvent', () => {
@@ -319,5 +427,111 @@ describe('chat store', () => {
     await expect(
       store.retryVariant('00000000-0000-4000-8000-0000000000c1', 'b', 'dense'),
     ).rejects.toThrow('Only a failed variant can be built again.');
+  });
+
+  it('continues a failed answer as one new message and keeps the draft', async () => {
+    const chatId = '00000000-0000-4000-8000-0000000000c2';
+    const request = vi.fn(async (path: string, _init?: RequestInit) => {
+      if (path === `/chats/${chatId}/turns`) return continuationStream();
+      return Response.json(failedChat(chatId));
+    });
+    const uploadContent = vi.fn(async () => ({ fileId: 'f', name: 'f', size: 0 }));
+    const store = createChatStore({
+      request,
+      uploadContent,
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+    });
+    await store.load(chatId);
+    const file = new File(['notes'], 'notes.md');
+    const kept = {
+      kind: 'file' as const,
+      fileId: '00000000-0000-4000-8000-00000000000f',
+      name: 'kept.md',
+      size: 4,
+    };
+    store.setDraft(chatId, {
+      text: 'unsaved',
+      files: [file],
+      templateFile: null,
+      attachments: [kept],
+    });
+    store.continueAfterFailure(chatId, ANSWER, CONTINUATION, PICKED_MODEL);
+    expect(store.get(chatId)?.pending).toMatchObject({
+      text: CONTINUATION,
+      attachments: [],
+      failed: null,
+    });
+    expect(store.get(chatId)?.draft).toMatchObject({ text: 'unsaved', attachments: [kept] });
+    expect(store.get(chatId)?.draft.files[0]).toBe(file);
+    await vi.waitFor(() => expect(store.get(chatId)?.running).toBe(false));
+    const turns = request.mock.calls.filter(([path]) => String(path).endsWith('/turns'));
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.[1]?.method).toBe('POST');
+    expect(JSON.parse(String(turns[0]?.[1]?.body))).toMatchObject({
+      model: PICKED_MODEL,
+      input: { type: 'message', text: CONTINUATION, attachments: [] },
+    });
+    expect(request.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+    expect(uploadContent).not.toHaveBeenCalled();
+    expect(store.get(chatId)?.model).toEqual(CHAT_MODEL);
+    expect(store.get(chatId)?.draft).toMatchObject({ text: 'unsaved', attachments: [kept] });
+    expect(store.get(chatId)?.draft.files[0]).toBe(file);
+  });
+
+  it('sends the continuation once when the button is clicked twice', async () => {
+    const chatId = '00000000-0000-4000-8000-0000000000c3';
+    const request = vi.fn(async (path: string) => {
+      if (path === `/chats/${chatId}/turns`) return continuationStream();
+      return Response.json(failedChat(chatId));
+    });
+    const store = createChatStore({
+      request,
+      uploadContent: async () => ({ fileId: 'f', name: 'f', size: 0 }),
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+    });
+    await store.load(chatId);
+    store.continueAfterFailure(chatId, ANSWER, CONTINUATION);
+    store.continueAfterFailure(chatId, ANSWER, CONTINUATION);
+    await vi.waitFor(() => expect(store.get(chatId)?.running).toBe(false));
+    expect(request.mock.calls.filter(([path]) => String(path).endsWith('/turns'))).toHaveLength(1);
+  });
+
+  it('does not post for a stale failure card or while a turn is running', async () => {
+    const staleId = '00000000-0000-4000-8000-0000000000c4';
+    const staleRequest = vi.fn(async (_path: string) => Response.json(failedChat(staleId)));
+    const stale = createChatStore({
+      request: staleRequest,
+      uploadContent: async () => ({ fileId: 'f', name: 'f', size: 0 }),
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+    });
+    await stale.load(staleId);
+    stale.continueAfterFailure(staleId, USER, CONTINUATION);
+    expect(
+      staleRequest.mock.calls.filter(([path]) => String(path).endsWith('/turns')),
+    ).toHaveLength(0);
+
+    const busyId = '00000000-0000-4000-8000-0000000000c5';
+    let releaseTurn: (response: Response) => void = (_response): void => undefined;
+    const turnGate = new Promise<Response>((resolve) => {
+      releaseTurn = resolve;
+    });
+    const busyRequest = vi.fn(async (path: string) => {
+      if (path === `/chats/${busyId}/turns`) return turnGate;
+      return Response.json(failedChat(busyId));
+    });
+    const busy = createChatStore({
+      request: busyRequest,
+      uploadContent: async () => ({ fileId: 'f', name: 'f', size: 0 }),
+      uploadTemplate: async () => ({ templateId: 't', name: 't' }),
+    });
+    await busy.load(busyId);
+    busy.continueAfterFailure(busyId, ANSWER, CONTINUATION);
+    await vi.waitFor(() => expect(busy.get(busyId)?.running).toBe(true));
+    busy.continueAfterFailure(busyId, ANSWER, CONTINUATION, PICKED_MODEL);
+    expect(busyRequest.mock.calls.filter(([path]) => String(path).endsWith('/turns'))).toHaveLength(
+      1,
+    );
+    releaseTurn(continuationStream());
+    await vi.waitFor(() => expect(busy.get(busyId)?.running).toBe(false));
   });
 });

@@ -108,12 +108,14 @@
     "list_templates": "Looked at the templates",
     "describe_template": "Studied the template",
     "read_file": "Read the material",
+    "research_materials": "Researched the materials",
     "read_deck": "Read the deck",
     "read_audit": "Looked at the audit",
     "running": {
       "list_templates": "Looking at the templates…",
       "describe_template": "Studying the template…",
       "read_file": "Reading the material…",
+      "research_materials": "Researching the materials…",
       "read_deck": "Reading the deck…",
       "read_audit": "Looking at the audit…",
       "ask_user": "Putting a question…",
@@ -201,6 +203,7 @@
     "edit": "Edit request",
     "partial": "Some actions have already run. Their results remain in this chat; continue from the appropriate step.",
     "continue": "Continue in chat",
+    "continueMessage": "Continue from where you stopped, taking the actions already completed into account.",
     "connection": "Open connection"
   }
 }

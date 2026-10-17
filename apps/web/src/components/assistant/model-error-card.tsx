@@ -147,7 +147,20 @@ export function ModelErrorCard({
           {!retryable ? (
             <>
               <p className="w-full text-xs text-muted-foreground">{t('partial')}</p>
-              <Button size="sm" variant="outline" onClick={onRefine}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={Boolean(chat?.running || chat?.pending || chat?.recovery)}
+                onClick={() => {
+                  chatStore.continueAfterFailure(
+                    chatId,
+                    messageId,
+                    t('continueMessage'),
+                    selection ? selection.model : undefined,
+                  );
+                  onRefine();
+                }}
+              >
                 {t('continue')}
               </Button>
             </>

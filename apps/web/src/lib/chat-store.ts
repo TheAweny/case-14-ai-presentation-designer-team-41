@@ -126,6 +126,16 @@ export interface ChatStore {
   retry(chatId: string): void;
   restore(chatId: string): void;
   retryAnswer(chatId: string, messageId: string, model?: ModelRef | null): void;
+  /**
+   * Continue after a failed assistant turn with a new user message. Does not replay tools,
+   * retry the previous answer, or approve a plan. The draft stays as the person left it.
+   */
+  continueAfterFailure(
+    chatId: string,
+    messageId: string,
+    text: string,
+    model?: ModelRef | null,
+  ): void;
   editFailed(chatId: string, messageId: string): void;
   setDraft(chatId: string, draft: ChatDraft): void;
   setMode(chatId: string, mode: ChatMode): void;
@@ -162,9 +172,14 @@ export function canRetryAnswer(messages: readonly ChatMessage[]): boolean {
         part.type === 'text' ||
         part.type === 'error' ||
         (part.type === 'tool' &&
-          ['list_templates', 'describe_template', 'read_file', 'read_deck', 'read_audit'].includes(
-            part.name,
-          )),
+          [
+            'list_templates',
+            'describe_template',
+            'read_file',
+            'research_materials',
+            'read_deck',
+            'read_audit',
+          ].includes(part.name)),
     )
   );
 }
@@ -457,6 +472,7 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
     input: ChatTurnInput,
     message?: ComposedMessage,
     mode?: ChatMode,
+    model?: ModelRef | null,
   ) => {
     const chat = chats.get(chatId);
     if (!chat || chat.running || working.has(chatId) || operations.has(chatId)) return;
@@ -464,7 +480,7 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
       request: {
         requestId: crypto.randomUUID(),
         mode: mode ?? chat.mode,
-        model: chat.model,
+        model: model !== undefined ? model : chat.model,
         reasoningEffort: readReasoningEffort(),
         projectId: chat.projectId,
         deckId: chat.deckId,
@@ -749,6 +765,34 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
           attachments: original.attachments.filter((item) => item.kind !== 'slides'),
         },
       }));
+    },
+    continueAfterFailure(chatId, messageId, text, model) {
+      const chat = chats.get(chatId);
+      if (!chat) return;
+      const trimmed = text.trim();
+      const last = chat.messages.at(-1);
+      if (
+        !trimmed ||
+        chat.running ||
+        chat.pending ||
+        chat.recovery ||
+        working.has(chatId) ||
+        operations.has(chatId) ||
+        last?.role !== 'assistant' ||
+        last.id !== messageId ||
+        last.status !== 'failed'
+      )
+        return;
+      update(chatId, () => ({
+        pending: { text: trimmed, attachments: [], failed: null },
+      }));
+      begin(
+        chatId,
+        { type: 'message', text: trimmed, attachments: [] },
+        undefined,
+        undefined,
+        model,
+      );
     },
     retryAnswer(chatId, messageId, model) {
       const chat = chats.get(chatId);
