@@ -1,7 +1,13 @@
 # Prompts every generation agent shares, outside any one agent. A model that ignores structured
 # output (response_format json_schema) still gets the schema of its answer in the instructions,
 # and one request to repair an answer that misses it. Bump the version when their meaning changes.
+#
+# The capability probe is the question the API asks a model to learn how it thinks: it answers a
+# few times, with thinking asked for, switched off and at a low and a high depth, and the replies
+# tell what each switch really changes. The question takes several steps to get right, so a model
+# that can think does: a trivial one is answered at once even at a high depth.
 
-version: 1.0.0
+version: 1.2.0
 answerFormatFile: answer-format.md
 answerRepairFile: answer-repair.md
+capabilityProbeFile: capability-probe.md

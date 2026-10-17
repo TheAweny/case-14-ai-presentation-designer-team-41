@@ -28,7 +28,6 @@ import {
   type ModelSettings,
   type PipelineRole,
   type RoleAssignment,
-  speechModelOf,
 } from '@lct/contracts';
 import { checkModelConnection, isPrivateHost, type CheckOptions } from './connection-check.js';
 import { KeyDecryptionError, type KeyVault } from './key-vault.js';
@@ -535,15 +534,6 @@ export class ModelSettingsService {
    * The model assigned to a role, or null when the role has none and the run falls back to the
    * writer's model. Like `resolve`, the result holds the key.
    */
-  /**
-   * The model that transcribes dictation: the one assigned to `speech`, or else the first speech
-   * model a connection offers (`speechModelOf`). Null: dictation is off.
-   */
-  async resolveSpeech(actor: SettingsActor): Promise<ResolvedModel | null> {
-    const ref = speechModelOf(await this.get(actor));
-    return ref ? this.resolveRef(ref, actor) : null;
-  }
-
   async resolveRole(role: PipelineRole, actor: SettingsActor): Promise<ResolvedModel | null> {
     const assigned = (await this.get(actor)).roles.find((item) => item.role === role);
     if (assigned?.kind !== 'model') return null;

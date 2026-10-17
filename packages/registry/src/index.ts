@@ -2,6 +2,7 @@ export {
   DEFAULT_REGISTRY_DIR,
   loadAgent,
   loadAnswerFormat,
+  loadCapabilityProbe,
   loadRegistry,
   toManifestEntry,
 } from './loader.js';

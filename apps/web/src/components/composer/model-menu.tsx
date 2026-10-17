@@ -23,7 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
-import { reasoningControl, type ReasoningEffort } from '@lct/contracts';
+import type { ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
 import {
   readReasoningEffort,
@@ -33,6 +33,7 @@ import {
   writeReasoningEffort,
 } from '@/lib/reasoning-effort';
 import { EffortSlider } from './effort-slider';
+import { useModelCapabilities } from './use-model-capabilities';
 import { cn } from '@/lib/utils';
 import {
   MODEL_SEARCH_FROM,
@@ -66,6 +67,7 @@ export function ModelMenu({
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
   const thinking = useSyncExternalStore(subscribeThinking, readThinking, () => true);
   const [open, setOpen] = useState(false);
+  const capabilities = useModelCapabilities(models ? effectiveModel(models, value) : null);
   if (!models) return null;
 
   const trigger = cn(
@@ -118,9 +120,11 @@ export function ModelMenu({
       (group) =>
         group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
     );
-  const control = selected ? reasoningControl(selected.modelId) : 'none';
-  // A hybrid model has a depth only while it thinks; switched off it answers at once.
-  const depth = control === 'effort' || (control === 'hybrid' && thinking);
+  const reasoning = capabilities?.reasoning;
+  // A depth only where probing showed it changes how much the model thinks, and only while it
+  // thinks: switched off, the model answers at once.
+  const depth =
+    reasoning !== undefined && reasoning.levels && (reasoning.toggle === null || thinking);
   const levelLabel = (level: ReasoningEffort) => t(`levels.${level}`);
 
   return (

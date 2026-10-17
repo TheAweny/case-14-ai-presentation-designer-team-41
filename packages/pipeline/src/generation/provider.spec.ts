@@ -133,7 +133,11 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
   });
   it('enables thinking and passes the output schema as strict json_schema', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());
-    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      reasoning: { toggle: 'enable-thinking', levels: false },
+    });
     await provider.generate('writer', 'instructions', {}, schema, AbortSignal.timeout(1000));
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
     expect(body.chat_template_kwargs).toEqual({ enable_thinking: true });

@@ -1,0 +1,231 @@
+import { NO_REASONING_CHOICE, type ReasoningCapability } from '@lct/contracts';
+import type { ResolvedModel } from './model-settings.service.js';
+
+/**
+ * What a model can do, learnt by asking it rather than by its name: a name can be anything a
+ * provider chose. A few short requests answer each question, and the API keeps the answer.
+ *
+ * A probe that could not be completed (rate limit, server error, no network) is `unknown`: it
+ * says nothing about the model, so nothing is stored and the next use asks again.
+ */
+export type Probed<T> = { readonly known: true; readonly value: T } | { readonly known: false };
+
+/** Room for a model that has to think before it answers, even a little. */
+const PROBE_MAX_TOKENS = 4096;
+const PROBE_TIMEOUT_MS = 90000;
+
+/** Longer than a number with a word or two: the model worked it out in the answer. */
+const VERBOSE_ANSWER = 120;
+/** Thinking worth the name: several steps of a multi-step question, not a stray token or two. */
+const THOUGHT = 150;
+/** Any thinking at all: far more tokens than a three-digit answer needs. */
+const SOME_THOUGHT = 64;
+/** How much more the thinking answer must think than the quiet one to call the switch real. */
+const SWITCH_RATIO = 3;
+/** A value of `reasoning_effort` no server accepts: refusing it shows the server reads the field. */
+const NO_SUCH_EFFORT = 'lct-probe-no-such-effort';
+
+/**
+ * How much the model thought before it answered, in tokens or near enough: the reasoning tokens
+ * the server reports, the reasoning text it returned, or the completion tokens the visible answer
+ * does not account for (gateways that hide the reasoning still bill it). An answer that spells its
+ * working out in the reply itself is not thinking mode: the probe asks for a number only.
+ */
+export function reasoningAmount(payload: unknown): number {
+  if (!payload || typeof payload !== 'object') return 0;
+  const { choices, usage } = payload as {
+    choices?: { message?: Record<string, unknown> }[];
+    usage?: {
+      completion_tokens?: unknown;
+      completion_tokens_details?: { reasoning_tokens?: unknown };
+    };
+  };
+  const message = choices?.[0]?.message ?? {};
+  const textOf = (value: unknown): string =>
+    typeof value === 'string'
+      ? value
+      : Array.isArray(value) || (value !== null && typeof value === 'object')
+        ? JSON.stringify(value)
+        : '';
+  const content = typeof message.content === 'string' ? message.content : '';
+  const think = /<think>([\s\S]*?)(?:<\/think>|$)/i.exec(content)?.[1] ?? '';
+  const answer = content.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
+  const reasoning = [message.reasoning_content, message.reasoning, message.reasoning_details]
+    .map(textOf)
+    .join('')
+    .concat(think)
+    .trim();
+  // About four characters a token: only compared with other answers of the same model.
+  const written = Math.ceil(reasoning.length / 4);
+  const reported = usage?.completion_tokens_details?.reasoning_tokens;
+  const completion = typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0;
+  const verbose = answer.length > VERBOSE_ANSWER;
+  const hidden = verbose ? 0 : completion - Math.ceil(answer.length / 4) - written;
+  return Math.max(typeof reported === 'number' ? reported : 0, written, hidden, 0);
+}
+
+/** Statuses that are about the request; the rest (408, 429, 5xx) are about the moment. */
+const refusal = (status: number) =>
+  status >= 400 && status < 500 && status !== 408 && status !== 429;
+
+interface Reply {
+  /** The server took the request. */
+  readonly ok: boolean;
+  /** It refused for what it was asked, not for being busy or down. */
+  readonly refused: boolean;
+  /** Reasoning that came back with the answer; 0 when it did not think. */
+  readonly amount: number;
+}
+
+async function errorText(response: Response): Promise<string> {
+  return (await response.text().catch(() => '')).slice(0, 500);
+}
+
+function headersOf(model: ResolvedModel, json: boolean): Record<string, string> {
+  return {
+    ...model.headers,
+    ...(model.apiKey ? { Authorization: `Bearer ${model.apiKey}` } : {}),
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
+  };
+}
+
+/**
+ * What thinking really does on this model, learnt from the server and the model together:
+ *
+ * - `reasoning_effort` is the provider's when it takes `low` and `high` but refuses a value that
+ *   does not exist: the server reads the field and passes it on rather than dropping it. Then
+ *   the depth is a choice, and `none` is the switch when the model thinks several times less
+ *   with it than without.
+ * - `enable_thinking` is a switch when "on" brings real thinking and "off" does not.
+ * - In both cases at least one answer must show thinking (reasoning text, reasoning tokens, or
+ *   completion tokens the short answer does not explain): a server that takes the fields but
+ *   never thinks offers nothing.
+ */
+export async function probeReasoning(
+  model: ResolvedModel,
+  question: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Probed<ReasoningCapability>> {
+  const endpoint = `${model.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  // Reasoning models of OpenAI take only `max_completion_tokens`; learnt from the first refusal.
+  let limitField = 'max_tokens';
+  const ask = async (extra: Record<string, unknown>): Promise<Reply> => {
+    for (;;) {
+      let response: Response;
+      try {
+        response = await fetchImpl(endpoint, {
+          method: 'POST',
+          headers: headersOf(model, true),
+          redirect: 'error',
+          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+          body: JSON.stringify({
+            model: model.model,
+            messages: [{ role: 'user', content: question }],
+            [limitField]: PROBE_MAX_TOKENS,
+            ...extra,
+          }),
+        });
+      } catch {
+        return { ok: false, refused: false, amount: 0 };
+      }
+      if (!response.ok) {
+        const message = await errorText(response);
+        if (response.status === 400 && limitField === 'max_tokens' && /max_tokens/.test(message)) {
+          limitField = 'max_completion_tokens';
+          continue;
+        }
+        return { ok: false, refused: refusal(response.status), amount: 0 };
+      }
+      const payload: unknown = await response.json().catch(() => null);
+      return { ok: true, refused: false, amount: reasoningAmount(payload) };
+    }
+  };
+
+  const plain = await ask({});
+  // A model that does not chat (speech, embeddings) has no thinking to offer.
+  if (!plain.ok)
+    return plain.refused ? { known: true, value: NO_REASONING_CHOICE } : { known: false };
+  const [off, on, low, high, none, invalid] = await Promise.all([
+    ask({ chat_template_kwargs: { enable_thinking: false } }),
+    ask({ chat_template_kwargs: { enable_thinking: true } }),
+    ask({ reasoning_effort: 'low' }),
+    ask({ reasoning_effort: 'high' }),
+    ask({ reasoning_effort: 'none' }),
+    ask({ reasoning_effort: NO_SUCH_EFFORT }),
+  ]);
+  // Thinking mode through the chat template: "on" thinks, "off" does not.
+  if (on.ok && off.ok && on.amount >= THOUGHT && on.amount >= off.amount * SWITCH_RATIO) {
+    return { known: true, value: { toggle: 'enable-thinking', levels: false } };
+  }
+  // The provider reads `reasoning_effort` and the model thinks at all: the depth is real. `none`
+  // is a switch only when it makes the model think several times less than it does otherwise.
+  const readsEffort = low.ok && high.ok && invalid.refused;
+  const thinking = Math.max(plain.amount, low.amount, high.amount);
+  if (readsEffort && thinking >= SOME_THOUGHT) {
+    const switches = none.ok && thinking >= THOUGHT && none.amount * SWITCH_RATIO <= thinking;
+    return {
+      known: true,
+      value: { toggle: switches ? 'reasoning-effort' : null, levels: true },
+    };
+  }
+  const unsettled = [off, on, low, high, none, invalid].some(
+    (reply) => !reply.ok && !reply.refused,
+  );
+  return unsettled ? { known: false } : { known: true, value: NO_REASONING_CHOICE };
+}
+
+/** Half a second of 16 kHz mono silence as WAV: enough for a transcription endpoint to accept. */
+function silentWav(): Uint8Array {
+  const samples = 8000;
+  const bytes = new Uint8Array(44 + samples * 2);
+  const view = new DataView(bytes.buffer);
+  const text = (at: number, value: string) =>
+    [...value].forEach((char, index) => view.setUint8(at + index, char.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples * 2, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 16000, true);
+  view.setUint32(28, 32000, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, 'data');
+  view.setUint32(40, samples * 2, true);
+  return bytes;
+}
+
+/**
+ * Whether the model transcribes speech: `POST /audio/transcriptions` with a moment of silence. A
+ * speech model answers with a `text` field (empty for silence); any other model is refused.
+ */
+export async function probeSpeech(
+  model: ResolvedModel,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Probed<boolean>> {
+  const body = new FormData();
+  body.append('file', new Blob([silentWav()], { type: 'audio/wav' }), 'probe.wav');
+  body.append('model', model.model);
+  let response: Response;
+  try {
+    response = await fetchImpl(`${model.baseUrl.replace(/\/+$/, '')}/audio/transcriptions`, {
+      method: 'POST',
+      headers: headersOf(model, false),
+      body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+  } catch {
+    return { known: false };
+  }
+  if (!response.ok)
+    return refusal(response.status) ? { known: true, value: false } : { known: false };
+  const payload: unknown = await response.json().catch(() => null);
+  const transcribed =
+    payload !== null &&
+    typeof payload === 'object' &&
+    typeof (payload as { text?: unknown }).text === 'string';
+  return { known: true, value: transcribed };
+}

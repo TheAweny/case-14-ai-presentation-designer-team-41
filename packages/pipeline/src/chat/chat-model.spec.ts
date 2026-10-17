@@ -1,3 +1,4 @@
+import type { ReasoningCapability } from '@lct/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { OpenAICompatibleChatModel, ThinkingFilter, type ToolSpec } from './chat-model.js';
 
@@ -11,13 +12,18 @@ function stream(chunks: unknown[]): Response {
   return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-function model(fetchImpl: typeof fetch, name = `model-${crypto.randomUUID()}`) {
+function model(
+  fetchImpl: typeof fetch,
+  name = `model-${crypto.randomUUID()}`,
+  reasoning?: ReasoningCapability,
+) {
   return new OpenAICompatibleChatModel({
     apiKey: 'key',
     baseUrl: 'https://models.example/v1',
     model: name,
     jsonModeInstructions: 'Answer as JSON.',
     fetchImpl,
+    ...(reasoning ? { reasoning } : {}),
   });
 }
 
@@ -50,7 +56,11 @@ describe('OpenAICompatibleChatModel', () => {
         }),
       );
       const onText = vi.fn();
-      const step = await model(fetchImpl, 'Qwen/Qwen3.5-27B').step({
+      // The switch comes from probing the model, whatever its name.
+      const step = await model(fetchImpl, 'served-model', {
+        toggle: 'enable-thinking',
+        levels: false,
+      }).step({
         messages: [],
         tools: native ? tools : [],
         signal: AbortSignal.timeout(5000),

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AgentGeneration, ReasoningEffort } from '@lct/contracts';
+import type { AgentGeneration, ReasoningCapability, ReasoningEffort } from '@lct/contracts';
 import {
   acquireModelSlot,
   backoff,
@@ -86,6 +86,8 @@ export interface OpenAICompatibleChatOptions {
   readonly reasoningEffort?: ReasoningEffort | null;
   /** Off only when the person switched thinking off for a model that can answer both ways. */
   readonly thinking?: boolean | null;
+  /** What probing this model showed about thinking; without it no thinking field is sent. */
+  readonly reasoning?: ReasoningCapability;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -143,11 +145,11 @@ export class OpenAICompatibleChatModel implements ChatModel {
   private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
     const generation = this.options.generation;
     const reasoning = reasoningRequestFields(
-      this.model,
+      this.options.reasoning,
       this.options.reasoningEffort,
       this.options.thinking,
     );
-    const sampling = samplingAllowed(this.model, reasoning)
+    const sampling = samplingAllowed(this.options.reasoning, reasoning)
       ? { temperature: generation?.temperature ?? 0.4, top_p: generation?.topP ?? 1 }
       : {};
     for (let attempt = 0; ; attempt++) {

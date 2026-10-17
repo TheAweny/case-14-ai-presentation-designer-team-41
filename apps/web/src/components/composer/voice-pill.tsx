@@ -2,21 +2,34 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { speechModelOf } from '@lct/contracts';
 import { useModelSettingsSnapshot } from '@/components/settings/model-settings-store';
 import { DictateIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { transcribeSpeechAction } from '@/app/speech-actions';
+import { getSpeechAvailableAction } from '@/app/model-capability-actions';
 import { cn } from '@/lib/utils';
 import { appendTranscript } from './voice-transcript';
 
 /**
- * The microphone exists only when there is a speech model: an assigned one, or a Whisper-like
- * model a provider offers. Loading and dictation switched off both hide it.
+ * The microphone exists only when there is a speech model: an assigned one, or a model of a
+ * connection that the API found really transcribes. Asked again whenever the settings change;
+ * loading and dictation switched off both hide it.
  */
 export function useSpeechConfigured(): boolean {
   const settings = useModelSettingsSnapshot();
-  return settings !== null && speechModelOf(settings) !== null;
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    if (!settings) return;
+    let current = true;
+    getSpeechAvailableAction().then(
+      (found) => current && setAvailable(found),
+      () => current && setAvailable(false),
+    );
+    return () => {
+      current = false;
+    };
+  }, [settings]);
+  return settings !== null && available;
 }
 
 /**

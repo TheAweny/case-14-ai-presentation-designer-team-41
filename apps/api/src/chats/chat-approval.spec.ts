@@ -3,6 +3,7 @@ import type { ChatMessage, ChatTurnRequest, DeckOutline } from '@lct/contracts';
 import type { Account } from '../accounts/account-rules.js';
 import type { GenerationService } from '../generation/generation.service.js';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
+import type { ModelCapabilityService } from '../models/model-capabilities.js';
 import { ChatsService } from './chats.service.js';
 import { chatTools, type ChatToolScope } from './chat-tools.js';
 
@@ -42,7 +43,11 @@ afterEach(async () => {
 
 function fixture(messages: ChatMessage[]) {
   const generation = { template: vi.fn(async () => ({})) } as unknown as GenerationService;
-  const service = new ChatsService(generation, {} as ModelSettingsService);
+  const service = new ChatsService(
+    generation,
+    {} as ModelSettingsService,
+    {} as ModelCapabilityService,
+  );
   services.push(service);
   Reflect.set(
     service,

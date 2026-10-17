@@ -846,7 +846,17 @@ test.describe('dictation', () => {
   });
 });
 
-test('offers the thinking switch only for a hybrid model and sends its state', async ({ page }) => {
+/** What probing a model found, as the fixture API will report it. */
+async function probed(page: Page, modelId: string, reasoning: unknown) {
+  const set = await page.request.put('http://127.0.0.1:3121/__capabilities', {
+    data: { modelId, reasoning },
+  });
+  expect(set.ok()).toBeTruthy();
+}
+
+test('offers the thinking switch only where probing found one, whatever the name', async ({
+  page,
+}) => {
   let thinking: unknown;
   await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
     const body = route.request().postDataJSON();
@@ -859,14 +869,17 @@ test('offers the thinking switch only for a hybrid model and sends its state', a
       ]),
     });
   });
-  await openChat(page);
-  const toggle = page.getByRole('button', { name: 'Размышление' });
-  await expect(toggle).toHaveCount(0);
-
+  // A name that looks like a thinking model means nothing until probing says so.
   const assigned = await page.request.put('http://127.0.0.1:3121/model-settings/roles', {
     data: { role: 'assistant', kind: 'model', connectionId: 'fixture', modelId: 'Qwen/Qwen3-8B' },
   });
   expect(assigned.ok()).toBeTruthy();
+  await openChat(page);
+  const toggle = page.getByRole('button', { name: 'Размышление' });
+  await expect(page.getByRole('button', { name: /Модель: Qwen\/Qwen3-8B/ })).toBeVisible();
+  await expect(toggle).toHaveCount(0);
+
+  await probed(page, 'Qwen/Qwen3-8B', { toggle: 'enable-thinking', levels: false });
   await page.reload();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await toggle.click();
@@ -896,12 +909,13 @@ test('lets a hybrid model think on request with a depth only while thinking', as
     });
   });
   const assigned = await page.request.put('http://127.0.0.1:3121/model-settings/roles', {
-    data: { role: 'assistant', kind: 'model', connectionId: 'fixture', modelId: 'gpt-6.1-sol' },
+    data: { role: 'assistant', kind: 'model', connectionId: 'fixture', modelId: 'house-model' },
   });
   expect(assigned.ok()).toBeTruthy();
+  await probed(page, 'house-model', { toggle: 'reasoning-effort', levels: true });
   await openChat(page);
   const toggle = page.getByRole('button', { name: 'Размышление' });
-  const menu = page.getByRole('button', { name: 'Модель: gpt-6.1-sol. Сменить модель' });
+  const menu = page.getByRole('button', { name: 'Модель: house-model. Сменить модель' });
   const depth = page.getByRole('slider', { name: 'Глубина размышления' });
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 

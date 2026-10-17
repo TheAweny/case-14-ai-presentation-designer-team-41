@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunRepository } from '@lct/run-store';
 import type { Account } from '../accounts/account-rules.js';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
+import type { ModelCapabilityService } from '../models/model-capabilities.js';
 import { GenerationService, type StartedBuild } from './generation.service.js';
 
 const RUN = 'run-00000000-0000-4000-8000-0000000000f1';
@@ -47,7 +48,11 @@ beforeEach(async () => {
   const repository = {
     get: async (runId: string) => (runId === RUN ? { runId, state } : null),
   } as unknown as RunRepository;
-  service = new GenerationService(repository, {} as ModelSettingsService);
+  service = new GenerationService(
+    repository,
+    {} as ModelSettingsService,
+    {} as ModelCapabilityService,
+  );
   await mkdir(join(root, RUN), { recursive: true });
   await writeFile(
     join(root, RUN, 'metadata.json'),

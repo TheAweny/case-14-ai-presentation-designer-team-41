@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { enabledModelIds, isSpeechModel } from './model-families.js';
 
 /**
  * Model settings: connections to OpenAI-compatible servers and which model performs each role of
@@ -446,23 +445,3 @@ export const modelSettingsErrorSchema = z.object({
     .default({}),
 });
 export type ModelSettingsError = z.infer<typeof modelSettingsErrorSchema>;
-
-/**
- * Who transcribes dictation. The model assigned to `speech`; without an assignment, the first
- * speech model (Whisper and the like) a checked connection offers, so a provider that has one
- * enables the microphone by itself. `disabled` switches dictation off even then.
- */
-export function speechModelOf(settings: ModelSettings): ModelRef | null {
-  const assigned = settings.roles.find((item) => item.role === 'speech');
-  if (assigned?.kind === 'model') {
-    return { connectionId: assigned.connectionId, modelId: assigned.modelId };
-  }
-  if (assigned?.kind === 'disabled') return null;
-  for (const connection of settings.connections) {
-    if (!connection.lastCheck?.ok) continue;
-    const offered = enabledModelIds(connection.lastCheck.models, connection.enabledModels ?? null);
-    const modelId = offered.find(isSpeechModel);
-    if (modelId) return { connectionId: connection.connectionId, modelId };
-  }
-  return null;
-}

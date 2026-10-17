@@ -24,13 +24,33 @@ const initialModels = (): ModelSettings => ({
   ],
 });
 let modelSettings = initialModels();
+/** What probing found per model id; a test sets it, any model not set offers no choice. */
+let capabilities = new Map<string, unknown>();
 
 /** Only fixed test data. Browser chat requests are intercepted by each Playwright scenario. */
 const server = createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json');
   if (request.url === '/__reset-models') {
     modelSettings = initialModels();
+    capabilities = new Map();
     response.end('{}');
+  } else if (request.url === '/__capabilities' && request.method === 'PUT') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    const { modelId, reasoning } = JSON.parse(body) as { modelId: string; reasoning: unknown };
+    capabilities.set(modelId, reasoning);
+    response.end('{}');
+  } else if (request.url?.startsWith('/model-settings/capabilities?')) {
+    const modelId = new URL(request.url, 'http://fixture').searchParams.get('modelId') ?? '';
+    response.end(
+      JSON.stringify({
+        reasoning: capabilities.get(modelId) ?? { toggle: null, levels: false },
+        probed: true,
+      }),
+    );
+  } else if (request.url === '/speech/model') {
+    const speech = modelSettings.roles.find((item) => item.role === 'speech');
+    response.end(JSON.stringify({ available: speech?.kind === 'model' }));
   } else if (request.url === '/model-settings/roles' && request.method === 'PUT') {
     let body = '';
     for await (const chunk of request) body += String(chunk);

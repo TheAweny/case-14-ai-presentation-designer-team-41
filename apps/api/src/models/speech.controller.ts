@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Controller,
+  Get,
   Inject,
   Logger,
   Post,
@@ -12,7 +13,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
-import { ModelSettingsService, type SettingsActor } from './model-settings.service.js';
+import type { SettingsActor } from './model-settings.service.js';
+import { ModelCapabilityService } from './model-capabilities.js';
 import { TranscriptionError, transcribeSpeech } from './transcribe.js';
 
 /** Fifteen megabytes: long enough for a prompt, short of the usual transcription limit. */
@@ -31,7 +33,7 @@ function actorOf(account: Account): SettingsActor {
 
 /**
  * Dictation. The browser sends a recording; the API calls the speech model: the one assigned to
- * `speech`, or the provider's own Whisper. Availability is not probed: a missing model is a
+ * `speech`, or a model of the person's connections that a probe showed transcribes. Availability is not probed: a missing model is a
  * settings fact, a failed call is an error of this one recording, and the provider's answer goes
  * back so the person sees why.
  */
@@ -39,7 +41,20 @@ function actorOf(account: Account): SettingsActor {
 export class SpeechController {
   private readonly logger = new Logger(SpeechController.name);
 
-  constructor(@Inject(ModelSettingsService) private readonly settings: ModelSettingsService) {}
+  constructor(
+    @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
+  ) {}
+
+  /**
+   * Whether dictation works for this account: a speech model is assigned, or one of its
+   * connections has a model that really transcribed a probe recording. The first ask may take a
+   * moment while the models are probed; the answer is kept.
+   */
+  @Get('model')
+  async model(@CurrentAccount() account: Account): Promise<{ available: boolean }> {
+    const model = await this.capabilities.speechModel(actorOf(account)).catch(() => null);
+    return { available: model !== null };
+  }
 
   @Post('transcriptions')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_AUDIO_BYTES } }))
@@ -48,7 +63,7 @@ export class SpeechController {
     @CurrentAccount() account: Account,
   ): Promise<{ text: string }> {
     if (!file?.buffer?.length) throw new BadRequestException({ reason: 'empty' });
-    const model = await this.settings.resolveSpeech(actorOf(account));
+    const model = await this.capabilities.speechModel(actorOf(account));
     if (!model) throw new ServiceUnavailableException({ reason: 'not-configured' });
     try {
       const text = await transcribeSpeech(model, {

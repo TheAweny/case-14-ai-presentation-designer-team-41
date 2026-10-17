@@ -1,0 +1,1 @@
+Find the smallest positive integer n such that n leaves remainder 2 when divided by 3, remainder 3 when divided by 5, remainder 4 when divided by 7, and remainder 5 when divided by 11. Answer with the number only.

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadAnswerFormat } from './loader.js';
+import { loadAnswerFormat, loadCapabilityProbe } from './loader.js';
 
 const root = join(__dirname, '..', '..', '..');
 let scratch: string | null = null;
@@ -18,6 +18,11 @@ describe('shared answer prompts', () => {
     expect(format.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(format.format).toContain('{{schema}}');
     expect(format.repair).toContain('{{problems}}');
+  });
+
+  it('reads the question that probes whether a model thinks', async () => {
+    const probe = await loadCapabilityProbe(join(root, 'registry', 'agents'));
+    expect(probe.question.length).toBeGreaterThan(0);
   });
 
   it('refuses prompts that lost their placeholder', async () => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AgentGeneration, ReasoningEffort } from '@lct/contracts';
+import type { AgentGeneration, ReasoningCapability, ReasoningEffort } from '@lct/contracts';
 import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js';
 
 export interface TextProvider {
@@ -38,6 +38,8 @@ interface Options {
   thinking?: boolean | null;
   /** Depth of thinking for models that take `reasoning_effort`, as the person picked it. */
   reasoningEffort?: ReasoningEffort | null;
+  /** What probing this model showed about thinking; without it no thinking field is sent. */
+  reasoning?: ReasoningCapability;
   /**
    * The shared prompts from the registry that carry the JSON Schema of an answer in the
    * instructions and ask once to repair an answer that misses it: a model that ignores
@@ -272,7 +274,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     const generation = this.generation.get(agent);
     const answerFormat = this.options.answerFormat;
     const reasoning = reasoningRequestFields(
-      this.model,
+      this.options.reasoning,
       this.options.reasoningEffort,
       this.options.thinking,
     );
@@ -310,7 +312,7 @@ export class OpenAICompatibleProvider implements TextProvider {
           body: JSON.stringify({
             model: this.model,
             seed: this.options.seed ?? 42,
-            ...(samplingAllowed(this.model, reasoning)
+            ...(samplingAllowed(this.options.reasoning, reasoning)
               ? { temperature: generation?.temperature ?? 0.35, top_p: generation?.topP ?? 1 }
               : {}),
             max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),

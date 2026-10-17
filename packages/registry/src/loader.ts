@@ -21,6 +21,7 @@ const sharedSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   answerFormatFile: z.string().min(1),
   answerRepairFile: z.string().min(1),
+  capabilityProbeFile: z.string().min(1).optional(),
 });
 
 /**
@@ -42,6 +43,24 @@ export async function loadAnswerFormat(
     throw new Error('The shared answer prompts must hold {{schema}} and {{problems}}.');
   }
   return { version: config.version, format: format.trim(), repair: repair.trim() };
+}
+
+/**
+ * The short question the API asks a model to learn whether it thinks and how it is switched
+ * (`shared/capability-probe.md`). Any answer will do: what matters is whether reasoning comes
+ * back with it.
+ */
+export async function loadCapabilityProbe(
+  registryDir: string = DEFAULT_REGISTRY_DIR,
+): Promise<{ readonly version: string; readonly question: string }> {
+  const directory = join(registryDir, '..', 'shared');
+  const config = sharedSchema.parse(
+    parseYaml(await readFile(join(directory, 'shared.yaml'), 'utf8')),
+  );
+  if (!config.capabilityProbeFile) throw new Error('shared.yaml names no capabilityProbeFile.');
+  const question = (await readFile(join(directory, config.capabilityProbeFile), 'utf8')).trim();
+  if (!question) throw new Error('The capability probe question is empty.');
+  return { version: config.version, question };
 }
 
 /** Reads every agent directory of the registry, sorted by id for reproducible manifests. */

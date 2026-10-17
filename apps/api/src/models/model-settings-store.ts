@@ -4,6 +4,7 @@ import type {
   ConnectionHeader,
   ConnectionPreset,
   PipelineRole,
+  ReasoningCapability,
   RoleAssignment,
 } from '@lct/contracts';
 
@@ -24,6 +25,16 @@ export interface StoredConnection {
   readonly headers: readonly ConnectionHeader[];
   /** The account the connection belongs to; null — shared with everyone by an administrator. */
   readonly ownerId: string | null;
+}
+
+/**
+ * What probing a model found, by server address and model id. A field that is missing was not
+ * settled. `probeVersion` is the version of the probe that found it: a new probe asks again.
+ */
+export interface StoredCapability {
+  readonly reasoning?: ReasoningCapability;
+  readonly speech?: boolean;
+  readonly probeVersion: string;
 }
 
 /** A stored role: a model or switched off. A role that is not stored is not assigned. */
@@ -59,6 +70,9 @@ export interface ModelSettingsStore {
    */
   getServerModels(baseUrl: string): Promise<readonly string[] | null>;
   setServerModels(baseUrl: string, enabledModels: readonly string[] | null): Promise<void>;
+  getCapability(baseUrl: string, modelId: string): Promise<StoredCapability | null>;
+  /** Merges the settled fields into what is stored; a new `probeVersion` drops the old ones. */
+  saveCapability(baseUrl: string, modelId: string, found: StoredCapability): Promise<void>;
 }
 
 interface ConnectionRow {
@@ -184,7 +198,7 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   async setRole(role: StoredRole, owner: RoleOwner) {
     await this.pool.query(
       `INSERT INTO model_role_assignments (role, kind, connection_id, model_id, owner_id)
-       VALUES ($1, $2, $3, $4, $5)
+       VALUES ($1, $2, $3::jsonb, $4, $5)
        ON CONFLICT (role, COALESCE(owner_id, '')) DO UPDATE SET
          kind = EXCLUDED.kind, connection_id = EXCLUDED.connection_id,
          model_id = EXCLUDED.model_id, updated_at = now()`,
@@ -229,6 +243,45 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
       [baseUrl, enabledModels === null ? null : JSON.stringify(enabledModels)],
     );
   }
+
+  async getCapability(baseUrl: string, modelId: string) {
+    const result = await this.pool.query<{
+      reasoning: ReasoningCapability | null;
+      speech: boolean | null;
+      probe_version: string;
+    }>(
+      `SELECT reasoning, speech, probe_version FROM model_capabilities
+       WHERE base_url = $1 AND model_id = $2`,
+      [baseUrl, modelId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      ...(row.reasoning ? { reasoning: row.reasoning } : {}),
+      ...(row.speech === null ? {} : { speech: row.speech }),
+      probeVersion: row.probe_version,
+    };
+  }
+
+  async saveCapability(baseUrl: string, modelId: string, found: StoredCapability) {
+    await this.pool.query(
+      `INSERT INTO model_capabilities (base_url, model_id, reasoning, speech, probe_version)
+       VALUES ($1, $2, $3::jsonb, $4, $5)
+       ON CONFLICT (base_url, model_id) DO UPDATE SET
+         reasoning = CASE WHEN model_capabilities.probe_version = EXCLUDED.probe_version
+           THEN COALESCE(EXCLUDED.reasoning, model_capabilities.reasoning) ELSE EXCLUDED.reasoning END,
+         speech = CASE WHEN model_capabilities.probe_version = EXCLUDED.probe_version
+           THEN COALESCE(EXCLUDED.speech, model_capabilities.speech) ELSE EXCLUDED.speech END,
+         probe_version = EXCLUDED.probe_version, updated_at = now()`,
+      [
+        baseUrl,
+        modelId,
+        found.reasoning ? JSON.stringify(found.reasoning) : null,
+        found.speech ?? null,
+        found.probeVersion,
+      ],
+    );
+  }
 }
 
 /** Settings in memory, for tests. Behaves like the PostgreSQL store. */
@@ -238,6 +291,8 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
   readonly roles = new Map<string, Map<PipelineRole, StoredRole>>();
   readonly events: SettingsEvent[] = [];
   readonly serverModels = new Map<string, readonly string[] | null>();
+  /** Probe findings by `${baseUrl} ${modelId}`. */
+  readonly capabilities = new Map<string, StoredCapability>();
 
   private rolesOf(owner: RoleOwner) {
     const key = owner ?? '';
@@ -295,5 +350,18 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
 
   async setServerModels(baseUrl: string, enabledModels: readonly string[] | null) {
     this.serverModels.set(baseUrl, enabledModels);
+  }
+
+  async getCapability(baseUrl: string, modelId: string) {
+    return this.capabilities.get(`${baseUrl} ${modelId}`) ?? null;
+  }
+
+  async saveCapability(baseUrl: string, modelId: string, found: StoredCapability) {
+    const key = `${baseUrl} ${modelId}`;
+    const stored = this.capabilities.get(key);
+    this.capabilities.set(
+      key,
+      stored?.probeVersion === found.probeVersion ? { ...stored, ...found } : found,
+    );
   }
 }

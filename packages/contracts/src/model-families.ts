@@ -77,12 +77,3 @@ export function enabledModelIds(
 export function isModelEnabled(modelId: string, enabled: readonly string[] | null): boolean {
   return enabled === null || enabled.includes(modelId);
 }
-
-/** Speech-to-text models: Whisper, `gpt-4o-transcribe` and servers that name them STT or ASR. */
-const SPEECH_MODEL =
-  /whisper|transcri|speech[-_]?to[-_]?text|(?:^|[^a-z0-9])(?:stt|asr)(?:[^a-z0-9]|$)/i;
-
-/** Whether a model turns speech into text rather than chatting. Read from the name, as a family is. */
-export function isSpeechModel(modelId: string): boolean {
-  return SPEECH_MODEL.test(modelId.trim());
-}

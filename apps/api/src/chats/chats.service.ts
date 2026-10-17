@@ -44,6 +44,7 @@ import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { actorOf, GenerationService } from '../generation/generation.service.js';
 import { ModelSettingsService, ModelNotConfiguredError } from '../models/model-settings.service.js';
+import { ModelCapabilityService } from '../models/model-capabilities.js';
 import {
   resultOf,
   withFailed,
@@ -204,6 +205,7 @@ export class ChatsService implements OnApplicationShutdown {
   constructor(
     @Inject(GenerationService) private readonly generation: GenerationService,
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
+    @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
@@ -924,6 +926,7 @@ export class ChatsService implements OnApplicationShutdown {
       jsonModeInstructions: agent.jsonMode,
       reasoningEffort: request.reasoningEffort,
       thinking: request.thinking,
+      reasoning: await this.capabilities.reasoningOf(resolved),
     });
   }
 

@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
-import { canSwitchThinking, reasoningControl } from '@lct/contracts';
 import { Button } from '@/components/ui/button';
 import { ThinkingIcon } from '@/components/ui/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,11 +10,12 @@ import type { ModelRef } from '@/lib/model-settings';
 import { readThinking, subscribeThinking, writeThinking } from '@/lib/reasoning-effort';
 import { effectiveModel } from '@/lib/writer-models';
 import { cn } from '@/lib/utils';
+import { useModelCapabilities } from './use-model-capabilities';
 import { PROMPT_CHIP } from './prompt-box';
 
 /**
- * Thinking on or off, as ChatGPT's “Think” chip. Only a model that can answer both ways gets it:
- * the others either always think or never do, and a switch there would lie.
+ * Thinking on or off, as ChatGPT's “Think” chip. Only a model that probing showed answers both
+ * ways gets it: the others either always think or never do, and a switch there would lie.
  */
 export function ThinkingToggle({
   model,
@@ -29,7 +29,8 @@ export function ThinkingToggle({
   const models = useWriterModels('assistant');
   const on = useSyncExternalStore(subscribeThinking, readThinking, () => true);
   const selected = models ? effectiveModel(models, model) : null;
-  if (!selected || !canSwitchThinking(reasoningControl(selected.modelId))) return null;
+  const capabilities = useModelCapabilities(selected);
+  if (!capabilities?.reasoning.toggle) return null;
 
   return (
     <Tooltip>

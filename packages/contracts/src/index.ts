@@ -374,14 +374,15 @@ export {
   VK_AI_SPACE_MODEL,
   VK_AI_SPACE_ROLES,
   VK_PROJECT_HEADER,
-  speechModelOf,
 } from './model-settings.js';
 export {
   REASONING_EFFORTS,
   reasoningEffortSchema,
-  reasoningControl,
-  canSwitchThinking,
-  type ReasoningControl,
+  reasoningCapabilitySchema,
+  modelCapabilitiesSchema,
+  NO_REASONING_CHOICE,
+  type ReasoningCapability,
+  type ModelCapabilities,
   type ReasoningEffort,
 } from './reasoning.js';
 export {
@@ -390,7 +391,6 @@ export {
   modelFamily,
   enabledModelIds,
   isModelEnabled,
-  isSpeechModel,
   type ModelFamily,
 } from './model-families.js';
 export {

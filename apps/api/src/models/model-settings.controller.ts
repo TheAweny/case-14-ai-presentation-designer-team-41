@@ -12,6 +12,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
@@ -26,6 +27,10 @@ import {
   VK_AI_SPACE_MODEL,
   VK_PROJECT_HEADER,
   connectionCheckSchema,
+  modelCapabilitiesSchema,
+  modelRefSchema,
+  NO_REASONING_CHOICE,
+  type ModelCapabilities,
   connectionInputSchema,
   connectionModelsInputSchema,
   modelConnectionSchema,
@@ -44,9 +49,11 @@ import {
   InvalidModelSettingsInputError,
   ManagedConnectionError,
   ModelConnectionNotFoundError,
+  ModelNotConfiguredError,
   ModelSettingsService,
   type SettingsActor,
 } from './model-settings.service.js';
+import { ModelCapabilityService } from './model-capabilities.js';
 import { ApiAccountRoutes, ApiJsonBody } from '../docs/decorators.js';
 
 const CONNECTION_EXAMPLE = {
@@ -118,7 +125,33 @@ function actorOf(account: Account): SettingsActor {
 @Controller('model-settings')
 @ApiAccountRoutes('models')
 export class ModelSettingsController {
-  constructor(@Inject(ModelSettingsService) private readonly settings: ModelSettingsService) {}
+  constructor(
+    @Inject(ModelSettingsService) private readonly settings: ModelSettingsService,
+    @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
+  ) {}
+
+  @Get('capabilities')
+  @ApiOperation({
+    summary: 'Возможности модели',
+    description:
+      'Как у модели включается размышление и меняет ли что-то глубина. Узнаётся короткими запросами к самой модели при первом обращении и запоминается; по имени модели ничего не решается.',
+  })
+  @ApiOkResponse({ standardSchema: modelCapabilitiesSchema })
+  async capabilitiesOf(
+    @Query('connectionId') connectionId: unknown,
+    @Query('modelId') modelId: unknown,
+    @CurrentAccount() account: Account,
+  ): Promise<ModelCapabilities> {
+    const ref = modelRefSchema.safeParse({ connectionId, modelId });
+    if (!ref.success) throw new BadRequestException({ reason: 'invalid' });
+    return this.capabilities.capabilitiesOf(ref.data, actorOf(account)).catch((error: unknown) => {
+      // A model that cannot be used offers nothing to choose; picking it says why elsewhere.
+      if (error instanceof ModelNotConfiguredError) {
+        return { reasoning: NO_REASONING_CHOICE, probed: false };
+      }
+      return refuse(error);
+    });
+  }
 
   @Get()
   @ApiOperation({
@@ -153,6 +186,7 @@ export class ModelSettingsController {
     @Body() body: unknown,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
+    this.capabilities.forgetSpeechModel(actorOf(account));
     return this.settings.saveConnection(body, actorOf(account)).catch(refuse);
   }
 
@@ -167,6 +201,7 @@ export class ModelSettingsController {
     @CurrentAccount() account: Account,
   ): Promise<void> {
     await this.settings.deleteConnection(connectionId, actorOf(account)).catch(refuse);
+    this.capabilities.forgetSpeechModel(actorOf(account));
   }
 
   @Post('connections/:id/check')
@@ -182,6 +217,7 @@ export class ModelSettingsController {
     @Param('id') connectionId: string,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
+    this.capabilities.forgetSpeechModel(actorOf(account));
     return this.settings.checkConnection(connectionId, actorOf(account)).catch(refuse);
   }
 
@@ -206,6 +242,7 @@ export class ModelSettingsController {
   ): Promise<ModelConnection> {
     const input =
       body !== null && typeof body === 'object' ? { ...body, connectionId } : { connectionId };
+    this.capabilities.forgetSpeechModel(actorOf(account));
     return this.settings.setConnectionModels(input, actorOf(account)).catch(refuse);
   }
 
@@ -246,5 +283,6 @@ export class ModelSettingsController {
   @ApiSettingsErrors(400, 404)
   async setRole(@Body() body: unknown, @CurrentAccount() account: Account): Promise<void> {
     await this.settings.setRole(body, actorOf(account)).catch(refuse);
+    this.capabilities.forgetSpeechModel(actorOf(account));
   }
 }

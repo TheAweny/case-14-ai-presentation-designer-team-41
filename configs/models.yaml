@@ -16,8 +16,8 @@
 #
 # Text roles share one open MoE under the case cap of 35B: 30.5B weights, 3.3B active per token,
 # so a 10-15 slide deck stays inside the 5 minute budget. Qwen3.6-35B-A3B is about 35.95B and is
-# not eligible. Slide images are read by a separate 8.8B vision-language model. Hybrid Qwen3
-# checkpoints use thinking; non-thinking Instruct checkpoints keep their native behavior.
+# not eligible. Slide images are read by a separate 8.8B vision-language model. Thinking is left
+# to the server here; the API learns how each model it calls thinks by probing it.
 # The served name is LLM_MODEL / VLM_MODEL in .env, not this file.
 
 models:

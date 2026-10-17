@@ -26,6 +26,7 @@ import {
   type LayoutVariant,
   type ModelRef,
   type StoredTemplateIndex,
+  type ReasoningCapability,
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
@@ -48,6 +49,7 @@ import {
   ModelSettingsService,
   type ResolvedModel,
 } from '../models/model-settings.service.js';
+import { ModelCapabilityService } from '../models/model-capabilities.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -154,6 +156,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   constructor(
     @Inject(RUN_REPOSITORY) readonly repository: RunRepository,
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
+    @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
   ) {}
 
   directory(id: string): string {
@@ -423,7 +426,13 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     // The schema of each answer goes into the instructions too: a model that ignores structured
     // output still answers in shape.
     const answerFormat = await loadAnswerFormat(this.registryDir());
-    const providerOf = (model: ResolvedModel) =>
+    // How each model thinks is what probing it showed, settled before the run starts.
+    const [writerReasoning, plannerReasoning, criticReasoning] = await Promise.all(
+      [writer, planner, critic].map((model) =>
+        model ? this.capabilities.reasoningOf(model) : Promise.resolve(undefined),
+      ),
+    );
+    const providerOf = (model: ResolvedModel, reasoning: ReasoningCapability | undefined) =>
       new GenerationProvider({
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
@@ -432,16 +441,17 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         seed: input.seed,
         thinking: input.thinking,
         reasoningEffort: input.reasoningEffort,
+        ...(reasoning ? { reasoning } : {}),
         answerFormat,
       });
-    const fallback = providerOf(writer);
+    const fallback = providerOf(writer, writerReasoning);
     const provider = new RoutedTextProvider(
       fallback,
       new Map([
         ['writer', fallback],
         ['rewriter', fallback],
-        ...(planner ? [['planner', providerOf(planner)] as const] : []),
-        ...(critic ? [['critic', providerOf(critic)] as const] : []),
+        ...(planner ? [['planner', providerOf(planner, plannerReasoning)] as const] : []),
+        ...(critic ? [['critic', providerOf(critic, criticReasoning)] as const] : []),
       ]),
     );
     const registryDir = this.registryDir();
