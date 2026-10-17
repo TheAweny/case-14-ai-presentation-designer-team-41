@@ -362,6 +362,12 @@ export {
   type ModelSettingsError,
 } from './model-settings.js';
 export {
+  REASONING_EFFORTS,
+  reasoningEffortSchema,
+  reasoningControl,
+  type ReasoningEffort,
+} from './reasoning.js';
+export {
   MODEL_FAMILIES,
   modelFamilySchema,
   modelFamily,

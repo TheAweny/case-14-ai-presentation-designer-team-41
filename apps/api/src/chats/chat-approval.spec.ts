@@ -83,6 +83,7 @@ function fixture(messages: ChatMessage[]) {
   ): ChatTurnRequest => ({
     mode: 'plan',
     model: null,
+    reasoningEffort: null,
     projectId: null,
     deckId: null,
     slideCount: null,

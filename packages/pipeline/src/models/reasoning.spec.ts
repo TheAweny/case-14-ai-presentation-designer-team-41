@@ -21,4 +21,14 @@ describe('reasoning request policy', () => {
   ])('preserves server defaults for %s', (model) => {
     expect(reasoningRequestFields(model)).toEqual({});
   });
+
+  it('sends reasoning depth only to models that accept it', () => {
+    expect(reasoningRequestFields('openai/gpt-oss-20b', 'low')).toEqual({
+      reasoning_effort: 'low',
+    });
+    expect(reasoningRequestFields('Qwen/Qwen3.5-27B', 'high')).toEqual({
+      chat_template_kwargs: { enable_thinking: true },
+    });
+    expect(reasoningRequestFields('gpt-4o', 'high')).toEqual({});
+  });
 });

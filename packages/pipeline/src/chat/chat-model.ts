@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AgentGeneration } from '@lct/contracts';
+import type { AgentGeneration, ReasoningEffort } from '@lct/contracts';
 import { acquireModelSlot, backoff, parseModelJson } from '../generation/provider.js';
 import { modelHttpFailure } from './model-failure.js';
 import { reasoningRequestFields } from '../models/reasoning.js';
@@ -73,6 +73,8 @@ export interface OpenAICompatibleChatOptions {
    * JSON mode. It is a prompt, so it comes from the registry.
    */
   readonly jsonModeInstructions: string;
+  /** Sent only when this model accepts `reasoning_effort`. */
+  readonly reasoningEffort?: ReasoningEffort | null;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -149,7 +151,7 @@ export class OpenAICompatibleChatModel implements ChatModel {
             temperature: generation?.temperature ?? 0.4,
             top_p: generation?.topP ?? 1,
             max_tokens: generation?.maxOutputTokens ?? 4096,
-            ...reasoningRequestFields(this.model),
+            ...reasoningRequestFields(this.model, this.options.reasoningEffort),
             ...body,
           }),
         });

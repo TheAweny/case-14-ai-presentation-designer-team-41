@@ -727,6 +727,7 @@ export class ChatsService implements OnApplicationShutdown {
       model: resolved.model,
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
+      reasoningEffort: request.reasoningEffort,
     });
   }
 

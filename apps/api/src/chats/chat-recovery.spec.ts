@@ -11,6 +11,7 @@ const userId = '00000000-0000-4000-8000-000000000011';
 const request = (text = 'Построй презентацию'): ChatTurnRequest => ({
   mode: 'plan',
   model: null,
+  reasoningEffort: null,
   projectId: null,
   deckId: null,
   slideCount: null,

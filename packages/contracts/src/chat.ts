@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { deckOutlineSchema } from './generation.js';
 import { layoutVariantSchema } from './run-config.js';
 import { modelRefSchema } from './model-settings.js';
+import { reasoningEffortSchema } from './reasoning.js';
 
 /**
  * A chat with the deck assistant. The API owns the conversation: the web sends a turn, the agent
@@ -240,6 +241,11 @@ export const chatTurnRequestSchema = z.object({
   mode: chatModeSchema,
   /** The model the agent answers with; null — the model of the assistant role. */
   model: modelRefSchema.nullable().default(null),
+  /**
+   * Depth for models that accept `reasoning_effort`. Ignored for every other model, including Qwen.
+   * Older clients omit it.
+   */
+  reasoningEffort: reasoningEffortSchema.nullable().default(null),
   /** The project a new chat belongs to; ignored for a chat that exists. */
   projectId: z.string().nullable().default(null),
   /** How many slides the person usually wants (their setting); null — as the material needs. */
