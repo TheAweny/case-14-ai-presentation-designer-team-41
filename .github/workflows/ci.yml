@@ -1,9 +1,12 @@
 name: CI
 
+# Mirrors .sourcecraft/ci.yaml: the same checks, so either host can be the one we submit.
 on:
   push:
     branches: [main]
   pull_request:
+  # Run by hand from the Actions tab or `gh workflow run CI --ref <branch>`.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -21,16 +24,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       # 1. Dependencies — yarn and uv, both cached.
+      # Corepack first: setup-node asks yarn for its cache folder, and the runner's global Yarn 1
+      # refuses a project pinned to Yarn 4 in packageManager.
+      - name: Enable Corepack
+        run: corepack enable
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: yarn
 
-      - name: Enable Corepack
+      - name: Enable Corepack for the installed Node
         run: corepack enable
 
       - name: Install Node dependencies
@@ -44,18 +50,17 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --frozen
 
-      - uses: nrwl/nx-set-shas@v4
-
+      # run-many, not affected, as on SourceCraft: a full run is short and needs no base commit.
       # 2. Lint.
       - name: Lint TypeScript
-        run: yarn nx affected -t lint
+        run: yarn nx run-many -t lint
 
       - name: Lint Python
         run: uv run ruff check . && uv run ruff format --check .
 
       # 3. Types.
       - name: Typecheck TypeScript
-        run: yarn nx affected -t typecheck
+        run: yarn nx run-many -t typecheck
 
       - name: Typecheck Python
         run: uv run pyright
@@ -78,14 +83,14 @@ jobs:
       # 6. Tests. The contract suites run the shared fixtures through both Zod and Pydantic, so
       # an incompatible schema change fails here even when codegen itself succeeds.
       - name: Test TypeScript
-        run: yarn nx affected -t test
+        run: yarn nx run-many -t test
 
       - name: Test Python
         run: uv run pytest
 
       # 7. Build.
       - name: Build
-        run: yarn nx affected -t build
+        run: yarn nx run-many -t build
 
   licenses:
     name: Dependency license policy
@@ -95,12 +100,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Corepack first: setup-node asks yarn for its cache folder, and the runner's global Yarn 1
+      # refuses a project pinned to Yarn 4 in packageManager.
+      - name: Enable Corepack
+        run: corepack enable
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: yarn
 
-      - name: Enable Corepack
+      - name: Enable Corepack for the installed Node
         run: corepack enable
 
       - name: Install Node dependencies
