@@ -647,6 +647,9 @@
   [data-slot='dropdown-menu-content'][data-state='open'],
   [data-slot='dropdown-menu-sub-content'][data-state='open'],
   [data-slot='popover-content'][data-state='open'],
+  [data-slot='dropdown-menu-content'][data-side='bottom'][data-state='open'],
+  [data-slot='dropdown-menu-sub-content'][data-side='bottom'][data-state='open'],
+  [data-slot='popover-content'][data-side='bottom'][data-state='open'],
   .effort-label {
     animation: none;
   }
