@@ -29,6 +29,7 @@ import {
   connectionCheckSchema,
   modelCapabilitiesSchema,
   modelRefSchema,
+  manualKindsInputSchema,
   NO_REASONING_CHOICE,
   type ModelCapabilities,
   connectionInputSchema,
@@ -162,7 +163,7 @@ export class ModelSettingsController {
   @ApiOkResponse({ standardSchema: modelSettingsSchema })
   async get(@CurrentAccount() account: Account): Promise<ModelSettings> {
     const actor = actorOf(account);
-    return this.capabilities.withKinds(await this.settings.get(actor), actor);
+    return this.capabilities.withManualKinds(await this.settings.get(actor), actor);
   }
 
   @Post('connections')
@@ -189,8 +190,8 @@ export class ModelSettingsController {
   ): Promise<ModelConnection> {
     const actor = actorOf(account);
     const saved = await this.settings.saveConnection(body, actor).catch(refuse);
-    // A new or changed connection: every model is probed now, in the background.
-    void this.capabilities.classify(saved.connectionId, actor, true);
+    // A new or changed connection: how its models think is settled now, in the background.
+    void this.capabilities.check(saved.connectionId, actor, true);
     return saved;
   }
 
@@ -222,8 +223,8 @@ export class ModelSettingsController {
   ): Promise<ModelConnection> {
     const actor = actorOf(account);
     const checked = await this.settings.checkConnection(connectionId, actor).catch(refuse);
-    // The person asked to check: every model is probed again, in the background.
-    void this.capabilities.classify(connectionId, actor, true);
+    // The person asked to check: how its models think is settled again, in the background.
+    void this.capabilities.check(connectionId, actor, true);
     return checked;
   }
 
@@ -250,8 +251,8 @@ export class ModelSettingsController {
       body !== null && typeof body === 'object' ? { ...body, connectionId } : { connectionId };
     const actor = actorOf(account);
     const updated = await this.settings.setConnectionModels(input, actor).catch(refuse);
-    // Models switched on that were never probed are probed now; the rest keep their findings.
-    void this.capabilities.classify(connectionId, actor, false);
+    // Models switched on that were never settled are settled now; the rest keep their findings.
+    void this.capabilities.check(connectionId, actor, false);
     return updated;
   }
 
@@ -292,5 +293,30 @@ export class ModelSettingsController {
   @ApiSettingsErrors(400, 404)
   async setRole(@Body() body: unknown, @CurrentAccount() account: Account): Promise<void> {
     await this.settings.setRole(body, actorOf(account)).catch(refuse);
+  }
+
+  @Put('connections/:id/kinds')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Тип модели вручную',
+    description:
+      'Что умеет модель подключения: текст, картинки на входе, картинки на выходе, голос. Ручной выбор главнее описания провайдера; `kinds: null` возвращает описание провайдера.',
+  })
+  @ApiParam({ name: 'id', description: 'Подключение.' })
+  @ApiJsonBody(manualKindsInputSchema, {
+    'Модель видит картинки': { modelId: VK_AI_SPACE_MODEL, kinds: ['text', 'vision'] },
+  })
+  @ApiNoContentResponse({ description: 'Тип модели сохранён.' })
+  @ApiSettingsErrors(400, 404, 409)
+  async setManualKinds(
+    @Param('id') connectionId: string,
+    @Body() body: unknown,
+    @CurrentAccount() account: Account,
+  ): Promise<void> {
+    const input = manualKindsInputSchema.safeParse(body);
+    if (!input.success) throw new BadRequestException({ reason: 'invalid' });
+    await this.capabilities
+      .setManualKinds(connectionId, input.data.modelId, input.data.kinds, actorOf(account))
+      .catch(refuse);
   }
 }

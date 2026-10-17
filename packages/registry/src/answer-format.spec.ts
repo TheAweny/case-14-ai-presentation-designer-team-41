@@ -20,11 +20,9 @@ describe('shared answer prompts', () => {
     expect(format.repair).toContain('{{problems}}');
   });
 
-  it('reads the question that probes whether a model thinks', async () => {
+  it('reads the message of the free reasoning probe', async () => {
     const probe = await loadCapabilityProbe(join(root, 'registry', 'agents'));
-    for (const prompt of [probe.question, probe.chat, probe.vision, probe.image]) {
-      expect(prompt.length).toBeGreaterThan(0);
-    }
+    expect(probe.prompt.length).toBeGreaterThan(0);
   });
 
   it('refuses prompts that lost their placeholder', async () => {

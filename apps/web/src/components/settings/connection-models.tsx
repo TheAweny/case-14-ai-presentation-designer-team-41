@@ -2,20 +2,27 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { setConnectionModelsAction, type SettingsResult } from '@/app/settings-actions';
+import {
+  setConnectionModelsAction,
+  setModelKindsAction,
+  type SettingsResult,
+} from '@/app/settings-actions';
 import { Button } from '@/components/ui/button';
 import { BackIcon, SearchIcon } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
 import {
   modelFamily,
+  modelKindsOf,
   reportedModels,
   type ModelConnection,
   type ModelFamily,
 } from '@/lib/model-settings';
 import { cn } from '@/lib/utils';
 import { byFamily } from '@/lib/writer-models';
+import { ModelKindMenu } from './model-kind-menu';
 
 type FamilyFilter = ModelFamily | 'all';
+type ModelKindList = Parameters<typeof setModelKindsAction>[1]['kinds'];
 
 /**
  * Следующий список включённых моделей: `ids` включают или выключают. Когда включены все найденные,
@@ -84,6 +91,14 @@ export function ConnectionModels({
     [reported, family, needle],
   );
   const enabledCount = reported.filter(on).length;
+
+  const setKinds = (modelId: string, kinds: ModelKindList | null) => {
+    if (!editable || pending) return;
+    setPending(true);
+    void apply(() => setModelKindsAction(connection.connectionId, { modelId, kinds })).finally(() =>
+      setPending(false),
+    );
+  };
 
   const change = (ids: readonly string[], next: boolean) => {
     if (!editable || pending || ids.length === 0) return;
@@ -200,6 +215,13 @@ export function ConnectionModels({
                     >
                       {modelId}
                     </span>
+                    <ModelKindMenu
+                      modelId={modelId}
+                      {...modelKindsOf(connection, modelId)}
+                      editable={editable}
+                      disabled={pending}
+                      onChange={(kinds) => setKinds(modelId, kinds)}
+                    />
                     <Switch
                       aria-labelledby={labelId}
                       checked={on(modelId)}

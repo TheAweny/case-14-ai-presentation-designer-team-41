@@ -395,14 +395,6 @@ function ConnectionCard({
               <StatusDot tone="idle" />
               {t('status.unchecked')}
             </>
-          ) : check.ok && connection.probing ? (
-            <>
-              <SpinnerIcon size={12} className="animate-spin motion-reduce:animate-none" />
-              {t('status.probing', {
-                done: connection.probing.done,
-                total: connection.probing.total,
-              })}
-            </>
           ) : check.ok ? (
             <>
               <StatusDot tone="ok" />

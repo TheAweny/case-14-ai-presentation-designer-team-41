@@ -2,17 +2,12 @@
 # output (response_format json_schema) still gets the schema of its answer in the instructions,
 # and one request to repair an answer that misses it. Bump the version when their meaning changes.
 #
-# The capability probe is the question the API asks a model to learn how it thinks: it answers a
-# few times, with thinking asked for, switched off and at a low and a high depth, and the replies
-# tell what each switch really changes. The question takes several steps to get right, so a model
-# that can think does: a trivial one is answered at once even at a high depth.
+# The capability probe is the message of the one free request the API sends to learn whether a
+# server reads reasoning_effort: it goes with a depth no server accepts, so a server that reads
+# the field refuses it before any model runs. What a model is comes from the provider's own
+# description in /models, never from requests to the model.
 
-version: 1.2.0
+version: 1.3.0
 answerFormatFile: answer-format.md
 answerRepairFile: answer-repair.md
 capabilityProbeFile: capability-probe.md
-# What a model is, asked once per model of a connection: does it chat, does it see the colour of a
-# picture it is sent, does it draw one. The answers decide which pickers offer it.
-chatProbeFile: capability-probe-chat.md
-visionProbeFile: capability-probe-vision.md
-imageProbeFile: capability-probe-image.md

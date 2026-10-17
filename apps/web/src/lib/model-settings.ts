@@ -5,9 +5,11 @@ import {
   enabledModelIds,
   isModelEnabled,
   isRoleOptional,
+  modelKindsOf,
   roleKind,
   usesWriterModelByDefault,
   type ConnectionModelsInput,
+  type ManualKindsInput,
   type ConnectionCheck,
   type ConnectionInput,
   type ConnectionPreset,
@@ -55,6 +57,7 @@ export {
   checkErrorSchema as CheckErrorSchema,
   connectionModelsInputSchema as ConnectionModelsInputSchema,
   connectionCheckSchema as ConnectionCheckSchema,
+  modelKindsOf,
   connectionInputProblems,
   connectionInputSchema as ConnectionInputSchema,
   connectionNameProblem,
@@ -92,6 +95,7 @@ export {
   type PipelineRole,
   type ProbeInput,
   type RoleAssignment,
+  type ManualKindsInput,
 } from '@lct/contracts';
 
 /**
@@ -204,17 +208,15 @@ export function knownModels(connection: ModelConnection): readonly string[] {
 }
 
 /**
- * Модели подключения, годные для роли: проверка запросами показала, что модель умеет нужное —
- * отвечать в чате, видеть картинку, рисовать или расшифровывать голос. Модель, которую ещё не
- * проверили, не предлагается нигде. Источник без проверок (демо) отдаёт подключение без
- * `modelKinds`, и тогда список не сужается.
+ * Модели подключения, годные для роли. Что умеет модель, говорит описание провайдера в `/models`
+ * или ручная пометка в настройках; модель без описания считается текстовой, которая, возможно,
+ * видит картинки. Модели изображений и голоса без описания или пометки не предлагаются.
  */
 export function modelsForRole(connection: ModelConnection, role: PipelineRole): readonly string[] {
-  const known = knownModels(connection);
-  const kinds = connection.modelKinds;
-  if (!kinds) return known;
   const kind = roleKind(role);
-  return known.filter((modelId) => kinds[modelId]?.includes(kind));
+  return knownModels(connection).filter((modelId) =>
+    modelKindsOf(connection, modelId).kinds.includes(kind),
+  );
 }
 
 /** Модели, которые проверка нашла, ещё до фильтра включённых. */
@@ -300,4 +302,9 @@ export interface ModelSettingsSource {
    * подключение менять нельзя.
    */
   setConnectionModels(input: ConnectionModelsInput): Promise<ModelConnection>;
+  /**
+   * Задать вручную, что умеет модель подключения; `kinds: null` — вернуть описание провайдера.
+   * Менять может тот, кому можно менять подключение.
+   */
+  setModelKinds(connectionId: string, input: ManualKindsInput): Promise<void>;
 }

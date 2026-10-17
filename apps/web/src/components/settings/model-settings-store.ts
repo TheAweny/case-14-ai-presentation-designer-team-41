@@ -14,18 +14,9 @@ let current: ModelSettings | null = null;
 let loading = false;
 const listeners = new Set<() => void>();
 
-let followUp: ReturnType<typeof setTimeout> | null = null;
-
 export function publishModelSettings(settings: ModelSettings): void {
   current = settings;
   for (const listener of listeners) listener();
-  // Models still being probed: ask again shortly, so the pickers fill in as they are sorted.
-  if (followUp === null && settings.connections.some((connection) => connection.probing)) {
-    followUp = setTimeout(() => {
-      followUp = null;
-      load();
-    }, 2500);
-  }
 }
 
 function subscribe(listener: () => void): () => void {

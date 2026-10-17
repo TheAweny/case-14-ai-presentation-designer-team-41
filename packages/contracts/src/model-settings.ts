@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reasoningCapabilitySchema } from './reasoning.js';
 
 /**
  * Model settings: connections to OpenAI-compatible servers and which model performs each role of
@@ -37,9 +38,9 @@ export function isRoleOptional(role: PipelineRole): boolean {
 }
 
 /**
- * What a model does, as the API learnt by asking it, never from its name: `text` answers chat
- * completions, `vision` reads a picture it is sent (and is `text` too), `image` draws pictures,
- * `speech` turns a recording into text.
+ * What a model does, as its provider describes it in `/models` or as the person marked it, never
+ * from its name: `text` answers chat completions, `vision` reads a picture it is sent (and is
+ * `text` too), `image` draws pictures, `speech` turns a recording into text.
  */
 export const MODEL_KINDS = ['text', 'vision', 'image', 'speech'] as const;
 export const modelKindSchema = z.enum(MODEL_KINDS);
@@ -128,12 +129,24 @@ export const connectionHeaderSchema = z.object({
 });
 export type ConnectionHeader = z.infer<typeof connectionHeaderSchema>;
 
+/**
+ * What the provider said about one model in `/models`, beyond its id: what kind it is and how it
+ * thinks. Missing fields: the provider did not say.
+ */
+export const modelDetailsSchema = z.object({
+  kinds: z.array(modelKindSchema).optional(),
+  reasoning: reasoningCapabilitySchema.optional(),
+});
+export type ModelDetails = z.infer<typeof modelDetailsSchema>;
+
 /** Outcome of the last check: when, and either the models found or why it failed. */
 export const connectionCheckSchema = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(true),
     at: z.iso.datetime(),
     models: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH),
+    /** What the provider said about each model, for the models it described. */
+    details: z.record(z.string(), modelDetailsSchema).optional(),
   }),
   z.object({ ok: z.literal(false), at: z.iso.datetime(), error: checkErrorSchema }),
 ]);
@@ -158,15 +171,8 @@ export const modelConnectionSchema = z.object({
    * instead of hundreds; for a shared key it applies to every account.
    */
   enabledModels: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH).nullable().optional(),
-  /**
-   * What each model of the connection does, for the models already probed. A model missing here
-   * has not been probed yet and is offered nowhere until it is.
-   */
-  modelKinds: z.record(z.string(), z.array(modelKindSchema)).optional(),
-  /** The models are being probed right now: how many of how many are done. */
-  probing: z
-    .object({ done: z.number().int().nonnegative(), total: z.number().int().positive() })
-    .optional(),
+  /** Kinds the person set by hand for models of this connection; they win over the provider. */
+  manualKinds: z.record(z.string(), z.array(modelKindSchema)).optional(),
   /** Configured on the server through the environment: it can be checked, not edited. */
   managed: z.boolean(),
   /**
@@ -471,3 +477,29 @@ export const modelSettingsErrorSchema = z.object({
     .default({}),
 });
 export type ModelSettingsError = z.infer<typeof modelSettingsErrorSchema>;
+
+/** A model the provider did not describe is taken for a chat model that may read pictures. */
+export const ASSUMED_KINDS: readonly ModelKind[] = ['text', 'vision'];
+
+/**
+ * What a model of a connection is, and who said so: the person (`manual`), the provider in
+ * `/models` (`provider`), or nobody, in which case it is taken for a chat model (`assumed`).
+ */
+export function modelKindsOf(
+  connection: Pick<ModelConnection, 'lastCheck' | 'manualKinds'>,
+  modelId: string,
+): { readonly kinds: readonly ModelKind[]; readonly source: 'manual' | 'provider' | 'assumed' } {
+  const manual = connection.manualKinds?.[modelId];
+  if (manual) return { kinds: manual, source: 'manual' };
+  const described =
+    connection.lastCheck?.ok === true ? connection.lastCheck.details?.[modelId]?.kinds : undefined;
+  if (described) return { kinds: described, source: 'provider' };
+  return { kinds: ASSUMED_KINDS, source: 'assumed' };
+}
+
+/** A kind set by hand for one model of a connection; `kinds: null` goes back to the provider. */
+export const manualKindsInputSchema = z.object({
+  modelId: modelIdSchema,
+  kinds: z.array(modelKindSchema).max(MODEL_KINDS.length).nullable(),
+});
+export type ManualKindsInput = z.infer<typeof manualKindsInputSchema>;

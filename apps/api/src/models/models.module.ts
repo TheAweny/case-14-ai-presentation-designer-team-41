@@ -24,7 +24,7 @@ function registryDir(): string {
   return found;
 }
 
-/** The probe prompts, read once: they are prompts, so they live in the registry. */
+/** The probe message, read once: it is a prompt, so it lives in the registry. */
 function probePrompts(): () => Promise<CapabilityProbe> {
   let loaded: Promise<CapabilityProbe> | null = null;
   return () => {

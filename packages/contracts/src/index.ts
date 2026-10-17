@@ -375,8 +375,14 @@ export {
   VK_AI_SPACE_ROLES,
   VK_PROJECT_HEADER,
   MODEL_KINDS,
+  ASSUMED_KINDS,
   modelKindSchema,
+  modelDetailsSchema,
+  modelKindsOf,
+  manualKindsInputSchema,
+  type ManualKindsInput,
   roleKind,
+  type ModelDetails,
   type ModelKind,
 } from './model-settings.js';
 export {

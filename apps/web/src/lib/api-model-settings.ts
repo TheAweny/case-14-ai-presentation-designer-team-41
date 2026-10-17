@@ -73,5 +73,11 @@ export function createApiModelSettings(userId: string): ModelSettingsSource {
         }),
       );
     },
+    async setModelKinds(connectionId, input) {
+      await call(`/connections/${encodeURIComponent(connectionId)}/kinds`, {
+        method: 'PUT',
+        body: json(input),
+      });
+    },
   };
 }

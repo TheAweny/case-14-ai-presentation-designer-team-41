@@ -954,11 +954,28 @@ test('lets a hybrid model think on request with a depth only while thinking', as
   await expect(depth).toHaveCount(0);
 });
 
-test('offers only models that probing found to chat in the chat model menu', async ({ page }) => {
+test('offers only models the provider describes as chat models in the chat menu', async ({
+  page,
+}) => {
   const sorted = await page.request.put('http://127.0.0.1:3121/__kinds', {
     data: { alpha: ['image'], beta: ['text', 'vision'] },
   });
   expect(sorted.ok()).toBeTruthy();
+  await openChat(page);
+  await page.getByRole('button', { name: 'Модель: beta. Сменить модель' }).click();
+  await expect(page.getByRole('option', { name: 'beta', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'alpha', exact: true })).toHaveCount(0);
+});
+
+test('lets the person mark what a model is, and the pickers follow', async ({ page }) => {
+  await page.goto('/?settings=models');
+  await page.getByRole('button', { name: 'Действия с подключением «Test models»' }).click();
+  await page.getByRole('menuitem', { name: 'Модели' }).click();
+  // Nothing describes `alpha`: it is taken for a text model that may see pictures.
+  await page.getByRole('button', { name: 'Что умеет alpha: Текст и картинки' }).click();
+  await page.getByRole('menuitemradio', { name: 'Изображения' }).click();
+  await expect(page.getByRole('button', { name: 'Что умеет alpha: Изображения' })).toBeVisible();
+
   await openChat(page);
   await page.getByRole('button', { name: 'Модель: beta. Сменить модель' }).click();
   await expect(page.getByRole('option', { name: 'beta', exact: true })).toBeVisible();

@@ -7,9 +7,6 @@ import { MODEL_CHECK_TIMEOUT_MS } from '@lct/contracts';
 import type { CheckError, ModelSettings } from '@/lib/model-settings';
 import { publishModelSettings } from './model-settings-store';
 
-/** How often the window asks for progress while models are being probed. */
-const PROBING_POLL_MS = 2500;
-
 /**
  * Настройки моделей для окна: загружаются, когда открыт раздел, и заменяются целиком ответом
  * каждого действия — так окно не расходится с сервером, даже если настройки правили в другой
@@ -32,17 +29,6 @@ export function useModelSettings() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // While the models of a connection are being probed, the window follows the progress and the
-  // models appear in their pickers as they are sorted.
-  const probing = settings?.connections.some((connection) => connection.probing) ?? false;
-  useEffect(() => {
-    if (!probing) return;
-    const timer = window.setTimeout(() => {
-      getModelSettingsAction().then(setSettings, () => undefined);
-    }, PROBING_POLL_MS);
-    return () => window.clearTimeout(timer);
-  }, [probing, settings]);
 
   return { settings, failed, reload: load, setSettings };
 }

@@ -4,6 +4,7 @@ import type {
   ConnectionHeader,
   ConnectionPreset,
   PipelineRole,
+  ModelKind,
   ReasoningCapability,
   RoleAssignment,
 } from '@lct/contracts';
@@ -32,11 +33,10 @@ export interface StoredConnection {
  * settled. `probeVersion` is the version of the probe prompts that found it.
  */
 export interface StoredCapability {
-  readonly chat?: boolean;
-  readonly vision?: boolean;
-  readonly image?: boolean;
-  readonly speech?: boolean;
+  /** How the model thinks, from the provider's description or the free probe. */
   readonly reasoning?: ReasoningCapability;
+  /** The kinds the person set by hand; they win over the provider's description. */
+  readonly manualKinds?: readonly ModelKind[];
   readonly probeVersion: string;
 }
 
@@ -76,8 +76,19 @@ export interface ModelSettingsStore {
   getCapability(baseUrl: string, modelId: string): Promise<StoredCapability | null>;
   /** Everything found for the models behind one server address, by model id. */
   listCapabilities(baseUrl: string): Promise<ReadonlyMap<string, StoredCapability>>;
-  /** Merges the settled fields into what is stored; the fields left out keep their value. */
-  saveCapability(baseUrl: string, modelId: string, found: StoredCapability): Promise<void>;
+  /** Stores how the model thinks; the other fields keep their value. */
+  saveReasoning(
+    baseUrl: string,
+    modelId: string,
+    reasoning: ReasoningCapability,
+    probeVersion: string,
+  ): Promise<void>;
+  /** Sets or, with null, clears the kinds the person chose by hand. */
+  setManualKinds(
+    baseUrl: string,
+    modelId: string,
+    kinds: readonly ModelKind[] | null,
+  ): Promise<void>;
 }
 
 interface ConnectionRow {
@@ -260,53 +271,48 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   private async capabilityRows(baseUrl: string, modelId: string | null) {
     const result = await this.pool.query<{
       model_id: string;
-      chat: boolean | null;
-      vision: boolean | null;
-      image: boolean | null;
-      speech: boolean | null;
       reasoning: ReasoningCapability | null;
+      manual_kinds: ModelKind[] | null;
       probe_version: string;
     }>(
-      `SELECT model_id, chat, vision, image, speech, reasoning, probe_version
+      `SELECT model_id, reasoning, manual_kinds, probe_version
        FROM model_capabilities WHERE base_url = $1 AND ($2::text IS NULL OR model_id = $2)`,
       [baseUrl, modelId],
     );
     const found = new Map<string, StoredCapability>();
     for (const row of result.rows) {
       found.set(row.model_id, {
-        ...(row.chat === null ? {} : { chat: row.chat }),
-        ...(row.vision === null ? {} : { vision: row.vision }),
-        ...(row.image === null ? {} : { image: row.image }),
-        ...(row.speech === null ? {} : { speech: row.speech }),
         ...(row.reasoning ? { reasoning: row.reasoning } : {}),
+        ...(row.manual_kinds ? { manualKinds: row.manual_kinds } : {}),
         probeVersion: row.probe_version,
       });
     }
     return found;
   }
 
-  async saveCapability(baseUrl: string, modelId: string, found: StoredCapability) {
+  async saveReasoning(
+    baseUrl: string,
+    modelId: string,
+    reasoning: ReasoningCapability,
+    probeVersion: string,
+  ) {
     await this.pool.query(
-      `INSERT INTO model_capabilities
-         (base_url, model_id, chat, vision, image, speech, reasoning, probe_version)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+      `INSERT INTO model_capabilities (base_url, model_id, reasoning, probe_version)
+       VALUES ($1, $2, $3::jsonb, $4)
        ON CONFLICT (base_url, model_id) DO UPDATE SET
-         chat = COALESCE(EXCLUDED.chat, model_capabilities.chat),
-         vision = COALESCE(EXCLUDED.vision, model_capabilities.vision),
-         image = COALESCE(EXCLUDED.image, model_capabilities.image),
-         speech = COALESCE(EXCLUDED.speech, model_capabilities.speech),
-         reasoning = COALESCE(EXCLUDED.reasoning, model_capabilities.reasoning),
-         probe_version = EXCLUDED.probe_version, updated_at = now()`,
-      [
-        baseUrl,
-        modelId,
-        found.chat ?? null,
-        found.vision ?? null,
-        found.image ?? null,
-        found.speech ?? null,
-        found.reasoning ? JSON.stringify(found.reasoning) : null,
-        found.probeVersion,
-      ],
+         reasoning = EXCLUDED.reasoning, probe_version = EXCLUDED.probe_version,
+         updated_at = now()`,
+      [baseUrl, modelId, JSON.stringify(reasoning), probeVersion],
+    );
+  }
+
+  async setManualKinds(baseUrl: string, modelId: string, kinds: readonly ModelKind[] | null) {
+    await this.pool.query(
+      `INSERT INTO model_capabilities (base_url, model_id, manual_kinds, probe_version)
+       VALUES ($1, $2, $3::jsonb, 'manual')
+       ON CONFLICT (base_url, model_id) DO UPDATE SET
+         manual_kinds = EXCLUDED.manual_kinds, updated_at = now()`,
+      [baseUrl, modelId, kinds === null ? null : JSON.stringify(kinds)],
     );
   }
 }
@@ -391,8 +397,19 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
     return found;
   }
 
-  async saveCapability(baseUrl: string, modelId: string, found: StoredCapability) {
+  async saveReasoning(
+    baseUrl: string,
+    modelId: string,
+    reasoning: ReasoningCapability,
+    probeVersion: string,
+  ) {
     const key = `${baseUrl} ${modelId}`;
-    this.capabilities.set(key, { ...this.capabilities.get(key), ...found });
+    this.capabilities.set(key, { ...this.capabilities.get(key), reasoning, probeVersion });
+  }
+
+  async setManualKinds(baseUrl: string, modelId: string, kinds: readonly ModelKind[] | null) {
+    const key = `${baseUrl} ${modelId}`;
+    const { manualKinds: _, ...rest } = this.capabilities.get(key) ?? { probeVersion: 'manual' };
+    this.capabilities.set(key, kinds === null ? rest : { ...rest, manualKinds: kinds });
   }
 }

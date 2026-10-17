@@ -1,6 +1,8 @@
 import {
+  MODEL_KINDS,
   NO_REASONING_CHOICE,
   enabledModelIds,
+  modelKindsOf,
   type ModelCapabilities,
   type ModelConnection,
   type ModelKind,
@@ -9,52 +11,32 @@ import {
   type ReasoningCapability,
 } from '@lct/contracts';
 import type { CapabilityProbe } from '@lct/registry';
+import { probeReasoning, type Probed } from './capability-probe.js';
+import type { ModelSettingsStore } from './model-settings-store.js';
 import {
-  probeChat,
-  probeImage,
-  probeReasoning,
-  probeSpeech,
-  probeVision,
-  type Probed,
-} from './capability-probe.js';
-import type { ModelSettingsStore, StoredCapability } from './model-settings-store.js';
-import type {
-  ModelSettingsService,
-  ResolvedModel,
-  SettingsActor,
+  ManagedConnectionError,
+  ModelConnectionNotFoundError,
+  type ModelSettingsService,
+  type ResolvedModel,
+  type SettingsActor,
 } from './model-settings.service.js';
 
-/** A single-model probe that could not finish is not repeated for this long. */
+/** A probe that could not finish is not repeated for this long. */
 const RETRY_AFTER_MS = 60000;
-/** Models probed at once while a connection is classified: gateways limit parallel requests. */
-const MODELS_AT_ONCE = 3;
-
-/** How far the classification of one connection has got. */
-interface Progress {
-  done: number;
-  readonly total: number;
-}
-
-/** The kinds a probed model was found to be; none for a model nothing was settled about yet. */
-export function kindsOf(found: StoredCapability): ModelKind[] {
-  const kinds: ModelKind[] = [];
-  if (found.chat) kinds.push('text');
-  if (found.chat && found.vision) kinds.push('vision');
-  if (found.image) kinds.push('image');
-  if (found.speech) kinds.push('speech');
-  return kinds;
-}
+/** Free probes at once while a connection is checked: gateways limit parallel requests. */
+const PROBES_AT_ONCE = 4;
 
 /**
- * What models can do, learnt by asking them (`capability-probe.ts`) and kept by server address
- * and model id. Every model of a connection is probed when the connection is added and when the
- * person checks it again; in between the findings stand and nothing is asked twice. A model
- * that is used but was never probed (an id typed by hand) is probed once on first use.
+ * What models can do. Their kind (text, pictures in, pictures out, speech) comes from what the
+ * provider says in `/models`, kept with the connection check, or from what the person set by
+ * hand. Nothing is learnt by making a model work: with a hundred models that is slow and costs
+ * money. How a model thinks comes from the same description; where it says nothing, one free
+ * request tells whether the server reads `reasoning_effort` (see `capability-probe.ts`). That is
+ * asked when the connection is added or checked, and kept until the next check.
  */
 export class ModelCapabilityService {
   private readonly running = new Map<string, Promise<unknown>>();
   private readonly failedAt = new Map<string, number>();
-  private readonly progress = new Map<string, Progress>();
 
   constructor(
     private readonly store: ModelSettingsStore,
@@ -65,169 +47,168 @@ export class ModelCapabilityService {
   ) {}
 
   /**
-   * Probes every offered model of a connection, in the background. `force` asks again about
-   * models already probed: the person pressed "check". Without it only models with nothing
-   * stored are asked. Resolves when the whole connection is done.
+   * Settles how each chat model of a connection thinks, in the background: the provider's word
+   * where it gave one, the free probe elsewhere. `force` asks again (the person checked the
+   * connection); without it only models with nothing stored are asked.
    */
-  classify(connectionId: string, actor: SettingsActor, force: boolean): Promise<void> {
-    const key = `classify ${connectionId}`;
+  check(connectionId: string, actor: SettingsActor, force: boolean): Promise<void> {
+    const key = `check ${connectionId}`;
     const current = this.running.get(key) as Promise<void> | undefined;
     if (current) return current;
-    // Shown as "probing" at once, so the answer to the save or the check already says so.
-    this.progress.set(connectionId, { done: 0, total: 1 });
-    const run = this.classifyNow(connectionId, actor, force)
+    const run = this.checkNow(connectionId, actor, force)
       .catch(() => undefined)
-      .finally(() => {
-        this.running.delete(key);
-        this.progress.delete(connectionId);
-      });
+      .finally(() => this.running.delete(key));
     this.running.set(key, run);
     return run;
   }
 
-  private async classifyNow(connectionId: string, actor: SettingsActor, force: boolean) {
-    const settings = await this.settings.get(actor);
-    const connection = settings.connections.find((item) => item.connectionId === connectionId);
+  private async checkNow(connectionId: string, actor: SettingsActor, force: boolean) {
+    const connection = await this.connection(connectionId, actor);
     if (!connection?.lastCheck?.ok) return;
-    const offered = enabledModelIds(connection.lastCheck.models, connection.enabledModels ?? null);
+    const { details } = connection.lastCheck;
     const stored = await this.store.listCapabilities(connection.baseUrl);
-    const models = force ? [...offered] : offered.filter((modelId) => !stored.has(modelId));
-    if (models.length === 0) return;
-    const progress: Progress = { done: 0, total: models.length };
-    this.progress.set(connectionId, progress);
-    const prompts = await this.prompts();
+    const { version } = await this.prompts();
+    const chatModels = this.offered(connection).filter((modelId) =>
+      modelKindsOf(connection, modelId).kinds.includes('text'),
+    );
+    const unknown: string[] = [];
+    for (const modelId of chatModels) {
+      const described = details?.[modelId]?.reasoning;
+      if (described) {
+        await this.store.saveReasoning(connection.baseUrl, modelId, described, version);
+      } else if (force || !stored.get(modelId)?.reasoning) {
+        unknown.push(modelId);
+      }
+    }
     let next = 0;
     const worker = async () => {
-      while (next < models.length) {
-        const modelId = models[next++];
+      while (next < unknown.length) {
+        const modelId = unknown[next++];
         if (modelId === undefined) break;
         const model = await this.settings
           .resolve({ connectionId, modelId }, actor)
           .catch(() => null);
-        if (model) await this.probeModel(model, prompts).catch(() => undefined);
-        progress.done++;
+        if (model) await this.reasoning(model, true);
       }
     };
-    await Promise.all(Array.from({ length: Math.min(MODELS_AT_ONCE, models.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(PROBES_AT_ONCE, unknown.length) }, worker));
   }
 
-  /** Everything that can be learnt about one model; what was settled is kept. */
-  private async probeModel(model: ResolvedModel, prompts: CapabilityProbe): Promise<void> {
-    const value = <T>(probed: Probed<T>) => (probed.known ? probed.value : undefined);
-    const [chat, image, speech] = await Promise.all([
-      probeChat(model, prompts.chat, this.fetchImpl),
-      probeImage(model, prompts.image, this.fetchImpl),
-      probeSpeech(model, this.fetchImpl),
-    ]);
-    const talks = value(chat);
-    // Only a model that chats can see a picture in a message or think before its answer.
-    const [vision, reasoning] = talks
-      ? await Promise.all([
-          probeVision(model, prompts.vision, this.fetchImpl),
-          probeReasoning(model, prompts.question, this.fetchImpl),
-        ])
-      : [
-          { known: talks === false, value: false } as Probed<boolean>,
-          { known: talks === false, value: NO_REASONING_CHOICE } as Probed<ReasoningCapability>,
-        ];
-    const found = {
-      chat: talks,
-      vision: value(vision),
-      image: value(image),
-      speech: value(speech),
-      reasoning: value(reasoning),
-    };
-    const settledFields = Object.fromEntries(
-      Object.entries(found).filter(([, settled]) => settled !== undefined),
-    );
-    if (Object.keys(settledFields).length === 0) return;
-    await this.store.saveCapability(model.baseUrl, model.model, {
-      ...settledFields,
-      probeVersion: prompts.version,
-    });
+  private async connection(
+    connectionId: string,
+    actor: SettingsActor,
+  ): Promise<ModelConnection | undefined> {
+    const settings = await this.settings.get(actor);
+    return settings.connections.find((item) => item.connectionId === connectionId);
   }
 
-  /**
-   * The settings with what each model was found to be, and how far a running classification
-   * has got. A checked connection none of whose models was ever probed (added before probing
-   * existed) is classified now, once.
-   */
-  async withKinds(settings: ModelSettings, actor: SettingsActor): Promise<ModelSettings> {
+  private offered(connection: ModelConnection): readonly string[] {
+    return connection.lastCheck?.ok
+      ? enabledModelIds(connection.lastCheck.models, connection.enabledModels ?? null)
+      : [];
+  }
+
+  /** The settings with the kinds the person set by hand on each connection. */
+  async withManualKinds(settings: ModelSettings, actor: SettingsActor): Promise<ModelSettings> {
     const connections = await Promise.all(
       settings.connections.map(async (connection): Promise<ModelConnection> => {
         if (!connection.lastCheck?.ok) return connection;
         const stored = await this.store.listCapabilities(connection.baseUrl);
-        const offered = enabledModelIds(
-          connection.lastCheck.models,
-          connection.enabledModels ?? null,
-        );
-        if (offered.length > 0 && !offered.some((modelId) => stored.has(modelId))) {
-          void this.classify(connection.connectionId, actor, false);
-        }
-        const modelKinds: Record<string, ModelKind[]> = {};
-        for (const modelId of offered) {
+        const manualKinds: Record<string, ModelKind[]> = {};
+        let reasoningKnown = false;
+        for (const modelId of this.offered(connection)) {
           const found = stored.get(modelId);
-          if (found) modelKinds[modelId] = kindsOf(found);
+          if (found?.manualKinds) manualKinds[modelId] = [...found.manualKinds];
+          if (found?.reasoning) reasoningKnown = true;
         }
-        const progress = this.progress.get(connection.connectionId);
-        return {
-          ...connection,
-          modelKinds,
-          ...(progress ? { probing: { done: progress.done, total: progress.total } } : {}),
-        };
+        // A connection checked before thinking was settled at check time: settle it once now.
+        if (!reasoningKnown) void this.check(connection.connectionId, actor, false);
+        return { ...connection, manualKinds };
       }),
     );
     return { ...settings, connections };
   }
 
-  /** How thinking can be chosen for a resolved model; no choice while that is unknown. */
-  async reasoningOf(model: ResolvedModel): Promise<ReasoningCapability> {
-    return (await this.reasoning(model)) ?? NO_REASONING_CHOICE;
+  /**
+   * Sets what a model of a connection is, by hand; null goes back to the provider's word. Only
+   * whoever may change the connection may change this: it applies to everyone using it.
+   */
+  async setManualKinds(
+    connectionId: string,
+    modelId: string,
+    kinds: readonly ModelKind[] | null,
+    actor: SettingsActor,
+  ): Promise<void> {
+    const connection = await this.connection(connectionId, actor);
+    if (!connection) throw new ModelConnectionNotFoundError(connectionId);
+    const mayChange =
+      connection.managed || connection.shared ? actor.admin : connection.editable !== false;
+    if (!mayChange)
+      throw new ManagedConnectionError('Only an administrator changes this connection.');
+    const known = kinds === null ? null : MODEL_KINDS.filter((kind) => kinds.includes(kind));
+    // Seeing pictures is a kind of chatting: a VLM without text is a text model that sees.
+    const normalised =
+      known !== null && known.includes('vision') && !known.includes('text')
+        ? (['text', ...known] as ModelKind[])
+        : known;
+    await this.store.setManualKinds(connection.baseUrl, modelId, normalised);
   }
 
-  /** The stored finding, or a probe of a model nobody probed yet (an id typed by hand). */
-  private async reasoning(model: ResolvedModel): Promise<ReasoningCapability | null> {
-    const stored = await this.store.getCapability(model.baseUrl, model.model);
-    if (stored?.reasoning) return stored.reasoning;
-    if (stored?.chat === false) return NO_REASONING_CHOICE;
+  /** How thinking can be chosen for a resolved model; no choice while that is unknown. */
+  async reasoningOf(model: ResolvedModel): Promise<ReasoningCapability> {
+    return (await this.reasoning(model, false)) ?? NO_REASONING_CHOICE;
+  }
+
+  /** The stored finding, or the free probe for a model nothing is stored about. */
+  private async reasoning(
+    model: ResolvedModel,
+    force: boolean,
+  ): Promise<ReasoningCapability | null> {
+    if (!force) {
+      const stored = await this.store.getCapability(model.baseUrl, model.model);
+      if (stored?.reasoning) return stored.reasoning;
+    }
     const key = `reasoning ${model.baseUrl} ${model.model}`;
     const failed = this.failedAt.get(key);
-    if (failed !== undefined && this.now() - failed < RETRY_AFTER_MS) return null;
-    let pending = this.running.get(key) as Promise<Probed<ReasoningCapability>> | undefined;
+    if (!force && failed !== undefined && this.now() - failed < RETRY_AFTER_MS) return null;
+    let pending = this.running.get(key) as Promise<Probed<ReasoningCapability | null>> | undefined;
     if (!pending) {
-      pending = this.prompts().then(({ question }) =>
-        probeReasoning(model, question, this.fetchImpl),
-      );
+      pending = this.prompts().then(({ prompt }) => probeReasoning(model, prompt, this.fetchImpl));
       this.running.set(key, pending);
       void pending.finally(() => this.running.delete(key)).catch(() => undefined);
     }
-    const found = await pending.catch((): Probed<ReasoningCapability> => ({ known: false }));
+    const found = await pending.catch((): Probed<ReasoningCapability | null> => ({
+      known: false,
+    }));
     if (!found.known) {
       this.failedAt.set(key, this.now());
       return null;
     }
     this.failedAt.delete(key);
-    await this.store.saveCapability(model.baseUrl, model.model, {
-      reasoning: found.value,
-      probeVersion: (await this.prompts()).version,
-    });
-    return found.value;
+    const reasoning = found.value ?? NO_REASONING_CHOICE;
+    await this.store.saveReasoning(
+      model.baseUrl,
+      model.model,
+      reasoning,
+      (await this.prompts()).version,
+    );
+    return reasoning;
   }
 
   /** What the composer shows for a model the person may use. */
   async capabilitiesOf(ref: ModelRef, actor: SettingsActor): Promise<ModelCapabilities> {
     const model = await this.settings.resolve(ref, actor);
-    const reasoning = await this.reasoning(model);
+    const reasoning = await this.reasoning(model, false);
     return { reasoning: reasoning ?? NO_REASONING_CHOICE, probed: reasoning !== null };
   }
 
   /**
    * Who transcribes dictation for this person: the model assigned to `speech`; without one, the
-   * first model of their connections that transcribed the probe recording. `disabled` switches
-   * dictation off. Null: there is no such model, or the connections are still being probed.
+   * first model of their connections that the provider describes, or the person marked, as a
+   * speech model. `disabled` switches dictation off.
    */
   async speechModel(actor: SettingsActor): Promise<ResolvedModel | null> {
-    const settings = await this.settings.get(actor);
+    const settings = await this.withManualKinds(await this.settings.get(actor), actor);
     const assigned = settings.roles.find((item) => item.role === 'speech');
     if (assigned?.kind === 'disabled') return null;
     if (assigned?.kind === 'model') {
@@ -237,13 +218,9 @@ export class ModelCapabilityService {
       );
     }
     for (const connection of settings.connections) {
-      if (!connection.lastCheck?.ok) continue;
-      const stored = await this.store.listCapabilities(connection.baseUrl);
-      const offered = enabledModelIds(
-        connection.lastCheck.models,
-        connection.enabledModels ?? null,
+      const modelId = this.offered(connection).find((id) =>
+        modelKindsOf(connection, id).kinds.includes('speech'),
       );
-      const modelId = offered.find((id) => stored.get(id)?.speech === true);
       if (modelId) {
         return this.settings.resolve({ connectionId: connection.connectionId, modelId }, actor);
       }

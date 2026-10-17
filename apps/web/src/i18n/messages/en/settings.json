@@ -171,8 +171,7 @@
         "checking": "Checking…",
         "ok": "{count, plural, =0 {Checked · no models} one {Checked · # model} other {Checked · # models}}",
         "okLimited": "Checked · {enabled} of {count} on",
-        "failed": "Error: {reason}",
-        "probing": "Finding out what each model does: {done} of {total}"
+        "failed": "Error: {reason}"
       },
       "menu": {
         "label": "Actions for connection “{name}”",
@@ -203,7 +202,27 @@
         "enableAll": "Switch all on",
         "disableAll": "Switch all off",
         "enableShown": "Switch shown on",
-        "disableShown": "Switch shown off"
+        "disableShown": "Switch shown off",
+        "kinds": {
+          "label": "What {model} does: {kind}",
+          "text": "Text",
+          "vlm": "Text and pictures",
+          "image": "Images",
+          "speech": "Speech",
+          "none": "Not used",
+          "kind": {
+            "text": "text",
+            "vision": "pictures",
+            "image": "images",
+            "speech": "speech"
+          },
+          "source": {
+            "provider": "As the provider describes it",
+            "assumed": "The provider did not describe it: taken for a text model that may see pictures",
+            "manual": "Set by hand"
+          },
+          "reset": "As the provider describes it"
+        }
       }
     },
     "errors": {
