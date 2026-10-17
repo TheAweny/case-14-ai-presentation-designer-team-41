@@ -423,3 +423,25 @@ export {
   type ChatDocument,
 } from './chat.js';
 export { finalReviewSchema, type FinalReview } from './generation-review.js';
+export {
+  materialResearchInputSchema,
+  materialResearchSourceSchema,
+  materialResearchAnswerSchema,
+  materialResearchResultSchema,
+  type MaterialResearchSource,
+  type MaterialResearchResult,
+} from './material-research.js';
+export {
+  ASSUMPTION_KINDS,
+  CLAIM_STATUSES,
+  assumptionKindSchema,
+  claimLedgerSchema,
+  claimLocatorSchema,
+  claimSchema,
+  claimStatusSchema,
+  type AssumptionKind,
+  type Claim,
+  type ClaimLedger,
+  type ClaimLocator,
+  type ClaimStatus,
+} from './claims.js';
