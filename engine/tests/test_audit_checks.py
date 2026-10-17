@@ -75,6 +75,9 @@ def _clean_slide() -> dict[str, Any]:
                 "Удержание клиентов 94%",
                 "Новые рынки дали треть роста",
                 "Средний чек вырос на 8%",
+                "Повторные заказы выросли вдвое",
+                "Доля онлайн-продаж дошла до 61%",
+                "Срок доставки сократился на два дня",
             ),
         ],
     }
@@ -353,6 +356,107 @@ def test_check_fires_on_a_slide_that_breaks_it(check_id: str) -> None:
     slide = _clean_slide()
     more = _VIOLATIONS[check_id](slide) or []
     assert check_id in _fired(slide, _MEDIA, *more)
+
+
+def _sparse_slide() -> dict[str, Any]:
+    """A tall body frame, as a template draws it, holding two short lines of small type."""
+    slide = _clean_slide()
+    body = _element(slide, "list")
+    body["box"] = {**body["box"], "cy": 4_400_000}
+    body["paragraphs"] = body["paragraphs"][:2]
+    return slide
+
+
+def test_slide_fill_measures_the_text_not_the_frame_around_it() -> None:
+    assert "slide-fill" in _fired(_sparse_slide())
+    # The same frame holding enough text is a full slide.
+    assert "slide-fill" not in _fired(_clean_slide())
+
+
+def test_the_cover_and_the_closing_slide_may_be_sparse() -> None:
+    cover, middle, closing = _sparse_slide(), _sparse_slide(), _sparse_slide()
+    for index, slide in enumerate((cover, middle, closing)):
+        slide["slideId"], slide["index"] = f"s{index + 1}", index
+    report = audit_deck(
+        _request(cover, None, middle, closing), "default", deterministic_profile("default")
+    )
+    flagged = {f["target"]["slideId"] for f in report["findings"] if f["checkId"] == "slide-fill"}
+    # Only the one between them is a content slide.
+    assert flagged == {"s2"}
+
+
+def test_slide_fill_does_not_count_an_empty_text_frame() -> None:
+    slide = _sparse_slide()
+    slide["elements"].append(
+        _text("blank", "body", {"x": _LEFT, "y": 700_000, "cx": _WIDTH, "cy": 4_800_000}, "")
+    )
+    assert "slide-fill" in _fired(slide)
+
+
+def test_a_picture_over_the_whole_slide_is_the_background_not_the_load() -> None:
+    cover = _clean_slide()
+    cover["elements"] = [
+        _image(
+            {"x": 0, "y": 0, "cx": _GRID["slideCx"], "cy": _GRID["slideCy"]},
+            elementId="slide-5",
+        ),
+        _text("title", "title", _TITLE_BOX, "Итоги года", size=40),
+        _text("sub", "subtitle", _BODY_BOX, "Отчёт для совета директоров", size=16),
+    ]
+    assert "slide-fill" not in _fired(cover, _MEDIA)
+    # What lies on the picture still counts: a bare slide on it is a sparse one.
+    cover["elements"][2] = _text("list", "bullet-list", _BODY_BOX, "Один пункт", size=16)
+    assert "slide-fill" in _fired(cover, _MEDIA)
+
+
+def test_a_picture_the_layout_draws_is_template_art_not_content() -> None:
+    slide = _clean_slide()
+    art = _image(
+        {"x": _LEFT, "y": 1_900_000, "cx": _WIDTH // 2, "cy": 2_000_000}, elementId="layout-12"
+    )
+    slide["elements"].append(art)
+    assert "overlap" not in _fired(slide, _MEDIA)
+    # The same picture on the slide itself is the deck's own, and it lies over the text.
+    art["elementId"] = "slide-12"
+    assert "overlap" in _fired(slide, _MEDIA)
+
+
+def test_a_slide_with_only_the_layouts_picture_is_empty() -> None:
+    slide = _clean_slide()
+    slide["elements"] = [
+        _image({"x": 0, "y": 0, "cx": 4_000_000, "cy": 3_000_000}, elementId="layout-3"),
+        _text("title", "title", _TITLE_BOX, "", size=40),
+    ]
+    assert "empty-slide" in _fired(slide, _MEDIA)
+    slide["elements"][0]["elementId"] = "slide-3"
+    assert "empty-slide" not in _fired(slide, _MEDIA)
+
+
+def test_type_scale_reports_a_slide_once_and_fixes_every_block() -> None:
+    slide = _clean_slide()
+    _run(slide, "title")["sizePt"] = 47
+    _run(slide, "list")["sizePt"] = 23
+    report = audit_deck(_request(slide), "default", deterministic_profile("default"))
+    found = [f for f in report["findings"] if f["checkId"] == "type-scale"]
+    assert len(found) == 1
+    ops = found[0]["proposedPatch"]["ops"]
+    assert {op["elementId"] for op in ops} == {"title", "list"}
+
+
+def test_two_slides_with_the_same_short_phrase_are_a_repeat() -> None:
+    def thanks(slide_id: str, index: int) -> dict[str, Any]:
+        slide = _clean_slide()
+        slide["slideId"], slide["index"] = slide_id, index
+        slide["elements"] = [_text("title", "title", _TITLE_BOX, "Спасибо за внимание", size=40)]
+        return slide
+
+    assert "duplicate-slide" in _fired(thanks("s1", 0), None, thanks("s2", 1))
+    # A slide whose one word is all it says is a divider, and dividers may repeat.
+    divider = thanks("s1", 0)
+    divider["elements"][0]["paragraphs"][0]["runs"][0]["text"] = "Раздел 1"
+    other = thanks("s2", 1)
+    other["elements"][0]["paragraphs"][0]["runs"][0]["text"] = "Раздел 2"
+    assert "duplicate-slide" not in _fired(divider, None, other)
 
 
 def test_clean_deck_passes_with_a_full_score() -> None:
