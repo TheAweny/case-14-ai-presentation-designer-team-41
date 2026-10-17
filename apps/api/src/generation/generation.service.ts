@@ -33,6 +33,7 @@ import { EngineClient } from '@lct/engine-client';
 import {
   currentTemplateIndexRevision,
   generatePresentation,
+  VisionProvider,
   GenerationProvider,
   indexTemplateWithAgent,
   RoutedTextProvider,
@@ -483,6 +484,23 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         );
       }
     });
+    // The model of the "vision" role reads the drawn slides for the contextual audit. Without one
+    // the build has the deterministic audit and the critic's read of the text, and says so.
+    const vision = await settle(this.models.resolveRole('vision', actor));
+    const reviewer = vision
+      ? {
+          model: vision.model,
+          provider: new VisionProvider({
+            apiKey: vision.apiKey,
+            baseUrl: vision.baseUrl,
+            model: vision.model,
+            headers: vision.headers,
+            seed: input.seed,
+            answerFormat,
+            signal,
+          }),
+        }
+      : null;
     // Pictures too are drawn once per brief. Without an image model the planner is not offered
     // a place for a picture, so no slide is left with an empty frame.
     const imageModel = await settle(this.models.resolveRole('image', actor));
@@ -550,6 +568,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           variant,
           sharedPlan,
           illustrations,
+          reviewer,
           signal,
           onEvent: (event) => this.repository.appendEvent(run.runId, event),
         });

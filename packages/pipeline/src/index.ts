@@ -59,6 +59,12 @@ export {
   type VariantResult,
 } from './orchestrator/index.js';
 export { findOverflows, fitCopy, type CopyTarget, type FitCopyResult } from './writer/index.js';
+export { VisionProvider, type VisionProviderOptions } from './generation/vision-provider.js';
+export {
+  reviewVariantVisually,
+  type VisualReview,
+  type VisualReviewOptions,
+} from './generation/visual-review.js';
 export {
   OpenAICompatibleProvider as GenerationProvider,
   RoutedTextProvider,
