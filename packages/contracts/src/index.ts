@@ -380,6 +380,8 @@ export {
   REASONING_EFFORTS,
   reasoningEffortSchema,
   reasoningControl,
+  canSwitchThinking,
+  type ReasoningControl,
   type ReasoningEffort,
 } from './reasoning.js';
 export {

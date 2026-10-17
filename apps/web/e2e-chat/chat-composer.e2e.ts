@@ -882,3 +882,54 @@ test('offers the thinking switch only for a hybrid model and sends its state', a
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('lets a hybrid model think on request with a depth only while thinking', async ({ page }) => {
+  let sent: { thinking?: unknown; reasoningEffort?: unknown } = {};
+  await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
+    sent = route.request().postDataJSON();
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: stream([
+        { type: 'message', seq: 0, message: assistant() },
+        { type: 'turn-end', seq: 1 },
+      ]),
+    });
+  });
+  const assigned = await page.request.put('http://127.0.0.1:3121/model-settings/roles', {
+    data: { role: 'assistant', kind: 'model', connectionId: 'fixture', modelId: 'gpt-6.1-sol' },
+  });
+  expect(assigned.ok()).toBeTruthy();
+  await openChat(page);
+  const toggle = page.getByRole('button', { name: 'Размышление' });
+  const menu = page.getByRole('button', { name: 'Модель: gpt-6.1-sol. Сменить модель' });
+  const depth = page.getByRole('slider', { name: 'Глубина размышления' });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+  await menu.click();
+  await depth.focus();
+  await page.keyboard.press('Home');
+  await expect(depth).toHaveAttribute('aria-valuetext', 'Низкая');
+  // How far the track sticks out past the thumb on each side, once the thumb has eased over.
+  const overhang = () =>
+    depth.evaluate((slider) => {
+      const track = slider.firstElementChild?.getBoundingClientRect();
+      const thumb = slider.lastElementChild?.getBoundingClientRect();
+      if (!track || !thumb) throw new Error('The slider lost its track or thumb.');
+      return { left: thumb.left - track.left, right: track.right - thumb.right };
+    });
+  await expect.poll(async () => (await overhang()).left).toBeLessThanOrEqual(0);
+  await page.keyboard.press('End');
+  await expect(depth).toHaveAttribute('aria-valuetext', 'Высокая');
+  await expect.poll(async () => (await overhang()).right).toBeLessThanOrEqual(0);
+  await page.keyboard.press('Escape');
+
+  await field(page).fill('Подумай');
+  await page.getByRole('button', { name: 'Отправить', exact: true }).click();
+  await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
+  expect(sent).toMatchObject({ thinking: true, reasoningEffort: 'high' });
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await menu.click();
+  await expect(depth).toHaveCount(0);
+});

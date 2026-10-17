@@ -12,6 +12,7 @@ import {
   type DeckOutline,
   type LayoutVariant,
   type ModelRef,
+  type ReasoningEffort,
   type FinalReview,
 } from '@lct/contracts';
 import type { ChatTool, ToolContext, ToolOutcome } from '@lct/pipeline';
@@ -35,6 +36,8 @@ export interface ChatToolScope {
   readonly model: ModelRef | null;
   /** The thinking switch of the turn; the deck is written with it too. */
   readonly thinking?: boolean | null;
+  /** The depth of thinking of the turn, for the deck as well. */
+  readonly reasoningEffort?: ReasoningEffort | null;
   readonly currentMessageId?: string;
   /** The chat as it is now, the answer of this turn included. */
   messages(): readonly ChatMessage[];
@@ -681,6 +684,7 @@ export async function runBuild(
         seed: 42,
         model: scope.model,
         thinking: scope.thinking ?? null,
+        reasoningEffort: scope.reasoningEffort ?? null,
       },
       scope.account,
     );

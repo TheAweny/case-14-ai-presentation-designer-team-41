@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
-import { reasoningControl } from '@lct/contracts';
+import { canSwitchThinking, reasoningControl } from '@lct/contracts';
 import { Button } from '@/components/ui/button';
 import { ThinkingIcon } from '@/components/ui/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -29,7 +29,7 @@ export function ThinkingToggle({
   const models = useWriterModels('assistant');
   const on = useSyncExternalStore(subscribeThinking, readThinking, () => true);
   const selected = models ? effectiveModel(models, model) : null;
-  if (!selected || reasoningControl(selected.modelId) !== 'thinking') return null;
+  if (!selected || !canSwitchThinking(reasoningControl(selected.modelId))) return null;
 
   return (
     <Tooltip>

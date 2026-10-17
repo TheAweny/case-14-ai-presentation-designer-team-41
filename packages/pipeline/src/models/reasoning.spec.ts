@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reasoningRequestFields } from './reasoning.js';
+import { reasoningRequestFields, samplingAllowed } from './reasoning.js';
 
 describe('reasoning request policy', () => {
   it.each([
@@ -43,5 +43,27 @@ describe('reasoning request policy', () => {
       reasoning_effort: 'low',
     });
     expect(reasoningRequestFields('custom-model', null, false)).toEqual({});
+  });
+
+  it('lets hybrids think on request and answer at once when switched off', () => {
+    expect(reasoningRequestFields('gpt-6.1-sol', 'high', true)).toEqual({
+      reasoning_effort: 'high',
+    });
+    expect(reasoningRequestFields('claude-sonnet-4-5', null, null)).toEqual({
+      reasoning_effort: 'medium',
+    });
+    expect(reasoningRequestFields('claude-sonnet-4-5', 'low', false)).toEqual({});
+    expect(reasoningRequestFields('qwen38-27b-fp8', 'high', false)).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    });
+  });
+
+  it('drops sampling while a model thinks through reasoning_effort', () => {
+    expect(samplingAllowed('gpt-6.1-sol', { reasoning_effort: 'low' })).toBe(false);
+    expect(samplingAllowed('gpt-6.1-sol', {})).toBe(true);
+    expect(samplingAllowed('o3', {})).toBe(false);
+    expect(
+      samplingAllowed('qwen38-27b-fp8', { chat_template_kwargs: { enable_thinking: true } }),
+    ).toBe(true);
   });
 });

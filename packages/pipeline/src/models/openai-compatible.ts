@@ -1,6 +1,6 @@
 import type { ModelEntry } from '@lct/contracts';
 import type { AgentUsage, ModelProvider, ModelRequest } from './provider.js';
-import { reasoningRequestFields } from './reasoning.js';
+import { reasoningRequestFields, samplingAllowed } from './reasoning.js';
 
 export interface OpenAICompatibleOptions {
   readonly model: ModelEntry;
@@ -109,13 +109,16 @@ export class OpenAICompatibleProvider implements ModelProvider {
         content: `The previous answer was not valid:\n${feedback}\nAnswer again with valid JSON only.`,
       });
     }
+    const served = model.servedName ?? model.repo;
+    const reasoning = reasoningRequestFields(served);
     const body: Record<string, unknown> = {
-      ...reasoningRequestFields(model.servedName ?? model.repo),
+      ...reasoning,
       ...model.extraBody,
-      model: model.servedName ?? model.repo,
+      model: served,
       messages,
-      temperature: generation.temperature,
-      top_p: generation.topP,
+      ...(samplingAllowed(served, reasoning)
+        ? { temperature: generation.temperature, top_p: generation.topP }
+        : {}),
       max_tokens: generation.maxOutputTokens,
       seed: request.seed,
     };

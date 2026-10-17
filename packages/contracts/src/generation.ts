@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { designSystemSchema } from './design-system.js';
 import { boxSchema, templateIrSchema } from './template-ir.js';
 import { modelRefSchema } from './model-settings.js';
+import { reasoningEffortSchema } from './reasoning.js';
 
 export const compositionSlotSchema = z.object({
   slotId: z.string().min(1),
@@ -189,8 +190,13 @@ export const generationRequestSchema = z.object({
    * role, or the one the server is configured with. Never a key: the API resolves the connection.
    */
   model: modelRefSchema.nullable().default(null),
-  /** Whether a hybrid model (Qwen3) thinks while it writes; null — it does. Others ignore it. */
+  /**
+   * Whether a model that can answer both ways thinks while it writes; null — it does. Models that
+   * always or never think ignore it.
+   */
   thinking: z.boolean().nullable().default(null),
+  /** Depth for models that take `reasoning_effort`; null — the model's own or a medium one. */
+  reasoningEffort: reasoningEffortSchema.nullable().default(null),
 });
 export type GenerationProfile = z.infer<typeof generationProfileSchema>;
 export type Composition = z.infer<typeof compositionSchema>;

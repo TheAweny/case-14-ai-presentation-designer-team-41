@@ -964,6 +964,7 @@ export class ChatsService implements OnApplicationShutdown {
       mode: request.mode,
       model: request.model,
       thinking: request.thinking,
+      reasoningEffort: request.reasoningEffort,
       currentMessageId: message.id,
       messages: () => {
         sync();

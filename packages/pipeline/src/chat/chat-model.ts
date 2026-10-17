@@ -9,7 +9,7 @@ import {
   throttleModelSlots,
 } from '../generation/provider.js';
 import { modelHttpFailure } from './model-failure.js';
-import { reasoningRequestFields } from '../models/reasoning.js';
+import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js';
 
 /** A tool as the model sees it: a name, what it is for, and its input as JSON Schema. */
 export interface ToolSpec {
@@ -84,7 +84,7 @@ export interface OpenAICompatibleChatOptions {
   readonly headers?: Readonly<Record<string, string>>;
   /** Sent only when this model accepts `reasoning_effort`. */
   readonly reasoningEffort?: ReasoningEffort | null;
-  /** Off only when the person switched thinking off for a hybrid model. */
+  /** Off only when the person switched thinking off for a model that can answer both ways. */
   readonly thinking?: boolean | null;
   readonly fetchImpl?: typeof fetch;
 }
@@ -142,6 +142,14 @@ export class OpenAICompatibleChatModel implements ChatModel {
 
   private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
     const generation = this.options.generation;
+    const reasoning = reasoningRequestFields(
+      this.model,
+      this.options.reasoningEffort,
+      this.options.thinking,
+    );
+    const sampling = samplingAllowed(this.model, reasoning)
+      ? { temperature: generation?.temperature ?? 0.4, top_p: generation?.topP ?? 1 }
+      : {};
     for (let attempt = 0; ; attempt++) {
       let response: Response;
       try {
@@ -160,14 +168,9 @@ export class OpenAICompatibleChatModel implements ChatModel {
           body: JSON.stringify({
             model: this.model,
             seed: this.options.seed ?? 42,
-            temperature: generation?.temperature ?? 0.4,
-            top_p: generation?.topP ?? 1,
+            ...sampling,
             max_tokens: generation?.maxOutputTokens ?? 4096,
-            ...reasoningRequestFields(
-              this.model,
-              this.options.reasoningEffort,
-              this.options.thinking,
-            ),
+            ...reasoning,
             ...body,
           }),
         });

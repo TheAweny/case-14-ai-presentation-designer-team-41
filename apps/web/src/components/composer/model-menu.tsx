@@ -27,7 +27,9 @@ import { reasoningControl, type ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
 import {
   readReasoningEffort,
+  readThinking,
   subscribeReasoningEffort,
+  subscribeThinking,
   writeReasoningEffort,
 } from '@/lib/reasoning-effort';
 import { EffortSlider } from './effort-slider';
@@ -62,6 +64,7 @@ export function ModelMenu({
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
+  const thinking = useSyncExternalStore(subscribeThinking, readThinking, () => true);
   const [open, setOpen] = useState(false);
   if (!models) return null;
 
@@ -116,6 +119,8 @@ export function ModelMenu({
         group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
     );
   const control = selected ? reasoningControl(selected.modelId) : 'none';
+  // A hybrid model has a depth only while it thinks; switched off it answers at once.
+  const depth = control === 'effort' || (control === 'hybrid' && thinking);
   const levelLabel = (level: ReasoningEffort) => t(`levels.${level}`);
 
   return (
@@ -140,7 +145,7 @@ export function ModelMenu({
                       : shortModelName(selected.modelId)
                     : t('chooseDefault'))}
             </span>
-            {control === 'effort' && effort ? (
+            {depth && effort ? (
               <span key={effort} className="effort-label shrink-0 text-muted-foreground">
                 {levelLabel(effort)}
               </span>
@@ -165,7 +170,7 @@ export function ModelMenu({
           models={models}
           selected={value}
           followingDefault={value === null}
-          control={control}
+          depth={depth}
           effort={effort ?? 'high'}
           onEffort={writeReasoningEffort}
           onPick={(model) => {
@@ -193,7 +198,7 @@ export function ModelList({
   models,
   selected,
   followingDefault,
-  control,
+  depth,
   effort,
   onEffort,
   onPick,
@@ -204,7 +209,8 @@ export function ModelList({
   /** Явно выбранная модель. Null — человек следует модели по умолчанию. */
   selected: ModelRef | null;
   followingDefault: boolean;
-  control: 'effort' | 'thinking' | 'none';
+  /** Show the depth slider: the model takes a depth now. */
+  depth: boolean;
   effort: ReasoningEffort;
   onEffort: (value: ReasoningEffort) => void;
   onPick: (ref: ModelRef) => void;
@@ -402,7 +408,7 @@ export function ModelList({
           )
         )}
       </div>
-      {control === 'effort' ? (
+      {depth ? (
         <div className="border-t border-border px-1 pt-2.5">
           <div className="flex items-center justify-between px-2 text-[0.8125rem] text-muted-foreground">
             <span>{t('effort')}</span>

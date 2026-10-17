@@ -256,13 +256,13 @@ export const chatTurnRequestSchema = z.object({
   /** The model the agent answers with; null — the model of the assistant role. */
   model: modelRefSchema.nullable().default(null),
   /**
-   * Depth for models that accept `reasoning_effort`. Ignored for every other model, including Qwen.
-   * Older clients omit it.
+   * Depth for models that accept `reasoning_effort`, in the chat and the deck it builds. Ignored
+   * for every other model, including Qwen. Older clients omit it.
    */
   reasoningEffort: reasoningEffortSchema.nullable().default(null),
   /**
-   * Whether a hybrid model (Qwen3) thinks before it answers, here and in the deck it builds.
-   * Ignored for every other model. Null: it thinks, as before the switch existed.
+   * Whether a model that can answer both ways (Qwen3, GPT-5.1+, Claude) thinks before it answers,
+   * here and in the deck it builds. Ignored for every other model. Null: it thinks.
    */
   thinking: z.boolean().nullable().default(null),
   /** The project a new chat belongs to; ignored for a chat that exists. */
