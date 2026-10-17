@@ -36,6 +36,23 @@ export function isRoleOptional(role: PipelineRole): boolean {
   return role === 'image' || role === 'speech';
 }
 
+/**
+ * What a model does, as the API learnt by asking it, never from its name: `text` answers chat
+ * completions, `vision` reads a picture it is sent (and is `text` too), `image` draws pictures,
+ * `speech` turns a recording into text.
+ */
+export const MODEL_KINDS = ['text', 'vision', 'image', 'speech'] as const;
+export const modelKindSchema = z.enum(MODEL_KINDS);
+export type ModelKind = z.infer<typeof modelKindSchema>;
+
+/** The kind of model a role needs: a picker for the role offers only models of this kind. */
+export function roleKind(role: PipelineRole): ModelKind {
+  if (role === 'vision') return 'vision';
+  if (role === 'image') return 'image';
+  if (role === 'speech') return 'speech';
+  return 'text';
+}
+
 /** A role that, without a model of its own, works with the writer's: the chat assistant. */
 export function usesWriterModelByDefault(role: PipelineRole): boolean {
   return role === 'assistant' || role === 'planner' || role === 'critic';
@@ -141,6 +158,15 @@ export const modelConnectionSchema = z.object({
    * instead of hundreds; for a shared key it applies to every account.
    */
   enabledModels: z.array(modelIdSchema).max(MODEL_LIST_MAX_LENGTH).nullable().optional(),
+  /**
+   * What each model of the connection does, for the models already probed. A model missing here
+   * has not been probed yet and is offered nowhere until it is.
+   */
+  modelKinds: z.record(z.string(), z.array(modelKindSchema)).optional(),
+  /** The models are being probed right now: how many of how many are done. */
+  probing: z
+    .object({ done: z.number().int().nonnegative(), total: z.number().int().positive() })
+    .optional(),
   /** Configured on the server through the environment: it can be checked, not edited. */
   managed: z.boolean(),
   /**

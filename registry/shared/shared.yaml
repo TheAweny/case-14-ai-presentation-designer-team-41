@@ -11,3 +11,8 @@ version: 1.2.0
 answerFormatFile: answer-format.md
 answerRepairFile: answer-repair.md
 capabilityProbeFile: capability-probe.md
+# What a model is, asked once per model of a connection: does it chat, does it see the colour of a
+# picture it is sent, does it draw one. The answers decide which pickers offer it.
+chatProbeFile: capability-probe-chat.md
+visionProbeFile: capability-probe-vision.md
+imageProbeFile: capability-probe-image.md

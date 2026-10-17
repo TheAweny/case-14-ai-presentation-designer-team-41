@@ -22,7 +22,7 @@ import {
   MODEL_ID_MAX_LENGTH,
   isRoleOptional,
   usesWriterModelByDefault,
-  knownModels,
+  modelsForRole,
   modelOffered,
   modelsLimited,
   type ModelConnection,
@@ -177,7 +177,7 @@ export function RoleRow({
                   </DropdownMenuRadioItem>
                 ) : null}
                 {connections.map((connection, index) => {
-                  const models = [...knownModels(connection)];
+                  const models = [...modelsForRole(connection, role)];
                   // Вписанная вручную модель тоже видна в списке и отмечена, пока её не выключили.
                   if (
                     assignment.kind === 'model' &&

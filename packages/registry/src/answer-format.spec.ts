@@ -22,7 +22,9 @@ describe('shared answer prompts', () => {
 
   it('reads the question that probes whether a model thinks', async () => {
     const probe = await loadCapabilityProbe(join(root, 'registry', 'agents'));
-    expect(probe.question.length).toBeGreaterThan(0);
+    for (const prompt of [probe.question, probe.chat, probe.vision, probe.image]) {
+      expect(prompt.length).toBeGreaterThan(0);
+    }
   });
 
   it('refuses prompts that lost their placeholder', async () => {

@@ -374,6 +374,10 @@ export {
   VK_AI_SPACE_MODEL,
   VK_AI_SPACE_ROLES,
   VK_PROJECT_HEADER,
+  MODEL_KINDS,
+  modelKindSchema,
+  roleKind,
+  type ModelKind,
 } from './model-settings.js';
 export {
   REASONING_EFFORTS,

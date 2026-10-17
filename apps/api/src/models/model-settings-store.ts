@@ -29,11 +29,14 @@ export interface StoredConnection {
 
 /**
  * What probing a model found, by server address and model id. A field that is missing was not
- * settled. `probeVersion` is the version of the probe that found it: a new probe asks again.
+ * settled. `probeVersion` is the version of the probe prompts that found it.
  */
 export interface StoredCapability {
-  readonly reasoning?: ReasoningCapability;
+  readonly chat?: boolean;
+  readonly vision?: boolean;
+  readonly image?: boolean;
   readonly speech?: boolean;
+  readonly reasoning?: ReasoningCapability;
   readonly probeVersion: string;
 }
 
@@ -71,7 +74,9 @@ export interface ModelSettingsStore {
   getServerModels(baseUrl: string): Promise<readonly string[] | null>;
   setServerModels(baseUrl: string, enabledModels: readonly string[] | null): Promise<void>;
   getCapability(baseUrl: string, modelId: string): Promise<StoredCapability | null>;
-  /** Merges the settled fields into what is stored; a new `probeVersion` drops the old ones. */
+  /** Everything found for the models behind one server address, by model id. */
+  listCapabilities(baseUrl: string): Promise<ReadonlyMap<string, StoredCapability>>;
+  /** Merges the settled fields into what is stored; the fields left out keep their value. */
   saveCapability(baseUrl: string, modelId: string, found: StoredCapability): Promise<void>;
 }
 
@@ -245,39 +250,61 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   }
 
   async getCapability(baseUrl: string, modelId: string) {
+    return (await this.capabilityRows(baseUrl, modelId)).get(modelId) ?? null;
+  }
+
+  async listCapabilities(baseUrl: string) {
+    return this.capabilityRows(baseUrl, null);
+  }
+
+  private async capabilityRows(baseUrl: string, modelId: string | null) {
     const result = await this.pool.query<{
-      reasoning: ReasoningCapability | null;
+      model_id: string;
+      chat: boolean | null;
+      vision: boolean | null;
+      image: boolean | null;
       speech: boolean | null;
+      reasoning: ReasoningCapability | null;
       probe_version: string;
     }>(
-      `SELECT reasoning, speech, probe_version FROM model_capabilities
-       WHERE base_url = $1 AND model_id = $2`,
+      `SELECT model_id, chat, vision, image, speech, reasoning, probe_version
+       FROM model_capabilities WHERE base_url = $1 AND ($2::text IS NULL OR model_id = $2)`,
       [baseUrl, modelId],
     );
-    const row = result.rows[0];
-    if (!row) return null;
-    return {
-      ...(row.reasoning ? { reasoning: row.reasoning } : {}),
-      ...(row.speech === null ? {} : { speech: row.speech }),
-      probeVersion: row.probe_version,
-    };
+    const found = new Map<string, StoredCapability>();
+    for (const row of result.rows) {
+      found.set(row.model_id, {
+        ...(row.chat === null ? {} : { chat: row.chat }),
+        ...(row.vision === null ? {} : { vision: row.vision }),
+        ...(row.image === null ? {} : { image: row.image }),
+        ...(row.speech === null ? {} : { speech: row.speech }),
+        ...(row.reasoning ? { reasoning: row.reasoning } : {}),
+        probeVersion: row.probe_version,
+      });
+    }
+    return found;
   }
 
   async saveCapability(baseUrl: string, modelId: string, found: StoredCapability) {
     await this.pool.query(
-      `INSERT INTO model_capabilities (base_url, model_id, reasoning, speech, probe_version)
-       VALUES ($1, $2, $3::jsonb, $4, $5)
+      `INSERT INTO model_capabilities
+         (base_url, model_id, chat, vision, image, speech, reasoning, probe_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
        ON CONFLICT (base_url, model_id) DO UPDATE SET
-         reasoning = CASE WHEN model_capabilities.probe_version = EXCLUDED.probe_version
-           THEN COALESCE(EXCLUDED.reasoning, model_capabilities.reasoning) ELSE EXCLUDED.reasoning END,
-         speech = CASE WHEN model_capabilities.probe_version = EXCLUDED.probe_version
-           THEN COALESCE(EXCLUDED.speech, model_capabilities.speech) ELSE EXCLUDED.speech END,
+         chat = COALESCE(EXCLUDED.chat, model_capabilities.chat),
+         vision = COALESCE(EXCLUDED.vision, model_capabilities.vision),
+         image = COALESCE(EXCLUDED.image, model_capabilities.image),
+         speech = COALESCE(EXCLUDED.speech, model_capabilities.speech),
+         reasoning = COALESCE(EXCLUDED.reasoning, model_capabilities.reasoning),
          probe_version = EXCLUDED.probe_version, updated_at = now()`,
       [
         baseUrl,
         modelId,
-        found.reasoning ? JSON.stringify(found.reasoning) : null,
+        found.chat ?? null,
+        found.vision ?? null,
+        found.image ?? null,
         found.speech ?? null,
+        found.reasoning ? JSON.stringify(found.reasoning) : null,
         found.probeVersion,
       ],
     );
@@ -356,12 +383,16 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
     return this.capabilities.get(`${baseUrl} ${modelId}`) ?? null;
   }
 
+  async listCapabilities(baseUrl: string) {
+    const found = new Map<string, StoredCapability>();
+    for (const [key, value] of this.capabilities) {
+      if (key.startsWith(`${baseUrl} `)) found.set(key.slice(baseUrl.length + 1), value);
+    }
+    return found;
+  }
+
   async saveCapability(baseUrl: string, modelId: string, found: StoredCapability) {
     const key = `${baseUrl} ${modelId}`;
-    const stored = this.capabilities.get(key);
-    this.capabilities.set(
-      key,
-      stored?.probeVersion === found.probeVersion ? { ...stored, ...found } : found,
-    );
+    this.capabilities.set(key, { ...this.capabilities.get(key), ...found });
   }
 }

@@ -12,6 +12,7 @@ export {
   loadModelCatalog,
   resolveModel,
 } from './models.js';
+export type { CapabilityProbe } from './loader.js';
 export type {
   AgentManifestEntry,
   AnswerFormat,

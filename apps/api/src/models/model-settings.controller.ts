@@ -160,8 +160,9 @@ export class ModelSettingsController {
       'Подключения и модель для каждой роли пайплайна. Ключ не возвращается никогда: только `hasKey` и последние символы.',
   })
   @ApiOkResponse({ standardSchema: modelSettingsSchema })
-  get(@CurrentAccount() account: Account): Promise<ModelSettings> {
-    return this.settings.get(actorOf(account));
+  async get(@CurrentAccount() account: Account): Promise<ModelSettings> {
+    const actor = actorOf(account);
+    return this.capabilities.withKinds(await this.settings.get(actor), actor);
   }
 
   @Post('connections')
@@ -182,12 +183,15 @@ export class ModelSettingsController {
   })
   @ApiResponse({ status: 201, standardSchema: modelConnectionSchema, example: CONNECTION_EXAMPLE })
   @ApiSettingsErrors(400, 404, 409, 503)
-  saveConnection(
+  async saveConnection(
     @Body() body: unknown,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
-    this.capabilities.forgetSpeechModel(actorOf(account));
-    return this.settings.saveConnection(body, actorOf(account)).catch(refuse);
+    const actor = actorOf(account);
+    const saved = await this.settings.saveConnection(body, actor).catch(refuse);
+    // A new or changed connection: every model is probed now, in the background.
+    void this.capabilities.classify(saved.connectionId, actor, true);
+    return saved;
   }
 
   @Delete('connections/:id')
@@ -201,7 +205,6 @@ export class ModelSettingsController {
     @CurrentAccount() account: Account,
   ): Promise<void> {
     await this.settings.deleteConnection(connectionId, actorOf(account)).catch(refuse);
-    this.capabilities.forgetSpeechModel(actorOf(account));
   }
 
   @Post('connections/:id/check')
@@ -213,12 +216,15 @@ export class ModelSettingsController {
   @connectionParam
   @ApiOkResponse({ standardSchema: modelConnectionSchema, example: CONNECTION_EXAMPLE })
   @ApiSettingsErrors(404, 503)
-  checkConnection(
+  async checkConnection(
     @Param('id') connectionId: string,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
-    this.capabilities.forgetSpeechModel(actorOf(account));
-    return this.settings.checkConnection(connectionId, actorOf(account)).catch(refuse);
+    const actor = actorOf(account);
+    const checked = await this.settings.checkConnection(connectionId, actor).catch(refuse);
+    // The person asked to check: every model is probed again, in the background.
+    void this.capabilities.classify(connectionId, actor, true);
+    return checked;
   }
 
   @Put('connections/:id/models')
@@ -235,15 +241,18 @@ export class ModelSettingsController {
   })
   @ApiOkResponse({ standardSchema: modelConnectionSchema, example: CONNECTION_EXAMPLE })
   @ApiSettingsErrors(400, 404, 409)
-  setConnectionModels(
+  async setConnectionModels(
     @Param('id') connectionId: string,
     @Body() body: unknown,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
     const input =
       body !== null && typeof body === 'object' ? { ...body, connectionId } : { connectionId };
-    this.capabilities.forgetSpeechModel(actorOf(account));
-    return this.settings.setConnectionModels(input, actorOf(account)).catch(refuse);
+    const actor = actorOf(account);
+    const updated = await this.settings.setConnectionModels(input, actor).catch(refuse);
+    // Models switched on that were never probed are probed now; the rest keep their findings.
+    void this.capabilities.classify(connectionId, actor, false);
+    return updated;
   }
 
   @Post('probe')
@@ -283,6 +292,5 @@ export class ModelSettingsController {
   @ApiSettingsErrors(400, 404)
   async setRole(@Body() body: unknown, @CurrentAccount() account: Account): Promise<void> {
     await this.settings.setRole(body, actorOf(account)).catch(refuse);
-    this.capabilities.forgetSpeechModel(actorOf(account));
   }
 }

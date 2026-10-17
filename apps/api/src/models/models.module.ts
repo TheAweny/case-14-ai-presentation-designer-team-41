@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Module, type OnApplicationShutdown } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import { loadCapabilityProbe } from '@lct/registry';
+import { loadCapabilityProbe, type CapabilityProbe } from '@lct/registry';
 import { Pool } from 'pg';
 import { privateHostsAllowed } from './connection-check.js';
 import { createKeyVault } from './key-vault.js';
@@ -10,7 +10,7 @@ import { ModelSettingsController } from './model-settings.controller.js';
 import { SpeechController } from './speech.controller.js';
 import { PostgresModelSettingsStore, type ModelSettingsStore } from './model-settings-store.js';
 import { ModelSettingsService } from './model-settings.service.js';
-import { ModelCapabilityService, type ProbeQuestion } from './model-capabilities.js';
+import { ModelCapabilityService } from './model-capabilities.js';
 
 const MODEL_SETTINGS_POOL = Symbol('MODEL_SETTINGS_POOL');
 const MODEL_SETTINGS_STORE = Symbol('MODEL_SETTINGS_STORE');
@@ -24,9 +24,9 @@ function registryDir(): string {
   return found;
 }
 
-/** The probe question, read once: it is a prompt, so it lives in the registry. */
-function probeQuestion(): () => Promise<ProbeQuestion> {
-  let loaded: Promise<ProbeQuestion> | null = null;
+/** The probe prompts, read once: they are prompts, so they live in the registry. */
+function probePrompts(): () => Promise<CapabilityProbe> {
+  let loaded: Promise<CapabilityProbe> | null = null;
   return () => {
     loaded ??= loadCapabilityProbe(registryDir()).catch((error: unknown) => {
       loaded = null;
@@ -60,7 +60,7 @@ function probeQuestion(): () => Promise<ProbeQuestion> {
       provide: ModelCapabilityService,
       inject: [MODEL_SETTINGS_STORE, ModelSettingsService],
       useFactory: (store: ModelSettingsStore, settings: ModelSettingsService) =>
-        new ModelCapabilityService(store, settings, probeQuestion()),
+        new ModelCapabilityService(store, settings, probePrompts()),
     },
   ],
   exports: [ModelSettingsService, ModelCapabilityService],

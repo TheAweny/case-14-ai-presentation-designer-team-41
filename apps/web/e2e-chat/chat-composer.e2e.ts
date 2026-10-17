@@ -953,3 +953,14 @@ test('lets a hybrid model think on request with a depth only while thinking', as
   await menu.click();
   await expect(depth).toHaveCount(0);
 });
+
+test('offers only models that probing found to chat in the chat model menu', async ({ page }) => {
+  const sorted = await page.request.put('http://127.0.0.1:3121/__kinds', {
+    data: { alpha: ['image'], beta: ['text', 'vision'] },
+  });
+  expect(sorted.ok()).toBeTruthy();
+  await openChat(page);
+  await page.getByRole('button', { name: 'Модель: beta. Сменить модель' }).click();
+  await expect(page.getByRole('option', { name: 'beta', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'alpha', exact: true })).toHaveCount(0);
+});

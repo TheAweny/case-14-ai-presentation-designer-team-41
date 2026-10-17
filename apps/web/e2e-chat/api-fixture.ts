@@ -26,6 +26,8 @@ const initialModels = (): ModelSettings => ({
 let modelSettings = initialModels();
 /** What probing found per model id; a test sets it, any model not set offers no choice. */
 let capabilities = new Map<string, unknown>();
+/** What each model of the fixture connection was found to be; null — a source that never probes. */
+let modelKinds: Record<string, string[]> | null = null;
 
 /** Only fixed test data. Browser chat requests are intercepted by each Playwright scenario. */
 const server = createServer(async (request, response) => {
@@ -33,6 +35,12 @@ const server = createServer(async (request, response) => {
   if (request.url === '/__reset-models') {
     modelSettings = initialModels();
     capabilities = new Map();
+    modelKinds = null;
+    response.end('{}');
+  } else if (request.url === '/__kinds' && request.method === 'PUT') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    modelKinds = JSON.parse(body) as Record<string, string[]>;
     response.end('{}');
   } else if (request.url === '/__capabilities' && request.method === 'PUT') {
     let body = '';
@@ -74,7 +82,20 @@ const server = createServer(async (request, response) => {
       }),
     );
   else if (request.url === '/auth/accounts') response.end(JSON.stringify({ hasAccounts: true }));
-  else if (request.url === '/model-settings') response.end(JSON.stringify(modelSettings));
+  else if (request.url === '/model-settings')
+    response.end(
+      JSON.stringify(
+        modelKinds
+          ? {
+              ...modelSettings,
+              connections: modelSettings.connections.map((connection) => ({
+                ...connection,
+                modelKinds,
+              })),
+            }
+          : modelSettings,
+      ),
+    );
   else if (request.url === '/speech/transcriptions' && request.method === 'POST') {
     // A real provider takes a moment: long enough for the composer to show it is transcribing.
     for await (const chunk of request) void chunk;

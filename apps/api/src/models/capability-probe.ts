@@ -1,3 +1,4 @@
+import { crc32, deflateSync } from 'node:zlib';
 import { NO_REASONING_CHOICE, type ReasoningCapability } from '@lct/contracts';
 import type { ResolvedModel } from './model-settings.service.js';
 
@@ -13,6 +14,8 @@ export type Probed<T> = { readonly known: true; readonly value: T } | { readonly
 /** Room for a model that has to think before it answers, even a little. */
 const PROBE_MAX_TOKENS = 4096;
 const PROBE_TIMEOUT_MS = 90000;
+/** Drawing one picture takes longer than answering a question. */
+const IMAGE_PROBE_TIMEOUT_MS = 180000;
 
 /** Longer than a number with a word or two: the model worked it out in the answer. */
 const VERBOSE_ANSWER = 120;
@@ -64,9 +67,38 @@ export function reasoningAmount(payload: unknown): number {
   return Math.max(typeof reported === 'number' ? reported : 0, written, hidden, 0);
 }
 
-/** Statuses that are about the request; the rest (408, 429, 5xx) are about the moment. */
+/**
+ * Statuses that are about what was asked. The rest are about the moment or the account (no key,
+ * no money, too many requests, a server error) and settle nothing.
+ */
 const refusal = (status: number) =>
-  status >= 400 && status < 500 && status !== 408 && status !== 429;
+  status >= 400 && status < 500 && ![401, 402, 403, 408, 429].includes(status);
+
+/** A server error that comes back every time is the server's answer, not an accident. */
+const SERVER_ERROR_TRIES = 3;
+const SERVER_ERROR_PAUSE_MS = 1500;
+
+/**
+ * Sends one probe request, again after a pause while the server answers 5xx. A gateway that has
+ * no route for a model on an endpoint says so with a 500 every time: after the last try that
+ * counts as a refusal. Rate limits, a missing key or balance and network failures stay unsettled.
+ */
+async function persistently(send: () => Promise<Response>): Promise<Response | null> {
+  for (let attempt = 1; ; attempt++) {
+    let response: Response;
+    try {
+      response = await send();
+    } catch {
+      return null;
+    }
+    if (response.status < 500 || attempt >= SERVER_ERROR_TRIES) {
+      return response.status >= 500
+        ? new Response(await response.text(), { status: 400 })
+        : response;
+    }
+    await new Promise((resolve) => setTimeout(resolve, SERVER_ERROR_PAUSE_MS));
+  }
+}
 
 interface Reply {
   /** The server took the request. */
@@ -208,18 +240,16 @@ export async function probeSpeech(
   const body = new FormData();
   body.append('file', new Blob([silentWav()], { type: 'audio/wav' }), 'probe.wav');
   body.append('model', model.model);
-  let response: Response;
-  try {
-    response = await fetchImpl(`${model.baseUrl.replace(/\/+$/, '')}/audio/transcriptions`, {
+  const response = await persistently(() =>
+    fetchImpl(`${model.baseUrl.replace(/\/+$/, '')}/audio/transcriptions`, {
       method: 'POST',
       headers: headersOf(model, false),
       body,
       redirect: 'error',
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
-  } catch {
-    return { known: false };
-  }
+    }),
+  );
+  if (!response) return { known: false };
   if (!response.ok)
     return refusal(response.status) ? { known: true, value: false } : { known: false };
   const payload: unknown = await response.json().catch(() => null);
@@ -228,4 +258,156 @@ export async function probeSpeech(
     typeof payload === 'object' &&
     typeof (payload as { text?: unknown }).text === 'string';
   return { known: true, value: transcribed };
+}
+
+/** A chat request for a probe, with the switch to `max_completion_tokens` a server may ask for. */
+async function chatProbe(
+  model: ResolvedModel,
+  content: unknown,
+  maxTokens: number,
+  fetchImpl: typeof fetch,
+): Promise<{ readonly status: number | null; readonly payload: unknown }> {
+  const endpoint = `${model.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  for (const limitField of ['max_tokens', 'max_completion_tokens']) {
+    const response = await persistently(() =>
+      fetchImpl(endpoint, {
+        method: 'POST',
+        headers: headersOf(model, true),
+        redirect: 'error',
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        body: JSON.stringify({
+          model: model.model,
+          messages: [{ role: 'user', content }],
+          [limitField]: maxTokens,
+        }),
+      }),
+    );
+    if (!response) return { status: null, payload: null };
+    if (response.ok)
+      return { status: response.status, payload: await response.json().catch(() => null) };
+    const message = await errorText(response);
+    if (!(response.status === 400 && limitField === 'max_tokens' && /max_tokens/.test(message))) {
+      return { status: response.status, payload: null };
+    }
+  }
+  return { status: 400, payload: null };
+}
+
+const settled = (status: number | null, value: boolean): Probed<boolean> =>
+  status !== null && (status < 300 || refusal(status)) ? { known: true, value } : { known: false };
+
+/** Whether the model answers chat completions: the kind every text role needs. */
+export async function probeChat(
+  model: ResolvedModel,
+  prompt: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Probed<boolean>> {
+  const { status, payload } = await chatProbe(model, prompt, 256, fetchImpl);
+  const answered =
+    payload !== null &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as { choices?: unknown }).choices);
+  return settled(status, status !== null && status < 300 && answered);
+}
+
+/** A 32×32 PNG filled with one colour: a colour any model that sees names at once. */
+function square(rgb: readonly [number, number, number]): string {
+  const size = 32;
+  const chunk = (type: string, data: Buffer) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header.writeUInt8(8, 8); // bit depth
+  header.writeUInt8(2, 9); // truecolour
+  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array(size).fill(rgb).flat())]);
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(Array(size).fill(row)))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+/** The colours of the vision probe and how an answer names them. */
+const SEEN_COLOURS = [
+  { rgb: [255, 0, 0] as const, named: /\bred\b|красн/i },
+  { rgb: [0, 0, 255] as const, named: /\bblue\b|син/i },
+];
+
+/**
+ * Whether the model sees pictures: it is sent a red square and a blue one and must name both
+ * colours. A gateway that drops the picture leaves the model guessing, and one guess cannot be
+ * right for both.
+ */
+export async function probeVision(
+  model: ResolvedModel,
+  prompt: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Probed<boolean>> {
+  const answers = await Promise.all(
+    SEEN_COLOURS.map(async ({ rgb, named }) => {
+      const { status, payload } = await chatProbe(
+        model,
+        [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: square(rgb) } },
+        ],
+        1024,
+        fetchImpl,
+      );
+      const content = (payload as { choices?: { message?: { content?: unknown } }[] } | null)
+        ?.choices?.[0]?.message?.content;
+      const answer =
+        typeof content === 'string' ? content.replace(/<think>[\s\S]*?<\/think>/gi, '') : '';
+      return { status, seen: named.test(answer) };
+    }),
+  );
+  const unsettled = answers.find((answer) => settled(answer.status, false).known === false);
+  if (unsettled) return { known: false };
+  return { known: true, value: answers.every((answer) => answer.seen) };
+}
+
+/**
+ * Whether the model draws: the request the illustrator sends, `POST /images/generations` with
+ * one square picture as base64, must come back with a picture. A model that is not an image
+ * model is refused at once, so only real image models cost a drawing, once.
+ */
+export async function probeImage(
+  model: ResolvedModel,
+  prompt: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Probed<boolean>> {
+  const response = await persistently(() =>
+    fetchImpl(`${model.baseUrl.replace(/\/+$/, '')}/images/generations`, {
+      method: 'POST',
+      headers: headersOf(model, true),
+      redirect: 'error',
+      signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
+      body: JSON.stringify({
+        model: model.model,
+        prompt,
+        size: '1024x1024',
+        n: 1,
+        response_format: 'b64_json',
+      }),
+    }),
+  );
+  if (!response) return { known: false };
+  if (!response.ok) return settled(response.status, false);
+  const payload = (await response.json().catch(() => null)) as {
+    data?: { b64_json?: unknown; url?: unknown }[];
+  } | null;
+  const picture = payload?.data?.[0];
+  return {
+    known: true,
+    value: typeof picture?.b64_json === 'string' || typeof picture?.url === 'string',
+  };
 }

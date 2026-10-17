@@ -171,7 +171,8 @@
         "checking": "Checking…",
         "ok": "{count, plural, =0 {Checked · no models} one {Checked · # model} other {Checked · # models}}",
         "okLimited": "Checked · {enabled} of {count} on",
-        "failed": "Error: {reason}"
+        "failed": "Error: {reason}",
+        "probing": "Finding out what each model does: {done} of {total}"
       },
       "menu": {
         "label": "Actions for connection “{name}”",

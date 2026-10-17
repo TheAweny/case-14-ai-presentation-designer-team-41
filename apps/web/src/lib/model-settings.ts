@@ -5,6 +5,7 @@ import {
   enabledModelIds,
   isModelEnabled,
   isRoleOptional,
+  roleKind,
   usesWriterModelByDefault,
   type ConnectionModelsInput,
   type ConnectionCheck,
@@ -200,6 +201,20 @@ export function rolesUsingConnection(
 export function knownModels(connection: ModelConnection): readonly string[] {
   const reported = connection.lastCheck?.ok === true ? connection.lastCheck.models : [];
   return enabledModelIds(reported, connection.enabledModels ?? null);
+}
+
+/**
+ * Модели подключения, годные для роли: проверка запросами показала, что модель умеет нужное —
+ * отвечать в чате, видеть картинку, рисовать или расшифровывать голос. Модель, которую ещё не
+ * проверили, не предлагается нигде. Источник без проверок (демо) отдаёт подключение без
+ * `modelKinds`, и тогда список не сужается.
+ */
+export function modelsForRole(connection: ModelConnection, role: PipelineRole): readonly string[] {
+  const known = knownModels(connection);
+  const kinds = connection.modelKinds;
+  if (!kinds) return known;
+  const kind = roleKind(role);
+  return known.filter((modelId) => kinds[modelId]?.includes(kind));
 }
 
 /** Модели, которые проверка нашла, ещё до фильтра включённых. */

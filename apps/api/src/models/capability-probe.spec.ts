@@ -144,9 +144,19 @@ describe('probeSpeech', () => {
       known: true,
       value: false,
     });
-    const busy = vi.fn(async () => new Response('', { status: 503 }));
+    const busy = vi.fn(async () => new Response('', { status: 429 }));
     await expect(probeSpeech(model, busy as unknown as typeof fetch)).resolves.toEqual({
       known: false,
     });
+  });
+
+  it('takes a server error that comes back every time as no route for this model', async () => {
+    // As a gateway with no channel for the model on this endpoint: 500 on every try.
+    const noRoute = vi.fn(async () => new Response('no channel', { status: 500 }));
+    await expect(probeSpeech(model, noRoute as unknown as typeof fetch)).resolves.toEqual({
+      known: true,
+      value: false,
+    });
+    expect(noRoute).toHaveBeenCalledTimes(3);
   });
 });
