@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AgentGeneration } from '@lct/contracts';
 import { reasoningRequestFields } from '../models/reasoning.js';
+import type { AttemptBudget } from './attempt-budget.js';
 
 export interface TextProvider {
   readonly model: string;
@@ -40,6 +41,11 @@ interface Options {
    * structured output still answers in shape. Without them only `response_format` holds it.
    */
   answerFormat?: { readonly format: string; readonly repair: string };
+  /**
+   * Attempts shared by this build. Each retry after a busy answer (429, 502, 503) takes one.
+   * Omitted, only the local cap of {@link BUSY_RETRIES} applies, as before.
+   */
+  attemptBudget?: AttemptBudget;
 }
 
 /** What is wrong with an answer, one problem a line, for the request to repair it. */
@@ -53,7 +59,10 @@ function problemsOf(error: unknown): string {
   return `- ${error instanceof Error ? error.message : String(error)}`;
 }
 interface Completion {
-  choices?: { message?: { content?: string }; finish_reason?: string }[];
+  choices?: {
+    message?: { content?: string; reasoning_content?: string; refusal?: string };
+    finish_reason?: string;
+  }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
@@ -279,6 +288,11 @@ export class OpenAICompatibleProvider implements TextProvider {
     // nothing about the answer and only cost a wait.
     let attempt = 0;
     let busy = 0;
+    const budget = this.options.attemptBudget;
+    // Every repeat — busy HTTP, bad JSON, a truncated answer, a timeout, a dropped connection —
+    // spends one shared attempt. The first send does not. Without a budget the local caps stand.
+    const allowRetry = (used: number, cap: number): boolean =>
+      used < cap && (budget === undefined || budget.tryTake());
     for (;;) {
       signal.throwIfAborted();
       const release = await this.limiter.acquire(signal);
@@ -304,7 +318,7 @@ export class OpenAICompatibleProvider implements TextProvider {
             temperature: generation?.temperature ?? 0.35,
             top_p: generation?.topP ?? 1,
             max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
-            ...reasoningRequestFields(this.model),
+            ...reasoningRequestFields(this.model, undefined, { thinking: false }),
             response_format: {
               type: 'json_schema',
               json_schema: {
@@ -330,10 +344,13 @@ export class OpenAICompatibleProvider implements TextProvider {
         });
         if (!response.ok) {
           await response.body?.cancel();
-          if (!BUSY_STATUSES.has(response.status) || busy >= BUSY_RETRIES) {
+          const allowed = BUSY_STATUSES.has(response.status) && allowRetry(busy, BUSY_RETRIES);
+          if (!allowed) {
+            const retrying = BUSY_STATUSES.has(response.status) && busy < BUSY_RETRIES;
             throw new Error(
               `Model API HTTP ${response.status} for ${this.model}` +
                 (busy ? ` after ${busy} retries` : '') +
+                (retrying ? '; the shared attempt budget is exhausted' : '') +
                 '; no alternate model was used.',
             );
           }
@@ -344,20 +361,55 @@ export class OpenAICompatibleProvider implements TextProvider {
         } else {
           const data = (await response.json()) as Completion;
           const choice = data.choices?.[0];
-          if (!choice?.message?.content || choice.finish_reason === 'length') {
-            if (attempt++ < 2) continue;
-            throw new Error('Model returned empty or truncated JSON.');
+          const content =
+            typeof choice?.message?.content === 'string' ? choice.message.content : '';
+          const reasoning =
+            typeof choice?.message?.reasoning_content === 'string'
+              ? choice.message.reasoning_content
+              : '';
+          const refusal =
+            typeof choice?.message?.refusal === 'string' ? choice.message.refusal : '';
+          const maxTokens = (generation?.maxOutputTokens ?? 3600) * (attempt + 1);
+          if (!content.trim() || refusal.trim() || choice?.finish_reason === 'length') {
+            if (allowRetry(attempt, 2)) {
+              attempt += 1;
+              continue;
+            }
+            const finish = ['stop', 'length', 'content_filter', 'tool_calls'].includes(
+              choice?.finish_reason ?? '',
+            )
+              ? choice?.finish_reason
+              : 'unknown';
+            const count = (value: unknown): number =>
+              typeof value === 'number' && Number.isFinite(value) ? value : 0;
+            const usage = {
+              prompt_tokens: count(data.usage?.prompt_tokens),
+              completion_tokens: count(data.usage?.completion_tokens),
+            };
+            const metadata = {
+              model: this.model.slice(0, 128),
+              agent: agent.slice(0, 128),
+              finish_reason: finish,
+              contentChars: content.trim().length,
+              reasoningChars: reasoning.trim().length,
+              hasRefusal: refusal.trim().length > 0,
+              attempts: attempt + 1,
+              maxTokens,
+              usage,
+            };
+            throw new Error('Model returned empty or truncated JSON. ' + JSON.stringify(metadata));
           }
           let result: T;
           try {
-            result = parseModelJson(choice.message.content, schema);
+            result = parseModelJson(content, schema);
           } catch (error) {
             // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
             // miss is a sampling accident, and a fresh draw follows.
-            if (attempt++ >= 2) throw error;
+            if (!allowRetry(attempt, 2)) throw error;
+            attempt += 1;
             repair =
               answerFormat && !repaired
-                ? { answer: choice.message.content.slice(0, 20000), problems: problemsOf(error) }
+                ? { answer: content.slice(0, 20000), problems: problemsOf(error) }
                 : null;
             if (repair) repaired = true;
             continue;
@@ -378,7 +430,8 @@ export class OpenAICompatibleProvider implements TextProvider {
         // cancellation of the whole run still stops at once.
         const timedOut = error instanceof Error && error.name === 'TimeoutError';
         const dropped = error instanceof TypeError;
-        if (!(timedOut || dropped) || signal.aborted || attempt++ >= 2) throw error;
+        if (!(timedOut || dropped) || signal.aborted || !allowRetry(attempt, 2)) throw error;
+        attempt += 1;
       } finally {
         release();
       }

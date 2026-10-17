@@ -9,10 +9,19 @@ describe('reasoningControl', () => {
     },
   );
 
-  it.each(['Qwen/Qwen3.5-27B', 'qwen3.5:27b', 'gpt://folder/qwen3.6-35b-a3b/latest'])(
-    'marks %s as thinking without a slider',
+  it.each([
+    'Qwen/Qwen3.5-27B',
+    'qwen3.5:27b',
+    'gpt://folder/qwen3.6-35b-a3b/latest',
+    'Qwen/Qwen3-8B',
+  ])('marks %s as thinking without a slider', (modelId) => {
+    expect(reasoningControl(modelId)).toBe('thinking');
+  });
+
+  it.each(['qwen38', 'qwen3.8', 'Qwen3.8', 'qwen38-27b-fp8', 'Qwen/Qwen3.8-27B'])(
+    'recognizes %s as Qwen3.8 and does not offer the hybrid thinking control',
     (modelId) => {
-      expect(reasoningControl(modelId)).toBe('thinking');
+      expect(reasoningControl(modelId)).toBe('none');
     },
   );
 

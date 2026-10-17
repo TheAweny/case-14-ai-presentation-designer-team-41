@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { AttemptBudget } from './attempt-budget.js';
 import {
   BUSY_RETRIES,
   OpenAICompatibleProvider,
@@ -131,12 +132,12 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     expect(JSON.parse(String(writerFetch.mock.calls[0]?.[1]?.body)).model).toBe('writer-model');
     expect(JSON.parse(String(fallbackFetch.mock.calls[0]?.[1]?.body)).model).toBe('fallback');
   });
-  it('enables thinking and passes the output schema as strict json_schema', async () => {
+  it('disables thinking and passes the output schema as strict json_schema', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());
     const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
     await provider.generate('writer', 'instructions', {}, schema, AbortSignal.timeout(1000));
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
-    expect(body.chat_template_kwargs).toEqual({ enable_thinking: true });
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
     expect(body.reasoning).toBeUndefined();
     expect(body.response_format).toMatchObject({
       type: 'json_schema',
@@ -255,6 +256,93 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       provider: 'llm.api.cloud.yandex.net',
     });
   });
+  it('reports counts for a reasoning-only length error and leaks nothing', async () => {
+    const secret = 'reasoning-secret-do-not-leak';
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { reasoning_content: secret }, finish_reason: 'length' }],
+            usage: { prompt_tokens: 11, completion_tokens: 7 },
+          }),
+        ),
+    );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    const error = await provider
+      .generate('writer', '', {}, schema, AbortSignal.timeout(1000))
+      .catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain('"finish_reason":"length"');
+    expect(message).toContain('"contentChars":0');
+    expect(message).toContain('"reasoningChars":' + String(secret.length));
+    expect(message).toContain('"attempts":3');
+    expect(message).toContain('"maxTokens":10800');
+    expect(message).toContain('"prompt_tokens":11');
+    expect(message).not.toContain(secret);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+  it('diagnoses empty choices without a raw payload', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({ choices: [], usage: { prompt_tokens: 3, completion_tokens: 0 } }),
+          ),
+      );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    const error = await provider
+      .generate('writer', '', {}, schema, AbortSignal.timeout(1000))
+      .catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain('"finish_reason":"unknown"');
+    expect(message).toContain('"contentChars":0');
+    expect(message).toContain('"hasRefusal":false');
+    expect(message).not.toContain('choices');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+  it('does not accept valid JSON when finish_reason is length', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"ok":true}' }, finish_reason: 'length' }],
+            usage: { prompt_tokens: 2, completion_tokens: 1 },
+          }),
+        ),
+    );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    await expect(
+      provider.generate('writer', '', {}, schema, AbortSignal.timeout(1000)),
+    ).rejects.toThrow(/empty or truncated JSON/);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+  it('rejects valid JSON with a refusal and does not leak the raw secret', async () => {
+    const secret = 'refusal-raw-secret';
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              { message: { content: '{"ok":true}', refusal: secret }, finish_reason: 'stop' },
+            ],
+          }),
+        ),
+    );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    const error = await provider
+      .generate('writer', '', {}, schema, AbortSignal.timeout(1000))
+      .catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain('"hasRefusal":true');
+    expect(message).toContain('"finish_reason":"stop"');
+    expect(message).not.toContain(secret);
+    expect(message).not.toContain('{"ok":true}');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('busy provider', () => {
@@ -291,6 +379,70 @@ describe('busy provider', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(BUSY_RETRIES + 1);
     const budgets = fetchImpl.mock.calls.map(([, init]) => tokensOf(init));
     expect(new Set(budgets).size).toBe(1);
+  });
+
+  it('stops HTTP retries when the shared attempt budget is exhausted', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => busyResponse());
+    const budget = new AttemptBudget(1);
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+      attemptBudget: budget,
+    });
+    const pending = provider
+      .generate('writer', '', {}, schema, new AbortController().signal)
+      .catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    const error = await pending;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/after 1 retries/);
+    expect((error as Error).message).toMatch(/shared attempt budget is exhausted/);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(budget.remaining).toBe(0);
+    expect(budget.snapshot()).toEqual({ max: 1, used: 1, remaining: 0 });
+  });
+
+  it('does not retry malformed JSON once the shared attempt budget is spent', async () => {
+    const bad = new Response(
+      JSON.stringify({
+        choices: [{ message: { content: '{"ok":"yes"}' }, finish_reason: 'stop' }],
+      }),
+    );
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(bad);
+    const budget = new AttemptBudget(1);
+    expect(budget.tryTake()).toBe(true);
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+      attemptBudget: budget,
+    });
+    await expect(
+      provider.generate('writer', '', {}, schema, new AbortController().signal),
+    ).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(budget.remaining).toBe(0);
+  });
+
+  it('keeps the busy-retry cap when no attempt budget is passed', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => busyResponse());
+    const provider = new OpenAICompatibleProvider({
+      ...settings,
+      fetchImpl,
+      limiter: new RequestLimiter(8),
+    });
+    const pending = provider
+      .generate('writer', '', {}, schema, new AbortController().signal)
+      .catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    const error = await pending;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/^Model API HTTP 429 .* after 5 retries/);
+    expect((error as Error).message).not.toMatch(/attempt budget/);
+    expect(fetchImpl).toHaveBeenCalledTimes(BUSY_RETRIES + 1);
   });
 
   it('gives up after the retry budget and says how many times it asked', async () => {
