@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import { ModelMenu } from '@/components/composer/model-menu';
-import { ComposerTemplateMenu } from '@/components/composer/composer-template-menu';
+import { useSpeechConfigured, VoicePill } from '@/components/composer/voice-pill';
 import { ComposerSourceMenu } from '@/components/composer/composer-source-menu';
 import { useComposerSuggestions } from '@/components/composer/composer-suggestions';
 import {
@@ -24,6 +24,7 @@ import {
   addComposerFiles,
   COMPOSER_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
+  templateTitle,
 } from '@/lib/composer-templates';
 import { chatContextOf, contextAttachments, createSlideRef, refKey } from '@/lib/slide-context';
 import type { TemplateSummary } from '@/lib/library-source';
@@ -68,7 +69,11 @@ export function ChatComposer({
   compact?: boolean;
 }) {
   const t = useTranslations('deckChat.input');
+  const voice = useTranslations('composer.voice');
+  const speech = useSpeechConfigured();
+  const [voiceError, setVoiceError] = useState<'empty' | 'failed' | 'blocked' | null>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const rejectedId = useId();
   const ownField = useRef<HTMLTextAreaElement>(null);
   const field = fieldRef ?? ownField;
   const {
@@ -211,11 +216,13 @@ export function ChatComposer({
   };
 
   const addFiles = (added: readonly File[]) => {
-    const update = addComposerFiles({ files, templateFile }, added);
+    if (added.length === 0) return;
+    const current = chatStore.get(chat.chatId)?.draft ?? chat.draft;
+    const update = addComposerFiles(current, added);
     patchDraft({
       files: update.files,
       templateFile: update.templateFile,
-      template: update.templateFile ? null : template,
+      template: update.templateFile ? null : current.template,
     });
     setRejected(update.rejected);
     box.aurora.kick();
@@ -231,6 +238,7 @@ export function ChatComposer({
         size={compact ? 'compact' : 'default'}
         onSubmit={send}
         onFiles={question ? undefined : addFiles}
+        pageDrop
         dropLabel={t('dropHere')}
       >
         {deck && deckId && (deck.refs.length > 0 || deck.ghost) ? (
@@ -276,7 +284,13 @@ export function ChatComposer({
             ) : null}
             {template ? (
               <AttachmentChip
-                attachment={{ kind: 'template', name: template.name }}
+                attachment={{
+                  kind: 'template',
+                  name: templateTitle(template.name),
+                  previewUrl:
+                    templates.find((item) => item.templateId === template.templateId)
+                      ?.previewDataUrl ?? undefined,
+                }}
                 onRemove={() => patchDraft({ template: null })}
               />
             ) : null}
@@ -318,6 +332,7 @@ export function ChatComposer({
           onValueChange={suggestions.onValueChange}
           fieldRef={field}
           label={t('label')}
+          describedBy={rejected.length ? rejectedId : undefined}
           placeholder={
             question ? t('placeholderAnswer') : running ? t('placeholderRunning') : t('placeholder')
           }
@@ -337,6 +352,18 @@ export function ChatComposer({
                 onChange={(model) => chatStore.setModel(chat.chatId, model)}
                 compact={compact}
               />
+              {speech ? (
+                <VoicePill
+                  draft={text}
+                  compact={compact}
+                  disabled={Boolean(question) || running}
+                  onDraft={(next) => {
+                    setVoiceError(null);
+                    setText(next);
+                  }}
+                  onError={setVoiceError}
+                />
+              ) : null}
               <PromptSubmit
                 state={action}
                 label={t('send')}
@@ -351,6 +378,25 @@ export function ChatComposer({
           <ComposerSourceMenu
             compact={compact}
             disabled={Boolean(question)}
+            groups={{ own: [], others: templates }}
+            inProject={false}
+            selectedId={templateFile ? null : (template?.templateId ?? null)}
+            pendingFile={templateFile !== null}
+            onSelectTemplate={(id) => {
+              const item = templates.find((entry) => entry.templateId === id);
+              if (item)
+                patchDraft({
+                  template: { templateId: id, name: item.fileName },
+                  templateFile: null,
+                });
+              box.aurora.flash();
+            }}
+            onUploadTemplate={() => {
+              if (picker.current) {
+                picker.current.accept = TEMPLATE_FILE_ACCEPT;
+                picker.current.click();
+              }
+            }}
             onFiles={() => {
               if (picker.current) {
                 picker.current.accept = COMPOSER_FILE_ACCEPT;
@@ -370,28 +416,6 @@ export function ChatComposer({
                 : undefined
             }
           />
-          <ComposerTemplateMenu
-            groups={{ own: [], others: templates }}
-            inProject={false}
-            selected={templates.find((item) => item.templateId === template?.templateId) ?? null}
-            pendingFile={templateFile}
-            disabled={Boolean(question)}
-            onSelect={(id) => {
-              const item = templates.find((entry) => entry.templateId === id);
-              if (item)
-                patchDraft({
-                  template: { templateId: id, name: item.fileName },
-                  templateFile: null,
-                });
-              box.aurora.flash();
-            }}
-            onUpload={() => {
-              if (picker.current) {
-                picker.current.accept = TEMPLATE_FILE_ACCEPT;
-                picker.current.click();
-              }
-            }}
-          />
           <input
             ref={picker}
             type="file"
@@ -410,8 +434,9 @@ export function ChatComposer({
         </PromptToolbar>
       </PromptBox>
       {rejected.length > 0 ? (
-        <PromptNote>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
+        <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
+      {voiceError ? <PromptNote>{voice(voiceError)}</PromptNote> : null}
     </div>
   );
 }

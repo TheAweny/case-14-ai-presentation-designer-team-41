@@ -24,22 +24,73 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   className,
   align = 'start',
-  sideOffset = 4,
+  sideOffset = 8,
+  glow = false,
+  children,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  /** Sliding row highlight from the prompt-bar prototype. */
+  glow?: boolean;
+}) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         align={align}
+        collisionPadding={12}
         className={cn(
-          'z-[5000] max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl bg-popover p-1.5 text-popover-foreground shadow-xl shadow-black/10 ring-1 ring-foreground/10 data-[state=open]:duration-200 data-[state=closed]:duration-120 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
+          'z-[5000] max-h-(--radix-dropdown-menu-content-available-height) w-[max(var(--radix-dropdown-menu-trigger-width),11rem)] min-w-32 max-w-[min(20rem,calc(100vw-2rem))] origin-bottom overflow-x-hidden overflow-y-auto rounded-xl bg-popover p-1.5 text-popover-foreground shadow-xl shadow-black/10 ring-1 ring-foreground/10 data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left',
+          glow && 'menu-glow-root',
           className,
         )}
         {...props}
-      />
+      >
+        {glow ? <SlidingHighlight>{children}</SlidingHighlight> : children}
+      </DropdownMenuPrimitive.Content>
     </DropdownMenuPrimitive.Portal>
+  );
+}
+
+/** The highlight slides between rows instead of swapping backgrounds. */
+function SlidingHighlight({ children }: { children: React.ReactNode }) {
+  const root = React.useRef<HTMLDivElement>(null);
+  const mark = React.useRef<HTMLSpanElement>(null);
+  const fresh = React.useRef(true);
+  React.useLayoutEffect(() => {
+    const el = root.current;
+    const glow = mark.current;
+    if (!el || !glow) return;
+    const place = () => {
+      const row = el.querySelector<HTMLElement>('[data-highlighted]');
+      if (!row) {
+        glow.style.opacity = '0';
+        return;
+      }
+      if (fresh.current) glow.style.transition = 'none';
+      glow.style.transform = `translateY(${row.offsetTop}px)`;
+      glow.style.height = `${row.offsetHeight}px`;
+      glow.style.opacity = '1';
+      if (fresh.current) {
+        fresh.current = false;
+        void glow.offsetHeight;
+        glow.style.transition = '';
+      }
+    };
+    place();
+    const observer = new MutationObserver(place);
+    observer.observe(el, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-highlighted'],
+    });
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={root} className="relative">
+      <span ref={mark} aria-hidden className="menu-glow" />
+      {children}
+    </div>
   );
 }
 
@@ -128,7 +179,7 @@ function DropdownMenuRadioItem({
       {...props}
     >
       <span
-        className="pointer-events-none absolute right-2 flex items-center justify-center"
+        className="pointer-events-none absolute top-1/2 right-2 flex size-4 -translate-y-1/2 items-center justify-center"
         data-slot="dropdown-menu-radio-item-indicator"
       >
         <DropdownMenuPrimitive.ItemIndicator>
@@ -219,7 +270,7 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        'z-[5000] min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-xl bg-popover p-1.5 text-popover-foreground shadow-xl shadow-black/10 ring-1 ring-foreground/10 data-[state=open]:duration-200 data-[state=closed]:duration-120 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
+        'z-[5000] min-w-32 origin-bottom overflow-hidden rounded-xl bg-popover p-1.5 text-popover-foreground shadow-xl shadow-black/10 ring-1 ring-foreground/10 data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left',
         className,
       )}
       {...props}

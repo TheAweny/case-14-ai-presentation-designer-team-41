@@ -43,16 +43,18 @@
     "stop": "Stop",
     "stopping": "Stopping…",
     "materials": "Add materials",
-    "materialsHint": "Text, tables, PDFs and images",
+    "materialsHint": "TXT, MD, DOCX, PDF, CSV, TSV and XLSX. PPTX and POTX are templates",
     "templateHint": "Design from your PowerPoint file",
     "uploadTemplate": "Upload a .pptx template",
     "templates": "Library templates",
     "commands": "Working modes",
     "context": "Slides and objects",
+    "add": "Add",
     "attach": "Add materials",
+    "attachFiles": "Attach files",
     "files": "Attachments",
     "dropHere": "Drop files to add them to the request",
-    "rejected": "Unsupported files: {names}."
+    "rejected": "Could not add: {names}. Choose a nonempty document, spreadsheet or PPTX / POTX template."
   },
   "toBottom": "Jump to latest",
   "modes": {
@@ -99,6 +101,10 @@
     "selectionFailed": "The selected model is active in this tab, but could not be saved for the next visit."
   },
   "tools": {
+    "completed": "{count, plural, one {# action completed} other {# actions completed}}",
+    "interrupted": "Work interrupted",
+    "cancelled": "Work stopped",
+    "cancelledTool": "Stopped: {name}",
     "list_templates": "Looked at the templates",
     "describe_template": "Studied the template",
     "read_file": "Read the material",

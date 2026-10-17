@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { AnimatedCollapse } from '@/components/ui/animated-collapse';
+import { CallChip, StatusMark } from './status-mark';
 import { TaskGlyph } from './task-glyph';
 import { useTranslations } from 'next-intl';
 import { ChevronDownIcon, RetryIcon, WarningIcon } from '@/components/ui/icons';
@@ -94,12 +95,7 @@ export function BuildCardView({
     ((phase === 'cancelled' && !superseded) || (phase === 'failed' && run.failure?.retryable));
 
   return (
-    <section
-      className={cn(
-        'flex flex-col gap-1 rounded-xl border border-border/70 bg-muted/15 p-2',
-        superseded && 'opacity-60',
-      )}
-    >
+    <section className={cn('flex flex-col gap-1', superseded && 'opacity-60')}>
       <button
         type="button"
         aria-expanded={open}
@@ -224,10 +220,7 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: BuildRun }) {
       layout="position"
       initial={false}
       transition={{ duration: reduce ? 0 : 0.2 }}
-      className={cn(
-        'flex flex-col gap-2 rounded-lg p-1.5 transition-colors duration-200',
-        running && 'bg-background/80 shadow-xs',
-      )}
+      className="flex flex-col gap-2 py-0.5"
     >
       <p
         className={cn(
@@ -237,8 +230,10 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: BuildRun }) {
           stage.state === 'failed' && 'text-destructive',
         )}
       >
-        <TaskGlyph state={state} />
-        <span className="shrink-0">{t(`stages.${stage.stage}`)}</span>
+        <StatusMark status={state} />
+        <CallChip active={running} failed={stage.state === 'failed'}>
+          <span className="shrink-0">{t(`stages.${stage.stage}`)}</span>
+        </CallChip>
         <span className="sr-only">, {t(`stageStates.${stage.state}`)}</span>
         {detail ? (
           <span className="min-w-0 truncate text-muted-foreground">

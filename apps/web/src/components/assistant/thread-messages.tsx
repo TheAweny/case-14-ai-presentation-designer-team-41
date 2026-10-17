@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useTranslations } from 'next-intl';
 import { CheckIcon, CopyIcon, EditIcon } from '@/components/ui/icons';
 import { AttachmentChip, type FileAttachment } from '@/components/composer/attachment-chip';
-import { TaskGlyph } from './task-glyph';
+import { ThoughtLine } from './thought-line';
 import { cn } from '@/lib/utils';
 import type { RunStatus } from './run-status';
 
@@ -153,15 +153,7 @@ export function MessageActions({
  */
 export function ThinkingLine() {
   const t = useTranslations('assistant.actions');
-  return (
-    <div
-      role="status"
-      className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-[0.8125rem] text-muted-foreground"
-    >
-      <TaskGlyph state="running" className="text-foreground" />
-      <span className="assistant-shimmer motion-reduce:animate-none">{t('thinking')}</span>
-    </div>
-  );
+  return <ThoughtLine state="running" label={t('thinking')} />;
 }
 
 /** Заголовок хода сборки словами интерфейса — для обеих карточек хода. */

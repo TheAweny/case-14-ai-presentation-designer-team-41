@@ -60,7 +60,7 @@ describe('defaultTemplate', () => {
 });
 
 describe('chosenTemplate', () => {
-  it('выбор из меню важнее значения по умолчанию, в том числе чужой шаблон в проекте', async () => {
+  it('берёт только явный выбор, в том числе чужой шаблон в проекте', async () => {
     const { library, sales } = await setup();
     const other = templateGroups(library, sales).others[0];
     expect(chosenTemplate(library, sales, other?.templateId ?? null)?.templateId).toBe(
@@ -68,9 +68,10 @@ describe('chosenTemplate', () => {
     );
   });
 
-  it('выбранного шаблона больше нет — возвращается значение по умолчанию', async () => {
+  it('без выбора и без пропавшего шаблона ничего не подставляет', async () => {
     const { library, sales, empty } = await setup();
-    expect(chosenTemplate(library, sales, 'gone')?.templateId).toBe(sales.templates[0]?.templateId);
+    expect(chosenTemplate(library, sales, null)).toBeNull();
+    expect(chosenTemplate(library, sales, 'gone')).toBeNull();
     expect(chosenTemplate(library, empty, 'gone')).toBeNull();
   });
 });
@@ -113,6 +114,14 @@ describe('addComposerFiles', () => {
   it('файлы без шаблона чип не трогают', () => {
     const update = addComposerFiles(none, [file('data.csv')]);
     expect(update.templateFile).toBeNull();
+  });
+
+  it('не дублирует материал внутри одного выбора и при повторном перетаскивании', () => {
+    const notes = file('notes.md');
+    const duplicate = file('notes.md');
+    const once = addComposerFiles(none, [notes, duplicate]);
+    expect(once.files).toEqual([notes]);
+    expect(addComposerFiles(once, [duplicate]).files).toEqual([notes]);
   });
 });
 

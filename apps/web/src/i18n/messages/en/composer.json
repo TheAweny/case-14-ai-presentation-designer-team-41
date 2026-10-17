@@ -67,7 +67,22 @@
     "roles": {
       "planner": "Planning",
       "critic": "Review"
+    },
+    "effort": "Depth",
+    "effortLabel": "Reasoning depth",
+    "thinkingOn": "Reasoning is on",
+    "levels": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
     }
+  },
+  "voice": {
+    "start": "Dictate",
+    "stop": "Stop dictation",
+    "empty": "The recording is empty.",
+    "failed": "The recording could not be transcribed.",
+    "blocked": "The microphone is unavailable."
   },
   "prompt": {
     "stop": "Stop",

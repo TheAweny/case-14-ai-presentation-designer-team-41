@@ -93,7 +93,7 @@ export function PlanCard({
     <section
       aria-labelledby={titleId}
       className={cn(
-        'overflow-hidden rounded-2xl bg-card ring-1 ring-border',
+        'flex flex-col',
         compact ? 'text-[0.8125rem]' : 'text-sm',
         part.status === 'superseded' && 'opacity-70',
       )}
@@ -255,7 +255,7 @@ export function PlanCard({
       {active ? (
         <footer
           className={cn(
-            'flex flex-wrap items-center gap-2 border-t border-border',
+            'flex flex-wrap items-center gap-2 pt-2',
             compact ? 'px-3 py-2.5' : 'px-4 py-3',
           )}
         >

@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { isSubmitKey, type PromptActionState } from './prompt-keys';
 import { useAurora, type Aurora } from './use-aurora';
 import { SendGlyph } from './send-glyph';
+import { usePageFileDrop } from './use-page-file-drop';
 
 /**
  * Поле запроса к агенту — одно на главной, в чате колоды и в панели редактора. Собирается из
@@ -84,6 +85,7 @@ export function PromptBox({
   onSubmit,
   onFiles,
   dropLabel,
+  pageDrop = false,
   size = 'default',
   busy = false,
   className,
@@ -96,6 +98,8 @@ export function PromptBox({
   onFiles?: (files: File[]) => void;
   /** Подпись над полем, пока над ним держат файлы. */
   dropLabel?: string;
+  /** Accept files anywhere on the page; nested drop targets keep their own behavior. */
+  pageDrop?: boolean;
   size?: PromptSize;
   /** Запрос ушёл и ждёт ответа — для программ чтения экрана. */
   busy?: boolean;
@@ -104,6 +108,7 @@ export function PromptBox({
   children: ReactNode;
 }) {
   const [dragging, setDragging] = useState(false);
+  const pageDragging = usePageFileDrop(box.root, onFiles, pageDrop);
   const carriesFiles = (event: DragEvent) =>
     onFiles !== undefined && event.dataTransfer.types.includes('Files');
 
@@ -139,17 +144,23 @@ export function PromptBox({
         aria-busy={busy}
         className={cn(
           'relative z-1 flex flex-col rounded-[inherit] bg-card ring-1 ring-border',
-          size === 'compact' ? 'gap-1 p-2' : 'gap-1.5 p-2.5',
+          size === 'compact' ? 'gap-2 p-2.5' : 'gap-2 p-3',
         )}
       >
         <Context.Provider value={{ aurora: box.aurora, size }}>
           <TooltipProvider>{children}</TooltipProvider>
         </Context.Provider>
       </form>
-      {dragging ? (
+      {dragging || pageDragging ? (
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-3 grid place-items-center rounded-[inherit] border border-dashed border-foreground/40 bg-card/90 text-sm text-foreground"
+          role="status"
+          data-composer-drop
+          className={cn(
+            'pointer-events-none z-40 grid place-items-center border border-dashed border-foreground/40 bg-card/95 p-6 text-center text-sm text-foreground',
+            pageDragging && size !== 'compact'
+              ? 'fixed inset-4 rounded-2xl'
+              : 'absolute inset-0 rounded-[inherit]',
+          )}
         >
           {dropLabel}
         </div>
@@ -264,7 +275,7 @@ export function PromptField({
         if (submitOnEnter) event.currentTarget.form?.requestSubmit();
       }}
       className={cn(
-        'w-full resize-none overflow-y-auto bg-transparent px-1.5 pt-1 text-foreground outline-none placeholder:text-muted-foreground',
+        'w-full resize-none overflow-y-auto bg-transparent px-1.5 pt-1 text-foreground outline-none placeholder:text-muted-foreground max-sm:text-base',
         FIELD_SIZE[size],
       )}
     />

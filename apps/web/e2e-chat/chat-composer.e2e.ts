@@ -1,5 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { signSessionToken } from '../src/lib/session-token';
+
+const fixture = (name: string) =>
+  JSON.parse(
+    readFileSync(
+      new URL(`../../../packages/contracts/fixtures/${name}.json`, import.meta.url),
+      'utf8',
+    ),
+  ).valid[0].payload;
 
 const ID = '00000000-0000-4000-8000-0000000000cc';
 const ANSWER = '00000000-0000-4000-8000-000000000002';
@@ -50,26 +59,343 @@ async function openChat(page: Page) {
   await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
 }
 
+async function droppedFiles(page: Page, names: string[]) {
+  return page.evaluateHandle((names) => {
+    const data = new DataTransfer();
+    for (const name of names) {
+      data.items.add(new File(['Материалы'], name, { lastModified: 1 }));
+    }
+    return data;
+  }, names);
+}
+
+test('uploads from the plus menu and sends an attachment-only message through the chat API', async ({
+  page,
+}) => {
+  const fileId = '00000000-0000-4000-8000-000000000010';
+  let uploaded = 0;
+  let input: unknown;
+  await page.route('**/api/backend/files/content', (route) => {
+    uploaded++;
+    expect(route.request().postDataBuffer()?.toString()).toContain('Факты');
+    return route.fulfill({ json: { fileId, fileName: 'notes.md' } });
+  });
+  await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
+    const body = route.request().postDataJSON();
+    input = body.input;
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: stream([
+        {
+          type: 'message',
+          seq: 0,
+          message: {
+            role: 'user',
+            id: body.requestId,
+            text: body.input.text,
+            attachments: body.input.attachments,
+            mode: body.mode,
+            createdAt: 1,
+          },
+        },
+        { type: 'message', seq: 1, message: assistant() },
+        { type: 'turn-end', seq: 2 },
+      ]),
+    });
+  });
+  await openChat(page);
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('menuitem', { name: /Добавить материалы/ }).click();
+  await (
+    await chooser
+  ).setFiles({ name: 'notes.md', mimeType: 'text/markdown', buffer: Buffer.from('Факты') });
+  await page.getByRole('button', { name: 'Отправить', exact: true }).click();
+  await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
+  expect(uploaded).toBe(1);
+  expect(input).toMatchObject({
+    type: 'message',
+    text: '',
+    attachments: [{ kind: 'file', fileId, name: 'notes.md' }],
+  });
+  await expect(page.getByRole('list', { name: 'Вложения' }).getByText('notes.md')).toBeVisible();
+});
+
+test('accepts files across the home and chat pages, preserves the draft and rejects unsupported inputs', async ({
+  page,
+}) => {
+  for (const path of ['/', `/chats/${ID}`]) {
+    await page.goto(path);
+    const textarea = page.locator('textarea');
+    await textarea.fill('Мой черновик');
+    const data = await droppedFiles(page, ['notes.md', 'notes.md', 'brand.PPTX', 'photo.png']);
+    await page.dispatchEvent('body', 'dragenter', { dataTransfer: data });
+    await expect(page.locator('[data-composer-drop]')).toBeVisible();
+    await page.dispatchEvent('body', 'dragleave', {
+      dataTransfer: data,
+      clientX: 100,
+      clientY: 100,
+    });
+    await expect(page.locator('[data-composer-drop]')).toBeVisible();
+    await page.dispatchEvent('body', 'drop', { dataTransfer: data });
+    await expect(page.locator('[data-composer-drop]')).toHaveCount(0);
+    const attachments = page.getByRole('list', { name: 'Вложения' });
+    await expect(attachments.getByText('notes.md', { exact: true })).toHaveCount(1);
+    await expect(attachments.getByText('brand.PPTX', { exact: true })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'photo.png' })).toBeVisible();
+    await expect(textarea).toHaveValue('Мой черновик');
+    await page.dispatchEvent('body', 'drop', { dataTransfer: data });
+    await expect(attachments.getByText('notes.md', { exact: true })).toHaveCount(1);
+    await data.dispose();
+  }
+});
+
+test('handles a composer drop once and clears the page highlight on escape and window exit', async ({
+  page,
+}) => {
+  await openChat(page);
+  const data = await droppedFiles(page, ['notes.md']);
+  await page.dispatchEvent('body', 'dragenter', { dataTransfer: data });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-composer-drop]')).toHaveCount(0);
+  await page.dispatchEvent('body', 'dragenter', { dataTransfer: data });
+  await page.dispatchEvent('body', 'dragleave', { dataTransfer: data, clientX: 0, clientY: 0 });
+  await expect(page.locator('[data-composer-drop]')).toHaveCount(0);
+  await page.locator('form[aria-busy]').dispatchEvent('drop', { dataTransfer: data });
+  await expect(
+    page.getByRole('list', { name: 'Вложения' }).getByText('notes.md', { exact: true }),
+  ).toHaveCount(1);
+  const textDragPrevented = await page.evaluate(() => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', 'текст');
+    const event = new DragEvent('drop', { dataTransfer, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(textDragPrevented).toBe(false);
+  await data.dispose();
+});
+
+test('uploads a dropped template separately from materials and passes both ids to the agent', async ({
+  page,
+}) => {
+  const templateId = '00000000-0000-4000-8000-000000000011';
+  const fileId = '00000000-0000-4000-8000-000000000012';
+  const endpoints: string[] = [];
+  let input: { attachments: unknown[] } | undefined;
+  await page.route('**/api/backend/files/template', (route) => {
+    endpoints.push('template');
+    return route.fulfill({
+      json: {
+        fileId: templateId,
+        fileName: 'brand.pptx',
+        profile: { designSystem: fixture('DesignSystem'), templateIr: fixture('TemplateIR') },
+      },
+    });
+  });
+  await page.route('**/api/backend/files/content', (route) => {
+    endpoints.push('content');
+    return route.fulfill({ json: { fileId, fileName: 'notes.md' } });
+  });
+  await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
+    const body = route.request().postDataJSON();
+    input = body.input;
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: stream([
+        {
+          type: 'message',
+          seq: 0,
+          message: {
+            role: 'user',
+            id: body.requestId,
+            text: body.input.text,
+            attachments: body.input.attachments,
+            mode: body.mode,
+            createdAt: 1,
+          },
+        },
+        { type: 'message', seq: 1, message: assistant() },
+        { type: 'turn-end', seq: 2 },
+      ]),
+    });
+  });
+  await openChat(page);
+  const data = await droppedFiles(page, ['brand.pptx', 'notes.md']);
+  await page.dispatchEvent('body', 'drop', { dataTransfer: data });
+  await page.getByRole('button', { name: 'Отправить', exact: true }).click();
+  await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
+  expect(endpoints).toEqual(['template', 'content']);
+  expect(input?.attachments).toMatchObject([
+    { kind: 'template', templateId },
+    { kind: 'file', fileId },
+  ]);
+  await data.dispose();
+});
+
+test('keeps the next files while an answer is running and restores completed tool history', async ({
+  page,
+}) => {
+  let status = 'streaming';
+  const tools = [
+    { type: 'tool', callId: 'read', name: 'read_file', input: {}, status: 'done', output: {} },
+    { type: 'tool', callId: 'templates', name: 'list_templates', input: {}, status: 'running' },
+  ];
+  await page.route(`**/api/backend/chats/${ID}`, (route) =>
+    route.fulfill({
+      json: savedChat(
+        [
+          {
+            ...assistant(status),
+            parts: tools.map((tool) => ({
+              ...tool,
+              status: status === 'done' ? 'done' : tool.status,
+            })),
+          },
+        ],
+        status === 'streaming',
+      ),
+    }),
+  );
+  await page.route(`**/api/backend/chats/${ID}/stream`, (route) => route.abort());
+  await openChat(page);
+  const trace = page.locator('.thought-line');
+  await expect(trace.getByRole('button', { expanded: true })).toContainText('Смотрю шаблоны');
+  const data = await droppedFiles(page, ['next.md']);
+  await page.dispatchEvent('body', 'drop', { dataTransfer: data });
+  await expect(page.getByRole('list', { name: 'Вложения' }).getByText('next.md')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Остановить', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/chat/integrated-desktop.png' });
+  status = 'done';
+  await page.reload();
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+  const disclosure = trace.getByRole('button', { expanded: false });
+  await expect(disclosure).toContainText('Выполнено 2 действия');
+  await disclosure.click();
+  await expect(trace.locator('ul [data-task-state=done]')).toHaveCount(2);
+  await expect(trace.locator('[data-task-state=running]')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: 'test-results/chat/integrated-mobile.png' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await data.dispose();
+});
+
+test('never animates unfinished tools after cancellation or failure', async ({ page }) => {
+  for (const status of ['cancelled', 'failed']) {
+    await page.route(`**/api/backend/chats/${ID}`, (route) =>
+      route.fulfill({
+        json: savedChat([
+          {
+            ...assistant(status),
+            parts: [
+              { type: 'tool', callId: 'read', name: 'read_file', input: {}, status: 'running' },
+            ],
+          },
+        ]),
+      }),
+    );
+    await openChat(page);
+    const trace = page.locator('.thought-line');
+    await expect(trace.getByRole('button', { expanded: false })).toHaveText(
+      status === 'cancelled' ? 'Работа остановлена' : 'Работа прервалась',
+    );
+    await trace.getByRole('button').click();
+    await expect(trace.locator('[data-task-state=running]')).toHaveCount(0);
+    await expect(trace.locator('.assistant-shimmer')).toHaveCount(0);
+  }
+});
+
 test('opens the same source menu on the home page and inside a chat', async ({ page }) => {
   for (const path of ['/', `/chats/${ID}`]) {
     await page.goto(path);
-    const plus = page.getByRole('button', { name: 'Добавить материалы', exact: true });
+    const plus = page.getByRole('button', { name: 'Добавить', exact: true });
+    await expect(page.getByRole('button', { name: 'Прикрепить файлы', exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole('button', { name: /Выбрать шаблон|Шаблон:.*Сменить шаблон/ }),
+    ).toHaveCount(0);
     await plus.click();
-    const menu = page.getByRole('menu', { name: 'Добавить материалы', exact: true });
+    const menu = page.getByRole('menu', { name: 'Добавить', exact: true });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: /Добавить материалы/ })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: /шаблон/i })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: /Загрузить шаблон/ })).toBeVisible();
     expect(await menu.evaluate((element) => getComputedStyle(element).animationName)).not.toBe(
       'none',
     );
     await menu.press('Escape');
     await expect(menu).toHaveCount(0);
-    const template = page.getByRole('button', { name: /Выбрать шаблон|Шаблон:.*Сменить шаблон/ });
-    await expect(template).toHaveCount(1);
-    await template.click();
-    await expect(page.getByRole('menuitem', { name: /Загрузить шаблон/ })).toBeVisible();
-    await page.getByRole('menu').press('Escape');
   }
+});
+
+test('switches menus in one click without losing text or attachments', async ({ page }) => {
+  await openChat(page);
+  await field(page).fill('Черновик с материалами');
+  const data = await droppedFiles(page, ['notes.md']);
+  await page.dispatchEvent('body', 'drop', { dataTransfer: data });
+  const model = page.getByRole('button', { name: 'Модель: beta. Сменить модель' });
+  await page.getByRole('button', { name: 'Режим: План' }).click();
+  await model.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(page.getByRole('menu', { name: 'Добавить' })).toBeVisible();
+  await model.click();
+  await page.getByRole('option', { name: 'alpha', exact: true }).click();
+  await expect(field(page)).toHaveValue('Черновик с материалами');
+  await expect(page.getByRole('list', { name: 'Вложения' }).getByText('notes.md')).toBeVisible();
+  await data.dispose();
+});
+
+test('does not attach behind a dialog or steal an existing drop target', async ({ page }) => {
+  await openChat(page);
+  const data = await droppedFiles(page, ['notes.md']);
+  await page.evaluate(() => {
+    const zone = document.createElement('div');
+    zone.id = 'existing-drop-target';
+    zone.addEventListener('dragover', (event) => event.preventDefault());
+    zone.addEventListener('drop', (event) => event.preventDefault());
+    document.body.append(zone);
+  });
+  await page.locator('#existing-drop-target').dispatchEvent('dragover', { dataTransfer: data });
+  await expect(page.locator('[data-composer-drop]')).toHaveCount(0);
+  await page.locator('#existing-drop-target').dispatchEvent('drop', { dataTransfer: data });
+  await expect(page.getByRole('list', { name: 'Вложения' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('dialog').dispatchEvent('drop', { dataTransfer: data });
+  await expect(page.locator('form[aria-busy] li')).toHaveCount(0);
+  await data.dispose();
+});
+
+test('prevents file navigation while a question awaits a text answer', async ({ page }) => {
+  const question = {
+    type: 'question',
+    callId: 'ask',
+    questionId: '00000000-0000-4000-8000-000000000013',
+    question: 'Кто будет смотреть презентацию?',
+    options: [],
+    multiSelect: false,
+    answer: null,
+  };
+  await page.route(`**/api/backend/chats/${ID}`, (route) =>
+    route.fulfill({ json: savedChat([{ ...assistant(), parts: [question] }]) }),
+  );
+  await openChat(page);
+  await expect(page.getByRole('button', { name: 'Добавить', exact: true })).toBeDisabled();
+  const prevented = await page.evaluate(() => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File(['факты'], 'notes.md'));
+    const event = new DragEvent('drop', { dataTransfer, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+  await expect(page.getByRole('list', { name: 'Вложения' })).toHaveCount(0);
+  await field(page).fill('Для команды');
+  await expect(page.getByRole('button', { name: 'Отправить', exact: true })).toBeEnabled();
 });
 
 test('chooses modes with the keyboard and limits the input to five lines', async ({ page }) => {
@@ -227,7 +553,7 @@ test('shows the assistant default, keeps model selection after reload, and reset
   await page.reload();
   await expect(page.getByRole('button', { name: 'Модель: alpha. Сменить модель' })).toBeVisible();
   await page.getByRole('button', { name: 'Модель: alpha. Сменить модель' }).click();
-  await page.getByRole('button', { name: 'Использовать по умолчанию · beta', exact: true }).click();
+  await page.getByRole('option', { name: 'Использовать по умолчанию', exact: true }).click();
   await expect.poll(() => model).toBeNull();
   await expect(page.getByRole('button', { name: 'Модель: beta. Сменить модель' })).toContainText(
     'По умолчанию',
@@ -494,11 +820,34 @@ test('shows animated tool execution and a stable send-to-stop glyph', async ({ p
   );
   await page.route(`**/api/backend/chats/${ID}/stream`, (route) => route.abort());
   await openChat(page);
-  await expect(page.locator('[data-task-state=running]')).toBeVisible();
+  await expect(page.locator('[data-task-state=running]').first()).toBeVisible();
   const stop = page.getByRole('button', { name: 'Остановить', exact: true });
   await expect(stop.locator('svg path')).toHaveAttribute(
     'd',
-    'M12 6L18 6L18 12L18 18L6 18L6 12L6 6Z',
+    'M7.00 17.00L7.00 7.00L17.00 7.00L17.00 17.00L7.00 17.00',
   );
-  await expect(page.getByText('Смотрю шаблоны', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Смотрю шаблоны…', exact: true })).toBeVisible();
+});
+
+test.describe('dictation', () => {
+  test.use({
+    launchOptions: {
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+    },
+  });
+
+  test('shows the microphone only after a speech model is assigned', async ({ page }) => {
+    await page.goto('/');
+    const prompt = page.getByRole('textbox', { name: 'О чём новая презентация?' });
+    await expect(prompt).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Диктовать' })).toHaveCount(0);
+    const assigned = await page.request.put('http://127.0.0.1:3121/model-settings/roles', {
+      data: { role: 'speech', kind: 'model', connectionId: 'fixture', modelId: 'alpha' },
+    });
+    expect(assigned.ok()).toBeTruthy();
+    await page.reload();
+    await page.getByRole('button', { name: 'Диктовать' }).click();
+    await page.getByRole('button', { name: 'Остановить диктовку' }).click();
+    await expect(prompt).toHaveValue('Голос услышан');
+  });
 });

@@ -35,9 +35,11 @@ const server = createServer(async (request, response) => {
     let body = '';
     for await (const chunk of request) body += String(chunk);
     const assignment = roleAssignmentSchema.parse(JSON.parse(body));
-    modelSettings.roles = modelSettings.roles.map((item) =>
-      item.role === assignment.role ? assignment : item,
-    );
+    const at = modelSettings.roles.findIndex((item) => item.role === assignment.role);
+    modelSettings.roles =
+      at >= 0
+        ? modelSettings.roles.map((item) => (item.role === assignment.role ? assignment : item))
+        : [...modelSettings.roles, assignment];
     response.statusCode = 204;
     response.end();
   } else if (request.url?.startsWith('/auth/accounts/'))
@@ -53,6 +55,8 @@ const server = createServer(async (request, response) => {
     );
   else if (request.url === '/auth/accounts') response.end(JSON.stringify({ hasAccounts: true }));
   else if (request.url === '/model-settings') response.end(JSON.stringify(modelSettings));
+  else if (request.url === '/speech/transcriptions' && request.method === 'POST')
+    response.end(JSON.stringify({ text: 'Голос услышан' }));
   else if (request.url?.startsWith('/health'))
     response.end(
       JSON.stringify({

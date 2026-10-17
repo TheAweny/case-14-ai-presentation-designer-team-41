@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,17 +17,20 @@ import {
   ChevronDownIcon,
   ConnectIcon,
   SearchIcon,
-  ServerIcon,
   SettingsIcon,
 } from '@/components/ui/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
-import {
-  useWriterModels,
-  useModelSettingsSnapshot,
-} from '@/components/settings/model-settings-store';
+import { useWriterModels } from '@/components/settings/model-settings-store';
+import { reasoningControl, type ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
+import {
+  readReasoningEffort,
+  subscribeReasoningEffort,
+  writeReasoningEffort,
+} from '@/lib/reasoning-effort';
+import { EffortSlider } from './effort-slider';
 import { cn } from '@/lib/utils';
 import {
   MODEL_SEARCH_FROM,
@@ -31,7 +43,7 @@ import {
   type ModelRow,
   type WriterModels,
 } from '@/lib/writer-models';
-import { PROMPT_PILL } from './prompt-box';
+import { PROMPT_CHIP } from './prompt-box';
 
 /** Role-aware picker shared by composers and error actions. Null always follows the chat default. */
 export function ModelMenu({
@@ -49,7 +61,7 @@ export function ModelMenu({
 }) {
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
-  const settings = useModelSettingsSnapshot();
+  const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
   const [open, setOpen] = useState(false);
   if (!models) return null;
 
@@ -103,10 +115,8 @@ export function ModelMenu({
       (group) =>
         group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
     );
-  const overrides =
-    settings?.roles.filter(
-      (item) => ['planner', 'critic'].includes(item.role) && item.kind === 'model',
-    ) ?? [];
+  const control = selected ? reasoningControl(selected.modelId) : 'none';
+  const levelLabel = (level: ReasoningEffort) => t(`levels.${level}`);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -115,66 +125,56 @@ export function ModelMenu({
           type="button"
           variant="ghost"
           size={compact ? 'default' : 'lg'}
-          className={cn(PROMPT_PILL, compact ? 'max-w-36 px-2.5' : 'max-w-44')}
+          className={cn(PROMPT_CHIP, compact ? 'max-w-36 px-2.5' : 'max-w-52')}
           aria-label={label ?? (selected ? t('change', { model: selected.modelId }) : t('menu'))}
           title={selected?.modelId}
         >
-          <span className="truncate">
-            {label ??
-              (!available
-                ? t('unavailable')
-                : selected
-                  ? value === null
-                    ? t('defaultModel', { model: shortModelName(selected.modelId) })
-                    : shortModelName(selected.modelId)
-                  : t('chooseDefault'))}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">
+              {label ??
+                (!available
+                  ? t('unavailable')
+                  : selected
+                    ? value === null
+                      ? t('defaultModel', { model: shortModelName(selected.modelId) })
+                      : shortModelName(selected.modelId)
+                    : t('chooseDefault'))}
+            </span>
+            {control === 'effort' && effort ? (
+              <span key={effort} className="effort-label shrink-0 text-muted-foreground">
+                {levelLabel(effort)}
+              </span>
+            ) : null}
           </span>
           <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        side="top"
         align="end"
+        sideOffset={8}
         className="flex w-80 flex-col overflow-hidden p-0"
-        // Фокус ставит сам список: в поиск или на список, а не на первую кнопку.
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div className="grid gap-1 border-b border-border px-3 py-2">
-          <p className="text-xs text-muted-foreground">{t('scope')}</p>
-          {!available ? (
-            <p role="status" className="text-xs text-destructive">
-              {t('unavailableHint', { model: selected?.modelId ?? '' })}
-            </p>
-          ) : null}
-          {overrides.length ? (
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer">{t('separateRoles')}</summary>
-              {overrides.map((item) =>
-                item.kind === 'model' ? (
-                  <p key={item.role} className="mt-1 break-all">
-                    {t(item.role === 'planner' ? 'roles.planner' : 'roles.critic')}: {item.modelId}
-                  </p>
-                ) : null,
-              )}
-            </details>
-          ) : null}
-          <button
-            type="button"
-            className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => {
-              onChange(null);
-              setOpen(false);
-            }}
-          >
-            {t('useDefault')}
-            {models.assigned ? ` · ${shortModelName(models.assigned.modelId)}` : ''}
-          </button>
-        </div>
+        {!available ? (
+          <p role="status" className="px-3 pt-2 text-xs text-destructive">
+            {t('unavailableHint', { model: selected?.modelId ?? '' })}
+          </p>
+        ) : null}
         <ModelList
           models={models}
-          selected={selected}
-          onPick={(ref) => {
+          selected={value}
+          followingDefault={value === null}
+          control={control}
+          effort={effort ?? 'high'}
+          onEffort={writeReasoningEffort}
+          onPick={(model) => {
+            onChange(model);
             setOpen(false);
-            onChange(ref);
+          }}
+          onUseDefault={() => {
+            onChange(null);
+            setOpen(false);
           }}
           onManage={() => {
             setOpen(false);
@@ -192,17 +192,31 @@ const firstModel = (rows: readonly ModelRow[]) => rows.findIndex((row) => row.ki
 export function ModelList({
   models,
   selected,
+  followingDefault,
+  control,
+  effort,
+  onEffort,
   onPick,
+  onUseDefault,
   onManage,
 }: {
   models: WriterModels;
+  /** Явно выбранная модель. Null — человек следует модели по умолчанию. */
   selected: ModelRef | null;
+  followingDefault: boolean;
+  control: 'effort' | 'thinking' | 'none';
+  effort: ReasoningEffort;
+  onEffort: (value: ReasoningEffort) => void;
   onPick: (ref: ModelRef) => void;
+  onUseDefault: () => void;
   onManage: () => void;
 }) {
   const t = useTranslations('composer.model');
   const listId = useId();
   const list = useRef<HTMLDivElement>(null);
+  const glow = useRef<HTMLSpanElement>(null);
+  const rowRefs = useRef<(HTMLElement | null)[]>([]);
+  const freshGlow = useRef(true);
   const [query, setQuery] = useState('');
   const [family, setFamily] = useState<ModelFamilyFilter>('all');
   const families = modelFamilies(models);
@@ -222,6 +236,25 @@ export function ModelList({
       ?.querySelector<HTMLElement>(`[data-row="${active}"]`)
       ?.scrollIntoView({ block: 'nearest' });
   }, [active]);
+
+  useLayoutEffect(() => {
+    const mark = glow.current;
+    const row = rowRefs.current[active];
+    if (!mark) return;
+    if (!row || rows[active]?.kind !== 'model') {
+      mark.style.opacity = '0';
+      return;
+    }
+    if (freshGlow.current) mark.style.transition = 'none';
+    mark.style.transform = `translateY(${row.offsetTop}px)`;
+    mark.style.height = `${row.offsetHeight}px`;
+    mark.style.opacity = '1';
+    if (freshGlow.current) {
+      freshGlow.current = false;
+      void mark.offsetHeight;
+      mark.style.transition = '';
+    }
+  }, [active, rows]);
 
   // Без поиска клавиатуру держит сам список.
   useEffect(() => {
@@ -279,7 +312,7 @@ export function ModelList({
         </div>
       ) : null}
       {families.length > 1 ? (
-        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-1.5">
+        <div className="flex flex-wrap gap-1 border-b border-border px-2 py-1.5">
           {(['all', ...families] as const).map((option) => (
             <button
               key={option}
@@ -308,11 +341,24 @@ export function ModelList({
         aria-activedescendant={searchable ? undefined : activeId}
         tabIndex={searchable ? -1 : 0}
         onKeyDown={searchable ? undefined : onKeyDown}
-        className="max-h-80 overflow-y-auto overscroll-contain p-1 outline-none"
+        className="relative max-h-80 overflow-y-auto overscroll-contain py-1 outline-none"
       >
-        {searchable ? null : (
-          <p className="px-2 pt-1 pb-1.5 text-[0.6875rem] text-muted-foreground">{t('menu')}</p>
-        )}
+        <span ref={glow} aria-hidden className="menu-glow" />
+        {models.assigned ? (
+          <div
+            role="option"
+            aria-selected={followingDefault}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onUseDefault}
+            className="relative z-1 flex h-9 cursor-default items-center gap-2 rounded-lg px-2 text-[0.8125rem] text-foreground"
+          >
+            <span className="min-w-0 flex-1 truncate">{t('useDefault')}</span>
+            <CheckIcon
+              aria-hidden
+              className={cn('size-3.5 shrink-0', followingDefault ? 'opacity-100' : 'opacity-0')}
+            />
+          </div>
+        ) : null}
         {rows.length === 0 ? (
           <p className="px-2 py-2 text-xs text-muted-foreground">{t('notFound')}</p>
         ) : (
@@ -321,49 +367,34 @@ export function ModelList({
               <p
                 key={row.key}
                 role="presentation"
-                className="flex items-center gap-1.5 px-2 pt-2.5 pb-1 text-[0.6875rem] text-muted-foreground first:pt-1"
+                className="relative z-1 truncate px-2 pt-2.5 pb-1 text-[0.6875rem] text-muted-foreground first:pt-1"
               >
-                {row.section === 'connection' ? (
-                  <ServerIcon className="size-3 shrink-0" aria-hidden />
-                ) : null}
-                <span className="truncate">
-                  {row.section === 'pinned' ? t('pinned') : row.name}
-                </span>
+                {row.section === 'pinned' ? t('pinned') : row.name}
               </p>
             ) : (
               <div
                 key={row.key}
                 id={`${listId}-${at}`}
+                ref={(node) => {
+                  rowRefs.current[at] = node;
+                }}
                 data-row={at}
                 role="option"
-                aria-selected={sameModel(row.ref, selected)}
+                aria-selected={!followingDefault && sameModel(row.ref, selected)}
                 title={row.ref.modelId}
-                onMouseMove={() => {
+                onPointerEnter={() => {
                   if (active !== at) setActive(at);
                 }}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onPick(row.ref)}
-                className={cn(
-                  'flex h-8 cursor-default items-center gap-2 rounded-md px-2 text-xs text-foreground',
-                  at === active && 'bg-accent text-accent-foreground',
-                )}
+                className="relative z-1 flex h-9 cursor-default items-center gap-2 rounded-lg px-2 text-[0.8125rem] text-foreground"
               >
                 <span className="min-w-0 flex-1 truncate">{shortModelName(row.ref.modelId)}</span>
-                {row.connectionName ? (
-                  <span className="max-w-24 shrink-0 truncate text-[0.6875rem] text-muted-foreground">
-                    {row.connectionName}
-                  </span>
-                ) : null}
-                {row.isDefault ? (
-                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
-                    {t('default')}
-                  </span>
-                ) : null}
                 <CheckIcon
                   aria-hidden
                   className={cn(
                     'size-3.5 shrink-0',
-                    sameModel(row.ref, selected) ? 'opacity-100' : 'opacity-0',
+                    !followingDefault && sameModel(row.ref, selected) ? 'opacity-100' : 'opacity-0',
                   )}
                 />
               </div>
@@ -371,6 +402,26 @@ export function ModelList({
           )
         )}
       </div>
+      {control === 'effort' ? (
+        <div className="border-t border-border px-1 pt-2.5">
+          <div className="flex items-center justify-between px-2 text-[0.8125rem] text-muted-foreground">
+            <span>{t('effort')}</span>
+            <span key={effort} className="effort-label font-medium text-foreground">
+              {t(`levels.${effort}`)}
+            </span>
+          </div>
+          <EffortSlider
+            value={effort}
+            onChange={onEffort}
+            label={t('effortLabel')}
+            valueText={(level) => t(`levels.${level}`)}
+          />
+        </div>
+      ) : control === 'thinking' ? (
+        <p className="border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
+          {t('thinkingOn')}
+        </p>
+      ) : null}
       <div className="border-t border-border p-1">
         <button
           type="button"

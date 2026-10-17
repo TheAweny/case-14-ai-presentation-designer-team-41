@@ -26,6 +26,7 @@ import {
   addComposerFiles,
   chosenTemplate,
   templateGroups,
+  templateTitle,
 } from '@/lib/composer-templates';
 import { hasContent } from '@/lib/deck-generator';
 import { chatHref } from '@/lib/library-menu';
@@ -34,8 +35,8 @@ import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
 import { writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
-import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
+import { useSpeechConfigured, VoicePill } from './voice-pill';
 import {
   PromptBox,
   PromptChips,
@@ -54,9 +55,9 @@ import { useComposerSuggestions } from './composer-suggestions';
  * нажать стрелку — генерация начинается сразу, без мастера. Шаблон, число слайдов и файлы — рядом
  * с полем, у каждого есть разумное значение по умолчанию, поэтому хватает одного текста.
  *
- * Шаблон — из библиотеки (какой выбран сразу, решает `lib/composer-templates.ts`) или новый
- * файл: .pptx и .potx через скрепку, перетаскивание или «Загрузить шаблон…» становятся чипом
- * шаблона и заменяют выбор, пока чип не убрали. Разбирает новый файл агент в разговоре.
+ * Шаблон выбирают в меню «+» или кладут файлом: .pptx и .potx через перетаскивание или
+ * «Загрузить шаблон…» становятся чипом с превью. Пока человек сам не выбрал шаблон, чипа нет.
+ * Разбирает новый файл агент в разговоре.
  *
  * Стрелка (или Enter) начинает чат с агентом (`chatStore`) и открывает его страницу. Режим у
  * поля решает, что агент сделает с сообщением: «Чат» ответит, «План» покажет план колоды на
@@ -101,10 +102,11 @@ export function DeckComposer({
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
+  const [voiceError, setVoiceError] = useState<'empty' | 'failed' | 'blocked' | null>(null);
+  const speech = useSpeechConfigured();
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
   const groups = templateGroups(templates, project);
-  // Выбор в меню переживает чип: убрали новый файл — вернулся прежний шаблон.
   const selected = chosenTemplate(templates, project, pickedId);
   const ready = hasContent(text, files) || templateFile !== null;
   // Пока настройки моделей не загрузились, неизвестно, есть ли чем писать: отправку придерживаем.
@@ -211,18 +213,30 @@ export function DeckComposer({
         busy={sending}
         onSubmit={submit}
         onFiles={addFiles}
+        pageDrop={!sending}
         dropLabel={t('dropHere')}
         style={glowStyle}
       >
-        {templateFile || files.length > 0 ? (
+        {templateFile || selected || files.length > 0 ? (
           <PromptChips label={t('files')}>
-            {/* Шаблон — первым: он меняет всю презентацию, а не добавляет материал. */}
             {templateFile ? (
               <AttachmentChip
                 attachment={{ kind: 'template', name: templateFile.name, size: templateFile.size }}
                 onRemove={() => {
                   setRejected([]);
                   setTemplateFile(null);
+                  box.aurora.flash();
+                }}
+              />
+            ) : selected ? (
+              <AttachmentChip
+                attachment={{
+                  kind: 'template',
+                  name: templateTitle(selected.fileName),
+                  previewUrl: selected.previewDataUrl ?? undefined,
+                }}
+                onRemove={() => {
+                  setPickedId(null);
                   box.aurora.flash();
                 }}
               />
@@ -260,6 +274,17 @@ export function DeckComposer({
           end={
             <>
               <ModelMenu value={model} onChange={setModel} />
+              {speech ? (
+                <VoicePill
+                  draft={text}
+                  disabled={sending}
+                  onDraft={(next) => {
+                    setVoiceError(null);
+                    setText(next);
+                  }}
+                  onError={setVoiceError}
+                />
+              ) : null}
               <PromptSubmit
                 state={promptAction({
                   hasInput: ready,
@@ -298,19 +323,18 @@ export function DeckComposer({
               event.currentTarget.value = '';
             }}
           />
-          <ComposerSourceMenu onFiles={() => picker.current?.click()} />
-          <ComposerTemplateMenu
+          <ComposerSourceMenu
+            onFiles={() => picker.current?.click()}
             groups={groups}
             inProject={project !== null}
-            selected={selected}
-            pendingFile={templateFile}
-            onSelect={(next) => {
-              // Шаблон из библиотеки выбран осознанно: новый файл больше не нужен.
+            selectedId={selected?.templateId ?? null}
+            pendingFile={templateFile !== null}
+            onSelectTemplate={(next) => {
               setPickedId(next);
               setTemplateFile(null);
               box.aurora.flash();
             }}
-            onUpload={() => templatePicker.current?.click()}
+            onUploadTemplate={() => templatePicker.current?.click()}
           />
           <ModeMenu value={mode} onChange={setMode} />
         </PromptToolbar>
@@ -318,6 +342,7 @@ export function DeckComposer({
       {rejected.length > 0 ? (
         <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
+      {voiceError ? <PromptNote>{t(`voice.${voiceError}`)}</PromptNote> : null}
     </div>
   );
 }

@@ -12,16 +12,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import type { TemplateGroups } from '@/lib/composer-templates';
+import { TemplateMenuSection } from './composer-template-menu';
 
-/** The same source picker on the home page, in a chat and in the editor. */
+/**
+ * Единственный вход вложений: файл, шаблон из библиотеки, загрузка шаблона и, в редакторе,
+ * объекты слайда. Отдельной скрепки и отдельной кнопки шаблона нет.
+ */
 export function ComposerSourceMenu({
   onFiles,
   onContext,
+  groups,
+  inProject,
+  selectedId,
+  pendingFile,
+  onSelectTemplate,
+  onUploadTemplate,
   compact = false,
   disabled = false,
 }: {
   onFiles: () => void;
+  /** В редакторе: вставить `@` и открыть список слайдов и объектов. */
   onContext?: () => void;
+  groups: TemplateGroups;
+  inProject: boolean;
+  selectedId: string | null;
+  pendingFile: boolean;
+  onSelectTemplate: (templateId: string) => void;
+  onUploadTemplate: () => void;
   compact?: boolean;
   disabled?: boolean;
 }) {
@@ -29,15 +47,15 @@ export function ComposerSourceMenu({
   const [open, setOpen] = useState(false);
   const reduce = useReducedMotion();
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
           variant="ghost"
           size={compact ? 'icon' : 'icon-lg'}
           disabled={disabled}
-          aria-label={t('attach')}
-          className="rounded-full bg-muted/40 text-muted-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground transition-[background-color,color,transform] duration-200 active:scale-95 motion-reduce:transform-none"
+          aria-label={t('add')}
+          className="rounded-full bg-muted/40 text-muted-foreground transition-[background-color,color,transform] duration-200 data-[state=open]:bg-muted data-[state=open]:text-foreground active:scale-95 motion-reduce:transform-none"
         >
           <motion.span
             className="inline-flex"
@@ -52,17 +70,15 @@ export function ComposerSourceMenu({
       <DropdownMenuContent
         side="top"
         align="start"
-        aria-label={t('attach')}
-        className="w-72 max-w-[calc(100vw-2rem)] rounded-xl p-1.5 duration-200 motion-reduce:animate-none"
+        aria-label={t('add')}
+        glow
+        className="w-80 max-w-[calc(100vw-2rem)]"
       >
-        <DropdownMenuItem
-          onSelect={onFiles}
-          className="items-start gap-2.5 rounded-lg px-2.5 py-2.5"
-        >
-          <FileIcon className="mt-0.5 size-4" />
-          <span className="flex flex-col gap-0.5">
+        <DropdownMenuItem onSelect={onFiles} className="gap-2.5 rounded-lg px-2.5 py-2">
+          <FileIcon className="size-4 shrink-0" />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span>{t('materials')}</span>
-            <span className="text-xs text-muted-foreground">{t('materialsHint')}</span>
+            <span className="truncate text-xs text-muted-foreground">{t('materialsHint')}</span>
           </span>
         </DropdownMenuItem>
         {onContext ? (
@@ -74,6 +90,14 @@ export function ComposerSourceMenu({
             </DropdownMenuItem>
           </>
         ) : null}
+        <TemplateMenuSection
+          groups={groups}
+          inProject={inProject}
+          selectedId={selectedId}
+          pendingFile={pendingFile}
+          onSelect={onSelectTemplate}
+          onUpload={onUploadTemplate}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );

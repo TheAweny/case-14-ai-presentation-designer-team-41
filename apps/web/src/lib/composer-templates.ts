@@ -40,9 +40,8 @@ export function templateGroups(
 }
 
 /**
- * Шаблон по умолчанию. В проекте — первый прикреплённый: им собраны его презентации. На главной —
- * самый свежий шаблон библиотеки: скорее всего, его и загрузили, чтобы собрать презентацию.
- * Пустой проект шаблона не навязывает — null, и человек выбирает сам.
+ * Шаблон, который можно было бы предложить: в проекте — первый прикреплённый, на главной —
+ * самый свежий. Поле его не подставляет. Чип появляется, только когда человек выбрал сам.
  */
 export function defaultTemplate(
   library: readonly TemplateSummary[],
@@ -53,17 +52,17 @@ export function defaultTemplate(
 }
 
 /**
- * Выбранный шаблон: тот, что выбрали в меню, пока он есть в меню, иначе — по умолчанию. Выбор
- * пропадает, если шаблон открепили или удалили, пока поле было открыто.
+ * Шаблон, который человек выбрал сам. Пока выбора нет — null: поле не подставляет «самый свежий»
+ * и не возвращает его, когда чип сняли. Выбор пропадает, если шаблон удалили, пока поле открыто.
  */
 export function chosenTemplate(
   library: readonly TemplateSummary[],
   project: ProjectSummary | null,
   pickedId: string | null,
 ): TemplateSummary | null {
+  if (pickedId === null) return null;
   const { own, others } = templateGroups(library, project);
-  const picked = [...own, ...others].find((template) => template.templateId === pickedId);
-  return picked ?? defaultTemplate(library, project);
+  return [...own, ...others].find((template) => template.templateId === pickedId) ?? null;
 }
 
 /** Файл шаблона: .pptx и .potx в контент-пак не идут — это всегда шаблон. */

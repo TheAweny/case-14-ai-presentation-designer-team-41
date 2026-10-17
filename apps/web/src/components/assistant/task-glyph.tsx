@@ -1,10 +1,20 @@
 'use client';
 
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { CheckIcon, WarningIcon } from '@/components/ui/icons';
+import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
-/** One visual language for model thinking, tool calls and pipeline stages. */
+// Adapted from React Bits LatticeLoader by David Haz, via prototypes/motion-lab.
+// License: docs/third-party/react-bits-license.txt (MIT + Commons Clause).
+// 4×4 orbit. The centre four cells are empty while it runs; done and failed
+// light the prototype's check and cross, which do not fit on a 3×3.
+const ORBIT = [0, 1, 2, 3, 11, null, null, 4, 10, null, null, 5, 9, 8, 7, 6];
+const CHECK = [7, 8, 10, 13];
+const CROSS = [0, 3, 5, 6, 9, 10, 12, 15];
+const REST = [5, 6, 9, 10];
+const STEP = 108;
+const LOOP = 648;
+
+/** The prototype's lattice follows actual model, tool and pipeline states. */
 export function TaskGlyph({
   state,
   className,
@@ -12,33 +22,33 @@ export function TaskGlyph({
   state: 'running' | 'done' | 'failed' | 'pending' | 'cancelled';
   className?: string;
 }) {
-  const reduce = useReducedMotion();
   return (
     <span
       aria-hidden
       data-task-state={state}
-      className={cn('relative grid size-5 shrink-0 place-items-center', className)}
+      className={cn('task-lattice relative grid size-5 shrink-0 place-items-center', className)}
     >
-      <AnimatePresence initial={false} mode="popLayout">
-        <motion.span
-          key={state}
-          initial={{ opacity: 0, scale: reduce ? 1 : 0.7, filter: reduce ? 'none' : 'blur(2px)' }}
-          animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, scale: reduce ? 1 : 0.7 }}
-          transition={{ duration: reduce ? 0 : 0.18 }}
-          className="absolute inset-0 grid place-items-center"
-        >
-          {state === 'running' ? (
-            <span className="task-orbit size-4 rounded-full border-[1.5px] border-current/15 border-t-current border-r-current/60" />
-          ) : state === 'done' ? (
-            <CheckIcon className="size-3.5" />
-          ) : state === 'failed' ? (
-            <WarningIcon className="size-3.5" />
-          ) : (
-            <span className="size-1 rounded-full bg-current opacity-50" />
-          )}
-        </motion.span>
-      </AnimatePresence>
+      <span className="grid grid-cols-4 gap-px">
+        {ORBIT.map((unit, index) => {
+          const lit =
+            state === 'done'
+              ? CHECK.includes(index)
+              : state === 'failed'
+                ? CROSS.includes(index)
+                : state === 'pending' || state === 'cancelled'
+                  ? REST.includes(index)
+                  : false;
+          return (
+            <span
+              key={index}
+              className="task-lattice-cell size-1 rounded-[1px] bg-current"
+              data-lit={lit ? '' : undefined}
+              data-hole={unit === null ? '' : undefined}
+              style={{ '--cell-delay': `${(unit ?? 0) * STEP - LOOP}ms` } as CSSProperties}
+            />
+          );
+        })}
+      </span>
     </span>
   );
 }

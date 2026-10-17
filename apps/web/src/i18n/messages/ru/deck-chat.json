@@ -43,16 +43,18 @@
     "stop": "Остановить",
     "stopping": "Останавливаю…",
     "materials": "Добавить материалы",
-    "materialsHint": "Текст, таблицы, PDF и изображения",
+    "materialsHint": "TXT, MD, DOCX, PDF, CSV, TSV и XLSX. PPTX и POTX — шаблоны",
     "templateHint": "Оформление из вашего файла PowerPoint",
     "uploadTemplate": "Загрузить шаблон .pptx",
     "templates": "Шаблоны из библиотеки",
     "commands": "Режимы работы",
     "context": "Слайды и объекты",
+    "add": "Добавить",
     "attach": "Добавить материалы",
+    "attachFiles": "Прикрепить файлы",
     "files": "Вложения",
     "dropHere": "Отпустите файлы, чтобы добавить их к запросу",
-    "rejected": "Не подходят: {names}."
+    "rejected": "Не удалось добавить: {names}. Выберите непустой документ, таблицу или шаблон PPTX / POTX."
   },
   "toBottom": "К последнему сообщению",
   "modes": {
@@ -99,6 +101,10 @@
     "selectionFailed": "Выбор модели действует во вкладке, но его не удалось сохранить для следующего открытия чата."
   },
   "tools": {
+    "completed": "{count, plural, one {Выполнено # действие} few {Выполнено # действия} other {Выполнено # действий}}",
+    "interrupted": "Работа прервалась",
+    "cancelled": "Работа остановлена",
+    "cancelledTool": "Остановлено: {name}",
     "list_templates": "Посмотрел шаблоны",
     "describe_template": "Изучил шаблон",
     "read_file": "Прочитал материал",
