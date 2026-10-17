@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { assignmentFor } from '@/lib/model-settings';
+import { speechModelOf } from '@lct/contracts';
 import { useModelSettingsSnapshot } from '@/components/settings/model-settings-store';
 import { DictateIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,13 @@ import { transcribeSpeechAction } from '@/app/speech-actions';
 import { cn } from '@/lib/utils';
 import { appendTranscript } from './voice-transcript';
 
-/** The microphone exists only when a speech model is assigned. Loading and “not set” both hide it. */
+/**
+ * The microphone exists only when there is a speech model: an assigned one, or a Whisper-like
+ * model a provider offers. Loading and dictation switched off both hide it.
+ */
 export function useSpeechConfigured(): boolean {
   const settings = useModelSettingsSnapshot();
-  return settings !== null && assignmentFor(settings, 'speech').kind === 'model';
+  return settings !== null && speechModelOf(settings) !== null;
 }
 
 /**
@@ -29,7 +32,8 @@ export function VoicePill({
 }: {
   draft: string;
   onDraft: (next: string) => void;
-  onError: (reason: 'empty' | 'failed' | 'blocked') => void;
+  /** The error to show under the field, already in words. */
+  onError: (message: string) => void;
   disabled?: boolean;
   compact?: boolean;
 }) {
@@ -62,7 +66,7 @@ export function VoicePill({
 
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      onError('blocked');
+      onError(t('blocked'));
       return;
     }
     try {
@@ -80,17 +84,25 @@ export function VoicePill({
         const blob = new Blob(chunks.current, { type: rec.mimeType || 'audio/webm' });
         const form = new FormData();
         form.set('audio', blob, 'speech.webm');
-        void transcribeSpeechAction(form).then((result) => {
-          if (result.ok) onDraft(appendTranscript(draftRef.current, result.text));
-          else onError(result.reason);
-        });
+        void transcribeSpeechAction(form)
+          .then((result) => {
+            if (result.ok) onDraft(appendTranscript(draftRef.current, result.text));
+            else
+              onError(
+                result.detail
+                  ? t('failedWith', { detail: result.detail })
+                  : t(result.reason === 'empty' ? 'empty' : 'failed'),
+              );
+          })
+          // The action itself failed: the recording did not reach the server.
+          .catch(() => onError(t('notSent')));
       };
       rec.start();
       recorder.current = rec;
       setStartedAt(Date.now());
       setListening(true);
     } catch {
-      onError('blocked');
+      onError(t('blocked'));
     }
   };
 

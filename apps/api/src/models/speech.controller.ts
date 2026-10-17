@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Controller,
   Inject,
+  Logger,
   Post,
   ServiceUnavailableException,
   UploadedFile,
@@ -12,7 +13,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { ModelSettingsService, type SettingsActor } from './model-settings.service.js';
-import { transcribeSpeech } from './transcribe.js';
+import { TranscriptionError, transcribeSpeech } from './transcribe.js';
 
 /** Fifteen megabytes: long enough for a prompt, short of the usual transcription limit. */
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
@@ -29,12 +30,15 @@ function actorOf(account: Account): SettingsActor {
 }
 
 /**
- * Dictation. The browser sends a recording; the API calls the model assigned to `speech`.
- * Availability is not probed: a missing assignment is a settings fact, a failed call is an error
- * of this one recording.
+ * Dictation. The browser sends a recording; the API calls the speech model: the one assigned to
+ * `speech`, or the provider's own Whisper. Availability is not probed: a missing model is a
+ * settings fact, a failed call is an error of this one recording, and the provider's answer goes
+ * back so the person sees why.
  */
 @Controller('speech')
 export class SpeechController {
+  private readonly logger = new Logger(SpeechController.name);
+
   constructor(@Inject(ModelSettingsService) private readonly settings: ModelSettingsService) {}
 
   @Post('transcriptions')
@@ -44,7 +48,7 @@ export class SpeechController {
     @CurrentAccount() account: Account,
   ): Promise<{ text: string }> {
     if (!file?.buffer?.length) throw new BadRequestException({ reason: 'empty' });
-    const model = await this.settings.resolveRole('speech', actorOf(account));
+    const model = await this.settings.resolveSpeech(actorOf(account));
     if (!model) throw new ServiceUnavailableException({ reason: 'not-configured' });
     try {
       const text = await transcribeSpeech(model, {
@@ -53,8 +57,17 @@ export class SpeechController {
         name: file.originalname || 'speech.webm',
       });
       return { text };
-    } catch {
-      throw new BadGatewayException({ reason: 'transcription-failed' });
+    } catch (error) {
+      const failure =
+        error instanceof TranscriptionError ? error : new TranscriptionError(null, String(error));
+      this.logger.warn(
+        `Speech model ${model.model} on ${model.connectionId} failed: ${failure.message}`,
+      );
+      throw new BadGatewayException({
+        reason: 'transcription-failed',
+        status: failure.status,
+        detail: failure.detail,
+      });
     }
   }
 }

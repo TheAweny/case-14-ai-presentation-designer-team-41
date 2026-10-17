@@ -103,7 +103,7 @@ export function DeckComposer({
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
-  const [voiceError, setVoiceError] = useState<'empty' | 'failed' | 'blocked' | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const speech = useSpeechConfigured();
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
@@ -344,7 +344,7 @@ export function DeckComposer({
       {rejected.length > 0 ? (
         <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
-      {voiceError ? <PromptNote>{t(`voice.${voiceError}`)}</PromptNote> : null}
+      {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>
   );
 }

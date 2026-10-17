@@ -84,7 +84,9 @@
     "stop": "Stop dictation",
     "empty": "The recording is empty.",
     "failed": "The recording could not be transcribed.",
-    "blocked": "The microphone is unavailable."
+    "blocked": "The microphone is unavailable.",
+    "failedWith": "Could not transcribe the recording. The provider said: {detail}",
+    "notSent": "The recording did not reach the server. Try again or record a shorter one."
   },
   "prompt": {
     "stop": "Stop",

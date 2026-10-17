@@ -35,4 +35,34 @@ describe('transcribeSpeech', () => {
     const empty = vi.fn(async () => new Response(JSON.stringify({ text: '  ' }), { status: 200 }));
     await expect(transcribeSpeech(model, audio, empty as typeof fetch)).rejects.toThrow(/no text/);
   });
+
+  it('sends the connection headers and a bare audio type the provider can read', async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(new Headers(init?.headers).get('Project-ID')).toBe('p-1');
+      const file = (init?.body as FormData).get('file') as File;
+      expect(file.type).toBe('audio/mp4');
+      expect(file.name).toBe('speech.mp4');
+      return new Response(JSON.stringify({ text: 'ok' }), { status: 200 });
+    });
+    await expect(
+      transcribeSpeech(
+        { ...model, headers: { 'Project-ID': 'p-1' } },
+        { bytes: Buffer.from('a'), type: 'audio/mp4;codecs=mp4a.40.2', name: 'speech.webm' },
+        fetchImpl as typeof fetch,
+      ),
+    ).resolves.toBe('ok');
+  });
+
+  it('passes on what the provider said when it refuses', async () => {
+    const refused = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { message: 'Model whisper not found' } }), {
+          status: 404,
+        }),
+    );
+    await expect(transcribeSpeech(model, audio, refused as typeof fetch)).rejects.toMatchObject({
+      status: 404,
+      detail: 'Model whisper not found',
+    });
+  });
 });

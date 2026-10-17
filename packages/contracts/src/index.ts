@@ -374,6 +374,7 @@ export {
   VK_AI_SPACE_MODEL,
   VK_AI_SPACE_ROLES,
   VK_PROJECT_HEADER,
+  speechModelOf,
 } from './model-settings.js';
 export {
   REASONING_EFFORTS,
@@ -387,6 +388,7 @@ export {
   modelFamily,
   enabledModelIds,
   isModelEnabled,
+  isSpeechModel,
   type ModelFamily,
 } from './model-families.js';
 export {

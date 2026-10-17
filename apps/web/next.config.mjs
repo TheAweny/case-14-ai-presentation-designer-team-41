@@ -15,6 +15,9 @@ const nextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   // Левый нижний угол занят подвалом колонки слайдов, индикатор dev-сборки его закрывал.
   devIndicators: { position: 'bottom-right' },
+  // Dictation goes through a server action; the default 1 MB is about a minute of speech. The API
+  // takes up to 15 MB of audio, and this leaves room for the multipart overhead.
+  experimental: { serverActions: { bodySizeLimit: '16mb' } },
   async redirects() {
     return [
       // Мастера нового шаблона больше нет: новая презентация и новый шаблон начинаются в поле

@@ -343,7 +343,7 @@
         },
         "speech": {
           "name": "Voice transcription",
-          "description": "Turns dictation into message text. The microphone stays hidden until a model is assigned.",
+          "description": "Turns dictation into message text. Without an assignment a Whisper model of a connection is used, if it has one. Off hides the microphone.",
           "hint": "Needs a model with an OpenAI-compatible POST /audio/transcriptions."
         }
       },

@@ -70,9 +70,8 @@ export function ChatComposer({
   compact?: boolean;
 }) {
   const t = useTranslations('deckChat.input');
-  const voice = useTranslations('composer.voice');
   const speech = useSpeechConfigured();
-  const [voiceError, setVoiceError] = useState<'empty' | 'failed' | 'blocked' | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const rejectedId = useId();
   const ownField = useRef<HTMLTextAreaElement>(null);
@@ -438,7 +437,7 @@ export function ChatComposer({
       {rejected.length > 0 ? (
         <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
-      {voiceError ? <PromptNote>{voice(voiceError)}</PromptNote> : null}
+      {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>
   );
 }
