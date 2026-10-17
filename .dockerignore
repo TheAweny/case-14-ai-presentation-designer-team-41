@@ -2,12 +2,16 @@ node_modules
 **/node_modules
 **/dist
 **/.next
+**/.next-chat-e2e
+**/test-results
+**/playwright-report
 .venv
 .nx
 .git
 coverage
 data
 runs
+tmp
 .env
 **/.env
 **/.env.*

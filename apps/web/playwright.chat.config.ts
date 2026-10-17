@@ -24,7 +24,7 @@ export default defineConfig({
       reuseExistingServer: false,
       env: {
         API_INTERNAL_URL: 'http://127.0.0.1:3121',
-        NEXT_DIST_DIR: '.next/chat-e2e',
+        NEXT_DIST_DIR: '.next-chat-e2e',
         AUTH_SECRET: 'chat-e2e-session-secret',
         API_SERVICE_TOKEN: 'chat-e2e-service-token',
       },

@@ -14,6 +14,7 @@ dist/
 build/
 out/
 .next/
+.next-chat-e2e/
 coverage/
 *.tsbuildinfo
 

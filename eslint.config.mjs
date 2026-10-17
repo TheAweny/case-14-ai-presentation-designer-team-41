@@ -8,6 +8,7 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
+      '**/.next-chat-e2e/**',
       '**/coverage/**',
       '**/.nx/**',
       'packages/contracts/schema/**',
