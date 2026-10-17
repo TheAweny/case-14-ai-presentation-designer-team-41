@@ -12,6 +12,7 @@ const request = (text = 'Построй презентацию'): ChatTurnReques
   mode: 'plan',
   model: null,
   reasoningEffort: null,
+  thinking: null,
   projectId: null,
   deckId: null,
   slideCount: null,

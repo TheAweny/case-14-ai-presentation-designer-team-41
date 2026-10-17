@@ -34,6 +34,8 @@ interface Options {
   limiter?: RequestLimiter;
   /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
   headers?: Readonly<Record<string, string>>;
+  /** Off only when the person switched thinking off for a hybrid model. */
+  thinking?: boolean | null;
   /**
    * The shared prompts from the registry that carry the JSON Schema of an answer in the
    * instructions and ask once to repair an answer that misses it: a model that ignores
@@ -304,7 +306,7 @@ export class OpenAICompatibleProvider implements TextProvider {
             temperature: generation?.temperature ?? 0.35,
             top_p: generation?.topP ?? 1,
             max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
-            ...reasoningRequestFields(this.model),
+            ...reasoningRequestFields(this.model, null, this.options.thinking),
             response_format: {
               type: 'json_schema',
               json_schema: {

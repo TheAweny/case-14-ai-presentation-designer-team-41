@@ -260,6 +260,11 @@ export const chatTurnRequestSchema = z.object({
    * Older clients omit it.
    */
   reasoningEffort: reasoningEffortSchema.nullable().default(null),
+  /**
+   * Whether a hybrid model (Qwen3) thinks before it answers, here and in the deck it builds.
+   * Ignored for every other model. Null: it thinks, as before the switch existed.
+   */
+  thinking: z.boolean().nullable().default(null),
   /** The project a new chat belongs to; ignored for a chat that exists. */
   projectId: z.string().nullable().default(null),
   /** How many slides the person usually wants (their setting); null — as the material needs. */

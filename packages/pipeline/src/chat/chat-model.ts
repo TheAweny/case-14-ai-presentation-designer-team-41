@@ -84,6 +84,8 @@ export interface OpenAICompatibleChatOptions {
   readonly headers?: Readonly<Record<string, string>>;
   /** Sent only when this model accepts `reasoning_effort`. */
   readonly reasoningEffort?: ReasoningEffort | null;
+  /** Off only when the person switched thinking off for a hybrid model. */
+  readonly thinking?: boolean | null;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -161,7 +163,11 @@ export class OpenAICompatibleChatModel implements ChatModel {
             temperature: generation?.temperature ?? 0.4,
             top_p: generation?.topP ?? 1,
             max_tokens: generation?.maxOutputTokens ?? 4096,
-            ...reasoningRequestFields(this.model, this.options.reasoningEffort),
+            ...reasoningRequestFields(
+              this.model,
+              this.options.reasoningEffort,
+              this.options.thinking,
+            ),
             ...body,
           }),
         });

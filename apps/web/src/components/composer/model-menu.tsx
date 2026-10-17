@@ -417,10 +417,6 @@ export function ModelList({
             valueText={(level) => t(`levels.${level}`)}
           />
         </div>
-      ) : control === 'thinking' ? (
-        <p className="border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
-          {t('thinkingOn')}
-        </p>
       ) : null}
       <div className="border-t border-border p-1">
         <button

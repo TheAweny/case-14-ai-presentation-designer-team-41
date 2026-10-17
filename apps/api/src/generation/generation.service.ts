@@ -430,6 +430,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         model: model.model,
         headers: model.headers,
         seed: input.seed,
+        thinking: input.thinking,
         answerFormat,
       });
     const fallback = providerOf(writer);

@@ -70,7 +70,9 @@
     },
     "effort": "Depth",
     "effortLabel": "Reasoning depth",
-    "thinkingOn": "Reasoning is on",
+    "thinking": "Reasoning",
+    "thinkingOn": "The model thinks before it answers",
+    "thinkingOff": "The model answers at once, without reasoning",
     "levels": {
       "low": "Low",
       "medium": "Medium",

@@ -845,3 +845,40 @@ test.describe('dictation', () => {
     await expect(prompt).toHaveValue('Голос услышан');
   });
 });
+
+test('offers the thinking switch only for a hybrid model and sends its state', async ({ page }) => {
+  let thinking: unknown;
+  await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
+    const body = route.request().postDataJSON();
+    thinking = body.thinking;
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: stream([
+        { type: 'message', seq: 0, message: assistant() },
+        { type: 'turn-end', seq: 1 },
+      ]),
+    });
+  });
+  await openChat(page);
+  const toggle = page.getByRole('button', { name: 'Размышление' });
+  await expect(toggle).toHaveCount(0);
+
+  const assigned = await page.request.put('http://127.0.0.1:3121/model-settings/roles', {
+    data: { role: 'assistant', kind: 'model', connectionId: 'fixture', modelId: 'Qwen/Qwen3-8B' },
+  });
+  expect(assigned.ok()).toBeTruthy();
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+  await field(page).fill('Короткий ответ');
+  await page.getByRole('button', { name: 'Отправить', exact: true }).click();
+  await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
+  expect(thinking).toBe(false);
+
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+});

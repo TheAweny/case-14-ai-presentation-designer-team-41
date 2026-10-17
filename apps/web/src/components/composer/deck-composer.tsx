@@ -36,6 +36,7 @@ import { projectColorVar } from '@/lib/project-appearance';
 import { writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ModelMenu } from './model-menu';
+import { ThinkingToggle } from './thinking-toggle';
 import { useSpeechConfigured, VoicePill } from './voice-pill';
 import {
   PromptBox,
@@ -273,6 +274,7 @@ export function DeckComposer({
         <PromptToolbar
           end={
             <>
+              <ThinkingToggle model={model} />
               <ModelMenu value={model} onChange={setModel} />
               {speech ? (
                 <VoicePill

@@ -14,7 +14,7 @@ import {
 import { chatDocumentOf, chatSummaryOf } from './chat-records';
 import { applyChatEvent, readChatEvents } from './chat-stream';
 import { canRetryChat, chatRetryDelay, ChatHttpError } from './chat-retry';
-import { readReasoningEffort } from './reasoning-effort';
+import { readReasoningEffort, readThinking } from './reasoning-effort';
 
 export type ChatActivity =
   'idle' | 'uploading' | 'sending' | 'answering' | 'reconnecting' | 'stopping';
@@ -466,6 +466,7 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
         mode: mode ?? chat.mode,
         model: chat.model,
         reasoningEffort: readReasoningEffort(),
+        thinking: readThinking(),
         projectId: chat.projectId,
         deckId: chat.deckId,
         slideCount: message?.slideCount ?? null,

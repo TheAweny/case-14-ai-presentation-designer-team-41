@@ -189,6 +189,8 @@ export const generationRequestSchema = z.object({
    * role, or the one the server is configured with. Never a key: the API resolves the connection.
    */
   model: modelRefSchema.nullable().default(null),
+  /** Whether a hybrid model (Qwen3) thinks while it writes; null — it does. Others ignore it. */
+  thinking: z.boolean().nullable().default(null),
 });
 export type GenerationProfile = z.infer<typeof generationProfileSchema>;
 export type Composition = z.infer<typeof compositionSchema>;

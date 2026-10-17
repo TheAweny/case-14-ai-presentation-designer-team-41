@@ -31,4 +31,17 @@ describe('reasoning request policy', () => {
     });
     expect(reasoningRequestFields('gpt-4o', 'high')).toEqual({});
   });
+
+  it('switches hybrid thinking off only when asked', () => {
+    expect(reasoningRequestFields('Qwen/Qwen3.5-27B', null, false)).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    });
+    expect(reasoningRequestFields('Qwen/Qwen3.5-27B', null, null)).toEqual({
+      chat_template_kwargs: { enable_thinking: true },
+    });
+    expect(reasoningRequestFields('openai/gpt-oss-20b', 'low', false)).toEqual({
+      reasoning_effort: 'low',
+    });
+    expect(reasoningRequestFields('custom-model', null, false)).toEqual({});
+  });
 });

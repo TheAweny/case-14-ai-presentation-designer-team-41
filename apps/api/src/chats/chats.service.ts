@@ -923,6 +923,7 @@ export class ChatsService implements OnApplicationShutdown {
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
       reasoningEffort: request.reasoningEffort,
+      thinking: request.thinking,
     });
   }
 
@@ -962,6 +963,7 @@ export class ChatsService implements OnApplicationShutdown {
       projectId: state.projectId,
       mode: request.mode,
       model: request.model,
+      thinking: request.thinking,
       currentMessageId: message.id,
       messages: () => {
         sync();

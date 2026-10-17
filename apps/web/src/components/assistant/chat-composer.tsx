@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } fr
 import { useTranslations } from 'next-intl';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import { ModelMenu } from '@/components/composer/model-menu';
+import { ThinkingToggle } from '@/components/composer/thinking-toggle';
 import { useSpeechConfigured, VoicePill } from '@/components/composer/voice-pill';
 import { ComposerSourceMenu } from '@/components/composer/composer-source-menu';
 import { useComposerSuggestions } from '@/components/composer/composer-suggestions';
@@ -347,6 +348,7 @@ export function ChatComposer({
         <PromptToolbar
           end={
             <>
+              <ThinkingToggle model={chat.model} compact={compact} />
               <ModelMenu
                 value={chat.model}
                 onChange={(model) => chatStore.setModel(chat.chatId, model)}
