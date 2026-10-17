@@ -20,6 +20,7 @@ import libraryMenu from './library-menu.json';
 import localeSwitcher from './locale-switcher.json';
 import metadata from './metadata.json';
 import mobileBar from './mobile-bar.json';
+import notFound from './not-found.json';
 import deckChat from './deck-chat.json';
 import projectAppearance from './project-appearance.json';
 import projectPage from './project-page.json';
@@ -56,6 +57,7 @@ const messages = {
   draft,
   slideShow,
   mobileBar,
+  notFound,
   tableMenu,
   tablePanel,
   layersPanel,

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Suspense, type ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getTranslations } from 'next-intl/server';
@@ -16,6 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata');
   return { title: t('title'), description: t('description') };
 }
+
+// Фон тёмной темы (`--background` в `.dark`): строка браузера на телефоне сливается со страницей.
+export const viewport: Viewport = { themeColor: '#17181b' };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const [locale, cookieStore, account] = await Promise.all([

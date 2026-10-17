@@ -12,5 +12,6 @@
   "checking": "Checking…",
   "pageTitle": "Could not load the page",
   "pageDescription": "A service may be temporarily unavailable. Please try loading the page again.",
-  "reload": "Try again"
+  "reload": "Try again",
+  "home": "Go to the home page"
 }
