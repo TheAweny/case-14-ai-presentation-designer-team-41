@@ -22,6 +22,7 @@
     },
     "typecheck": {
       "executor": "nx:run-commands",
+      "dependsOn": [{ "target": "build", "projects": ["contracts"] }],
       "options": { "command": "tsc -p prototypes/motion-lab/tsconfig.json" }
     },
     "lint": {
