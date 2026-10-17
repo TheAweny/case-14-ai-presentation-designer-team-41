@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   MODEL_ID_MAX_LENGTH,
-  ROLE_MODEL_KIND,
   isRoleOptional,
   usesWriterModelByDefault,
   knownModels,
@@ -67,11 +66,13 @@ export function RoleRow({
   const name = primary ? t('primaryName') : t(`items.${role}.name`);
   // Подсказка о типе модели — там, где подойдёт не любая: у зрения и иллюстратора.
   const hint =
-    ROLE_MODEL_KIND[role] === 'llm'
-      ? null
-      : role === 'vision'
-        ? t('items.vision.hint')
-        : t('items.image.hint');
+    role === 'vision'
+      ? t('items.vision.hint')
+      : role === 'image'
+        ? t('items.image.hint')
+        : role === 'speech'
+          ? t('items.speech.hint')
+          : null;
 
   const current =
     assignment.kind === 'model'
@@ -249,7 +250,7 @@ export function RoleRow({
                   <>
                     {connections.length > 0 ? <DropdownMenuSeparator /> : null}
                     <DropdownMenuRadioItem value={DISABLED_VALUE}>
-                      {t('disabled')}
+                      {t(role === 'speech' ? 'disabledSpeech' : 'disabled')}
                     </DropdownMenuRadioItem>
                   </>
                 ) : null}
@@ -280,7 +281,11 @@ function PickerValue({
 }) {
   const t = useTranslations('settings.models.roles');
   if (assignment.kind === 'disabled') {
-    return <span className="truncate text-muted-foreground">{t('disabled')}</span>;
+    return (
+      <span className="truncate text-muted-foreground">
+        {t(assignment.role === 'speech' ? 'disabledSpeech' : 'disabled')}
+      </span>
+    );
   }
   if (assignment.kind === 'unassigned' || assignment.kind === 'default') {
     return (

@@ -88,7 +88,7 @@ export {
  * Какая модель нужна роли. По ответу `/models` тип не определить — сервер отдаёт только id, —
  * поэтому это подсказка человеку, а не проверка.
  */
-export type ModelKind = 'llm' | 'vlm' | 'text-to-image';
+export type ModelKind = 'llm' | 'vlm' | 'text-to-image' | 'speech';
 
 export const ROLE_MODEL_KIND: Readonly<Record<PipelineRole, ModelKind>> = {
   assistant: 'llm',
@@ -97,6 +97,7 @@ export const ROLE_MODEL_KIND: Readonly<Record<PipelineRole, ModelKind>> = {
   critic: 'llm',
   vision: 'vlm',
   image: 'text-to-image',
+  speech: 'speech',
 };
 
 /** Адрес по умолчанию: стандартный порт каждого рантайма и его OpenAI-совместимый префикс. */

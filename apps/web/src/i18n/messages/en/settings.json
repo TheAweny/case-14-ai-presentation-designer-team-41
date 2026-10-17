@@ -264,6 +264,7 @@
       "unassigned": "Not assigned",
       "missing": "{count, plural, one {# required role is not assigned — generation won’t start without it.} other {# required roles are not assigned — generation won’t start without them.}}",
       "disabled": "Don’t generate images",
+      "disabledSpeech": "No voice transcription",
       "picker": {
         "label": "Model for the “{role}” role",
         "noModels": "Model list not received",
@@ -303,6 +304,11 @@
           "name": "Illustrator",
           "description": "Draws illustrations when the materials have none.",
           "hint": "Needs a text-to-image model with an OpenAI-compatible images API."
+        },
+        "speech": {
+          "name": "Voice transcription",
+          "description": "Turns dictation into message text. The microphone stays hidden until a model is assigned.",
+          "hint": "Needs a model with an OpenAI-compatible POST /audio/transcriptions."
         }
       },
       "descriptionShared": "You are an administrator: these roles are the defaults for every user. Only shared connections are offered here; anyone can pick their own.",
@@ -316,7 +322,7 @@
     "primaryActive": "Text tasks use the primary model unless overridden",
     "primaryShared": "As administrator, you set the defaults for everyone.",
     "primaryPersonal": "Your preferences. A model picked in chat applies to that conversation only.",
-    "visualModels": "Images and visual review"
+    "visualModels": "Images, voice and visual review"
   },
   "users": {
     "title": "Users",

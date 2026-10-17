@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PIPELINE_ROLES } from '@lct/contracts';
 import { createKeyVault } from './key-vault.js';
 import { MemoryModelSettingsStore } from './model-settings-store.js';
 import {
@@ -56,7 +57,9 @@ describe('ModelSettingsService', () => {
   it('starts empty without a server model: no connections, every role unassigned', async () => {
     const settings = await setup().service.get(ADMIN);
     expect(settings.connections).toEqual([]);
-    expect(settings.roles.map((role) => role.kind)).toEqual(Array(6).fill('unassigned'));
+    expect(settings.roles.map((role) => role.kind)).toEqual(
+      Array(PIPELINE_ROLES.length).fill('unassigned'),
+    );
   });
 
   it('never lets the key out and stores it only encrypted', async () => {
@@ -217,6 +220,7 @@ describe('ModelSettingsService', () => {
       { role: 'critic', kind: 'unassigned' },
       { role: 'vision', kind: 'unassigned' },
       { role: 'image', kind: 'disabled' },
+      { role: 'speech', kind: 'unassigned' },
     ]);
   });
 });

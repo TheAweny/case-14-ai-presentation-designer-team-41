@@ -286,7 +286,7 @@ export function ModelSettingsPanel() {
       <section aria-label={t('visualModels')} className="flex flex-col gap-3">
         <h3 className="text-sm font-medium">{t('visualModels')}</h3>
         <ul className="flex flex-col divide-y divide-border rounded-lg ring-1 ring-border">
-          {(['vision', 'image'] as const).map(row)}
+          {(['vision', 'image', 'speech'] as const).map(row)}
         </ul>
       </section>
 
