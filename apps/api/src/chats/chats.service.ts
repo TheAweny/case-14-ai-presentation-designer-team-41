@@ -13,6 +13,8 @@ import {
   chatModeSchema,
   chatPartSchema,
   layoutVariantSchema,
+  modelRefSchema,
+  type ModelRef,
   type AssistantChatMessage,
   type ChatAttachment,
   type ChatDocument,
@@ -26,6 +28,8 @@ import {
 } from '@lct/contracts';
 import {
   AnswerWriter,
+  ModelRequestError,
+  modelFailureOf,
   chatInstructions,
   loadChatAgent,
   modelHistory,
@@ -39,7 +43,7 @@ import {
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { actorOf, GenerationService } from '../generation/generation.service.js';
-import { ModelSettingsService } from '../models/model-settings.service.js';
+import { ModelSettingsService, ModelNotConfiguredError } from '../models/model-settings.service.js';
 import {
   resultOf,
   withFailed,
@@ -54,6 +58,7 @@ import {
   runBuild,
   type ChatToolScope,
 } from './chat-tools.js';
+import { acquireChatLease, type ChatLease } from './chat-lease.js';
 
 export const CHAT_ID = /^[0-9a-f-]{36}$/i;
 const TITLE_MAX_LENGTH = 200;
@@ -69,13 +74,14 @@ interface ChatRow {
   readonly deck_ids: string[];
   readonly primary_deck_id: string | null;
   readonly mode: string;
+  readonly model?: unknown;
   readonly messages?: unknown;
   readonly created_at: Date;
   readonly updated_at: Date;
 }
 
 const SUMMARY_COLUMNS =
-  'id, title, project_id, deck_ids, primary_deck_id, mode, created_at, updated_at';
+  'id, title, project_id, deck_ids, primary_deck_id, mode, model, created_at, updated_at';
 
 function summaryOf(row: ChatRow): ChatSummary {
   return {
@@ -129,6 +135,8 @@ class Turn {
   private readonly listeners = new Set<(event: ChatEvent) => void>();
   readonly controller = new AbortController();
   finished = false;
+  lease: ChatLease | null = null;
+  stopWhenUnwatched = false;
 
   constructor(readonly chatId: string) {}
 
@@ -141,7 +149,10 @@ class Turn {
   watch(listener: (event: ChatEvent) => void, fromStart: boolean): () => void {
     if (fromStart) for (const event of this.events) listener(event);
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+      if (this.stopWhenUnwatched && this.listeners.size === 0) this.controller.abort();
+    };
   }
 }
 
@@ -155,6 +166,20 @@ interface ChatState {
   messages: ChatMessage[];
   deckIds: string[];
   primaryDeckId: string | null;
+  persisted: boolean;
+  initialModel?: ModelRef | null;
+}
+
+interface ApprovedPlan {
+  readonly planId: string;
+  readonly revision: number;
+  readonly outline: DeckOutline;
+  readonly templateId: string;
+}
+
+interface AcceptedInput {
+  readonly approved: ApprovedPlan | null;
+  readonly replay?: boolean;
 }
 
 /**
@@ -165,8 +190,15 @@ interface ChatState {
 @Injectable()
 export class ChatsService implements OnApplicationShutdown {
   private readonly pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  /** Held leases cannot consume the query pool: saves still need a connection at capacity. */
+  private readonly lockPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 16,
+    connectionTimeoutMillis: 10000,
+  });
   private readonly logger = new Logger(ChatsService.name);
   private readonly turns = new Map<string, Turn>();
+  private readonly remoteStreams = new Set<Turn>();
   private agent: Promise<ChatAgent> | null = null;
 
   constructor(
@@ -176,7 +208,8 @@ export class ChatsService implements OnApplicationShutdown {
 
   async onApplicationShutdown(): Promise<void> {
     for (const turn of this.turns.values()) turn.controller.abort();
-    await this.pool.end();
+    for (const turn of this.remoteStreams) turn.controller.abort();
+    await Promise.all([this.pool.end(), this.lockPool.end()]);
   }
 
   private loadAgent(): Promise<ChatAgent> {
@@ -207,12 +240,36 @@ export class ChatsService implements OnApplicationShutdown {
       `SELECT ${SUMMARY_COLUMNS}, messages FROM chats WHERE id = $1 AND owner_id = $2`,
       [id, account.id],
     );
-    const row = result.rows[0];
+    let row = result.rows[0];
     if (!row) throw new NotFoundException('Chat not found.');
+    let running = this.turns.has(id);
+    if (!running) {
+      const lease = await acquireChatLease(this.lockPool, id);
+      running = lease === null;
+      if (lease) {
+        try {
+          // Read again under the lease: the preceding owner may have just finished.
+          const fresh = await this.pool.query<ChatRow>(
+            `SELECT ${SUMMARY_COLUMNS}, messages FROM chats WHERE id = $1 AND owner_id = $2`,
+            [id, account.id],
+          );
+          row = fresh.rows[0];
+          if (!row) throw new NotFoundException('Chat not found.');
+          const state = this.stateOf(row, account.id);
+          if (this.recoverInterrupted(state)) {
+            await this.save(state);
+            row = { ...row, messages: state.messages };
+          }
+        } finally {
+          await lease.release();
+        }
+      }
+    }
     return {
       ...summaryOf(row),
+      model: modelRefSchema.nullable().catch(null).parse(row.model),
       messages: messagesOf(row.messages).map((message) => this.withoutStaleRetries(message)),
-      running: this.turns.has(id),
+      running,
     };
   }
 
@@ -401,9 +458,12 @@ export class ChatsService implements OnApplicationShutdown {
    */
   async update(
     id: string,
-    body: { title?: unknown; projectId?: unknown; deckId?: unknown },
+    body: { title?: unknown; projectId?: unknown; deckId?: unknown; model?: unknown },
     account: Account,
   ): Promise<ChatSummary> {
+    const selection =
+      body.model === undefined ? undefined : modelRefSchema.nullable().safeParse(body.model);
+    if (selection && !selection.success) throw new BadRequestException('Invalid model selection.');
     const title = body.title === undefined ? null : checkedTitle(body.title);
     const moves = body.projectId !== undefined;
     if (moves && body.projectId !== null && typeof body.projectId !== 'string') {
@@ -417,9 +477,19 @@ export class ChatsService implements OnApplicationShutdown {
       `UPDATE chats SET title = COALESCE($3, title),
               project_id = CASE WHEN $4::boolean THEN $5 ELSE project_id END,
               primary_deck_id = CASE WHEN $6::text IS NOT NULL AND $6 = ANY(deck_ids)
-                                     THEN $6 ELSE primary_deck_id END
+                                     THEN $6 ELSE primary_deck_id END,
+              model = CASE WHEN $7::boolean THEN $8::jsonb ELSE model END
        WHERE id = $1 AND owner_id = $2 RETURNING ${SUMMARY_COLUMNS}`,
-      [id, account.id, title, moves, moves ? body.projectId : null, body.deckId ?? null],
+      [
+        id,
+        account.id,
+        title,
+        moves,
+        moves ? body.projectId : null,
+        body.deckId ?? null,
+        selection !== undefined,
+        selection?.success ? JSON.stringify(selection.data) : null,
+      ],
     );
     const row = result.rows[0];
     if (!row) throw new NotFoundException('Chat not found.');
@@ -435,7 +505,9 @@ export class ChatsService implements OnApplicationShutdown {
 
   /** Deleting a chat deletes the decks it produced: the chat is how a person finds them. */
   async remove(id: string, account: Account): Promise<void> {
+    await this.get(id, account);
     this.turns.get(id)?.controller.abort();
+    await this.pool.query("SELECT pg_notify('chat_turn_cancel', $1)", [id]);
     const result = await this.pool.query<{ deck_ids: string[] }>(
       'DELETE FROM chats WHERE id = $1 AND owner_id = $2 RETURNING deck_ids',
       [id, account.id],
@@ -453,6 +525,7 @@ export class ChatsService implements OnApplicationShutdown {
   async cancel(id: string, account: Account): Promise<void> {
     await this.get(id, account);
     this.turns.get(id)?.controller.abort();
+    await this.pool.query("SELECT pg_notify('chat_turn_cancel', $1)", [id]);
   }
 
   /**
@@ -460,8 +533,53 @@ export class ChatsService implements OnApplicationShutdown {
    * turn is running.
    */
   async attach(id: string, account: Account): Promise<Turn | null> {
-    await this.get(id, account);
-    return this.turns.get(id) ?? null;
+    const document = await this.get(id, account);
+    const local = this.turns.get(id);
+    if (local) return local;
+    if (!document.running) return null;
+    const turn = new Turn(id);
+    turn.stopWhenUnwatched = true;
+    this.remoteStreams.add(turn);
+    let timer: ReturnType<typeof setTimeout>;
+    const finish = () => {
+      clearTimeout(timer);
+      if (turn.finished) return;
+      turn.finished = true;
+      turn.emit({ type: 'turn-end' });
+      this.remoteStreams.delete(turn);
+    };
+    turn.controller.signal.addEventListener('abort', finish, { once: true });
+    const poll = async () => {
+      try {
+        const snapshot = await this.get(id, account);
+        if (turn.finished) return;
+        for (const message of snapshot.messages) turn.emit({ type: 'message', message });
+        if (!snapshot.running) finish();
+        else timer = setTimeout(() => void poll(), 500);
+      } catch (error) {
+        this.logger.warn(
+          `Chat ${id} remote stream failed: ${error instanceof Error ? error.message : error}`,
+        );
+        turn.emit({
+          type: 'message',
+          message: {
+            role: 'assistant',
+            id: crypto.randomUUID(),
+            status: 'failed',
+            createdAt: Date.now(),
+            parts: [
+              {
+                type: 'error',
+                message: 'Не удалось восстановить соединение с чатом. Обновите страницу.',
+              },
+            ],
+          },
+        });
+        finish();
+      }
+    };
+    timer = setTimeout(() => void poll(), 0);
+    return turn;
   }
 
   /** The answer being written in a turn, for one who starts watching it midway. */
@@ -477,17 +595,37 @@ export class ChatsService implements OnApplicationShutdown {
     const turn = new Turn(id);
     this.turns.set(id, turn);
     try {
+      await this.openChat(id, request, account);
+      turn.lease = await acquireChatLease(this.lockPool, id, turn.controller);
+      if (!turn.lease) throw new ConflictException('The chat is answering already.');
       const state = await this.openChat(id, request, account);
+      if (this.recoverInterrupted(state)) await this.save(state);
       const prepared = await this.acceptInput(state, request, account, turn);
-      void this.answer(state, request, account, turn, prepared).finally(() => {
+      if (prepared.replay) {
+        for (const message of state.messages) turn.emit({ type: 'message', message });
         turn.finished = true;
         this.turns.delete(id);
-        this.currentAnswer.delete(id);
+        await turn.lease.release();
         turn.emit({ type: 'turn-end' });
-      });
+        return turn;
+      }
+      void this.answer(state, request, account, turn, prepared)
+        .catch((error: unknown) => {
+          this.logger.error(
+            `Chat ${id} could not save its final state: ${error instanceof Error ? error.message : error}`,
+          );
+        })
+        .finally(async () => {
+          turn.finished = true;
+          this.turns.delete(id);
+          this.currentAnswer.delete(id);
+          turn.emit({ type: 'turn-end' });
+          await turn.lease?.release();
+        });
       return turn;
     } catch (error) {
       this.turns.delete(id);
+      await turn.lease?.release();
       throw error;
     }
   }
@@ -512,16 +650,7 @@ export class ChatsService implements OnApplicationShutdown {
     const row = result.rows[0];
     if (row && row.owner_id !== account.id) throw new NotFoundException('Chat not found.');
     if (row) {
-      return {
-        id,
-        ownerId: account.id,
-        title: row.title,
-        projectId: row.project_id,
-        mode: request.mode,
-        messages: messagesOf(row.messages),
-        deckIds: [...row.deck_ids],
-        primaryDeckId: row.primary_deck_id,
-      };
+      return this.stateOf(row, account.id);
     }
     if (request.input.type !== 'message') throw new NotFoundException('Chat not found.');
     if (request.projectId !== null) await this.requireProject(request.projectId, account);
@@ -541,7 +670,61 @@ export class ChatsService implements OnApplicationShutdown {
       messages: [],
       deckIds: deck ? [deck] : [],
       primaryDeckId: deck,
+      persisted: false,
+      initialModel: request.model,
     };
+  }
+
+  private stateOf(row: ChatRow, ownerId: string): ChatState {
+    return {
+      id: row.id,
+      ownerId,
+      title: row.title,
+      projectId: row.project_id,
+      mode: chatModeSchema.catch('plan').parse(row.mode),
+      messages: messagesOf(row.messages),
+      deckIds: [...row.deck_ids],
+      primaryDeckId: row.primary_deck_id,
+      persisted: true,
+    };
+  }
+
+  /** A lost process never makes an in-flight side effect safe to repeat. */
+  private recoverInterrupted(state: ChatState): boolean {
+    let changed = false;
+    state.messages = state.messages.map((message) => {
+      if (message.role !== 'assistant') return message;
+      const active =
+        message.status === 'streaming' ||
+        message.parts.some(
+          (part) =>
+            (part.type === 'build' && (part.status === 'preparing' || part.status === 'running')) ||
+            (part.type === 'tool' && part.status === 'running'),
+        );
+      if (!active) return message;
+      changed = true;
+      const explanation =
+        'Ответ прерван после остановки сервера. Проверьте результаты в библиотеке перед повторной сборкой.';
+      return {
+        ...message,
+        status: 'failed' as const,
+        parts: [
+          ...message.parts.map((part): ChatPart => {
+            if (part.type === 'build' && (part.status === 'preparing' || part.status === 'running'))
+              return { ...part, status: 'failed', finishedAt: Date.now(), error: explanation };
+            if (part.type === 'tool' && part.status === 'running')
+              return {
+                ...part,
+                status: 'failed',
+                output: { error: 'interrupted', message: explanation },
+              };
+            return part;
+          }),
+          { type: 'error' as const, message: explanation },
+        ],
+      };
+    });
+    return changed;
   }
 
   /** Files and templates a message attaches, as the account may use them, named from the library. */
@@ -586,21 +769,38 @@ export class ChatsService implements OnApplicationShutdown {
     request: ChatTurnRequest,
     account: Account,
     turn: Turn,
-  ): Promise<{ approved: { templateId: string } | null }> {
+  ): Promise<AcceptedInput> {
     const input = request.input;
+    if (input.type === 'approve-plan' && request.mode === 'chat')
+      throw new BadRequestException('A plan cannot be built in chat mode.');
     const now = Date.now();
     if (input.type === 'message') {
+      const existing = request.requestId
+        ? state.messages.find((message) => message.id === request.requestId)
+        : null;
+      if (existing) {
+        if (
+          existing.role !== 'user' ||
+          existing.mode !== request.mode ||
+          existing.text !== input.text ||
+          JSON.stringify(existing.attachments) !==
+            JSON.stringify(await this.checkedAttachments(input.attachments, account))
+        )
+          throw new ConflictException('This request id was used with different content.');
+        return { approved: null, replay: true };
+      }
       if (!input.text && input.attachments.length === 0)
         throw new BadRequestException('The message is empty.');
       const message: ChatMessage = {
         role: 'user',
-        id: crypto.randomUUID(),
+        id: request.requestId ?? crypto.randomUUID(),
         text: input.text,
         attachments: await this.checkedAttachments(input.attachments, account),
         mode: request.mode,
         createdAt: now,
       };
       state.messages.push(message);
+      state.mode = request.mode;
       turn.emit({ type: 'message', message });
       await this.save(state);
       return { approved: null };
@@ -612,6 +812,13 @@ export class ChatsService implements OnApplicationShutdown {
     );
     if (!found) throw new NotFoundException('There is nothing to answer here.');
     if (input.type === 'answer') {
+      if (
+        found.part.type === 'question' &&
+        found.part.answer !== null &&
+        state.mode === request.mode &&
+        JSON.stringify(found.part.answer) === JSON.stringify(input.answer)
+      )
+        return { approved: null, replay: true };
       if (found.part.type !== 'question' || found.part.answer !== null)
         throw new ConflictException('The question is answered already.');
       this.putPart(state, turn, found.messageId, found.index, {
@@ -627,21 +834,52 @@ export class ChatsService implements OnApplicationShutdown {
         createdAt: now,
       };
       state.messages.push(message);
+      state.mode = request.mode;
       turn.emit({ type: 'message', message });
       await this.save(state);
       return { approved: null };
     }
     if (found.part.type !== 'plan' || found.part.status === 'superseded')
       throw new ConflictException('This plan was replaced by a newer one.');
+    const latest = state.messages
+      .flatMap((message) =>
+        message.role === 'assistant'
+          ? message.parts.filter((part) => part.type === 'plan' && part.status !== 'superseded')
+          : [],
+      )
+      .at(-1);
+    if (latest?.type === 'plan' && latest.planId !== found.part.planId)
+      throw new ConflictException('This plan was replaced by a newer plan.');
+    const revision = found.part.revision ?? 1;
+    const requestedRevision = input.revision ?? 1;
+    if (found.part.status === 'approved' && requestedRevision === revision) {
+      if (
+        state.mode !== request.mode ||
+        found.part.templateId !== input.templateId ||
+        JSON.stringify(found.part.outline) !== JSON.stringify(input.outline)
+      )
+        throw new ConflictException('This revision is approved already. Submit a new revision.');
+      return { approved: null, replay: true };
+    }
+    const expectedRevision = found.part.status === 'approved' ? revision + 1 : revision;
+    if (requestedRevision !== expectedRevision)
+      throw new ConflictException('The plan revision changed. Reload the latest plan.');
     await this.generation.template(input.templateId, account);
+    const approved: ApprovedPlan = {
+      planId: input.planId,
+      revision: requestedRevision,
+      outline: structuredClone(input.outline),
+      templateId: input.templateId,
+    };
     this.putPart(state, turn, found.messageId, found.index, {
       ...found.part,
-      outline: input.outline,
-      templateId: input.templateId,
+      ...approved,
       status: 'approved',
+      approvalSource: 'user',
     });
+    state.mode = request.mode;
     await this.save(state);
-    return { approved: { templateId: input.templateId } };
+    return { approved };
   }
 
   private findPart(state: ChatState, match: (part: ChatPart) => boolean) {
@@ -684,6 +922,7 @@ export class ChatsService implements OnApplicationShutdown {
       headers: resolved.headers,
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
+      reasoningEffort: request.reasoningEffort,
     });
   }
 
@@ -692,7 +931,7 @@ export class ChatsService implements OnApplicationShutdown {
     request: ChatTurnRequest,
     account: Account,
     turn: Turn,
-    prepared: { approved: { templateId: string } | null },
+    prepared: AcceptedInput,
   ): Promise<void> {
     const signal = turn.controller.signal;
     const message: AssistantChatMessage = {
@@ -723,6 +962,7 @@ export class ChatsService implements OnApplicationShutdown {
       projectId: state.projectId,
       mode: request.mode,
       model: request.model,
+      currentMessageId: message.id,
       messages: () => {
         sync();
         return state.messages;
@@ -735,8 +975,33 @@ export class ChatsService implements OnApplicationShutdown {
         state.deckIds = [...new Set([...state.deckIds, ...deckIds])];
         if (primary) state.primaryDeckId = primary;
       },
+      persist: async () => {
+        signal.throwIfAborted();
+        await turn.lease?.check();
+        signal.throwIfAborted();
+        sync();
+        await this.save(state);
+      },
+    };
+    const finishAnswer = async () => {
+      if (status === 'streaming') status = 'done';
+      sync();
+      try {
+        await this.save(state);
+      } catch (error) {
+        status = 'failed';
+        writer.show({
+          type: 'error',
+          message: 'Не удалось сохранить ответ. Обновите чат, чтобы проверить состояние операции.',
+        });
+        sync();
+        turn.emit({ type: 'message', message: current() });
+        throw error;
+      }
+      turn.emit({ type: 'message', message: current() });
     };
     try {
+      await this.save(state);
       const agent = await this.loadAgent();
       let model: ChatModel | null = null;
       try {
@@ -746,16 +1011,10 @@ export class ChatsService implements OnApplicationShutdown {
         // An approved plan is built without the model; only the comment after it needs one.
       }
       if (prepared.approved) {
-        const plan = this.findPart(
-          state,
-          (part) => part.type === 'plan' && part.status === 'approved',
-        );
-        const outline = plan?.part.type === 'plan' ? plan.part.outline : null;
-        await this.buildApproved(writer, scope, signal, {
-          templateId: prepared.approved.templateId,
-          outline,
-          planId: plan?.part.type === 'plan' ? plan.part.planId : null,
-        });
+        if (!(await this.buildApproved(writer, scope, signal, prepared.approved))) {
+          status = 'failed';
+          return;
+        }
         if (!model) return;
       }
       if (!model) return;
@@ -764,7 +1023,8 @@ export class ChatsService implements OnApplicationShutdown {
       // The agent tells the person whether the deck gets pictures, and does not promise them
       // when no image model is assigned.
       const imagesAvailable = await this.generation.imagesAvailable(account).catch(() => false);
-      await runChatTurn({
+      const result = await runChatTurn({
+        mode: request.mode,
         model,
         instructions: chatInstructions(agent, request.mode, {
           ...this.facts(state),
@@ -782,7 +1042,33 @@ export class ChatsService implements OnApplicationShutdown {
         signal,
         loopNudge: agent.loopNudge,
       });
-      status = 'done';
+      if (result.end === 'limit')
+        throw new Error(
+          'Достигнут предел шагов. Ответ не завершён; проверьте результаты перед продолжением.',
+        );
+      if (result.end === 'incomplete') {
+        const explanations = {
+          length: 'Модель достигла предела длины ответа.',
+          content_filter: 'Провайдер остановил ответ.',
+          protocol_error: 'Провайдер вернул неполный или повреждённый ответ.',
+          interrupted: 'Соединение с моделью прервано.',
+          loop: 'Повторяющийся ответ остановлен.',
+          empty: 'Модель вернула пустой ответ.',
+          context_budget:
+            'Контекст превышает допустимый объём. Приложите материалы файлом или сократите запрос.',
+        };
+        throw new ModelRequestError(
+          `${explanations[result.reason ?? 'protocol_error']} Ответ не завершён.`,
+          {
+            kind:
+              result.reason === 'context_budget' || result.reason === 'length'
+                ? 'context'
+                : 'unavailable',
+            modelId: model.model,
+          },
+        );
+      }
+      status = result.end === 'failed' ? 'failed' : 'done';
     } catch (error) {
       if (signal.aborted) status = 'cancelled';
       else {
@@ -793,13 +1079,19 @@ export class ChatsService implements OnApplicationShutdown {
         writer.show({
           type: 'error',
           message: (error instanceof Error ? error.message : 'Не удалось ответить.').slice(0, 2000),
+          failure: {
+            ...modelFailureOf(error),
+            ...(error instanceof ModelNotConfiguredError
+              ? { kind: 'not-configured' as const }
+              : {}),
+            ...(request.model
+              ? { modelId: request.model.modelId, connectionId: request.model.connectionId }
+              : {}),
+          },
         });
       }
     } finally {
-      if (status === 'streaming') status = 'done';
-      sync();
-      turn.emit({ type: 'message', message: current() });
-      await this.save(state);
+      await finishAnswer();
     }
   }
 
@@ -808,12 +1100,8 @@ export class ChatsService implements OnApplicationShutdown {
     writer: AnswerWriter,
     scope: ChatToolScope,
     signal: AbortSignal,
-    plan: {
-      templateId: string;
-      outline: DeckOutline | null;
-      planId: string | null;
-    },
-  ): Promise<void> {
+    plan: ApprovedPlan,
+  ): Promise<boolean> {
     const callId = `call-${crypto.randomUUID()}`;
     const input = { templateId: plan.templateId, planId: plan.planId, brief: '', fileIds: [] };
     const part: Extract<ChatPart, { type: 'tool' }> = {
@@ -843,7 +1131,10 @@ export class ChatsService implements OnApplicationShutdown {
         },
         {
           templateId: plan.templateId,
+          planId: plan.planId,
+          planRevision: plan.revision,
           outline: plan.outline,
+          outlineSource: 'user',
           brief: '',
           fileIds: [...new Set(fileIds)].slice(0, 10),
         },
@@ -851,9 +1142,10 @@ export class ChatsService implements OnApplicationShutdown {
       writer.update(index, {
         ...part,
         input: { ...input, fileIds },
-        status: 'done',
+        status: outcome.failed ? 'failed' : 'done',
         output: outcome.output,
       });
+      return !outcome.failed;
     } catch (error) {
       writer.update(index, {
         ...part,
@@ -880,6 +1172,26 @@ export class ChatsService implements OnApplicationShutdown {
       mode: state.mode,
       projectId: state.projectId,
       plans,
+      builds: state.messages
+        .flatMap((message) =>
+          message.role === 'assistant'
+            ? message.parts.flatMap((part) =>
+                part.type === 'build'
+                  ? [
+                      {
+                        buildId: part.buildId,
+                        planId: part.planId,
+                        runId: part.runId,
+                        status: part.status,
+                        active: part.status === 'preparing' || part.status === 'running',
+                        error: part.error,
+                      },
+                    ]
+                  : [],
+              )
+            : [],
+        )
+        .slice(-5),
       decks: state.deckIds,
       recommendedDeck: state.primaryDeckId,
     };
@@ -890,13 +1202,21 @@ export class ChatsService implements OnApplicationShutdown {
 
   /** Write the chat down soon: a streaming answer changes it many times a second. */
   private saveSoon(state: ChatState): void {
+    const turn = this.turns.get(state.id);
+    if (!turn || turn.finished) return;
     if (this.pendingSave.has(state.id)) return;
     this.pendingSave.add(state.id);
     setTimeout(() => {
       this.pendingSave.delete(state.id);
+      if (this.turns.get(state.id) !== turn || turn.finished) return;
       const answer = this.currentAnswer.get(state.id);
       answer?.();
-      void this.save(state).catch(() => undefined);
+      void this.save(state).catch((error: unknown) => {
+        this.logger.error(
+          `Chat ${state.id} could not save progress: ${error instanceof Error ? error.message : error}`,
+        );
+        turn.controller.abort(error);
+      });
     }, SAVE_EVERY_MS);
   }
 
@@ -907,13 +1227,22 @@ export class ChatsService implements OnApplicationShutdown {
       .catch(() => undefined)
       .then(async () => {
         const messages = JSON.stringify(state.messages);
-        if (messages.length > MAX_DOCUMENT_BYTES) {
-          this.logger.warn(`Chat ${state.id} is too large to save.`);
+        if (Buffer.byteLength(messages, 'utf8') > MAX_DOCUMENT_BYTES) {
+          throw new BadRequestException('Chat document is too large to save.');
+        }
+        if (state.persisted) {
+          const result = await this.pool.query(
+            `UPDATE chats SET mode = $3, deck_ids = $4, primary_deck_id = $5,
+                    messages = $6::jsonb, updated_at = now()
+             WHERE id = $1 AND owner_id = $2`,
+            [state.id, state.ownerId, state.mode, state.deckIds, state.primaryDeckId, messages],
+          );
+          if (!result.rowCount) throw new NotFoundException('Chat not found.');
           return;
         }
-        await this.pool.query(
-          `INSERT INTO chats (id, owner_id, title, project_id, mode, deck_ids, primary_deck_id, messages)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+        const result = await this.pool.query(
+          `INSERT INTO chats (id, owner_id, title, project_id, mode, deck_ids, primary_deck_id, messages, model)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
            ON CONFLICT (id) DO UPDATE SET
              mode = EXCLUDED.mode, deck_ids = EXCLUDED.deck_ids,
              primary_deck_id = EXCLUDED.primary_deck_id,
@@ -928,8 +1257,11 @@ export class ChatsService implements OnApplicationShutdown {
             state.deckIds,
             state.primaryDeckId,
             messages,
+            JSON.stringify(state.initialModel ?? null),
           ],
         );
+        if (!result.rowCount) throw new NotFoundException('Chat not found.');
+        state.persisted = true;
       });
     this.saving.set(state.id, next);
     return next;

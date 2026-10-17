@@ -154,7 +154,9 @@ class ArtifactManifest(BaseModel):
         description="Fixes the user accepted, so the delivered deck is reproducible too.",
     )
     artifacts: list[Artifact]
+    contentHash: constr(min_length=64, max_length=64) | None = None
     contentPackId: constr(min_length=1)
+    contentRevision: conint(le=9007199254740991, gt=0) | None = None
     finishedAt: constr(min_length=1) = Field(
         ..., description="ISO 8601 timestamp, UTC."
     )

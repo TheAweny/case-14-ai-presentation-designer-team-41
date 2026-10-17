@@ -1,0 +1,32 @@
+{
+  "name": "motion-lab",
+  "projectType": "application",
+  "sourceRoot": "prototypes/motion-lab",
+  "tags": ["scope:web", "type:app"],
+  "targets": {
+    "smoke": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node prototypes/motion-lab/smoke.mjs" }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite --host 127.0.0.1 --port 4314 --strictPort",
+        "cwd": "prototypes/motion-lab"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/prototypes/motion-lab"],
+      "options": { "command": "vite build", "cwd": "prototypes/motion-lab" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": { "command": "tsc -p prototypes/motion-lab/tsconfig.json" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": { "command": "eslint prototypes/motion-lab --max-warnings 0" }
+    }
+  }
+}

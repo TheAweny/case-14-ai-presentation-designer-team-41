@@ -1,0 +1,131 @@
+.choice-picker {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.choice-picker__trigger {
+  max-width: 100%;
+}
+
+.choice-picker__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choice-picker__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--pb-muted);
+}
+
+.choice-picker__menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  right: 0;
+  left: auto;
+  width: 280px;
+  max-width: min(280px, calc(100vw - 40px));
+  max-height: min(340px, 50dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pb-muted) transparent;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--pb-menu);
+  color: var(--pb-ink);
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 35%);
+  transform-origin: bottom left;
+  animation: prompt-bar-pop 180ms var(--pb-ease-out) both;
+}
+
+.choice-picker[data-compact] .choice-picker__menu {
+  left: 0;
+  right: auto;
+}
+
+.choice-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.choice-picker__row:hover,
+.choice-picker__row:focus-visible {
+  background: var(--pb-hover);
+}
+
+.choice-picker .choice-picker__row:focus-visible {
+  outline: 1px solid var(--pb-muted);
+  outline-offset: -1px;
+}
+
+.choice-picker__copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.choice-picker__description {
+  color: var(--pb-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.choice-picker__name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.choice-picker__check {
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice-picker__menu {
+    animation: none;
+  }
+}
+
+html[data-reduced='true'] .choice-picker__menu {
+  animation: none;
+}
+
+.choice-picker__row[aria-selected='true'] .choice-picker__check {
+  opacity: 1;
+}
+
+@container (max-width: 350px) {
+  .choice-picker[data-compact] .choice-picker__value,
+  .choice-picker[data-compact] .choice-picker__chevron {
+    display: none;
+  }
+
+  .choice-picker__trigger[aria-label='Выбрать модель'] {
+    max-width: 78px;
+  }
+
+  .choice-picker__menu {
+    width: 220px;
+  }
+}

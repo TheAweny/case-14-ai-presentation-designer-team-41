@@ -12,6 +12,7 @@ RUN corepack enable
 COPY package.json yarn.lock .yarnrc.yml nx.json tsconfig.base.json ./
 COPY apps apps
 COPY packages packages
+COPY scripts scripts
 
 RUN yarn install --immutable
 

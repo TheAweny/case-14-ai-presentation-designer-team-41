@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   MODEL_ID_MAX_LENGTH,
-  ROLE_MODEL_KIND,
   isRoleOptional,
   usesWriterModelByDefault,
   knownModels,
@@ -30,7 +29,7 @@ import {
   type RoleAssignment,
 } from '@/lib/model-settings';
 import { cn } from '@/lib/utils';
-import { MODEL_SEARCH_FROM, byFamily } from '@/lib/writer-models';
+import { MODEL_SEARCH_FROM, byFamily, shortModelName } from '@/lib/writer-models';
 import { StatusDot } from './status-dot';
 
 /** Значение пункта меню: пара «подключение, модель» без риска склеить разделитель с id. */
@@ -51,10 +50,12 @@ export function RoleRow({
   assignment,
   connections,
   onChange,
+  primary = false,
 }: {
   assignment: RoleAssignment;
   connections: readonly ModelConnection[];
   onChange: (next: RoleAssignment) => void;
+  primary?: boolean;
 }) {
   const t = useTranslations('settings.models.roles');
   const tFamilies = useTranslations('composer.model.families');
@@ -62,21 +63,26 @@ export function RoleRow({
   const [manualFor, setManualFor] = useState<string | null>(null);
   const manualAsked = useRef<string | null>(null);
   const optional = isRoleOptional(role);
-  const name = t(`items.${role}.name`);
+  const name = primary ? t('primaryName') : t(`items.${role}.name`);
   // Подсказка о типе модели — там, где подойдёт не любая: у зрения и иллюстратора.
   const hint =
-    ROLE_MODEL_KIND[role] === 'llm'
-      ? null
-      : role === 'vision'
-        ? t('items.vision.hint')
-        : t('items.image.hint');
+    role === 'vision'
+      ? t('items.vision.hint')
+      : role === 'image'
+        ? t('items.image.hint')
+        : role === 'speech'
+          ? t('items.speech.hint')
+          : null;
 
   const current =
     assignment.kind === 'model'
       ? modelValue(assignment.connectionId, assignment.modelId)
       : assignment.kind === 'disabled'
         ? DISABLED_VALUE
-        : '';
+        : assignment.kind === 'default' ||
+            (assignment.kind === 'unassigned' && usesWriterModelByDefault(role))
+          ? 'default'
+          : '';
   const manualConnection = connections.find((item) => item.connectionId === manualFor) ?? null;
 
   return (
@@ -84,12 +90,14 @@ export function RoleRow({
       <div className="grid min-w-0 gap-0.5">
         <p className="flex items-baseline gap-2 text-sm font-medium">
           {name}
-          <code className="font-mono text-[0.6875rem] font-normal text-muted-foreground">
-            {role}
-          </code>
+          {primary ? null : (
+            <code className="font-mono text-[0.6875rem] font-normal text-muted-foreground">
+              {role}
+            </code>
+          )}
         </p>
         <p className="text-xs text-pretty text-muted-foreground">
-          {t(`items.${role}.description`)}
+          {primary ? t('primaryDescription') : t(`items.${role}.description`)}
         </p>
         {hint ? <p className="text-xs text-pretty text-muted-foreground/80">{hint}</p> : null}
       </div>
@@ -126,17 +134,20 @@ export function RoleRow({
               <Button
                 variant="outline"
                 size="lg"
-                className="relative w-full justify-between gap-2 font-normal"
+                className="relative h-10 w-full justify-between gap-2 rounded-lg bg-muted/25 px-3 font-normal shadow-xs transition-[background-color,border-color,box-shadow] duration-150 data-[state=open]:border-ring/50 data-[state=open]:bg-muted/60"
               >
                 {/* Для чтения с экрана — какая роль, а видимое значение кнопки остаётся её именем. */}
                 <span className="sr-only">{t('picker.label', { role: name })}: </span>
                 <PickerValue assignment={assignment} connections={connections} />
-                <ChevronDownIcon data-icon="inline-end" className="text-muted-foreground" />
+                <ChevronDownIcon
+                  data-icon="inline-end"
+                  className="text-muted-foreground transition-transform duration-200 group-data-[state=open]/button:rotate-180 motion-reduce:transition-none"
+                />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-72 max-w-[calc(100vw-2rem)]"
+              className="w-80 max-w-[calc(100vw-2rem)] p-1.5"
               onCloseAutoFocus={(event) => {
                 if (manualAsked.current === null) return;
                 // Поле открываем, когда меню закрылось: иначе оно вернуло бы фокус на кнопку.
@@ -152,10 +163,19 @@ export function RoleRow({
                     onChange({ role, kind: 'disabled' });
                     return;
                   }
+                  if (value === 'default') {
+                    onChange({ role, kind: 'default' });
+                    return;
+                  }
                   const [connectionId, modelId] = JSON.parse(value) as [string, string];
                   onChange({ role, kind: 'model', connectionId, modelId });
                 }}
               >
+                {usesWriterModelByDefault(role) ? (
+                  <DropdownMenuRadioItem value="default">
+                    {t('writerDefault')}
+                  </DropdownMenuRadioItem>
+                ) : null}
                 {connections.map((connection, index) => {
                   const models = [...knownModels(connection)];
                   // Вписанная вручную модель тоже видна в списке и отмечена, пока её не выключили.
@@ -173,9 +193,11 @@ export function RoleRow({
                     <DropdownMenuRadioItem
                       key={modelId}
                       value={modelValue(connection.connectionId, modelId)}
-                      className="font-mono"
+                      className="font-normal data-[state=checked]:bg-accent/70"
                     >
-                      <span className="truncate">{modelId}</span>
+                      <span className="truncate" title={modelId}>
+                        {shortModelName(modelId)}
+                      </span>
                     </DropdownMenuRadioItem>
                   );
                   return (
@@ -228,7 +250,7 @@ export function RoleRow({
                   <>
                     {connections.length > 0 ? <DropdownMenuSeparator /> : null}
                     <DropdownMenuRadioItem value={DISABLED_VALUE}>
-                      {t('disabled')}
+                      {t(role === 'speech' ? 'disabledSpeech' : 'disabled')}
                     </DropdownMenuRadioItem>
                   </>
                 ) : null}
@@ -259,9 +281,13 @@ function PickerValue({
 }) {
   const t = useTranslations('settings.models.roles');
   if (assignment.kind === 'disabled') {
-    return <span className="truncate text-muted-foreground">{t('disabled')}</span>;
+    return (
+      <span className="truncate text-muted-foreground">
+        {t(assignment.role === 'speech' ? 'disabledSpeech' : 'disabled')}
+      </span>
+    );
   }
-  if (assignment.kind === 'unassigned') {
+  if (assignment.kind === 'unassigned' || assignment.kind === 'default') {
     return (
       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
         <StatusDot
@@ -283,8 +309,11 @@ function PickerValue({
   return (
     <span className="flex min-w-0 items-center gap-1.5" title={off ? t('picker.off') : undefined}>
       {off ? <StatusDot tone="warning" /> : null}
-      <span className={cn('truncate font-mono', off && 'text-muted-foreground line-through')}>
-        {assignment.modelId}
+      <span
+        title={assignment.modelId}
+        className={cn('truncate font-medium', off && 'text-muted-foreground line-through')}
+      >
+        {shortModelName(assignment.modelId)}
       </span>
       {connection ? (
         <span className="max-w-24 shrink-0 truncate text-muted-foreground">{connection.name}</span>

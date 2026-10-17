@@ -18,24 +18,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ConnectIcon, PlusIcon, WarningIcon } from '@/components/ui/icons';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ConnectIcon, WarningIcon } from '@/components/ui/icons';
+import { CHAT_MODES } from '@lct/contracts';
 import {
   COMPOSER_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
   addComposerFiles,
   chosenTemplate,
   templateGroups,
+  templateTitle,
 } from '@/lib/composer-templates';
-import { CONTENT_FILE_KINDS, TEMPLATE_EXTENSIONS, hasContent } from '@/lib/deck-generator';
+import { hasContent } from '@/lib/deck-generator';
 import { chatHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
-import { effectiveModel, writerModelReady } from '@/lib/writer-models';
+import { writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
-import { ComposerTemplateMenu } from './composer-template-menu';
 import { ModelMenu } from './model-menu';
+import { useSpeechConfigured, VoicePill } from './voice-pill';
 import {
   PromptBox,
   PromptChips,
@@ -46,23 +47,17 @@ import {
   usePromptBox,
 } from './prompt-box';
 import { promptAction } from './prompt-keys';
-
-/** Расширения одного вида контента через запятую — для подсказки у скрепки. */
-function extensionsOf(kind: string): string {
-  return Object.entries(CONTENT_FILE_KINDS)
-    .filter(([, value]) => value === kind)
-    .map(([extension]) => extension)
-    .join(', ');
-}
+import { ComposerSourceMenu } from './composer-source-menu';
+import { useComposerSuggestions } from './composer-suggestions';
 
 /**
  * Поле генерации, как у ChatGPT и Claude: написать, о чём презентация, прикрепить материалы и
  * нажать стрелку — генерация начинается сразу, без мастера. Шаблон, число слайдов и файлы — рядом
  * с полем, у каждого есть разумное значение по умолчанию, поэтому хватает одного текста.
  *
- * Шаблон — из библиотеки (какой выбран сразу, решает `lib/composer-templates.ts`) или новый
- * файл: .pptx и .potx через скрепку, перетаскивание или «Загрузить шаблон…» становятся чипом
- * шаблона и заменяют выбор, пока чип не убрали. Разбирает новый файл агент в разговоре.
+ * Шаблон выбирают в меню «+» или кладут файлом: .pptx и .potx через перетаскивание или
+ * «Загрузить шаблон…» становятся чипом с превью. Пока человек сам не выбрал шаблон, чипа нет.
+ * Разбирает новый файл агент в разговоре.
  *
  * Стрелка (или Enter) начинает чат с агентом (`chatStore`) и открывает его страницу. Режим у
  * поля решает, что агент сделает с сообщением: «Чат» ответит, «План» покажет план колоды на
@@ -88,6 +83,7 @@ export function DeckComposer({
   focusRequested?: boolean;
 }) {
   const t = useTranslations('composer');
+  const tm = useTranslations('deckChat.modes');
   const router = useRouter();
   const pathname = usePathname();
   const rejectedId = useId();
@@ -102,18 +98,31 @@ export function DeckComposer({
   // Число слайдов из настроек — пожелание агенту, а не жёсткое правило.
   const { slideCount } = useEditorPrefs();
   const [model, setModel] = useState<ModelRef | null>(null);
-  const models = useWriterModels();
+  const models = useWriterModels('assistant');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
+  const [voiceError, setVoiceError] = useState<'empty' | 'failed' | 'blocked' | null>(null);
+  const speech = useSpeechConfigured();
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
   const groups = templateGroups(templates, project);
-  // Выбор в меню переживает чип: убрали новый файл — вернулся прежний шаблон.
   const selected = chosenTemplate(templates, project, pickedId);
   const ready = hasContent(text, files) || templateFile !== null;
   // Пока настройки моделей не загрузились, неизвестно, есть ли чем писать: отправку придерживаем.
   const box = usePromptBox({ ready: ready && models !== null, busy: sending });
+  const suggestions = useComposerSuggestions({
+    text,
+    field,
+    onText: setText,
+    sources: [],
+    commands: CHAT_MODES.map((mode) => ({
+      key: mode,
+      name: `/${mode}`,
+      description: `${tm(`${mode}.name`)} — ${tm(`${mode}.description`)}`,
+      choose: () => setMode(mode),
+    })),
+  });
   const glowStyle = {
     '--aurora-color': projectColorVar(project?.appearance.color ?? 'gray'),
   } as CSSProperties;
@@ -141,13 +150,13 @@ export function DeckComposer({
 
   const submit = () => {
     if (!ready || sending) return;
-    if (!writerModelReady(models)) {
+    if (!writerModelReady(models, model)) {
       if (models !== null) setModelRequiredOpen(true);
       return;
     }
     setSending(true);
     // Выбор показывают, только когда моделей несколько: подписывать в сообщении есть смысл тогда же.
-    const chosen = models ? effectiveModel(models, model) : null;
+    const chosen = model;
     const chatId = crypto.randomUUID();
     chatStore.start(
       chatId,
@@ -168,7 +177,8 @@ export function DeckComposer({
   };
 
   return (
-    <div>
+    <div className="relative">
+      {suggestions.menu}
       <Dialog open={modelRequiredOpen} onOpenChange={setModelRequiredOpen}>
         <DialogContent closeLabel={t('modelRequired.close')} className="max-w-md">
           <DialogHeader className="pr-8">
@@ -203,18 +213,30 @@ export function DeckComposer({
         busy={sending}
         onSubmit={submit}
         onFiles={addFiles}
+        pageDrop={!sending}
         dropLabel={t('dropHere')}
         style={glowStyle}
       >
-        {templateFile || files.length > 0 ? (
+        {templateFile || selected || files.length > 0 ? (
           <PromptChips label={t('files')}>
-            {/* Шаблон — первым: он меняет всю презентацию, а не добавляет материал. */}
             {templateFile ? (
               <AttachmentChip
                 attachment={{ kind: 'template', name: templateFile.name, size: templateFile.size }}
                 onRemove={() => {
                   setRejected([]);
                   setTemplateFile(null);
+                  box.aurora.flash();
+                }}
+              />
+            ) : selected ? (
+              <AttachmentChip
+                attachment={{
+                  kind: 'template',
+                  name: templateTitle(selected.fileName),
+                  previewUrl: selected.previewDataUrl ?? undefined,
+                }}
+                onRemove={() => {
+                  setPickedId(null);
                   box.aurora.flash();
                 }}
               />
@@ -233,12 +255,16 @@ export function DeckComposer({
         ) : null}
         <PromptField
           value={text}
-          onValueChange={setText}
+          {...suggestions.fieldProps}
+          onSelect={suggestions.onSelect}
+          onValueChange={suggestions.onValueChange}
           label={t('label')}
           placeholder={t('placeholder')}
           fieldRef={field}
           describedBy={rejected.length > 0 ? rejectedId : undefined}
           onKeyDown={(event) => {
+            suggestions.onKeyDown(event);
+            if (event.defaultPrevented) return;
             if (event.key !== 'Tab' || !event.shiftKey) return;
             event.preventDefault();
             setMode(nextChatMode(mode));
@@ -248,6 +274,17 @@ export function DeckComposer({
           end={
             <>
               <ModelMenu value={model} onChange={setModel} />
+              {speech ? (
+                <VoicePill
+                  draft={text}
+                  disabled={sending}
+                  onDraft={(next) => {
+                    setVoiceError(null);
+                    setText(next);
+                  }}
+                  onError={setVoiceError}
+                />
+              ) : null}
               <PromptSubmit
                 state={promptAction({
                   hasInput: ready,
@@ -286,39 +323,18 @@ export function DeckComposer({
               event.currentTarget.value = '';
             }}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                className="rounded-full text-muted-foreground"
-                aria-label={t('attach')}
-                onClick={() => picker.current?.click()}
-              >
-                <PlusIcon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {t('attachHint', {
-                text: extensionsOf('text'),
-                table: extensionsOf('table'),
-                template: TEMPLATE_EXTENSIONS.join(', '),
-              })}
-            </TooltipContent>
-          </Tooltip>
-          <ComposerTemplateMenu
+          <ComposerSourceMenu
+            onFiles={() => picker.current?.click()}
             groups={groups}
             inProject={project !== null}
-            selected={selected}
-            pendingFile={templateFile}
-            onSelect={(next) => {
-              // Шаблон из библиотеки выбран осознанно: новый файл больше не нужен.
+            selectedId={selected?.templateId ?? null}
+            pendingFile={templateFile !== null}
+            onSelectTemplate={(next) => {
               setPickedId(next);
               setTemplateFile(null);
               box.aurora.flash();
             }}
-            onUpload={() => templatePicker.current?.click()}
+            onUploadTemplate={() => templatePicker.current?.click()}
           />
           <ModeMenu value={mode} onChange={setMode} />
         </PromptToolbar>
@@ -326,6 +342,7 @@ export function DeckComposer({
       {rejected.length > 0 ? (
         <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
+      {voiceError ? <PromptNote>{t(`voice.${voiceError}`)}</PromptNote> : null}
     </div>
   );
 }

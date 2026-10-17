@@ -376,6 +376,12 @@ export {
   VK_PROJECT_HEADER,
 } from './model-settings.js';
 export {
+  REASONING_EFFORTS,
+  reasoningEffortSchema,
+  reasoningControl,
+  type ReasoningEffort,
+} from './reasoning.js';
+export {
   MODEL_FAMILIES,
   modelFamilySchema,
   modelFamily,
@@ -393,6 +399,8 @@ export {
   buildStatusSchema,
   variantReviewSchema,
   chatPartSchema,
+  modelFailureSchema,
+  type ModelFailure,
   chatMessageSchema,
   chatTurnInputSchema,
   chatTurnRequestSchema,
@@ -414,3 +422,4 @@ export {
   type ChatSummary,
   type ChatDocument,
 } from './chat.js';
+export { finalReviewSchema, type FinalReview } from './generation-review.js';

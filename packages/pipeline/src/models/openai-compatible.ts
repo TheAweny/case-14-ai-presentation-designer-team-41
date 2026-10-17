@@ -1,5 +1,6 @@
 import type { ModelEntry } from '@lct/contracts';
 import type { AgentUsage, ModelProvider, ModelRequest } from './provider.js';
+import { reasoningRequestFields } from './reasoning.js';
 
 export interface OpenAICompatibleOptions {
   readonly model: ModelEntry;
@@ -109,6 +110,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       });
     }
     const body: Record<string, unknown> = {
+      ...reasoningRequestFields(model.servedName ?? model.repo),
       ...model.extraBody,
       model: model.servedName ?? model.repo,
       messages,

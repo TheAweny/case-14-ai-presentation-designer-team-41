@@ -1403,6 +1403,32 @@ describe('composition requirements', () => {
 });
 
 describe('keepOutline', () => {
+  it('keeps approved points even when the planner already repeated the title', () => {
+    const kept = keepOutline(
+      {
+        title: 'Plan',
+        audience: '',
+        goal: '',
+        slides: [
+          { patternId: 'a', purpose: 'Гарантия действует', imageQuery: '', sourceEvidence: {} },
+        ],
+      },
+      {
+        title: 'Approved',
+        audience: '',
+        goal: '',
+        slides: [
+          {
+            title: 'Гарантия действует',
+            points: ['Только при предоплате до 15 октября', 'Стоимость 50 рублей'],
+            kind: 'statement',
+          },
+        ],
+      },
+    );
+    expect(kept.slides[0]?.purpose).toContain('Только при предоплате до 15 октября');
+    expect(kept.slides[0]?.purpose).toContain('Стоимость 50 рублей');
+  });
   it('titles the deck as the outline and gives a slide that lost its claim the outline words', () => {
     const plan = {
       title: 'План',

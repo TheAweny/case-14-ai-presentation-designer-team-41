@@ -15,6 +15,7 @@ import {
   hasProblems,
   isModelEnabled,
   isRoleOptional,
+  usesWriterModelByDefault,
   keyHint,
   normalizeBaseUrl,
   probeInputSchema,
@@ -86,7 +87,7 @@ export interface ResolvedModel {
 }
 
 /** Roles the server connection performs until someone assigns another model. */
-const SERVER_DEFAULT_ROLES: readonly PipelineRole[] = ['assistant', 'planner', 'writer', 'critic'];
+const SERVER_DEFAULT_ROLES: readonly PipelineRole[] = ['writer'];
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -258,7 +259,7 @@ export class ModelSettingsService {
       ? new Map<PipelineRole, StoredRole>()
       : byRole(await this.store.listRoles(actor.userId));
     const usable = (assigned: StoredRole | undefined): assigned is StoredRole =>
-      assigned !== undefined && (assigned.kind === 'disabled' || ids.has(assigned.connectionId));
+      assigned !== undefined && (assigned.kind !== 'model' || ids.has(assigned.connectionId));
     const inherited: PipelineRole[] = [];
     const roles = PIPELINE_ROLES.map((role): RoleAssignment => {
       const mine = own.get(role);
@@ -483,6 +484,9 @@ export class ModelSettingsService {
     const parsed = roleAssignmentSchema.safeParse(raw);
     if (!parsed.success) throw new InvalidModelSettingsInputError();
     const assignment = parsed.data;
+    if (assignment.kind === 'default' && !usesWriterModelByDefault(assignment.role)) {
+      throw new InvalidModelSettingsInputError();
+    }
     if (assignment.kind === 'disabled' && !isRoleOptional(assignment.role)) {
       throw new InvalidModelSettingsInputError();
     }

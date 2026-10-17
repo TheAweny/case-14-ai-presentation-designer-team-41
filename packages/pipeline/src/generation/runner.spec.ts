@@ -20,14 +20,30 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((p) => rm(p, { recursive: true, force: true })));
 });
 
-async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'missing-font') {
+async function exercise(
+  mode:
+    | 'clean'
+    | 'repair'
+    | 'unfixable'
+    | 'cancel'
+    | 'missing-font'
+    | 'post-export-repair'
+    | 'factual-error',
+) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
   const pattern = profile.compositions[0];
-  if (!pattern) throw new Error('Missing fixture pattern');
+  if (!pattern || !pattern.slots[0]) throw new Error('Missing fixture pattern');
+  const firstSlot = pattern.slots[0];
   let checks = 0;
   let exports = 0;
   let repairs = 0;
+  let audits = 0;
+  const exportedSlides: unknown[] = [];
+  const criticInputs: {
+    slides: { texts: { slotId: string; text: string }[] }[];
+    contentHash?: string;
+  }[] = [];
   const events: string[] = [];
   const warnings: { stage: string; code: string; message: string }[] = [];
   const controller = new AbortController();
@@ -59,7 +75,22 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
           ),
         });
       }
-      if (agent === 'critic') return schema.parse({ issues: [] });
+      if (agent === 'critic') {
+        criticInputs.push(structuredClone(input) as (typeof criticInputs)[number]);
+        return schema.parse({
+          issues:
+            mode === 'factual-error'
+              ? [
+                  {
+                    slideIndex: 0,
+                    slotId: firstSlot.slotId,
+                    category: 'factual-error',
+                    message: 'The condition from the source is missing.',
+                  },
+                ]
+              : [],
+        });
+      }
       if (typeof input === 'object' && input !== null && 'previous' in input) repairs++;
       return schema.parse({
         patternId: pattern.patternId,
@@ -79,7 +110,7 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
   };
   const engine = new EngineClient({
     baseUrl: 'http://offline.test',
-    fetchImpl: async (url) => {
+    fetchImpl: async (url, init) => {
       if (String(url).endsWith('/composition-check')) {
         checks++;
         const findings =
@@ -100,19 +131,52 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
         return Response.json({ schemaVersion: 1, findings });
       }
       if (String(url).endsWith('/composition-audit')) {
+        audits++;
+        const findings =
+          mode === 'post-export-repair' && audits === 1
+            ? [
+                {
+                  schemaVersion: 1,
+                  findingId: 'post-export',
+                  origin: 'deterministic',
+                  confidence: 1,
+                  fixability: 'assisted',
+                  checkId: 'placeholder-text',
+                  category: 'content',
+                  severity: 'major',
+                  title: 'Replace text',
+                  detail: 'The copy needs a repair.',
+                  target: {
+                    slideId: 's1',
+                    elementId: `slot-${firstSlot.slotId}`,
+                    variant: 'balanced',
+                    box: null,
+                  },
+                  evidence: {
+                    measured: 'old',
+                    expected: 'repaired',
+                    quote: '',
+                    sources: [],
+                    screenshot: '',
+                  },
+                  proposedPatch: null,
+                },
+              ]
+            : [];
         return Response.json({
           schemaVersion: 1,
           deckId: 'test',
           profile: 'composition',
-          passed: true,
+          passed: findings.length === 0,
           score: 100,
           slideCount: 10,
           counts: { blocker: 0, major: 0, minor: 0, info: 0 },
           categories: [],
-          findings: [],
+          findings,
         });
       }
       exports++;
+      exportedSlides.splice(0, exportedSlides.length, ...JSON.parse(String(init?.body)).slides);
       const outputPath = join(outputDir, 'deck.pptx');
       const pdfPath = join(outputDir, 'deck.pdf');
       await Promise.all([writeFile(outputPath, 'fixture-pptx'), writeFile(pdfPath, 'fixture-pdf')]);
@@ -150,7 +214,15 @@ async function exercise(mode: 'clean' | 'repair' | 'unfixable' | 'cancel' | 'mis
       }
     },
   });
-  return { result, outputDir, events, warnings, counters: () => ({ checks, exports, repairs }) };
+  return {
+    result,
+    outputDir,
+    events,
+    warnings,
+    exportedSlides,
+    criticInputs,
+    counters: () => ({ checks, exports, repairs }),
+  };
 }
 
 describe('real generation orchestration with offline dependencies', () => {
@@ -159,7 +231,8 @@ describe('real generation orchestration with offline dependencies', () => {
     const result = await run.result;
     expect(run.events.at(-1)).toBe('done');
     expect(result.manifest.artifacts.map((a) => a.kind)).toContain('audit');
-    expect(JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'))).toHaveLength(1);
+    const history = JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'));
+    expect(history.at(-1).contentHash).toBe(result.manifest.contentHash);
   });
   it('repairs just the affected slide through the Mastra repair workflow', async () => {
     const run = await exercise('repair');
@@ -167,15 +240,37 @@ describe('real generation orchestration with offline dependencies', () => {
     // One more check settles the fit before the export.
     expect(run.counters()).toEqual({ checks: 3, exports: 1, repairs: 1 });
   });
-  it('still exports the deck when fit fails after bounded repair, warning instead of dropping the variant', async () => {
+  it('refuses export when bounded repair cannot fit the complete content', async () => {
     const run = await exercise('unfixable');
+    await expect(run.result).rejects.toThrow(/fit|overflow|помещ/i);
+    expect(run.counters().exports).toBe(0);
+    expect(run.events.at(-1)).toBe('failed');
+    expect(JSON.parse(await readFile(join(run.outputDir, 'failure.json'), 'utf8'))).toMatchObject({
+      requiresReview: true,
+    });
+  });
+  it('saves and semantically audits the exact final content after a post-export repair', async () => {
+    const run = await exercise('post-export-repair');
     await run.result;
-    // Three variants are mandatory: an unfixable overflow is reported, not fatal.
-    // An engine that never accepts the slot gets every cut the fit settling tries, then the export.
-    expect(run.counters()).toEqual({ checks: 11, exports: 1, repairs: 2 });
-    expect(run.events.at(-1)).toBe('done');
-    expect(JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'))).toHaveLength(3);
-    expect(run.warnings.some((w) => w.code === 'content-review-required')).toBe(true);
+    const saved = JSON.parse(await readFile(join(run.outputDir, 'plan.json'), 'utf8'));
+    expect(saved.map((s: { slide: unknown }) => s.slide)).toEqual(run.exportedSlides);
+    const finalTexts = run.exportedSlides.map(
+      (s) => (s as { texts: { slotId: string; text: string }[] }).texts,
+    );
+    expect(
+      run.criticInputs
+        .at(-1)
+        ?.slides.map((s) => s.texts.map(({ slotId, text }) => ({ slotId, text }))),
+    ).toEqual(finalTexts);
+  });
+  it('includes remaining semantic errors in the final review despite clean geometry', async () => {
+    const run = await exercise('factual-error');
+    await run.result;
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review.contextual.errors).toBeGreaterThan(0);
+    expect(review.errors).toBeGreaterThan(0);
+    expect(review.status).toBe('requires-review');
+    expect(review.contentHash).toBe(run.criticInputs.at(-1)?.contentHash);
   });
   it('never calls the engine export on cancellation', async () => {
     const run = await exercise('cancel');

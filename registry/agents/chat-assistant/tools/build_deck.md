@@ -4,3 +4,10 @@ in a few sentences, with the facts the slides need. `fileIds` are attached mater
 Takes a few minutes; returns the variants, their audit and the one to recommend.
 Use the returned `recommended`; compare errors before warnings. If `auditAvailable` is false,
 the recommendation is a default preference and null audit counts are unknown.
+
+`status` is authoritative. `failed` or `cancelled` with `active: false` means there is no
+running build. Never describe it as running or promise that it will finish later. A failed
+build ends the turn and preserves the approved plan. Do not automatically repeat it.
+Only when the person explicitly asks to retry a failed or cancelled build in a later turn,
+call this tool with the same `planId`, `templateId`, and `retry: true`. Do not propose or approve
+a new plan merely to retry. Running and completed operations are reused, never duplicated.

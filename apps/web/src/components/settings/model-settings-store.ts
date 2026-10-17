@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { getModelSettingsAction } from '@/app/settings-actions';
-import type { ModelSettings } from '@/lib/model-settings';
+import type { ModelSettings, PipelineRole } from '@/lib/model-settings';
 import { writerModels, type WriterModels } from '@/lib/writer-models';
 
 /**
@@ -38,12 +38,17 @@ function load(): void {
  * Модели, которыми можно писать текст; null — настройки ещё не пришли. Каждое новое поле
  * перечитывает настройки: их могли поменять в другой вкладке.
  */
-export function useWriterModels(): WriterModels | null {
+export function useModelSettingsSnapshot(): ModelSettings | null {
   const settings = useSyncExternalStore(
     subscribe,
     () => current,
     () => null,
   );
   useEffect(load, []);
-  return useMemo(() => (settings ? writerModels(settings) : null), [settings]);
+  return settings;
+}
+
+export function useWriterModels(role: PipelineRole = 'writer'): WriterModels | null {
+  const settings = useModelSettingsSnapshot();
+  return useMemo(() => (settings ? writerModels(settings, role) : null), [settings, role]);
 }

@@ -23,6 +23,7 @@ export const PIPELINE_ROLES = [
   'critic',
   'vision',
   'image',
+  'speech',
 ] as const;
 export const pipelineRoleSchema = z.enum(PIPELINE_ROLES);
 export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
@@ -32,12 +33,12 @@ export type PipelineRole = z.infer<typeof pipelineRoleSchema>;
  * from the content pack or are not drawn. Without a plan, copy, audit or visual review it is not.
  */
 export function isRoleOptional(role: PipelineRole): boolean {
-  return role === 'image';
+  return role === 'image' || role === 'speech';
 }
 
 /** A role that, without a model of its own, works with the writer's: the chat assistant. */
 export function usesWriterModelByDefault(role: PipelineRole): boolean {
-  return role === 'assistant';
+  return role === 'assistant' || role === 'planner' || role === 'critic';
 }
 
 /**
@@ -161,6 +162,7 @@ export const roleAssignmentSchema = z.discriminatedUnion('kind', [
     modelId: modelIdSchema,
   }),
   z.object({ role: pipelineRoleSchema, kind: z.literal('disabled') }),
+  z.object({ role: pipelineRoleSchema, kind: z.literal('default') }),
   z.object({ role: pipelineRoleSchema, kind: z.literal('unassigned') }),
 ]);
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;

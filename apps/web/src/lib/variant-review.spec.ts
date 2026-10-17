@@ -62,13 +62,47 @@ describe('resultOfBuild', () => {
     buildId: 'build',
     variants,
     reviews: {
-      d: { errors: 1, warnings: 0 },
-      b: { errors: 2, warnings: 2 },
-      a: { errors: 3, warnings: 3 },
+      d: {
+        errors: 1,
+        warnings: 0,
+        status: 'requires-review' as const,
+        contentRevision: 1,
+        contentHash: 'a'.repeat(64),
+      },
+      b: {
+        errors: 2,
+        warnings: 2,
+        status: 'requires-review' as const,
+        contentRevision: 1,
+        contentHash: 'b'.repeat(64),
+      },
+      a: {
+        errors: 3,
+        warnings: 3,
+        status: 'requires-review' as const,
+        contentRevision: 1,
+        contentHash: 'c'.repeat(64),
+      },
     },
     recommended: 'dense' as const,
     elapsedMs: 325000,
   };
+
+  it('does not present old counts without a verified revision as a complete audit', () => {
+    const result = resultOfBuild(
+      {
+        ...part,
+        reviews: {
+          d: { errors: 0, warnings: 0 },
+          b: { errors: 0, warnings: 0 },
+          a: { errors: 0, warnings: 0 },
+        },
+      },
+      decks,
+    );
+    expect(result.reviews).toBeNull();
+    expect(result.recommended).toBe('balanced');
+  });
 
   it('показывает сохранённый аудит сборки даже когда аудит импортированных слайдов другой', () => {
     const dense = decks[0];
@@ -103,9 +137,9 @@ describe('resultOfBuild', () => {
       {
         ...part,
         reviews: {
-          d: { errors: 13, warnings: 13 },
-          b: { errors: 7, warnings: 7 },
-          a: { errors: 4, warnings: 6 },
+          d: { ...part.reviews.d, errors: 13, warnings: 13 },
+          b: { ...part.reviews.b, errors: 7, warnings: 7 },
+          a: { ...part.reviews.a, errors: 4, warnings: 6 },
         },
       },
       decks,

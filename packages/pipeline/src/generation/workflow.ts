@@ -45,6 +45,8 @@ export interface GenerationDependencies {
    * composition with a place for a picture, so no slide is left with an empty frame.
    */
   imagesAvailable?: boolean;
+  /** A model's draft is a story to lay out, never independent evidence of its facts. */
+  outlineIsSource?: boolean;
   /** The laid-out slides, as soon as the plan is made: pictures are drawn while copy is written. */
   onPlan?: (slides: readonly PlannedSlide[]) => void;
 }
@@ -75,6 +77,7 @@ const taskSchema = z.object({
   title: z.string(),
   /** The approved title of this slide, when the person approved an outline. */
   slideTitle: z.string().optional(),
+  approvedSlide: deckOutlineSchema.shape.slides.element.optional(),
   brief: z.string(),
   purpose: z.string(),
   imageQuery: z.string(),
@@ -85,6 +88,7 @@ export const writtenSchema = z.object({
   title: z.string(),
   /** The claim the plan gave the slide: the deck-wide checks and the repair read it. */
   purpose: z.string().default(''),
+  approvedSlide: deckOutlineSchema.shape.slides.element.optional(),
   slide: composedSlideSchema,
   imageQuery: z.string(),
 });
@@ -1144,13 +1148,18 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...slide,
           patternId: composition.patternId,
           narrative: result.slides.map((s) => s.purpose),
-          ...(outline?.slides[index] ? { slideTitle: outline.slides[index].title } : {}),
+          ...(outline?.slides[index]
+            ? { slideTitle: outline.slides[index].title, approvedSlide: outline.slides[index] }
+            : {}),
           index,
           total: result.slides.length,
           audience: result.audience,
           goal: result.goal,
           title: result.title,
-          brief: inputData.brief,
+          brief:
+            outline && deps.outlineIsSource !== false
+              ? JSON.stringify({ brief: inputData.brief, approvedOutline: outline })
+              : inputData.brief,
           composition,
         };
       });
@@ -1215,6 +1224,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           index: inputData.index,
           brief: inputData.brief,
           purpose: inputData.purpose,
+          ...(inputData.approvedSlide ? { approvedSlide: inputData.approvedSlide } : {}),
           composition: inputData.composition,
           previous: current,
           corrections: slotCorrections(current, inputData.composition, context),
@@ -1245,6 +1255,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         index: inputData.index,
         title: inputData.title,
         purpose: inputData.purpose,
+        ...(inputData.approvedSlide ? { approvedSlide: inputData.approvedSlide } : {}),
         slide,
         imageQuery: inputData.imageQuery,
       };
@@ -1275,11 +1286,15 @@ export function keepOutline(
     goal: outline.goal || plan.goal,
     slides: plan.slides.map((slide, index) => {
       const planned = outline.slides[index];
-      if (!planned || slide.purpose.includes(planned.title)) return slide;
+      if (
+        !planned ||
+        [planned.title, ...planned.points].every((claim) => slide.purpose.includes(claim))
+      )
+        return slide;
       const points = planned.points.join('; ');
       return {
         ...slide,
-        purpose: (points ? `${planned.title} — ${points}` : planned.title).slice(0, 600),
+        purpose: points ? `${planned.title} — ${points}` : planned.title,
       };
     }),
   };
@@ -1461,6 +1476,7 @@ export const repairTaskSchema = z.object({
   brief: z.string(),
   /** The slide's claim from the plan: an empty card is filled with a point that supports it. */
   purpose: z.string().optional(),
+  approvedSlide: deckOutlineSchema.shape.slides.element.optional(),
   composition: compositionSchema,
   previous: composedSlideSchema,
   corrections: z.array(z.object({ slotId: z.string(), message: z.string() })),
@@ -1546,6 +1562,7 @@ async function rewriteSlide(
   const input = (feedback?: string) => ({
     brief: task.brief,
     ...(task.purpose ? { purpose: task.purpose } : {}),
+    ...(task.approvedSlide ? { approvedSlide: task.approvedSlide } : {}),
     // The filled slots of the same slide, so a new point does not repeat them.
     otherSlots: task.previous.texts
       .filter((t) => t.text.trim() && !slots.some((s) => s.slotId === t.slotId))

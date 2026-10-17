@@ -1,36 +1,26 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { ChevronDownIcon, CloudUploadIcon, TemplateIcon } from '@/components/ui/icons';
-import { Button } from '@/components/ui/button';
+import { CloudUploadIcon } from '@/components/ui/icons';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PaletteStrip, roleColor } from '@/components/library/template-swatch';
-import { templateTitle, type TemplateGroups } from '@/lib/composer-templates';
+import type { TemplateGroups } from '@/lib/composer-templates';
 import type { TemplateSummary } from '@/lib/library-source';
-import { cn } from '@/lib/utils';
-import { PROMPT_CHIP } from './prompt-box';
 
 /**
- * Выбор шаблона в поле генерации. Шаблоны — библиотека: на странице проекта первыми идут
- * прикреплённые к нему («В проекте»), ниже — остальные, недавно загруженные первыми. Любой из
- * них годится: презентация попадёт туда, где стоит поле, а не в проект шаблона.
- *
- * «Загрузить шаблон…» кладёт файл в поле чипом, как скрепка: разбирать его будет агент в
- * разговоре. Пока чип есть, кнопка показывает новый файл, а выбор в меню убирает чип.
+ * Шаблоны внутри меню «+». На странице проекта первыми идут прикреплённые к нему, ниже —
+ * остальные. «Загрузить шаблон…» кладёт файл чипом над полем: разбирать его будет агент.
  */
-export function ComposerTemplateMenu({
+export function TemplateMenuSection({
   groups,
   inProject,
-  selected,
+  selectedId,
   pendingFile,
   onSelect,
   onUpload,
@@ -38,10 +28,10 @@ export function ComposerTemplateMenu({
   groups: TemplateGroups;
   /** Поле стоит на странице проекта: группа «В проекте» видна, даже пустая. */
   inProject: boolean;
-  /** Шаблон библиотеки, выбранный сейчас; null — выбрать нечего или ещё не выбрали. */
-  selected: TemplateSummary | null;
-  /** Новый файл шаблона из чипа поля: пока он есть, презентация соберётся на нём. */
-  pendingFile: File | null;
+  /** Id шаблона библиотеки, который сейчас выбран; null — человек ещё не выбирал. */
+  selectedId: string | null;
+  /** Новый файл шаблона уже лежит чипом: отметка в списке снята, файл важнее. */
+  pendingFile: boolean;
   onSelect: (templateId: string) => void;
   /** Открыть выбор файла шаблона. */
   onUpload: () => void;
@@ -49,99 +39,60 @@ export function ComposerTemplateMenu({
   const t = useTranslations('composer.template');
   const { own, others } = groups;
   const layouts = (template: TemplateSummary) => t('layouts', { count: template.layouts.length });
-  const empty = !pendingFile && !selected;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          className={cn(
-            PROMPT_CHIP,
-            // Без шаблона собирать не из чего: кнопка — первое, что нужно сделать, и выглядит
-            // пустым местом, которое ждёт выбора.
-            empty && 'border-dashed border-foreground/40 text-foreground',
-          )}
-          aria-label={
-            pendingFile
-              ? t('changeNew', { file: pendingFile.name })
-              : selected
-                ? t('change', { file: selected.fileName })
-                : t('chooseLabel')
-          }
-        >
-          {selected && !pendingFile ? (
-            <PaletteStrip
-              system={selected.designSystem}
-              className="w-7 shrink-0 ring-1 ring-border"
-            />
-          ) : (
-            <TemplateIcon data-icon="inline-start" />
-          )}
-          <span className="truncate">
-            {pendingFile
-              ? t('newFile', { file: pendingFile.name })
-              : selected
-                ? templateTitle(selected.fileName)
-                : t('choose')}
-          </span>
-          <ChevronDownIcon className="opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-80 max-w-[calc(100vw-2rem)]" aria-label={t('menu')}>
-        <DropdownMenuRadioGroup
-          value={pendingFile ? '' : (selected?.templateId ?? '')}
-          onValueChange={onSelect}
-        >
-          {inProject ? (
-            <>
-              <DropdownMenuLabel>{t('own')}</DropdownMenuLabel>
-              {own.length > 0 ? (
-                own.map((template) => (
-                  <TemplateItem
-                    key={template.templateId}
-                    template={template}
-                    meta={layouts(template)}
-                  />
-                ))
-              ) : (
-                <p className="px-2 pb-1.5 text-xs text-muted-foreground">{t('ownEmpty')}</p>
-              )}
-            </>
-          ) : null}
-          {others.length > 0 ? (
-            <>
-              {inProject ? <DropdownMenuSeparator /> : null}
-              <DropdownMenuLabel>{inProject ? t('others') : t('library')}</DropdownMenuLabel>
-              {/* Библиотека растёт без предела: длинный список прокручивается внутри меню. */}
-              <div className="max-h-60 overflow-y-auto">
-                {others.map((template) => (
-                  <TemplateItem
-                    key={template.templateId}
-                    template={template}
-                    meta={layouts(template)}
-                  />
-                ))}
-              </div>
-            </>
-          ) : inProject ? null : (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('libraryEmpty')}</p>
-          )}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="gap-2.5" onSelect={onUpload}>
-          <span className="grid h-6.5 w-11 shrink-0 place-items-center rounded-sm ring-1 ring-border">
-            <CloudUploadIcon />
-          </span>
-          <span className="flex min-w-0 flex-col">
-            <span>{t('upload')}</span>
-            <span className="text-muted-foreground">{t('uploadHint')}</span>
-          </span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuRadioGroup
+        value={pendingFile ? '' : (selectedId ?? '')}
+        onValueChange={onSelect}
+      >
+        {inProject ? (
+          <>
+            <DropdownMenuLabel>{t('own')}</DropdownMenuLabel>
+            {own.length > 0 ? (
+              own.map((template) => (
+                <TemplateItem
+                  key={template.templateId}
+                  template={template}
+                  meta={layouts(template)}
+                />
+              ))
+            ) : (
+              <p className="px-2 pb-1.5 text-xs text-muted-foreground">{t('ownEmpty')}</p>
+            )}
+          </>
+        ) : null}
+        {others.length > 0 ? (
+          <>
+            {inProject ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuLabel>{inProject ? t('others') : t('library')}</DropdownMenuLabel>
+            {/* Библиотека растёт без предела: длинный список прокручивается внутри меню. */}
+            <div className="max-h-60 overflow-y-auto">
+              {others.map((template) => (
+                <TemplateItem
+                  key={template.templateId}
+                  template={template}
+                  meta={layouts(template)}
+                />
+              ))}
+            </div>
+          </>
+        ) : inProject ? null : (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('libraryEmpty')}</p>
+        )}
+      </DropdownMenuRadioGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem className="gap-2.5" onSelect={onUpload}>
+        <span className="grid h-6.5 w-11 shrink-0 place-items-center rounded-sm ring-1 ring-border">
+          <CloudUploadIcon />
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span>{t('upload')}</span>
+          <span className="text-muted-foreground">{t('uploadHint')}</span>
+        </span>
+      </DropdownMenuItem>
+    </>
   );
 }
 

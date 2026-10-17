@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { deckOutlineSchema } from './generation.js';
 import { layoutVariantSchema } from './run-config.js';
 import { modelRefSchema } from './model-settings.js';
+import { reasoningEffortSchema } from './reasoning.js';
 
 /**
  * A chat with the deck assistant. The API owns the conversation: the web sends a turn, the agent
@@ -77,6 +78,9 @@ export type BuildStatus = z.infer<typeof buildStatusSchema>;
 export const variantReviewSchema = z.object({
   errors: z.number().int().nonnegative(),
   warnings: z.number().int().nonnegative(),
+  status: z.enum(['complete', 'requires-review', 'unknown']).optional(),
+  contentRevision: z.number().int().positive().optional(),
+  contentHash: z.string().length(64).optional(),
 });
 
 /**
@@ -84,6 +88,23 @@ export const variantReviewSchema = z.object({
  * call with what the model saw back (`output`), so the next turn replays the conversation exactly;
  * the other parts are what a tool showed the person.
  */
+export const modelFailureSchema = z.object({
+  kind: z.enum([
+    'rate-limit',
+    'unauthorized',
+    'unavailable',
+    'timeout',
+    'context',
+    'unsupported',
+    'not-configured',
+    'unknown',
+  ]),
+  modelId: z.string().optional(),
+  connectionId: z.string().optional(),
+  retryAt: z.number().int().optional(),
+});
+export type ModelFailure = z.infer<typeof modelFailureSchema>;
+
 export const chatPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({
@@ -98,6 +119,10 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     type: z.literal('plan'),
     callId: z.string().min(1),
     planId: z.string().uuid(),
+    /** Revision approved by the person; older stored cards start at revision one. */
+    revision: z.number().int().positive().default(1),
+    /** Only an explicit approval request makes the outline factual source material. */
+    approvalSource: z.enum(['user', 'model']).optional(),
     outline: deckOutlineSchema,
     /** The template the agent means to build with; null — not chosen yet. */
     templateId: z.string().uuid().nullable(),
@@ -116,6 +141,9 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     type: z.literal('build'),
     callId: z.string().min(1),
     buildId: z.string().uuid(),
+    /** A plan revision is an idempotent build operation inside the chat. */
+    planId: z.string().uuid().nullable().default(null),
+    planRevision: z.number().int().positive().nullable().default(null),
     templateId: z.string().uuid(),
     templateName: z.string(),
     /** The balanced run the progress follows, and all three; empty while the template prepares. */
@@ -164,7 +192,11 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     before: z.string().max(4000),
     text: z.string().max(4000),
   }),
-  z.object({ type: z.literal('error'), message: z.string().max(2000) }),
+  z.object({
+    type: z.literal('error'),
+    message: z.string().max(2000),
+    failure: modelFailureSchema.optional(),
+  }),
 ]);
 export type ChatPart = z.infer<typeof chatPartSchema>;
 export type SlideEditPart = Extract<ChatPart, { type: 'slide-edit' }>;
@@ -209,6 +241,7 @@ export const chatTurnInputSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('approve-plan'),
     planId: z.string().uuid(),
+    revision: z.number().int().positive().default(1),
     /** The plan as the person left it in the card: they may have edited it. */
     outline: deckOutlineSchema,
     templateId: z.string().uuid(),
@@ -217,9 +250,16 @@ export const chatTurnInputSchema = z.discriminatedUnion('type', [
 export type ChatTurnInput = z.infer<typeof chatTurnInputSchema>;
 
 export const chatTurnRequestSchema = z.object({
+  /** Stable across transport retries. Older clients can omit it. */
+  requestId: z.string().uuid().optional(),
   mode: chatModeSchema,
   /** The model the agent answers with; null — the model of the assistant role. */
   model: modelRefSchema.nullable().default(null),
+  /**
+   * Depth for models that accept `reasoning_effort`. Ignored for every other model, including Qwen.
+   * Older clients omit it.
+   */
+  reasoningEffort: reasoningEffortSchema.nullable().default(null),
   /** The project a new chat belongs to; ignored for a chat that exists. */
   projectId: z.string().nullable().default(null),
   /** How many slides the person usually wants (their setting); null — as the material needs. */
@@ -270,6 +310,7 @@ export const chatSummarySchema = z.object({
 export type ChatSummary = z.infer<typeof chatSummarySchema>;
 
 export const chatDocumentSchema = chatSummarySchema.extend({
+  model: modelRefSchema.nullable().optional(),
   messages: z.array(chatMessageSchema),
   /** A turn is being answered right now: the web attaches to its stream. */
   running: z.boolean(),

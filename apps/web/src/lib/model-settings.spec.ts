@@ -160,8 +160,8 @@ describe('roles', () => {
     ],
   });
 
-  it('only the illustrator can be switched off', () => {
-    expect(PIPELINE_ROLES.filter(isRoleOptional)).toEqual(['image']);
+  it('only the illustrator and voice transcription can be switched off', () => {
+    expect(PIPELINE_ROLES.filter(isRoleOptional)).toEqual(['image', 'speech']);
   });
 
   it('lists required roles still waiting for a model', () => {

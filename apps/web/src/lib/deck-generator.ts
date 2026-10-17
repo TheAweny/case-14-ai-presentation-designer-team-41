@@ -204,8 +204,12 @@ export function addContentFiles(
   const accepted = added.filter((file) => contentFileKind(file.name) !== null && file.size > 0);
   const same = (a: File, b: File) =>
     a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+  const files = [...current];
+  for (const file of accepted) {
+    if (!files.some((had) => same(had, file))) files.push(file);
+  }
   return {
-    files: [...current, ...accepted.filter((file) => !current.some((had) => same(had, file)))],
+    files,
     rejected: added.filter((file) => !accepted.includes(file)).map((file) => file.name),
   };
 }

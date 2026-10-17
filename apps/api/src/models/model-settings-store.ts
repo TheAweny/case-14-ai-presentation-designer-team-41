@@ -75,7 +75,7 @@ interface ConnectionRow {
 
 interface RoleRow {
   role: PipelineRole;
-  kind: 'model' | 'disabled';
+  kind: 'model' | 'disabled' | 'default';
   connection_id: string | null;
   model_id: string | null;
 }
@@ -95,6 +95,7 @@ function connectionOf(row: ConnectionRow): StoredConnection {
 }
 
 function roleOf(row: RoleRow): StoredRole | null {
+  if (row.kind === 'default') return { role: row.role, kind: 'default' };
   if (row.kind === 'disabled') return { role: row.role, kind: 'disabled' };
   if (!row.connection_id || !row.model_id) return null;
   return { role: row.role, kind: 'model', connectionId: row.connection_id, modelId: row.model_id };

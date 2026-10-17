@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { ChatMessage, ChatPart } from '@lct/contracts';
 import {
@@ -77,6 +77,112 @@ const ask: ChatTool = {
 };
 
 describe('runChatTurn', () => {
+  it('ends a terminal tool failure before the model can invent a running build or retry it', async () => {
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"build"}' }] },
+      { text: 'Сборка уже запущена.' },
+    ]);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [
+        {
+          ...echo,
+          async run(_input, context) {
+            context.show({ type: 'error', message: 'Сборка остановлена: HTTP 429.' });
+            return { output: { status: 'failed', active: false }, failed: true, stop: true };
+          },
+        },
+      ],
+      specs: [{ name: 'echo', description: 'Build.', parameters: {} }],
+      mode: 'auto',
+      writer: answer,
+      signal: new AbortController().signal,
+    });
+    expect(result.end).toBe('failed');
+    expect(model.requests).toHaveLength(1);
+    expect(answer.parts).not.toContainEqual(
+      expect.objectContaining({ type: 'text', text: 'Сборка уже запущена.' }),
+    );
+  });
+
+  it('never dispatches a tool from a truncated model step', async () => {
+    const run = vi.fn(echo.run);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model: scripted([
+        { truncated: true, toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+      ]),
+      instructions: 'system',
+      history: [],
+      tools: [{ ...echo, run }],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(run).not.toHaveBeenCalled();
+    expect(result.end).toBe('incomplete');
+    expect(answer.parts.filter((part) => part.type === 'tool')).toEqual([
+      expect.objectContaining({ status: 'failed' }),
+    ]);
+  });
+
+  it('treats an empty answer as incomplete', async () => {
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model: scripted([{}]),
+      instructions: 'system',
+      history: [],
+      tools: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(result.end).toBe('incomplete');
+  });
+
+  it('checks cancellation immediately before dispatch, even if the model ignores abort', async () => {
+    const control = new AbortController();
+    const run = vi.fn(echo.run);
+    const { writer: answer } = writer();
+    const pending = runChatTurn({
+      model: {
+        model: 'ignores-abort',
+        async step() {
+          control.abort();
+          return {
+            text: '',
+            toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }],
+            truncated: false,
+            inputTokens: 0,
+            outputTokens: 0,
+          };
+        },
+      },
+      instructions: 'system',
+      history: [],
+      tools: [{ ...echo, run }],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: control.signal,
+    });
+    await expect(pending).rejects.toThrow();
+    expect(run).not.toHaveBeenCalled();
+  });
   it('runs the tools the model calls and gives it their results', async () => {
     const model = scripted([
       { text: 'Проверю.', toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
@@ -88,7 +194,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [{ role: 'user', content: 'Скажи да' }],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -125,7 +235,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -149,7 +263,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo, ask],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -173,7 +291,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
     });
@@ -217,7 +339,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
       loopNudge: 'Сделай следующий шаг.',
@@ -246,7 +372,11 @@ describe('runChatTurn', () => {
       instructions: 'system',
       history: [],
       tools: [echo],
-      specs: [],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
       writer: answer,
       signal: AbortSignal.timeout(5000),
       maxSteps: 3,

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ensureLocalStorageDirectory } from './mastra.js';
+import { ensureLocalStorageDirectory, createMastra, closeMastra } from './mastra.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -13,6 +13,25 @@ afterEach(() => {
 });
 
 describe('Mastra storage setup', () => {
+  it('releases the local database after shutdown', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lct-mastra-close-'));
+    temporaryDirectories.push(root);
+    const mastra = createMastra({ storageUrl: `file:${join(root, 'mastra.db')}` });
+    await mastra.getStorage()?.init();
+    await closeMastra(mastra);
+    rmSync(root, { force: true, recursive: true });
+  });
+  it('initializes local storage concurrently and releases it after shutdown', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'lct-mastra-concurrent-'));
+    temporaryDirectories.push(root);
+    const mastra = createMastra({ storageUrl: `file:${join(root, 'mastra.db')}` });
+    try {
+      await Promise.all([mastra.getStorage()?.init(), mastra.getStorage()?.init()]);
+    } finally {
+      await closeMastra(mastra);
+    }
+    rmSync(root, { force: true, recursive: true });
+  });
   it('creates the parent directory for a local LibSQL file', () => {
     const root = mkdtempSync(join(tmpdir(), 'lct-mastra-'));
     temporaryDirectories.push(root);

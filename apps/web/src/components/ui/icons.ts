@@ -120,6 +120,7 @@ export {
   IconMinus as MinusIcon,
   IconNotes as NotesIcon,
   IconPalette as PaletteIcon,
+  IconMicrophone as DictateIcon,
   IconPaperclip as AttachIcon,
   IconPencil as EditorIcon,
   IconPhoto as ImageIcon,

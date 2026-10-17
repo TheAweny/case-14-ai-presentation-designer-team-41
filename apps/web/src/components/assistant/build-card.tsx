@@ -1,18 +1,16 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { AnimatedCollapse } from '@/components/ui/animated-collapse';
+import { CallChip, StatusMark } from './status-mark';
+import { TaskGlyph } from './task-glyph';
 import { useTranslations } from 'next-intl';
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  RetryIcon,
-  SpinnerIcon,
-  WarningIcon,
-} from '@/components/ui/icons';
+import { ChevronDownIcon, RetryIcon, WarningIcon } from '@/components/ui/icons';
 import { SlideView } from '@lct/slide-renderer';
 import { Button } from '@/components/ui/button';
 import { GENERATION_BUDGET_MS, type GenerationStage } from '@/lib/deck-generator';
-import type { GenerationRun, GenerationPhase } from '@/lib/generation-runs';
+import type { GenerationRun } from '@/lib/generation-runs';
 import { cn } from '@/lib/utils';
 import { formatElapsed, useNow } from './elapsed';
 import { generationRuns, useRun } from './session';
@@ -54,15 +52,21 @@ export function BuildCard({
   return <BuildCardView run={run} latest={latest} retry={retry} />;
 }
 
-function BuildCardView({
+export type BuildRun = Pick<
+  GenerationRun,
+  'runId' | 'phase' | 'progress' | 'slides' | 'startedAt' | 'finishedAt' | 'failure'
+>;
+
+export function BuildCardView({
   run,
   latest,
   retry,
 }: {
-  run: GenerationRun;
+  run: BuildRun;
   latest: boolean;
   retry: boolean;
 }) {
+  const reduce = useReducedMotion();
   const t = useTranslations('assistant.work');
   const tb = useTranslations('assistant.build');
   const statusText = useRunStatusText();
@@ -80,7 +84,12 @@ function BuildCardView({
     phase === 'done'
       ? tb('doneTitle', { time: formatElapsed(elapsed) })
       : statusText(runStatus(run, latest));
-  const failure = phase === 'failed' ? run.failure?.message || t('failedUnknown') : null;
+  const failure =
+    phase === 'failed'
+      ? /HTTP 429\b/.test(run.failure?.message ?? '')
+        ? t('rateLimited')
+        : run.failure?.message || t('failedUnknown')
+      : null;
   const retryable =
     retry &&
     ((phase === 'cancelled' && !superseded) || (phase === 'failed' && run.failure?.retryable));
@@ -93,12 +102,15 @@ function BuildCardView({
         aria-controls={stepsId}
         onClick={() => setExpanded(!open)}
         className={cn(
-          'group flex max-w-full items-center gap-2 self-start rounded-md py-1 pr-1 text-left text-[0.8125rem] outline-none',
+          'group flex w-full max-w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[0.8125rem] outline-none',
           'text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
           phase === 'failed' && 'text-destructive hover:text-destructive',
         )}
       >
-        <PhaseGlyph phase={phase} />
+        <TaskGlyph
+          state={phase}
+          className={running ? 'text-[var(--aurora-color,var(--foreground))]' : undefined}
+        />
         <span className={cn('min-w-0 truncate', running && 'assistant-shimmer')}>{title}</span>
         {running ? (
           <span className="shrink-0 tabular-nums opacity-70">
@@ -111,42 +123,44 @@ function BuildCardView({
         <ChevronDownIcon
           aria-hidden
           className={cn(
-            'size-3.5 shrink-0 opacity-60 transition-transform duration-200 motion-reduce:transition-none',
+            'ml-auto size-3.5 shrink-0 opacity-60 transition-transform duration-200 motion-reduce:transition-none',
             open ? 'rotate-0' : '-rotate-90',
           )}
         />
       </button>
 
-      <div
-        id={stepsId}
-        className={cn(
-          'grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none',
-          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <ol
-            aria-label={tb('stages')}
-            className="ml-[7px] flex flex-col gap-2 border-l border-border py-1.5 pl-4"
-          >
-            {progress.stages.map((stage) => (
-              <StepRow key={stage.stage} stage={stage} run={run} />
-            ))}
-            {progress.warnings.map((warning, at) => (
-              <li
-                key={`${warning.code}-${at}`}
-                className="flex gap-2 text-[0.8125rem] text-muted-foreground"
-              >
-                <WarningIcon
-                  aria-hidden
-                  className="mt-0.5 size-3.5 shrink-0 text-(--project-yellow)"
-                />
-                {warning.message}
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
+      <AnimatedCollapse open={open} id={stepsId}>
+        {running ? (
+          <div className="mx-2 mb-3 mt-1 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+            <motion.div
+              className="h-full origin-left rounded-full bg-[var(--aurora-color,var(--foreground))] opacity-60"
+              initial={false}
+              animate={{ scaleX: Math.max(0.02, progress.percent / 100) }}
+              transition={{ duration: reduce ? 0 : 0.35, ease: 'easeOut' }}
+            />
+          </div>
+        ) : null}
+        <ol
+          aria-label={tb('stages')}
+          className="ml-2 flex flex-col gap-1 border-l border-border py-1 pl-2"
+        >
+          {progress.stages.map((stage) => (
+            <StepRow key={stage.stage} stage={stage} run={run} />
+          ))}
+          {progress.warnings.map((warning, at) => (
+            <li
+              key={`${warning.code}-${at}`}
+              className="flex gap-2 text-[0.8125rem] text-muted-foreground"
+            >
+              <WarningIcon
+                aria-hidden
+                className="mt-0.5 size-3.5 shrink-0 text-(--project-yellow)"
+              />
+              {warning.message}
+            </li>
+          ))}
+        </ol>
+      </AnimatedCollapse>
 
       {failure !== null || retryable ? (
         <div className="flex items-center gap-3 pl-6">
@@ -171,35 +185,23 @@ function BuildCardView({
   );
 }
 
-/** Знак сборки в строке-сводке: идёт, готова, сбой или остановлена. */
-function PhaseGlyph({ phase }: { phase: GenerationPhase }) {
-  if (phase === 'running') {
-    return (
-      <SpinnerIcon
-        aria-hidden
-        className="size-3.5 shrink-0 animate-spin text-[var(--aurora-color,var(--foreground))] motion-reduce:animate-none"
-      />
-    );
-  }
-  if (phase === 'done') return <CheckIcon aria-hidden className="size-3.5 shrink-0" />;
-  if (phase === 'failed') return <WarningIcon aria-hidden className="size-3.5 shrink-0" />;
-  return (
-    <span aria-hidden className="grid size-3.5 shrink-0 place-items-center">
-      ·
-    </span>
-  );
-}
-
 /**
  * Шаг ленты: этап пайплайна, его состояние и чем он занят. У вёрстки под строкой растут слайды —
  * по нажатию они открываются крупно.
  */
-function StepRow({ stage, run }: { stage: GenerationStage; run: GenerationRun }) {
+function StepRow({ stage, run }: { stage: GenerationStage; run: BuildRun }) {
+  const reduce = useReducedMotion();
   const t = useTranslations('assistant.work');
   const tb = useTranslations('assistant.build');
   const tv = useTranslations('assistant.variants');
   const [gallery, setGallery] = useState<{ start: number; key: number } | null>(null);
-  const running = stage.state === 'running';
+  const running = stage.state === 'running' && run.phase === 'running';
+  const state =
+    stage.state === 'running' && !running
+      ? run.phase === 'failed'
+        ? 'failed'
+        : 'cancelled'
+      : stage.state;
   const count =
     running && stage.total !== null && stage.total > 1
       ? t('stageCount', { done: stage.done ?? 0, total: stage.total })
@@ -214,7 +216,12 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: GenerationRun })
   const showSlides = layingOut && stage.state !== 'pending' && total !== null && designSystem;
 
   return (
-    <li className="flex flex-col gap-2">
+    <motion.li
+      layout="position"
+      initial={false}
+      transition={{ duration: reduce ? 0 : 0.2 }}
+      className="flex flex-col gap-2 py-0.5"
+    >
       <p
         className={cn(
           'flex min-w-0 items-center gap-2 text-[0.8125rem]',
@@ -223,18 +230,10 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: GenerationRun })
           stage.state === 'failed' && 'text-destructive',
         )}
       >
-        <span aria-hidden className="grid size-3.5 shrink-0 place-items-center">
-          {stage.state === 'done' ? (
-            <CheckIcon className="size-3.5" />
-          ) : running ? (
-            <SpinnerIcon className="size-3.5 animate-spin motion-reduce:animate-none" />
-          ) : stage.state === 'failed' ? (
-            <WarningIcon className="size-3.5" />
-          ) : (
-            <span className="size-1 rounded-full bg-current opacity-60" />
-          )}
-        </span>
-        <span className="shrink-0">{t(`stages.${stage.stage}`)}</span>
+        <StatusMark status={state} />
+        <CallChip active={running} failed={stage.state === 'failed'}>
+          <span className="shrink-0">{t(`stages.${stage.stage}`)}</span>
+        </CallChip>
         <span className="sr-only">, {t(`stageStates.${stage.state}`)}</span>
         {detail ? (
           <span className="min-w-0 truncate text-muted-foreground">
@@ -300,6 +299,6 @@ function StepRow({ stage, run }: { stage: GenerationStage; run: GenerationRun })
           start={gallery.start}
         />
       ) : null}
-    </li>
+    </motion.li>
   );
 }

@@ -11,12 +11,17 @@ import { isSettingsShortcut, withSettings, type SettingsSection } from '@/lib/se
  * перерисовывается, а Next видит новый параметр в `useSearchParams`. «Назад» после закрытия
  * уводит туда, откуда пришли, а не открывает окно снова.
  */
-export function openSettings(section: SettingsSection = 'general'): void {
-  window.history.replaceState(null, '', withSettings(window.location.href, section));
+export function openSettings(section: SettingsSection = 'general', connectionId?: string): void {
+  const url = new URL(withSettings(window.location.href, section), window.location.href);
+  if (connectionId) url.searchParams.set('modelConnection', connectionId);
+  else url.searchParams.delete('modelConnection');
+  window.history.replaceState(null, '', url.toString());
 }
 
 export function closeSettings(): void {
-  window.history.replaceState(null, '', withSettings(window.location.href, null));
+  const url = new URL(withSettings(window.location.href, null), window.location.href);
+  url.searchParams.delete('modelConnection');
+  window.history.replaceState(null, '', url.toString());
 }
 
 /**

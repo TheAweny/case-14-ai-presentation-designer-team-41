@@ -34,7 +34,7 @@
   },
   "model": {
     "change": "Model: {model}. Change model",
-    "menu": "Text model",
+    "menu": "Model",
     "default": "default",
     "connect": "Connect a model",
     "manage": "Manage models…",
@@ -56,7 +56,33 @@
       "gemma": "Gemma",
       "yi": "Yi",
       "other": "Other"
+    },
+    "scope": "For this chat",
+    "defaultModel": "{model} · Default",
+    "chooseDefault": "Choose a model",
+    "useDefault": "Use default",
+    "unavailable": "Model unavailable",
+    "unavailableHint": "{model} is disabled or removed. Choose another model.",
+    "separateRoles": "Generation uses separate task models",
+    "roles": {
+      "planner": "Planning",
+      "critic": "Review"
+    },
+    "effort": "Depth",
+    "effortLabel": "Reasoning depth",
+    "thinkingOn": "Reasoning is on",
+    "levels": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
     }
+  },
+  "voice": {
+    "start": "Dictate",
+    "stop": "Stop dictation",
+    "empty": "The recording is empty.",
+    "failed": "The recording could not be transcribed.",
+    "blocked": "The microphone is unavailable."
   },
   "prompt": {
     "stop": "Stop",
@@ -64,7 +90,7 @@
   },
   "modelRequired": {
     "title": "Connect a model first",
-    "description": "Generation cannot start without a checked model. Connect a provider and choose a writer model in Settings.",
+    "description": "Connect a provider and choose the primary model in settings.",
     "connect": "Connect model",
     "later": "Not now",
     "close": "Close model message",

@@ -8,19 +8,12 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { AgentIcon, ChevronDownIcon, ListIcon, RocketIcon, type Icon } from '@/components/ui/icons';
+import { ChevronDownIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-
-const ICONS: Readonly<Record<ChatMode, Icon>> = {
-  chat: AgentIcon,
-  plan: ListIcon,
-  auto: RocketIcon,
-};
 
 const STORAGE_KEY = 'lct.chatMode';
 const listeners = new Set<() => void>();
@@ -74,9 +67,8 @@ export function ModeMenu({
   compact?: boolean;
 }) {
   const t = useTranslations('deckChat.modes');
-  const Current = ICONS[value];
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -86,13 +78,11 @@ export function ModeMenu({
           aria-label={`${t('label')}: ${t(`${value}.name`)}`}
           title={t(`${value}.description`)}
         >
-          <Current data-icon="inline-start" />
           <span className="truncate">{t(`${value}.name`)}</span>
           <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
-        <DropdownMenuLabel>{t('label')}</DropdownMenuLabel>
+      <DropdownMenuContent side="top" align="start" glow>
         <DropdownMenuRadioGroup
           value={value}
           onValueChange={(next) => {
@@ -100,20 +90,11 @@ export function ModeMenu({
             if (mode) onChange(mode);
           }}
         >
-          {CHAT_MODES.map((mode) => {
-            const ModeIcon = ICONS[mode];
-            return (
-              <DropdownMenuRadioItem key={mode} value={mode} className="items-start gap-2 py-2">
-                <ModeIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="font-medium">{t(`${mode}.name`)}</span>
-                  <span className="text-xs text-pretty text-muted-foreground">
-                    {t(`${mode}.description`)}
-                  </span>
-                </span>
-              </DropdownMenuRadioItem>
-            );
-          })}
+          {CHAT_MODES.map((mode) => (
+            <DropdownMenuRadioItem key={mode} value={mode}>
+              {t(`${mode}.name`)}
+            </DropdownMenuRadioItem>
+          ))}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

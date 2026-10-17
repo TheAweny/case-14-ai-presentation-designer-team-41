@@ -68,9 +68,19 @@
       },
       "type": "array"
     },
+    "contentHash": {
+      "maxLength": 64,
+      "minLength": 64,
+      "type": "string"
+    },
     "contentPackId": {
       "minLength": 1,
       "type": "string"
+    },
+    "contentRevision": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
     },
     "finishedAt": {
       "description": "ISO 8601 timestamp, UTC.",

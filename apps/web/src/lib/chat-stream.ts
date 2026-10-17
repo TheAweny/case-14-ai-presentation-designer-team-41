@@ -59,25 +59,37 @@ export async function readChatEvents(
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let ended = false;
   const take = (line: string) => {
     if (!line.startsWith('data:')) return;
     try {
       const parsed = chatEventSchema.safeParse(JSON.parse(line.slice(5).trim()));
-      if (parsed.success) onEvent(parsed.data);
+      if (parsed.success) {
+        if (parsed.data.type === 'turn-end') ended = true;
+        onEvent(parsed.data);
+      }
     } catch {
       // Не JSON — пропускаем.
     }
   };
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newline = buffer.indexOf('\n');
-    while (newline >= 0) {
-      take(buffer.slice(0, newline).trim());
-      buffer = buffer.slice(newline + 1);
-      newline = buffer.indexOf('\n');
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf('\n');
+      while (newline >= 0) {
+        take(buffer.slice(0, newline).trim());
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf('\n');
+      }
     }
+    take(buffer.trim());
+    if (!ended) throw new Error('Соединение прервано до завершения ответа.');
+  } finally {
+    reader.releaseLock();
   }
-  take(buffer.trim());
 }

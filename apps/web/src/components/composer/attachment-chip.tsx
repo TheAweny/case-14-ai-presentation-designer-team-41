@@ -16,6 +16,8 @@ export interface FileAttachment {
   readonly kind: 'file' | 'template' | 'context';
   readonly name: string;
   readonly size?: number;
+  /** Миниатюра выбранного шаблона библиотеки. У нового файла её ещё нет. */
+  readonly previewUrl?: string;
 }
 
 /**
@@ -83,7 +85,14 @@ function FileChip({
         className,
       )}
     >
-      {kind === 'template' ? (
+      {kind === 'template' && attachment.previewUrl ? (
+        <img
+          src={attachment.previewUrl}
+          alt=""
+          aria-hidden
+          className="h-6 w-9 shrink-0 rounded-sm object-cover ring-1 ring-border"
+        />
+      ) : kind === 'template' ? (
         <TemplateIcon size={14} className="shrink-0 text-foreground" aria-hidden />
       ) : kind === 'context' ? (
         <SlideIcon size={14} className="shrink-0 text-muted-foreground" aria-hidden />
