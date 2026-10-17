@@ -33,7 +33,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: process.env.E2E_BROWSER_CHANNEL },
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: process.env.E2E_BROWSER_CHANNEL,
+        // Dictation needs a microphone; launch options can't be set inside a describe block.
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+        },
+      },
     },
   ],
 });

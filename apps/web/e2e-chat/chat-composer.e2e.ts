@@ -620,7 +620,7 @@ test('keeps role customization collapsed and separates the primary and visual mo
   await dialog.getByText('Настроить модели для отдельных задач', { exact: false }).click();
   await expect(dialog.getByRole('button', { name: /Модель для роли «Ассистент»/ })).toBeVisible();
   await expect(
-    dialog.getByRole('heading', { name: 'Изображения и визуальная проверка' }),
+    dialog.getByRole('heading', { name: 'Изображения, голос и визуальная проверка' }),
   ).toBeVisible();
 });
 
@@ -830,12 +830,6 @@ test('shows animated tool execution and a stable send-to-stop glyph', async ({ p
 });
 
 test.describe('dictation', () => {
-  test.use({
-    launchOptions: {
-      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
-    },
-  });
-
   test('shows the microphone only after a speech model is assigned', async ({ page }) => {
     await page.goto('/');
     const prompt = page.getByRole('textbox', { name: 'О чём новая презентация?' });
