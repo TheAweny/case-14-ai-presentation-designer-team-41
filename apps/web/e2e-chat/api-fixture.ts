@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { roleAssignmentSchema, type ModelSettings } from '@lct/contracts';
+import { modelSettingsSchema, roleAssignmentSchema, type ModelSettings } from '@lct/contracts';
 
 const initialModels = (): ModelSettings => ({
   connections: [
@@ -30,6 +30,11 @@ const server = createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json');
   if (request.url === '/__reset-models') {
     modelSettings = initialModels();
+    response.end('{}');
+  } else if (request.url === '/__set-models' && request.method === 'POST') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    modelSettings = modelSettingsSchema.parse(JSON.parse(body));
     response.end('{}');
   } else if (request.url === '/model-settings/roles' && request.method === 'PUT') {
     let body = '';

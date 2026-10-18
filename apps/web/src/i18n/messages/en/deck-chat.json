@@ -240,7 +240,8 @@
       "context": "The request or answer exceeded the size limit",
       "unsupported": "The model does not support this request",
       "not-configured": "The selected model is unavailable or not configured",
-      "unknown": "Could not complete the answer"
+      "unknown": "Could not complete the answer",
+      "quota-exhausted": "The API key quota is exhausted"
     },
     "details": "Details",
     "retry": "Retry",
@@ -252,6 +253,11 @@
     "partial": "Some actions have already run. Their results remain in this chat; continue from the appropriate step.",
     "continue": "Continue in chat",
     "continueMessage": "Continue from where you stopped, taking the actions already completed into account.",
-    "connection": "Open connection"
+    "connection": "Open connection",
+    "helper": {
+      "quota-exhausted": "Increase the limit or replace the API key in the connection settings, then retry. You can choose another available connection. Another model on the same connection uses the same quota."
+    },
+    "retryQuota": "Retry after changing the quota",
+    "continueQuota": "Continue after changing the quota"
   }
 }

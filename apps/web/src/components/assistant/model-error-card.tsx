@@ -44,15 +44,20 @@ export function ModelErrorCard({
   const [selection, setSelection] = useState<{ model: ModelRef | null } | null>(null);
   const [remaining, setRemaining] = useState(0);
   const retryAt = part.failure?.retryAt;
+  const kind = part.failure?.kind ?? 'unknown';
+  const quota = kind === 'quota-exhausted';
   useEffect(() => {
+    if (kind !== 'rate-limit') {
+      setRemaining(0);
+      return;
+    }
     const tick = () =>
       setRemaining(retryAt ? Math.max(0, Math.ceil((retryAt - Date.now()) / 1000)) : 0);
     tick();
     if (!retryAt) return;
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [retryAt]);
-  const kind = part.failure?.kind ?? 'unknown';
+  }, [kind, retryAt]);
   const value = selection ? selection.model : (chat?.model ?? null);
   const resolved = models ? effectiveModel(models, value) : value;
   const original = part.failure?.modelId;
@@ -66,6 +71,11 @@ export function ModelErrorCard({
           resolved,
           models ? effectiveModel(models, chat?.model ?? null) : (chat?.model ?? null),
         ));
+  const otherConnection =
+    selection !== null &&
+    part.failure?.connectionId !== undefined &&
+    resolved?.connectionId !== undefined &&
+    resolved.connectionId !== part.failure.connectionId;
   const wait = kind === 'rate-limit' && remaining > 0 && !replacement;
   const canRepeat =
     retryable &&
@@ -86,6 +96,9 @@ export function ModelErrorCard({
         <WarningIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{t(`reasons.${kind}`)}</p>
+          {quota ? (
+            <p className="mt-1 text-xs text-muted-foreground">{t('helper.quota-exhausted')}</p>
+          ) : null}
           {original ? (
             <p className="mt-1 break-all text-xs text-muted-foreground">{original}</p>
           ) : null}
@@ -109,9 +122,11 @@ export function ModelErrorCard({
               <RetryIcon />
               {wait
                 ? t('retryAfter', { seconds: remaining })
-                : replacement && resolved
-                  ? t('retryWith', { model: shortModelName(resolved.modelId) })
-                  : t('retry')}
+                : quota && !otherConnection
+                  ? t('retryQuota')
+                  : replacement && resolved
+                    ? t('retryWith', { model: shortModelName(resolved.modelId) })
+                    : t('retry')}
             </Button>
           ) : null}
           <ModelMenu
@@ -123,7 +138,7 @@ export function ModelErrorCard({
               if (!retryable) chatStore.setModel(chatId, model);
             }}
           />
-          {['unauthorized', 'not-configured'].includes(kind) ? (
+          {['unauthorized', 'not-configured'].includes(kind) || quota ? (
             <Button
               size="sm"
               variant="outline"
@@ -161,7 +176,7 @@ export function ModelErrorCard({
                   onRefine();
                 }}
               >
-                {t('continue')}
+                {quota && !otherConnection ? t('continueQuota') : t('continue')}
               </Button>
             </>
           ) : null}
