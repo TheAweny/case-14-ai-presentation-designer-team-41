@@ -1,0 +1,107 @@
+name: lct-production
+
+x-security: &security
+  init: true
+  restart: unless-stopped
+  security_opt: ['no-new-privileges:true']
+  logging:
+    driver: local
+    options: { max-size: 10m, max-file: '3' }
+
+x-app: &app
+  <<: *security
+  user: '1000:1000'
+  read_only: true
+  cap_drop: [ALL]
+  tmpfs: ['/tmp:rw,nosuid,nodev,size=256m,mode=1777']
+
+services:
+  postgres:
+    <<: *security
+    image: postgres:17-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    user: '999:999'
+    shm_size: 128m
+    mem_limit: 384m
+    environment:
+      POSTGRES_USER: lct26
+      POSTGRES_DB: lct26
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: ['/srv/lct/postgres:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U lct26 -d lct26']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  engine:
+    <<: *app
+    image: ${ENGINE_IMAGE:?required}
+    mem_limit: 1152m
+    cpus: 1.5
+    environment: { HOME: /tmp, ENGINE_LOG_LEVEL: info }
+    volumes:
+      - /srv/lct/data:/app/data
+      - /srv/lct/runs:/app/runs
+      - /srv/lct/fonts:/usr/local/share/fonts/template:ro
+
+  api:
+    <<: *app
+    image: ${API_IMAGE:?required}
+    mem_limit: 1280m
+    cpus: 1.5
+    depends_on:
+      postgres: { condition: service_healthy }
+      engine: { condition: service_healthy }
+    env_file: [/etc/lct/production.env]
+    environment:
+      NODE_ENV: production
+      HOME: /tmp
+      API_PORT: '3001'
+      DATABASE_URL: postgresql://lct26:${POSTGRES_PASSWORD:?required}@postgres:5432/lct26
+      ENGINE_URL: http://engine:8000
+      RUNS_DIR: /app/runs
+      DATA_DIR: /app/data
+      MASTRA_STORAGE_URL: file:/app/runs/mastra.db
+      WEB_SEARCH_URL: http://search:8080
+      RECORDINGS_DIR: /app/registry/recordings
+      MODEL_ALLOW_PRIVATE_HOSTS: 'false'
+      NODE_OPTIONS: --max-old-space-size=896
+    volumes: ['/srv/lct/data:/app/data', '/srv/lct/runs:/app/runs']
+
+  search:
+    <<: *security
+    image: searxng/searxng@sha256:8bdd9aa136b2dc3b9332cf24714fa34a375b8a1949a1201ec900c24d7378596e
+    mem_limit: 384m
+    cpus: 0.5
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?required}
+      SEARXNG_BASE_URL: http://search:8080/
+      FORCE_OWNERSHIP: 'false'
+    volumes:
+      - /usr/local/lib/lct/search.yml:/etc/searxng/settings.yml:ro
+    tmpfs: ['/var/cache/searxng:rw,nosuid,nodev,size=64m,mode=1777']
+
+  web:
+    <<: *app
+    image: ${WEB_IMAGE:?required}
+    mem_limit: 512m
+    cpus: 1.0
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      PORT: '3000'
+      HOME: /tmp
+      API_INTERNAL_URL: http://api:3001
+      API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:?required}
+      AUTH_SECRET: ${AUTH_SECRET:?required}
+    ports: ['127.0.0.1:3000:3000']
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 15

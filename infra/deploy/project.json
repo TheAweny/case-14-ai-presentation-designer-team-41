@@ -1,0 +1,17 @@
+{
+  "name": "deployment",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:lib"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "uv run pytest infra/deploy/tests" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run ruff check infra/deploy && uv run ruff format --check infra/deploy"
+      }
+    }
+  }
+}
