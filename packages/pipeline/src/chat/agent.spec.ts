@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import type { ChatMessage, ChatPart } from '@lct/contracts';
+import type { ChatMessage } from '@lct/contracts';
+import type { ToolContext } from './agent.js';
 import {
   AnswerWriter,
   chatInstructions,
@@ -203,18 +204,18 @@ describe('runChatTurn', () => {
       signal: AbortSignal.timeout(5000),
     });
     expect(result).toMatchObject({ steps: 2, end: 'answer' });
-    expect(answer.parts).toEqual<ChatPart[]>([
-      { type: 'text', text: 'Проверю.' },
-      {
-        type: 'tool',
-        callId: 'c1',
-        name: 'echo',
-        input: { word: 'да' },
-        status: 'done',
-        output: { heard: 'да' },
-      },
-      { type: 'text', text: 'Услышал «да».' },
-    ]);
+    expect(answer.parts.map((part) => part.type)).toEqual(['text', 'tool', 'text']);
+    expect(answer.parts[0]).toEqual({ type: 'text', text: 'Проверю.' });
+    expect(answer.parts[2]).toEqual({ type: 'text', text: 'Услышал «да».' });
+    expect(answer.parts[1]).toMatchObject({
+      type: 'tool',
+      callId: 'c1',
+      name: 'echo',
+      input: { word: 'да' },
+      status: 'done',
+      phase: 'executing',
+      output: { heard: 'да' },
+    });
     expect(model.requests[1]?.messages.at(-1)).toEqual({
       role: 'tool',
       callId: 'c1',
@@ -303,7 +304,196 @@ describe('runChatTurn', () => {
     expect(tools).toHaveLength(1);
     expect(tools[0]).toMatchObject({ callId: 'c1', status: 'done' });
     const first = events.find((event) => event.type === 'part');
-    expect(first).toMatchObject({ part: { type: 'tool', status: 'running', input: null } });
+    expect(first).toMatchObject({
+      part: { type: 'tool', status: 'running', phase: 'preparing', input: null },
+    });
+  });
+
+  it('keeps a child that finished before the parent and does not reopen it', async () => {
+    let report: ToolContext['activity'];
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+      { text: 'Готово.' },
+    ]);
+    const { writer: answer } = writer();
+    await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [
+        {
+          ...echo,
+          async run(_input, context) {
+            report = context.activity;
+            context.activity?.({
+              id: 'child-1',
+              kind: 'agent',
+              name: 'research',
+              detail: 'https://example.test/a',
+              status: 'done',
+              startedAt: 10,
+              finishedAt: 20,
+            });
+            context.activity?.({
+              id: 'child-1',
+              kind: 'agent',
+              name: 'research',
+              status: 'running',
+              startedAt: 10,
+            });
+            context.activity?.({
+              id: '',
+              kind: 'tool',
+              name: 'x',
+              status: 'running',
+              startedAt: 1,
+            });
+            return { output: { heard: 'да' } };
+          },
+        },
+      ],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+    });
+    const tool = answer.parts.find((part) => part.type === 'tool');
+    expect(tool).toMatchObject({
+      status: 'done',
+      phase: 'executing',
+      activities: [{ id: 'child-1', status: 'done', finishedAt: 20 }],
+    });
+    if (tool?.type !== 'tool') throw new Error('missing tool');
+    expect(tool.startedAt).toEqual(expect.any(Number));
+    expect(tool.finishedAt).toBeGreaterThanOrEqual(tool.startedAt ?? 0);
+    report?.({
+      id: 'child-1',
+      kind: 'agent',
+      name: 'research',
+      status: 'running',
+      startedAt: 10,
+    });
+    expect(answer.parts.find((part) => part.type === 'tool')).toMatchObject({
+      activities: [{ id: 'child-1', status: 'done' }],
+    });
+    const history = modelHistory([
+      {
+        role: 'assistant',
+        id: crypto.randomUUID(),
+        status: 'done',
+        createdAt: 1,
+        parts: answer.parts,
+      },
+    ]);
+    expect(history.filter((message) => message.role === 'tool')).toHaveLength(1);
+    expect(history.find((message) => message.role === 'tool')?.content).toBe('{"heard":"да"}');
+  });
+
+  it('keeps the latest 32 finished activities and seals a call whose arguments never arrived', async () => {
+    const { writer: answer } = writer();
+    await runChatTurn({
+      model: scripted([
+        { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+        { text: 'Готово.' },
+      ]),
+      instructions: 'system',
+      history: [],
+      tools: [
+        {
+          ...echo,
+          async run(_input, context) {
+            for (let job = 0; job < 40; job += 1) {
+              context.activity?.({
+                id: `job-${job}`,
+                kind: 'tool',
+                name: 'slide',
+                status: 'running',
+                startedAt: job,
+              });
+              context.activity?.({
+                id: `job-${job}`,
+                kind: 'tool',
+                name: 'slide',
+                status: 'done',
+                startedAt: job,
+                finishedAt: job + 1,
+              });
+            }
+            context.activity?.({
+              id: 'live',
+              kind: 'agent',
+              name: 'writer',
+              status: 'running',
+              startedAt: 100,
+            });
+            context.activity?.({
+              id: 'extra',
+              kind: 'tool',
+              name: 'slide',
+              status: 'done',
+              startedAt: 101,
+              finishedAt: 102,
+            });
+            context.activity?.({
+              id: 'live',
+              kind: 'agent',
+              name: 'writer',
+              status: 'done',
+              startedAt: 100,
+              finishedAt: 103,
+            });
+            return { output: { heard: 'да' } };
+          },
+        },
+      ],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+    });
+    const capped = answer.parts.find((part) => part.type === 'tool');
+    if (capped?.type !== 'tool') throw new Error('missing tool');
+    expect(capped.activities).toHaveLength(32);
+    expect(capped.activities?.filter((item) => item.status === 'running')).toHaveLength(0);
+    expect(capped.activities?.map((item) => item.id)).toEqual([
+      ...Array.from({ length: 30 }, (_, index) => `job-${index + 10}`),
+      'live',
+      'extra',
+    ]);
+
+    const broken = writer();
+    await expect(
+      runChatTurn({
+        model: {
+          model: 'breaks',
+          async step(request) {
+            request.onToolCall?.('echo');
+            throw new Error('stream broke');
+          },
+        },
+        instructions: 'system',
+        history: [],
+        tools: [echo],
+        specs: [
+          { name: 'echo', description: 'Echo.', parameters: {} },
+          { name: 'ask_user', description: 'Ask.', parameters: {} },
+        ],
+        mode: 'auto',
+        writer: broken.writer,
+        signal: AbortSignal.timeout(5000),
+      }),
+    ).rejects.toThrow('stream broke');
+    const preparing = broken.writer.parts.find((part) => part.type === 'tool');
+    expect(preparing).toMatchObject({ status: 'failed', phase: 'preparing' });
+    if (preparing?.type !== 'tool') throw new Error('missing preparing tool');
+    expect(preparing.finishedAt).toEqual(expect.any(Number));
+    expect(preparing.finishedAt).toBeGreaterThanOrEqual(preparing.startedAt ?? 0);
   });
 
   it('cuts off an answer that loops, hides it, and nudges the model once to act', async () => {

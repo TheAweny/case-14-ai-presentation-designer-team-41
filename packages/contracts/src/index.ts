@@ -401,6 +401,8 @@ export {
   chatPartSchema,
   modelFailureSchema,
   type ModelFailure,
+  chatToolActivitySchema,
+  type ChatToolActivity,
   chatMessageSchema,
   chatTurnInputSchema,
   chatTurnRequestSchema,

@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { ChatEvent, ChatMessage, ChatMode, ChatPart } from '@lct/contracts';
+import { chatToolActivitySchema, type ChatToolActivity } from '@lct/contracts';
 import { loadAgent, type LoadedAgent } from '@lct/registry';
 import type { ChatModel, ModelMessage, ToolSpec } from './chat-model.js';
 import { ChatToolDispatcher } from './tool-runtime.js';
@@ -28,6 +29,11 @@ export interface ToolContext {
   show(part: ChatPart): number;
   /** Replace a part shown earlier: a build moving on, a plan approved. */
   update(index: number, part: ChatPart): void;
+  /**
+   * Upsert one nested step of this call by `id`. Ignored after the call has finished, and a
+   * finished step is not reopened. The part index stays the render key; `callId` is the model id.
+   */
+  activity?(activity: ChatToolActivity): void;
 }
 
 /**
@@ -104,6 +110,64 @@ const MAX_OUTPUT_CHARS = 12000;
 function clipped(output: unknown): unknown {
   const text = JSON.stringify(output ?? null);
   return text.length <= MAX_OUTPUT_CHARS ? output : { truncated: text.slice(0, MAX_OUTPUT_CHARS) };
+}
+
+const MAX_TOOL_ACTIVITIES = 32;
+
+function asTool(part: ChatPart | undefined): Extract<ChatPart, { type: 'tool' }> | undefined {
+  return part?.type === 'tool' ? part : undefined;
+}
+
+/**
+ * Nested steps of one tool call. A finished step is not started again. Past 32, the oldest
+ * finished step makes room; a running step is never dropped.
+ */
+export function mergeToolActivity(
+  part: Extract<ChatPart, { type: 'tool' }>,
+  activity: ChatToolActivity,
+): Extract<ChatPart, { type: 'tool' }> | undefined {
+  if (part.status !== 'running') return undefined;
+  const parsed = chatToolActivitySchema.safeParse(activity);
+  if (!parsed.success) return undefined;
+  const next = parsed.data;
+  const activities = [...(part.activities ?? [])];
+  const at = activities.findIndex((item) => item.id === next.id);
+  if (at >= 0) {
+    const current = activities[at];
+    if (!current || current.status !== 'running') return undefined;
+    activities[at] = next;
+    return { ...part, activities };
+  }
+  if (activities.length >= MAX_TOOL_ACTIVITIES) {
+    const evict = activities.findIndex((item) => item.status !== 'running');
+    if (evict < 0) return undefined;
+    activities.splice(evict, 1);
+  }
+  activities.push(next);
+  return { ...part, activities };
+}
+
+/**
+ * Give a tool call a terminal status. Already finished nested steps stay as they are. A call that
+ * itself already finished only closes nested steps still marked running.
+ */
+export function closeToolPart(
+  part: Extract<ChatPart, { type: 'tool' }>,
+  status: 'done' | 'failed',
+  output: unknown,
+  childStatus: 'done' | 'failed' | 'cancelled',
+): Extract<ChatPart, { type: 'tool' }> {
+  const finishedAt = Date.now();
+  const activities = part.activities?.map((item) =>
+    item.status === 'running'
+      ? { ...item, status: childStatus, finishedAt: item.finishedAt ?? finishedAt }
+      : item,
+  );
+  if (part.status !== 'running') {
+    if (!part.activities?.some((item) => item.status === 'running')) return part;
+    return { ...part, activities, finishedAt: part.finishedAt ?? finishedAt };
+  }
+  return { ...part, status, output, finishedAt, activities };
 }
 
 /**
@@ -249,6 +313,21 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     }
     // Calls shown while the model was still writing them, in the order they began.
     const begun: { name: string; index: number }[] = [];
+    const childStatus = (): 'cancelled' | 'failed' => (signal.aborted ? 'cancelled' : 'failed');
+    const sealAt = (index: number) => {
+      const live = asTool(writer.parts[index]);
+      if (!live) return;
+      const closed = closeToolPart(
+        live,
+        'failed',
+        live.output ?? { error: 'The call was cut off.' },
+        childStatus(),
+      );
+      if (closed !== live) writer.update(index, closed);
+    };
+    const sealBegun = () => {
+      for (const early of begun.splice(0)) sealAt(early.index);
+    };
     // A step of its own: an answer circling through the same paragraph is cut off here, while
     // the turn goes on.
     const stepControl = new AbortController();
@@ -279,6 +358,8 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
             name,
             input: null,
             status: 'running',
+            phase: 'preparing',
+            startedAt: Date.now(),
           }),
         });
       },
@@ -289,19 +370,14 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       // Some providers return a partial step when the reader is aborted instead of throwing.
       if (stepControl.signal.reason instanceof LoopCut) throw stepControl.signal.reason;
     } catch (error) {
-      if (!(stepControl.signal.reason instanceof LoopCut) || signal.aborted) throw error;
+      if (!(stepControl.signal.reason instanceof LoopCut) || signal.aborted) {
+        sealBegun();
+        throw error;
+      }
       // The person never sees the loop: the text part goes back to what it said before it.
       const open = writer.openText;
       if (open) writer.retract(open.index, before?.index === open.index ? before.text : '');
-      for (const early of begun.splice(0))
-        writer.update(early.index, {
-          type: 'tool',
-          callId: `call-${crypto.randomUUID()}`,
-          name: early.name,
-          input: null,
-          status: 'failed',
-          output: { error: 'The call was cut off.' },
-        });
+      sealBegun();
       if (nudged || !options.loopNudge)
         return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: 'loop' };
       nudged = true;
@@ -310,28 +386,21 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     } finally {
       signal.removeEventListener('abort', stopStep);
     }
-    const cutOff = () => {
-      for (const early of begun.splice(0)) {
-        writer.update(early.index, {
-          type: 'tool',
-          callId: `call-${crypto.randomUUID()}`,
-          name: early.name,
-          input: null,
-          status: 'failed',
-          output: { error: 'The call was cut off.' },
-        });
-      }
-    };
     inputTokens += answer.inputTokens;
     outputTokens += answer.outputTokens;
-    signal.throwIfAborted();
+    try {
+      signal.throwIfAborted();
+    } catch (error) {
+      sealBegun();
+      throw error;
+    }
     const finish = answer.truncated ? 'length' : answer.finishReason;
     if (finish && finish !== 'stop' && finish !== 'tool_calls') {
-      cutOff();
+      sealBegun();
       return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: finish };
     }
     if (answer.toolCalls.length === 0) {
-      cutOff();
+      sealBegun();
       if (!answer.text.trim())
         return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: 'empty' };
       return { steps: step, inputTokens, outputTokens, end: 'answer' };
@@ -340,38 +409,69 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     let waiting = false;
     let terminalFailure = false;
     for (const call of answer.toolCalls) {
-      signal.throwIfAborted();
-      const input = parseArguments(call.arguments);
-      const part: Extract<ChatPart, { type: 'tool' }> = {
-        type: 'tool',
-        callId: call.id,
-        name: call.name,
-        input: input.ok ? input.value : call.arguments,
-        status: 'running',
-      };
-      const early = begun[0]?.name === call.name ? begun.shift() : undefined;
-      const index = early ? early.index : writer.show(part);
-      if (early) writer.update(index, part);
-      const outcome = waiting
-        ? {
+      let index = -1;
+      try {
+        signal.throwIfAborted();
+        const input = parseArguments(call.arguments);
+        const early = begun[0]?.name === call.name ? begun.shift() : undefined;
+        const previous = early ? asTool(writer.parts[early.index]) : undefined;
+        const part: Extract<ChatPart, { type: 'tool' }> = {
+          type: 'tool',
+          callId: call.id,
+          name: call.name,
+          input: input.ok ? input.value : call.arguments,
+          status: 'running',
+          phase: 'preparing',
+          startedAt: previous?.startedAt ?? Date.now(),
+          ...(previous?.activities ? { activities: previous.activities } : {}),
+        };
+        index = early ? early.index : writer.show(part);
+        if (early) writer.update(index, part);
+        let outcome: ToolOutcome;
+        if (waiting) {
+          outcome = {
             output: { skipped: 'The turn waits for the person; call it again later.' },
             failed: true,
-          }
-        : await dispatcher.dispatch(call.name, call.arguments, {
+          };
+        } else {
+          const executing = asTool(writer.parts[index]) ?? part;
+          writer.update(index, { ...executing, phase: 'executing' });
+          outcome = await dispatcher.dispatch(call.name, call.arguments, {
             signal,
             callId: call.id,
             show: (shown) => writer.show(shown),
             update: (at, shown) => writer.update(at, shown),
+            activity: (item) => {
+              const live = asTool(writer.parts[index]);
+              if (!live) return;
+              const merged = mergeToolActivity(live, item);
+              if (merged) writer.update(index, merged);
+            },
           });
-      const output = clipped(outcome.output);
-      writer.update(index, { ...part, status: outcome.failed ? 'failed' : 'done', output });
-      messages.push({ role: 'tool', callId: call.id, content: JSON.stringify(output) });
-      if (outcome.stop) {
-        waiting = true;
-        terminalFailure ||= outcome.failed === true;
+        }
+        const live = asTool(writer.parts[index]) ?? part;
+        const output = clipped(outcome.output);
+        writer.update(
+          index,
+          closeToolPart(
+            live,
+            outcome.failed ? 'failed' : 'done',
+            output,
+            outcome.failed ? childStatus() : 'cancelled',
+          ),
+        );
+        messages.push({ role: 'tool', callId: call.id, content: JSON.stringify(output) });
+        if (outcome.stop) {
+          waiting = true;
+          terminalFailure ||= outcome.failed === true;
+        }
+      } catch (error) {
+        if (index >= 0) sealAt(index);
+        sealBegun();
+        throw error;
       }
     }
-    cutOff();
+    sealBegun();
     if (waiting)
       return {
         steps: step,

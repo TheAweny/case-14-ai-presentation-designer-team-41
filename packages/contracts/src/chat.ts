@@ -75,6 +75,23 @@ export const toolStatusSchema = z.enum(['running', 'done', 'failed']);
 export const buildStatusSchema = z.enum(['preparing', 'running', 'done', 'failed', 'cancelled']);
 export type BuildStatus = z.infer<typeof buildStatusSchema>;
 
+/**
+ * One visible step inside a tool chip. A child `agent` exists only while delegated work is
+ * actually running. This is server telemetry for the person, not a prompt and not model history.
+ */
+export const chatToolActivitySchema = z.object({
+  id: z.string().min(1).max(100),
+  parentId: z.string().min(1).max(100).optional(),
+  kind: z.enum(['agent', 'tool']),
+  name: z.string().min(1).max(100),
+  detail: z.string().max(1000).optional(),
+  status: z.enum(['running', 'done', 'failed', 'cancelled']),
+  startedAt: z.number().int().nonnegative(),
+  finishedAt: z.number().int().nonnegative().optional(),
+  error: z.string().max(300).optional(),
+});
+export type ChatToolActivity = z.infer<typeof chatToolActivitySchema>;
+
 export const variantReviewSchema = z.object({
   errors: z.number().int().nonnegative(),
   warnings: z.number().int().nonnegative(),
@@ -114,6 +131,17 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     input: z.unknown(),
     status: toolStatusSchema,
     output: z.unknown().optional(),
+    /** When the model started writing the call. Older stored parts omit it. */
+    startedAt: z.number().int().nonnegative().optional(),
+    /** When the call reached a terminal status. Older stored parts omit it. */
+    finishedAt: z.number().int().nonnegative().optional(),
+    /**
+     * `preparing` — the model is still writing arguments. `executing` — the call was dispatched.
+     * Absent on parts saved before the field existed.
+     */
+    phase: z.enum(['preparing', 'executing']).optional(),
+    /** Nested steps of this call, at most the latest thirty-two. */
+    activities: z.array(chatToolActivitySchema).max(32).optional(),
   }),
   z.object({
     type: z.literal('plan'),

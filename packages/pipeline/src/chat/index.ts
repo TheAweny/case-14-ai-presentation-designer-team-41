@@ -17,6 +17,8 @@ export {
   modelHistory,
   runChatTurn,
   toolSpecs,
+  closeToolPart,
+  mergeToolActivity,
   type ChatAgent,
   type ChatEventBody,
   type ChatTool,
