@@ -9,6 +9,12 @@ export const agentGenerationSchema = z.object({
   temperature: z.number().min(0).max(2).describe('Sampling temperature.'),
   topP: z.number().min(0).max(1).describe('Nucleus sampling cutoff.'),
   maxOutputTokens: z.number().int().positive().describe('Upper bound on generated tokens.'),
+  thinking: z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether a model that can answer both ways thinks before it answers. Unset: the caller decides.',
+    ),
 });
 
 /** Schema of registry/agents/<agent-id>/agent.yaml. */

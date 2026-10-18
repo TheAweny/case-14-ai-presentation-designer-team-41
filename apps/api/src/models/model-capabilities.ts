@@ -66,7 +66,7 @@ export class ModelCapabilityService {
     const connection = await this.connection(connectionId, actor);
     if (!connection?.lastCheck?.ok) return;
     const { details } = connection.lastCheck;
-    const stored = await this.store.listCapabilities(connection.baseUrl);
+    const stored = await this.store.listCapabilities(connection);
     const { version } = await this.prompts();
     const chatModels = this.offered(connection).filter((modelId) =>
       modelKindsOf(connection, modelId).kinds.includes('text'),
@@ -75,7 +75,7 @@ export class ModelCapabilityService {
     for (const modelId of chatModels) {
       const described = details?.[modelId]?.reasoning;
       if (described) {
-        await this.store.saveReasoning(connection.baseUrl, modelId, described, version);
+        await this.store.saveReasoning(connection, modelId, described, version);
       } else if (force || !stored.get(modelId)?.reasoning) {
         unknown.push(modelId);
       }
@@ -113,7 +113,7 @@ export class ModelCapabilityService {
     const connections = await Promise.all(
       settings.connections.map(async (connection): Promise<ModelConnection> => {
         if (!connection.lastCheck?.ok) return connection;
-        const stored = await this.store.listCapabilities(connection.baseUrl);
+        const stored = await this.store.listCapabilities(connection);
         const manualKinds: Record<string, ModelKind[]> = {};
         let reasoningKnown = false;
         for (const modelId of this.offered(connection)) {
@@ -151,7 +151,7 @@ export class ModelCapabilityService {
       known !== null && known.includes('vision') && !known.includes('text')
         ? (['text', ...known] as ModelKind[])
         : known;
-    await this.store.setManualKinds(connection.baseUrl, modelId, normalised);
+    await this.store.setManualKinds(connection, modelId, normalised);
   }
 
   /** How thinking can be chosen for a resolved model; no choice while that is unknown. */
@@ -165,10 +165,10 @@ export class ModelCapabilityService {
     force: boolean,
   ): Promise<ReasoningCapability | null> {
     if (!force) {
-      const stored = await this.store.getCapability(model.baseUrl, model.model);
+      const stored = await this.store.getCapability(model, model.model);
       if (stored?.reasoning) return stored.reasoning;
     }
-    const key = `reasoning ${model.baseUrl} ${model.model}`;
+    const key = `reasoning ${model.connectionId} ${model.baseUrl} ${model.model}`;
     const failed = this.failedAt.get(key);
     if (!force && failed !== undefined && this.now() - failed < RETRY_AFTER_MS) return null;
     let pending = this.running.get(key) as Promise<Probed<ReasoningCapability | null>> | undefined;
@@ -186,12 +186,7 @@ export class ModelCapabilityService {
     }
     this.failedAt.delete(key);
     const reasoning = found.value ?? NO_REASONING_CHOICE;
-    await this.store.saveReasoning(
-      model.baseUrl,
-      model.model,
-      reasoning,
-      (await this.prompts()).version,
-    );
+    await this.store.saveReasoning(model, model.model, reasoning, (await this.prompts()).version);
     return reasoning;
   }
 

@@ -365,8 +365,8 @@ export const chatTurnRequestSchema = z.object({
    */
   reasoningEffort: reasoningEffortSchema.nullable().default(null),
   /**
-   * Whether a model that can answer both ways (Qwen3, GPT-5.1+, Claude) thinks before it answers,
-   * here and in the deck it builds. Ignored for every other model. Null: it thinks.
+   * Whether a model that can answer both ways (Qwen3, GPT-5.1+, Claude) thinks while it builds a
+   * deck from this chat. The chat itself thinks as the assistant's config says. Null: it does not.
    */
   thinking: z.boolean().nullable().default(null),
   /** The project a new chat belongs to; ignored for a chat that exists. */

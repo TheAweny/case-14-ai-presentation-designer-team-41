@@ -87,7 +87,8 @@ function kindsOf(item: Record<string, unknown>): ModelKind[] | undefined {
       'image-text-to-text',
     ) ||
       has(output, 'text') ||
-      has(capabilities, 'completion', 'chat') ||
+      // Mistral: `capabilities: { completion_chat: true }`.
+      has(capabilities, 'completion', 'chat', 'completion-chat') ||
       // A gateway that serves it through the chat formats and not only through images or video.
       (endpoints.length > 0 &&
         !image &&
@@ -97,6 +98,9 @@ function kindsOf(item: Record<string, unknown>): ModelKind[] | undefined {
   // lists only its chat formats does not say, and a model nobody said cannot see is offered for
   // pictures too, as an undescribed model is: the person can correct it.
   const inputSaid = input.length > 0 || has(type, 'llm', 'vlm', 'vision');
+  // Only words that name no kind, like Anthropic's `type: "model"` or Mistral's `type: "base"`:
+  // nothing was said, and the model is taken as an undescribed one rather than hidden.
+  if (!chat && !image && !speech && !notChat) return undefined;
   const kinds: ModelKind[] = [];
   if (chat) kinds.push('text');
   if (chat && (vision || !inputSaid)) kinds.push('vision');

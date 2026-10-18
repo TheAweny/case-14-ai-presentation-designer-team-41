@@ -642,6 +642,30 @@ describe('runChatTurn', () => {
     expect(tools.map((part) => part.status)).toEqual(['done']);
   });
 
+  it('ends a tool call on the reserved final step as the limit, however the server ended it', async () => {
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+      {
+        toolCalls: [{ id: 'c2', name: 'echo', arguments: '{"word":"нет"}' }],
+        finishReason: 'protocol_error',
+      },
+    ]);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [echo],
+      specs: [{ name: 'echo', description: 'Echo.', parameters: {} }],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      maxSteps: 2,
+      finalizeNudge: 'Подведи итог.',
+    });
+    expect(result).toMatchObject({ steps: 2, end: 'limit' });
+  });
+
   it('does not dispatch a tool when the reserved final step is cancelled', async () => {
     const control = new AbortController();
     const run = vi.fn(echo.run);

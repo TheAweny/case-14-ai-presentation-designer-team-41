@@ -153,6 +153,24 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       },
     });
   });
+  it('thinks only when switched on, and then with more room', async () => {
+    const bodyOf = async (thinking: boolean | null) => {
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(answer());
+      const provider = new OpenAICompatibleProvider({
+        ...settings,
+        fetchImpl,
+        reasoning: { toggle: 'enable-thinking', levels: false },
+        thinking,
+      });
+      await provider.generate('writer', '', {}, schema, AbortSignal.timeout(1000));
+      return JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    };
+    const unset = await bodyOf(null);
+    expect(unset.chat_template_kwargs).toEqual({ enable_thinking: false });
+    const on = await bodyOf(true);
+    expect(on.chat_template_kwargs).toEqual({ enable_thinking: true });
+    expect(on.max_tokens).toBeGreaterThan(unset.max_tokens);
+  });
   it('does not retry unauthorized responses or expose their secret-bearing body', async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()

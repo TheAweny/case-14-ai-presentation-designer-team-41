@@ -1001,7 +1001,8 @@ export class ChatsService implements OnApplicationShutdown {
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
       reasoningEffort: request.reasoningEffort,
-      thinking: request.thinking,
+      // The chat thinks as its config says; the person's switch is for the decks it builds.
+      thinking: agent.agent.config.generation.thinking ?? null,
       reasoning: await this.capabilities.reasoningOf(resolved),
     });
     return withConnection(model, resolved.connectionId);
@@ -1179,12 +1180,11 @@ export class ChatsService implements OnApplicationShutdown {
         throw new ModelRequestError(
           `${explanations[result.reason ?? 'protocol_error']} Ответ не завершён.`,
           {
+            // A broken chunk or format is usually a one-off: the person may ask again.
             kind:
               result.reason === 'context_budget' || result.reason === 'length'
                 ? 'context'
-                : result.reason === 'protocol_error'
-                  ? 'unsupported'
-                  : 'unavailable',
+                : 'unavailable',
             modelId: model.model,
           },
         );

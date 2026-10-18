@@ -29,6 +29,10 @@ class Generation(BaseModel):
     temperature: confloat(ge=0.0, le=2.0) = Field(
         ..., description="Sampling temperature."
     )
+    thinking: bool | None = Field(
+        None,
+        description="Whether a model that can answer both ways thinks before it answers. Unset: the caller decides.",
+    )
     topP: confloat(ge=0.0, le=1.0) = Field(..., description="Nucleus sampling cutoff.")
 
 

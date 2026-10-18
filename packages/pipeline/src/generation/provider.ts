@@ -36,6 +36,7 @@ interface Options {
   limiter?: RequestLimiter;
   /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
   headers?: Readonly<Record<string, string>>;
+  /** Thinking is on only when the person switched it on; null leaves it off, as false does. */
   thinking?: boolean | null;
   reasoningEffort?: ReasoningEffort | null;
   reasoning?: ReasoningCapability;
@@ -226,6 +227,11 @@ export const BUSY_RETRIES = 5;
 const MAX_BACKOFF_MS = 16_000;
 /** The longest wait a Retry-After header may impose; a longer one is the run's deadline's call. */
 const MAX_RETRY_AFTER_MS = 30_000;
+/** How long an answer may take, and how long once the model thinks before it. */
+const ANSWER_TIMEOUT_MS = 65_000;
+const THINKING_TIMEOUT_MS = 180_000;
+/** Tokens a thinking model gets for its reasoning on top of the answer's budget. */
+const THINKING_TOKENS = 8192;
 
 /** Retry-After as milliseconds: either seconds or an HTTP date. */
 function retryAfterMs(header: string | null): number {
@@ -326,11 +332,15 @@ export class OpenAICompatibleProvider implements TextProvider {
     try {
       const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
       const generation = this.generation.get(agent);
+      // The slide budgets are sized for answers, so a model thinks only when asked to, and then
+      // gets more room and time for it.
+      const thinking = this.options.thinking === true;
       const reasoningFields = reasoningRequestFields(
         this.options.reasoning,
         this.options.reasoningEffort,
-        this.options.thinking,
+        thinking,
       );
+      const thinkingTokens = thinking ? THINKING_TOKENS : 0;
       const answerFormat = this.options.answerFormat;
       const system = answerFormat
         ? `${instructions}\n\n${answerFormat.format.replace('{{schema}}', JSON.stringify(outputSchema))}`
@@ -368,7 +378,10 @@ export class OpenAICompatibleProvider implements TextProvider {
               },
               // A redirect would carry the key to wherever the server points; refuse it instead.
               redirect: 'error',
-              signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
+              signal: AbortSignal.any([
+                signal,
+                AbortSignal.timeout(thinking ? THINKING_TIMEOUT_MS : ANSWER_TIMEOUT_MS),
+              ]),
             },
             {
               model: this.model,
@@ -376,7 +389,7 @@ export class OpenAICompatibleProvider implements TextProvider {
               ...(samplingAllowed(this.options.reasoning, reasoningFields)
                 ? { temperature: generation?.temperature ?? 0.35, top_p: generation?.topP ?? 1 }
                 : {}),
-              max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
+              max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1) + thinkingTokens,
               ...reasoningFields,
               response_format: {
                 type: 'json_schema',
@@ -430,7 +443,8 @@ export class OpenAICompatibleProvider implements TextProvider {
                 : '';
             const refusal =
               typeof choice?.message?.refusal === 'string' ? choice.message.refusal : '';
-            const maxTokens = (generation?.maxOutputTokens ?? 3600) * (attempt + 1);
+            const maxTokens =
+              (generation?.maxOutputTokens ?? 3600) * (attempt + 1) + thinkingTokens;
             if (!content.trim() || refusal.trim() || choice?.finish_reason === 'length') {
               if (allowRetry(attempt, 2)) {
                 attempt += 1;

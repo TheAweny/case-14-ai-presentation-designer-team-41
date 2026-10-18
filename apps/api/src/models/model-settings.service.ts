@@ -502,6 +502,12 @@ export class ModelSettingsService {
         if (stored.ownerId !== null) personal = true;
       }
     }
+    // Clearing takes away what the administrator sees: their own choice, when they made one,
+    // and not the default under it.
+    if (actor.admin && assignment.kind === 'unassigned') {
+      const own = await this.store.listRoles(actor.userId);
+      if (own.some((role) => role.role === assignment.role)) personal = true;
+    }
     const owner = personal ? actor.userId : null;
     if (assignment.kind === 'unassigned') await this.store.clearRole(assignment.role, owner);
     else await this.store.setRole(assignment satisfies StoredRole, owner);

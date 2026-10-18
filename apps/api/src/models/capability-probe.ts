@@ -20,6 +20,9 @@ const NO_SUCH_EFFORT = 'lct-probe-no-such-effort';
 const refusal = (status: number) =>
   status >= 400 && status < 500 && ![401, 402, 403, 408, 429].includes(status);
 
+/** `'none'`, or `none` between other values of a list. */
+const listsNone = (message: string) => /["'`]none["'`]|\bnone\s*,|,\s*none\b/.test(message);
+
 export async function probeReasoning(
   model: ResolvedModel,
   prompt: string,
@@ -53,7 +56,11 @@ export async function probeReasoning(
   // the field and passes real depths on. Refused for the field itself ("unsupported parameter"),
   // or for anything else: it does not.
   const readsValue = message.includes(NO_SUCH_EFFORT) || /\blow\b[\s\S]*\bhigh\b/.test(message);
-  return readsValue
-    ? { known: true, value: { toggle: 'reasoning-effort', levels: true } }
-    : { known: true, value: null };
+  if (!readsValue) return { known: true, value: null };
+  // Thinking can be switched off only where `none` is among the listed values: o3, GPT-5 and
+  // vLLM, which checks the field for every model, refuse it. Elsewhere only the depth is chosen.
+  return {
+    known: true,
+    value: { toggle: listsNone(message) ? 'reasoning-effort' : null, levels: true },
+  };
 }

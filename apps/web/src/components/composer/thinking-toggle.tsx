@@ -14,8 +14,9 @@ import { useModelCapabilities } from './use-model-capabilities';
 import { PROMPT_CHIP } from './prompt-box';
 
 /**
- * Thinking on or off, as ChatGPT's “Think” chip. Only a model that probing showed answers both
- * ways gets it: the others either always think or never do, and a switch there would lie.
+ * Whether the model thinks while it builds a deck. The chat always thinks where it can; this
+ * chip is for the build only. Only a model that probing showed answers both ways gets it: the
+ * others either always think or never do, and a switch there would lie.
  */
 export function ThinkingToggle({
   model,
@@ -27,7 +28,7 @@ export function ThinkingToggle({
 }) {
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
-  const on = useSyncExternalStore(subscribeThinking, readThinking, () => true);
+  const on = useSyncExternalStore(subscribeThinking, readThinking, () => false);
   const selected = models ? effectiveModel(models, model) : null;
   const capabilities = useModelCapabilities(selected);
   if (!capabilities?.reasoning.toggle) return null;

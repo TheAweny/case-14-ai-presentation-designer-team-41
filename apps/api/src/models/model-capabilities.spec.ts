@@ -47,7 +47,7 @@ function gateway() {
   return vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as { model: string };
     return body.model === 'thinker'
-      ? new Response('unsupported reasoning effort: "lct-probe-no-such-effort"', { status: 400 })
+      ? new Response("Supported values are: 'none', 'low', 'medium', 'high'.", { status: 400 })
       : Response.json({ choices: [{ message: { content: 'o' } }] });
   }) as unknown as typeof fetch;
 }
@@ -102,5 +102,51 @@ describe('ModelCapabilityService', () => {
     await service.setManualKinds('hub', 'talker', null, actor);
     const reset = await service.withManualKinds(await settings.get(actor), actor);
     expect(reset.connections[0]?.manualKinds).toEqual({});
+  });
+
+  it('keeps what a person says about their own connection off a shared one at the same address', async () => {
+    const connection = (connectionId: string, details: Record<string, ModelDetails>) => ({
+      connectionId,
+      name: connectionId,
+      preset: 'custom' as const,
+      baseUrl,
+      hasKey: true,
+      keyHint: null,
+      managed: false,
+      shared: connectionId === 'hub',
+      editable: connectionId !== 'hub',
+      lastCheck: { ok: true as const, at: '2026-10-17T00:00:00Z', models: ['m'], details },
+    });
+    const settings: ModelSettings = {
+      connections: [
+        connection('hub', { m: { reasoning: { toggle: null, levels: false } } }),
+        // A check the person's own form sent, saying whatever they liked.
+        connection('mine', { m: { reasoning: { toggle: 'reasoning-effort', levels: true } } }),
+      ],
+      roles: [],
+    };
+    const service = new ModelCapabilityService(
+      new MemoryModelSettingsStore(),
+      {
+        get: async () => settings,
+        resolve: async (ref: ModelRef): Promise<ResolvedModel> => ({
+          connectionId: ref.connectionId,
+          baseUrl,
+          apiKey: 'key',
+          model: ref.modelId,
+          headers: {},
+        }),
+      } as unknown as ModelSettingsService,
+      prompts,
+      gateway(),
+    );
+    await service.check('hub', actor, true);
+    await service.check('mine', actor, true);
+    await service.setManualKinds('mine', 'm', ['image'], actor);
+    await expect(
+      service.capabilitiesOf({ connectionId: 'hub', modelId: 'm' }, actor),
+    ).resolves.toMatchObject({ reasoning: { toggle: null, levels: false } });
+    const view = await service.withManualKinds(settings, actor);
+    expect(view.connections.map((item) => item.manualKinds)).toEqual([{}, { m: ['image'] }]);
   });
 });

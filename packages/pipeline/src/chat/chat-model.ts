@@ -100,7 +100,9 @@ const STEP_TIMEOUT_MS = 180000;
 /**
  * The OpenAI chat completions API with tools, streamed. A server that refuses tools is asked in
  * the JSON mode instead: one answer is `{say, tool, arguments}`, the same tools described in the
- * system prompt, and the text arrives whole rather than streamed.
+ * system prompt, and the text arrives whole rather than streamed. A step offered no tools that
+ * someone reads as it arrives (`onText`) streams: that mode would only hold it back. Without a
+ * reader the JSON mode keeps the answer in shape.
  */
 export class OpenAICompatibleChatModel implements ChatModel {
   readonly model: string;
@@ -129,7 +131,8 @@ export class OpenAICompatibleChatModel implements ChatModel {
     };
     const release = await acquireModelSlot(bounded.signal);
     try {
-      if (request.tools.length > 0 && !this.withoutTools) {
+      const streamed = request.tools.length > 0 ? !this.withoutTools : request.onText !== undefined;
+      if (streamed) {
         const native = await this.native(bounded);
         if (native !== 'tools-refused') return native;
         this.withoutTools = true;
@@ -213,11 +216,19 @@ export class OpenAICompatibleChatModel implements ChatModel {
     const response = await this.post(
       {
         stream: !this.buffered,
-        tools: request.tools.map((tool) => ({
-          type: 'function',
-          function: { name: tool.name, description: tool.description, parameters: tool.parameters },
-        })),
-        tool_choice: 'auto',
+        ...(request.tools.length > 0
+          ? {
+              tools: request.tools.map((tool) => ({
+                type: 'function',
+                function: {
+                  name: tool.name,
+                  description: tool.description,
+                  parameters: tool.parameters,
+                },
+              })),
+              tool_choice: 'auto',
+            }
+          : {}),
         messages: request.messages.map(openAiMessage),
       },
       request.signal,
@@ -231,7 +242,11 @@ export class OpenAICompatibleChatModel implements ChatModel {
         detail,
       );
       if (failure.failure.kind === 'quota-exhausted') throw failure;
-      if ([400, 404, 422, 501].includes(response.status) && /tool|function/i.test(detail)) {
+      if (
+        request.tools.length > 0 &&
+        [400, 404, 422, 501].includes(response.status) &&
+        /tool|function/i.test(detail)
+      ) {
         return 'tools-refused';
       }
       throw failure;

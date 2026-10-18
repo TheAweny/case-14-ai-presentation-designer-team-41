@@ -42,7 +42,11 @@ describe('OpenAICompatibleChatModel', () => {
   it.each([true, false])(
     'keeps thinking enabled in native and JSON requests (tools=%s)',
     async (native) => {
-      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      const fetchImpl = vi.fn<typeof fetch>();
+      // A server without tools is asked again in the JSON mode.
+      if (!native)
+        fetchImpl.mockResolvedValueOnce(new Response('tools are not supported', { status: 400 }));
+      fetchImpl.mockResolvedValue(
         Response.json({
           choices: [
             {
@@ -63,17 +67,38 @@ describe('OpenAICompatibleChatModel', () => {
         levels: false,
       }).step({
         messages: [],
-        tools: native ? tools : [],
+        tools,
         signal: AbortSignal.timeout(5000),
         onText,
       });
-      expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)).chat_template_kwargs).toEqual({
-        enable_thinking: true,
-      });
+      const body = JSON.parse(String(fetchImpl.mock.calls.at(-1)?.[1]?.body));
+      expect(body.chat_template_kwargs).toEqual({ enable_thinking: true });
+      expect(body.response_format === undefined).toBe(native);
       expect(step.text).toBe('Ответ');
       expect(onText.mock.calls.flat().join('')).toBe('Ответ');
     },
   );
+
+  it('streams a step offered no tools to whoever reads it as it arrives', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        stream([{ choices: [{ delta: { content: 'Итог' }, finish_reason: 'stop' }] }]),
+      );
+    const onText = vi.fn();
+    const step = await model(fetchImpl).step({
+      messages: [{ role: 'user', content: 'Подведи итог' }],
+      tools: [],
+      signal: AbortSignal.timeout(5000),
+      onText,
+    });
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({ stream: true });
+    expect(body.tools).toBeUndefined();
+    expect(body.response_format).toBeUndefined();
+    expect(step).toMatchObject({ text: 'Итог', finishReason: 'stop', toolCalls: [] });
+    expect(onText.mock.calls.flat().join('')).toBe('Итог');
+  });
 
   it('rejects tool calls paired with a stop finish reason instead of tool_calls', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(

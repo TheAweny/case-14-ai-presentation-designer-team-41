@@ -27,9 +27,7 @@ import type { ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
 import {
   readReasoningEffort,
-  readThinking,
   subscribeReasoningEffort,
-  subscribeThinking,
   writeReasoningEffort,
 } from '@/lib/reasoning-effort';
 import { EffortSlider } from './effort-slider';
@@ -70,7 +68,6 @@ export function ModelMenu({
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
-  const thinking = useSyncExternalStore(subscribeThinking, readThinking, () => true);
   const [open, setOpen] = useState(false);
   const capabilities = useModelCapabilities(models ? effectiveModel(models, value) : null);
   if (!models) return null;
@@ -126,10 +123,9 @@ export function ModelMenu({
         group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
     );
   const reasoning = capabilities?.reasoning;
-  // A depth only where probing showed it changes how much the model thinks, and only while it
-  // thinks: switched off, the model answers at once.
-  const depth =
-    reasoning !== undefined && reasoning.levels && (reasoning.toggle === null || thinking);
+  // A depth only where probing showed it changes how much the model thinks. The chat always
+  // thinks where it can, so the depth matters even while deck builds do not think.
+  const depth = reasoning !== undefined && reasoning.levels;
   const levelLabel = (level: ReasoningEffort) => t(`levels.${level}`);
 
   return (

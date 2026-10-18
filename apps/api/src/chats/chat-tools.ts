@@ -58,7 +58,7 @@ export interface ChatToolScope {
   readonly mode: ChatMode;
   /** The model the person picked for the chat; the deck is written with it too. */
   readonly model: ModelRef | null;
-  /** The thinking switch of the turn; the deck is written with it too. */
+  /** The person's switch for thinking while the deck is written; the chat does not follow it. */
   readonly thinking?: boolean | null;
   /** The depth of thinking of the turn, for the deck as well. */
   readonly reasoningEffort?: ReasoningEffort | null;

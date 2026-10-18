@@ -426,6 +426,11 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       sealBegun();
       throw error;
     }
+    // A call on the reserved last step is not run, however the server ended it: the steps ran out.
+    if (finalizing && answer.toolCalls.length > 0) {
+      sealBegun();
+      return { steps: step, inputTokens, outputTokens, end: 'limit' };
+    }
     const finish = answer.truncated ? 'length' : answer.finishReason;
     if (finish && finish !== 'stop' && finish !== 'tool_calls') {
       sealBegun();
@@ -436,10 +441,6 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       if (!answer.text.trim())
         return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: 'empty' };
       return { steps: step, inputTokens, outputTokens, end: 'answer' };
-    }
-    if (finalizing) {
-      sealBegun();
-      return { steps: step, inputTokens, outputTokens, end: 'limit' };
     }
     messages.push({ role: 'assistant', content: answer.text, toolCalls: answer.toolCalls });
     let waiting = false;

@@ -23,24 +23,31 @@ function server(answer: () => Response) {
 
 describe('probeReasoning', () => {
   it('finds a server that reads reasoning_effort by its refusal of a made-up depth', async () => {
-    const refused = server(
+    const switchable = server(
       () =>
-        new Response('unsupported reasoning effort: "lct-probe-no-such-effort"', { status: 400 }),
+        new Response(
+          "Invalid value: 'lct-probe-no-such-effort'. Supported values are: 'none', 'low', 'medium', and 'high'.",
+          { status: 400 },
+        ),
     );
-    await expect(probeReasoning(model, 'ok', refused)).resolves.toEqual({
+    await expect(probeReasoning(model, 'ok', switchable)).resolves.toEqual({
       known: true,
       value: { toggle: 'reasoning-effort', levels: true },
     });
-    const listed = server(
-      () =>
-        new Response("Invalid value. Supported values are: 'low', 'medium', 'high'.", {
-          status: 400,
-        }),
-    );
-    await expect(probeReasoning(model, 'ok', listed)).resolves.toMatchObject({
-      known: true,
-      value: { levels: true },
-    });
+  });
+
+  it('offers only the depth where none is not among the values (o3, vLLM)', async () => {
+    for (const text of [
+      "Invalid value. Supported values are: 'low', 'medium', 'high'.",
+      "Input should be 'low', 'medium' or 'high'",
+      'unsupported reasoning effort: "lct-probe-no-such-effort"',
+    ]) {
+      const listed = server(() => new Response(text, { status: 400 }));
+      await expect(probeReasoning(model, 'ok', listed)).resolves.toEqual({
+        known: true,
+        value: { toggle: null, levels: true },
+      });
+    }
   });
 
   it('offers nothing where the field itself is refused or simply dropped', async () => {

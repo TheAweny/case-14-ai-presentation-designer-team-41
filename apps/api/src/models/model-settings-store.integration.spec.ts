@@ -54,16 +54,33 @@ describeWithPostgres('PostgresModelSettingsStore integration', () => {
   });
 
   it('keeps how a model thinks and the kinds set by hand', async () => {
-    const baseUrl = 'https://hub.example.test/v1';
-    await store.saveReasoning(baseUrl, 'm', { toggle: 'reasoning-effort', levels: true }, '1.3.0');
-    await store.setManualKinds(baseUrl, 'm', ['text', 'vision']);
-    expect(await store.getCapability(baseUrl, 'm')).toEqual({
+    const scope = { connectionId: 'hub', baseUrl: 'https://hub.example.test/v1' };
+    await store.saveReasoning(scope, 'm', { toggle: 'reasoning-effort', levels: true }, '1.3.0');
+    await store.setManualKinds(scope, 'm', ['text', 'vision']);
+    expect(await store.getCapability(scope, 'm')).toEqual({
       reasoning: { toggle: 'reasoning-effort', levels: true },
       manualKinds: ['text', 'vision'],
       probeVersion: '1.3.0',
     });
-    await store.setManualKinds(baseUrl, 'm', null);
-    expect((await store.listCapabilities(baseUrl)).get('m')?.manualKinds).toBeUndefined();
+    await store.setManualKinds(scope, 'm', null);
+    expect((await store.listCapabilities(scope)).get('m')?.manualKinds).toBeUndefined();
+  });
+
+  it('keeps findings apart for connections to the same address', async () => {
+    const baseUrl = 'https://hub.example.test/v1';
+    const shared = { connectionId: 'shared', baseUrl };
+    const own = { connectionId: 'own', baseUrl };
+    await store.saveReasoning(shared, 'm', { toggle: null, levels: false }, '1.3.0');
+    await store.saveReasoning(own, 'm', { toggle: 'reasoning-effort', levels: true }, '1.3.0');
+    await store.setManualKinds(own, 'm', ['image']);
+    expect(await store.getCapability(shared, 'm')).toEqual({
+      reasoning: { toggle: null, levels: false },
+      probeVersion: '1.3.0',
+    });
+    // The same connection moved to another server starts afresh.
+    expect(
+      await store.getCapability({ connectionId: 'own', baseUrl: 'https://x.test/v1' }, 'm'),
+    ).toBeNull();
   });
 
   it('keeps the check of the server connection across restarts', async () => {
