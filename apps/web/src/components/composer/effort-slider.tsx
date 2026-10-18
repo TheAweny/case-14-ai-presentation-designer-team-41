@@ -38,9 +38,10 @@ export function EffortSlider({
       const width = track.clientWidth;
       const progress = index / Math.max(1, REASONING_EFFORTS.length - 1);
       const offset = Math.max(0, width - EDGE * 2) * progress;
-      const fraction = progress === 1 ? 1 : Math.min(1, (EDGE + offset + 7) / Math.max(1, width));
+      // Track and fill run between the two extreme thumb centres, so the thumb covers their ends:
+      // nothing peeks out past it at either end.
       const thumbTransform = `translateX(${offset}px)`;
-      const fillTransform = `scaleX(${fraction})`;
+      const fillTransform = `scaleX(${progress})`;
       if (!smooth || reduce) {
         thumb.style.transform = thumbTransform;
         fill.style.transform = fillTransform;
@@ -122,11 +123,11 @@ export function EffortSlider({
       }}
       onKeyDown={onKeyDown}
     >
-      <span aria-hidden className="absolute inset-x-0 top-2 bottom-2 rounded bg-muted" />
+      <span aria-hidden className="absolute inset-x-3 top-2 bottom-2 rounded bg-muted" />
       <span
         ref={fillRef}
         aria-hidden
-        className="absolute top-2 bottom-2 left-0 w-full origin-left rounded bg-foreground/40"
+        className="absolute inset-x-3 top-2 bottom-2 origin-left rounded bg-foreground/40"
       />
       {REASONING_EFFORTS.map((level, at) => (
         <i

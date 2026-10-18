@@ -3,6 +3,7 @@ import type { ChatMessage, ChatTurnRequest } from '@lct/contracts';
 import type { Account } from '../accounts/account-rules.js';
 import type { GenerationService } from '../generation/generation.service.js';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
+import type { ModelCapabilityService } from '../models/model-capabilities.js';
 import { ChatsService } from './chats.service.js';
 
 const account = { id: 'owner' } as Account;
@@ -12,6 +13,7 @@ const request = (text = 'Построй презентацию'): ChatTurnReques
   mode: 'plan',
   model: null,
   reasoningEffort: null,
+  thinking: null,
   projectId: null,
   deckId: null,
   slideCount: null,
@@ -121,7 +123,11 @@ function database(messages: ChatMessage[] = []) {
 }
 
 function service(db: ReturnType<typeof database>) {
-  const instance = new ChatsService({} as GenerationService, {} as ModelSettingsService);
+  const instance = new ChatsService(
+    {} as GenerationService,
+    {} as ModelSettingsService,
+    {} as ModelCapabilityService,
+  );
   Reflect.set(instance, 'pool', db.pool);
   Reflect.set(instance, 'lockPool', db.pool);
   const answer = vi.fn(async () => new Promise<void>((resolve) => pending.push(resolve)));

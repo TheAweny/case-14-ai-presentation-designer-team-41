@@ -16,6 +16,7 @@ import { HealthController } from '../health/health.controller.js';
 import { LibraryController } from '../library/library.controller.js';
 import { ModelSettingsController } from '../models/model-settings.controller.js';
 import { ModelSettingsService } from '../models/model-settings.service.js';
+import { ModelCapabilityService } from '../models/model-capabilities.js';
 import { RunsController } from '../runs/runs.controller.js';
 import { RunsService } from '../runs/runs.service.js';
 import { DOCS_TAGS, buildOpenApiDocument, convertSchema } from './openapi.js';
@@ -38,6 +39,7 @@ const SERVICES: Type<unknown>[] = [
   ChatsService,
   GenerationService,
   ModelSettingsService,
+  ModelCapabilityService,
   RunsService,
 ];
 

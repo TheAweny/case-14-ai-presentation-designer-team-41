@@ -5,8 +5,11 @@ import {
   enabledModelIds,
   isModelEnabled,
   isRoleOptional,
+  modelKindsOf,
+  roleKind,
   usesWriterModelByDefault,
   type ConnectionModelsInput,
+  type ManualKindsInput,
   type ConnectionCheck,
   type ConnectionInput,
   type ConnectionPreset,
@@ -54,6 +57,7 @@ export {
   checkErrorSchema as CheckErrorSchema,
   connectionModelsInputSchema as ConnectionModelsInputSchema,
   connectionCheckSchema as ConnectionCheckSchema,
+  modelKindsOf,
   connectionInputProblems,
   connectionInputSchema as ConnectionInputSchema,
   connectionNameProblem,
@@ -91,6 +95,7 @@ export {
   type PipelineRole,
   type ProbeInput,
   type RoleAssignment,
+  type ManualKindsInput,
 } from '@lct/contracts';
 
 /**
@@ -202,6 +207,18 @@ export function knownModels(connection: ModelConnection): readonly string[] {
   return enabledModelIds(reported, connection.enabledModels ?? null);
 }
 
+/**
+ * Модели подключения, годные для роли. Что умеет модель, говорит описание провайдера в `/models`
+ * или ручная пометка в настройках; модель без описания считается текстовой, которая, возможно,
+ * видит картинки. Модели изображений и голоса без описания или пометки не предлагаются.
+ */
+export function modelsForRole(connection: ModelConnection, role: PipelineRole): readonly string[] {
+  const kind = roleKind(role);
+  return knownModels(connection).filter((modelId) =>
+    modelKindsOf(connection, modelId).kinds.includes(kind),
+  );
+}
+
 /** Модели, которые проверка нашла, ещё до фильтра включённых. */
 export function reportedModels(connection: ModelConnection): readonly string[] {
   return connection.lastCheck?.ok === true ? connection.lastCheck.models : [];
@@ -285,4 +302,9 @@ export interface ModelSettingsSource {
    * подключение менять нельзя.
    */
   setConnectionModels(input: ConnectionModelsInput): Promise<ModelConnection>;
+  /**
+   * Задать вручную, что умеет модель подключения; `kinds: null` — вернуть описание провайдера.
+   * Менять может тот, кому можно менять подключение.
+   */
+  setModelKinds(connectionId: string, input: ManualKindsInput): Promise<void>;
 }

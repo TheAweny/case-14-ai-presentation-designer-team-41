@@ -1,6 +1,6 @@
 import type { ModelEntry } from '@lct/contracts';
 import type { AgentUsage, ModelProvider, ModelRequest } from './provider.js';
-import { reasoningRequestFields } from './reasoning.js';
+import { CompatibleRequests, refusedParameter } from './compatibility.js';
 
 export interface OpenAICompatibleOptions {
   readonly model: ModelEntry;
@@ -82,9 +82,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
   readonly name: string;
   readonly usage = new Map<string, AgentUsage>();
   private readonly options: OpenAICompatibleOptions;
+  private readonly requests: CompatibleRequests;
 
   constructor(options: OpenAICompatibleOptions) {
     this.options = options;
+    this.requests = new CompatibleRequests(options.fetch);
     this.name = `openai-compatible:${options.model.id}`;
   }
 
@@ -100,7 +102,13 @@ export class OpenAICompatibleProvider implements ModelProvider {
           ]
         : input;
     const messages: { role: string; content: unknown }[] = [
-      { role: 'system', content: request.agent.instructions },
+      {
+        role: 'system',
+        content: [
+          request.agent.instructions,
+          ...(request.responseSchema ? [JSON.stringify(request.responseSchema.schema)] : []),
+        ].join('\n\n'),
+      },
       { role: 'user', content: userContent },
     ];
     if (feedback !== undefined) {
@@ -110,7 +118,6 @@ export class OpenAICompatibleProvider implements ModelProvider {
       });
     }
     const body: Record<string, unknown> = {
-      ...reasoningRequestFields(model.servedName ?? model.repo),
       ...model.extraBody,
       model: model.servedName ?? model.repo,
       messages,
@@ -128,7 +135,6 @@ export class OpenAICompatibleProvider implements ModelProvider {
     } else if (mode !== 'off') {
       body.response_format = { type: 'json_object' };
     }
-    const doFetch = this.options.fetch ?? fetch;
     const gate = gateFor(baseUrl, this.options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT);
     let reason = '';
     for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
@@ -136,24 +142,27 @@ export class OpenAICompatibleProvider implements ModelProvider {
         await pause(FIRST_PAUSE_MS * 2 ** (attempt - 1));
       }
       const response = await gate.run(() =>
-        doFetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            ...this.options.headers,
-            'content-type': 'application/json',
-            authorization: `Bearer ${apiKey}`,
+        this.requests.post(
+          `${baseUrl.replace(/\/+$/, '')}/chat/completions`,
+          {
+            headers: {
+              ...this.options.headers,
+              'content-type': 'application/json',
+              authorization: `Bearer ${apiKey}`,
+            },
+            redirect: 'error',
+            signal: AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
           },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-        }),
+          body,
+        ),
       );
       if (!response.ok) {
         const detail = (await response.text()).slice(0, 500);
         if (response.status === 429 || response.status >= 500) {
-          reason = `HTTP ${response.status}: ${detail}`;
+          reason = `HTTP ${response.status}${refusedParameter(detail)}`;
           continue;
         }
-        throw new Error(`${this.name} answered HTTP ${response.status}: ${detail}`);
+        throw new Error(`${this.name} answered HTTP ${response.status}${refusedParameter(detail)}`);
       }
       const payload = (await response.json()) as ChatResponse;
       const spent = this.usage.get(request.agent.config.id) ?? {

@@ -21,6 +21,7 @@ const sharedSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   answerFormatFile: z.string().min(1),
   answerRepairFile: z.string().min(1),
+  capabilityProbeFile: z.string().min(1).optional(),
 });
 
 /**
@@ -42,6 +43,26 @@ export async function loadAnswerFormat(
     throw new Error('The shared answer prompts must hold {{schema}} and {{problems}}.');
   }
   return { version: config.version, format: format.trim(), repair: repair.trim() };
+}
+
+/** The message of the free request that tells whether a server reads `reasoning_effort`. */
+export interface CapabilityProbe {
+  readonly version: string;
+  readonly prompt: string;
+}
+
+/** The capability probe message (`shared/capability-probe.md`). */
+export async function loadCapabilityProbe(
+  registryDir: string = DEFAULT_REGISTRY_DIR,
+): Promise<CapabilityProbe> {
+  const directory = join(registryDir, '..', 'shared');
+  const config = sharedSchema.parse(
+    parseYaml(await readFile(join(directory, 'shared.yaml'), 'utf8')),
+  );
+  if (!config.capabilityProbeFile) throw new Error('shared.yaml names no capabilityProbeFile.');
+  const prompt = (await readFile(join(directory, config.capabilityProbeFile), 'utf8')).trim();
+  if (!prompt) throw new Error('The capability probe message is empty.');
+  return { version: config.version, prompt };
 }
 
 /** Reads every agent directory of the registry, sorted by id for reproducible manifests. */

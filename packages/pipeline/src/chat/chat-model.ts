@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AgentGeneration, ReasoningEffort } from '@lct/contracts';
+import type { AgentGeneration, ReasoningCapability, ReasoningEffort } from '@lct/contracts';
 import {
   acquireModelSlot,
   backoff,
@@ -9,7 +9,8 @@ import {
   throttleModelSlots,
 } from '../generation/provider.js';
 import { modelHttpFailure } from './model-failure.js';
-import { reasoningRequestFields } from '../models/reasoning.js';
+import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js';
+import { CompatibleRequests } from '../models/compatibility.js';
 
 /** A tool as the model sees it: a name, what it is for, and its input as JSON Schema. */
 export interface ToolSpec {
@@ -54,6 +55,8 @@ export interface ModelStepRequest {
   readonly signal: AbortSignal;
   /** Text as it arrives, reasoning blocks left out. */
   readonly onText?: (delta: string) => void;
+  /** I replace provisional streamed text before a verified buffered retry. */
+  readonly onTextReset?: () => void;
   /**
    * A tool call has begun: its name is known, its arguments are still being written. A plan is
    * long to write, and the person sees what the agent is doing meanwhile.
@@ -84,18 +87,15 @@ export interface OpenAICompatibleChatOptions {
   readonly headers?: Readonly<Record<string, string>>;
   /** Sent only when this model accepts `reasoning_effort`. */
   readonly reasoningEffort?: ReasoningEffort | null;
+  /** Off only when the person switched thinking off for a model that can answer both ways. */
+  readonly thinking?: boolean | null;
+  /** What probing this model showed about thinking; without it no thinking field is sent. */
+  readonly reasoning?: ReasoningCapability;
   readonly fetchImpl?: typeof fetch;
 }
 
 /** A slow step is a stuck step: the person waits in front of the chat. */
 const STEP_TIMEOUT_MS = 180000;
-
-/**
- * Servers known to refuse `tools` in this process, by endpoint and model. A server started without
- * a tool parser (vLLM without `--enable-auto-tool-choice`, older Ollama) answers 400 to every
- * request with tools; after the first refusal the chat asks it in the JSON mode straight away.
- */
-const withoutTools = new Set<string>();
 
 /**
  * The OpenAI chat completions API with tools, streamed. A server that refuses tools is asked in
@@ -105,7 +105,9 @@ const withoutTools = new Set<string>();
 export class OpenAICompatibleChatModel implements ChatModel {
   readonly model: string;
   private readonly endpoint: string;
-  private readonly fetchImpl: typeof fetch;
+  private readonly requests: CompatibleRequests;
+  private buffered = false;
+  private withoutTools = false;
 
   get contextOverheadChars(): number {
     return this.options.jsonModeInstructions.length;
@@ -116,23 +118,23 @@ export class OpenAICompatibleChatModel implements ChatModel {
     if (!options.model.trim()) throw new Error('The model name is required.');
     this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     this.model = options.model;
-    this.fetchImpl = options.fetchImpl ?? fetch;
-  }
-
-  private get key(): string {
-    return `${this.endpoint} ${this.model}`;
+    this.requests = new CompatibleRequests(options.fetchImpl);
   }
 
   async step(request: ModelStepRequest): Promise<ModelStep> {
     // One slot for the whole step: a streamed answer holds the connection until its last chunk.
-    const release = await acquireModelSlot(request.signal);
+    const bounded = {
+      ...request,
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
+    };
+    const release = await acquireModelSlot(bounded.signal);
     try {
-      if (request.tools.length > 0 && !withoutTools.has(this.key)) {
-        const native = await this.native(request);
+      if (request.tools.length > 0 && !this.withoutTools) {
+        const native = await this.native(bounded);
         if (native !== 'tools-refused') return native;
-        withoutTools.add(this.key);
+        this.withoutTools = true;
       }
-      return await this.json(request);
+      return await this.json(bounded);
     } finally {
       release();
     }
@@ -140,31 +142,40 @@ export class OpenAICompatibleChatModel implements ChatModel {
 
   private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
     const generation = this.options.generation;
+    const reasoning = reasoningRequestFields(
+      this.options.reasoning,
+      this.options.reasoningEffort,
+      this.options.thinking,
+    );
+    const sampling = samplingAllowed(this.options.reasoning, reasoning)
+      ? { temperature: generation?.temperature ?? 0.4, top_p: generation?.topP ?? 1 }
+      : {};
     for (let attempt = 0; ; attempt++) {
       let response: Response;
       try {
-        response = await this.fetchImpl(this.endpoint, {
-          method: 'POST',
-          headers: {
-            ...this.options.headers,
-            ...(this.options.apiKey.trim()
-              ? { Authorization: `Bearer ${this.options.apiKey}` }
-              : {}),
-            'Content-Type': 'application/json',
+        response = await this.requests.post(
+          this.endpoint,
+          {
+            headers: {
+              ...this.options.headers,
+              ...(this.options.apiKey.trim()
+                ? { Authorization: `Bearer ${this.options.apiKey}` }
+                : {}),
+              'Content-Type': 'application/json',
+            },
+            // A redirect would carry the key to wherever the server points; refuse it instead.
+            redirect: 'error',
+            signal: AbortSignal.any([signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
           },
-          // A redirect would carry the key to wherever the server points; refuse it instead.
-          redirect: 'error',
-          signal: AbortSignal.any([signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
-          body: JSON.stringify({
+          {
             model: this.model,
             seed: this.options.seed ?? 42,
-            temperature: generation?.temperature ?? 0.4,
-            top_p: generation?.topP ?? 1,
+            ...sampling,
             max_tokens: generation?.maxOutputTokens ?? 4096,
-            ...reasoningRequestFields(this.model, this.options.reasoningEffort),
+            ...reasoning,
             ...body,
-          }),
-        });
+          },
+        );
       } catch (error) {
         // A dropped connection before any answer is a network accident: ask again. Stopping the
         // turn is not one.
@@ -201,7 +212,7 @@ export class OpenAICompatibleChatModel implements ChatModel {
   private async native(request: ModelStepRequest): Promise<ModelStep | 'tools-refused'> {
     const response = await this.post(
       {
-        stream: true,
+        stream: !this.buffered,
         tools: request.tools.map((tool) => ({
           type: 'function',
           function: { name: tool.name, description: tool.description, parameters: tool.parameters },
@@ -225,7 +236,25 @@ export class OpenAICompatibleChatModel implements ChatModel {
       }
       throw failure;
     }
-    return readCompletion(response, request.onText, request.onToolCall);
+    const answer = await readCompletion(response, request.onText, request.onToolCall);
+    if (
+      answer.bufferedRetry &&
+      !this.buffered &&
+      !request.signal.aborted &&
+      (!answer.text || !request.onText || request.onTextReset)
+    ) {
+      if (answer.text) request.onTextReset?.();
+      this.buffered = true;
+      const verified = await this.native(request);
+      return verified === 'tools-refused'
+        ? verified
+        : {
+            ...verified,
+            inputTokens: answer.inputTokens + verified.inputTokens,
+            outputTokens: answer.outputTokens + verified.outputTokens,
+          };
+    }
+    return answer;
   }
 
   private async json(request: ModelStepRequest): Promise<ModelStep> {
@@ -390,7 +419,7 @@ async function readCompletion(
   response: Response,
   onText?: (delta: string) => void,
   onToolCall?: (name: string) => void,
-): Promise<ModelStep> {
+): Promise<ModelStep & { bufferedRetry?: boolean }> {
   const thinking = new ThinkingFilter();
   let text = '';
   const say = (delta: string) => {
@@ -404,6 +433,9 @@ async function readCompletion(
   let usage: Chunk['usage'];
   let protocolError = false;
   let interrupted = false;
+  let bufferedRetry = false;
+  let invalidChunk = false;
+  let transportFailed = false;
 
   if (!(response.headers.get('content-type') ?? '').includes('text/event-stream')) {
     const data = (await response.json()) as Completion;
@@ -445,10 +477,12 @@ async function readCompletion(
         chunk = value as Chunk;
       } catch {
         protocolError = true;
+        invalidChunk = true;
         return;
       }
       if (ended) {
         protocolError = true;
+        invalidChunk = true;
         return;
       }
       if (chunk.usage) usage = chunk.usage;
@@ -465,6 +499,8 @@ async function readCompletion(
           index > calls.length
         ) {
           protocolError = true;
+          if (index === undefined) bufferedRetry = true;
+          else invalidChunk = true;
           continue;
         }
         const call = (calls[index] ??= { id: '', name: '', arguments: '' });
@@ -493,10 +529,14 @@ async function readCompletion(
       take(buffer.trim());
     } catch {
       interrupted = true;
+      transportFailed = true;
     } finally {
       reader.releaseLock();
     }
-    if (!ended) interrupted = true;
+    if (!ended) {
+      if (!interrupted && (finish === 'stop' || finish === 'tool_calls')) bufferedRetry = true;
+      interrupted = true;
+    }
   }
   const rest = thinking.flush();
   if (rest) {
@@ -513,6 +553,12 @@ async function readCompletion(
   const complete = finishReason === 'tool_calls' || finishReason === 'stop';
   return {
     text,
+    ...(bufferedRetry &&
+    !invalidChunk &&
+    !transportFailed &&
+    (finish === 'stop' || finish === 'tool_calls')
+      ? { bufferedRetry: true }
+      : {}),
     toolCalls: (complete ? calls : [])
       .filter((call) => call.name !== '')
       .map((call) => ({ ...call, id: call.id || `call-${crypto.randomUUID()}` })),

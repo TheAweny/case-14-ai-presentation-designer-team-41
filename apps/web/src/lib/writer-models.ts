@@ -1,8 +1,8 @@
 import {
   MODEL_FAMILIES,
   assignmentFor,
-  knownModels,
   modelFamily,
+  modelsForRole,
   modelOffered,
   type ModelFamily,
   type ModelRef,
@@ -68,7 +68,7 @@ export function writerModels(settings: ModelSettings, role: PipelineRole = 'writ
 
   const groups = settings.connections
     .map((connection) => {
-      const known = knownModels(connection);
+      const known = modelsForRole(connection, role);
       const manual =
         assigned?.connectionId === connection.connectionId &&
         !known.includes(assigned.modelId) &&

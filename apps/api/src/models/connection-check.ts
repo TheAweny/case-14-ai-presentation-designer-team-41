@@ -9,6 +9,7 @@ import {
   type CheckError,
   type ConnectionCheck,
 } from '@lct/contracts';
+import { modelDetailsOf } from './model-details.js';
 
 /**
  * A check of a connection: a real `GET {baseUrl}/models`, as any OpenAI-compatible client does it.
@@ -188,7 +189,17 @@ export async function checkModelConnection(
     }
     const models = parseModelsResponse(body);
     if (models === null) return fail({ kind: 'invalid-response' });
-    return { ok: true, at: now().toISOString(), models: [...models] } satisfies ConnectionCheck;
+    // What the provider says about its models, read from the same answer: no extra request.
+    const described = modelDetailsOf(body);
+    const details = Object.fromEntries(
+      models.flatMap((modelId) => (described[modelId] ? [[modelId, described[modelId]]] : [])),
+    );
+    return {
+      ok: true,
+      at: now().toISOString(),
+      models: [...models],
+      ...(Object.keys(details).length > 0 ? { details } : {}),
+    } satisfies ConnectionCheck;
   };
 
   try {

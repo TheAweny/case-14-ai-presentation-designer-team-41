@@ -3,6 +3,7 @@ import { ModelRequestError } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import type { GenerationService } from '../generation/generation.service.js';
 import type { ModelSettingsService, ResolvedModel } from '../models/model-settings.service.js';
+import type { ModelCapabilityService } from '../models/model-capabilities.js';
 import { ChatsService } from './chats.service.js';
 import type { ChatAgent } from '@lct/pipeline';
 import type { ChatTurnRequest } from '@lct/contracts';
@@ -34,7 +35,13 @@ function resolved(connectionId: string): ResolvedModel {
 }
 
 function service(models: Pick<ModelSettingsService, 'resolve' | 'resolveRole'>): ChatsService {
-  const instance = new ChatsService({} as GenerationService, models as ModelSettingsService);
+  const instance = new ChatsService(
+    {} as GenerationService,
+    models as ModelSettingsService,
+    {
+      reasoningOf: vi.fn(async () => ({ toggle: null, levels: false })),
+    } as unknown as ModelCapabilityService,
+  );
   services.push(instance);
   return instance;
 }

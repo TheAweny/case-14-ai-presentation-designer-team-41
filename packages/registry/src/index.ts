@@ -2,6 +2,7 @@ export {
   DEFAULT_REGISTRY_DIR,
   loadAgent,
   loadAnswerFormat,
+  loadCapabilityProbe,
   loadRegistry,
   toManifestEntry,
 } from './loader.js';
@@ -11,6 +12,7 @@ export {
   loadModelCatalog,
   resolveModel,
 } from './models.js';
+export type { CapabilityProbe } from './loader.js';
 export type {
   AgentManifestEntry,
   AnswerFormat,

@@ -8,28 +8,31 @@ export const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
 export const reasoningEffortSchema = z.enum(REASONING_EFFORTS);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
-const QWEN3 = /(?:^|[^a-z0-9])qwen3(?:[.:-]|$)/i;
 /**
- * Qwen3.8, including the final alias `qwen38-27b-fp8`. The next character is `8`
- * or `.8`, so this must stay separate from `QWEN3`: that hybrid path asks the
- * model to think. Request fields force this checkpoint's thinking off.
+ * What a model lets the person choose about thinking, as the API learnt it by asking the model
+ * (`apps/api/src/models/capability-probe.ts`), never from its name.
+ *
+ * `toggle` — how thinking is switched on and off, when the model answers both ways:
+ * `enable-thinking` through `chat_template_kwargs` (Qwen3 hybrids on vLLM and the like), or
+ * `reasoning-effort`: a depth to think, `none` to answer at once. Null: it cannot be switched,
+ * the model always or never thinks.
+ *
+ * `levels` — the provider reads `reasoning_effort` (it refuses a value that does not exist) and
+ * the model thinks, so the depth reaches the model.
  */
-const QWEN38 = /(?:^|[^a-z0-9])qwen3(?:\.8|8)(?![a-z0-9])/i;
-const QWEN_WITHOUT_THINKING = /instruct[-_:]?2507|qwen3[-_:]vl.*instruct/i;
-/** gpt-oss, GPT-5 and the o-series. A plain GPT chat model does not take this field. */
-const EFFORT_MODEL =
-  /gpt-oss|(?:^|[^a-z0-9])gpt-5|(?:^|[^a-z0-9])o[134](?:-[a-z0-9]+)*(?:[^a-z0-9]|$)/i;
+export const reasoningCapabilitySchema = z.object({
+  toggle: z.enum(['enable-thinking', 'reasoning-effort']).nullable(),
+  levels: z.boolean(),
+});
+export type ReasoningCapability = z.infer<typeof reasoningCapabilitySchema>;
 
-/**
- * What the composer may offer. `effort` — a depth slider that becomes `reasoning_effort`.
- * `thinking` — Qwen3 hybrids other than Qwen3.8, already asked to think, with no depth control.
- * `none` — no slider. Qwen3.8 is recognized here so it does not take the hybrid path;
- * its requests force thinking off. Every other `none` leaves the server defaults alone.
- */
-export function reasoningControl(modelId: string): 'effort' | 'thinking' | 'none' {
-  const id = modelId.trim();
-  if (EFFORT_MODEL.test(id)) return 'effort';
-  if (QWEN38.test(id)) return 'none';
-  if (QWEN3.test(id) && !QWEN_WITHOUT_THINKING.test(id)) return 'thinking';
-  return 'none';
-}
+/** A model nothing is known about, or one that offers no choice: the server's defaults stand. */
+export const NO_REASONING_CHOICE: ReasoningCapability = { toggle: null, levels: false };
+
+/** The answer of `GET /model-settings/capabilities`: what one model offers. */
+export const modelCapabilitiesSchema = z.object({
+  reasoning: reasoningCapabilitySchema,
+  /** False while the model has not been probed yet or the probe could not finish. */
+  probed: z.boolean(),
+});
+export type ModelCapabilities = z.infer<typeof modelCapabilitiesSchema>;

@@ -7,6 +7,7 @@ import {
   type ConnectionCheck,
   type ConnectionModelsInput,
   type ConnectionInput,
+  type ManualKindsInput,
   type ConnectionProblems,
   type ModelConnection,
   type ModelSettings,
@@ -107,6 +108,20 @@ export async function setRoleAction(assignment: RoleAssignment): Promise<Setting
   const source = modelSettingsSource((await requireAccount()).userId);
   try {
     await source.setRole(assignment);
+    return { ok: true, settings: await source.get() };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Отметить вручную, что умеет модель; `kinds: null` — как говорит провайдер. */
+export async function setModelKindsAction(
+  connectionId: string,
+  input: ManualKindsInput,
+): Promise<SettingsResult> {
+  const source = modelSettingsSource((await requireAccount()).userId);
+  try {
+    await source.setModelKinds(connectionId, input);
     return { ok: true, settings: await source.get() };
   } catch (error) {
     return failure(error);

@@ -28,3 +28,30 @@ export function subscribeReasoningEffort(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+const THINKING_KEY = 'lct.thinking';
+const thinkingListeners = new Set<() => void>();
+
+/** Whether a hybrid model thinks. On unless the person switched it off; the server agrees. */
+export function readThinking(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return window.localStorage.getItem(THINKING_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function writeThinking(on: boolean): void {
+  try {
+    window.localStorage.setItem(THINKING_KEY, on ? 'on' : 'off');
+  } catch {
+    // The choice still applies until the page reloads.
+  }
+  for (const listener of thinkingListeners) listener();
+}
+
+export function subscribeThinking(listener: () => void): () => void {
+  thinkingListeners.add(listener);
+  return () => thinkingListeners.delete(listener);
+}

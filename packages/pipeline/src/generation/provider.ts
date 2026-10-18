@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import type { AgentGeneration } from '@lct/contracts';
-import { reasoningRequestFields } from '../models/reasoning.js';
+import type { AgentGeneration, ReasoningCapability, ReasoningEffort } from '@lct/contracts';
+import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js';
+import { CompatibleRequests, refusedParameter } from '../models/compatibility.js';
 import type { AttemptBudget } from './attempt-budget.js';
 
 export interface TextProvider {
@@ -35,6 +36,9 @@ interface Options {
   limiter?: RequestLimiter;
   /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
   headers?: Readonly<Record<string, string>>;
+  thinking?: boolean | null;
+  reasoningEffort?: ReasoningEffort | null;
+  reasoning?: ReasoningCapability;
   /**
    * One logical `generate` call, retries included. `running` means the agent was asked, not that
    * a GPU is busy: the limiter's queue is not a separate agent. Events carry no prompt or answer.
@@ -267,7 +271,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     outputTokens: number;
     provider: string;
   }[] = [];
-  private readonly fetchImpl: typeof fetch;
+  private readonly requests: CompatibleRequests;
   private readonly endpoint: string;
   private readonly provider: string;
   private readonly limiter: RequestLimiter;
@@ -291,7 +295,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}/chat/completions`;
     this.provider = url.hostname;
     this.model = options.model;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requests = new CompatibleRequests(options.fetchImpl);
     this.limiter = options.limiter ?? requests;
   }
 
@@ -317,6 +321,11 @@ export class OpenAICompatibleProvider implements TextProvider {
     try {
       const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
       const generation = this.generation.get(agent);
+      const reasoningFields = reasoningRequestFields(
+        this.options.reasoning,
+        this.options.reasoningEffort,
+        this.options.thinking,
+      );
       const answerFormat = this.options.answerFormat;
       const system = answerFormat
         ? `${instructions}\n\n${answerFormat.format.replace('{{schema}}', JSON.stringify(outputSchema))}`
@@ -342,25 +351,28 @@ export class OpenAICompatibleProvider implements TextProvider {
         let wait = 500;
         try {
           signal.throwIfAborted();
-          const response = await this.fetchImpl(this.endpoint, {
-            method: 'POST',
-            headers: {
-              ...this.options.headers,
-              ...(this.options.apiKey.trim()
-                ? { Authorization: `Bearer ${this.options.apiKey}` }
-                : {}),
-              'Content-Type': 'application/json',
+          const response = await this.requests.post(
+            this.endpoint,
+            {
+              headers: {
+                ...this.options.headers,
+                ...(this.options.apiKey.trim()
+                  ? { Authorization: `Bearer ${this.options.apiKey}` }
+                  : {}),
+                'Content-Type': 'application/json',
+              },
+              // A redirect would carry the key to wherever the server points; refuse it instead.
+              redirect: 'error',
+              signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
             },
-            // A redirect would carry the key to wherever the server points; refuse it instead.
-            redirect: 'error',
-            signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
-            body: JSON.stringify({
+            {
               model: this.model,
               seed: this.options.seed ?? 42,
-              temperature: generation?.temperature ?? 0.35,
-              top_p: generation?.topP ?? 1,
+              ...(samplingAllowed(this.options.reasoning, reasoningFields)
+                ? { temperature: generation?.temperature ?? 0.35, top_p: generation?.topP ?? 1 }
+                : {}),
               max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
-              ...reasoningRequestFields(this.model, undefined, { thinking: false }),
+              ...reasoningFields,
               response_format: {
                 type: 'json_schema',
                 json_schema: {
@@ -382,10 +394,11 @@ export class OpenAICompatibleProvider implements TextProvider {
                     ]
                   : []),
               ],
-            }),
-          });
+            },
+            budget ? () => budget.tryTake() : undefined,
+          );
           if (!response.ok) {
-            await response.body?.cancel();
+            const detail = await response.text().catch(() => '');
             const allowed = BUSY_STATUSES.has(response.status) && allowRetry(busy, BUSY_RETRIES);
             if (!allowed) {
               const retrying = BUSY_STATUSES.has(response.status) && busy < BUSY_RETRIES;
@@ -393,7 +406,8 @@ export class OpenAICompatibleProvider implements TextProvider {
                 `Model API HTTP ${response.status} for ${this.model}` +
                   (busy ? ` after ${busy} retries` : '') +
                   (retrying ? '; the shared attempt budget is exhausted' : '') +
-                  '; no alternate model was used.',
+                  '; no alternate model was used.' +
+                  refusedParameter(detail),
               );
             }
             wait = retryDelay(busy++, response.headers.get('retry-after'));

@@ -1,43 +1,50 @@
-import { reasoningControl, type ReasoningEffort } from '@lct/contracts';
+import {
+  NO_REASONING_CHOICE,
+  type ReasoningCapability,
+  type ReasoningEffort,
+} from '@lct/contracts';
+
+/** Depth when a model is asked to think and nobody picked one. */
+const DEFAULT_EFFORT: ReasoningEffort = 'medium';
 
 /**
- * Same names as `QWEN38` in `@lct/contracts` reasoning.ts. Kept beside the request
- * so Qwen3.8 does not inherit the hybrid switch, which turns thinking on.
- */
-const QWEN38_THINKING_OFF = /(?:^|[^a-z0-9])qwen3(?:\.8|8)(?![a-z0-9])/i;
-
-export type ReasoningRequestOptions = {
-  /** Hybrid Qwen3 only. Defaults to `true`. Qwen3.8 ignores this and stays off. */
-  thinking?: boolean;
-};
-
-/**
- * Thinking fields a chat request may add. Qwen3 hybrids get `enable_thinking`
- * (default `true`; `options.thinking` overrides it) and nothing else: they do not
- * accept `reasoning_effort`. Qwen3.8 (`qwen38`, `qwen3.8`) is the exception: the
- * checkpoint thinks unless asked not to, so the request forces
- * `enable_thinking: false` and still omits `reasoning_effort`, even when
- * `options.thinking` is set. gpt-oss, GPT-5 and the o-series get `reasoning_effort`
- * only when a depth was chosen. Every other name keeps the server defaults.
+ * Thinking fields a chat request adds, by what probing the model showed it does
+ * (`ReasoningCapability`). Thinking is on unless the person switched it off.
+ *
+ * - `enable-thinking`: `chat_template_kwargs.enable_thinking` on or off, plus the depth when
+ *   the model showed the depth changes how much it thinks.
+ * - `reasoning-effort`: the depth makes the model think, `none` makes it answer at once (probing
+ *   showed it thinks several times less with it); the depth is the person's when it is real, a
+ *   medium one otherwise.
+ * - no switch: the depth when it is real, nothing otherwise.
  */
 export function reasoningRequestFields(
-  model: string,
+  capability: ReasoningCapability = NO_REASONING_CHOICE,
   effort?: ReasoningEffort | null,
-  options?: ReasoningRequestOptions,
+  thinking?: boolean | null,
 ): Record<string, unknown> {
-  if (QWEN38_THINKING_OFF.test(model.trim())) {
-    return { chat_template_kwargs: { enable_thinking: false } };
-  }
-  const control = reasoningControl(model);
-  if (control === 'thinking') {
+  const on = thinking !== false;
+  const depth = capability.levels && effort ? effort : null;
+  if (capability.toggle === 'enable-thinking') {
     return {
-      chat_template_kwargs: {
-        enable_thinking: /(?:^|[^a-z0-9])thinking(?:[^a-z0-9]|$)/i.test(model)
-          ? true
-          : (options?.thinking ?? true),
-      },
+      chat_template_kwargs: { enable_thinking: on },
+      ...(on && depth ? { reasoning_effort: depth } : {}),
     };
   }
-  if (control === 'effort' && effort) return { reasoning_effort: effort };
-  return {};
+  if (capability.toggle === 'reasoning-effort') {
+    return { reasoning_effort: on ? (depth ?? DEFAULT_EFFORT) : 'none' };
+  }
+  return depth ? { reasoning_effort: depth } : {};
+}
+
+/**
+ * Whether the request may carry `temperature` and `top_p`. A model thinking through
+ * `reasoning_effort` refuses them: OpenAI reasoning models answer 400, and Claude takes only
+ * temperature 1 while it thinks. A template switch (vLLM and the like) keeps sampling as it is.
+ */
+export function samplingAllowed(
+  capability: ReasoningCapability = NO_REASONING_CHOICE,
+  reasoning: Record<string, unknown>,
+): boolean {
+  return capability.toggle === 'enable-thinking' || !('reasoning_effort' in reasoning);
 }

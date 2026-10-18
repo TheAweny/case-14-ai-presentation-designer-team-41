@@ -4,6 +4,8 @@ import type {
   ConnectionHeader,
   ConnectionPreset,
   PipelineRole,
+  ModelKind,
+  ReasoningCapability,
   RoleAssignment,
 } from '@lct/contracts';
 
@@ -24,6 +26,18 @@ export interface StoredConnection {
   readonly headers: readonly ConnectionHeader[];
   /** The account the connection belongs to; null — shared with everyone by an administrator. */
   readonly ownerId: string | null;
+}
+
+/**
+ * What probing a model found, by server address and model id. A field that is missing was not
+ * settled. `probeVersion` is the version of the probe prompts that found it.
+ */
+export interface StoredCapability {
+  /** How the model thinks, from the provider's description or the free probe. */
+  readonly reasoning?: ReasoningCapability;
+  /** The kinds the person set by hand; they win over the provider's description. */
+  readonly manualKinds?: readonly ModelKind[];
+  readonly probeVersion: string;
 }
 
 /** A stored role: a model or switched off. A role that is not stored is not assigned. */
@@ -59,6 +73,25 @@ export interface ModelSettingsStore {
    */
   getServerModels(baseUrl: string): Promise<readonly string[] | null>;
   setServerModels(baseUrl: string, enabledModels: readonly string[] | null): Promise<void>;
+  /** The last check of the server connection at this address; null — never checked. */
+  getServerCheck(baseUrl: string): Promise<ConnectionCheck | null>;
+  setServerCheck(baseUrl: string, check: ConnectionCheck): Promise<void>;
+  getCapability(baseUrl: string, modelId: string): Promise<StoredCapability | null>;
+  /** Everything found for the models behind one server address, by model id. */
+  listCapabilities(baseUrl: string): Promise<ReadonlyMap<string, StoredCapability>>;
+  /** Stores how the model thinks; the other fields keep their value. */
+  saveReasoning(
+    baseUrl: string,
+    modelId: string,
+    reasoning: ReasoningCapability,
+    probeVersion: string,
+  ): Promise<void>;
+  /** Sets or, with null, clears the kinds the person chose by hand. */
+  setManualKinds(
+    baseUrl: string,
+    modelId: string,
+    kinds: readonly ModelKind[] | null,
+  ): Promise<void>;
 }
 
 interface ConnectionRow {
@@ -229,6 +262,78 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
       [baseUrl, enabledModels === null ? null : JSON.stringify(enabledModels)],
     );
   }
+
+  async getServerCheck(baseUrl: string) {
+    const result = await this.pool.query<{ last_check: ConnectionCheck | null }>(
+      'SELECT last_check FROM model_server_connection WHERE base_url = $1',
+      [baseUrl],
+    );
+    return result.rows[0]?.last_check ?? null;
+  }
+
+  async setServerCheck(baseUrl: string, check: ConnectionCheck) {
+    await this.pool.query(
+      `INSERT INTO model_server_connection (base_url, last_check) VALUES ($1, $2::jsonb)
+       ON CONFLICT (base_url) DO UPDATE SET last_check = EXCLUDED.last_check, updated_at = now()`,
+      [baseUrl, JSON.stringify(check)],
+    );
+  }
+
+  async getCapability(baseUrl: string, modelId: string) {
+    return (await this.capabilityRows(baseUrl, modelId)).get(modelId) ?? null;
+  }
+
+  async listCapabilities(baseUrl: string) {
+    return this.capabilityRows(baseUrl, null);
+  }
+
+  private async capabilityRows(baseUrl: string, modelId: string | null) {
+    const result = await this.pool.query<{
+      model_id: string;
+      reasoning: ReasoningCapability | null;
+      manual_kinds: ModelKind[] | null;
+      probe_version: string;
+    }>(
+      `SELECT model_id, reasoning, manual_kinds, probe_version
+       FROM model_capabilities WHERE base_url = $1 AND ($2::text IS NULL OR model_id = $2)`,
+      [baseUrl, modelId],
+    );
+    const found = new Map<string, StoredCapability>();
+    for (const row of result.rows) {
+      found.set(row.model_id, {
+        ...(row.reasoning ? { reasoning: row.reasoning } : {}),
+        ...(row.manual_kinds ? { manualKinds: row.manual_kinds } : {}),
+        probeVersion: row.probe_version,
+      });
+    }
+    return found;
+  }
+
+  async saveReasoning(
+    baseUrl: string,
+    modelId: string,
+    reasoning: ReasoningCapability,
+    probeVersion: string,
+  ) {
+    await this.pool.query(
+      `INSERT INTO model_capabilities (base_url, model_id, reasoning, probe_version)
+       VALUES ($1, $2, $3::jsonb, $4)
+       ON CONFLICT (base_url, model_id) DO UPDATE SET
+         reasoning = EXCLUDED.reasoning, probe_version = EXCLUDED.probe_version,
+         updated_at = now()`,
+      [baseUrl, modelId, JSON.stringify(reasoning), probeVersion],
+    );
+  }
+
+  async setManualKinds(baseUrl: string, modelId: string, kinds: readonly ModelKind[] | null) {
+    await this.pool.query(
+      `INSERT INTO model_capabilities (base_url, model_id, manual_kinds, probe_version)
+       VALUES ($1, $2, $3::jsonb, 'manual')
+       ON CONFLICT (base_url, model_id) DO UPDATE SET
+         manual_kinds = EXCLUDED.manual_kinds, updated_at = now()`,
+      [baseUrl, modelId, kinds === null ? null : JSON.stringify(kinds)],
+    );
+  }
 }
 
 /** Settings in memory, for tests. Behaves like the PostgreSQL store. */
@@ -238,6 +343,9 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
   readonly roles = new Map<string, Map<PipelineRole, StoredRole>>();
   readonly events: SettingsEvent[] = [];
   readonly serverModels = new Map<string, readonly string[] | null>();
+  readonly serverChecks = new Map<string, ConnectionCheck>();
+  /** Probe findings by `${baseUrl} ${modelId}`. */
+  readonly capabilities = new Map<string, StoredCapability>();
 
   private rolesOf(owner: RoleOwner) {
     const key = owner ?? '';
@@ -295,5 +403,41 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
 
   async setServerModels(baseUrl: string, enabledModels: readonly string[] | null) {
     this.serverModels.set(baseUrl, enabledModels);
+  }
+
+  async getServerCheck(baseUrl: string) {
+    return this.serverChecks.get(baseUrl) ?? null;
+  }
+
+  async setServerCheck(baseUrl: string, check: ConnectionCheck) {
+    this.serverChecks.set(baseUrl, check);
+  }
+
+  async getCapability(baseUrl: string, modelId: string) {
+    return this.capabilities.get(`${baseUrl} ${modelId}`) ?? null;
+  }
+
+  async listCapabilities(baseUrl: string) {
+    const found = new Map<string, StoredCapability>();
+    for (const [key, value] of this.capabilities) {
+      if (key.startsWith(`${baseUrl} `)) found.set(key.slice(baseUrl.length + 1), value);
+    }
+    return found;
+  }
+
+  async saveReasoning(
+    baseUrl: string,
+    modelId: string,
+    reasoning: ReasoningCapability,
+    probeVersion: string,
+  ) {
+    const key = `${baseUrl} ${modelId}`;
+    this.capabilities.set(key, { ...this.capabilities.get(key), reasoning, probeVersion });
+  }
+
+  async setManualKinds(baseUrl: string, modelId: string, kinds: readonly ModelKind[] | null) {
+    const key = `${baseUrl} ${modelId}`;
+    const { manualKinds: _, ...rest } = this.capabilities.get(key) ?? { probeVersion: 'manual' };
+    this.capabilities.set(key, kinds === null ? rest : { ...rest, manualKinds: kinds });
   }
 }

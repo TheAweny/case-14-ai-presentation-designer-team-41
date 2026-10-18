@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRunRepository, type RunRepository } from '@lct/run-store';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
+import type { ModelCapabilityService } from '../models/model-capabilities.js';
 import { GenerationController } from './generation.controller.js';
 import { GenerationService, PROFILE_REVISION, type StoredTemplate } from './generation.service.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -41,7 +42,9 @@ let controller: GenerationController | undefined;
 let service: GenerationService | undefined;
 
 function controllerOf(runs: RunRepository, models: ModelSettingsService): GenerationController {
-  service = new GenerationService(runs, models);
+  service = new GenerationService(runs, models, {
+    reasoningOf: async () => ({ toggle: null, levels: false }),
+  } as unknown as ModelCapabilityService);
   return new GenerationController(service);
 }
 

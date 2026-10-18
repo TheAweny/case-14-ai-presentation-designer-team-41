@@ -679,3 +679,49 @@ describe('lenientJson', () => {
     expect(lenientJson('{"title": "Итог", ')).toBeNull();
   });
 });
+
+describe('buffered retry text replacement', () => {
+  it('retracts provisional text even after an early tool announcement closed its part', async () => {
+    const { writer: answer, events } = writer();
+    const chat: ChatModel = {
+      model: 'buffered',
+      async step(request) {
+        request.onText?.('Provisional');
+        request.onToolCall?.('echo');
+        request.onTextReset?.();
+        request.onText?.('Verified');
+        return {
+          text: 'Verified',
+          toolCalls: [],
+          finishReason: 'stop',
+          truncated: false,
+          inputTokens: 1,
+          outputTokens: 1,
+        };
+      },
+    };
+    const result = await runChatTurn({
+      model: chat,
+      instructions: 'system',
+      history: [],
+      tools: [echo],
+      specs: [],
+      mode: 'chat',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      loopNudge: 'continue',
+    });
+    expect(result.end).toBe('answer');
+    expect(
+      answer.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join(''),
+    ).toBe('Verified');
+    expect(
+      events.some(
+        (event) => event.type === 'part' && event.part.type === 'text' && event.part.text === '',
+      ),
+    ).toBe(true);
+  });
+});

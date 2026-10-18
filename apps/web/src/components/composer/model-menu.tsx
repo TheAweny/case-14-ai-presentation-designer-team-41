@@ -23,14 +23,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
-import { reasoningControl, type ReasoningEffort } from '@lct/contracts';
+import type { ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
 import {
   readReasoningEffort,
+  readThinking,
   subscribeReasoningEffort,
+  subscribeThinking,
   writeReasoningEffort,
 } from '@/lib/reasoning-effort';
 import { EffortSlider } from './effort-slider';
+import { useModelCapabilities } from './use-model-capabilities';
 import { cn } from '@/lib/utils';
 import {
   MODEL_SEARCH_FROM,
@@ -62,7 +65,9 @@ export function ModelMenu({
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
+  const thinking = useSyncExternalStore(subscribeThinking, readThinking, () => true);
   const [open, setOpen] = useState(false);
+  const capabilities = useModelCapabilities(models ? effectiveModel(models, value) : null);
   if (!models) return null;
 
   const trigger = cn(
@@ -115,7 +120,11 @@ export function ModelMenu({
       (group) =>
         group.connectionId === selected.connectionId && group.models.includes(selected.modelId),
     );
-  const control = selected ? reasoningControl(selected.modelId) : 'none';
+  const reasoning = capabilities?.reasoning;
+  // A depth only where probing showed it changes how much the model thinks, and only while it
+  // thinks: switched off, the model answers at once.
+  const depth =
+    reasoning !== undefined && reasoning.levels && (reasoning.toggle === null || thinking);
   const levelLabel = (level: ReasoningEffort) => t(`levels.${level}`);
 
   return (
@@ -140,7 +149,7 @@ export function ModelMenu({
                       : shortModelName(selected.modelId)
                     : t('chooseDefault'))}
             </span>
-            {control === 'effort' && effort ? (
+            {depth && effort ? (
               <span key={effort} className="effort-label shrink-0 text-muted-foreground">
                 {levelLabel(effort)}
               </span>
@@ -165,7 +174,7 @@ export function ModelMenu({
           models={models}
           selected={value}
           followingDefault={value === null}
-          control={control}
+          depth={depth}
           effort={effort ?? 'high'}
           onEffort={writeReasoningEffort}
           onPick={(model) => {
@@ -193,7 +202,7 @@ export function ModelList({
   models,
   selected,
   followingDefault,
-  control,
+  depth,
   effort,
   onEffort,
   onPick,
@@ -204,7 +213,8 @@ export function ModelList({
   /** Явно выбранная модель. Null — человек следует модели по умолчанию. */
   selected: ModelRef | null;
   followingDefault: boolean;
-  control: 'effort' | 'thinking' | 'none';
+  /** Show the depth slider: the model takes a depth now. */
+  depth: boolean;
   effort: ReasoningEffort;
   onEffort: (value: ReasoningEffort) => void;
   onPick: (ref: ModelRef) => void;
@@ -402,7 +412,7 @@ export function ModelList({
           )
         )}
       </div>
-      {control === 'effort' ? (
+      {depth ? (
         <div className="border-t border-border px-1 pt-2.5">
           <div className="flex items-center justify-between px-2 text-[0.8125rem] text-muted-foreground">
             <span>{t('effort')}</span>
@@ -417,10 +427,6 @@ export function ModelList({
             valueText={(level) => t(`levels.${level}`)}
           />
         </div>
-      ) : control === 'thinking' ? (
-        <p className="border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
-          {t('thinkingOn')}
-        </p>
       ) : null}
       <div className="border-t border-border p-1">
         <button

@@ -34,6 +34,7 @@ export {
   IconBorderVertical as BorderVerticalIcon,
   IconBoxMultiple as GroupIcon,
   IconBrain as ModelsIcon,
+  IconBrain as ThinkingIcon,
   IconBriefcase as BriefcaseIcon,
   IconBulb as IdeaIcon,
   IconChartArea as AreaChartIcon,

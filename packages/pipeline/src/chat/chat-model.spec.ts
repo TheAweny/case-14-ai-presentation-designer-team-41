@@ -1,3 +1,4 @@
+import type { ReasoningCapability } from '@lct/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelRequestError } from './model-failure.js';
 import { OpenAICompatibleChatModel, ThinkingFilter, type ToolSpec } from './chat-model.js';
@@ -12,13 +13,18 @@ function stream(chunks: unknown[]): Response {
   return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-function model(fetchImpl: typeof fetch, name = `model-${crypto.randomUUID()}`) {
+function model(
+  fetchImpl: typeof fetch,
+  name = `model-${crypto.randomUUID()}`,
+  reasoning?: ReasoningCapability,
+) {
   return new OpenAICompatibleChatModel({
     apiKey: 'key',
     baseUrl: 'https://models.example/v1',
     model: name,
     jsonModeInstructions: 'Answer as JSON.',
     fetchImpl,
+    ...(reasoning ? { reasoning } : {}),
   });
 }
 
@@ -51,7 +57,11 @@ describe('OpenAICompatibleChatModel', () => {
         }),
       );
       const onText = vi.fn();
-      const step = await model(fetchImpl, 'Qwen/Qwen3.5-27B').step({
+      // The switch comes from probing the model, whatever its name.
+      const step = await model(fetchImpl, 'served-model', {
+        toggle: 'enable-thinking',
+        levels: false,
+      }).step({
         messages: [],
         tools: native ? tools : [],
         signal: AbortSignal.timeout(5000),
@@ -446,5 +456,171 @@ describe('OpenAICompatibleChatModel', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('buffered transport compatibility', () => {
+  const nativeCall = { id: 'complete-call', function: { name: 'list_templates', arguments: '{}' } };
+  const request = () => ({
+    messages: [{ role: 'user' as const, content: 'List templates' }],
+    tools,
+    signal: AbortSignal.timeout(5000),
+  });
+
+  it('re-asks a nonstandard stream without streaming and authorizes only the complete new response', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          'data: ' +
+            JSON.stringify({
+              choices: [{ delta: { tool_calls: [nativeCall] }, finish_reason: 'tool_calls' }],
+            }) +
+            '\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { tool_calls: [nativeCall] }, finish_reason: 'tool_calls' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { content: 'Done' }, finish_reason: 'stop' }] }),
+      );
+    const chat = model(fetchImpl);
+    expect((await chat.step(request())).toolCalls).toEqual([
+      { id: 'complete-call', name: 'list_templates', arguments: '{}' },
+    ]);
+    await chat.step(request());
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).stream)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it('never accepts a truncated buffered response after a nonstandard stream', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          'data: ' +
+            JSON.stringify({
+              choices: [{ delta: { tool_calls: [nativeCall] }, finish_reason: 'tool_calls' }],
+            }) +
+            '\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { tool_calls: [nativeCall] }, finish_reason: 'length' }],
+        }),
+      );
+    expect(await model(fetchImpl).step(request())).toMatchObject({
+      toolCalls: [],
+      finishReason: 'length',
+    });
+  });
+});
+
+describe('chat JSON transport fallback', () => {
+  it('works without native tools or response_format while retaining argument validation', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('tools unsupported', { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({ error: { param: 'response_format' } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ error: { param: 'response_format' } }, { status: 400 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: { content: '{"say":"Looking","tool":"list_templates","arguments":"{}"}' },
+              finish_reason: 'stop',
+            },
+          ],
+        }),
+      );
+    const step = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(step.toolCalls).toMatchObject([{ name: 'list_templates', arguments: '{}' }]);
+    const body = JSON.parse(String(fetchImpl.mock.calls[3]?.[1]?.body));
+    expect(body.response_format).toBeUndefined();
+    expect(body.messages[0].content).toContain('Answer as JSON.');
+    expect(body.messages[0].content).toContain('list_templates');
+  });
+});
+
+describe('native tool feature isolation', () => {
+  it('does not share another account adapter tool refusal at the same endpoint and model', async () => {
+    const firstFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('tools unsupported', { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: { content: '{"say":"Done","tool":"","arguments":""}' },
+              finish_reason: 'stop',
+            },
+          ],
+        }),
+      );
+    const secondFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ choices: [{ message: { content: 'Done' }, finish_reason: 'stop' }] }),
+      );
+    const name = `shared-model-${crypto.randomUUID()}`;
+    const request = () => ({ messages: [], tools, signal: AbortSignal.timeout(5000) });
+    await model(firstFetch, name).step(request());
+    await model(secondFetch, name).step(request());
+    expect(JSON.parse(String(secondFetch.mock.calls[0]?.[1]?.body)).tools).toBeDefined();
+  });
+});
+
+describe('provisional streamed text', () => {
+  it('replaces text without a terminal marker with the verified buffered answer', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          'data: ' +
+            JSON.stringify({
+              choices: [{ delta: { content: 'Provisional' }, finish_reason: 'stop' }],
+            }) +
+            '\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { content: 'Verified answer' }, finish_reason: 'stop' }],
+        }),
+      );
+    let visible = '';
+    const onTextReset = vi.fn(() => {
+      visible = '';
+    });
+    const answer = await model(fetchImpl).step({
+      messages: [],
+      tools,
+      signal: AbortSignal.timeout(5000),
+      onText: (delta) => {
+        visible += delta;
+      },
+      onTextReset,
+    });
+    expect(onTextReset).toHaveBeenCalledTimes(1);
+    expect(visible).toBe('Verified answer');
+    expect(answer).toMatchObject({ text: visible, finishReason: 'stop', toolCalls: [] });
   });
 });

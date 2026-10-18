@@ -70,7 +70,9 @@
     },
     "effort": "Depth",
     "effortLabel": "Reasoning depth",
-    "thinkingOn": "Reasoning is on",
+    "thinking": "Reasoning",
+    "thinkingOn": "The model thinks before it answers",
+    "thinkingOff": "The model answers at once, without reasoning",
     "levels": {
       "low": "Low",
       "medium": "Medium",
@@ -82,7 +84,12 @@
     "stop": "Stop dictation",
     "empty": "The recording is empty.",
     "failed": "The recording could not be transcribed.",
-    "blocked": "The microphone is unavailable."
+    "blocked": "The microphone is unavailable.",
+    "failedWith": "Could not transcribe the recording. The provider said: {detail}",
+    "notSent": "The recording did not reach the server. Try again or record a shorter one.",
+    "transcribing": "Transcribing the recording…",
+    "transcribingShort": "Transcribing",
+    "busy": "Wait until the recording turns into text"
   },
   "prompt": {
     "stop": "Stop",

@@ -12,6 +12,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
@@ -26,6 +27,11 @@ import {
   VK_AI_SPACE_MODEL,
   VK_PROJECT_HEADER,
   connectionCheckSchema,
+  modelCapabilitiesSchema,
+  modelRefSchema,
+  manualKindsInputSchema,
+  NO_REASONING_CHOICE,
+  type ModelCapabilities,
   connectionInputSchema,
   connectionModelsInputSchema,
   modelConnectionSchema,
@@ -44,9 +50,11 @@ import {
   InvalidModelSettingsInputError,
   ManagedConnectionError,
   ModelConnectionNotFoundError,
+  ModelNotConfiguredError,
   ModelSettingsService,
   type SettingsActor,
 } from './model-settings.service.js';
+import { ModelCapabilityService } from './model-capabilities.js';
 import { ApiAccountRoutes, ApiJsonBody } from '../docs/decorators.js';
 
 const CONNECTION_EXAMPLE = {
@@ -118,7 +126,33 @@ function actorOf(account: Account): SettingsActor {
 @Controller('model-settings')
 @ApiAccountRoutes('models')
 export class ModelSettingsController {
-  constructor(@Inject(ModelSettingsService) private readonly settings: ModelSettingsService) {}
+  constructor(
+    @Inject(ModelSettingsService) private readonly settings: ModelSettingsService,
+    @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
+  ) {}
+
+  @Get('capabilities')
+  @ApiOperation({
+    summary: 'Возможности модели',
+    description:
+      'Как у модели включается размышление и меняет ли что-то глубина. Узнаётся короткими запросами к самой модели при первом обращении и запоминается; по имени модели ничего не решается.',
+  })
+  @ApiOkResponse({ standardSchema: modelCapabilitiesSchema })
+  async capabilitiesOf(
+    @Query('connectionId') connectionId: unknown,
+    @Query('modelId') modelId: unknown,
+    @CurrentAccount() account: Account,
+  ): Promise<ModelCapabilities> {
+    const ref = modelRefSchema.safeParse({ connectionId, modelId });
+    if (!ref.success) throw new BadRequestException({ reason: 'invalid' });
+    return this.capabilities.capabilitiesOf(ref.data, actorOf(account)).catch((error: unknown) => {
+      // A model that cannot be used offers nothing to choose; picking it says why elsewhere.
+      if (error instanceof ModelNotConfiguredError) {
+        return { reasoning: NO_REASONING_CHOICE, probed: false };
+      }
+      return refuse(error);
+    });
+  }
 
   @Get()
   @ApiOperation({
@@ -127,8 +161,9 @@ export class ModelSettingsController {
       'Подключения и модель для каждой роли пайплайна. Ключ не возвращается никогда: только `hasKey` и последние символы.',
   })
   @ApiOkResponse({ standardSchema: modelSettingsSchema })
-  get(@CurrentAccount() account: Account): Promise<ModelSettings> {
-    return this.settings.get(actorOf(account));
+  async get(@CurrentAccount() account: Account): Promise<ModelSettings> {
+    const actor = actorOf(account);
+    return this.capabilities.withManualKinds(await this.settings.get(actor), actor);
   }
 
   @Post('connections')
@@ -149,11 +184,15 @@ export class ModelSettingsController {
   })
   @ApiResponse({ status: 201, standardSchema: modelConnectionSchema, example: CONNECTION_EXAMPLE })
   @ApiSettingsErrors(400, 404, 409, 503)
-  saveConnection(
+  async saveConnection(
     @Body() body: unknown,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
-    return this.settings.saveConnection(body, actorOf(account)).catch(refuse);
+    const actor = actorOf(account);
+    const saved = await this.settings.saveConnection(body, actor).catch(refuse);
+    // A new or changed connection: how its models think is settled now, in the background.
+    void this.capabilities.check(saved.connectionId, actor, true);
+    return saved;
   }
 
   @Delete('connections/:id')
@@ -178,11 +217,15 @@ export class ModelSettingsController {
   @connectionParam
   @ApiOkResponse({ standardSchema: modelConnectionSchema, example: CONNECTION_EXAMPLE })
   @ApiSettingsErrors(404, 503)
-  checkConnection(
+  async checkConnection(
     @Param('id') connectionId: string,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
-    return this.settings.checkConnection(connectionId, actorOf(account)).catch(refuse);
+    const actor = actorOf(account);
+    const checked = await this.settings.checkConnection(connectionId, actor).catch(refuse);
+    // The person asked to check: how its models think is settled again, in the background.
+    void this.capabilities.check(connectionId, actor, true);
+    return checked;
   }
 
   @Put('connections/:id/models')
@@ -199,14 +242,18 @@ export class ModelSettingsController {
   })
   @ApiOkResponse({ standardSchema: modelConnectionSchema, example: CONNECTION_EXAMPLE })
   @ApiSettingsErrors(400, 404, 409)
-  setConnectionModels(
+  async setConnectionModels(
     @Param('id') connectionId: string,
     @Body() body: unknown,
     @CurrentAccount() account: Account,
   ): Promise<ModelConnection> {
     const input =
       body !== null && typeof body === 'object' ? { ...body, connectionId } : { connectionId };
-    return this.settings.setConnectionModels(input, actorOf(account)).catch(refuse);
+    const actor = actorOf(account);
+    const updated = await this.settings.setConnectionModels(input, actor).catch(refuse);
+    // Models switched on that were never settled are settled now; the rest keep their findings.
+    void this.capabilities.check(connectionId, actor, false);
+    return updated;
   }
 
   @Post('probe')
@@ -246,5 +293,30 @@ export class ModelSettingsController {
   @ApiSettingsErrors(400, 404)
   async setRole(@Body() body: unknown, @CurrentAccount() account: Account): Promise<void> {
     await this.settings.setRole(body, actorOf(account)).catch(refuse);
+  }
+
+  @Put('connections/:id/kinds')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Тип модели вручную',
+    description:
+      'Что умеет модель подключения: текст, картинки на входе, картинки на выходе, голос. Ручной выбор главнее описания провайдера; `kinds: null` возвращает описание провайдера.',
+  })
+  @ApiParam({ name: 'id', description: 'Подключение.' })
+  @ApiJsonBody(manualKindsInputSchema, {
+    'Модель видит картинки': { modelId: VK_AI_SPACE_MODEL, kinds: ['text', 'vision'] },
+  })
+  @ApiNoContentResponse({ description: 'Тип модели сохранён.' })
+  @ApiSettingsErrors(400, 404, 409)
+  async setManualKinds(
+    @Param('id') connectionId: string,
+    @Body() body: unknown,
+    @CurrentAccount() account: Account,
+  ): Promise<void> {
+    const input = manualKindsInputSchema.safeParse(body);
+    if (!input.success) throw new BadRequestException({ reason: 'invalid' });
+    await this.capabilities
+      .setManualKinds(connectionId, input.data.modelId, input.data.kinds, actorOf(account))
+      .catch(refuse);
   }
 }

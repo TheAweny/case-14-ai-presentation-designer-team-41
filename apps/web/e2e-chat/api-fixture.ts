@@ -24,18 +24,61 @@ const initialModels = (): ModelSettings => ({
   ],
 });
 let modelSettings = initialModels();
+/** What probing found per model id; a test sets it, any model not set offers no choice. */
+let capabilities = new Map<string, unknown>();
+/** What the provider says about each model of the fixture connection; null — it says nothing. */
+let details: Record<string, { kinds: string[] }> | null = null;
+/** Kinds the person set by hand, as the API keeps them. */
+let manualKinds: Record<string, string[]> = {};
 
 /** Only fixed test data. Browser chat requests are intercepted by each Playwright scenario. */
 const server = createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json');
   if (request.url === '/__reset-models') {
     modelSettings = initialModels();
+    capabilities = new Map();
+    details = null;
+    manualKinds = {};
     response.end('{}');
   } else if (request.url === '/__set-models' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);
     modelSettings = modelSettingsSchema.parse(JSON.parse(body));
     response.end('{}');
+  } else if (
+    request.url === '/model-settings/connections/fixture/kinds' &&
+    request.method === 'PUT'
+  ) {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    const { modelId, kinds } = JSON.parse(body) as { modelId: string; kinds: string[] | null };
+    if (kinds === null) delete manualKinds[modelId];
+    else manualKinds[modelId] = kinds;
+    response.statusCode = 204;
+    response.end();
+  } else if (request.url === '/__kinds' && request.method === 'PUT') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    const kinds = JSON.parse(body) as Record<string, string[]>;
+    details = Object.fromEntries(Object.entries(kinds).map(([id, list]) => [id, { kinds: list }]));
+    response.end('{}');
+  } else if (request.url === '/__capabilities' && request.method === 'PUT') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    const { modelId, reasoning } = JSON.parse(body) as { modelId: string; reasoning: unknown };
+    capabilities.set(modelId, reasoning);
+    response.end('{}');
+  } else if (request.url?.startsWith('/model-settings/capabilities?')) {
+    const modelId = new URL(request.url, 'http://fixture').searchParams.get('modelId') ?? '';
+    response.end(
+      JSON.stringify({
+        reasoning: capabilities.get(modelId) ?? { toggle: null, levels: false },
+        probed: true,
+      }),
+    );
+  } else if (request.url === '/speech/model') {
+    const speech = modelSettings.roles.find((item) => item.role === 'speech');
+    response.end(JSON.stringify({ available: speech?.kind === 'model' }));
   } else if (request.url === '/model-settings/roles' && request.method === 'PUT') {
     let body = '';
     for await (const chunk of request) body += String(chunk);
@@ -59,10 +102,26 @@ const server = createServer(async (request, response) => {
       }),
     );
   else if (request.url === '/auth/accounts') response.end(JSON.stringify({ hasAccounts: true }));
-  else if (request.url === '/model-settings') response.end(JSON.stringify(modelSettings));
-  else if (request.url === '/speech/transcriptions' && request.method === 'POST')
+  else if (request.url === '/model-settings')
+    response.end(
+      JSON.stringify({
+        ...modelSettings,
+        connections: modelSettings.connections.map((connection) => ({
+          ...connection,
+          manualKinds,
+          lastCheck:
+            details && connection.lastCheck?.ok
+              ? { ...connection.lastCheck, details }
+              : connection.lastCheck,
+        })),
+      }),
+    );
+  else if (request.url === '/speech/transcriptions' && request.method === 'POST') {
+    // A real provider takes a moment: long enough for the composer to show it is transcribing.
+    for await (const chunk of request) void chunk;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
     response.end(JSON.stringify({ text: 'Голос услышан' }));
-  else if (request.url?.startsWith('/health'))
+  } else if (request.url?.startsWith('/health'))
     response.end(
       JSON.stringify({
         status: 'ok',

@@ -1,81 +1,54 @@
 import { describe, expect, it } from 'vitest';
-import { reasoningRequestFields } from './reasoning.js';
+import { reasoningRequestFields, samplingAllowed } from './reasoning.js';
 
 describe('reasoning request policy', () => {
-  it.each([
-    'Qwen/Qwen3.5-27B',
-    'qwen3.5:27b',
-    'gpt://folder/qwen3.6-35b-a3b/latest',
-    'Qwen/Qwen3-8B',
-  ])('enables thinking for %s', (model) => {
-    expect(reasoningRequestFields(model)).toEqual({
+  it('switches enable_thinking and thinks unless switched off', () => {
+    const qwen = { toggle: 'enable-thinking', levels: false } as const;
+    expect(reasoningRequestFields(qwen, 'high', null)).toEqual({
       chat_template_kwargs: { enable_thinking: true },
     });
-  });
-  it.each(['qwen38', 'qwen3.8', 'Qwen3.8', 'qwen38-27b-fp8', 'Qwen/Qwen3.8-27B'])(
-    'forces thinking off for %s and does not send reasoning_effort',
-    (model) => {
-      expect(reasoningRequestFields(model)).toEqual({
-        chat_template_kwargs: { enable_thinking: false },
-      });
-      expect(reasoningRequestFields(model, 'high')).toEqual({
-        chat_template_kwargs: { enable_thinking: false },
-      });
-    },
-  );
-
-  it.each([
-    'custom-model',
-    'openai/gpt-oss-20b',
-    'Qwen/Qwen3-30B-A3B-Instruct-2507',
-    'Qwen/Qwen3-VL-8B-Instruct',
-    'Qwen/Qwen2.5-32B',
-  ])('preserves server defaults for %s', (model) => {
-    expect(reasoningRequestFields(model)).toEqual({});
-  });
-
-  it('sends reasoning depth only to models that accept it', () => {
-    expect(reasoningRequestFields('openai/gpt-oss-20b', 'low')).toEqual({
-      reasoning_effort: 'low',
-    });
-    expect(reasoningRequestFields('Qwen/Qwen3.5-27B', 'high')).toEqual({
-      chat_template_kwargs: { enable_thinking: true },
-    });
-    expect(reasoningRequestFields('gpt-4o', 'high')).toEqual({});
-  });
-  it('keeps thinking on for Qwen3-30B-A3B-Thinking-2507 even when options.thinking is false', () => {
-    expect(
-      reasoningRequestFields('Qwen/Qwen3-30B-A3B-Thinking-2507', undefined, { thinking: false }),
-    ).toEqual({
-      chat_template_kwargs: { enable_thinking: true },
-    });
-    expect(
-      reasoningRequestFields('gpt://folder/Qwen3-30B-A3B-Thinking-2507/latest', 'high', {
-        thinking: false,
-      }),
-    ).toEqual({
-      chat_template_kwargs: { enable_thinking: true },
-    });
-  });
-  it.each(['Qwen/Qwen3-8B', 'gpt://folder/qwen3.6-35b-a3b/latest'])(
-    'sets hybrid %s thinking from the third argument, defaulting to true',
-    (model) => {
-      expect(reasoningRequestFields(model, undefined, { thinking: false })).toEqual({
-        chat_template_kwargs: { enable_thinking: false },
-      });
-      expect(reasoningRequestFields(model)).toEqual({
-        chat_template_kwargs: { enable_thinking: true },
-      });
-    },
-  );
-
-  it('keeps Qwen3.8 off, GPT effort, and unknown names when the third argument is set', () => {
-    expect(reasoningRequestFields('qwen38-27b-fp8', undefined, { thinking: true })).toEqual({
+    expect(reasoningRequestFields(qwen, 'high', false)).toEqual({
       chat_template_kwargs: { enable_thinking: false },
     });
-    expect(reasoningRequestFields('gpt-5', 'low', { thinking: false })).toEqual({
+    expect(reasoningRequestFields({ ...qwen, levels: true }, 'low', true)).toEqual({
+      chat_template_kwargs: { enable_thinking: true },
       reasoning_effort: 'low',
     });
-    expect(reasoningRequestFields('custom-model', undefined, { thinking: false })).toEqual({});
+  });
+
+  it('asks a reasoning_effort model to think at a depth, and to stop with none', () => {
+    const hybrid = { toggle: 'reasoning-effort', levels: true } as const;
+    expect(reasoningRequestFields(hybrid, 'high', true)).toEqual({ reasoning_effort: 'high' });
+    expect(reasoningRequestFields(hybrid, 'low', false)).toEqual({ reasoning_effort: 'none' });
+    expect(reasoningRequestFields({ ...hybrid, levels: false }, 'high', null)).toEqual({
+      reasoning_effort: 'medium',
+    });
+  });
+
+  it('sends a depth only where it was shown to change the answer', () => {
+    expect(reasoningRequestFields({ toggle: null, levels: true }, 'low')).toEqual({
+      reasoning_effort: 'low',
+    });
+    expect(reasoningRequestFields({ toggle: null, levels: false }, 'low')).toEqual({});
+    expect(reasoningRequestFields(undefined, 'high', true)).toEqual({});
+  });
+
+  it('drops sampling while a model thinks through reasoning_effort', () => {
+    const hybrid = { toggle: 'reasoning-effort', levels: true } as const;
+    const qwen = { toggle: 'enable-thinking', levels: true } as const;
+    expect(samplingAllowed(hybrid, { reasoning_effort: 'low' })).toBe(false);
+    expect(samplingAllowed(hybrid, { reasoning_effort: 'none' })).toBe(false);
+    expect(samplingAllowed(qwen, { reasoning_effort: 'low' })).toBe(true);
+    expect(samplingAllowed(undefined, {})).toBe(true);
+  });
+
+  it('omits depth when enable-thinking is off and does not invent a missing switch', () => {
+    expect(
+      reasoningRequestFields({ toggle: 'enable-thinking', levels: true }, 'high', false),
+    ).toEqual({ chat_template_kwargs: { enable_thinking: false } });
+    expect(reasoningRequestFields({ toggle: null, levels: false }, 'high', false)).toEqual({});
+    expect(reasoningRequestFields({ toggle: null, levels: true }, 'low', false)).toEqual({
+      reasoning_effort: 'low',
+    });
   });
 });

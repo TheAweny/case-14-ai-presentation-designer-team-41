@@ -36,7 +36,8 @@ import { projectColorVar } from '@/lib/project-appearance';
 import { writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ModelMenu } from './model-menu';
-import { useSpeechConfigured, VoicePill } from './voice-pill';
+import { ThinkingToggle } from './thinking-toggle';
+import { useSpeechConfigured, VoicePill, type DictationPhase } from './voice-pill';
 import {
   PromptBox,
   PromptChips,
@@ -102,7 +103,9 @@ export function DeckComposer({
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [modelRequiredOpen, setModelRequiredOpen] = useState(false);
-  const [voiceError, setVoiceError] = useState<'empty' | 'failed' | 'blocked' | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  // While dictating nothing is sent, and while the recording turns into text the field waits too.
+  const [dictation, setDictation] = useState<DictationPhase>('idle');
   const speech = useSpeechConfigured();
 
   const project = projects.find((item) => item.projectId === projectId) ?? null;
@@ -149,7 +152,7 @@ export function DeckComposer({
   };
 
   const submit = () => {
-    if (!ready || sending) return;
+    if (!ready || sending || dictation !== 'idle') return;
     if (!writerModelReady(models, model)) {
       if (models !== null) setModelRequiredOpen(true);
       return;
@@ -259,7 +262,8 @@ export function DeckComposer({
           onSelect={suggestions.onSelect}
           onValueChange={suggestions.onValueChange}
           label={t('label')}
-          placeholder={t('placeholder')}
+          placeholder={dictation === 'transcribing' ? t('voice.transcribing') : t('placeholder')}
+          readOnly={dictation === 'transcribing'}
           fieldRef={field}
           describedBy={rejected.length > 0 ? rejectedId : undefined}
           onKeyDown={(event) => {
@@ -273,6 +277,7 @@ export function DeckComposer({
         <PromptToolbar
           end={
             <>
+              <ThinkingToggle model={model} />
               <ModelMenu value={model} onChange={setModel} />
               {speech ? (
                 <VoicePill
@@ -283,16 +288,17 @@ export function DeckComposer({
                     setText(next);
                   }}
                   onError={setVoiceError}
+                  onPhase={setDictation}
                 />
               ) : null}
               <PromptSubmit
                 state={promptAction({
                   hasInput: ready,
                   sending,
-                  blocked: models === null,
+                  blocked: models === null || dictation !== 'idle',
                 })}
                 label={t('submit')}
-                blockedHint={t('modelRequired.loading')}
+                blockedHint={dictation !== 'idle' ? t('voice.busy') : t('modelRequired.loading')}
               />
             </>
           }
@@ -342,7 +348,7 @@ export function DeckComposer({
       {rejected.length > 0 ? (
         <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
       ) : null}
-      {voiceError ? <PromptNote>{t(`voice.${voiceError}`)}</PromptNote> : null}
+      {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>
   );
 }

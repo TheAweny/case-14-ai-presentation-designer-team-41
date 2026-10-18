@@ -50,6 +50,7 @@ import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { actorOf, GenerationService } from '../generation/generation.service.js';
 import { ModelSettingsService, ModelNotConfiguredError } from '../models/model-settings.service.js';
+import { ModelCapabilityService } from '../models/model-capabilities.js';
 import {
   resultOf,
   withFailed,
@@ -215,6 +216,7 @@ export class ChatsService implements OnApplicationShutdown {
   constructor(
     @Inject(GenerationService) private readonly generation: GenerationService,
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
+    @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
@@ -999,6 +1001,8 @@ export class ChatsService implements OnApplicationShutdown {
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
       reasoningEffort: request.reasoningEffort,
+      thinking: request.thinking,
+      reasoning: await this.capabilities.reasoningOf(resolved),
     });
     return withConnection(model, resolved.connectionId);
   }
@@ -1039,6 +1043,8 @@ export class ChatsService implements OnApplicationShutdown {
       projectId: state.projectId,
       mode: request.mode,
       model: request.model,
+      thinking: request.thinking,
+      reasoningEffort: request.reasoningEffort,
       currentMessageId: message.id,
       messages: () => {
         sync();
@@ -1174,7 +1180,9 @@ export class ChatsService implements OnApplicationShutdown {
             kind:
               result.reason === 'context_budget' || result.reason === 'length'
                 ? 'context'
-                : 'unavailable',
+                : result.reason === 'protocol_error'
+                  ? 'unsupported'
+                  : 'unavailable',
             modelId: model.model,
           },
         );

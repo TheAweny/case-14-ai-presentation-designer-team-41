@@ -170,7 +170,7 @@ export class ModelSettingsService {
       hasKey: server.apiKey !== '',
       keyHint: keyHint(server.apiKey || null),
       headers: server.headers,
-      lastCheck: this.serverCheck,
+      lastCheck: this.serverCheck ?? (await this.store.getServerCheck(server.baseUrl)),
       enabledModels: enabledModels === null ? null : [...enabledModels],
       managed: true,
     };
@@ -255,9 +255,8 @@ export class ModelSettingsService {
     const ids = new Set(connections.map((connection) => connection.connectionId));
     const byRole = (list: readonly StoredRole[]) => new Map(list.map((role) => [role.role, role]));
     const defaults = byRole(await this.store.listRoles(null));
-    const own = actor.admin
-      ? new Map<PipelineRole, StoredRole>()
-      : byRole(await this.store.listRoles(actor.userId));
+    // An administrator's own choices exist too: a model on a connection only they can use.
+    const own = byRole(await this.store.listRoles(actor.userId));
     const usable = (assigned: StoredRole | undefined): assigned is StoredRole =>
       assigned !== undefined && (assigned.kind !== 'model' || ids.has(assigned.connectionId));
     const inherited: PipelineRole[] = [];
@@ -339,8 +338,8 @@ export class ModelSettingsService {
     // A new VK AI Space connection is the model of the finals: a key and a project are all the
     // person enters, and its model takes the roles it can perform at once. Shared, it becomes the
     // default for everyone; someone else's own choices stay theirs.
-    const roleOwner = ownerId === null ? null : actor.admin ? undefined : actor.userId;
-    if (previous === null && input.preset === 'vk-ai-space' && roleOwner !== undefined) {
+    const roleOwner = ownerId === null ? null : actor.userId;
+    if (previous === null && input.preset === 'vk-ai-space') {
       for (const role of VK_AI_SPACE_ROLES) {
         await this.store.setRole(
           { role, kind: 'model', connectionId, modelId: VK_AI_SPACE_MODEL },
@@ -426,6 +425,8 @@ export class ModelSettingsService {
         },
         { ...this.checkOptions, allowPrivateHosts: true },
       );
+      // Kept by address, so a restart of the API still knows the models and their description.
+      await this.store.setServerCheck(server.baseUrl, this.serverCheck);
       const view = await this.serverView();
       if (!view) throw new ModelConnectionNotFoundError(connectionId);
       return view;
@@ -490,17 +491,22 @@ export class ModelSettingsService {
     if (assignment.kind === 'disabled' && !isRoleOptional(assignment.role)) {
       throw new InvalidModelSettingsInputError();
     }
+    // An administrator's choice is the default for everyone, unless it is a model on a connection
+    // only the administrator can use: that is their own choice, as anyone else's would be.
+    let personal = !actor.admin;
     if (assignment.kind === 'model') {
       if (assignment.connectionId === SERVER_CONNECTION_ID) {
         if (this.server() === null) throw new ModelConnectionNotFoundError(assignment.connectionId);
       } else {
         const stored = await this.find(assignment.connectionId, actor);
-        if (actor.admin && stored.ownerId !== null) throw new InvalidModelSettingsInputError();
+        if (stored.ownerId !== null) personal = true;
       }
     }
-    const owner = actor.admin ? null : actor.userId;
+    const owner = personal ? actor.userId : null;
     if (assignment.kind === 'unassigned') await this.store.clearRole(assignment.role, owner);
     else await this.store.setRole(assignment satisfies StoredRole, owner);
+    // A default the administrator sets replaces their own earlier choice for the role.
+    if (actor.admin && !personal) await this.store.clearRole(assignment.role, actor.userId);
     await this.store.record({
       userId: actor.userId,
       action: 'role-set',

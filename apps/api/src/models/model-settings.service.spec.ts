@@ -503,15 +503,31 @@ describe('shared and personal connections', () => {
 
   it('keeps the defaults on connections everyone can use', async () => {
     const { service } = setup();
-    await service.saveConnection(cloud(KEY), ADMIN);
+    const shared = await service.saveConnection(cloud(KEY), ADMIN);
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId: shared.connectionId, modelId: 'm' },
+      ADMIN,
+    );
     const personal = await service.saveConnection({ ...cloud(KEY), shared: false }, ADMIN);
     expect(personal.shared).toBe(false);
-    await expect(
-      service.setRole(
-        { role: 'writer', kind: 'model', connectionId: personal.connectionId, modelId: 'm' },
-        ADMIN,
-      ),
-    ).rejects.toThrow(InvalidModelSettingsInputError);
+    // A model on the administrator's own connection is their own choice, not everyone's default.
+    await service.setRole(
+      { role: 'speech', kind: 'model', connectionId: personal.connectionId, modelId: 'voice' },
+      ADMIN,
+    );
+    const mine = await service.get(ADMIN);
+    expect(mine.roles.find((role) => role.role === 'speech')).toMatchObject({
+      kind: 'model',
+      connectionId: personal.connectionId,
+    });
+    const others = await service.get(ANN);
+    expect(others.roles.find((role) => role.role === 'speech')).toEqual({
+      role: 'speech',
+      kind: 'unassigned',
+    });
+    expect(others.roles.find((role) => role.role === 'writer')).toMatchObject({
+      connectionId: shared.connectionId,
+    });
   });
 });
 

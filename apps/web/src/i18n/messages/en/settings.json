@@ -202,7 +202,27 @@
         "enableAll": "Switch all on",
         "disableAll": "Switch all off",
         "enableShown": "Switch shown on",
-        "disableShown": "Switch shown off"
+        "disableShown": "Switch shown off",
+        "kinds": {
+          "label": "What {model} does: {kind}",
+          "text": "Text",
+          "vlm": "Text and pictures",
+          "image": "Images",
+          "speech": "Speech",
+          "none": "Not used",
+          "kind": {
+            "text": "text",
+            "vision": "pictures",
+            "image": "images",
+            "speech": "speech"
+          },
+          "source": {
+            "provider": "As the provider describes it",
+            "assumed": "The provider did not describe it: taken for a text model that may see pictures",
+            "manual": "Set by hand"
+          },
+          "reset": "As the provider describes it"
+        }
       }
     },
     "errors": {
@@ -343,7 +363,7 @@
         },
         "speech": {
           "name": "Voice transcription",
-          "description": "Turns dictation into message text. The microphone stays hidden until a model is assigned.",
+          "description": "Turns dictation into message text. Without an assignment the first speech model of the connections is used. \"No speech transcription\" hides the microphone.",
           "hint": "Needs a model with an OpenAI-compatible POST /audio/transcriptions."
         }
       },
@@ -351,7 +371,8 @@
       "inherited": "Default for everyone — pick a model to use your own.",
       "writerDefault": "Use primary model",
       "primaryName": "Primary model",
-      "primaryDescription": "Used for chat, planning, writing and text review unless overridden."
+      "primaryDescription": "Used for chat, planning, writing and text review unless overridden.",
+      "auto": "auto · {connection}"
     },
     "advanced": "Customize models for individual tasks",
     "separateActive": "Separate task models are configured",
