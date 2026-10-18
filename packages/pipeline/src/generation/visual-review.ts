@@ -36,6 +36,8 @@ export interface VisualReview {
   reviews: SlideReview[];
   slideCount: number;
   pictures: number;
+  /** Slides whose pictures were successfully loaded across merged passes. */
+  picturedSlideIds: string[];
 }
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
@@ -110,19 +112,31 @@ export async function reviewVariantVisually(options: VisualReviewOptions): Promi
   });
   // A review that was stopped writes nothing: its file would land after the run is done.
   options.signal?.throwIfAborted();
+  const currentIds = new Set(slides.map((slide) => slide.slideId));
+  const currentPictured = Object.keys(images);
+  const { only, previous } = options;
+  const kept = (slideId: string) => {
+    const index = slideIndexOf(slideId);
+    return currentIds.has(slideId) && index !== null && !(only?.has(index + 1) ?? false);
+  };
+  const picturedSlideIds =
+    only && previous
+      ? [
+          ...new Set([
+            ...previous.picturedSlideIds.filter((slideId) => kept(slideId)),
+            ...currentPictured,
+          ]),
+        ]
+      : currentPictured;
   const review: VisualReview = {
     ...result,
     failures: [...result.failures, ...missing],
     slideCount: slides.length,
-    pictures: Object.keys(images).length,
+    picturedSlideIds,
+    pictures: picturedSlideIds.length,
   };
-  const { only, previous } = options;
   if (only && previous) {
     // Slides asked about again replace their old answers; the rest of the deck stays as it was.
-    const kept = (slideId: string) => {
-      const index = slideIndexOf(slideId);
-      return index !== null && !only.has(index + 1);
-    };
     review.findings = [
       ...previous.findings.filter((f) => kept(f.target.slideId)),
       ...review.findings,
