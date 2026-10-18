@@ -1,8 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 import { formatElapsed } from './elapsed';
-import { StatusMark } from './status-mark';
 import {
   durationMs,
   isCardTool,
@@ -87,19 +87,16 @@ export function ToolCallChip({ chip, now }: { chip: ToolChipView; now: number })
   const detail = chip.state === 'preparing' ? null : chip.detail;
   return (
     <div className={styles.chip} data-tool-call={chip.callId} data-call-state={chip.state}>
-      <div className={styles.row}>
-        <StatusMark status={chip.state === 'preparing' ? 'pending' : chip.state} />
-        <span className={styles.name}>{toolChipLabel(chip.name, chip.state, t)}</span>
-        {detail ? <span className={styles.detail}>{detail}</span> : null}
-        {elapsed === null ? null : <time className={styles.time}>{formatElapsed(elapsed)}</time>}
-      </div>
-      {chip.error ? <p className={styles.error}>{chip.error}</p> : null}
-      {chip.fullDetail && chip.fullDetail !== detail ? (
-        <details className={styles.more}>
-          <summary>{t('details')}</summary>
-          <p>{chip.fullDetail}</p>
-        </details>
-      ) : null}
+      <CallDetails detail={chip.fullDetail} error={chip.error} name={chip.name}>
+        <div className={styles.row}>
+          <CallGlyph state={chip.state} />
+          <span className={styles.name}>
+            {toolChipLabel(chip.name, chip.state === 'failed' ? 'done' : chip.state, t)}
+          </span>
+          {detail ? <span className={styles.detail}>{detail}</span> : null}
+          {elapsed === null ? null : <time className={styles.time}>{formatElapsed(elapsed)}</time>}
+        </div>
+      </CallDetails>
       {chip.activities.length > 0 ? (
         <ul className={styles.children}>
           {chip.activities.map((activity) => (
@@ -121,24 +118,21 @@ function ActivityRow({ activity, now }: { activity: ActivityChipView; now: numbe
         : durationMs(activity.startedAt, activity.finishedAt, now);
   return (
     <li
-      className={styles.chip}
+      className={styles.childRow}
       data-activity-id={activity.id}
       data-activity-kind={activity.kind}
       data-call-state={activity.state}
     >
-      <div className={styles.row}>
-        <StatusMark status={activity.state} />
-        <span className={styles.name}>{toolChipLabel(activity.name, activity.state, t)}</span>
-        {activity.detail ? <span className={styles.detail}>{activity.detail}</span> : null}
-        {elapsed === null ? null : <time className={styles.time}>{formatElapsed(elapsed)}</time>}
-      </div>
-      {activity.error ? <p className={styles.error}>{activity.error}</p> : null}
-      {activity.fullDetail && activity.fullDetail !== activity.detail ? (
-        <details className={styles.more}>
-          <summary>{t('details')}</summary>
-          <p>{activity.fullDetail}</p>
-        </details>
-      ) : null}
+      <CallDetails detail={activity.fullDetail} error={activity.error} name={activity.name}>
+        <div className={styles.row}>
+          <CallGlyph state={activity.state} />
+          <span className={styles.name}>
+            {toolChipLabel(activity.name, activity.state === 'failed' ? 'done' : activity.state, t)}
+          </span>
+          {activity.detail ? <span className={styles.detail}>{activity.detail}</span> : null}
+          {elapsed === null ? null : <time className={styles.time}>{formatElapsed(elapsed)}</time>}
+        </div>
+      </CallDetails>
       {activity.children.length > 0 ? (
         <ul className={styles.children}>
           {activity.children.map((child) => (
@@ -147,5 +141,101 @@ function ActivityRow({ activity, now }: { activity: ActivityChipView; now: numbe
         </ul>
       ) : null}
     </li>
+  );
+}
+
+function CallDetails({
+  detail,
+  error,
+  name,
+  children,
+}: {
+  detail: string | null;
+  error: string | null;
+  name: string;
+  children: ReactNode;
+}) {
+  const t = useTranslations('deckChat.tools');
+  const reason = presentedError(error, t);
+  if (!detail && !reason) return children;
+  return (
+    <details className={styles.more}>
+      <summary aria-label={t('detailsFor', { name })}>{children}</summary>
+      {detail ? <p>{detail}</p> : null}
+      {reason ? <p className={styles.error}>{reason}</p> : null}
+    </details>
+  );
+}
+
+const MACHINE_CODE = /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/i;
+const MACHINE_TOKEN = /^[a-z0-9_-]{1,64}$/i;
+
+function presentedError(error: string | null, t: ToolText): string | null {
+  if (error === null) return null;
+  const trimmed = error.trim();
+  if (trimmed === '') return null;
+  if (trimmed === 'cancelled') return t('errors.cancelled');
+  if (
+    trimmed === 'web_budget_exhausted' ||
+    /web.*(?:call limit|budget)|budget.*exhausted/i.test(trimmed)
+  ) {
+    return t('errors.budget');
+  }
+  if (trimmed === 'operation_failed' || MACHINE_CODE.test(trimmed) || MACHINE_TOKEN.test(trimmed)) {
+    return t('errors.operation');
+  }
+  return trimmed;
+}
+
+function CallGlyph({ state }: { state: ToolChipView['state'] }) {
+  const live = state === 'running' || state === 'preparing';
+  const visible = live ? 'loading' : state === 'done' ? 'check' : 'error';
+  return (
+    <span className={styles.glyph} aria-hidden data-glyph-state={state}>
+      <svg
+        viewBox="0 0 20 20"
+        className={styles.glyphLayer}
+        data-glyph="loading"
+        data-visible={visible === 'loading' ? 'true' : 'false'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      >
+        <circle className={styles.spinner} cx="10" cy="10" r="6" strokeDasharray="24 14" />
+      </svg>
+      <svg
+        viewBox="0 0 20 20"
+        className={styles.glyphLayer}
+        data-glyph="check"
+        data-visible={visible === 'check' ? 'true' : 'false'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m5 10 3.3 3.3L15 6.7" />
+      </svg>
+      <svg
+        viewBox="0 0 20 20"
+        className={styles.glyphLayer}
+        data-glyph="error"
+        data-visible={visible === 'error' ? 'true' : 'false'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      >
+        {state === 'cancelled' ? (
+          <path d="M6 10h8" />
+        ) : (
+          <>
+            <path d="M10 4v7" />
+            <circle cx="10" cy="15" r=".6" />
+          </>
+        )}
+      </svg>
+    </span>
   );
 }

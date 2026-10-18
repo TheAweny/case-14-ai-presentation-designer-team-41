@@ -7,5 +7,10 @@ declare const styles: {
   readonly error: string;
   readonly more: string;
   readonly children: string;
+  readonly childRow: string;
+  readonly technical: string;
+  readonly glyph: string;
+  readonly glyphLayer: string;
+  readonly spinner: string;
 };
 export default styles;

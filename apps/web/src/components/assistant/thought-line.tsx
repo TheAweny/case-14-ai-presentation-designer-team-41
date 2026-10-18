@@ -23,7 +23,8 @@ export function ThoughtLine({
   const reduceMotion = useReducedMotion();
   const [expanded, setExpanded] = useState<boolean | null>(null);
   const running = state === 'running';
-  const open = expanded ?? running;
+  const [startedRunning] = useState(running);
+  const open = expanded ?? (running || startedRunning);
   const summary = (
     <>
       <TaskGlyph state={state} />

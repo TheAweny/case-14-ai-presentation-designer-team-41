@@ -139,7 +139,9 @@ for (const narrow of [false, true]) {
       await expect(page.getByText(query, { exact: true }).first()).toBeVisible();
       await expect(page.locator('[data-active-researchers="1"]')).toBeVisible();
       await expect(page.locator('[data-activity-id="researcher"]')).toBeVisible();
-      await expect(page.getByText('https://example.org/roadster', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText('https://example.org/roadster', { exact: true }).first(),
+      ).toBeVisible();
       await noHorizontalOverflow(page);
       if (narrow) {
         expect(
@@ -161,6 +163,7 @@ for (const narrow of [false, true]) {
       await expect(page.locator('[data-active-researchers="1"]')).toHaveCount(0);
       const summary = page.locator('.thought-line button[aria-expanded]').first();
       if ((await summary.getAttribute('aria-expanded')) === 'false') await summary.click();
+      await call.locator(':scope > details > summary').click();
       await expect(
         page.getByText('Research provider unavailable', { exact: true }).first(),
       ).toBeVisible();

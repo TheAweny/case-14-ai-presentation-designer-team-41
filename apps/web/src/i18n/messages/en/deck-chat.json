@@ -171,6 +171,12 @@
       "illustrator": "Illustrator",
       "webResearcher": "Web researcher",
       "materialResearcher": "Material researcher"
+    },
+    "detailsFor": "Action details: {name}",
+    "errors": {
+      "operation": "The action could not be completed. Other sources can still be used.",
+      "cancelled": "The action was stopped.",
+      "budget": "This type of web request has reached its limit for this turn. Other tools remain available."
     }
   },
   "plan": {
