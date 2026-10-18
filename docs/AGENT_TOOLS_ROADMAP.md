@@ -4,11 +4,17 @@
 
 ## Что работает сейчас
 
-Чат получает `list_templates`, `describe_template`, `read_file`, `research_materials`,
-`read_deck`, `read_audit`, `ask_user`, `propose_plan`, `build_deck` и `edit_slide`.
-`research_materials` читает прикреплённые текстовые материалы порциями и возвращает точные
-цитаты; это не поиск в интернете и не независимое подтверждение факта. `describe_template`
-сообщает назначение макетов и число элементов, но не даёт чату подробную карту слотов.
+Чат получает базовые инструменты разговора, планирования, сборки и редактирования текста,
+а также `search_materials`, `inspect_template_layout`, `calculate`, `extract_material`,
+`read_table`, `inspect_sources`, `preview_slide`, `check_slide_fit`, `check_content_coverage`
+и `read_build_status`. При настроенном SearXNG доступны `search_web`, `research_topic`
+и `search_assets`; `fetch_source` читает прямые публичные ссылки.
+
+`research_materials` и `search_materials` работают с текстовыми файлами; PDF/DOCX/XLSX читаются
+через `extract_material` и используются сборкой после подготовки. Независимая проверка
+истинности фактов и OCR отсутствуют. Подробности реализации и ограничения — в
+[отчёте](AGENT_TOOLKIT_IMPLEMENTATION.md). Три инструмента изменения целого слайда остаются
+планом P2 в [AGENT_SLIDE_EDITS.md](AGENT_SLIDE_EDITS.md).
 
 Отдельно в репозитории есть подготовительные модули: реестр утверждений `claims`,
 детерминированная проверка чисел и единиц `claim-check`, размещение общего содержания
