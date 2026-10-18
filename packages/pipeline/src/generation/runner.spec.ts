@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -33,7 +33,11 @@ async function exercise(
     | 'factual-error'
     | 'reviewed'
     | 'self-corrected'
-    | 'review-down',
+    | 'review-down'
+    | 'recheck-import-down'
+    | 'empty-import'
+    | 'clean-vision'
+    | 'expired',
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
@@ -51,7 +55,11 @@ async function exercise(
   }[] = [];
   const events: string[] = [];
   const seenPictures: string[] = [];
-  let reviewCalls = 0;
+  let imports = 0;
+  let engineCalls = 0;
+  let modelCalls = 0;
+  const reviewPasses = new Map<string, number>();
+  const coveredReview = mode === 'reviewed' || mode === 'self-corrected' || mode === 'clean-vision';
   const warnings: { stage: string; code: string; message: string }[] = [];
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
@@ -65,6 +73,7 @@ async function exercise(
       signal: AbortSignal,
     ) {
       signal.throwIfAborted();
+      modelCalls++;
       if (agent === 'planner')
         return schema.parse({
           title: 'Pilot',
@@ -118,6 +127,7 @@ async function exercise(
   const engine = new EngineClient({
     baseUrl: 'http://offline.test',
     fetchImpl: async (url, init) => {
+      engineCalls++;
       if (String(url).endsWith('/composition-check')) {
         checks++;
         const findings =
@@ -182,20 +192,46 @@ async function exercise(
           findings,
         });
       }
-      if (String(url).endsWith('/deck-import')) return Response.json(fixture('DeckImportResponse'));
+      if (String(url).endsWith('/deck-import')) {
+        imports++;
+        if (mode === 'empty-import') {
+          return Response.json({ ...fixture('DeckImportResponse'), slides: [] });
+        }
+        if (mode === 'recheck-import-down' && imports > 1) {
+          return new Response('import down', { status: 500 });
+        }
+        const imported = fixture('DeckImportResponse') as {
+          slides: { slideId: string }[];
+        };
+        if (!coveredReview) return Response.json(imported);
+        return Response.json({
+          ...imported,
+          slides: Array.from({ length: exportedSlides.length }, (_, index) => ({
+            ...imported.slides[0],
+            slideId: `imported-${index + 1}`,
+          })),
+        });
+      }
       exports++;
-      exportedSlides.splice(0, exportedSlides.length, ...JSON.parse(String(init?.body)).slides);
+      const bodySlides = JSON.parse(String(init?.body)).slides as unknown[];
+      exportedSlides.splice(0, exportedSlides.length, ...bodySlides);
       const outputPath = join(outputDir, 'deck.pptx');
       const pdfPath = join(outputDir, 'deck.pdf');
       await Promise.all([writeFile(outputPath, 'fixture-pptx'), writeFile(pdfPath, 'fixture-pdf')]);
       const missingFonts = mode === 'missing-font' ? ['Template Face'] : [];
-      const preview = join(outputDir, 'slide-1.png');
-      await writeFile(preview, 'fixture-png');
+      const previewCount = coveredReview ? bodySlides.length : 1;
+      const previews = await Promise.all(
+        Array.from({ length: previewCount }, async (_, index) => {
+          const preview = join(outputDir, `slide-${index + 1}.png`);
+          await writeFile(preview, 'fixture-png');
+          return preview;
+        }),
+      );
       return Response.json({
         ...fixture('CompositionExportResponse'),
         outputPath,
         pdfPath,
-        previews: [preview],
+        previews,
         missingFonts,
         warnings:
           missingFonts.length > 0
@@ -216,7 +252,12 @@ async function exercise(
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
-    ...(mode === 'reviewed' || mode === 'self-corrected' || mode === 'review-down'
+    ...(mode === 'reviewed' ||
+    mode === 'self-corrected' ||
+    mode === 'review-down' ||
+    mode === 'recheck-import-down' ||
+    mode === 'empty-import' ||
+    mode === 'clean-vision'
       ? {
           reviewer: {
             model: 'vlm-fixture',
@@ -225,14 +266,22 @@ async function exercise(
               complete: (request: ModelRequest) => {
                 seenPictures.push(...(request.images ?? []));
                 if (mode === 'review-down') return Promise.reject(new Error('runtime down'));
+                const slideId = (request.input as { slideId: string }).slideId;
+                const pass = (reviewPasses.get(slideId) ?? 0) + 1;
+                reviewPasses.set(slideId, pass);
+                const clean =
+                  mode === 'clean-vision' ||
+                  mode === 'empty-import' ||
+                  slideId !== 'imported-1' ||
+                  (mode === 'self-corrected' && pass > 1);
                 return Promise.resolve(
                   JSON.stringify({
                     schemaVersion: 1,
-                    slideId: (request.input as { slideId: string }).slideId,
+                    slideId,
                     answers: [
                       {
                         checkId: 'no-service-text',
-                        verdict: mode === 'self-corrected' && reviewCalls++ > 0 ? 'yes' : 'no',
+                        verdict: clean ? 'yes' : 'no',
                         confidence: 0.95,
                         evidence: 'Slide',
                         suggestion: '',
@@ -245,6 +294,7 @@ async function exercise(
           },
         }
       : {}),
+    ...(mode === 'expired' ? { deadlineAt: Date.now() - 1 } : {}),
     signal: controller.signal,
     onEvent: async (e) => {
       events.push(e.type);
@@ -261,7 +311,7 @@ async function exercise(
     exportedSlides,
     criticInputs,
     seenPictures,
-    counters: () => ({ checks, exports, repairs }),
+    counters: () => ({ checks, exports, repairs, engineCalls, modelCalls, imports }),
   };
 }
 
@@ -278,7 +328,7 @@ describe('real generation orchestration with offline dependencies', () => {
     const run = await exercise('repair');
     await run.result;
     // One more check settles the fit before the export.
-    expect(run.counters()).toEqual({ checks: 3, exports: 1, repairs: 1 });
+    expect(run.counters()).toMatchObject({ checks: 3, exports: 1, repairs: 1 });
   });
   it('refuses export when bounded repair cannot fit the complete content', async () => {
     const run = await exercise('unfixable');
@@ -317,7 +367,7 @@ describe('real generation orchestration with offline dependencies', () => {
     const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
     expect(review.contextual.errors).toBeGreaterThan(0);
     expect(review.errors).toBeGreaterThan(0);
-    expect(review.status).toBe('requires-review');
+    expect(review.status).toBe('unknown');
     expect(review.contentHash).toBe(run.criticInputs.at(-1)?.contentHash);
   });
   it('never calls the engine export on cancellation', async () => {
@@ -349,9 +399,9 @@ describe('real generation orchestration with offline dependencies', () => {
     const run = await exercise('reviewed');
     const result = await run.result;
     expect(run.events.at(-1)).toBe('done');
-    // The slide is asked about once, then again from the picture of what the rewriter wrote.
+    // Every written slide is asked about, then the rewritten one again.
     const picture = `data:image/png;base64,${Buffer.from('fixture-png').toString('base64')}`;
-    expect(run.seenPictures).toEqual([picture, picture]);
+    expect(run.seenPictures).toEqual(Array.from({ length: 11 }, () => picture));
     const contextual = JSON.parse(
       await readFile(join(run.outputDir, 'audit-contextual.json'), 'utf8'),
     ) as { model: string; findings: { origin: string }[] };
@@ -419,17 +469,63 @@ describe('real generation orchestration with offline dependencies', () => {
     expect(run.events.at(-1)).toBe('done');
     expect(run.warnings.some((w) => w.code === 'contextual-audit-failed')).toBe(true);
     expect(result.manifest.revisions.some((r) => r.id === 'vlm-fixture')).toBe(true);
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8')) as {
+      status: string;
+    };
+    expect(review.status).toBe('unknown');
   });
   it('has no contextual audit when no model is assigned to the role', async () => {
     const run = await exercise('clean');
     const result = await run.result;
     expect(run.seenPictures).toEqual([]);
     expect(result.manifest.artifacts.map((a) => a.path)).not.toContain('audit-contextual.json');
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8')) as {
+      status: string;
+      contextual: { errors: number } | null;
+    };
+    expect(review.status).toBe('unknown');
+    expect(review.contextual).not.toBeNull();
     const check = JSON.parse(await readFile(join(run.outputDir, 'self-check.json'), 'utf8')) as {
       pictureReviewed: boolean;
       rounds: unknown[];
     };
     expect(check).toMatchObject({ pictureReviewed: false, rounds: [] });
     expect(run.warnings.some((w) => w.code === 'contextual-audit-skipped')).toBe(true);
+  });
+  it('calls a clean picture review complete', async () => {
+    const run = await exercise('clean-vision');
+    await run.result;
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8')) as {
+      status: string;
+    };
+    expect(review.status).toBe('complete');
+  });
+  it('drops a stale picture review when the recheck cannot import the rewritten deck', async () => {
+    const run = await exercise('recheck-import-down');
+    const result = await run.result;
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8')) as {
+      status: string;
+    };
+    expect(review.status).toBe('unknown');
+    const check = JSON.parse(await readFile(join(run.outputDir, 'self-check.json'), 'utf8')) as {
+      rounds: { after: unknown }[];
+    };
+    expect(check.rounds[0]?.after).toBeNull();
+    expect(result.manifest.artifacts.map((a) => a.path)).not.toContain('audit-contextual.json');
+    await expect(access(join(run.outputDir, 'audit-contextual.json'))).rejects.toThrow();
+  });
+  it('does not call a deck with an empty picture import reviewed', async () => {
+    const run = await exercise('empty-import');
+    await run.result;
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8')) as {
+      status: string;
+    };
+    expect(review.status).toBe('unknown');
+    expect(run.seenPictures).toEqual([]);
+  });
+  it('does not start the engine or the model when the deadline has already passed', async () => {
+    const run = await exercise('expired');
+    await expect(run.result).rejects.toThrow();
+    expect(run.counters()).toMatchObject({ engineCalls: 0, modelCalls: 0, exports: 0 });
   });
 });

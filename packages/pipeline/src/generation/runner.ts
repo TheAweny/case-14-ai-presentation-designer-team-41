@@ -94,6 +94,11 @@ export interface GenerateOptions {
    * or null: no model is assigned to the role, and the contextual audit is not part of the run.
    */
   reviewer?: { provider: ModelProvider; model: string } | null;
+  /**
+   * Absolute epoch ms when this variant must stop. Absent: this call's own deadline.
+   * A later value is capped by that deadline, so preparation cannot buy another 290s.
+   */
+  deadlineAt?: number;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
 }
@@ -135,8 +140,20 @@ function slideNumber(slideId: string): string {
 
 export async function generatePresentation(options: GenerateOptions) {
   const started = Date.now();
+  const deadlineAt = Math.min(
+    options.deadlineAt ?? started + RUN_DEADLINE_MS,
+    started + RUN_DEADLINE_MS,
+  );
+  const remaining = deadlineAt - Date.now();
+  const deadlineController = new AbortController();
+  if (remaining <= 0) {
+    deadlineController.abort(
+      new DOMException('The operation was aborted due to timeout', 'TimeoutError'),
+    );
+  }
   const signal = AbortSignal.any([
-    AbortSignal.timeout(RUN_DEADLINE_MS),
+    deadlineController.signal,
+    AbortSignal.timeout(Math.max(0, remaining)),
     ...(options.signal ? [options.signal] : []),
   ]);
   let seq = 0;
@@ -169,6 +186,7 @@ export async function generatePresentation(options: GenerateOptions) {
       : options.brief;
   let ownedMastra: ReturnType<typeof createMastra> | undefined;
   try {
+    signal.throwIfAborted();
     // Warnings collected from repairs and audits; recorded in the deck and streamed as events.
     const reviewWarnings: string[] = [];
     const warn = (message: string) =>
@@ -524,7 +542,7 @@ export async function generatePresentation(options: GenerateOptions) {
     // leaves its slot, and the export removes the empty frame.
     const images: Record<string, unknown>[] = [];
     if (pending.length) {
-      const waitMs = Math.max(0, RUN_DEADLINE_MS - EXPORT_RESERVE_MS - (Date.now() - started));
+      const waitMs = Math.max(0, deadlineAt - Date.now() - EXPORT_RESERVE_MS);
       const deadline = new Promise<'late'>((resolve) => {
         const timer = setTimeout(() => resolve('late'), waitMs);
         timer.unref?.();
@@ -591,12 +609,22 @@ export async function generatePresentation(options: GenerateOptions) {
     // the time left never costs the variant; the user is told.
     let contextual: VisualReview | null = null;
     let reviewerAgent: LoadedAgent | null = null;
+    let reviewerAgentId = '';
+    // An empty import is slideCount 0 with no reviews, and 0 < 0 does not catch it.
+    // The picture audit is finished only when that count is the written deck.
+    const reviewedDeck = (review: VisualReview | null): review is VisualReview =>
+      review !== null &&
+      review.failures.length === 0 &&
+      review.reviews.length >= review.slideCount &&
+      review.slideCount === written.length &&
+      review.slideCount > 0;
     const reviewPictures = async (
       only?: ReadonlySet<number>,
       previous?: VisualReview,
+      reserveMs = EXPORT_RESERVE_MS,
     ): Promise<VisualReview | null> => {
       if (!options.reviewer) return null;
-      const left = RUN_DEADLINE_MS - (Date.now() - started) - REVIEW_RESERVE_MS;
+      const left = deadlineAt - Date.now() - reserveMs;
       if (left < REVIEW_MIN_MS) {
         await emit({
           type: 'warning',
@@ -606,17 +634,18 @@ export async function generatePresentation(options: GenerateOptions) {
         });
         return null;
       }
+      const stop = new AbortController();
       let timer: NodeJS.Timeout | undefined;
       try {
         const reviewer = (reviewerAgent ??= await loadAgent(
           join(options.registryDir, 'slide-reviewer'),
         ));
+        reviewerAgentId = `${reviewer.config.id}@${reviewer.config.version}`;
         // The review has its own stop: when its time is up the requests still in flight are
         // cancelled, so they neither hold the model's slots nor write after the run is done.
-        const stop = new AbortController();
         const expired = new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            stop.abort();
+            stop.abort(new Error('time is up'));
             reject(new Error('time is up'));
           }, left);
         });
@@ -631,6 +660,7 @@ export async function generatePresentation(options: GenerateOptions) {
           previews: output.previews,
           seed: options.seed ?? 42,
           outputDir: options.outputDir,
+          variant: options.variant ?? 'balanced',
           ...(only ? { only } : {}),
           ...(previous ? { previous } : {}),
           signal: AbortSignal.any([signal, stop.signal]),
@@ -651,6 +681,7 @@ export async function generatePresentation(options: GenerateOptions) {
         return null;
       } finally {
         clearTimeout(timer);
+        stop.abort();
       }
     };
     contextual = await reviewPictures();
@@ -722,7 +753,7 @@ export async function generatePresentation(options: GenerateOptions) {
           // The slides that were rewritten are asked about again, from the new picture.
           const rewritten = new Set(tasks.map((task) => task.index + 1));
           if (contextual) {
-            contextual = (await reviewPictures(rewritten, contextual)) ?? contextual;
+            contextual = await reviewPictures(rewritten, contextual, REVIEW_RESERVE_MS);
           }
           selfCheck.push({
             round: 1,
@@ -730,10 +761,12 @@ export async function generatePresentation(options: GenerateOptions) {
             corrected: requested
               .filter((r) => rewritten.has(r.index + 1))
               .map((r) => ({ slide: r.index + 1, slotId: r.slotId, source: r.source })),
-            after: {
-              deterministic: needsAttention(report.findings).length,
-              contextual: contextual ? needsAttention(contextual.findings).length : 0,
-            },
+            after: reviewedDeck(contextual)
+              ? {
+                  deterministic: needsAttention(report.findings).length,
+                  contextual: needsAttention(contextual.findings).length,
+                }
+              : null,
           });
         }
       }
@@ -750,6 +783,26 @@ export async function generatePresentation(options: GenerateOptions) {
       join(options.outputDir, 'audit-deterministic.json'),
       JSON.stringify({ ...report, contentRevision, contentHash: finalContentHash }, null, 2),
     );
+    if (contextual !== null) {
+      await writeFile(
+        join(options.outputDir, 'audit-contextual.json'),
+        JSON.stringify(
+          {
+            contentRevision,
+            contentHash: finalContentHash,
+            model: options.reviewer?.model ?? '',
+            agent: reviewerAgentId,
+            slides: contextual.slideCount,
+            pictures: contextual.pictures,
+            findings: contextual.findings,
+            failures: contextual.failures,
+            reviews: contextual.reviews,
+          },
+          null,
+          2,
+        ),
+      );
+    }
     // The final semantic check runs after every possible copy mutation and describes the export.
     const finalCritique = await critiqueCurrent();
     const coverage = approvedCoverage(options.outline, written, finalCritique.coverage);
@@ -768,10 +821,11 @@ export async function generatePresentation(options: GenerateOptions) {
       schemaVersion: 1,
       contentRevision,
       contentHash: contentHash(),
-      status:
-        semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
+      status: reviewedDeck(contextual)
+        ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
           ? 'requires-review'
-          : 'complete',
+          : 'complete'
+        : 'unknown',
       deterministic: {
         errors: deterministicErrors,
         warnings: report.findings.length - deterministicErrors,
@@ -857,7 +911,7 @@ export async function generatePresentation(options: GenerateOptions) {
       join(options.outputDir, 'self-check.json'),
       JSON.stringify(
         {
-          pictureReviewed: contextual !== null,
+          pictureReviewed: reviewedDeck(contextual),
           rounds: selfCheck,
           remaining: {
             deterministic: needsAttention(report.findings).length,

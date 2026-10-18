@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SlideIr, SlideReview } from '@lct/contracts';
+import type { LayoutVariant, SlideIr, SlideReview } from '@lct/contracts';
 import type { LoadedAgent } from '@lct/registry';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ModelProvider, ModelRequest } from '../models/provider.js';
@@ -57,8 +57,28 @@ async function folder() {
   return path;
 }
 
+function yes(slideId: string): SlideReview {
+  return {
+    schemaVersion: 1,
+    slideId,
+    answers: [
+      { checkId: 'no-typos', verdict: 'yes', confidence: 0.9, evidence: '', suggestion: '' },
+    ],
+  };
+}
+
+function no(slideId: string): SlideReview {
+  return {
+    schemaVersion: 1,
+    slideId,
+    answers: [
+      { checkId: 'no-typos', verdict: 'no', confidence: 0.9, evidence: 'Revenue', suggestion: '' },
+    ],
+  };
+}
+
 describe('reviewVariantVisually', () => {
-  it('asks the questions of the picture of every slide and writes the findings next to the audit', async () => {
+  it('asks the questions of the picture of every slide and returns the findings', async () => {
     const dir = await folder();
     const previews = [join(dir, 'slide-1.png'), join(dir, 'slide-2.png')];
     await Promise.all(previews.map((p) => writeFile(p, 'png-bytes')));
@@ -126,81 +146,79 @@ describe('reviewVariantVisually', () => {
     expect(result.slideCount).toBe(2);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ origin: 'contextual', target: { slideId: 's1' } });
-    const written = JSON.parse(await readFile(join(dir, 'audit-contextual.json'), 'utf8')) as {
-      model: string;
-      agent: string;
-      pictures: number;
-      findings: unknown[];
-    };
-    expect(written).toMatchObject({
-      model: 'scripted',
-      agent: 'slide-reviewer@1.2.0',
-      pictures: 2,
-    });
-    expect(written.findings).toHaveLength(1);
+    expect(result.reviews).toHaveLength(2);
+    expect(result.pictures).toBe(2);
+    expect(result.failures).toEqual([]);
   });
 
-  it('still reviews the slides that have a picture when a preview is missing', async () => {
+  it.each([
+    {
+      name: 'missing',
+      previews: (dir: string) => [join(dir, 'missing.png')],
+    },
+    {
+      name: 'unreadable',
+      previews: (dir: string) => [join(dir, 'no-such-directory', 'slide-1.png')],
+    },
+    {
+      name: 'empty',
+      previews: async (dir: string) => {
+        const empty = join(dir, 'slide-1.png');
+        await writeFile(empty, '');
+        return [empty];
+      },
+    },
+  ])('records a failure and does not call the model for a $name preview', async ({ previews }) => {
     const dir = await folder();
-    const only = join(dir, 'slide-1.png');
-    await writeFile(only, 'png-bytes');
-    const seen: (readonly string[] | undefined)[] = [];
+    const paths = await previews(dir);
+    let calls = 0;
     const result = await reviewVariantVisually({
       engine: {
         importDeck: () =>
           Promise.resolve({
             schemaVersion: 1,
-            slides: [slide('s1', 0, 'One', 'Text'), slide('s2', 1, 'Two', 'Text')],
+            slides: [slide('s1', 0, 'One', 'Text')],
           }),
       },
       agent,
       provider: {
         name: 'scripted',
-        complete: (request) => {
-          seen.push(request.images);
-          const slideId = (request.input as { slideId: string }).slideId;
-          return Promise.resolve(
-            JSON.stringify({
-              schemaVersion: 1,
-              slideId,
-              answers: [
-                {
-                  checkId: 'no-typos',
-                  verdict: 'yes',
-                  confidence: 0.9,
-                  evidence: '',
-                  suggestion: '',
-                },
-              ],
-            }),
-          );
+        complete: () => {
+          calls += 1;
+          return Promise.resolve(JSON.stringify(yes('s1')));
         },
       },
       brief: 'Brief',
       goal: '',
       pptxPath: join(dir, 'deck.pptx'),
       mediaDir: join(dir, 'media'),
-      previews: [only],
+      previews: paths,
       seed: 1,
       outputDir: dir,
     });
-    expect(result.failures).toEqual([]);
-    expect(seen.filter((images) => images !== undefined)).toHaveLength(1);
+    expect(calls).toBe(0);
+    expect(result.failures).toEqual([{ slideId: 's1', error: 'Slide preview unavailable.' }]);
+    expect(result.pictures).toBe(0);
+    expect(result.findings).toEqual([]);
+    expect(result.reviews).toEqual([]);
   });
 
-  it('does not read previews or call the model when import ignores an aborted signal', async () => {
+  it('does not import or call the model when the signal is already aborted', async () => {
     const dir = await folder();
     const controller = new AbortController();
     controller.abort(new Error('cancelled'));
+    let imports = 0;
     let calls = 0;
     await expect(
       reviewVariantVisually({
         engine: {
-          importDeck: () =>
-            Promise.resolve({
+          importDeck: () => {
+            imports += 1;
+            return Promise.resolve({
               schemaVersion: 1,
               slides: [slide('s1', 0, 'One', 'Text')],
-            }),
+            });
+          },
         },
         agent,
         provider: {
@@ -220,6 +238,7 @@ describe('reviewVariantVisually', () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow(/cancelled/);
+    expect(imports).toBe(0);
     expect(calls).toBe(0);
     await expect(readFile(join(dir, 'audit-contextual.json'))).rejects.toThrow();
   });
@@ -229,8 +248,8 @@ describe('reviewVariantVisually', () => {
     const preview = join(dir, 'slide-1.png');
     await writeFile(preview, 'png-bytes');
     const controller = new AbortController();
-    let release = (_answer: string) => undefined;
-    let started = () => undefined;
+    let release: (answer: string) => void = () => undefined;
+    let started: () => void = () => undefined;
     const startedPromise = new Promise<void>((resolve) => {
       started = resolve;
     });
@@ -334,6 +353,7 @@ describe('reviewVariantVisually asked again about some slides', () => {
       outputDir: dir,
     });
     expect(earlier.findings.map((f) => f.target.slideId).sort()).toEqual(['s1', 's2']);
+    expect(earlier.pictures).toBe(2);
 
     const again = await reviewVariantVisually({
       engine,
@@ -349,15 +369,121 @@ describe('reviewVariantVisually asked again about some slides', () => {
       only: new Set([2]),
       previous: earlier,
     });
-    // Only slide 2 was asked about; its old finding is replaced, slide 1's is kept.
     expect(asked).toEqual(['s2']);
     expect(again.findings.map((f) => f.target.slideId)).toEqual(['s1']);
     expect(again.reviews.map((r) => r.slideId).sort()).toEqual(['s1', 's2']);
-    const written = JSON.parse(await readFile(join(dir, 'audit-contextual.json'), 'utf8')) as {
-      findings: unknown[];
-    };
-    expect(written.findings).toHaveLength(1);
+    expect(again.pictures).toBe(1);
+    expect(again.failures).toEqual([]);
   });
+
+  it('drops the old finding of a failed targeted recheck and keeps the rest', async () => {
+    const dir = await folder();
+    const previews = [join(dir, 'slide-1.png'), join(dir, 'slide-2.png')];
+    await Promise.all(previews.map((p) => writeFile(p, 'png-bytes')));
+    const engine = {
+      importDeck: () =>
+        Promise.resolve({
+          schemaVersion: 1 as const,
+          slides: [slide('s1', 0, 'One', 'Retention'), slide('s2', 1, 'Two', 'Revenue')],
+        }),
+    };
+    const earlier = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: {
+        name: 'scripted',
+        complete: (request) => {
+          const slideId = (request.input as { slideId: string }).slideId;
+          return Promise.resolve(JSON.stringify(no(slideId)));
+        },
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+    });
+    expect(earlier.findings.map((f) => f.target.slideId).sort()).toEqual(['s1', 's2']);
+
+    let calls = 0;
+    const again = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: {
+        name: 'scripted',
+        complete: () => {
+          calls += 1;
+          return Promise.resolve('not-json');
+        },
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+      only: new Set([2]),
+      previous: earlier,
+    });
+    expect(calls).toBe(2);
+    expect(again.findings.map((f) => f.target.slideId)).toEqual(['s1']);
+    expect(again.reviews.map((r) => r.slideId)).toEqual(['s1']);
+    expect(again.failures.map((f) => f.slideId)).toEqual(['s2']);
+    expect(again.pictures).toBe(1);
+  });
+});
+
+describe('reviewVariantVisually stamps the asked density on findings', () => {
+  it.each(['dense', 'airy'] as const)(
+    'targets findings at the %s variant',
+    async (variant: LayoutVariant) => {
+      const dir = await folder();
+      const preview = join(dir, 'slide-1.png');
+      await writeFile(preview, 'png-bytes');
+      const result = await reviewVariantVisually({
+        engine: {
+          importDeck: () =>
+            Promise.resolve({ schemaVersion: 1, slides: [slide('s1', 0, 'One', 'Text')] }),
+        },
+        agent,
+        provider: {
+          name: 'scripted',
+          complete: (request) => {
+            const slideId = (request.input as { slideId: string }).slideId;
+            return Promise.resolve(
+              JSON.stringify({
+                schemaVersion: 1,
+                slideId,
+                answers: [
+                  {
+                    checkId: 'no-typos',
+                    verdict: 'no',
+                    confidence: 0.9,
+                    evidence: 'Text',
+                    suggestion: '',
+                  },
+                ],
+              }),
+            );
+          },
+        },
+        brief: 'Brief',
+        goal: '',
+        pptxPath: join(dir, 'deck.pptx'),
+        mediaDir: join(dir, 'media'),
+        previews: [preview],
+        seed: 1,
+        outputDir: dir,
+        variant,
+      });
+      expect(result.findings).toHaveLength(1);
+      expect(result.findings[0]?.target).toMatchObject({ slideId: 's1', variant });
+      expect(result.pictures).toBe(1);
+    },
+  );
 });
 
 describe('reviewVariantVisually that is stopped', () => {
