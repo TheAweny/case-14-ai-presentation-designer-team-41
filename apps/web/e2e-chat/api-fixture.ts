@@ -30,6 +30,7 @@ let capabilities = new Map<string, unknown>();
 let details: Record<string, { kinds: string[] }> | null = null;
 /** Kinds the person set by hand, as the API keeps them. */
 let manualKinds: Record<string, string[]> = {};
+let templates: unknown[] = [];
 
 /** Only fixed test data. Browser chat requests are intercepted by each Playwright scenario. */
 const server = createServer(async (request, response) => {
@@ -39,7 +40,15 @@ const server = createServer(async (request, response) => {
     capabilities = new Map();
     details = null;
     manualKinds = {};
+    templates = [];
     response.end('{}');
+  } else if (request.url === '/__set-templates' && request.method === 'POST') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    templates = JSON.parse(body) as unknown[];
+    response.end('{}');
+  } else if (request.url === '/files/templates') {
+    response.end(JSON.stringify(templates));
   } else if (request.url === '/__set-models' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);

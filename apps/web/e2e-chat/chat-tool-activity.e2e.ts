@@ -167,10 +167,8 @@ for (const narrow of [false, true]) {
       await expect(page.getByText('Работа прервалась', { exact: true })).toHaveCount(0);
       const failure = page.getByRole('alert');
       await expect(failure.getByText('Не удалось завершить ответ', { exact: true })).toBeVisible();
-      await failure.locator('details > summary').click();
-      await expect(
-        failure.locator('details[open]').getByText('Ответ прервался', { exact: true }),
-      ).toBeVisible();
+      await failure.getByRole('button', { name: 'Подробности', exact: true }).click();
+      await expect(failure.getByText('Ответ прервался', { exact: true })).toBeVisible();
       const summary = page.locator('.thought-line button[aria-expanded]').first();
       if ((await summary.getAttribute('aria-expanded')) === 'false') await summary.click();
       await call.locator(':scope > details > summary').click();
