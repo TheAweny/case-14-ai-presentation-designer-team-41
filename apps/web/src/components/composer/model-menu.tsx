@@ -36,17 +36,22 @@ import { EffortSlider } from './effort-slider';
 import { useModelCapabilities } from './use-model-capabilities';
 import { cn } from '@/lib/utils';
 import {
+  MANUFACTURER_LABEL,
+  MANUFACTURERS,
+  modelManufacturer,
+  type ManufacturerId,
+} from '@/lib/model-manufacturers';
+import {
   MODEL_SEARCH_FROM,
   effectiveModel,
-  modelFamilies,
   modelRows,
   sameModel,
   shortModelName,
-  type ModelFamilyFilter,
   type ModelRow,
   type WriterModels,
 } from '@/lib/writer-models';
 import { PROMPT_CHIP } from './prompt-box';
+import styles from './model-menu.module.css';
 
 /** Role-aware picker shared by composers and error actions. Null always follows the chat default. */
 export function ModelMenu({
@@ -162,7 +167,7 @@ export function ModelMenu({
         side="top"
         align="end"
         sideOffset={8}
-        className="flex w-80 flex-col overflow-hidden p-0"
+        className="flex w-[min(22rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         {!available ? (
@@ -197,6 +202,67 @@ export function ModelMenu({
 
 const firstModel = (rows: readonly ModelRow[]) => rows.findIndex((row) => row.kind === 'model');
 
+/** Производители, которые реально есть в списке, в порядке колонки. */
+function manufacturersOf(rows: readonly ModelRow[]): ManufacturerId[] {
+  const present = new Set<ManufacturerId>();
+  for (const row of rows) {
+    if (row.kind === 'model') present.add(modelManufacturer(row.ref.modelId));
+  }
+  const named = MANUFACTURERS.filter((id) => present.has(id));
+  return present.has('other') ? [...named, 'other'] : named;
+}
+
+function visibleRows(
+  models: WriterModels,
+  selected: ModelRef | null,
+  query: string,
+  maker: ManufacturerId | 'all',
+  grouped: boolean,
+): readonly ModelRow[] {
+  const all = modelRows(models, selected, query, 'all');
+  if (!grouped) return all;
+  const kept: ModelRow[] = [];
+  let header: ModelRow | null = null;
+  let pinned = false;
+  for (const row of all) {
+    if (row.kind === 'header') {
+      pinned = row.section === 'pinned';
+      header = pinned ? null : row;
+      continue;
+    }
+    if (
+      pinned ||
+      (query.trim() === '' && maker !== 'all' && modelManufacturer(row.ref.modelId) !== maker)
+    ) {
+      continue;
+    }
+    if (header) {
+      kept.push(header);
+      header = null;
+    }
+    kept.push(row);
+  }
+  return kept;
+}
+
+function placeGlow(mark: HTMLElement | null, row: HTMLElement | null, snap: boolean) {
+  if (!mark) return;
+  if (!row) {
+    mark.style.opacity = '0';
+    return;
+  }
+  if (snap) mark.style.transition = 'none';
+  const top = row.offsetTop;
+  const height = row.offsetHeight;
+  mark.style.transform = `translateY(${top}px) scaleY(${height / 32})`;
+  mark.style.transformOrigin = 'top';
+  mark.style.opacity = '1';
+  if (snap) {
+    void mark.offsetHeight;
+    mark.style.transition = '';
+  }
+}
+
 /** Содержимое поповера: живёт, только пока он открыт, — поиск каждый раз с нуля. */
 export function ModelList({
   models,
@@ -225,20 +291,37 @@ export function ModelList({
   const listId = useId();
   const list = useRef<HTMLDivElement>(null);
   const glow = useRef<HTMLSpanElement>(null);
+  const makerGlow = useRef<HTMLSpanElement>(null);
   const rowRefs = useRef<(HTMLElement | null)[]>([]);
+  const defaultRef = useRef<HTMLDivElement>(null);
+  const makerRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const freshGlow = useRef(true);
+  const activeRef = useRef(0);
+  const rowsRef = useRef<readonly ModelRow[]>([]);
   const [query, setQuery] = useState('');
-  const [family, setFamily] = useState<ModelFamilyFilter>('all');
-  const families = modelFamilies(models);
+  const catalog = useMemo(() => modelRows(models, selected, '', 'all'), [models, selected]);
+  const makers = useMemo(() => manufacturersOf(catalog), [catalog]);
+  const grouped = makers.some((id) => id !== 'other');
+  const initialMaker = (): ManufacturerId | 'all' => {
+    if (!grouped) return 'all';
+    const current = selected ?? models.assigned;
+    if (!current) return 'all';
+    const maker = modelManufacturer(current.modelId);
+    return makers.includes(maker) ? maker : 'all';
+  };
+  const [maker, setMaker] = useState<ManufacturerId | 'all'>(initialMaker);
   const searchable = models.count >= MODEL_SEARCH_FROM;
+  const searching = query.trim() !== '';
   const rows = useMemo(
-    () => modelRows(models, selected, query, family),
-    [models, selected, query, family],
+    () => visibleRows(models, selected, query, maker, grouped),
+    [models, selected, query, maker, grouped],
   );
   const [active, setActive] = useState(() => {
     const at = rows.findIndex((row) => row.kind === 'model' && sameModel(row.ref, selected));
     return at >= 0 ? at : firstModel(rows);
   });
+  activeRef.current = active;
+  rowsRef.current = rows;
 
   // Активная строка всегда видна: стрелки прокручивают список за собой.
   useEffect(() => {
@@ -247,24 +330,52 @@ export function ModelList({
       ?.scrollIntoView({ block: 'nearest' });
   }, [active]);
 
+  const activeRowEl = () =>
+    (active < 0
+      ? defaultRef.current
+      : rows[active]?.kind === 'model'
+        ? rowRefs.current[active]
+        : null) ?? null;
+
   useLayoutEffect(() => {
-    const mark = glow.current;
-    const row = rowRefs.current[active];
-    if (!mark) return;
-    if (!row || rows[active]?.kind !== 'model') {
-      mark.style.opacity = '0';
+    placeGlow(glow.current, activeRowEl(), freshGlow.current);
+    freshGlow.current = false;
+  }, [active, rows, models.assigned]);
+
+  useLayoutEffect(() => {
+    const box = list.current;
+    if (!box || typeof ResizeObserver === 'undefined') return;
+    let initialResize = true;
+    const observer = new ResizeObserver(() => {
+      if (initialResize) {
+        initialResize = false;
+        return;
+      }
+      const at = activeRef.current;
+      const current = rowsRef.current;
+      const row =
+        at < 0
+          ? defaultRef.current
+          : current[at]?.kind === 'model'
+            ? (rowRefs.current[at] ?? null)
+            : null;
+      placeGlow(glow.current, row, true);
+    });
+    observer.observe(box);
+    const row = activeRowEl();
+    if (row) observer.observe(row);
+    return () => observer.disconnect();
+  }, [active, rows]);
+
+  useLayoutEffect(() => {
+    if (!grouped || searching) {
+      placeGlow(makerGlow.current, null, true);
       return;
     }
-    if (freshGlow.current) mark.style.transition = 'none';
-    mark.style.transform = `translateY(${row.offsetTop}px)`;
-    mark.style.height = `${row.offsetHeight}px`;
-    mark.style.opacity = '1';
-    if (freshGlow.current) {
-      freshGlow.current = false;
-      void mark.offsetHeight;
-      mark.style.transition = '';
-    }
-  }, [active, rows]);
+    const options = ['all', ...makers] as const;
+    const at = options.indexOf(maker);
+    placeGlow(makerGlow.current, at >= 0 ? (makerRefs.current[at] ?? null) : null, true);
+  }, [grouped, searching, maker, makers]);
 
   // Без поиска клавиатуру держит сам список.
   useEffect(() => {
@@ -272,6 +383,10 @@ export function ModelList({
   }, [searchable]);
 
   const step = (direction: 1 | -1) => {
+    if (direction < 0 && active <= firstModel(rows) && models.assigned) {
+      setActive(-1);
+      return;
+    }
     for (let at = active + direction; at >= 0 && at < rows.length; at += direction) {
       if (rows[at]?.kind === 'model') {
         setActive(at);
@@ -280,19 +395,39 @@ export function ModelList({
     }
   };
 
+  const pickMaker = (next: ManufacturerId | 'all') => {
+    freshGlow.current = true;
+    setMaker(next);
+    setActive(firstModel(visibleRows(models, selected, query, next, grouped)));
+  };
+
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       step(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      const indexes = rows.flatMap((row, at) => (row.kind === 'model' ? [at] : []));
+      const next = event.key === 'Home' ? (models.assigned ? -1 : indexes[0]) : indexes.at(-1);
+      if (next !== undefined) setActive(next);
     } else if (event.key === 'Enter') {
       event.preventDefault();
+      if (active < 0) {
+        if (models.assigned) onUseDefault();
+        return;
+      }
       const row = rows[active];
       if (row?.kind === 'model') onPick(row.ref);
     }
   };
 
   const activeRow = rows[active];
-  const activeId = activeRow?.kind === 'model' ? `${listId}-${active}` : undefined;
+  const activeId =
+    active < 0 && models.assigned
+      ? `${listId}-default`
+      : activeRow?.kind === 'model'
+        ? `${listId}-${active}`
+        : undefined;
 
   return (
     <>
@@ -314,103 +449,132 @@ export function ModelList({
             onChange={(event) => {
               const next = event.currentTarget.value;
               setQuery(next);
-              setActive(firstModel(modelRows(models, selected, next, family)));
+              freshGlow.current = true;
+              setActive(firstModel(visibleRows(models, selected, next, maker, grouped)));
             }}
             onKeyDown={onKeyDown}
             className="h-9 min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
       ) : null}
-      {families.length > 1 ? (
-        <div className="flex flex-wrap gap-1 border-b border-border px-2 py-1.5">
-          {(['all', ...families] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={family === option}
-              onClick={() => {
-                setFamily(option);
-                setActive(firstModel(modelRows(models, selected, query, option)));
-              }}
-              className={cn(
-                'shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] text-muted-foreground outline-none',
-                'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                family === option && 'bg-accent text-accent-foreground',
-              )}
-            >
-              {option === 'all' ? t('all') : t(`families.${option}`)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div
-        ref={list}
-        id={listId}
-        role="listbox"
-        aria-label={t('menu')}
-        aria-activedescendant={searchable ? undefined : activeId}
-        tabIndex={searchable ? -1 : 0}
-        onKeyDown={searchable ? undefined : onKeyDown}
-        className="relative max-h-80 overflow-y-auto overscroll-contain py-1 outline-none"
-      >
-        <span ref={glow} aria-hidden className="menu-glow" />
-        {models.assigned ? (
+      <div className={cn(styles.root, 'max-h-80')}>
+        {grouped ? (
           <div
-            role="option"
-            aria-selected={followingDefault}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={onUseDefault}
-            className="relative z-1 flex h-9 cursor-default items-center gap-2 rounded-lg px-2 text-[0.8125rem] text-foreground"
+            className={styles.makers}
+            aria-label={t('manufacturers')}
+            onPointerLeave={() => {
+              if (searching) return;
+              const options = ['all', ...makers] as const;
+              const at = options.indexOf(maker);
+              placeGlow(makerGlow.current, at >= 0 ? (makerRefs.current[at] ?? null) : null, false);
+            }}
           >
-            <span className="min-w-0 flex-1 truncate">{t('useDefault')}</span>
-            <CheckIcon
-              aria-hidden
-              className={cn('size-3.5 shrink-0', followingDefault ? 'opacity-100' : 'opacity-0')}
-            />
+            <span ref={makerGlow} aria-hidden className={styles.glow} />
+            {(['all', ...makers] as const).map((option, at) => (
+              <button
+                key={option}
+                ref={(node) => {
+                  makerRefs.current[at] = node;
+                }}
+                type="button"
+                aria-pressed={maker === option && !searching}
+                onPointerEnter={() =>
+                  placeGlow(makerGlow.current, makerRefs.current[at] ?? null, false)
+                }
+                onFocus={() => placeGlow(makerGlow.current, makerRefs.current[at] ?? null, false)}
+                onClick={() => pickMaker(option)}
+                className={styles.maker}
+              >
+                <span className={styles.label}>
+                  {option === 'all'
+                    ? t('all')
+                    : option === 'other'
+                      ? t('families.other')
+                      : MANUFACTURER_LABEL[option]}
+                </span>
+              </button>
+            ))}
           </div>
         ) : null}
-        {rows.length === 0 ? (
-          <p className="px-2 py-2 text-xs text-muted-foreground">{t('notFound')}</p>
-        ) : (
-          rows.map((row, at) =>
-            row.kind === 'header' ? (
-              <p
-                key={row.key}
-                role="presentation"
-                className="relative z-1 truncate px-2 pt-2.5 pb-1 text-[0.6875rem] text-muted-foreground first:pt-1"
-              >
-                {row.section === 'pinned' ? t('pinned') : row.name}
-              </p>
-            ) : (
-              <div
-                key={row.key}
-                id={`${listId}-${at}`}
-                ref={(node) => {
-                  rowRefs.current[at] = node;
-                }}
-                data-row={at}
-                role="option"
-                aria-selected={!followingDefault && sameModel(row.ref, selected)}
-                title={row.ref.modelId}
-                onPointerEnter={() => {
-                  if (active !== at) setActive(at);
-                }}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onPick(row.ref)}
-                className="relative z-1 flex h-9 cursor-default items-center gap-2 rounded-lg px-2 text-[0.8125rem] text-foreground"
-              >
-                <span className="min-w-0 flex-1 truncate">{shortModelName(row.ref.modelId)}</span>
-                <CheckIcon
-                  aria-hidden
-                  className={cn(
-                    'size-3.5 shrink-0',
-                    !followingDefault && sameModel(row.ref, selected) ? 'opacity-100' : 'opacity-0',
-                  )}
-                />
-              </div>
-            ),
-          )
-        )}
+        <div
+          ref={list}
+          id={listId}
+          role="listbox"
+          aria-label={t('menu')}
+          aria-activedescendant={searchable ? undefined : activeId}
+          tabIndex={searchable ? -1 : 0}
+          onKeyDown={searchable ? undefined : onKeyDown}
+          className={styles.models}
+        >
+          <span ref={glow} aria-hidden className={styles.glow} />
+          {models.assigned ? (
+            <div
+              ref={defaultRef}
+              id={`${listId}-default`}
+              role="option"
+              aria-selected={followingDefault}
+              tabIndex={active < 0 ? 0 : -1}
+              onPointerEnter={() => {
+                if (active !== -1) setActive(-1);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onUseDefault();
+                } else {
+                  onKeyDown(event);
+                }
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onUseDefault}
+              className={styles.fallback}
+            >
+              <span className="min-w-0 flex-1 truncate">{t('useDefault')}</span>
+              <CheckIcon
+                aria-hidden
+                className={cn('size-3.5 shrink-0', followingDefault ? 'opacity-100' : 'opacity-0')}
+              />
+            </div>
+          ) : null}
+          {rows.length === 0 ? (
+            <p className="px-2 py-2 text-xs text-muted-foreground">{t('notFound')}</p>
+          ) : (
+            rows.map((row, at) =>
+              row.kind === 'header' ? (
+                <p key={row.key} role="presentation" className={styles.section}>
+                  {row.section === 'pinned' ? t('pinned') : row.name}
+                </p>
+              ) : (
+                <div
+                  key={row.key}
+                  id={`${listId}-${at}`}
+                  ref={(node) => {
+                    rowRefs.current[at] = node;
+                  }}
+                  data-row={at}
+                  role="option"
+                  aria-selected={!followingDefault && sameModel(row.ref, selected)}
+                  title={row.ref.modelId}
+                  onPointerEnter={() => {
+                    if (active !== at) setActive(at);
+                  }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onPick(row.ref)}
+                  className={styles.model}
+                >
+                  <span className={styles.label}>{shortModelName(row.ref.modelId)}</span>
+                  <CheckIcon
+                    aria-hidden
+                    className={cn(
+                      styles.check,
+                      !followingDefault && sameModel(row.ref, selected) && styles.checkOn,
+                    )}
+                  />
+                </div>
+              ),
+            )
+          )}
+        </div>
       </div>
       {depth ? (
         <div className="border-t border-border px-1 pt-2.5">

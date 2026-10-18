@@ -1,0 +1,129 @@
+.root {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.makers {
+  position: relative;
+  display: flex;
+  width: 6.75rem;
+  min-width: 0;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid var(--border);
+  padding: 0.25rem;
+  outline: none;
+}
+
+.maker,
+.model,
+.fallback {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 2rem;
+  min-width: 0;
+  cursor: default;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  padding: 0 0.5rem;
+  text-align: left;
+  color: var(--foreground);
+  outline: none;
+}
+
+.maker {
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.maker:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.maker[aria-pressed='true'] {
+  color: var(--foreground);
+}
+
+.models {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
+  outline: none;
+}
+
+.model,
+.fallback {
+  font-size: 0.8125rem;
+}
+
+.label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+  opacity: 0;
+}
+
+.checkOn {
+  opacity: 1;
+}
+
+.empty {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.section {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  padding: 0.5rem 0.5rem 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section:first-child {
+  padding-top: 0.25rem;
+}
+
+.glow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow {
+    transition: none;
+  }
+}

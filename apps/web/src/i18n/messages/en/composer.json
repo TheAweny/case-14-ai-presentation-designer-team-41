@@ -42,6 +42,7 @@
     "notFound": "Nothing found",
     "pinned": "Selected and default",
     "all": "All",
+    "manufacturers": "Model manufacturers",
     "families": {
       "gpt": "GPT",
       "claude": "Claude",

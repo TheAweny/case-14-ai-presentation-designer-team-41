@@ -42,6 +42,7 @@
     "notFound": "Ничего не нашлось",
     "pinned": "Выбрана и по умолчанию",
     "all": "Все",
+    "manufacturers": "Производители моделей",
     "families": {
       "gpt": "GPT",
       "claude": "Claude",
