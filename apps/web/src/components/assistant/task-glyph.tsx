@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
+import styles from './task-glyph.module.css';
 
 // Adapted from React Bits LatticeLoader by David Haz, via prototypes/motion-lab.
 // License: docs/third-party/react-bits-license.txt (MIT + Commons Clause).
@@ -14,7 +15,7 @@ const REST = [5, 6, 9, 10];
 const STEP = 108;
 const LOOP = 648;
 
-type TaskGlyphState = 'running' | 'done' | 'failed' | 'pending' | 'cancelled';
+type TaskGlyphState = 'running' | 'done' | 'failed' | 'pending' | 'cancelled' | 'partial';
 
 function settledLit(state: TaskGlyphState, index: number) {
   if (state === 'done') return CHECK.includes(index);
@@ -29,7 +30,11 @@ export function TaskGlyph({ state, className }: { state: TaskGlyphState; classNa
     <span
       aria-hidden
       data-task-state={state}
-      className={cn('task-lattice relative grid size-5 shrink-0 place-items-center', className)}
+      className={cn(
+        'task-lattice relative grid size-5 shrink-0 place-items-center',
+        styles.lattice,
+        className,
+      )}
     >
       <span className="task-glyph-stage grid">
         <span className="task-glyph-layer grid grid-cols-4 gap-px" data-glyph-layer="running">
@@ -53,6 +58,10 @@ export function TaskGlyph({ state, className }: { state: TaskGlyphState; classNa
           ))}
         </span>
       </span>
+      <svg viewBox="0 0 20 20" className={cn('absolute size-5 overflow-visible', styles.mark)}>
+        <circle className={styles.ring} cx="10" cy="10" r="7.25" pathLength="1" />
+        <path className={styles.check} d="M6.2 10.3 8.7 12.8 13.9 7.4" pathLength="1" />
+      </svg>
     </span>
   );
 }

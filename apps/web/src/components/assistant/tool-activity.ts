@@ -156,6 +156,52 @@ export function groupState(
   return 'done';
 }
 
+export type GroupGlyphState = 'running' | 'done' | 'failed' | 'cancelled' | 'partial';
+
+/** Group mark only. Settled success beside a failed or cancelled step is partial. An open root or cutoff seal follows the finished message and is never partial. */
+export function groupGlyphState(
+  parts: readonly ToolPart[],
+  messageStatus: AssistantChatMessage['status'],
+): GroupGlyphState {
+  const chips = parts.map((part) => toolChip(part, messageStatus));
+  const state = groupState(chips);
+  if (state === 'running') return state;
+  if (
+    parts.some((part) => part.status === 'running') ||
+    parts.some((part) => isCutoffSeal(part, messageStatus))
+  ) {
+    return messageStatus === 'failed' ? 'failed' : 'cancelled';
+  }
+  if (state === 'cancelled') return state;
+  const successes = chips.filter(chipSucceeded).length;
+  const failures = chips.filter(chipHasIssue).length;
+  if (successes > 0 && failures > 0) return 'partial';
+  return state;
+}
+
+function chipSucceeded(chip: ToolChipView): boolean {
+  return chip.state === 'done' || containsDone(chip.activities);
+}
+
+function chipHasIssue(chip: ToolChipView): boolean {
+  return chip.state === 'failed' || containsIssue(chip.activities);
+}
+
+function containsDone(activities: readonly ActivityChipView[]): boolean {
+  return activities.some(
+    (activity) => activity.state === 'done' || containsDone(activity.children),
+  );
+}
+
+function containsIssue(activities: readonly ActivityChipView[]): boolean {
+  return activities.some(
+    (activity) =>
+      activity.state === 'failed' ||
+      activity.state === 'cancelled' ||
+      containsIssue(activity.children),
+  );
+}
+
 export type ToolGroupHeadline =
   | { readonly kind: 'running' }
   | { readonly kind: 'interrupted' }

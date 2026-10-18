@@ -21,7 +21,7 @@ import { ToolCallChip, toolChipLabel } from './tool-call-chip';
 import {
   activeAgentCount,
   activeResearcherCount,
-  groupState,
+  groupGlyphState,
   toolChip,
   toolGroupHeadline,
   toolLineVisible,
@@ -276,10 +276,9 @@ function ToolLines({
   const now = useNow(live);
   const agents = activeAgentCount(parts, messageStatus);
   const researchers = activeResearcherCount(parts, messageStatus);
-  const issues = chips.reduce((count, chip) => count + chip.issues, 0);
   const headline = toolGroupHeadline(parts, messageStatus);
   const running = chips.findLast((chip) => chip.state === 'running' || chip.state === 'preparing');
-  const state = groupState(chips);
+  const state = groupGlyphState(parts, messageStatus);
   const summary =
     headline.kind === 'running' && running
       ? toolChipLabel(running.name, running.state, t)
@@ -297,7 +296,7 @@ function ToolLines({
           {agents > 0 ? t('agents', { count: agents }) : t('waiting')}
         </p>
       ) : null}
-      <ThoughtLine state={state === 'done' && issues > 0 ? 'failed' : state} label={summary}>
+      <ThoughtLine state={state} label={summary}>
         <ul className="flex w-full min-w-0 flex-col items-stretch gap-1">
           {/* Streamed positions stay stable when a provisional call id is replaced. */}
           {chips.map((chip, index) => (

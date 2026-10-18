@@ -3,6 +3,7 @@ import type { ChatToolActivity } from '@lct/contracts';
 import {
   activeAgentCount,
   groupState,
+  groupGlyphState,
   toolChip,
   toolGroupHeadline,
   toolLineVisible,
@@ -89,6 +90,27 @@ describe('independent tool presentation acceptance', () => {
     );
     expect(view.state).toBe('done');
     expect(groupState([view])).toBe('failed');
+    expect(
+      groupGlyphState(
+        [
+          {
+            ...part,
+            status: 'done',
+            activities: [
+              {
+                ...activity,
+                kind: 'tool',
+                name: 'fetch_source',
+                status: 'failed',
+                error: 'operation_failed',
+                finishedAt: 20,
+              },
+            ],
+          },
+        ],
+        'done',
+      ),
+    ).toBe('partial');
   });
 
   it('does not leak URL credentials through nested string details or raw unknown input', () => {
@@ -343,5 +365,99 @@ describe('finished tool errors stay separate from an interrupted turn', () => {
     expect(
       toolGroupHeadline([research('failed', [fetchFailure, agentFailure]), live], 'streaming'),
     ).toEqual({ kind: 'running' });
+  });
+
+  it('keeps an unsealed running call on a failed answer out of partial', () => {
+    const doneFetch: ToolPart = {
+      ...part,
+      callId: 'fetch',
+      name: 'fetch_source',
+      status: 'done',
+      finishedAt: 20,
+      activities: [],
+    };
+    expect(groupGlyphState([doneFetch, research('running', [])], 'failed')).toBe('failed');
+    expect(toolGroupHeadline([doneFetch, research('running', [])], 'failed')).toEqual({
+      kind: 'interrupted',
+    });
+  });
+});
+
+describe('group glyph partial success', () => {
+  const doneSearch = (): ToolPart => ({
+    ...part,
+    callId: 'search-ok',
+    name: 'search_web',
+    status: 'done',
+    finishedAt: 20,
+    activities: [],
+  });
+  const failedSearch = (): ToolPart => ({
+    ...part,
+    callId: 'search-bad',
+    name: 'search_web',
+    status: 'failed',
+    finishedAt: 20,
+    output: { error: 'web_http_403' },
+    activities: [],
+  });
+
+  it('stays red when every settled call failed', () => {
+    expect(groupGlyphState([failedSearch(), research('failed', [fetchFailure])], 'done')).toBe(
+      'failed',
+    );
+  });
+
+  it('uses partial for a mix of settled success and failure', () => {
+    expect(groupGlyphState([doneSearch(), failedSearch()], 'done')).toBe('partial');
+    expect(toolGroupHeadline([doneSearch(), failedSearch()], 'done')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+  });
+
+  it('uses partial when a done root still has a failed descendant', () => {
+    expect(groupGlyphState([research('done', [fetchFailure])], 'done')).toBe('partial');
+  });
+
+  it('uses partial when a done root skipped a nested step', () => {
+    const skipped: ChatToolActivity = {
+      id: 'page-skip',
+      kind: 'tool',
+      name: 'fetch_source',
+      status: 'cancelled',
+      startedAt: 12,
+      finishedAt: 20,
+    };
+    expect(groupGlyphState([research('done', [skipped])], 'done')).toBe('partial');
+    expect(groupGlyphState([failedSearch()], 'done')).toBe('failed');
+    expect(groupGlyphState([doneSearch(), failedSearch()], 'done')).toBe('partial');
+    expect(groupGlyphState([research('running', [])], 'cancelled')).toBe('cancelled');
+  });
+
+  it('stays running while a call is open', () => {
+    expect(groupGlyphState([doneSearch(), { ...part, status: 'running' }], 'streaming')).toBe(
+      'running',
+    );
+  });
+
+  it('does not turn a cancelled turn into partial', () => {
+    const open: ToolPart = { ...part, callId: 'cut', status: 'running', activities: [] };
+    expect(groupGlyphState([doneSearch(), failedSearch(), open], 'cancelled')).toBe('cancelled');
+    expect(groupGlyphState([doneSearch(), open], 'cancelled')).toBe('cancelled');
+    expect(groupGlyphState([research('running', [])], 'cancelled')).toBe('cancelled');
+    expect(groupGlyphState([doneSearch(), failedSearch(), open], 'failed')).toBe('failed');
+    const sealed: ToolPart = {
+      ...part,
+      callId: 'sealed',
+      status: 'failed',
+      finishedAt: 40,
+      output: { error: 'Interrupted.' },
+      activities: [],
+    };
+    expect(groupGlyphState([doneSearch(), sealed], 'cancelled')).toBe('cancelled');
+    expect(groupGlyphState([doneSearch(), failedSearch(), sealed], 'cancelled')).toBe('cancelled');
+    expect(groupGlyphState([doneSearch(), sealed], 'failed')).toBe('failed');
+    expect(groupGlyphState([doneSearch(), failedSearch(), sealed], 'failed')).toBe('failed');
   });
 });

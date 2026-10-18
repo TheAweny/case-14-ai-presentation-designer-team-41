@@ -15,7 +15,7 @@ export function ThoughtLine({
   label,
   children,
 }: {
-  state: 'running' | 'done' | 'failed' | 'cancelled';
+  state: 'running' | 'done' | 'failed' | 'cancelled' | 'partial';
   label: string;
   children?: ReactNode;
 }) {

@@ -1,0 +1,32 @@
+.lattice {
+  color: var(--muted-foreground);
+}
+.lattice[data-task-state='partial'] .settled {
+  opacity: 0;
+}
+.mark {
+  pointer-events: none;
+  opacity: 0;
+  color: color-mix(in srgb, var(--project-orange) 72%, var(--muted-foreground));
+  transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.lattice[data-task-state='partial'] .mark {
+  opacity: 1;
+}
+.ring,
+.check {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ring {
+  opacity: 0.72;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark,
+  .lattice :global(.task-glyph-layer) {
+    transition: none;
+  }
+}
