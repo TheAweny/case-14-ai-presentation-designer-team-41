@@ -70,9 +70,9 @@
     },
     "effort": "Depth",
     "effortLabel": "Reasoning depth",
-    "thinking": "Reasoning",
-    "thinkingOn": "The model thinks before it answers",
-    "thinkingOff": "The model answers at once, without reasoning",
+    "thinking": "Think while building",
+    "thinkingOn": "The model thinks while it builds the deck. The chat always thinks",
+    "thinkingOff": "The deck is built without reasoning. The chat always thinks",
     "levels": {
       "low": "Low",
       "medium": "Medium",

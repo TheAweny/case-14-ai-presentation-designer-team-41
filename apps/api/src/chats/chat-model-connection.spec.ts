@@ -115,3 +115,40 @@ describe('chat model connection on quota failure', () => {
     expect(models.resolve).toHaveBeenCalledWith(null, { userId: account.id, admin: false });
   });
 });
+
+describe('chat thinking', () => {
+  it('thinks as the assistant config says, whatever the deck switch of the turn', async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ choices: [{ message: { content: 'Ок' }, finish_reason: 'stop' }] }),
+    );
+    vi.stubGlobal('fetch', fetchImpl);
+    const instance = new ChatsService(
+      {} as GenerationService,
+      {
+        resolve: vi.fn(async () => resolved('own')),
+        resolveRole: vi.fn(async () => null),
+      } as unknown as ModelSettingsService,
+      {
+        reasoningOf: vi.fn(async () => ({ toggle: 'enable-thinking', levels: false })),
+      } as unknown as ModelCapabilityService,
+    );
+    services.push(instance);
+    const thinkingAgent = {
+      jsonMode: 'Answer as JSON.',
+      agent: { config: { generation: { maxOutputTokens: 32, thinking: true } } },
+    } as ChatAgent;
+    const model = (await Reflect.apply(Reflect.get(instance, 'chatModel'), instance, [
+      { ...request, thinking: false },
+      account,
+      thinkingAgent,
+    ])) as { step(input: unknown): Promise<unknown> };
+    await model.step({
+      messages: [],
+      tools: [],
+      signal: AbortSignal.timeout(5000),
+      onText: () => undefined,
+    });
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: true });
+  });
+});

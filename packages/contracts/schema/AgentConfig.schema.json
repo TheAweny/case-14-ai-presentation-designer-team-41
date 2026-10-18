@@ -22,6 +22,10 @@
           "minimum": 0,
           "type": "number"
         },
+        "thinking": {
+          "description": "Whether a model that can answer both ways thinks before it answers. Unset: the caller decides.",
+          "type": "boolean"
+        },
         "topP": {
           "description": "Nucleus sampling cutoff.",
           "maximum": 1,

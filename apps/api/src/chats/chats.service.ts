@@ -1001,7 +1001,8 @@ export class ChatsService implements OnApplicationShutdown {
       generation: agent.agent.config.generation,
       jsonModeInstructions: agent.jsonMode,
       reasoningEffort: request.reasoningEffort,
-      thinking: request.thinking,
+      // The chat thinks as its config says; the person's switch is for the decks it builds.
+      thinking: agent.agent.config.generation.thinking ?? null,
       reasoning: await this.capabilities.reasoningOf(resolved),
     });
     return withConnection(model, resolved.connectionId);

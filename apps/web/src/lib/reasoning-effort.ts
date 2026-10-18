@@ -32,7 +32,7 @@ export function subscribeReasoningEffort(listener: () => void): () => void {
 const THINKING_KEY = 'lct.thinking';
 const thinkingListeners = new Set<() => void>();
 
-/** Whether a hybrid model thinks. Off until the person switches it on. */
+/** Whether a hybrid model thinks while it builds a deck. Off until the person switches it on. */
 export function readThinking(): boolean {
   if (typeof window === 'undefined') return false;
   try {

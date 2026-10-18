@@ -3,7 +3,7 @@
 # json-mode.md, loop-nudge.md and finalize.md are part of the agent and share its version.
 
 id: chat-assistant
-version: 1.18.0
+version: 1.19.0
 description: 'Chat assistant of the deck designer: conversation, deck outline, build.'
 modelId: assistant-default
 
@@ -11,6 +11,9 @@ generation:
   temperature: 0.4
   topP: 0.95
   maxOutputTokens: 4096
+  # The chat chooses tools and reads their results step by step: it thinks wherever the model
+  # can switch thinking on. The person's switch in the composer is only for deck builds.
+  thinking: true
 
 outputSchema: ChatTurn
 instructionsFile: instructions.md
