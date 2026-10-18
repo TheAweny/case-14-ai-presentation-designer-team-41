@@ -17,6 +17,12 @@ describe('proxiedApiPath', () => {
     expect(proxiedApiPath(['files', 'templates', 't-1', 'previews', 'slide-12.png'], 'GET')).toBe(
       '/files/templates/t-1/previews/slide-12.png',
     );
+    expect(
+      proxiedApiPath(
+        ['files', 'templates', '11d8fefa-d032-4a95-84e5-77efd69569c2', 'download'],
+        'GET',
+      ),
+    ).toBe('/files/templates/11d8fefa-d032-4a95-84e5-77efd69569c2/download');
     expect(proxiedApiPath(['generation', 'run-1', 'artifacts', 'deck.pdf'], 'GET')).toBe(
       '/generation/run-1/artifacts/deck.pdf',
     );
@@ -29,11 +35,19 @@ describe('proxiedApiPath', () => {
     expect(proxiedApiPath(['auth', 'accounts', 'x'], 'GET')).toBeNull();
     expect(proxiedApiPath(['library', 'projects'], 'GET')).toBeNull();
     expect(proxiedApiPath(['files'], 'GET')).toBeNull();
+    expect(proxiedApiPath(['files', 'templates', 't-1', 'download', 'extra'], 'GET')).toBeNull();
+    expect(proxiedApiPath(['files', 'templates', '..', 'download'], 'GET')).toBeNull();
   });
 
   it('checks the method as well as the path', () => {
     expect(proxiedApiPath(['generation', 'run-1'], 'DELETE')).toBeNull();
     expect(proxiedApiPath(['files', 'template'], 'GET')).toBeNull();
+    expect(
+      proxiedApiPath(
+        ['files', 'templates', '11d8fefa-d032-4a95-84e5-77efd69569c2', 'download'],
+        'POST',
+      ),
+    ).toBeNull();
     expect(proxiedApiPath(['generation', 'run-1', 'summary'], 'POST')).toBeNull();
   });
 

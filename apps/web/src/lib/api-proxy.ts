@@ -19,6 +19,8 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },
   // Pictures of a template's sample slides in the library.
   { method: 'GET', pattern: /^files\/templates\/[\w-]+\/previews\/slide-\d+\.png$/ },
+  // The original template bytes. Another instance accepts this file on the existing upload.
+  { method: 'GET', pattern: /^files\/templates\/[\w-]+\/download$/ },
   // Chats: read one or the list, send a turn and stream its answer, watch a turn still running,
   // stop it, pick the deck a chat leads to, build again a variant that failed.
   { method: 'GET', pattern: /^chats(\/[\w-]+(\/stream)?)?$/ },

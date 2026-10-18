@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Fragment,
   useEffect,
   useOptimistic,
   useRef,
@@ -38,6 +39,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreIcon, SpinnerIcon, UploadIcon, WarningIcon } from '@/components/ui/icons';
 import { TEMPLATE_EXTENSIONS, templateFileProblem } from '@/lib/deck-generator';
+import { templateMenuActions, type TemplateMenuAction } from '@/lib/template-menu';
+import {
+  originalDownloadMessageKey,
+  readOriginalTemplate,
+  saveOriginalTemplate,
+} from '@/lib/template-original-download';
 import { cn } from '@/lib/utils';
 
 const FAILED: LibraryActionResult = { ok: false, reason: 'invalid' };
@@ -122,8 +129,9 @@ export function TemplateUpload({ className }: { className?: string }) {
 
 /**
  * Библиотека шаблонов: свои и общие. Щелчок раскрывает профиль шаблона под сеткой, меню «⋯» и
- * правая кнопка — переименовать, открыть всем (администратору) и удалить. Удалённый шаблон
- * пропадает сразу, до ответа сервера; не вышло — возвращается, и уведомление объясняет почему.
+ * правая кнопка — скачать исходный файл, переименовать, открыть всем (администратору) и удалить.
+ * Скачать можно и чужой общий шаблон. Удалённый шаблон пропадает сразу, до ответа сервера;
+ * не вышло — возвращается, и уведомление объясняет почему.
  */
 export function TemplateLibrary({
   templates,
@@ -161,6 +169,8 @@ export function TemplateLibrary({
     kind: 'rename' | 'delete';
     template: LibraryTemplate;
   } | null>(null);
+  const inflight = useRef(new Set<string>());
+  const [downloading, setDownloading] = useState<ReadonlySet<string>>(() => new Set());
 
   const run = (
     patch: { templateId: string; removed?: boolean; name?: string; shared?: boolean },
@@ -204,6 +214,28 @@ export function TemplateLibrary({
       { ok: t('deleted', { name: template.fileName }), failed: t('deleteFailed') },
     );
 
+  const download = (template: LibraryTemplate) => {
+    const templateId = template.templateId;
+    if (inflight.current.has(templateId)) return;
+    inflight.current.add(templateId);
+    setDownloading(new Set(inflight.current));
+    void readOriginalTemplate(templateId)
+      .then((result) => {
+        if (!result.ok) {
+          notice.alert(t(originalDownloadMessageKey(result.reason)));
+          return;
+        }
+        saveOriginalTemplate(result.file);
+      })
+      .catch(() => {
+        notice.alert(t('downloadFailed'));
+      })
+      .finally(() => {
+        inflight.current.delete(templateId);
+        setDownloading(new Set(inflight.current));
+      });
+  };
+
   return (
     <div className="flex flex-col gap-8">
       <ul
@@ -212,7 +244,13 @@ export function TemplateLibrary({
       >
         {shown.map((template) => {
           const editable = template.mine || canShare;
+          const menu = templateMenuActions({
+            editable,
+            canShare,
+            shared: template.shared,
+          });
           const actions = {
+            download: () => download(template),
             rename: editable ? () => setDialog({ kind: 'rename', template }) : null,
             share: canShare ? () => share(template, !template.shared) : null,
             remove: editable ? () => setDialog({ kind: 'delete', template }) : null,
@@ -222,6 +260,7 @@ export function TemplateLibrary({
               <TemplateCard
                 template={template}
                 selected={template.templateId === selectedId}
+                menu={menu}
                 onSelect={() =>
                   router.replace(
                     templateHref(template.templateId === selectedId ? null : template.templateId),
@@ -229,6 +268,7 @@ export function TemplateLibrary({
                   )
                 }
                 actions={actions}
+                downloading={downloading.has(template.templateId)}
               />
             </li>
           );
@@ -261,6 +301,7 @@ export function TemplateLibrary({
 }
 
 interface CardActions {
+  readonly download: () => void;
   readonly rename: (() => void) | null;
   readonly share: (() => void) | null;
   readonly remove: (() => void) | null;
@@ -271,89 +312,127 @@ function TemplateCard({
   template,
   selected,
   onSelect,
+  menu,
   actions,
+  downloading,
 }: {
   template: LibraryTemplate;
   selected: boolean;
   onSelect: () => void;
+  menu: readonly TemplateMenuAction[];
   actions: CardActions;
+  downloading: boolean;
 }) {
   const t = useTranslations('templatesPage');
-  const hasActions = actions.rename || actions.share || actions.remove;
   const items = (
     Item: typeof DropdownMenuItem | typeof ContextMenuItem,
     Separator: typeof DropdownMenuSeparator | typeof ContextMenuSeparator,
   ) => (
     <>
-      {actions.rename ? <Item onSelect={actions.rename}>{t('rename')}</Item> : null}
-      {actions.share ? (
-        <Item onSelect={actions.share}>{t(template.shared ? 'unshare' : 'share')}</Item>
-      ) : null}
-      {actions.remove ? (
-        <>
-          <Separator />
-          <Item variant="destructive" onSelect={actions.remove}>
-            {t('delete')}
-          </Item>
-        </>
-      ) : null}
+      {menu.map((id) => {
+        if (id === 'download') {
+          return (
+            <Item
+              key={id}
+              disabled={downloading}
+              aria-busy={downloading}
+              onSelect={(event) => {
+                if (downloading) {
+                  event.preventDefault();
+                  return;
+                }
+                actions.download();
+              }}
+            >
+              {t('download')}
+            </Item>
+          );
+        }
+        if (id === 'rename' && actions.rename) {
+          return (
+            <Item key={id} onSelect={actions.rename}>
+              {t('rename')}
+            </Item>
+          );
+        }
+        if (id === 'share' && actions.share) {
+          return (
+            <Item key={id} onSelect={actions.share}>
+              {t('share')}
+            </Item>
+          );
+        }
+        if (id === 'unshare' && actions.share) {
+          return (
+            <Item key={id} onSelect={actions.share}>
+              {t('unshare')}
+            </Item>
+          );
+        }
+        if (id === 'delete' && actions.remove) {
+          return (
+            <Fragment key={id}>
+              <Separator />
+              <Item variant="destructive" onSelect={actions.remove}>
+                {t('delete')}
+              </Item>
+            </Fragment>
+          );
+        }
+        return null;
+      })}
     </>
   );
 
-  const card = (
-    <div className="group/template relative">
-      <button
-        type="button"
-        aria-pressed={selected}
-        onClick={onSelect}
-        className={cn(
-          'flex w-full flex-col gap-2 rounded-xl p-2 text-left ring-1 ring-border outline-none',
-          'transition-colors duration-100 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50',
-          'motion-reduce:transition-none',
-          selected && 'bg-muted/60 ring-2 ring-foreground/40',
-        )}
-      >
-        <TemplateCover template={template} className="w-full" />
-        <span className="flex min-w-0 flex-col gap-1 px-0.5">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-sm font-medium">{template.fileName}</span>
-            {template.shared ? (
-              <span className="shrink-0 rounded-full px-1.5 py-px text-[0.6875rem] text-muted-foreground ring-1 ring-border">
-                {t('sharedBadge')}
-              </span>
-            ) : null}
-          </span>
-          <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground tabular-nums">
-            {t('layouts', { count: template.layoutCount })}
-            <PaletteStrip system={template.designSystem} className="h-2 w-16" />
-          </span>
-        </span>
-      </button>
-      {hasActions ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              aria-label={t('menu', { name: template.fileName })}
-              className="absolute top-3 right-3 size-7 opacity-0 shadow-sm group-hover/template:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-            >
-              <MoreIcon size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            {items(DropdownMenuItem, DropdownMenuSeparator)}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-    </div>
-  );
-
-  if (!hasActions) return card;
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{card}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild>
+        <div className="group/template relative">
+          <button
+            type="button"
+            aria-pressed={selected}
+            onClick={onSelect}
+            className={cn(
+              'flex w-full flex-col gap-2 rounded-xl p-2 text-left ring-1 ring-border outline-none',
+              'transition-colors duration-100 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50',
+              'motion-reduce:transition-none',
+              selected && 'bg-muted/60 ring-2 ring-foreground/40',
+            )}
+          >
+            <TemplateCover template={template} className="w-full" />
+            <span className="flex min-w-0 flex-col gap-1 px-0.5">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-sm font-medium">{template.fileName}</span>
+                {template.shared ? (
+                  <span className="shrink-0 rounded-full px-1.5 py-px text-[0.6875rem] text-muted-foreground ring-1 ring-border">
+                    {t('sharedBadge')}
+                  </span>
+                ) : null}
+              </span>
+              <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground tabular-nums">
+                {t('layouts', { count: template.layoutCount })}
+                <PaletteStrip system={template.designSystem} className="h-2 w-16" />
+              </span>
+            </span>
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                aria-label={t('menu', { name: template.fileName })}
+                className="absolute top-3 right-3 size-7 opacity-0 shadow-sm group-hover/template:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+              >
+                <MoreIcon size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {items(DropdownMenuItem, DropdownMenuSeparator)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         {items(ContextMenuItem, ContextMenuSeparator)}
       </ContextMenuContent>

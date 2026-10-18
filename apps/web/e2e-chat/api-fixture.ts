@@ -31,6 +31,11 @@ let details: Record<string, { kinds: string[] }> | null = null;
 /** Kinds the person set by hand, as the API keeps them. */
 let manualKinds: Record<string, string[]> = {};
 let templates: unknown[] = [];
+/** Original template bytes for GET /files/templates/:id/download. An unknown id is 404. */
+const templateDownloads = new Map<
+  string,
+  { readonly fileName: string; readonly contentType: string; readonly body: Buffer }
+>();
 
 /** Only fixed test data. Browser chat requests are intercepted by each Playwright scenario. */
 const server = createServer(async (request, response) => {
@@ -41,6 +46,7 @@ const server = createServer(async (request, response) => {
     details = null;
     manualKinds = {};
     templates = [];
+    templateDownloads.clear();
     response.end('{}');
   } else if (request.url === '/__set-templates' && request.method === 'POST') {
     let body = '';
@@ -49,6 +55,41 @@ const server = createServer(async (request, response) => {
     response.end('{}');
   } else if (request.url === '/files/templates') {
     response.end(JSON.stringify(templates));
+  } else if (request.url === '/__set-template-download' && request.method === 'POST') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    const file = JSON.parse(body) as {
+      id: string;
+      fileName: string;
+      contentType: string;
+      bodyBase64: string;
+    };
+    templateDownloads.set(file.id, {
+      fileName: file.fileName,
+      contentType: file.contentType,
+      body: Buffer.from(file.bodyBase64, 'base64'),
+    });
+    response.end('{}');
+  } else if (request.url?.startsWith('/files/templates/') && request.url.endsWith('/download')) {
+    const id = decodeURIComponent(
+      request.url.slice('/files/templates/'.length, -'/download'.length),
+    );
+    const file = templateDownloads.get(id);
+    if (!file) {
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'Template file is missing.' }));
+    } else {
+      const star = encodeURIComponent(file.fileName).replace(/['()*]/g, (character) => {
+        return '%' + character.charCodeAt(0).toString(16).toUpperCase();
+      });
+      const ascii = /\.potx$/i.test(file.fileName) ? 'template.potx' : 'template.pptx';
+      response.setHeader('content-type', file.contentType);
+      response.setHeader(
+        'content-disposition',
+        `attachment; filename="${ascii}"; filename*=UTF-8''${star}`,
+      );
+      response.end(file.body);
+    }
   } else if (request.url === '/__set-models' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);

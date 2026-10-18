@@ -14,6 +14,9 @@ const document: OpenApiDocument = {
     '/files/templates/{id}/previews/{name}': {
       get: { parameters: [pathParam('id', 't-1'), pathParam('name', 'slide-3.png')] },
     },
+    '/files/templates/{id}/download': {
+      get: { parameters: [pathParam('id', '11d8fefa-d032-4a95-84e5-77efd69569c2')] },
+    },
     '/model-settings': { get: { description: 'Настройки.' } },
     '/generation/{id}': {
       get: { parameters: [pathParam('id', 'run-1')] },
@@ -35,6 +38,7 @@ describe('browserDocument', () => {
     expect(paths['/files/templates/{id}/previews/{name}']?.get?.[SERVER_ONLY_EXTENSION]).toBe(
       undefined,
     );
+    expect(paths['/files/templates/{id}/download']?.get?.[SERVER_ONLY_EXTENSION]).toBe(undefined);
   });
 
   it('marks the routes only the web server may call', () => {

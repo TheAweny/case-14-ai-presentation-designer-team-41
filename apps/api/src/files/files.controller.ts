@@ -29,10 +29,11 @@ import {
 import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { mkdir, open, readdir, realpath, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Pool } from 'pg';
 import { EngineClient } from '@lct/engine-client';
+import { contentDisposition } from './content-disposition.js';
 import { decodeMultipartFilename } from './filename.js';
 import { templateUploadError } from './template-upload-error.js';
 import { visibleFile } from './template-visibility.js';
@@ -65,6 +66,8 @@ export interface StoredFile {
 }
 
 const TEMPLATE_NAME_MAX_LENGTH = 200;
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const POTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.template';
 
 const UPLOAD_BODY = {
   schema: {
@@ -297,6 +300,70 @@ export class FilesController implements OnApplicationShutdown {
     return new StreamableFile(createReadStream(join(directory, found)), {
       type: 'image/png',
     });
+  }
+
+  /**
+   * The original uploaded template. Another instance accepts these bytes through the existing
+   * upload and builds its own profile; this route does not read the PPTX.
+   * A shared template may be downloaded by every account that can see it. Changing or deleting
+   * it stays with the owner and an administrator.
+   */
+  @Get('templates/:id/download')
+  @ApiOperation({
+    summary: 'Скачать исходный шаблон',
+    description:
+      'Оригинальные байты `.pptx` или `.potx`. Свой шаблон и открытый всем; чужой личный и убранный из библиотеки — нет.',
+  })
+  @ApiParam({ name: 'id', example: TEMPLATE_EXAMPLE.fileId })
+  @ApiFile('Исходный файл шаблона.', PPTX_MIME, POTX_MIME)
+  @ApiErrors(404)
+  async downloadTemplate(
+    @Param('id') id: string,
+    @CurrentAccount() account: Account,
+  ): Promise<StreamableFile> {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new NotFoundException('Template not found.');
+    const result = await this.pool.query<{ file_name: string; storage_path: string }>(
+      `SELECT file_name, storage_path FROM stored_files
+       WHERE id = $1 AND kind = 'template' AND ${visibleFile(2)}`,
+      [id, account.id],
+    );
+    const row = result.rows[0];
+    if (!row) throw new NotFoundException('Template not found.');
+    const extension = row.file_name.toLowerCase().slice(row.file_name.lastIndexOf('.'));
+    if (extension !== '.pptx' && extension !== '.potx') {
+      throw new NotFoundException('Template file is missing.');
+    }
+    const directory = resolve(this.root, 'templates', id);
+    let realDirectory: string;
+    let realFile: string;
+    try {
+      realDirectory = await realpath(directory);
+      realFile = await realpath(row.storage_path);
+    } catch {
+      throw new NotFoundException('Template file is missing.');
+    }
+    const rel = relative(realDirectory, realFile);
+    if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+      throw new NotFoundException('Template file is missing.');
+    }
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      handle = await open(realFile, 'r');
+      const info = await handle.stat();
+      if (!info.isFile() || info.size === 0)
+        throw new NotFoundException('Template file is missing.');
+      const stream = handle.createReadStream();
+      handle = undefined;
+      return new StreamableFile(stream, {
+        type: extension === '.potx' ? POTX_MIME : PPTX_MIME,
+        disposition: contentDisposition(row.file_name),
+        length: info.size,
+      });
+    } catch (error) {
+      await handle?.close().catch(() => undefined);
+      if (error instanceof NotFoundException) throw error;
+      throw new NotFoundException('Template file is missing.');
+    }
   }
 
   /**
