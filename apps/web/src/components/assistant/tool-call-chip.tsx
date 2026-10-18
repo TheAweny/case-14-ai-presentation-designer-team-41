@@ -181,6 +181,36 @@ function presentedError(error: string | null, t: ToolText): string | null {
   ) {
     return t('errors.budget');
   }
+  switch (trimmed) {
+    case 'web_http_401':
+    case 'web_http_403':
+      return t('errors.webAccess');
+    case 'web_http_404':
+    case 'web_http_410':
+      return t('errors.webMissing');
+    case 'web_http_429':
+      return t('errors.webRate');
+    case 'web_http_5xx':
+      return t('errors.webServer');
+    case 'web_timeout':
+      return t('errors.webTimeout');
+    case 'web_unreachable':
+      return t('errors.webUnreachable');
+    case 'web_blocked':
+      return t('errors.webBlocked');
+    case 'web_unsupported':
+      return t('errors.webUnsupported');
+    case 'web_too_large':
+      return t('errors.webTooLarge');
+    case 'web_invalid_url':
+      return t('errors.webInvalidUrl');
+    case 'web_hash_mismatch':
+      return t('errors.webHash');
+    case 'web_redirect':
+      return t('errors.webRedirect');
+    default:
+      break;
+  }
   if (trimmed === 'operation_failed' || MACHINE_CODE.test(trimmed) || MACHINE_TOKEN.test(trimmed)) {
     return t('errors.operation');
   }

@@ -176,7 +176,19 @@
     "errors": {
       "operation": "The action could not be completed. Other sources can still be used.",
       "cancelled": "The action was stopped.",
-      "budget": "This type of web request has reached its limit for this turn. Other tools remain available."
+      "budget": "This type of web request has reached its limit for this turn. Other tools remain available.",
+      "webAccess": "The site limited access to this page.",
+      "webMissing": "The page was not found.",
+      "webRate": "The site limited how often this page can be opened.",
+      "webServer": "The site could not return this page.",
+      "webTimeout": "The site did not respond in time.",
+      "webUnreachable": "The site could not be reached.",
+      "webBlocked": "This address cannot be opened.",
+      "webUnsupported": "This page is not in a format that can be read.",
+      "webTooLarge": "The page is too large to read.",
+      "webInvalidUrl": "This address cannot be opened.",
+      "webHash": "The page no longer matches the version that was expected.",
+      "webRedirect": "The page moved too many times to open."
     }
   },
   "plan": {

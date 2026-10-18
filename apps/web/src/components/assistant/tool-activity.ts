@@ -365,7 +365,35 @@ function privateHost(hostname: string): boolean {
 
 function partError(part: ToolPart): unknown {
   const output = recordOf(part.output);
-  return output?.error ?? output?.message ?? null;
+  return (
+    safeErrorCode(output?.error) ??
+    safeErrorCode(output?.code) ??
+    output?.error ??
+    output?.message ??
+    null
+  );
+}
+
+const WEB_ERROR_CODES = new Set([
+  'web_http_401',
+  'web_http_403',
+  'web_http_404',
+  'web_http_410',
+  'web_http_429',
+  'web_http_5xx',
+  'web_timeout',
+  'web_unreachable',
+  'web_blocked',
+  'web_unsupported',
+  'web_too_large',
+  'web_invalid_url',
+  'web_hash_mismatch',
+  'web_redirect',
+  'web_budget_exhausted',
+]);
+
+function safeErrorCode(value: unknown): string | null {
+  return typeof value === 'string' && WEB_ERROR_CODES.has(value) ? value : null;
 }
 
 function recordOf(value: unknown): Record<string, unknown> | null {

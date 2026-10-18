@@ -26,6 +26,36 @@ const part: ToolPart = {
 };
 
 describe('independent tool presentation acceptance', () => {
+  it('prefers a recognised web failure over raw provider text and keeps nested codes', () => {
+    const direct = toolChip(
+      {
+        ...part,
+        name: 'fetch_source',
+        status: 'failed',
+        output: { code: 'web_http_403', error: 'PRIVATE_PROVIDER_BODY' },
+      },
+      'done',
+    );
+    expect(direct.error).toBe('web_http_403');
+    expect(JSON.stringify(direct)).not.toContain('PRIVATE_PROVIDER_BODY');
+    const nested = toolChip(
+      {
+        ...part,
+        status: 'done',
+        activities: [
+          {
+            ...activity,
+            status: 'failed',
+            error: 'web_http_401',
+            finishedAt: 20,
+          },
+        ],
+      },
+      'done',
+    );
+    expect(nested.activities[0]?.error).toBe('web_http_401');
+  });
+
   it('counts actual agent jobs only while their parent and message remain open', () => {
     expect(activeAgentCount([part], 'streaming')).toBe(1);
     expect(activeAgentCount([{ ...part, status: 'done', finishedAt: 20 }], 'streaming')).toBe(0);
