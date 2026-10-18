@@ -29,8 +29,8 @@ export interface StoredConnection {
 }
 
 /**
- * What probing a model found, by server address and model id. A field that is missing was not
- * settled. `probeVersion` is the version of the probe prompts that found it.
+ * What probing a model found, by connection, its address and the model id. A field that is
+ * missing was not settled. `probeVersion` is the version of the probe prompts that found it.
  */
 export interface StoredCapability {
   /** How the model thinks, from the provider's description or the free probe. */
@@ -38,6 +38,15 @@ export interface StoredCapability {
   /** The kinds the person set by hand; they win over the provider's description. */
   readonly manualKinds?: readonly ModelKind[];
   readonly probeVersion: string;
+}
+
+/**
+ * Whose findings: one connection at one address. Not the address alone: a person's own connection
+ * to the same server as a shared one must not change what everyone's models are.
+ */
+export interface CapabilityScope {
+  readonly connectionId: string;
+  readonly baseUrl: string;
 }
 
 /** A stored role: a model or switched off. A role that is not stored is not assigned. */
@@ -61,7 +70,10 @@ export interface ModelSettingsStore {
   listConnections(ownerId: string): Promise<StoredConnection[]>;
   getConnection(connectionId: string): Promise<StoredConnection | null>;
   saveConnection(connection: StoredConnection): Promise<void>;
-  /** Removes the connection and the roles assigned to it; false when there was none. */
+  /**
+   * Removes the connection, the roles assigned to it and what was found about its models; false
+   * when there was none.
+   */
   deleteConnection(connectionId: string): Promise<boolean>;
   listRoles(owner: RoleOwner): Promise<StoredRole[]>;
   setRole(role: StoredRole, owner: RoleOwner): Promise<void>;
@@ -76,19 +88,19 @@ export interface ModelSettingsStore {
   /** The last check of the server connection at this address; null — never checked. */
   getServerCheck(baseUrl: string): Promise<ConnectionCheck | null>;
   setServerCheck(baseUrl: string, check: ConnectionCheck): Promise<void>;
-  getCapability(baseUrl: string, modelId: string): Promise<StoredCapability | null>;
-  /** Everything found for the models behind one server address, by model id. */
-  listCapabilities(baseUrl: string): Promise<ReadonlyMap<string, StoredCapability>>;
+  getCapability(scope: CapabilityScope, modelId: string): Promise<StoredCapability | null>;
+  /** Everything found for the models of one connection, by model id. */
+  listCapabilities(scope: CapabilityScope): Promise<ReadonlyMap<string, StoredCapability>>;
   /** Stores how the model thinks; the other fields keep their value. */
   saveReasoning(
-    baseUrl: string,
+    scope: CapabilityScope,
     modelId: string,
     reasoning: ReasoningCapability,
     probeVersion: string,
   ): Promise<void>;
   /** Sets or, with null, clears the kinds the person chose by hand. */
   setManualKinds(
-    baseUrl: string,
+    scope: CapabilityScope,
     modelId: string,
     kinds: readonly ModelKind[] | null,
   ): Promise<void>;
@@ -195,6 +207,9 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
       await client.query('DELETE FROM model_role_assignments WHERE connection_id = $1', [
         connectionId,
       ]);
+      await client.query('DELETE FROM model_connection_capabilities WHERE connection_id = $1', [
+        connectionId,
+      ]);
       await client.query('COMMIT');
       return (removed.rowCount ?? 0) > 0;
     } catch (error) {
@@ -279,15 +294,15 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
     );
   }
 
-  async getCapability(baseUrl: string, modelId: string) {
-    return (await this.capabilityRows(baseUrl, modelId)).get(modelId) ?? null;
+  async getCapability(scope: CapabilityScope, modelId: string) {
+    return (await this.capabilityRows(scope, modelId)).get(modelId) ?? null;
   }
 
-  async listCapabilities(baseUrl: string) {
-    return this.capabilityRows(baseUrl, null);
+  async listCapabilities(scope: CapabilityScope) {
+    return this.capabilityRows(scope, null);
   }
 
-  private async capabilityRows(baseUrl: string, modelId: string | null) {
+  private async capabilityRows(scope: CapabilityScope, modelId: string | null) {
     const result = await this.pool.query<{
       model_id: string;
       reasoning: ReasoningCapability | null;
@@ -295,8 +310,9 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
       probe_version: string;
     }>(
       `SELECT model_id, reasoning, manual_kinds, probe_version
-       FROM model_capabilities WHERE base_url = $1 AND ($2::text IS NULL OR model_id = $2)`,
-      [baseUrl, modelId],
+       FROM model_connection_capabilities
+       WHERE connection_id = $1 AND base_url = $2 AND ($3::text IS NULL OR model_id = $3)`,
+      [scope.connectionId, scope.baseUrl, modelId],
     );
     const found = new Map<string, StoredCapability>();
     for (const row of result.rows) {
@@ -310,28 +326,34 @@ export class PostgresModelSettingsStore implements ModelSettingsStore {
   }
 
   async saveReasoning(
-    baseUrl: string,
+    scope: CapabilityScope,
     modelId: string,
     reasoning: ReasoningCapability,
     probeVersion: string,
   ) {
     await this.pool.query(
-      `INSERT INTO model_capabilities (base_url, model_id, reasoning, probe_version)
-       VALUES ($1, $2, $3::jsonb, $4)
-       ON CONFLICT (base_url, model_id) DO UPDATE SET
+      `INSERT INTO model_connection_capabilities
+         (connection_id, base_url, model_id, reasoning, probe_version)
+       VALUES ($1, $2, $3, $4::jsonb, $5)
+       ON CONFLICT (connection_id, base_url, model_id) DO UPDATE SET
          reasoning = EXCLUDED.reasoning, probe_version = EXCLUDED.probe_version,
          updated_at = now()`,
-      [baseUrl, modelId, JSON.stringify(reasoning), probeVersion],
+      [scope.connectionId, scope.baseUrl, modelId, JSON.stringify(reasoning), probeVersion],
     );
   }
 
-  async setManualKinds(baseUrl: string, modelId: string, kinds: readonly ModelKind[] | null) {
+  async setManualKinds(
+    scope: CapabilityScope,
+    modelId: string,
+    kinds: readonly ModelKind[] | null,
+  ) {
     await this.pool.query(
-      `INSERT INTO model_capabilities (base_url, model_id, manual_kinds, probe_version)
-       VALUES ($1, $2, $3::jsonb, 'manual')
-       ON CONFLICT (base_url, model_id) DO UPDATE SET
+      `INSERT INTO model_connection_capabilities
+         (connection_id, base_url, model_id, manual_kinds, probe_version)
+       VALUES ($1, $2, $3, $4::jsonb, 'manual')
+       ON CONFLICT (connection_id, base_url, model_id) DO UPDATE SET
          manual_kinds = EXCLUDED.manual_kinds, updated_at = now()`,
-      [baseUrl, modelId, kinds === null ? null : JSON.stringify(kinds)],
+      [scope.connectionId, scope.baseUrl, modelId, kinds === null ? null : JSON.stringify(kinds)],
     );
   }
 }
@@ -344,7 +366,7 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
   readonly events: SettingsEvent[] = [];
   readonly serverModels = new Map<string, readonly string[] | null>();
   readonly serverChecks = new Map<string, ConnectionCheck>();
-  /** Probe findings by `${baseUrl} ${modelId}`. */
+  /** Probe findings by `${connectionId} ${baseUrl} ${modelId}`. */
   readonly capabilities = new Map<string, StoredCapability>();
 
   private rolesOf(owner: RoleOwner) {
@@ -373,6 +395,9 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
 
   async deleteConnection(connectionId: string) {
     const existed = this.connections.delete(connectionId);
+    for (const key of this.capabilities.keys()) {
+      if (key.startsWith(`${connectionId} `)) this.capabilities.delete(key);
+    }
     for (const roles of this.roles.values()) {
       for (const [role, stored] of roles) {
         if (stored.kind === 'model' && stored.connectionId === connectionId) roles.delete(role);
@@ -413,30 +438,39 @@ export class MemoryModelSettingsStore implements ModelSettingsStore {
     this.serverChecks.set(baseUrl, check);
   }
 
-  async getCapability(baseUrl: string, modelId: string) {
-    return this.capabilities.get(`${baseUrl} ${modelId}`) ?? null;
+  private static prefix(scope: CapabilityScope) {
+    return `${scope.connectionId} ${scope.baseUrl} `;
   }
 
-  async listCapabilities(baseUrl: string) {
+  async getCapability(scope: CapabilityScope, modelId: string) {
+    return this.capabilities.get(MemoryModelSettingsStore.prefix(scope) + modelId) ?? null;
+  }
+
+  async listCapabilities(scope: CapabilityScope) {
+    const prefix = MemoryModelSettingsStore.prefix(scope);
     const found = new Map<string, StoredCapability>();
     for (const [key, value] of this.capabilities) {
-      if (key.startsWith(`${baseUrl} `)) found.set(key.slice(baseUrl.length + 1), value);
+      if (key.startsWith(prefix)) found.set(key.slice(prefix.length), value);
     }
     return found;
   }
 
   async saveReasoning(
-    baseUrl: string,
+    scope: CapabilityScope,
     modelId: string,
     reasoning: ReasoningCapability,
     probeVersion: string,
   ) {
-    const key = `${baseUrl} ${modelId}`;
+    const key = MemoryModelSettingsStore.prefix(scope) + modelId;
     this.capabilities.set(key, { ...this.capabilities.get(key), reasoning, probeVersion });
   }
 
-  async setManualKinds(baseUrl: string, modelId: string, kinds: readonly ModelKind[] | null) {
-    const key = `${baseUrl} ${modelId}`;
+  async setManualKinds(
+    scope: CapabilityScope,
+    modelId: string,
+    kinds: readonly ModelKind[] | null,
+  ) {
+    const key = MemoryModelSettingsStore.prefix(scope) + modelId;
     const { manualKinds: _, ...rest } = this.capabilities.get(key) ?? { probeVersion: 'manual' };
     this.capabilities.set(key, kinds === null ? rest : { ...rest, manualKinds: kinds });
   }
