@@ -41,9 +41,17 @@ import {
   SharedIllustrations,
   OpenAICompatibleImageProvider,
   FakeImageProvider,
+  AttemptBudget,
   type ImageProvider,
   type IndexProgress,
 } from '@lct/pipeline';
+import {
+  BUILD_DEADLINE_MS,
+  buildStopReason,
+  openBuildBudget,
+  waitForBuild,
+} from './build-budget.js';
+import { effectiveModelPlan } from './model-plan.js';
 import { loadAnswerFormat } from '@lct/registry';
 import type { RunRepository } from '@lct/run-store';
 import {
@@ -155,6 +163,12 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   private readonly preparing = new Map<string, PrepareProgress>();
   /** Templates whose slides are being drawn right now: a second request does not start again. */
   private readonly drawing = new Set<string>();
+  /**
+   * Clock and wall-clock cap for a build. Production uses `Date.now` and the existing 290s
+   * ceiling. Tests replace them so a deadline can pass without waiting out the real cap.
+   */
+  now: () => number = () => Date.now();
+  deadlineMs = BUILD_DEADLINE_MS;
 
   constructor(
     @Inject(RUN_REPOSITORY) readonly repository: RunRepository,
@@ -382,226 +396,290 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     retry?: { variant: LayoutVariant; buildId: string; plan?: CompositionPlan },
     onActivity?: (activity: ChatToolActivity) => void,
   ): Promise<StartedBuild> {
-    // Every generation runs three variants, each counted as one active run.
-    if (this.active.size >= 2 * VARIANTS.length)
-      throw new BadRequestException('Two generations are already running.');
-    if (input.projectId !== null) await this.requireProject(input.projectId, account);
-    const template = await this.template(input.templateId, account);
-    const prepared = generationProfileSchema.safeParse(template.profile?.generation);
-    if (!prepared.success) throw new BadRequestException('Prepare the template before generation.');
-    let brief = input.brief;
-    for (const id of input.contentIds) {
-      const files = await this.pool.query<{ storage_path: string; file_name: string }>(
-        `SELECT storage_path, file_name FROM stored_files
+    const startedAt = this.now();
+    const controller = new AbortController();
+    const budget = openBuildBudget(startedAt, controller.signal, this.deadlineMs, startedAt);
+    let handedOff = false;
+    try {
+      const signal = budget.signal;
+      const gate = <T>(pending: () => Promise<T>): Promise<T> => waitForBuild(pending, budget);
+      // Every generation runs three variants, each counted as one active run.
+      if (this.active.size >= 2 * VARIANTS.length)
+        throw new BadRequestException('Two generations are already running.');
+      const projectId = input.projectId;
+      if (projectId !== null) await gate(() => this.requireProject(projectId, account));
+      const template = await gate(() => this.template(input.templateId, account));
+      const prepared = generationProfileSchema.safeParse(template.profile?.generation);
+      if (!prepared.success)
+        throw new BadRequestException('Prepare the template before generation.');
+      let brief = input.brief;
+      for (const id of input.contentIds) {
+        const files = await gate(() =>
+          this.pool.query<{ storage_path: string; file_name: string }>(
+            `SELECT storage_path, file_name FROM stored_files
          WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
-        [id, account.id],
+            [id, account.id],
+          ),
+        );
+        const stored = files.rows[0];
+        if (!stored) throw new BadRequestException('There is no such content file.');
+        const material = await gate(() =>
+          readPreparedMaterial(
+            this.engine,
+            {
+              sourceId: id,
+              name: stored.file_name,
+              path: stored.storage_path,
+            },
+            signal,
+          ),
+        );
+        brief += `\n\nSource ${id}:\n${material.text}`;
+      }
+      if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
+      // The models are settled before a run exists: without one there is nothing to start, and the
+      // person gets the reason in the answer rather than a run that fails without one.
+      const settle = <T>(pending: Promise<T>): Promise<T> =>
+        pending.catch((error: unknown) => {
+          if (error instanceof ModelNotConfiguredError)
+            throw new ServiceUnavailableException({
+              code: 'model-not-configured',
+              message: error.message,
+            });
+          throw error;
+        });
+      const actor = actorOf(account);
+      const writer = await gate(() => settle(this.models.resolve(input.model, actor)));
+      // Planner and critic run on the models of their roles; a role without one writes with the
+      // writer's model, and the slot rewriter always does.
+      const [planner, critic] = await gate(() =>
+        settle(
+          Promise.all([
+            this.models.resolveRole('planner', actor),
+            this.models.resolveRole('critic', actor),
+          ]),
+        ),
       );
-      const stored = files.rows[0];
-      if (!stored) throw new BadRequestException('There is no such content file.');
-      const material = await readPreparedMaterial(this.engine, {
-        sourceId: id,
-        name: stored.file_name,
-        path: stored.storage_path,
+      // The schema of each answer goes into the instructions too: a model that ignores structured
+      // output still answers in shape.
+      const answerFormat = await gate(() => loadAnswerFormat(this.registryDir()));
+      // How each model thinks is what probing it showed, settled before the run starts.
+      const [writerReasoning, plannerReasoning, criticReasoning] = await gate(() =>
+        Promise.all(
+          [writer, planner, critic].map((model) =>
+            model ? this.capabilities.reasoningOf(model) : Promise.resolve(undefined),
+          ),
+        ),
+      );
+      const attemptBudget = new AttemptBudget();
+      const providerOf = (model: ResolvedModel, reasoning: ReasoningCapability | undefined) =>
+        new GenerationProvider({
+          apiKey: model.apiKey,
+          baseUrl: model.baseUrl,
+          model: model.model,
+          headers: model.headers,
+          seed: input.seed,
+          thinking: input.thinking,
+          reasoningEffort: input.reasoningEffort,
+          ...(reasoning ? { reasoning } : {}),
+          answerFormat,
+          attemptBudget,
+          onActivity: (event) => onActivity?.({ ...event, kind: 'agent' }),
+        });
+      const fallback = providerOf(writer, writerReasoning);
+      const provider = new RoutedTextProvider(
+        fallback,
+        new Map([
+          ['writer', fallback],
+          ['rewriter', fallback],
+          ...(planner ? [['planner', providerOf(planner, plannerReasoning)] as const] : []),
+          ...(critic ? [['critic', providerOf(critic, criticReasoning)] as const] : []),
+        ]),
+      );
+      const registryDir = this.registryDir();
+      const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
+      // Notes describe the profile they were made from; a re-parsed template drops stale ones.
+      const notes =
+        index.success && index.data.templateHash === prepared.data.templateHash
+          ? index.data.notes
+          : undefined;
+      // The three variants of one brief are separate runs, so every deck endpoint serves each of
+      // them as it is, and they share one cancellation.
+      // One plan for the three variants: the story is decided once, the layouts per variant. Each
+      // run keeps it, so a variant that fails can be built again on the same story.
+      const sharedPlan = new SharedPlan(retry?.plan, async (plan) => {
+        for (const { run } of runs) {
+          await writeFile(
+            join(this.directory(run.runId), 'composition-plan.json'),
+            JSON.stringify(plan),
+          );
+        }
       });
-      brief += `\n\nSource ${id}:\n${material.text}`;
-    }
-    if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
-    const buildStartedAt = Date.now();
-    // The models are settled before a run exists: without one there is nothing to start, and the
-    // person gets the reason in the answer rather than a run that fails without one.
-    const settle = <T>(pending: Promise<T>): Promise<T> =>
-      pending.catch((error: unknown) => {
-        if (error instanceof ModelNotConfiguredError)
-          throw new ServiceUnavailableException({
-            code: 'model-not-configured',
-            message: error.message,
-          });
-        throw error;
-      });
-    const actor = actorOf(account);
-    const writer = await settle(this.models.resolve(input.model, actor));
-    // Planner and critic run on the models of their roles; a role without one writes with the
-    // writer's model, and the slot rewriter always does.
-    const [planner, critic] = await settle(
-      Promise.all([
-        this.models.resolveRole('planner', actor),
-        this.models.resolveRole('critic', actor),
-      ]),
-    );
-    // The schema of each answer goes into the instructions too: a model that ignores structured
-    // output still answers in shape.
-    const answerFormat = await loadAnswerFormat(this.registryDir());
-    // How each model thinks is what probing it showed, settled before the run starts.
-    const [writerReasoning, plannerReasoning, criticReasoning] = await Promise.all(
-      [writer, planner, critic].map((model) =>
-        model ? this.capabilities.reasoningOf(model) : Promise.resolve(undefined),
-      ),
-    );
-    const providerOf = (model: ResolvedModel, reasoning: ReasoningCapability | undefined) =>
-      new GenerationProvider({
-        apiKey: model.apiKey,
-        baseUrl: model.baseUrl,
-        model: model.model,
-        headers: model.headers,
-        seed: input.seed,
+      // The model of the "vision" role reads the drawn slides for the contextual audit. Without one
+      // the build has the deterministic audit and the critic's read of the text, and says so.
+      const vision = await gate(() => settle(this.models.resolveRole('vision', actor)));
+      const reviewer = vision
+        ? {
+            model: vision.model,
+            provider: new VisionProvider({
+              apiKey: vision.apiKey,
+              baseUrl: vision.baseUrl,
+              model: vision.model,
+              headers: vision.headers,
+              seed: input.seed,
+              answerFormat,
+              signal,
+              attemptBudget,
+            }),
+          }
+        : null;
+      // Pictures too are drawn once per brief. Without an image model the planner is not offered
+      // a place for a picture, so no slide is left with an empty frame.
+      const imageModel = await gate(() => settle(this.models.resolveRole('image', actor)));
+      const images = imageProviderOf(imageModel);
+      const illustrations = images
+        ? await gate(() =>
+            SharedIllustrations.load(
+              {
+                images,
+                text: provider,
+                designSystem: prepared.data.designSystem,
+                seed: input.seed ?? 42,
+                signal,
+              },
+              registryDir,
+            ),
+          )
+        : null;
+      const modelPlan = effectiveModelPlan({
+        startedAt: budget.startedAt,
+        deadlineAt: budget.deadlineAt,
+        attemptBudgetMax: attemptBudget.max,
         thinking: input.thinking,
         reasoningEffort: input.reasoningEffort,
-        ...(reasoning ? { reasoning } : {}),
-        answerFormat,
-        onActivity: (event) => onActivity?.({ ...event, kind: 'agent' }),
+        writerExplicit: input.model !== null,
+        writer: { modelId: writer.model, connectionId: writer.connectionId },
+        planner: planner ? { modelId: planner.model, connectionId: planner.connectionId } : null,
+        critic: critic ? { modelId: critic.model, connectionId: critic.connectionId } : null,
+        vision: vision ? { modelId: vision.model, connectionId: vision.connectionId } : null,
       });
-    const fallback = providerOf(writer, writerReasoning);
-    const provider = new RoutedTextProvider(
-      fallback,
-      new Map([
-        ['writer', fallback],
-        ['rewriter', fallback],
-        ...(planner ? [['planner', providerOf(planner, plannerReasoning)] as const] : []),
-        ...(critic ? [['critic', providerOf(critic, criticReasoning)] as const] : []),
-      ]),
-    );
-    const registryDir = this.registryDir();
-    const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
-    // Notes describe the profile they were made from; a re-parsed template drops stale ones.
-    const notes =
-      index.success && index.data.templateHash === prepared.data.templateHash
-        ? index.data.notes
-        : undefined;
-    // The three variants of one brief are separate runs, so every deck endpoint serves each of
-    // them as it is, and they share one cancellation.
-    const controller = new AbortController();
-    const signal = AbortSignal.any([
-      controller.signal,
-      AbortSignal.timeout(Math.max(1, 290000 - (Date.now() - buildStartedAt))),
-    ]);
-    // One plan for the three variants: the story is decided once, the layouts per variant. Each
-    // run keeps it, so a variant that fails can be built again on the same story.
-    const sharedPlan = new SharedPlan(retry?.plan, async (plan) => {
-      for (const { run } of runs) {
-        await writeFile(
-          join(this.directory(run.runId), 'composition-plan.json'),
-          JSON.stringify(plan),
-        );
-      }
-    });
-    // The model of the "vision" role reads the drawn slides for the contextual audit. Without one
-    // the build has the deterministic audit and the critic's read of the text, and says so.
-    const vision = await settle(this.models.resolveRole('vision', actor));
-    const reviewer = vision
-      ? {
-          model: vision.model,
-          provider: new VisionProvider({
-            apiKey: vision.apiKey,
-            baseUrl: vision.baseUrl,
-            model: vision.model,
-            headers: vision.headers,
-            seed: input.seed,
-            answerFormat,
-            signal,
-          }),
-        }
-      : null;
-    // Pictures too are drawn once per brief. Without an image model the planner is not offered
-    // a place for a picture, so no slide is left with an empty frame.
-    const imageModel = await settle(this.models.resolveRole('image', actor));
-    const images = imageProviderOf(imageModel);
-    const illustrations = images
-      ? await SharedIllustrations.load(
-          {
-            images,
-            text: provider,
-            designSystem: prepared.data.designSystem,
-            seed: input.seed ?? 42,
-            signal,
-          },
-          registryDir,
-        )
-      : null;
-    const runs: {
-      run: Awaited<ReturnType<RunRepository['create']>>;
-      variant: LayoutVariant;
-    }[] = [];
-    // The variants are one build: the library shows it once. A variant built again joins it.
-    const buildId = retry?.buildId ?? randomUUID();
-    for (const variant of retry ? [retry.variant] : VARIANTS) {
-      const run = await this.repository.create();
-      await mkdir(this.directory(run.runId), { recursive: true });
-      await writeFile(
-        join(this.directory(run.runId), 'metadata.json'),
-        JSON.stringify({
-          templateId: input.templateId,
-          projectId: input.projectId,
-          ownerId: account.id,
-          variant,
-          buildId,
-          updatedAt: Date.now(),
-        }),
-      );
-      // What the build was asked for, to build a failed variant again from it.
-      await writeFile(join(this.directory(run.runId), 'request.json'), JSON.stringify(input));
-      if (retry?.plan) {
-        await writeFile(
-          join(this.directory(run.runId), 'composition-plan.json'),
-          JSON.stringify(retry.plan),
-        );
-      }
-      this.active.set(run.runId, controller);
-      runs.push({ run, variant });
-    }
-    const work = async ({ run, variant }: (typeof runs)[number]) => {
+      const runs: {
+        run: Awaited<ReturnType<RunRepository['create']>>;
+        variant: LayoutVariant;
+      }[] = [];
+      // The variants are one build: the library shows it once. A variant built again joins it.
+      const buildId = retry?.buildId ?? randomUUID();
       try {
-        await this.repository.transition(run.runId, 'running');
-        await generatePresentation({
-          runId: run.runId,
-          templatePath: template.storage_path,
-          outputDir: this.directory(run.runId),
-          brief,
-          slideCount: input.outline ? null : input.slideCount,
-          outline: input.outline,
-          outlineSource: input.outlineSource,
-          profile: prepared.data,
-          ...(notes ? { notes } : {}),
-          registryDir,
-          engine: this.engine,
-          provider,
-          seed: input.seed,
-          variant,
-          sharedPlan,
-          illustrations,
-          reviewer,
-          signal,
-          onEvent: (event) => this.repository.appendEvent(run.runId, event),
-        });
-        if (input.projectId !== null) {
-          const project = await this.pool.query(
-            'UPDATE library_projects SET updated_at = now() WHERE id = $1 RETURNING id',
-            [input.projectId],
+        for (const variant of retry ? [retry.variant] : VARIANTS) {
+          if (signal.aborted) throw buildStopReason(signal);
+          const run = await this.repository.create();
+          runs.push({ run, variant });
+          this.active.set(run.runId, controller);
+          if (signal.aborted) throw buildStopReason(signal);
+          await mkdir(this.directory(run.runId), { recursive: true });
+          if (signal.aborted) throw buildStopReason(signal);
+          await writeFile(
+            join(this.directory(run.runId), 'metadata.json'),
+            JSON.stringify({
+              templateId: input.templateId,
+              projectId: input.projectId,
+              ownerId: account.id,
+              variant,
+              buildId,
+              updatedAt: Date.now(),
+            }),
           );
-          if (!project.rowCount) await this.library.remove(run.runId);
+          if (signal.aborted) throw buildStopReason(signal);
+          // What the build was asked for, to build a failed variant again from it.
+          await writeFile(join(this.directory(run.runId), 'request.json'), JSON.stringify(input));
+          if (signal.aborted) throw buildStopReason(signal);
+          await writeFile(
+            join(this.directory(run.runId), 'model-plan.json'),
+            JSON.stringify(modelPlan),
+          );
+          if (signal.aborted) throw buildStopReason(signal);
+          if (retry?.plan) {
+            await writeFile(
+              join(this.directory(run.runId), 'composition-plan.json'),
+              JSON.stringify(retry.plan),
+            );
+            if (signal.aborted) throw buildStopReason(signal);
+          }
         }
-        await this.repository.transition(run.runId, 'done');
-        return 'done' as const;
-      } catch {
-        await this.repository.transition(run.runId, 'failed').catch(() => undefined);
-        return 'failed' as const;
-      } finally {
-        this.active.delete(run.runId);
+      } catch (error) {
+        for (const { run } of runs) {
+          this.active.delete(run.runId);
+          await this.repository.transition(run.runId, 'failed').catch(() => undefined);
+        }
+        throw error;
       }
-    };
-    const each = runs.map(async (entry): Promise<VariantEnd> => ({
-      variant: entry.variant,
-      runId: entry.run.runId,
-      state: await work(entry),
-    }));
-    const settled = Promise.all(each).finally(() => controller.abort());
-    const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
-    if (!primary) throw new BadRequestException('No variant could be started.');
-    return {
-      runId: primary.run.runId,
-      variants: runs.map(({ run, variant }) => ({ variant, runId: run.runId })),
-      each,
-      settled,
-    };
+      const work = async ({ run, variant }: (typeof runs)[number]) => {
+        try {
+          if (signal.aborted) throw buildStopReason(signal);
+          await this.repository.transition(run.runId, 'running');
+          await generatePresentation({
+            runId: run.runId,
+            templatePath: template.storage_path,
+            outputDir: this.directory(run.runId),
+            brief,
+            slideCount: input.outline ? null : input.slideCount,
+            outline: input.outline,
+            outlineSource: input.outlineSource,
+            profile: prepared.data,
+            ...(notes ? { notes } : {}),
+            registryDir,
+            engine: this.engine,
+            provider,
+            seed: input.seed,
+            variant,
+            sharedPlan,
+            illustrations,
+            reviewer,
+            signal,
+            deadlineAt: budget.deadlineAt,
+            onEvent: (event) => this.repository.appendEvent(run.runId, event),
+          });
+          if (input.projectId !== null) {
+            const project = await this.pool.query(
+              'UPDATE library_projects SET updated_at = now() WHERE id = $1 RETURNING id',
+              [input.projectId],
+            );
+            if (!project.rowCount) await this.library.remove(run.runId);
+          }
+          await this.repository.transition(run.runId, 'done');
+          return 'done' as const;
+        } catch {
+          await this.repository.transition(run.runId, 'failed').catch(() => undefined);
+          return 'failed' as const;
+        } finally {
+          this.active.delete(run.runId);
+        }
+      };
+      const each = runs.map(async (entry): Promise<VariantEnd> => ({
+        variant: entry.variant,
+        runId: entry.run.runId,
+        state: await work(entry),
+      }));
+      const settled = Promise.all(each).finally(() => {
+        controller.abort();
+        budget.dispose();
+      });
+      const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
+      if (!primary) throw new BadRequestException('No variant could be started.');
+      const result = {
+        runId: primary.run.runId,
+        variants: runs.map(({ run, variant }) => ({ variant, runId: run.runId })),
+        each,
+        settled,
+      };
+      handedOff = true;
+      return result;
+    } finally {
+      if (!handedOff) {
+        controller.abort();
+        budget.dispose();
+      }
+    }
   }
 
   /**

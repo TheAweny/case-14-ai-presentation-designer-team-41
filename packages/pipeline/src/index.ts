@@ -83,6 +83,11 @@ export {
 } from './generation/workflow.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
 export {
+  AttemptBudget,
+  DEFAULT_ATTEMPT_BUDGET,
+  type AttemptBudgetSnapshot,
+} from './generation/attempt-budget.js';
+export {
   FakeImageProvider,
   OpenAICompatibleImageProvider,
   sizeFor,
