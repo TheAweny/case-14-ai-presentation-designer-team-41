@@ -24,6 +24,10 @@ function objectShape(schema: unknown): Record<string, unknown> | undefined {
   return undefined;
 }
 
+function acceptsNull(schema: unknown): boolean {
+  return schema instanceof z.ZodType && schema.safeParse(null).success;
+}
+
 /**
  * JSON a model wrote, even when it left the last brackets open: they are closed in the order
  * they were opened. Null when it still does not read.
@@ -78,6 +82,9 @@ export function mendedArguments(schema: z.ZodType, value: unknown): unknown {
   if (!isRecord(value) || !shape) return value;
   const out = unstrung(value) as Record<string, unknown>;
   for (const [key, field] of Object.entries(shape)) {
+    if (out[key] === 'null' && acceptsNull(field)) {
+      out[key] = null;
+    }
     if (out[key] !== undefined) continue;
     const inner = objectShape(field);
     if (!inner) continue;
