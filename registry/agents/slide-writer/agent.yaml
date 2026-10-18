@@ -1,0 +1,10 @@
+id: slide-writer
+version: 2.7.0
+description: Template-grounded writer
+modelId: writer-default
+generation:
+  temperature: 0.35
+  topP: 1
+  maxOutputTokens: 3600
+outputSchema: TemplateSlotCopy
+instructionsFile: instructions.md

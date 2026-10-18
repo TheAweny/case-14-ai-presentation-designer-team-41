@@ -1,0 +1,13 @@
+# Prompts every generation agent shares, outside any one agent. A model that ignores structured
+# output (response_format json_schema) still gets the schema of its answer in the instructions,
+# and one request to repair an answer that misses it. Bump the version when their meaning changes.
+#
+# The capability probe is the message of the one free request the API sends to learn whether a
+# server reads reasoning_effort: it goes with a depth no server accepts, so a server that reads
+# the field refuses it before any model runs. What a model is comes from the provider's own
+# description in /models, never from requests to the model.
+
+version: 1.3.0
+answerFormatFile: answer-format.md
+answerRepairFile: answer-repair.md
+capabilityProbeFile: capability-probe.md

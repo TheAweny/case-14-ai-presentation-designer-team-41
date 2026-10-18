@@ -1,0 +1,10 @@
+id: slot-rewriter
+version: 1.8.0
+description: Short complete alternatives for overflowing template slots
+modelId: writer-default
+generation:
+  temperature: 0.35
+  topP: 1
+  maxOutputTokens: 3600
+outputSchema: SlotRewriteChoices
+instructionsFile: instructions.md

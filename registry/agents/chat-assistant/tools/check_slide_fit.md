@@ -1,0 +1,1 @@
+Check whether the saved slide text fits its template composition. deckId and slideIndex select the slide; slideIndex starts at 1. Each finding uses the zero-based index of that same slide. offset defaults to 0 and limit defaults to 5, from 1 to 10. Returns a page of findings and the plan content hash. It does not write a file or start a build.
