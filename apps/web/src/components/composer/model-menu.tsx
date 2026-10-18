@@ -325,10 +325,12 @@ export function ModelList({
 
   // Активная строка всегда видна: стрелки прокручивают список за собой.
   useEffect(() => {
-    list.current
-      ?.querySelector<HTMLElement>(`[data-row="${active}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
-  }, [active]);
+    const row =
+      active < 0
+        ? defaultRef.current
+        : list.current?.querySelector<HTMLElement>(`[data-row="${active}"]`);
+    row?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [active, rows]);
 
   const activeRowEl = () =>
     (active < 0
@@ -374,7 +376,9 @@ export function ModelList({
     }
     const options = ['all', ...makers] as const;
     const at = options.indexOf(maker);
-    placeGlow(makerGlow.current, at >= 0 ? (makerRefs.current[at] ?? null) : null, true);
+    const button = at >= 0 ? (makerRefs.current[at] ?? null) : null;
+    placeGlow(makerGlow.current, button, true);
+    button?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [grouped, searching, maker, makers]);
 
   // Без поиска клавиатуру держит сам список.
