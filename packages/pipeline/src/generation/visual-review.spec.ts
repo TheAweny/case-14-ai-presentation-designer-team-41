@@ -187,6 +187,218 @@ describe('reviewVariantVisually', () => {
     expect(result.failures).toEqual([]);
     expect(seen.filter((images) => images !== undefined)).toHaveLength(1);
   });
+
+  it('does not read previews or call the model when import ignores an aborted signal', async () => {
+    const dir = await folder();
+    const controller = new AbortController();
+    controller.abort(new Error('cancelled'));
+    let calls = 0;
+    await expect(
+      reviewVariantVisually({
+        engine: {
+          importDeck: () =>
+            Promise.resolve({
+              schemaVersion: 1,
+              slides: [slide('s1', 0, 'One', 'Text')],
+            }),
+        },
+        agent,
+        provider: {
+          name: 'scripted',
+          complete: () => {
+            calls += 1;
+            return Promise.resolve('{}');
+          },
+        },
+        brief: 'Brief',
+        goal: '',
+        pptxPath: join(dir, 'deck.pptx'),
+        mediaDir: join(dir, 'media'),
+        previews: [join(dir, 'missing.png')],
+        seed: 1,
+        outputDir: dir,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow(/cancelled/);
+    expect(calls).toBe(0);
+    await expect(readFile(join(dir, 'audit-contextual.json'))).rejects.toThrow();
+  });
+
+  it('drops a late model answer and does not write the audit after cancellation', async () => {
+    const dir = await folder();
+    const preview = join(dir, 'slide-1.png');
+    await writeFile(preview, 'png-bytes');
+    const controller = new AbortController();
+    let release = (_answer: string) => undefined;
+    let started = () => undefined;
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const pending = reviewVariantVisually({
+      engine: {
+        importDeck: () =>
+          Promise.resolve({
+            schemaVersion: 1,
+            slides: [slide('s1', 0, 'One', 'Text')],
+          }),
+      },
+      agent,
+      provider: {
+        name: 'late',
+        complete: () => {
+          started();
+          return new Promise<string>((resolve) => {
+            release = resolve;
+          });
+        },
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews: [preview],
+      seed: 1,
+      outputDir: dir,
+      signal: controller.signal,
+    });
+    const settled = pending.then(
+      () => 'resolved' as const,
+      () => 'rejected' as const,
+    );
+    await startedPromise;
+    controller.abort(new Error('review deadline'));
+    release(
+      JSON.stringify({
+        schemaVersion: 1,
+        slideId: 's1',
+        answers: [
+          {
+            checkId: 'no-typos',
+            verdict: 'yes',
+            confidence: 0.9,
+            evidence: '',
+            suggestion: '',
+          },
+        ],
+      }),
+    );
+    expect(await settled).toBe('rejected');
+    await expect(readFile(join(dir, 'audit-contextual.json'))).rejects.toThrow();
+  });
+});
+
+describe('reviewVariantVisually asked again about some slides', () => {
+  it('asks only about them and keeps the earlier answers for the rest', async () => {
+    const dir = await folder();
+    const previews = [join(dir, 'slide-1.png'), join(dir, 'slide-2.png')];
+    await Promise.all(previews.map((p) => writeFile(p, 'png-bytes')));
+    const asked: string[] = [];
+    const answer = (slideId: string, verdict: 'yes' | 'no'): SlideReview => ({
+      schemaVersion: 1,
+      slideId,
+      answers: [
+        { checkId: 'no-typos', verdict, confidence: 0.9, evidence: 'Revenue', suggestion: '' },
+      ],
+    });
+    const provider: ModelProvider = {
+      name: 'scripted',
+      complete: (request) => {
+        const slideId = (request.input as { slideId: string }).slideId;
+        asked.push(slideId);
+        return Promise.resolve(JSON.stringify(answer(slideId, 'yes')));
+      },
+    };
+    const engine = {
+      importDeck: () =>
+        Promise.resolve({
+          schemaVersion: 1 as const,
+          slides: [slide('s1', 0, 'One', 'Retention'), slide('s2', 1, 'Two', 'Revenue')],
+        }),
+    };
+    const earlier = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: {
+        name: 'scripted',
+        complete: (request) => {
+          const slideId = (request.input as { slideId: string }).slideId;
+          return Promise.resolve(JSON.stringify(answer(slideId, 'no')));
+        },
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+    });
+    expect(earlier.findings.map((f) => f.target.slideId).sort()).toEqual(['s1', 's2']);
+
+    const again = await reviewVariantVisually({
+      engine,
+      agent,
+      provider,
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+      only: new Set([2]),
+      previous: earlier,
+    });
+    // Only slide 2 was asked about; its old finding is replaced, slide 1's is kept.
+    expect(asked).toEqual(['s2']);
+    expect(again.findings.map((f) => f.target.slideId)).toEqual(['s1']);
+    expect(again.reviews.map((r) => r.slideId).sort()).toEqual(['s1', 's2']);
+    const written = JSON.parse(await readFile(join(dir, 'audit-contextual.json'), 'utf8')) as {
+      findings: unknown[];
+    };
+    expect(written.findings).toHaveLength(1);
+  });
+});
+
+describe('reviewVariantVisually that is stopped', () => {
+  it('cancels the requests in flight and writes nothing after the stop', async () => {
+    const dir = await folder();
+    const preview = join(dir, 'slide-1.png');
+    await writeFile(preview, 'png-bytes');
+    const stop = new AbortController();
+    let cancelled = 0;
+    const provider: ModelProvider = {
+      name: 'hangs',
+      complete: (request) =>
+        new Promise((_, reject) => {
+          request.signal?.addEventListener('abort', () => {
+            cancelled += 1;
+            reject(new Error('cancelled'));
+          });
+          setTimeout(() => stop.abort(), 10);
+        }),
+    };
+    await expect(
+      reviewVariantVisually({
+        engine: {
+          importDeck: () =>
+            Promise.resolve({ schemaVersion: 1, slides: [slide('s1', 0, 'One', 'Text')] }),
+        },
+        agent,
+        provider,
+        brief: 'Brief',
+        goal: '',
+        pptxPath: join(dir, 'deck.pptx'),
+        mediaDir: join(dir, 'media'),
+        previews: [preview],
+        seed: 1,
+        outputDir: dir,
+        signal: stop.signal,
+      }),
+    ).rejects.toThrow();
+    expect(cancelled).toBeGreaterThan(0);
+    await expect(readFile(join(dir, 'audit-contextual.json'), 'utf8')).rejects.toThrow();
+  });
 });
 
 describe('VisionProvider', () => {
@@ -232,6 +444,22 @@ describe('VisionProvider', () => {
       { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
     ]);
     expect(call.body.model).toBe('qwen38-27b-fp8');
+  });
+
+  it('stops a request when the call is cancelled, without waiting for the gateway', async () => {
+    const stop = new AbortController();
+    const provider = new VisionProvider({
+      apiKey: '',
+      baseUrl: 'https://gateway.test/v1',
+      model: 'm',
+      fetchImpl: (_url, init) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    });
+    const pending = provider.complete({ ...request(), signal: stop.signal });
+    setTimeout(() => stop.abort(new Error('time is up')), 10);
+    await expect(pending).rejects.toThrow('time is up');
   });
 
   it('asks again once the gateway says it is busy', async () => {

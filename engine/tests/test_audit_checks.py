@@ -189,6 +189,12 @@ def _text_overflow(s: dict[str, Any]) -> None:
     body["paragraphs"] = body["paragraphs"] * 4
 
 
+def _word_break(s: dict[str, Any]) -> None:
+    body = _element(s, "list")
+    body["box"] = {**body["box"], "cx": 1_500_000}
+    _run(s, "list")["text"] = "Достопримечательностей"
+
+
 def _grid_alignment(s: dict[str, Any]) -> None:
     body = _element(s, "list")
     # Off every column edge of the 12-column grid, and off centre.
@@ -315,6 +321,7 @@ _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] 
     "text-clipped": _text_clipped,
     "overlap": _overlap,
     "text-overflow": _text_overflow,
+    "word-break": _word_break,
     "grid-alignment": _grid_alignment,
     "safe-margins": _safe_margins,
     "image-aspect": _image_aspect,
@@ -457,6 +464,43 @@ def test_two_slides_with_the_same_short_phrase_are_a_repeat() -> None:
     other = thanks("s2", 1)
     other["elements"][0]["paragraphs"][0]["runs"][0]["text"] = "Раздел 2"
     assert "duplicate-slide" not in _fired(divider, None, other)
+
+
+def _torn_slide(size: float) -> dict[str, Any]:
+    slide = _clean_slide()
+    body = _element(slide, "list")
+    body["box"] = {**body["box"], "cx": 2_800_000}
+    body["paragraphs"] = body["paragraphs"][:1]
+    run = _run(slide, "list")
+    run["text"], run["sizePt"] = "Достопримечательностей", size
+    return slide
+
+
+def test_word_break_names_the_word_and_proposes_a_size_of_the_scale() -> None:
+    report = audit_deck(_request(_torn_slide(24)), "default", deterministic_profile("default"))
+    [found] = [f for f in report["findings"] if f["checkId"] == "word-break"]
+    assert "«Достопримечательностей»" in found["detail"]
+    assert found["target"]["elementId"] == "list"
+    ops = found["proposedPatch"]["ops"]
+    assert ops == [{"op": "set-font-size", "elementId": "list", "sizePt": 16.0}]
+
+
+def test_word_break_asks_for_a_shorter_word_when_no_size_of_the_scale_helps() -> None:
+    slide = _torn_slide(16)
+    _run(slide, "list")["text"] = "Электроэнцефалографических"
+    report = audit_deck(_request(slide), "default", deterministic_profile("default"))
+    [found] = [f for f in report["findings"] if f["checkId"] == "word-break"]
+    assert found["proposedPatch"] is None
+    assert "заменить" in found["detail"]
+
+
+def test_word_break_ignores_short_words_and_text_that_wraps_between_words() -> None:
+    wraps = _torn_slide(16)
+    _run(wraps, "list")["text"] = "Рост продаж за квартал и выводы для команды продаж"
+    assert "word-break" not in _fired(wraps)
+    short = _torn_slide(40)
+    _run(short, "list")["text"] = "Итоги"
+    assert "word-break" not in _fired(short)
 
 
 def test_clean_deck_passes_with_a_full_score() -> None:

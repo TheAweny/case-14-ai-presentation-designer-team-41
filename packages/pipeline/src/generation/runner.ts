@@ -39,6 +39,12 @@ import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from 
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import type { ModelProvider } from '../models/provider.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
+import {
+  contextualCorrections,
+  needsAttention,
+  type SelfCheckRound,
+  slideIndexOf,
+} from './self-check.js';
 
 type EventData = {
   [K in JobEvent['type']]: Omit<
@@ -48,6 +54,7 @@ type EventData = {
 }[JobEvent['type']];
 /** Checks of the deterministic audit whose findings a rewrite of the slot's copy can fix. */
 const REWRITABLE = new Set([
+  'word-break',
   'placeholder-text',
   'bullet-length',
   'bullet-count',
@@ -121,6 +128,11 @@ interface PendingPicture {
 function orderedImageSlots(slots: readonly ImageSlot[]): ImageSlot[] {
   return [...slots].sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
 }
+/** The number a slide id ends with: `s3` and `imported-3` are both the third slide. */
+function slideNumber(slideId: string): string {
+  return /(\d+)$/.exec(slideId)?.[1] ?? slideId;
+}
+
 export async function generatePresentation(options: GenerateOptions) {
   const started = Date.now();
   const signal = AbortSignal.any([
@@ -306,7 +318,9 @@ export async function generatePresentation(options: GenerateOptions) {
     // Geometry cannot authorize deleting content or restoring an older, unaudited wording.
     const settleFit = async () => {
       const { findings } = await options.engine.checkCompositions(exportRequest(), signal);
-      const errors = findings.filter((f) => f.severity === 'error');
+      // A torn word goes to the rewriter and the audit, but never costs the variant: a deck with
+      // one ugly line is worth more than none, and the three are all required.
+      const errors = findings.filter((f) => f.severity === 'error' && f.code !== 'word-break');
       if (errors.length) throw new ContentFitError(errors);
     };
     let contentRevision = 1;
@@ -572,6 +586,79 @@ export async function generatePresentation(options: GenerateOptions) {
     // rewrite can fix (filler text, overlong bullets, too many points) go back to the slot
     // rewriter once, then the deck is written and audited again. The report is kept either way.
     let report = await options.engine.auditCompositions(exportRequest(), signal);
+    // The picture of the slides is asked about as soon as the deck is written, so what it shows can
+    // go to the rewriter with what the measuring audit found. A review that fails or does not fit
+    // the time left never costs the variant; the user is told.
+    let contextual: VisualReview | null = null;
+    let reviewerAgent: LoadedAgent | null = null;
+    const reviewPictures = async (
+      only?: ReadonlySet<number>,
+      previous?: VisualReview,
+    ): Promise<VisualReview | null> => {
+      if (!options.reviewer) return null;
+      const left = RUN_DEADLINE_MS - (Date.now() - started) - REVIEW_RESERVE_MS;
+      if (left < REVIEW_MIN_MS) {
+        await emit({
+          type: 'warning',
+          stage,
+          code: 'contextual-audit-skipped',
+          message: 'Смысловой аудит по картинкам слайдов пропущен: не осталось времени.',
+        });
+        return null;
+      }
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        const reviewer = (reviewerAgent ??= await loadAgent(
+          join(options.registryDir, 'slide-reviewer'),
+        ));
+        // The review has its own stop: when its time is up the requests still in flight are
+        // cancelled, so they neither hold the model's slots nor write after the run is done.
+        const stop = new AbortController();
+        const expired = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            stop.abort();
+            reject(new Error('time is up'));
+          }, left);
+        });
+        const asked = reviewVariantVisually({
+          engine: options.engine,
+          agent: reviewer,
+          provider: options.reviewer.provider,
+          brief: options.brief,
+          goal: written[0]?.title ?? '',
+          pptxPath: output.outputPath,
+          mediaDir: join(options.outputDir, 'media'),
+          previews: output.previews,
+          seed: options.seed ?? 42,
+          outputDir: options.outputDir,
+          ...(only ? { only } : {}),
+          ...(previous ? { previous } : {}),
+          signal: AbortSignal.any([signal, stop.signal]),
+        });
+        // Once the race is lost nobody awaits it: its late failure must not go unhandled.
+        asked.catch(() => undefined);
+        return await Promise.race([asked, expired]);
+      } catch (error) {
+        signal.throwIfAborted();
+        await emit({
+          type: 'warning',
+          stage,
+          code: 'contextual-audit-failed',
+          message:
+            'Смысловой аудит по картинкам слайдов не выполнен: ' +
+            (error instanceof Error ? error.message : String(error)),
+        });
+        return null;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    contextual = await reviewPictures();
+    const foundBefore = {
+      deterministic: needsAttention(report.findings).length,
+      contextual: contextual ? needsAttention(contextual.findings).length : 0,
+    };
+    const selfCheck: SelfCheckRound[] = [];
     const fixable = (r: typeof report) =>
       r.findings.filter(
         (f) =>
@@ -579,16 +666,35 @@ export async function generatePresentation(options: GenerateOptions) {
           (f.severity === 'blocker' || f.severity === 'major') &&
           f.target.elementId?.startsWith('slot-'),
       );
-    if (fixable(report).length > 0) {
+    // What goes back to the rewriter: the measuring audit's findings on slots, and what the
+    // picture of the slides showed that new wording can answer. One round, inside the time.
+    const requested = [
+      ...fixable(report).flatMap((f) => {
+        const index = slideIndexOf(f.target.slideId);
+        return index === null
+          ? []
+          : [
+              {
+                index,
+                slotId: (f.target.elementId ?? '').slice('slot-'.length),
+                message: `${f.title}: ${f.detail} (${f.evidence.measured}; ${f.evidence.expected})`,
+                source: 'deterministic' as const,
+              },
+            ];
+      }),
+      ...(contextual
+        ? contextualCorrections(contextual.findings, written).map((c) => ({
+            ...c,
+            source: 'contextual' as const,
+          }))
+        : []),
+    ];
+    if (requested.length > 0) {
       const tasks: z.infer<typeof repairTaskSchema>[] = [];
       for (const current of written) {
-        const slideId = `s${current.index + 1}`;
-        const corrections = fixable(report)
-          .filter((f) => f.target.slideId === slideId)
-          .map((f) => ({
-            slotId: (f.target.elementId ?? '').slice('slot-'.length),
-            message: `${f.title}: ${f.detail} (${f.evidence.measured}; ${f.evidence.expected})`,
-          }));
+        const corrections = requested
+          .filter((r) => r.index === current.index)
+          .map(({ slotId, message }) => ({ slotId, message }));
         const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
         if (corrections.length && pattern) {
           tasks.push({
@@ -613,13 +719,29 @@ export async function generatePresentation(options: GenerateOptions) {
           await settleFit();
           output = await options.engine.exportCompositions(exportRequest(), signal);
           report = await options.engine.auditCompositions(exportRequest(), signal);
+          // The slides that were rewritten are asked about again, from the new picture.
+          const rewritten = new Set(tasks.map((task) => task.index + 1));
+          if (contextual) {
+            contextual = (await reviewPictures(rewritten, contextual)) ?? contextual;
+          }
+          selfCheck.push({
+            round: 1,
+            found: foundBefore,
+            corrected: requested
+              .filter((r) => rewritten.has(r.index + 1))
+              .map((r) => ({ slide: r.index + 1, slotId: r.slotId, source: r.source })),
+            after: {
+              deterministic: needsAttention(report.findings).length,
+              contextual: contextual ? needsAttention(contextual.findings).length : 0,
+            },
+          });
         }
       }
     }
     for (const finding of report.findings.filter(
       (f) => f.severity === 'blocker' || f.severity === 'major',
     )) {
-      const message = `Аудит, слайд ${finding.target.slideId.slice(1)}: ${finding.title}`;
+      const message = `Аудит, слайд ${slideNumber(finding.target.slideId)}: ${finding.title}`;
       reviewWarnings.push(message);
       await emit({ type: 'warning', stage, code: 'content-review-required', message });
     }
@@ -635,12 +757,19 @@ export async function generatePresentation(options: GenerateOptions) {
     const deterministicErrors = report.findings.filter(
       (f) => f.severity === 'blocker' || f.severity === 'major',
     ).length;
+    // What the pictures of the slides showed counts here too, or a deck with a blocker in its
+    // picture would be called complete and recommended.
+    const pictured = (contextual?.findings ?? []).filter((f) => f.origin === 'contextual');
+    const pictureErrors = pictured.filter(
+      (f) => f.severity === 'blocker' || f.severity === 'major',
+    ).length;
+    const pictureWarnings = pictured.filter((f) => f.severity === 'minor').length;
     const finalReview = finalReviewSchema.parse({
       schemaVersion: 1,
       contentRevision,
       contentHash: contentHash(),
       status:
-        semanticErrors.length || deterministicErrors || coverage.missing.length
+        semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
           ? 'requires-review'
           : 'complete',
       deterministic: {
@@ -648,17 +777,18 @@ export async function generatePresentation(options: GenerateOptions) {
         warnings: report.findings.length - deterministicErrors,
       },
       contextual: {
-        errors: semanticErrors.length,
-        warnings: finalCritique.issues.length - semanticErrors.length,
+        errors: semanticErrors.length + pictureErrors,
+        warnings: finalCritique.issues.length - semanticErrors.length + pictureWarnings,
       },
       coverage,
       issues: finalCritique.issues,
-      errors: deterministicErrors + semanticErrors.length + coverage.missing.length,
+      errors: deterministicErrors + semanticErrors.length + pictureErrors + coverage.missing.length,
       warnings:
         report.findings.length -
         deterministicErrors +
         finalCritique.issues.length -
-        semanticErrors.length,
+        semanticErrors.length +
+        pictureWarnings,
     });
     for (const missing of coverage.missing) {
       const message = `Слайд ${missing.slideIndex + 1}: не подтверждено сохранение утверждения «${missing.text}».`;
@@ -685,73 +815,20 @@ export async function generatePresentation(options: GenerateOptions) {
       JSON.stringify(finalReview, null, 2),
     );
     signal.throwIfAborted();
-    // The contextual half: the questions of the case asked of the picture of every slide. A review
-    // that fails or does not fit the time left never costs the variant; the user is told.
-    let contextual: VisualReview | null = null;
-    let reviewerAgent: LoadedAgent | null = null;
-    if (options.reviewer) {
-      const left = RUN_DEADLINE_MS - (Date.now() - started) - REVIEW_RESERVE_MS;
-      if (left < REVIEW_MIN_MS) {
+    // What the final picture of the slides still shows, once the self-check has had its round.
+    if (contextual) {
+      for (const failure of contextual.failures) {
         await emit({
           type: 'warning',
           stage,
-          code: 'contextual-audit-skipped',
-          message: 'Смысловой аудит по картинкам слайдов пропущен: не осталось времени.',
+          code: 'contextual-audit-failed',
+          message: `Смысловой аудит, слайд ${slideNumber(failure.slideId)}: ответ модели не получен.`,
         });
-      } else {
-        try {
-          const reviewer = await loadAgent(join(options.registryDir, 'slide-reviewer'));
-          reviewerAgent = reviewer;
-          let timer: NodeJS.Timeout | undefined;
-          const expired = new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error('time is up')), left);
-          });
-          try {
-            contextual = await Promise.race([
-              reviewVariantVisually({
-                engine: options.engine,
-                agent: reviewer,
-                provider: options.reviewer.provider,
-                brief: options.brief,
-                goal: written[0]?.title ?? '',
-                pptxPath: output.outputPath,
-                mediaDir: join(options.outputDir, 'media'),
-                previews: output.previews,
-                seed: options.seed ?? 42,
-                outputDir: options.outputDir,
-                signal,
-              }),
-              expired,
-            ]);
-          } finally {
-            clearTimeout(timer);
-          }
-          for (const failure of contextual.failures) {
-            await emit({
-              type: 'warning',
-              stage,
-              code: 'contextual-audit-failed',
-              message: `Смысловой аудит, слайд ${failure.slideId.slice(1)}: ответ модели не получен.`,
-            });
-          }
-          for (const finding of contextual.findings.filter(
-            (f) => f.severity === 'blocker' || f.severity === 'major',
-          )) {
-            const message = `Смысловой аудит, слайд ${finding.target.slideId.slice(1)}: ${finding.title}`;
-            reviewWarnings.push(message);
-            await emit({ type: 'warning', stage, code: 'content-review-required', message });
-          }
-        } catch (error) {
-          signal.throwIfAborted();
-          await emit({
-            type: 'warning',
-            stage,
-            code: 'contextual-audit-failed',
-            message:
-              'Смысловой аудит по картинкам слайдов не выполнен: ' +
-              (error instanceof Error ? error.message : String(error)),
-          });
-        }
+      }
+      for (const finding of needsAttention(contextual.findings)) {
+        const message = `Смысловой аудит, слайд ${slideNumber(finding.target.slideId)}: ${finding.title}`;
+        reviewWarnings.push(message);
+        await emit({ type: 'warning', stage, code: 'content-review-required', message });
       }
     }
     if (!options.reviewer) {
@@ -775,6 +852,22 @@ export async function generatePresentation(options: GenerateOptions) {
           'В .pptx они сохранены, превью нарисованы запасным шрифтом.',
       });
     }
+    // What the self-check found, sent back and found again, for the user and for the pitch.
+    await writeFile(
+      join(options.outputDir, 'self-check.json'),
+      JSON.stringify(
+        {
+          pictureReviewed: contextual !== null,
+          rounds: selfCheck,
+          remaining: {
+            deterministic: needsAttention(report.findings).length,
+            contextual: contextual ? needsAttention(contextual.findings).length : 0,
+          },
+        },
+        null,
+        2,
+      ),
+    );
     timings.push({ stage, ms: Date.now() - exportStarted });
     await emit({ type: 'stage-finished', stage, durationMs: Date.now() - exportStarted });
     const deck = {
@@ -796,6 +889,7 @@ export async function generatePresentation(options: GenerateOptions) {
       ['audit', join(options.outputDir, 'audit-deterministic.json')],
       ['audit', join(options.outputDir, 'final-review.json')],
       ...(contextual ? [['audit', join(options.outputDir, 'audit-contextual.json')] as const] : []),
+      ['audit', join(options.outputDir, 'self-check.json')],
       ...output.previews.map((p) => ['preview', p]),
     ] as const) {
       const bytes = await readFile(path);

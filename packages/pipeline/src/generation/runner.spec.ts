@@ -26,11 +26,13 @@ async function exercise(
     | 'clean'
     | 'repair'
     | 'unfixable'
+    | 'torn-word'
     | 'cancel'
     | 'missing-font'
     | 'post-export-repair'
     | 'factual-error'
     | 'reviewed'
+    | 'self-corrected'
     | 'review-down',
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
@@ -49,6 +51,7 @@ async function exercise(
   }[] = [];
   const events: string[] = [];
   const seenPictures: string[] = [];
+  let reviewCalls = 0;
   const warnings: { stage: string; code: string; message: string }[] = [];
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
@@ -118,12 +121,12 @@ async function exercise(
       if (String(url).endsWith('/composition-check')) {
         checks++;
         const findings =
-          mode === 'unfixable' || (mode === 'repair' && checks === 1)
+          mode === 'unfixable' || mode === 'torn-word' || (mode === 'repair' && checks === 1)
             ? [
                 {
                   slideIndex: 0,
                   slotId: pattern.slots[0]?.slotId,
-                  code: 'text-overflow',
+                  code: mode === 'torn-word' ? 'word-break' : 'text-overflow',
                   severity: 'error',
                   lines: 3,
                   maxLines: 2,
@@ -213,7 +216,7 @@ async function exercise(
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
-    ...(mode === 'reviewed' || mode === 'review-down'
+    ...(mode === 'reviewed' || mode === 'self-corrected' || mode === 'review-down'
       ? {
           reviewer: {
             model: 'vlm-fixture',
@@ -229,7 +232,7 @@ async function exercise(
                     answers: [
                       {
                         checkId: 'no-service-text',
-                        verdict: 'no',
+                        verdict: mode === 'self-corrected' && reviewCalls++ > 0 ? 'yes' : 'no',
                         confidence: 0.95,
                         evidence: 'Slide',
                         suggestion: '',
@@ -286,6 +289,14 @@ describe('real generation orchestration with offline dependencies', () => {
       requiresReview: true,
     });
   });
+  it('sends a torn word to the rewriter but never refuses the export for it', async () => {
+    const run = await exercise('torn-word');
+    await run.result;
+    // The engine keeps reporting the word, the rewriter was asked, and the deck is still given.
+    expect(run.counters().repairs).toBeGreaterThan(0);
+    expect(run.counters().exports).toBe(1);
+    expect(run.events.at(-1)).toBe('done');
+  });
   it('saves and semantically audits the exact final content after a post-export repair', async () => {
     const run = await exercise('post-export-repair');
     await run.result;
@@ -338,21 +349,69 @@ describe('real generation orchestration with offline dependencies', () => {
     const run = await exercise('reviewed');
     const result = await run.result;
     expect(run.events.at(-1)).toBe('done');
-    expect(run.seenPictures).toEqual([
-      `data:image/png;base64,${Buffer.from('fixture-png').toString('base64')}`,
-    ]);
+    // The slide is asked about once, then again from the picture of what the rewriter wrote.
+    const picture = `data:image/png;base64,${Buffer.from('fixture-png').toString('base64')}`;
+    expect(run.seenPictures).toEqual([picture, picture]);
     const contextual = JSON.parse(
       await readFile(join(run.outputDir, 'audit-contextual.json'), 'utf8'),
     ) as { model: string; findings: { origin: string }[] };
     expect(contextual.model).toBe('vlm-fixture');
     expect(contextual.findings[0]?.origin).toBe('contextual');
     expect(result.manifest.artifacts.map((a) => a.path)).toContain('audit-contextual.json');
+    // A blocker in the picture counts in the final review, so the deck is not called complete.
+    const finalReview = JSON.parse(
+      await readFile(join(run.outputDir, 'final-review.json'), 'utf8'),
+    ) as { status: string; contextual: { errors: number } | null; errors: number };
+    expect(finalReview.status).toBe('requires-review');
+    expect(finalReview.contextual?.errors).toBeGreaterThanOrEqual(1);
+    expect(finalReview.errors).toBeGreaterThanOrEqual(1);
+    // A slide read back from the file is `imported-1`: the lane names its number, not its id.
+    expect(run.warnings.find((w) => w.message.startsWith('Смысловой аудит'))?.message).toMatch(
+      /^Смысловой аудит, слайд 1: /,
+    );
     expect(result.manifest.revisions).toContainEqual(
       expect.objectContaining({ kind: 'model', id: 'vlm-fixture' }),
     );
     expect(result.manifest.revisions).toContainEqual(
       expect.objectContaining({ kind: 'agent', id: 'slide-reviewer' }),
     );
+  });
+  it('sends what the picture showed back to the rewriter and keeps what it found and fixed', async () => {
+    const run = await exercise('self-corrected');
+    const result = await run.result;
+    expect(run.counters().repairs).toBe(1);
+    const check = JSON.parse(await readFile(join(run.outputDir, 'self-check.json'), 'utf8')) as {
+      pictureReviewed: boolean;
+      rounds: {
+        found: { deterministic: number; contextual: number };
+        corrected: { slide: number; slotId: string; source: string }[];
+        after: { deterministic: number; contextual: number };
+      }[];
+      remaining: { deterministic: number; contextual: number };
+    };
+    expect(check.pictureReviewed).toBe(true);
+    expect(check.rounds).toHaveLength(1);
+    expect(check.rounds[0]?.found.contextual).toBe(1);
+    expect(check.rounds[0]?.corrected).toEqual([{ slide: 1, slotId: '2', source: 'contextual' }]);
+    expect(check.rounds[0]?.after.contextual).toBe(0);
+    expect(check.remaining.contextual).toBe(0);
+    const contextual = JSON.parse(
+      await readFile(join(run.outputDir, 'audit-contextual.json'), 'utf8'),
+    ) as { findings: unknown[] };
+    expect(contextual.findings).toEqual([]);
+    expect(result.manifest.artifacts.map((a) => a.path)).toContain('self-check.json');
+    // Nothing is left to ask the user about, so no warning names a slide of the picture review.
+    expect(run.warnings.some((w) => w.message.startsWith('Смысловой аудит, слайд'))).toBe(false);
+  });
+  it('keeps what is still wrong after the round and says so', async () => {
+    const run = await exercise('reviewed');
+    await run.result;
+    const check = JSON.parse(await readFile(join(run.outputDir, 'self-check.json'), 'utf8')) as {
+      rounds: { after: { contextual: number } }[];
+      remaining: { contextual: number };
+    };
+    expect(check.rounds[0]?.after.contextual).toBe(1);
+    expect(check.remaining.contextual).toBe(1);
   });
   it('finishes the variant and says so when the vision model is down', async () => {
     const run = await exercise('review-down');
@@ -366,6 +425,11 @@ describe('real generation orchestration with offline dependencies', () => {
     const result = await run.result;
     expect(run.seenPictures).toEqual([]);
     expect(result.manifest.artifacts.map((a) => a.path)).not.toContain('audit-contextual.json');
+    const check = JSON.parse(await readFile(join(run.outputDir, 'self-check.json'), 'utf8')) as {
+      pictureReviewed: boolean;
+      rounds: unknown[];
+    };
+    expect(check).toMatchObject({ pictureReviewed: false, rounds: [] });
     expect(run.warnings.some((w) => w.code === 'contextual-audit-skipped')).toBe(true);
   });
 });

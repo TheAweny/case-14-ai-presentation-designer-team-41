@@ -71,6 +71,35 @@ def test_long_content_produces_overflow_finding(tmp_path: Path) -> None:
     assert any(f["code"] == "text-overflow" for f in findings)
 
 
+def test_a_word_wider_than_the_box_is_reported_even_when_the_lines_fit(tmp_path: Path) -> None:
+    pattern = extract_compositions(make_source(tmp_path / "input.pptx"))[0]
+    slot_id = pattern["slots"][0]["slotId"]
+    # In a 4 inch box at 24 pt this word cannot sit on one line, so it would be torn mid-word:
+    # that is its own finding, whatever the line count says.
+    torn = check_composition_text(
+        pattern, [{"slotId": slot_id, "text": "Достопримечательностей и риски"}]
+    )
+    found = [f for f in torn if f["code"] == "word-break"]
+    assert len(found) == 1
+    assert "«Достопримечательностей»" in found[0]["message"]
+    assert found[0]["severity"] == "error"
+    # The same slot with words that each fit, even punctuated, is clean.
+    whole = check_composition_text(
+        pattern, [{"slotId": slot_id, "text": "Возможности, риски и выводы."}]
+    )
+    assert whole == []
+
+
+def test_every_word_of_a_torn_slot_is_named_once(tmp_path: Path) -> None:
+    pattern = extract_compositions(make_source(tmp_path / "input.pptx"))[0]
+    slot_id = pattern["slots"][0]["slotId"]
+    text = "Достопримечательностей Достопримечательностей Электроэнцефалографических"
+    findings = check_composition_text(pattern, [{"slotId": slot_id, "text": text}])
+    message = next(f["message"] for f in findings if f["code"] == "word-break")
+    assert message.count("«Достопримечательностей»") == 1
+    assert "«Электроэнцефалографических»" in message
+
+
 def test_repeated_footer_sample_is_not_treated_as_branding(tmp_path: Path) -> None:
     deck = Presentation()
     for _ in range(4):

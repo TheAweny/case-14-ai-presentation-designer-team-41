@@ -24,6 +24,10 @@ export interface ContextualAuditOptions {
   /** Slides reviewed at once. The model calls of a deck run in parallel within this bound. */
   readonly concurrency?: number;
   readonly checks?: readonly ContextualCheck[];
+  /** Ask only about these slides (by id); the others still count as neighbours and headlines. */
+  readonly only?: ReadonlySet<string>;
+  /** Stops the review: the slides not yet asked about are not asked. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ContextualAuditResult {
@@ -270,10 +274,14 @@ export async function runContextualAudit(
 ): Promise<ContextualAuditResult> {
   const { slides, agent, provider, seed } = options;
   const checks = options.checks ?? CONTEXTUAL_CHECKS;
+  const asked = slides.flatMap((slide, i) =>
+    options.only === undefined || options.only.has(slide.slideId) ? [i] : [],
+  );
   const outcomes = await pool(
-    slides.length,
+    asked.length,
     options.concurrency ?? DEFAULT_CONCURRENCY,
-    async (i) => {
+    async (position) => {
+      const i = asked[position] as number;
       const slide = slides[i] as SlideIr;
       const image = options.images?.[slide.slideId];
       try {
@@ -282,6 +290,7 @@ export async function runContextualAudit(
           input: inputFor(slides, i, options),
           seed,
           ...(image ? { images: [image] } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
         });
         return { slide, review };
       } catch (error) {

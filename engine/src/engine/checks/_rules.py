@@ -27,6 +27,7 @@ from engine.checks._geometry import (
     paragraphs_of,
     share_groups,
     text_height,
+    widest_word,
     words,
 )
 from engine.checks.registry import CheckDefinition
@@ -303,6 +304,57 @@ def text_overflow(
             rationale=f"Уменьшить кегль до {fitting[0]:g} pt" if fitting else "",
             assisted=True,
             confidence=confidence,
+        )
+    return out.findings
+
+
+def word_break(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext) -> list[Finding]:
+    out = _Emitter(check, slide)
+    p = ctx.params[check.id]
+    template = ctx.template
+    for element in slide["elements"]:
+        if not paragraphs_of(element) or not is_content(element):
+            continue
+        torn = widest_word(element, template, None, p["charWidthEm"], p["minWordChars"])
+        if torn is None:
+            continue
+        word, needed, available = torn
+        current = max(
+            (
+                float(run["sizePt"])
+                for paragraph in paragraphs_of(element)
+                for run in paragraph.get("runs", [])
+                if run.get("sizePt")
+            ),
+            default=template.default_size(element["role"]),
+        )
+        fitting = [
+            size
+            for size in sorted(template.sizes, reverse=True)
+            if size < current
+            and size >= max(current * 0.6, p["minSizePt"])
+            and widest_word(element, template, size, p["charWidthEm"], p["minWordChars"]) is None
+        ]
+        out.add(
+            title="Слово разорвано посередине",
+            detail=f"Слово «{word}» шире блока и будет перенесено посреди слова. "
+            + (
+                f"Можно уменьшить кегль до {fitting[0]:g} pt из шкалы шаблона."
+                if fitting
+                else "Слово нужно заменить более коротким."
+            ),
+            element=element,
+            quote=word,
+            measured=f"нужно ~{_pt(needed)}, в блоке {_pt(available)}",
+            expected="слово помещается на строке целиком",
+            ops=(
+                [{"op": "set-font-size", "elementId": element["elementId"], "sizePt": fitting[0]}]
+                if fitting
+                else None
+            ),
+            rationale=f"Уменьшить кегль до {fitting[0]:g} pt" if fitting else "",
+            assisted=True,
+            confidence=0.8,
         )
     return out.findings
 
@@ -1109,6 +1161,7 @@ RULES: dict[str, Rule] = {
     "text-clipped": text_clipped,
     "overlap": overlap,
     "text-overflow": text_overflow,
+    "word-break": word_break,
     "grid-alignment": grid_alignment,
     "safe-margins": safe_margins,
     "image-aspect": image_aspect,
