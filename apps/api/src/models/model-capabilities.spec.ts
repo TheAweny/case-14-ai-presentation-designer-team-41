@@ -47,7 +47,7 @@ function gateway() {
   return vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as { model: string };
     return body.model === 'thinker'
-      ? new Response('unsupported reasoning effort: "lct-probe-no-such-effort"', { status: 400 })
+      ? new Response("Supported values are: 'none', 'low', 'medium', 'high'.", { status: 400 })
       : Response.json({ choices: [{ message: { content: 'o' } }] });
   }) as unknown as typeof fetch;
 }
