@@ -305,7 +305,7 @@ describe('toolkit core', () => {
     }
   });
 
-  it('spends eight shared calls on failures and serves a repeated success from cache', async () => {
+  it('counts failed searches separately from page reads and serves a repeated success from cache', async () => {
     const search = vi.fn(async () => {
       throw new Error('engine down');
     });
@@ -313,7 +313,7 @@ describe('toolkit core', () => {
       throw new Error('page down');
     });
     const { dispatcher, context } = await webDispatcher({ search: { search }, fetchSource });
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 8; index += 1) {
       const failed = await dispatcher.dispatch(
         'search_web',
         JSON.stringify({ query: 'q' + String(index) }),
@@ -334,9 +334,9 @@ describe('toolkit core', () => {
     );
     expect(ninth).toMatchObject({
       failed: true,
-      output: { error: expect.stringMatching(/limit/) },
+      output: { code: 'web_budget_exhausted', operation: 'search', limit: 8 },
     });
-    expect(search).toHaveBeenCalledTimes(7);
+    expect(search).toHaveBeenCalledTimes(8);
     expect(fetchSource).toHaveBeenCalledTimes(1);
     const cachedAnswer: WebSearchAnswer = {
       query: 'ok',

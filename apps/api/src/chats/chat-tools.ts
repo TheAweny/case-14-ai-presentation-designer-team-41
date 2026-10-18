@@ -40,6 +40,7 @@ import { inspectChatSources } from './source-provenance.js';
 import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
 import { fetchWebSource, type WebSourceOptions, type WebSourcePage } from './web-source.js';
 import { activityDetail, withToolActivity, type ActivityContext } from './tool-activity.js';
+import { WebBudget, WebBudgetError, webBudgetOutput } from './web-budget.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -136,7 +137,6 @@ export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
 const TEXT_FILE = /\.(txt|md|csv|tsv)$/i;
 const MAX_FILE_CHARS = 8000;
 const MAX_SEARCH_CALLS = 8;
-const MAX_WEB_CALLS = 8;
 
 function attachedFileIds(scope: ChatToolScope): Set<string> {
   return new Set(
@@ -179,8 +179,7 @@ export function chatTools(
   let researchCalls = 0;
   let searchCalls = 0;
   const searchCache = new Map<string, unknown>();
-  let webCalls = 0;
-  const webCache = new Map<string, unknown>();
+  const webBudget = new WebBudget();
   let researchTopicCalls = 0;
   const researchTopicCache = new Map<string, unknown>();
   const baseUrl = web ? null : webSearchBaseUrl(process.env);
@@ -214,15 +213,12 @@ export function chatTools(
   const fetchSource = web?.fetchSource ?? fetchWebSource;
 
   async function webCall<T>(key: string, signal: AbortSignal, load: () => Promise<T>): Promise<T> {
-    signal.throwIfAborted();
-    const cached = webCache.get(key);
-    if (cached !== undefined) return cached as T;
-    if (webCalls >= MAX_WEB_CALLS) throw new Error('The web call limit for this turn was reached.');
-    webCalls += 1;
-    const output = await load();
-    signal.throwIfAborted();
-    webCache.set(key, output);
-    return output;
+    const operation = key.startsWith('assets:')
+      ? 'images'
+      : key.startsWith('fetch:')
+        ? 'fetch'
+        : 'search';
+    return webBudget.call(operation, key, signal, load);
   }
 
   const researchMaterials: ChatTool = {
@@ -602,9 +598,7 @@ export function chatTools(
       const client = searchClient;
       const cached = researchTopicCache.get(request.question);
       if (cached !== undefined) return { output: cached };
-      if (researchTopicCalls >= 2) {
-        throw new Error('The web research call limit for this turn was reached.');
-      }
+      webBudget.reserveResearch(researchTopicCalls);
       researchTopicCalls += 1;
       const output = await researchWebTopic(
         request.question,
@@ -947,7 +941,21 @@ export function chatTools(
     proposePlan,
     buildDeck,
     editSlide,
-  ].filter((tool) => tool.modes.includes(scope.mode));
+  ]
+    .filter((tool) => tool.modes.includes(scope.mode))
+    .map((tool): ChatTool => ({
+      ...tool,
+      async run(input, context) {
+        try {
+          return await tool.run(input, context);
+        } catch (error) {
+          context.signal.throwIfAborted();
+          if (error instanceof WebBudgetError)
+            return { failed: true, output: webBudgetOutput(error) };
+          throw error;
+        }
+      },
+    }));
 }
 
 function activityOf(context: ToolContext): ActivityContext['activity'] {

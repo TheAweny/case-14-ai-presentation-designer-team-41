@@ -68,7 +68,7 @@ async function dispatcher(web: ChatWebDependency) {
 }
 
 describe('research_topic and search_assets', () => {
-  it('shares the web budget and the default fetch cache, and stops before a third research searches', async () => {
+  it('keeps search quota of 8 independent of fetch cache after research spends one search', async () => {
     const search = vi.fn(async (query: string) => ({
       query,
       results: [{ url: URL, title: 'Отчёт', snippet: 'не факт', publishedAt: null }],
@@ -141,20 +141,30 @@ describe('research_topic and search_assets', () => {
     });
     expect(fetched.failed).not.toBe(true);
     expect(fetchSource).toHaveBeenCalledTimes(1);
-    const blocked = await tools.dispatch('search_web', JSON.stringify({ query: 'ещё' }), {
+    const eighth = await tools.dispatch('search_web', JSON.stringify({ query: 'ещё' }), {
       callId: 's2',
+      signal: new AbortController().signal,
+      show: () => 0,
+      update: () => undefined,
+    });
+    expect(eighth.failed).not.toBe(true);
+    expect(search).toHaveBeenCalledTimes(8);
+    expect(fetchSource).toHaveBeenCalledTimes(1);
+    const blocked = await tools.dispatch('search_web', JSON.stringify({ query: 'девятый' }), {
+      callId: 's3',
       signal: new AbortController().signal,
       show: () => 0,
       update: () => undefined,
     });
     expect(blocked).toMatchObject({
       failed: true,
-      output: { error: expect.stringMatching(/limit/) },
+      output: { code: 'web_budget_exhausted', operation: 'search', limit: 8 },
     });
-    expect(search).toHaveBeenCalledTimes(7);
+    expect(search).toHaveBeenCalledTimes(8);
+    expect(fetchSource).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses a third new question before search and does not offer a child when research is off', async () => {
+  it('allows four research questions and refuses a fifth before search, and does not offer a child when research is off', async () => {
     const search = vi.fn(async (query: string) => ({
       query,
       results: [{ url: URL, title: 'Отчёт', snippet: 'не факт', publishedAt: null }],
@@ -198,18 +208,31 @@ describe('research_topic and search_assets', () => {
         )
       ).failed,
     ).not.toBe(true);
-    const calls = search.mock.calls.length;
     const third = await ready.dispatcher.dispatch(
       'research_topic',
       JSON.stringify({ question: 'третий' }),
       context,
     );
-    expect(third).toMatchObject({
+    expect(third.failed).not.toBe(true);
+    const fourth = await ready.dispatcher.dispatch(
+      'research_topic',
+      JSON.stringify({ question: 'четвёртый' }),
+      context,
+    );
+    expect(fourth.failed).not.toBe(true);
+    const fifthCalls = search.mock.calls.length;
+    const fifth = await ready.dispatcher.dispatch(
+      'research_topic',
+      JSON.stringify({ question: 'пятый' }),
+      context,
+    );
+    expect(fifth).toMatchObject({
       failed: true,
-      output: { error: expect.stringMatching(/limit/) },
+      output: { code: 'web_budget_exhausted', operation: 'research', limit: 4 },
     });
-    expect(search).toHaveBeenCalledTimes(calls);
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenCalledTimes(fifthCalls);
+    expect(search).toHaveBeenCalledTimes(4);
+    expect(run).toHaveBeenCalledTimes(4);
     expect(webSourceId(URL)).toMatch(/^[0-9a-f-]{36}$/);
 
     const disabled = chatTools({} as GenerationService, scope(), undefined, {
@@ -230,7 +253,7 @@ describe('research_topic and search_assets', () => {
       research: { run },
     });
     expect(noSearch.map((tool) => tool.name)).not.toContain('research_topic');
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenCalledTimes(4);
   });
 
   it('offers image search only when configured and keeps an unknown license', async () => {

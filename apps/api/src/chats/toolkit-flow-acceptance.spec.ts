@@ -13,7 +13,7 @@ import type { GenerationService } from '../generation/generation.service.js';
 import { chatTools, type ChatToolScope } from './chat-tools.js';
 
 describe('independent toolkit workflow through the chat loop', () => {
-  it('shares the network limit across tools while cached pages do not consume it', async () => {
+  it('keeps search and read budgets separate while cached pages do not consume them', async () => {
     const scope: ChatToolScope = {
       account: {
         id: 'owner',
@@ -71,7 +71,7 @@ describe('independent toolkit workflow through the chat loop', () => {
       dispatcher.dispatch(name, JSON.stringify(input), context);
     await dispatch('search_web', { query: 'q' });
     await dispatch('search_web', { query: 'q' });
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 24; index += 1) {
       expect(
         (await dispatch('fetch_source', { url: `https://example.org/${index}` })).failed,
       ).not.toBe(true);
@@ -79,13 +79,17 @@ describe('independent toolkit workflow through the chat loop', () => {
     expect((await dispatch('fetch_source', { url: 'https://example.org/0' })).failed).not.toBe(
       true,
     );
-    expect((await dispatch('search_web', { query: 'overflow' })).failed).toBe(true);
-    expect(search).toHaveBeenCalledTimes(1);
-    expect(fetchSource).toHaveBeenCalledTimes(7);
+    expect((await dispatch('search_web', { query: 'still-available' })).failed).not.toBe(true);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(await dispatch('fetch_source', { url: 'https://example.org/overflow' })).toMatchObject({
+      failed: true,
+      output: { code: 'web_budget_exhausted', operation: 'fetch' },
+    });
+    expect(fetchSource).toHaveBeenCalledTimes(24);
     expect(
       (await dispatch('fetch_source', { url: 'https://example.org/last', maxChars: 8001 })).failed,
     ).toBe(true);
-    expect(fetchSource).toHaveBeenCalledTimes(7);
+    expect(fetchSource).toHaveBeenCalledTimes(24);
   });
 
   it('runs search, source read and calculation with recorded responses and no build side effect', async () => {
