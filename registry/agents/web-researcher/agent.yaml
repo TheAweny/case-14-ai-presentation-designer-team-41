@@ -1,0 +1,16 @@
+# Isolated child of web research. One question, fetched page text only.
+# No tools, no network, no recursive research. The server rechecks every quote.
+# Search snippets are not evidence.
+
+id: web-researcher
+version: 1.0.0
+description: 'Research child for public web pages: exact excerpts only. Search results are not evidence.'
+modelId: assistant-default
+
+generation:
+  temperature: 0.2
+  topP: 0.95
+  maxOutputTokens: 2048
+
+outputSchema: MaterialResearchResult
+instructionsFile: instructions.md
