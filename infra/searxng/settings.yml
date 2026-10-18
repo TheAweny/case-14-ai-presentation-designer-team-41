@@ -1,0 +1,16 @@
+# Internal SearXNG. Defaults come from the image; this file only turns on the JSON API
+# and disables the bot limiter (no Valkey on this private network).
+# server.secret_key is supplied at start by SEARXNG_SECRET. Do not put a real key here.
+use_default_settings: true
+
+server:
+  limiter: false
+  image_proxy: false
+  secret_key: 'overwritten-at-start'
+
+search:
+  safe_search: 0
+  autocomplete: ''
+  formats:
+    - html
+    - json

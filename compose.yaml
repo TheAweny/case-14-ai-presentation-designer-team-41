@@ -60,6 +60,9 @@ services:
       API_PORT: '3001'
       DATABASE_URL: postgresql://${POSTGRES_USER:-lct26}:${POSTGRES_PASSWORD:-lct26-local}@postgres:5432/${POSTGRES_DB:-lct26}
       ENGINE_URL: http://engine:8000
+      # Unset -> http://search:8080. An explicit empty value disables search.
+      # Dash, not colon-dash: WEB_SEARCH_URL= stays empty and does not fall back.
+      WEB_SEARCH_URL: ${WEB_SEARCH_URL-http://search:8080}
       MASTRA_STORAGE_URL: ${MASTRA_STORAGE_URL:-file:/app/runs/mastra.db}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -84,6 +87,35 @@ services:
       - '127.0.0.1:3001:3001'
     restart: unless-stopped
 
+  search:
+    image: searxng/searxng@sha256:8bdd9aa136b2dc3b9332cf24714fa34a375b8a1949a1201ec900c24d7378596e
+    environment:
+      # Empty or unset: the command below generates a process-local key and does not persist it.
+      # A non-empty value from the uncommitted .env is kept across restarts. Never commit it.
+      SEARXNG_SECRET: ${SEARXNG_SECRET-}
+      SEARXNG_BASE_URL: http://search:8080/
+      # The settings file is mounted read-only; the image must not chown that directory.
+      FORCE_OWNERSHIP: 'false'
+    volumes:
+      - ./infra/searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - search-data:/var/cache/searxng
+    # Official image entrypoint. An empty SEARXNG_SECRET would overwrite server.secret_key with
+    # an empty string, so generate one in the process environment before exec.
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        if [ -z "$$SEARXNG_SECRET" ]; then
+          # Same tools as the image entrypoint. `python` is not on PATH before the venv starts.
+          SEARXNG_SECRET="$$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
+          export SEARXNG_SECRET
+        fi
+        exec /usr/local/searxng/entrypoint.sh
+    expose:
+      - '8080'
+    mem_limit: 512m
+    cpus: 0.50
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -106,3 +138,4 @@ services:
 
 volumes:
   postgres-data:
+  search-data:
