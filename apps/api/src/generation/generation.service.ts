@@ -52,6 +52,7 @@ import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
+import { readPreparedMaterial } from '../materials/prepared-material.js';
 
 /** The account as model settings see it: whose connections and role choices apply. */
 export function actorOf(account: Account) {
@@ -375,7 +376,6 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     account: Account,
     retry?: { variant: LayoutVariant; buildId: string; plan?: CompositionPlan },
   ): Promise<StartedBuild> {
-    const buildStartedAt = Date.now();
     // Every generation runs three variants, each counted as one active run.
     if (this.active.size >= 2 * VARIANTS.length)
       throw new BadRequestException('Two generations are already running.');
@@ -385,20 +385,22 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     if (!prepared.success) throw new BadRequestException('Prepare the template before generation.');
     let brief = input.brief;
     for (const id of input.contentIds) {
-      const files = await this.pool.query<{ storage_path: string }>(
-        `SELECT storage_path FROM stored_files
+      const files = await this.pool.query<{ storage_path: string; file_name: string }>(
+        `SELECT storage_path, file_name FROM stored_files
          WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
         [id, account.id],
       );
-      const path = files.rows[0]?.storage_path;
-      if (!path || !/\.(txt|md|csv|tsv)$/i.test(path))
-        throw new BadRequestException(
-          'This generation supports text, Markdown and CSV/TSV content.',
-        );
-      const content = await readFile(path, 'utf8');
-      brief += `\n\nSource ${id}:\n${content}`;
+      const stored = files.rows[0];
+      if (!stored) throw new BadRequestException('There is no such content file.');
+      const material = await readPreparedMaterial(this.engine, {
+        sourceId: id,
+        name: stored.file_name,
+        path: stored.storage_path,
+      });
+      brief += `\n\nSource ${id}:\n${material.text}`;
     }
     if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
+    const buildStartedAt = Date.now();
     // The models are settled before a run exists: without one there is nothing to start, and the
     // person gets the reason in the answer rather than a run that fails without one.
     const settle = <T>(pending: Promise<T>): Promise<T> =>

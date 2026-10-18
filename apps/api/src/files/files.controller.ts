@@ -166,7 +166,8 @@ export class FilesController implements OnApplicationShutdown {
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({
     summary: 'Загрузить материалы',
-    description: 'Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.csv`, `.tsv`, `.xlsx`.',
+    description:
+      'Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.pdf`, `.csv`, `.tsv`, `.xlsx`.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody(UPLOAD_BODY)
@@ -188,7 +189,7 @@ export class FilesController implements OnApplicationShutdown {
     if (!file) throw new BadRequestException('Field file is required.');
     const fileName = decodeMultipartFilename(file.originalname);
     const extension = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
-    const accepted = ['.txt', '.md', '.docx', '.csv', '.tsv', '.xlsx'];
+    const accepted = ['.txt', '.md', '.docx', '.pdf', '.csv', '.tsv', '.xlsx'];
     if (!accepted.includes(extension))
       throw new BadRequestException('Unsupported content file type.');
     if (file.size === 0) throw new BadRequestException('The uploaded content file is empty.');
