@@ -126,7 +126,7 @@ export function ConnectionModels({
           {t('back')}
         </Button>
         <div className="grid gap-1 md:pr-8">
-          <h2 className="text-base font-semibold">{connection.name}</h2>
+          <h2 className="text-base font-semibold [overflow-wrap:anywhere]">{connection.name}</h2>
           <p className="max-w-xl text-xs text-pretty text-muted-foreground">
             {editable ? t('hint') : t('readOnly')}
           </p>
@@ -182,7 +182,7 @@ export function ConnectionModels({
                 : t('summary', { enabled: enabledCount, count: catalog.length })}
             </p>
             {editable ? (
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <Button
                   type="button"
                   variant="outline"

@@ -59,6 +59,7 @@ function DialogContent({
       >
         {children}
         <DialogPrimitive.Close
+          data-slot="dialog-close"
           aria-label={closeLabel}
           className={cn(
             'absolute top-3 right-3 grid size-7 place-items-center rounded-md outline-none',

@@ -229,7 +229,7 @@ export function ModelSettingsPanel() {
       </section>
 
       <section aria-labelledby="settings-connections" className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 id="settings-connections" className="text-sm font-medium">
             {t('connections.title')}
           </h3>
@@ -347,7 +347,7 @@ function ConnectionCard({
         {location === 'local' ? <ComputerIcon size={16} /> : <CloudIcon size={16} />}
       </span>
       <div className="grid min-w-0 flex-1 gap-0.5">
-        <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
           <span className="truncate">{connection.name}</span>
           <span className="shrink-0 rounded-sm px-1 text-[0.6875rem] font-normal text-muted-foreground ring-1 ring-border">
             {t(`location.${location}`)}

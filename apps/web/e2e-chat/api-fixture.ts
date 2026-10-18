@@ -24,6 +24,7 @@ const initialModels = (): ModelSettings => ({
   ],
 });
 let modelSettings = initialModels();
+let accountRole: 'user' | 'admin' = 'user';
 /** What probing found per model id; a test sets it, any model not set offers no choice. */
 let capabilities = new Map<string, unknown>();
 /** What the provider says about each model of the fixture connection; null — it says nothing. */
@@ -43,6 +44,7 @@ const templateDownloads = new Map<
 const server = createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json');
   if (request.url === '/__reset-models') {
+    accountRole = 'user';
     modelSettings = initialModels();
     capabilities = new Map();
     details = null;
@@ -52,6 +54,11 @@ const server = createServer(async (request, response) => {
     generationDeck = null;
     templateDownloads.clear();
     response.end('{}');
+  } else if (request.url === '/__set-admin' && request.method === 'POST') {
+    accountRole = 'admin';
+    response.end('{}');
+  } else if (request.url === '/users' && request.method === 'GET') {
+    response.end('[]');
   } else if (request.url === '/__set-generation-deck' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);
@@ -169,7 +176,7 @@ const server = createServer(async (request, response) => {
           id: '00000000-0000-4000-8000-000000000001',
           email: 'chat-e2e@example.test',
           name: 'Chat E2E',
-          role: 'user',
+          role: accountRole,
         },
       }),
     );

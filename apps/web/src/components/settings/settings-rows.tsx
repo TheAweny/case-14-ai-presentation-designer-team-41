@@ -78,7 +78,7 @@ export function SwitchRow({
   );
 }
 
-/** Выбор из двух-трёх значений — сегменты в ряд: всё видно сразу, без выпадающего списка. */
+/** Короткий выбор — сегменты; длинный список значений — обычный select. */
 export function ChoiceRow<T extends string | number>({
   label,
   hint,
@@ -95,32 +95,52 @@ export function ChoiceRow<T extends string | number>({
   const labelId = useId();
   return (
     <Row label={label} hint={hint} labelId={labelId}>
-      <ToggleGroupPrimitive.Root
-        type="single"
-        aria-labelledby={labelId}
-        value={String(value)}
-        onValueChange={(next) => {
-          // Повторный клик по выбранному сегменту снимает выбор — у нас значение есть всегда.
-          const option = options.find((candidate) => String(candidate.id) === next);
-          if (option) onChange(option.id);
-        }}
-        className="flex shrink-0 rounded-lg bg-muted p-0.5"
-      >
-        {options.map((option) => (
-          <ToggleGroupPrimitive.Item
-            key={String(option.id)}
-            value={String(option.id)}
-            className={cn(
-              'h-7 min-w-8 rounded-md px-2.5 text-xs text-muted-foreground outline-none',
-              'transition-colors duration-100 motion-reduce:transition-none',
-              'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-              'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
-            )}
-          >
-            {option.label}
-          </ToggleGroupPrimitive.Item>
-        ))}
-      </ToggleGroupPrimitive.Root>
+      {options.length > 5 ? (
+        <select
+          aria-labelledby={labelId}
+          value={String(value)}
+          onChange={(event) => {
+            const option = options.find(
+              (candidate) => String(candidate.id) === event.currentTarget.value,
+            );
+            if (option) onChange(option.id);
+          }}
+          className="h-11 max-w-full min-w-24 rounded-md border border-border bg-background px-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:h-8 md:text-sm"
+        >
+          {options.map((option) => (
+            <option key={String(option.id)} value={String(option.id)}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <ToggleGroupPrimitive.Root
+          type="single"
+          aria-labelledby={labelId}
+          value={String(value)}
+          onValueChange={(next) => {
+            // Повторный клик по выбранному сегменту снимает выбор — у нас значение есть всегда.
+            const option = options.find((candidate) => String(candidate.id) === next);
+            if (option) onChange(option.id);
+          }}
+          className="flex max-w-full flex-wrap rounded-lg bg-muted p-0.5"
+        >
+          {options.map((option) => (
+            <ToggleGroupPrimitive.Item
+              key={String(option.id)}
+              value={String(option.id)}
+              className={cn(
+                'min-h-11 min-w-11 rounded-md px-2.5 text-sm text-muted-foreground outline-none md:min-h-7 md:min-w-8 md:text-xs',
+                'transition-colors duration-100 motion-reduce:transition-none',
+                'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+                'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
+              )}
+            >
+              {option.label}
+            </ToggleGroupPrimitive.Item>
+          ))}
+        </ToggleGroupPrimitive.Root>
+      )}
     </Row>
   );
 }

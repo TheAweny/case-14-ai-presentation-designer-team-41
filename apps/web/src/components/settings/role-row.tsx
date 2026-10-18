@@ -115,7 +115,7 @@ export function RoleRow({
               <Button
                 variant="outline"
                 size="lg"
-                className="relative h-10 w-full justify-between gap-2 rounded-lg bg-muted/25 px-3 font-normal shadow-xs transition-[background-color,border-color,box-shadow] duration-150 data-[state=open]:border-ring/50 data-[state=open]:bg-muted/60"
+                className="relative h-11 w-full justify-between gap-2 rounded-lg bg-muted/25 px-3 font-normal shadow-xs transition-[background-color,border-color,box-shadow] duration-150 data-[state=open]:border-ring/50 data-[state=open]:bg-muted/60 md:h-10"
               >
                 <span className="sr-only">{t('picker.label', { role: name })}: </span>
                 <PickerValue assignment={assignment} connections={connections} />
@@ -127,7 +127,7 @@ export function RoleRow({
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="flex max-h-[calc(100dvh-2rem)] w-[22rem] max-w-[calc(100vw-2rem)] flex-col p-0"
+              className="flex max-h-[min(calc(100dvh-2rem),var(--radix-popover-content-available-height))] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-y-auto overscroll-contain p-0"
             >
               <ModelList
                 models={models}

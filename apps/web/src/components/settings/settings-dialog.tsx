@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -23,7 +23,6 @@ import {
   settingsSection,
   type SettingsSection,
 } from '@/lib/settings-url';
-import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
 import { cn } from '@/lib/utils';
 import { AccountSettingsPanel } from './account-settings-panel';
 import { DeckSettingsPanel } from './deck-settings-panel';
@@ -70,11 +69,11 @@ export function SettingsHost() {
 
 /**
  * Разделы слева, содержимое справа — как в настройках Claude. На узком экране разделы уходят
- * наверх строкой вкладок. Раздел пишется в адрес: ссылка открывает ровно его.
+ * наверх компактным списком. Раздел пишется в адрес: ссылка открывает ровно его.
  */
 function SettingsDialogContent({ section }: { section: SettingsSection }) {
   const t = useTranslations('settings');
-  const narrow = useMediaQuery(NARROW_SCREEN);
+  const sectionSelectId = useId();
   // Без аккаунта (страница входа) раздела «Аккаунт» нет, «Пользователи» — только у администратора.
   const account = useAccount();
   const sections = SETTINGS_SECTIONS.filter(
@@ -84,7 +83,12 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
   return (
     <DialogContent
       closeLabel={t('close')}
-      className="flex h-[min(46rem,calc(100dvh-2rem))] max-w-5xl flex-col gap-0 overflow-hidden p-0"
+      className={cn(
+        'flex h-[min(46rem,calc(100dvh-2rem))] max-w-5xl flex-col gap-0 overflow-hidden p-0',
+        'max-md:[&>[data-slot=dialog-close]]:top-1 max-md:[&>[data-slot=dialog-close]]:right-1 max-md:[&>[data-slot=dialog-close]]:size-11',
+        'max-md:[&_input:not([type=radio]):not([type=checkbox])]:min-h-11 max-md:[&_input:not([type=radio]):not([type=checkbox])]:text-base',
+        'max-md:[&_textarea]:text-base',
+      )}
       onEscapeKeyDown={(event) => {
         // Поле, которое Esc отменяет само (id модели вручную), окно не закрывает.
         const focused = document.activeElement;
@@ -96,22 +100,39 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
       <Tabs
         value={section}
         onValueChange={(next) => openSettings(settingsSection(next) ?? 'general')}
-        orientation={narrow ? 'horizontal' : 'vertical'}
-        className="min-h-0 flex-1 gap-0"
+        orientation="vertical"
+        className="min-h-0 min-w-0 flex-1 gap-0 data-[orientation=vertical]:flex-col md:data-[orientation=vertical]:flex-row"
       >
         <div
           className={cn(
-            'flex shrink-0 flex-col gap-3 border-border px-3 pt-3 pb-2',
-            'max-md:border-b md:w-52 md:border-r md:bg-sidebar md:pb-3',
+            'flex min-w-0 shrink-0 flex-col gap-3 border-border px-3 pt-3 pb-3',
+            'max-md:border-b md:w-52 md:border-r md:bg-sidebar',
           )}
         >
           <div className="grid gap-0.5 px-2 pt-1 pr-10 md:pr-2">
             <DialogTitle className="text-base">{t('title')}</DialogTitle>
             <DialogDescription className="sr-only">{t('description')}</DialogDescription>
           </div>
+          <label htmlFor={sectionSelectId} className="sr-only md:hidden">
+            {t('sections.label')}
+          </label>
+          <select
+            id={sectionSelectId}
+            value={section}
+            onChange={(event) =>
+              openSettings(settingsSection(event.currentTarget.value) ?? 'general')
+            }
+            className="h-11 w-full min-w-0 rounded-md border border-border bg-background px-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:hidden"
+          >
+            {sections.map((id) => (
+              <option key={id} value={id}>
+                {t(`sections.${id}`)}
+              </option>
+            ))}
+          </select>
           <TabsList
             aria-label={t('sections.label')}
-            className="h-auto w-full justify-start bg-transparent p-0 md:flex-col md:items-stretch"
+            className="hidden h-auto w-full justify-start bg-transparent p-0 md:flex md:flex-col md:items-stretch"
           >
             {sections.map((id) => {
               const SectionIcon = SECTION_ICONS[id];
@@ -133,27 +154,33 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
         </div>
 
         {account ? (
-          <TabsContent value="account" className="min-h-0 overflow-y-auto">
+          <TabsContent
+            value="account"
+            className="min-h-0 min-w-0 overflow-y-auto overscroll-contain"
+          >
             <AccountSettingsPanel account={account} />
           </TabsContent>
         ) : null}
-        <TabsContent value="general" className="min-h-0 overflow-y-auto">
+        <TabsContent value="general" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
           <GeneralSettings />
         </TabsContent>
-        <TabsContent value="editor" className="min-h-0 overflow-y-auto">
+        <TabsContent value="editor" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
           <EditorSettingsPanel />
         </TabsContent>
-        <TabsContent value="shortcuts" className="min-h-0 overflow-y-auto">
+        <TabsContent
+          value="shortcuts"
+          className="min-h-0 min-w-0 overflow-y-auto overscroll-contain"
+        >
           <ShortcutSettingsPanel />
         </TabsContent>
-        <TabsContent value="decks" className="min-h-0 overflow-y-auto">
+        <TabsContent value="decks" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
           <DeckSettingsPanel />
         </TabsContent>
-        <TabsContent value="models" className="min-h-0 overflow-y-auto">
+        <TabsContent value="models" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
           <ModelSettingsPanel />
         </TabsContent>
         {account?.role === 'admin' ? (
-          <TabsContent value="users" className="min-h-0 overflow-y-auto">
+          <TabsContent value="users" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
             <UsersSettingsPanel />
           </TabsContent>
         ) : null}

@@ -161,7 +161,7 @@ function ShortcutRow({
 
   return (
     <div className="flex min-h-12 items-center justify-between gap-4 border-b border-border py-2">
-      <div className="grid gap-0.5">
+      <div className="grid min-w-0 gap-0.5">
         <span id={labelId} className="text-sm">
           {label}
         </span>
@@ -208,7 +208,7 @@ function ShortcutRow({
             else onKey(event);
           }}
           className={cn(
-            'flex h-8 min-w-24 items-center justify-center gap-0.5 rounded-md border border-border px-2',
+            'flex h-11 min-w-24 items-center justify-center gap-0.5 rounded-md border border-border px-2 md:h-8',
             'text-xs text-muted-foreground outline-none hover:bg-muted',
             'focus-visible:ring-2 focus-visible:ring-ring/50',
             recording && 'border-ring bg-muted text-foreground',

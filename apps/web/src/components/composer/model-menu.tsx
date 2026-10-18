@@ -487,7 +487,7 @@ export function ModelList({
               setActive(firstModel(visibleRows(models, selected, next, maker, grouped)));
             }}
             onKeyDown={onKeyDown}
-            className="h-9 min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-11 min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground md:h-9 md:text-xs"
           />
         </div>
       ) : null}
