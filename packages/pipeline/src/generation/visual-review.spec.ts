@@ -262,6 +262,47 @@ describe('reviewVariantVisually asked again about some slides', () => {
   });
 });
 
+describe('reviewVariantVisually that is stopped', () => {
+  it('cancels the requests in flight and writes nothing after the stop', async () => {
+    const dir = await folder();
+    const preview = join(dir, 'slide-1.png');
+    await writeFile(preview, 'png-bytes');
+    const stop = new AbortController();
+    let cancelled = 0;
+    const provider: ModelProvider = {
+      name: 'hangs',
+      complete: (request) =>
+        new Promise((_, reject) => {
+          request.signal?.addEventListener('abort', () => {
+            cancelled += 1;
+            reject(new Error('cancelled'));
+          });
+          setTimeout(() => stop.abort(), 10);
+        }),
+    };
+    await expect(
+      reviewVariantVisually({
+        engine: {
+          importDeck: () =>
+            Promise.resolve({ schemaVersion: 1, slides: [slide('s1', 0, 'One', 'Text')] }),
+        },
+        agent,
+        provider,
+        brief: 'Brief',
+        goal: '',
+        pptxPath: join(dir, 'deck.pptx'),
+        mediaDir: join(dir, 'media'),
+        previews: [preview],
+        seed: 1,
+        outputDir: dir,
+        signal: stop.signal,
+      }),
+    ).rejects.toThrow();
+    expect(cancelled).toBeGreaterThan(0);
+    await expect(readFile(join(dir, 'audit-contextual.json'), 'utf8')).rejects.toThrow();
+  });
+});
+
 describe('VisionProvider', () => {
   const request = (): ModelRequest => ({
     agent,
@@ -305,6 +346,22 @@ describe('VisionProvider', () => {
       { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
     ]);
     expect(call.body.model).toBe('qwen38-27b-fp8');
+  });
+
+  it('stops a request when the call is cancelled, without waiting for the gateway', async () => {
+    const stop = new AbortController();
+    const provider = new VisionProvider({
+      apiKey: '',
+      baseUrl: 'https://gateway.test/v1',
+      model: 'm',
+      fetchImpl: (_url, init) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    });
+    const pending = provider.complete({ ...request(), signal: stop.signal });
+    setTimeout(() => stop.abort(new Error('time is up')), 10);
+    await expect(pending).rejects.toThrow('time is up');
   });
 
   it('asks again once the gateway says it is busy', async () => {

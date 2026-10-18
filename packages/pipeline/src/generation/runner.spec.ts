@@ -349,6 +349,13 @@ describe('real generation orchestration with offline dependencies', () => {
     expect(contextual.model).toBe('vlm-fixture');
     expect(contextual.findings[0]?.origin).toBe('contextual');
     expect(result.manifest.artifacts.map((a) => a.path)).toContain('audit-contextual.json');
+    // A blocker in the picture counts in the final review, so the deck is not called complete.
+    const finalReview = JSON.parse(
+      await readFile(join(run.outputDir, 'final-review.json'), 'utf8'),
+    ) as { status: string; contextual: { errors: number } | null; errors: number };
+    expect(finalReview.status).toBe('requires-review');
+    expect(finalReview.contextual?.errors).toBeGreaterThanOrEqual(1);
+    expect(finalReview.errors).toBeGreaterThanOrEqual(1);
     // A slide read back from the file is `imported-1`: the lane names its number, not its id.
     expect(run.warnings.find((w) => w.message.startsWith('Смысловой аудит'))?.message).toMatch(
       /^Смысловой аудит, слайд 1: /,

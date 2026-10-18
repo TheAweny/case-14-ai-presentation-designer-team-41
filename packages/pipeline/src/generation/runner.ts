@@ -608,27 +608,33 @@ export async function generatePresentation(options: GenerateOptions) {
         const reviewer = (reviewerAgent ??= await loadAgent(
           join(options.registryDir, 'slide-reviewer'),
         ));
+        // The review has its own stop: when its time is up the requests still in flight are
+        // cancelled, so they neither hold the model's slots nor write after the run is done.
+        const stop = new AbortController();
         const expired = new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('time is up')), left);
+          timer = setTimeout(() => {
+            stop.abort();
+            reject(new Error('time is up'));
+          }, left);
         });
-        return await Promise.race([
-          reviewVariantVisually({
-            engine: options.engine,
-            agent: reviewer,
-            provider: options.reviewer.provider,
-            brief: options.brief,
-            goal: written[0]?.title ?? '',
-            pptxPath: output.outputPath,
-            mediaDir: join(options.outputDir, 'media'),
-            previews: output.previews,
-            seed: options.seed ?? 42,
-            outputDir: options.outputDir,
-            ...(only ? { only } : {}),
-            ...(previous ? { previous } : {}),
-            signal,
-          }),
-          expired,
-        ]);
+        const asked = reviewVariantVisually({
+          engine: options.engine,
+          agent: reviewer,
+          provider: options.reviewer.provider,
+          brief: options.brief,
+          goal: written[0]?.title ?? '',
+          pptxPath: output.outputPath,
+          mediaDir: join(options.outputDir, 'media'),
+          previews: output.previews,
+          seed: options.seed ?? 42,
+          outputDir: options.outputDir,
+          ...(only ? { only } : {}),
+          ...(previous ? { previous } : {}),
+          signal: AbortSignal.any([signal, stop.signal]),
+        });
+        // Once the race is lost nobody awaits it: its late failure must not go unhandled.
+        asked.catch(() => undefined);
+        return await Promise.race([asked, expired]);
       } catch (error) {
         signal.throwIfAborted();
         await emit({
@@ -748,12 +754,19 @@ export async function generatePresentation(options: GenerateOptions) {
     const deterministicErrors = report.findings.filter(
       (f) => f.severity === 'blocker' || f.severity === 'major',
     ).length;
+    // What the pictures of the slides showed counts here too, or a deck with a blocker in its
+    // picture would be called complete and recommended.
+    const pictured = (contextual?.findings ?? []).filter((f) => f.origin === 'contextual');
+    const pictureErrors = pictured.filter(
+      (f) => f.severity === 'blocker' || f.severity === 'major',
+    ).length;
+    const pictureWarnings = pictured.filter((f) => f.severity === 'minor').length;
     const finalReview = finalReviewSchema.parse({
       schemaVersion: 1,
       contentRevision,
       contentHash: contentHash(),
       status:
-        semanticErrors.length || deterministicErrors || coverage.missing.length
+        semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
           ? 'requires-review'
           : 'complete',
       deterministic: {
@@ -761,17 +774,18 @@ export async function generatePresentation(options: GenerateOptions) {
         warnings: report.findings.length - deterministicErrors,
       },
       contextual: {
-        errors: semanticErrors.length,
-        warnings: finalCritique.issues.length - semanticErrors.length,
+        errors: semanticErrors.length + pictureErrors,
+        warnings: finalCritique.issues.length - semanticErrors.length + pictureWarnings,
       },
       coverage,
       issues: finalCritique.issues,
-      errors: deterministicErrors + semanticErrors.length + coverage.missing.length,
+      errors: deterministicErrors + semanticErrors.length + pictureErrors + coverage.missing.length,
       warnings:
         report.findings.length -
         deterministicErrors +
         finalCritique.issues.length -
-        semanticErrors.length,
+        semanticErrors.length +
+        pictureWarnings,
     });
     for (const missing of coverage.missing) {
       const message = `Слайд ${missing.slideIndex + 1}: не подтверждено сохранение утверждения «${missing.text}».`;

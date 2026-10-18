@@ -26,6 +26,8 @@ export interface ContextualAuditOptions {
   readonly checks?: readonly ContextualCheck[];
   /** Ask only about these slides (by id); the others still count as neighbours and headlines. */
   readonly only?: ReadonlySet<string>;
+  /** Stops the review: the slides not yet asked about are not asked. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ContextualAuditResult {
@@ -288,6 +290,7 @@ export async function runContextualAudit(
           input: inputFor(slides, i, options),
           seed,
           ...(image ? { images: [image] } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
         });
         return { slide, review };
       } catch (error) {

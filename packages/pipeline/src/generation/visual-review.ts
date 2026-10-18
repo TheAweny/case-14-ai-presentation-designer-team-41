@@ -85,7 +85,10 @@ export async function reviewVariantVisually(options: VisualReviewOptions): Promi
           ),
         }
       : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
   });
+  // A review that was stopped writes nothing: its file would land after the run is done.
+  options.signal?.throwIfAborted();
   const review: VisualReview = { ...result, slideCount: slides.length };
   const { only, previous } = options;
   if (only && previous) {

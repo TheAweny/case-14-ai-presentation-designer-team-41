@@ -210,6 +210,11 @@ export function throttleModelSlots(ms: number): void {
   requests.throttle(ms);
 }
 
+/** An answer came back through one of the slots: the pool a refusal halved grows back. */
+export function modelSlotSucceeded(): void {
+  requests.succeeded();
+}
+
 /** Answers that mean "busy, ask again", not "wrong request". */
 export const BUSY_STATUSES: ReadonlySet<number> = new Set([429, 502, 503]);
 

@@ -16,6 +16,8 @@ export interface ModelRequest {
   readonly images?: readonly string[];
   /** JSON Schema of the answer, for runtimes that can hold a model to it (structured output). */
   readonly responseSchema?: { readonly name: string; readonly schema: Record<string, unknown> };
+  /** Cancels this request alone, as when the review it belongs to has run out of time. */
+  readonly signal?: AbortSignal;
 }
 
 /** Tokens a provider spent for one agent, which is what a hosted model is billed by. */
