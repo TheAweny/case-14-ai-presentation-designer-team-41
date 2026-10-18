@@ -125,7 +125,10 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         id="type-scale",
         category="template",
         title="Sizes come from the type scale",
-        description="Checks every stated text size against the sizes of the template type scale.",
+        description=(
+            "Checks every stated text size against the sizes of the template type scale. A slide "
+            "gets one finding, listing every size off the scale, with a fix for each block."
+        ),
         severity="minor",
         defaults={"tolerancePt": 0.5},
     ),
@@ -220,8 +223,11 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         category="density",
         title="Slides are neither empty nor crowded",
         description=(
-            "Measures the share of the slide covered by content and reports slides below or "
-            "above the profile band. Title and section slides are exempt from the lower bound."
+            "Measures the share of the slide that content takes and reports slides below or "
+            "above the profile band. A text block counts as tall as its text, not as its frame, "
+            "an empty frame counts for nothing, and a picture over nearly the whole slide is its "
+            "background. Title slides, and the cover and the closing slide of a deck of three or "
+            "more, are exempt from the lower bound."
         ),
         severity="minor",
         defaults={"minFill": 0.25, "maxFill": 0.75},
@@ -252,10 +258,11 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         title="Slides do not repeat each other",
         description=(
             "Compares the words of every two slides of a variant and reports pairs that say "
-            "almost the same thing."
+            "almost the same thing. A slide with a single word of its own, such as a divider, "
+            "is not compared."
         ),
         severity="major",
-        defaults={"minSimilarity": 0.85, "minWords": 4},
+        defaults={"minSimilarity": 0.85, "minWords": 2},
     ),
     CheckDefinition(
         id="placeholder-text",

@@ -473,6 +473,9 @@ def type_scale(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext)
     out = _Emitter(check, slide)
     sizes = ctx.template.sizes
     tolerance = ctx.params[check.id]["tolerancePt"]
+    if not sizes:
+        return out.findings
+    strays: list[tuple[dict[str, Any], list[float]]] = []
     for element in slide["elements"]:
         stray = sorted(
             {
@@ -482,19 +485,31 @@ def type_scale(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext)
                 and all(abs(float(run["sizePt"]) - s) > tolerance for s in sizes)
             }
         )
-        if not stray or not sizes:
-            continue
-        target = min(sizes, key=lambda s: abs(s - stray[0]))
-        out.add(
-            title="Кегль не из шкалы шаблона",
-            detail=f"Размеры {', '.join(f'{s:g}' for s in stray)} pt не входят в типографическую "
-            "шкалу шаблона.",
-            element=element,
-            measured=", ".join(f"{s:g} pt" for s in stray),
-            expected="шкала: " + ", ".join(f"{s:g}" for s in sizes) + " pt",
-            ops=[{"op": "set-font-size", "elementId": element["elementId"], "sizePt": target}],
-            rationale=f"Поставить ближайший кегль шкалы, {target:g} pt",
-        )
+        if stray:
+            strays.append((element, stray))
+    if not strays:
+        return out.findings
+    # One finding per slide: a template whose own sizes are off its scale would otherwise raise a
+    # finding for every block, and the one that matters is buried under them.
+    found = sorted({size for _, stray in strays for size in stray})
+    ops = [
+        {
+            "op": "set-font-size",
+            "elementId": element["elementId"],
+            "sizePt": min(sizes, key=lambda s, first=stray[0]: abs(s - first)),
+        }
+        for element, stray in strays
+    ]
+    out.add(
+        title="Кегль не из шкалы шаблона",
+        detail=f"Размеры {', '.join(f'{s:g}' for s in found)} pt не входят в типографическую "
+        f"шкалу шаблона (блоков на слайде: {len(strays)}).",
+        element=strays[0][0] if len(strays) == 1 else None,
+        measured=", ".join(f"{s:g} pt" for s in found),
+        expected="шкала: " + ", ".join(f"{s:g}" for s in sizes) + " pt",
+        ops=ops,
+        rationale="Поставить ближайший кегль шкалы каждому блоку",
+    )
     return out.findings
 
 
@@ -836,6 +851,38 @@ def chart_labels(
     return out.findings
 
 
+def _covers_slide(element: dict[str, Any], area: Rect) -> bool:
+    """A picture that covers at least 85% of the slide."""
+    if element["kind"] != "image":
+        return False
+    cover = Rect.of(element["box"]).intersection(area)
+    return cover is not None and cover.area >= 0.85 * area.area
+
+
+def _inked_rect(element: dict[str, Any], area: Rect, ctx: AuditContext) -> Rect | None:
+    """The part of an element's box that its content really takes.
+
+    A text block is as tall as its text, not as its box: a template's body frame that spans most
+    of the slide holds two lines of small type and leaves the slide looking empty. An empty text
+    frame takes nothing. Pictures, tables and charts are drawn to their whole box.
+    """
+    box = Rect.of(element["box"])
+    visual = element["kind"] in {"image", "table", "chart"}
+    if visual:
+        return box.intersection(area)
+    if not any(text.strip() for text in element_texts(element)):
+        return None
+    sizing = ctx.params.get("text-overflow", {})
+    needed, _ = text_height(
+        element,
+        ctx.template,
+        None,
+        float(sizing.get("charWidthEm", 0.55)),
+        float(sizing.get("lineHeight", 1.2)),
+    )
+    return Rect(box.x, box.y, box.cx, min(box.cy, needed)).intersection(area)
+
+
 def slide_fill(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext) -> list[Finding]:
     out = _Emitter(check, slide)
     p = ctx.params[check.id]
@@ -843,11 +890,19 @@ def slide_fill(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext)
     content = [e for e in slide["elements"] if is_content(e)]
     if not content:
         return out.findings
-    rects = [r for r in (Rect.of(e["box"]).intersection(area) for e in content) if r]
+    # A picture over nearly the whole slide is its background: it says nothing about how full
+    # the slide is, what lies on it does. A slide with only that picture is judged by it.
+    backdrop = [e for e in content if _covers_slide(e, area)]
+    measured = [e for e in content if e not in backdrop] or content
+    rects = [r for r in (_inked_rect(e, area, ctx) for e in measured) if r]
     filled = fraction_covered(rects, area)
-    headline_only = all(e["role"] in {"title", "subtitle"} for e in content)
+    headline_only = all(e["role"] in {"title", "subtitle"} for e in measured)
+    # The cover and the closing slide are sparse by design. A deck of fewer than three slides has
+    # no such slides: its only one is judged like any other.
+    mine = [other["index"] for other in ctx.deck if other["variant"] == slide["variant"]]
+    bookend = len(mine) >= 3 and slide["index"] in {min(mine), max(mine)}
     single_picture = len(content) <= 2 and any(_full_bleed(e, area) for e in content)
-    if filled < p["minFill"] and not headline_only:
+    if filled < p["minFill"] and not headline_only and not bookend:
         out.add(
             title="Слайд почти пустой",
             detail=f"Контент занимает {_pct(filled)} слайда, меньше {_pct(p['minFill'])}.",

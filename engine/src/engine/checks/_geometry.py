@@ -75,9 +75,19 @@ class Rect:
         return {"x": self.x, "y": self.y, "cx": self.cx, "cy": self.cy}
 
 
+#: Where the import takes an element from: a picture drawn by the layout or the master is the
+#: template's own artwork, and its id says so (`layout-12`, `master-3`; a slide's is `slide-7`).
+_TEMPLATE_PARTS = ("layout-", "master-")
+
+
+def is_template_art(element: dict[str, Any]) -> bool:
+    """A picture the template draws behind the slide: part of its design, not of the deck."""
+    return element["kind"] == "image" and str(element["elementId"]).startswith(_TEMPLATE_PARTS)
+
+
 def is_content(element: dict[str, Any]) -> bool:
     """Whether an element carries content of the deck rather than template furniture."""
-    if element["role"] in FURNITURE_ROLES:
+    if element["role"] in FURNITURE_ROLES or is_template_art(element):
         return False
     return element["kind"] != "decor" or bool(element.get("paragraphs"))
 

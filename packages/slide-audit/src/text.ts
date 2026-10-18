@@ -20,9 +20,27 @@ export function isBlank(paragraphs: readonly Paragraph[]): boolean {
   return textOf(paragraphs).trim() === '';
 }
 
-/** What a person reads or looks at, as opposed to decoration. Empty text shows nothing. */
+/** Roles the template places around the content rather than as content itself. */
+const FURNITURE_ROLES: ReadonlySet<string> = new Set([
+  'logo',
+  'footer',
+  'page-number',
+  'decoration',
+]);
+
+/**
+ * Where an import takes a picture from is in its id: the layout's and the master's are the
+ * template's own artwork (`layout-12`), a slide's own is `slide-7`. The engine reads it the same.
+ */
+const TEMPLATE_ART = /^(layout|master)-/;
+
+/**
+ * What a person reads or looks at, as opposed to decoration and the template's own furniture:
+ * its logos, footers, page numbers and the pictures its layout draws. Empty text shows nothing.
+ */
 export function isContent(element: SlideElement): boolean {
-  if (element.kind === 'decor') return false;
+  if (element.kind === 'decor' || FURNITURE_ROLES.has(element.role)) return false;
+  if (element.kind === 'image' && TEMPLATE_ART.test(element.elementId)) return false;
   if (element.kind === 'text') return !isBlank(element.paragraphs);
   return true;
 }
