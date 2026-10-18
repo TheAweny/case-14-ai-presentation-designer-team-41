@@ -121,6 +121,20 @@ describe('element-overlap', () => {
     }
   });
 
+  it("leaves the template's own pictures and logos out: they are its design, not the deck's", () => {
+    const hanging = text('cap', box(300, 300, 300, 40), 'Caption');
+    const own = slide([image('slide-7', box(60, 60, 400, 300)), hanging]);
+    expect(ofCheck(auditSlide(own, context), 'element-overlap')).toMatchObject([
+      { kind: 'picture-edge' },
+    ]);
+    // The same picture drawn by the layout, and a logo on the slide, lie under text unremarked.
+    const layoutArt = slide([image('layout-12', box(60, 60, 400, 300)), hanging]);
+    const logo = slide([{ ...image('slide-8', box(60, 60, 400, 300)), role: 'logo' }, hanging]);
+    for (const clean of [layoutArt, logo]) {
+      expect(ofCheck(auditSlide(clean, context), 'element-overlap')).toEqual([]);
+    }
+  });
+
   it('judges text by the height of its words when they were measured', () => {
     // The boxes overlap, but the words of the upper one take only its top 30 pt.
     const boxes = slide([

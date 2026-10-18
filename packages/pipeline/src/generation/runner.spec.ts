@@ -8,6 +8,7 @@ import { generationProfileSchema } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import { generatePresentation } from './runner.js';
 import { minChars } from './workflow.js';
+import type { ModelRequest } from '../models/provider.js';
 import type { TextProvider } from './provider.js';
 
 const fixture = (name: string) =>
@@ -28,7 +29,9 @@ async function exercise(
     | 'cancel'
     | 'missing-font'
     | 'post-export-repair'
-    | 'factual-error',
+    | 'factual-error'
+    | 'reviewed'
+    | 'review-down',
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
@@ -45,6 +48,7 @@ async function exercise(
     contentHash?: string;
   }[] = [];
   const events: string[] = [];
+  const seenPictures: string[] = [];
   const warnings: { stage: string; code: string; message: string }[] = [];
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
@@ -175,17 +179,20 @@ async function exercise(
           findings,
         });
       }
+      if (String(url).endsWith('/deck-import')) return Response.json(fixture('DeckImportResponse'));
       exports++;
       exportedSlides.splice(0, exportedSlides.length, ...JSON.parse(String(init?.body)).slides);
       const outputPath = join(outputDir, 'deck.pptx');
       const pdfPath = join(outputDir, 'deck.pdf');
       await Promise.all([writeFile(outputPath, 'fixture-pptx'), writeFile(pdfPath, 'fixture-pdf')]);
       const missingFonts = mode === 'missing-font' ? ['Template Face'] : [];
+      const preview = join(outputDir, 'slide-1.png');
+      await writeFile(preview, 'fixture-png');
       return Response.json({
         ...fixture('CompositionExportResponse'),
         outputPath,
         pdfPath,
-        previews: [],
+        previews: [preview],
         missingFonts,
         warnings:
           missingFonts.length > 0
@@ -206,6 +213,35 @@ async function exercise(
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
+    ...(mode === 'reviewed' || mode === 'review-down'
+      ? {
+          reviewer: {
+            model: 'vlm-fixture',
+            provider: {
+              name: 'vlm-fixture',
+              complete: (request: ModelRequest) => {
+                seenPictures.push(...(request.images ?? []));
+                if (mode === 'review-down') return Promise.reject(new Error('runtime down'));
+                return Promise.resolve(
+                  JSON.stringify({
+                    schemaVersion: 1,
+                    slideId: (request.input as { slideId: string }).slideId,
+                    answers: [
+                      {
+                        checkId: 'no-service-text',
+                        verdict: 'no',
+                        confidence: 0.95,
+                        evidence: 'Slide',
+                        suggestion: '',
+                      },
+                    ],
+                  }),
+                );
+              },
+            },
+          },
+        }
+      : {}),
     signal: controller.signal,
     onEvent: async (e) => {
       events.push(e.type);
@@ -221,6 +257,7 @@ async function exercise(
     warnings,
     exportedSlides,
     criticInputs,
+    seenPictures,
     counters: () => ({ checks, exports, repairs }),
   };
 }
@@ -296,5 +333,39 @@ describe('real generation orchestration with offline dependencies', () => {
     const run = await exercise('clean');
     await run.result;
     expect(run.warnings.some((warning) => warning.code === 'fonts-substituted')).toBe(false);
+  });
+  it('asks the content questions of the picture of every slide and keeps the answers in the run', async () => {
+    const run = await exercise('reviewed');
+    const result = await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.seenPictures).toEqual([
+      `data:image/png;base64,${Buffer.from('fixture-png').toString('base64')}`,
+    ]);
+    const contextual = JSON.parse(
+      await readFile(join(run.outputDir, 'audit-contextual.json'), 'utf8'),
+    ) as { model: string; findings: { origin: string }[] };
+    expect(contextual.model).toBe('vlm-fixture');
+    expect(contextual.findings[0]?.origin).toBe('contextual');
+    expect(result.manifest.artifacts.map((a) => a.path)).toContain('audit-contextual.json');
+    expect(result.manifest.revisions).toContainEqual(
+      expect.objectContaining({ kind: 'model', id: 'vlm-fixture' }),
+    );
+    expect(result.manifest.revisions).toContainEqual(
+      expect.objectContaining({ kind: 'agent', id: 'slide-reviewer' }),
+    );
+  });
+  it('finishes the variant and says so when the vision model is down', async () => {
+    const run = await exercise('review-down');
+    const result = await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.warnings.some((w) => w.code === 'contextual-audit-failed')).toBe(true);
+    expect(result.manifest.revisions.some((r) => r.id === 'vlm-fixture')).toBe(true);
+  });
+  it('has no contextual audit when no model is assigned to the role', async () => {
+    const run = await exercise('clean');
+    const result = await run.result;
+    expect(run.seenPictures).toEqual([]);
+    expect(result.manifest.artifacts.map((a) => a.path)).not.toContain('audit-contextual.json');
+    expect(run.warnings.some((w) => w.code === 'contextual-audit-skipped')).toBe(true);
   });
 });

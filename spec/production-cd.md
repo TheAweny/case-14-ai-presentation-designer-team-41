@@ -15,6 +15,8 @@ service; API, engine, search and PostgreSQL are private. Deployment serializes w
 rejects superseded commits, checks free disk, pulls before stopping anything, snapshots PostgreSQL,
 and keeps previous image digests. Failed readiness restores the previous images. Initial failed
 installation stops application services and reports failure. No database volumes are removed.
+Pre-deployment backups pause application writers and resume the current release even if the
+snapshot fails. Daily live backups do not interrupt requests.
 
 Single-host in-place deployment can briefly interrupt requests and running generations. Migration
 changes must use expand/contract and remain compatible with the previous application release;

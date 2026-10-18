@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { EngineClient } from '@lct/engine-client';
-import { loadAgent, toManifestEntry } from '@lct/registry';
+import { type LoadedAgent, loadAgent, toManifestEntry } from '@lct/registry';
 import {
   artifactManifestSchema,
   finalReviewSchema,
@@ -37,6 +37,8 @@ import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
 import { approvedCoverage } from './final-review.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
+import type { ModelProvider } from '../models/provider.js';
+import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 
 type EventData = {
   [K in JobEvent['type']]: Omit<
@@ -80,6 +82,11 @@ export interface GenerateOptions {
    * assigned, the planner is not offered compositions with a place for a picture.
    */
   illustrations?: SharedIllustrations | null;
+  /**
+   * The model that looks at the drawn slides and answers the content validation questions. Absent
+   * or null: no model is assigned to the role, and the contextual audit is not part of the run.
+   */
+  reviewer?: { provider: ModelProvider; model: string } | null;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
 }
@@ -88,6 +95,10 @@ export interface GenerateOptions {
 const EXPORT_RESERVE_MS = 60_000;
 /** The run's own deadline, under the five minutes the three variants share. */
 const RUN_DEADLINE_MS = 290_000;
+/** Time left for the manifest and the end of the run once the pictures of the slides are read. */
+const REVIEW_RESERVE_MS = 12_000;
+/** Under this the slides are not asked about: a review that cannot finish would only be thrown away. */
+const REVIEW_MIN_MS = 8_000;
 
 export class ContentFitError extends Error {
   readonly code = 'content-overflow';
@@ -674,6 +685,85 @@ export async function generatePresentation(options: GenerateOptions) {
       JSON.stringify(finalReview, null, 2),
     );
     signal.throwIfAborted();
+    // The contextual half: the questions of the case asked of the picture of every slide. A review
+    // that fails or does not fit the time left never costs the variant; the user is told.
+    let contextual: VisualReview | null = null;
+    let reviewerAgent: LoadedAgent | null = null;
+    if (options.reviewer) {
+      const left = RUN_DEADLINE_MS - (Date.now() - started) - REVIEW_RESERVE_MS;
+      if (left < REVIEW_MIN_MS) {
+        await emit({
+          type: 'warning',
+          stage,
+          code: 'contextual-audit-skipped',
+          message: 'Смысловой аудит по картинкам слайдов пропущен: не осталось времени.',
+        });
+      } else {
+        try {
+          const reviewer = await loadAgent(join(options.registryDir, 'slide-reviewer'));
+          reviewerAgent = reviewer;
+          let timer: NodeJS.Timeout | undefined;
+          const expired = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('time is up')), left);
+          });
+          try {
+            contextual = await Promise.race([
+              reviewVariantVisually({
+                engine: options.engine,
+                agent: reviewer,
+                provider: options.reviewer.provider,
+                brief: options.brief,
+                goal: written[0]?.title ?? '',
+                pptxPath: output.outputPath,
+                mediaDir: join(options.outputDir, 'media'),
+                previews: output.previews,
+                seed: options.seed ?? 42,
+                outputDir: options.outputDir,
+                signal,
+              }),
+              expired,
+            ]);
+          } finally {
+            clearTimeout(timer);
+          }
+          for (const failure of contextual.failures) {
+            await emit({
+              type: 'warning',
+              stage,
+              code: 'contextual-audit-failed',
+              message: `Смысловой аудит, слайд ${failure.slideId.slice(1)}: ответ модели не получен.`,
+            });
+          }
+          for (const finding of contextual.findings.filter(
+            (f) => f.severity === 'blocker' || f.severity === 'major',
+          )) {
+            const message = `Смысловой аудит, слайд ${finding.target.slideId.slice(1)}: ${finding.title}`;
+            reviewWarnings.push(message);
+            await emit({ type: 'warning', stage, code: 'content-review-required', message });
+          }
+        } catch (error) {
+          signal.throwIfAborted();
+          await emit({
+            type: 'warning',
+            stage,
+            code: 'contextual-audit-failed',
+            message:
+              'Смысловой аудит по картинкам слайдов не выполнен: ' +
+              (error instanceof Error ? error.message : String(error)),
+          });
+        }
+      }
+    }
+    if (!options.reviewer) {
+      await emit({
+        type: 'warning',
+        stage,
+        code: 'contextual-audit-skipped',
+        message:
+          'Смысловой аудит по картинкам слайдов не выполнен: роли «Визуальная проверка» не назначена модель.',
+      });
+    }
+    signal.throwIfAborted();
     if (output.missingFonts.length > 0) {
       const fonts = output.missingFonts.join(', ');
       await emit({
@@ -705,6 +795,7 @@ export async function generatePresentation(options: GenerateOptions) {
       ['audit', join(options.outputDir, 'audit.json')],
       ['audit', join(options.outputDir, 'audit-deterministic.json')],
       ['audit', join(options.outputDir, 'final-review.json')],
+      ...(contextual ? [['audit', join(options.outputDir, 'audit-contextual.json')] as const] : []),
       ...output.previews.map((p) => ['preview', p]),
     ] as const) {
       const bytes = await readFile(path);
@@ -733,6 +824,7 @@ export async function generatePresentation(options: GenerateOptions) {
         critic,
         rewriter,
         ...(illustrations ? [illustrations.agent] : []),
+        ...(contextual && reviewerAgent ? [reviewerAgent] : []),
       ]
         .map((agent) => ({
           kind: 'agent',
@@ -755,6 +847,17 @@ export async function generatePresentation(options: GenerateOptions) {
                   id: illustrations.model,
                   version: 'hosted-revision-not-reported',
                   hash: createHash('sha256').update(illustrations.model).digest('hex'),
+                },
+              ]
+            : []),
+          // The model that read the pictures of the slides.
+          ...(contextual && options.reviewer
+            ? [
+                {
+                  kind: 'model',
+                  id: options.reviewer.model,
+                  version: 'hosted-revision-not-reported',
+                  hash: createHash('sha256').update(options.reviewer.model).digest('hex'),
                 },
               ]
             : []),

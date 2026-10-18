@@ -50,8 +50,9 @@ model settings live in the database. New users are created in the UI by an admin
 
 ## Health and rollback
 
-Images are pulled before replacing application services. PostgreSQL is dumped before upgrade;
-files are included in the backup. Docker readiness waits for engine/API/database/web, followed by
+Images are pulled before replacing application services. Before upgrade, application writers are
+paused for a matching PostgreSQL/files snapshot and resumed even if the snapshot fails.
+Docker readiness waits for engine/API/database/web, followed by
 protected `/health/database` and `/health/engine` checks and public HTTPS. Failure restores the
 previous images and checks readiness again; the successful-release manifest is updated only after
 all checks pass. A first-install failure stops application containers and fails the job.
@@ -66,8 +67,8 @@ Rollback is for application images. Migrations run at API start and **must be ba
 with the previous application (expand/contract). Never automatically restore a live database:
 that would destroy writes made after a backup. For destructive schema recovery, stop the apps,
 select a verified backup, restore PostgreSQL using pg_restore and restore matching files with an
-operator-approved maintenance plan. Live file backups can include writes concurrent with the
-snapshot; use a maintenance pause for a guaranteed matching database/files recovery point.
+operator-approved maintenance plan. Daily backups are live and their files can include writes
+concurrent with the database snapshot; pre-deployment snapshots pause application writers.
 
 This is a single host: replacement can briefly interrupt requests and in-flight generation.
 It does not provide zero downtime or high availability. Same-disk snapshots are not disaster
