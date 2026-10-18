@@ -26,6 +26,7 @@ async function exercise(
     | 'clean'
     | 'repair'
     | 'unfixable'
+    | 'torn-word'
     | 'cancel'
     | 'missing-font'
     | 'post-export-repair'
@@ -120,12 +121,12 @@ async function exercise(
       if (String(url).endsWith('/composition-check')) {
         checks++;
         const findings =
-          mode === 'unfixable' || (mode === 'repair' && checks === 1)
+          mode === 'unfixable' || mode === 'torn-word' || (mode === 'repair' && checks === 1)
             ? [
                 {
                   slideIndex: 0,
                   slotId: pattern.slots[0]?.slotId,
-                  code: 'text-overflow',
+                  code: mode === 'torn-word' ? 'word-break' : 'text-overflow',
                   severity: 'error',
                   lines: 3,
                   maxLines: 2,
@@ -287,6 +288,14 @@ describe('real generation orchestration with offline dependencies', () => {
     expect(JSON.parse(await readFile(join(run.outputDir, 'failure.json'), 'utf8'))).toMatchObject({
       requiresReview: true,
     });
+  });
+  it('sends a torn word to the rewriter but never refuses the export for it', async () => {
+    const run = await exercise('torn-word');
+    await run.result;
+    // The engine keeps reporting the word, the rewriter was asked, and the deck is still given.
+    expect(run.counters().repairs).toBeGreaterThan(0);
+    expect(run.counters().exports).toBe(1);
+    expect(run.events.at(-1)).toBe('done');
   });
   it('saves and semantically audits the exact final content after a post-export repair', async () => {
     const run = await exercise('post-export-repair');

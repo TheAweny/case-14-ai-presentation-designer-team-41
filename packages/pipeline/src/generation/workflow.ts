@@ -16,6 +16,7 @@ import {
 } from '@lct/contracts';
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
+import { tearsAWord } from './fit.js';
 import type { TextProvider } from './provider.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
@@ -1517,19 +1518,29 @@ export function createRepairWorkflow(deps: GenerationDependencies) {
 }
 
 /** The longest alternative that still fits the slot, or undefined when none of them do. */
-function bestFittingAlternative(
-  slot: { role: string; sample: string; maxChars: number; maxLines: number; prompt?: boolean },
+export function bestFittingAlternative(
+  slot: {
+    role: string;
+    sample: string;
+    maxChars: number;
+    maxLines: number;
+    prompt?: boolean;
+    fontSize?: number;
+    textWidthPt?: number;
+  },
   alternatives: readonly string[],
 ): string | undefined {
-  return alternatives
-    .filter(
-      (t) =>
-        t.length <= fitChars(slot) &&
-        t.length <= slot.maxChars &&
-        t.split('\n').length <= slot.maxLines &&
-        (slot.role !== 'title' || t.trim()),
-    )
-    .sort((a, b) => b.length - a.length)[0];
+  const fitting = alternatives.filter(
+    (t) =>
+      t.length <= fitChars(slot) &&
+      t.length <= slot.maxChars &&
+      t.split('\n').length <= slot.maxLines &&
+      (slot.role !== 'title' || t.trim()),
+  );
+  // An alternative that keeps a word wider than the box is the one the engine would tear: the
+  // others come first, and it is taken only when every one of them would be.
+  const whole = fitting.filter((t) => !tearsAWord(t, slot));
+  return (whole.length ? whole : fitting).sort((a, b) => b.length - a.length)[0];
 }
 
 /** How many times the rewriter may be asked to fix one slide before the deck fails. */
