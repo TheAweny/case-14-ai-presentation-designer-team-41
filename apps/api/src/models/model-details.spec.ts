@@ -71,6 +71,20 @@ describe('modelDetailsOf', () => {
     });
   });
 
+  it('takes a type that names no kind for saying nothing', () => {
+    const details = modelDetailsOf({
+      data: [
+        { id: 'claude', type: 'model', display_name: 'Claude' },
+        {
+          id: 'mistral-large',
+          type: 'base',
+          capabilities: { completion_chat: true, function_calling: true, vision: true },
+        },
+      ],
+    });
+    expect(details).toEqual({ 'mistral-large': { kinds: ['text', 'vision'] } });
+  });
+
   it('says nothing about models described only by id', () => {
     expect(modelDetailsOf({ data: [{ id: 'm', object: 'model', owned_by: 'me' }] })).toEqual({});
   });
