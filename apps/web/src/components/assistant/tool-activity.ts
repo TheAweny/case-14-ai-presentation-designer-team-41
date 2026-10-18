@@ -156,6 +156,111 @@ export function groupState(
   return 'done';
 }
 
+export type ToolGroupHeadline =
+  | { readonly kind: 'running' }
+  | { readonly kind: 'interrupted' }
+  | { readonly kind: 'cancelled' }
+  | { readonly kind: 'completedWithErrors'; readonly count: number }
+  | { readonly kind: 'completed' };
+
+/**
+ * Title of one run of tool chips.
+ *
+ * A call that reached failed is a finished action, including an HTTP error,
+ * and including a call inside an answer that later failed. The message failure
+ * card stays separate. A call still running, or a root sealed by closeToolPart
+ * with exactly "Interrupted." or "The call was cut off.", is not that kind of
+ * failure: on a failed answer it is an interruption, and on a cancelled answer
+ * it is a cancellation. Those two strings are the only markers. Any other
+ * error, including web_http_403, stays a finished error. A call that is still
+ * open wins over every settled outcome.
+ *
+ * The count is each nested failed or cancelled step, plus a root that itself
+ * finished failed. The root is not added again when it only repeats a nested
+ * failure: the same error is already in the tree, or a nested agent failed and
+ * the root is that agent's outcome. A web error the tree does not already show
+ * still counts, so an HTTP failure is not dropped just because an agent failed
+ * beside it. A sealed cutoff root is left out of the count; a nested step that
+ * already carries its own error is not.
+ */
+export function toolGroupHeadline(
+  parts: readonly ToolPart[],
+  messageStatus: AssistantChatMessage['status'],
+): ToolGroupHeadline {
+  const views = parts.map((part) => ({ part, chip: toolChip(part, messageStatus) }));
+  if (views.some(({ chip }) => chip.state === 'running' || chip.state === 'preparing')) {
+    return { kind: 'running' };
+  }
+  if (parts.some((part) => part.status === 'running')) {
+    return messageStatus === 'failed' ? { kind: 'interrupted' } : { kind: 'cancelled' };
+  }
+  const count = views.reduce(
+    (total, view) => total + groupErrorCount(view.part, view.chip, messageStatus),
+    0,
+  );
+  if (count === 0 && parts.some((part) => isCutoffSeal(part, messageStatus))) {
+    return messageStatus === 'failed' ? { kind: 'interrupted' } : { kind: 'cancelled' };
+  }
+  return count > 0 ? { kind: 'completedWithErrors', count } : { kind: 'completed' };
+}
+
+const CUTOFF_ERRORS = new Set<string>(['Interrupted.', 'The call was cut off.']);
+
+function isCutoffSeal(part: ToolPart, messageStatus: AssistantChatMessage['status']): boolean {
+  if (part.status !== 'failed') return false;
+  if (messageStatus !== 'failed' && messageStatus !== 'cancelled') return false;
+  const error = recordOf(part.output)?.error;
+  return typeof error === 'string' && CUTOFF_ERRORS.has(error);
+}
+
+function groupErrorCount(
+  part: ToolPart,
+  chip: ToolChipView,
+  messageStatus: AssistantChatMessage['status'],
+): number {
+  if (!isCutoffSeal(part, messageStatus)) return settledErrorCount(part, chip);
+  return reportedNestedErrors(chip.activities);
+}
+
+function reportedNestedErrors(activities: readonly ActivityChipView[]): number {
+  return activities.reduce((count, activity) => {
+    const own =
+      activity.error !== null &&
+      !CUTOFF_ERRORS.has(activity.error) &&
+      (activity.state === 'failed' || activity.state === 'cancelled')
+        ? 1
+        : 0;
+    return count + own + reportedNestedErrors(activity.children);
+  }, 0);
+}
+
+function settledErrorCount(part: ToolPart, chip: ToolChipView): number {
+  return chip.issues + (countRootFailure(part, chip) ? 1 : 0);
+}
+
+function countRootFailure(part: ToolPart, chip: ToolChipView): boolean {
+  if (part.status !== 'failed') return false;
+  if (chip.error !== null && treeCarriesError(chip.activities, chip.error)) return false;
+  if (hasFailedAgent(chip.activities)) {
+    return chip.error !== null && WEB_ERROR_CODES.has(chip.error);
+  }
+  return true;
+}
+
+function hasFailedAgent(activities: readonly ActivityChipView[]): boolean {
+  return activities.some(
+    (activity) =>
+      (activity.kind === 'agent' && activity.state === 'failed') ||
+      hasFailedAgent(activity.children),
+  );
+}
+
+function treeCarriesError(activities: readonly ActivityChipView[], error: string): boolean {
+  return activities.some(
+    (activity) => activity.error === error || treeCarriesError(activity.children, error),
+  );
+}
+
 export function durationMs(
   startedAt: number | null,
   finishedAt: number | null,

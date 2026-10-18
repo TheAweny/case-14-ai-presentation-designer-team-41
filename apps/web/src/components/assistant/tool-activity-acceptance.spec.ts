@@ -4,6 +4,7 @@ import {
   activeAgentCount,
   groupState,
   toolChip,
+  toolGroupHeadline,
   toolLineVisible,
   type ToolPart,
 } from './tool-activity';
@@ -127,5 +128,220 @@ describe('independent tool presentation acceptance', () => {
     );
     expect(view.activities.length).toBeGreaterThan(0);
     expect(JSON.stringify(view).length).toBeLessThan(10000);
+  });
+});
+
+const fetchFailure: ChatToolActivity = {
+  id: 'page',
+  kind: 'tool',
+  name: 'fetch_source',
+  detail: 'https://example.org/roadster',
+  status: 'failed',
+  startedAt: 12,
+  finishedAt: 20,
+  error: 'web_http_403',
+};
+const agentFailure: ChatToolActivity = {
+  id: 'researcher',
+  kind: 'agent',
+  name: 'web-researcher',
+  status: 'failed',
+  startedAt: 20,
+  finishedAt: 30,
+  error: 'operation_failed',
+};
+
+function research(status: ToolPart['status'], activities: ChatToolActivity[]): ToolPart {
+  return {
+    ...part,
+    status,
+    ...(status === 'failed' ? { output: { error: 'operation_failed' }, finishedAt: 30 } : {}),
+    activities,
+  };
+}
+
+describe('finished tool errors stay separate from an interrupted turn', () => {
+  it('counts a failed research root once when it only repeats the nested agent, plus the HTTP fetch', () => {
+    expect(toolGroupHeadline([research('failed', [fetchFailure, agentFailure])], 'done')).toEqual({
+      kind: 'completedWithErrors',
+      count: 2,
+    });
+    expect(
+      toolGroupHeadline(
+        [research('failed', [{ ...agentFailure, error: 'operation_failed' }])],
+        'streaming',
+      ),
+    ).toEqual({ kind: 'completedWithErrors', count: 1 });
+  });
+
+  it('keeps a lone HTTP failure as one finished error while the answer continues', () => {
+    const fetch: ToolPart = {
+      ...part,
+      callId: 'fetch',
+      name: 'fetch_source',
+      status: 'failed',
+      finishedAt: 20,
+      output: { code: 'web_http_403', error: 'PRIVATE_PROVIDER_BODY' },
+      activities: [],
+    };
+    expect(toolGroupHeadline([fetch], 'done')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+    expect(toolGroupHeadline([fetch], 'failed')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+    expect(toolGroupHeadline([fetch], 'cancelled')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+    expect(JSON.stringify(toolChip(fetch, 'done'))).not.toContain('PRIVATE_PROVIDER_BODY');
+  });
+
+  it('reads a sealed cutoff on a cancelled answer as cancellation, not a tool error', () => {
+    for (const error of ['Interrupted.', 'The call was cut off.']) {
+      const sealed: ToolPart = {
+        ...part,
+        status: 'failed',
+        finishedAt: 40,
+        output: { error },
+        activities: [
+          {
+            id: 'page',
+            kind: 'tool',
+            name: 'fetch_source',
+            status: 'cancelled',
+            startedAt: 12,
+            finishedAt: 40,
+          },
+        ],
+      };
+      expect(toolGroupHeadline([sealed], 'cancelled')).toEqual({ kind: 'cancelled' });
+    }
+    const unrelated: ToolPart = {
+      ...part,
+      status: 'failed',
+      output: { error: 'Interrupted' },
+      activities: [],
+    };
+    expect(toolGroupHeadline([unrelated], 'cancelled')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+  });
+
+  it('reads a sealed cutoff on a failed answer as an interruption, not a tool error', () => {
+    for (const error of ['Interrupted.', 'The call was cut off.']) {
+      const sealed: ToolPart = {
+        ...part,
+        status: 'failed',
+        finishedAt: 40,
+        output: { error },
+        activities: [
+          {
+            id: 'page',
+            kind: 'tool',
+            name: 'fetch_source',
+            status: 'failed',
+            startedAt: 12,
+            finishedAt: 40,
+          },
+        ],
+      };
+      expect(toolGroupHeadline([sealed], 'failed')).toEqual({ kind: 'interrupted' });
+    }
+    const http: ToolPart = {
+      ...part,
+      callId: 'fetch',
+      name: 'fetch_source',
+      status: 'failed',
+      output: { error: 'web_http_403' },
+      activities: [],
+    };
+    const sealed: ToolPart = {
+      ...part,
+      callId: 'cut',
+      status: 'failed',
+      output: { error: 'Interrupted.' },
+      activities: [],
+    };
+    expect(toolGroupHeadline([http, sealed], 'failed')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+    expect(toolGroupHeadline([http, sealed], 'cancelled')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+  });
+
+  it('does not count a root twice when its error text is already on a nested step', () => {
+    const echoed: ToolPart = {
+      ...part,
+      name: 'fetch_source',
+      status: 'failed',
+      output: { error: 'web_http_403' },
+      activities: [fetchFailure],
+    };
+    expect(toolGroupHeadline([echoed], 'done')).toEqual({
+      kind: 'completedWithErrors',
+      count: 1,
+    });
+  });
+
+  it('still counts a web error that the failed agent does not already carry', () => {
+    const distinct = research('failed', [agentFailure]);
+    distinct.output = { error: 'web_http_403' };
+    expect(toolGroupHeadline([distinct], 'done')).toEqual({
+      kind: 'completedWithErrors',
+      count: 2,
+    });
+  });
+
+  it('sums terminal failures in one finished group and leaves a clean group completed', () => {
+    const second: ToolPart = {
+      ...part,
+      callId: 'calc',
+      name: 'calculate',
+      status: 'failed',
+      output: { error: 'The expression was rejected' },
+      activities: [],
+    };
+    expect(
+      toolGroupHeadline([research('failed', [fetchFailure, agentFailure]), second], 'done'),
+    ).toEqual({ kind: 'completedWithErrors', count: 3 });
+    expect(toolGroupHeadline([{ ...part, status: 'done', activities: [] }], 'done')).toEqual({
+      kind: 'completed',
+    });
+  });
+
+  it('calls an unfinished tool on a failed answer an interruption, not an HTTP failure', () => {
+    expect(toolGroupHeadline([research('running', [fetchFailure])], 'failed')).toEqual({
+      kind: 'interrupted',
+    });
+    expect(
+      toolGroupHeadline([research('running', [fetchFailure, agentFailure])], 'failed'),
+    ).toEqual({ kind: 'interrupted' });
+  });
+
+  it('keeps cancellation on its own outcome, including beside an already failed nested step', () => {
+    expect(toolGroupHeadline([research('running', [fetchFailure])], 'cancelled')).toEqual({
+      kind: 'cancelled',
+    });
+    expect(toolGroupHeadline([research('running', [])], 'done')).toEqual({ kind: 'cancelled' });
+  });
+
+  it('lets a still running call win over a finished sibling failure', () => {
+    const live: ToolPart = {
+      ...part,
+      callId: 'search',
+      name: 'search_web',
+      status: 'running',
+      activities: [],
+    };
+    expect(
+      toolGroupHeadline([research('failed', [fetchFailure, agentFailure]), live], 'streaming'),
+    ).toEqual({ kind: 'running' });
   });
 });

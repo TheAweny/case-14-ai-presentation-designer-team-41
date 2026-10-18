@@ -23,6 +23,7 @@ import {
   activeResearcherCount,
   groupState,
   toolChip,
+  toolGroupHeadline,
   toolLineVisible,
 } from './tool-activity';
 
@@ -276,17 +277,19 @@ function ToolLines({
   const agents = activeAgentCount(parts, messageStatus);
   const researchers = activeResearcherCount(parts, messageStatus);
   const issues = chips.reduce((count, chip) => count + chip.issues, 0);
+  const headline = toolGroupHeadline(parts, messageStatus);
   const running = chips.findLast((chip) => chip.state === 'running' || chip.state === 'preparing');
   const state = groupState(chips);
-  const summary = running
-    ? toolChipLabel(running.name, running.state, t)
-    : chips.some((chip) => chip.state === 'failed')
-      ? t('interrupted')
-      : issues > 0
-        ? t('completedWithErrors', { count: issues })
-        : state === 'cancelled'
+  const summary =
+    headline.kind === 'running' && running
+      ? toolChipLabel(running.name, running.state, t)
+      : headline.kind === 'interrupted'
+        ? t('interrupted')
+        : headline.kind === 'cancelled'
           ? t('cancelled')
-          : t('completed', { count: parts.length });
+          : headline.kind === 'completedWithErrors'
+            ? t('completedWithErrors', { count: headline.count })
+            : t('completed', { count: parts.length });
   return (
     <div data-active-agents={agents} data-active-researchers={researchers}>
       {messageStatus === 'streaming' && live ? (
