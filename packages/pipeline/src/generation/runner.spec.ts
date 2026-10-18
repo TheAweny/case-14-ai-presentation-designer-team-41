@@ -31,6 +31,7 @@ async function exercise(
     | 'post-export-repair'
     | 'factual-error'
     | 'reviewed'
+    | 'review-clean'
     | 'review-down',
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
@@ -213,7 +214,7 @@ async function exercise(
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
-    ...(mode === 'reviewed' || mode === 'review-down'
+    ...(mode === 'reviewed' || mode === 'review-clean' || mode === 'review-down'
       ? {
           reviewer: {
             model: 'vlm-fixture',
@@ -229,7 +230,7 @@ async function exercise(
                     answers: [
                       {
                         checkId: 'no-service-text',
-                        verdict: 'no',
+                        verdict: mode === 'review-clean' ? 'yes' : 'no',
                         confidence: 0.95,
                         evidence: 'Slide',
                         suggestion: '',
@@ -306,7 +307,8 @@ describe('real generation orchestration with offline dependencies', () => {
     const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
     expect(review.contextual.errors).toBeGreaterThan(0);
     expect(review.errors).toBeGreaterThan(0);
-    expect(review.status).toBe('requires-review');
+    expect(review.status).toBe('unknown');
+    expect(review.contextual).not.toBeNull();
     expect(review.contentHash).toBe(run.criticInputs.at(-1)?.contentHash);
   });
   it('never calls the engine export on cancellation', async () => {
@@ -346,6 +348,13 @@ describe('real generation orchestration with offline dependencies', () => {
     ) as { model: string; findings: { origin: string }[] };
     expect(contextual.model).toBe('vlm-fixture');
     expect(contextual.findings[0]?.origin).toBe('contextual');
+    const finalReview = JSON.parse(
+      await readFile(join(run.outputDir, 'final-review.json'), 'utf8'),
+    );
+    expect(finalReview.status).toBe('requires-review');
+    expect(finalReview.contextual.errors).toBe(contextual.findings.length);
+    expect(finalReview.errors).toBe(finalReview.contextual.errors);
+    expect(finalReview.issues).toEqual([]);
     expect(result.manifest.artifacts.map((a) => a.path)).toContain('audit-contextual.json');
     expect(result.manifest.revisions).toContainEqual(
       expect.objectContaining({ kind: 'model', id: 'vlm-fixture' }),
@@ -359,6 +368,11 @@ describe('real generation orchestration with offline dependencies', () => {
     const result = await run.result;
     expect(run.events.at(-1)).toBe('done');
     expect(run.warnings.some((w) => w.code === 'contextual-audit-failed')).toBe(true);
+    const failedReview = JSON.parse(
+      await readFile(join(run.outputDir, 'final-review.json'), 'utf8'),
+    );
+    expect(failedReview.status).toBe('unknown');
+    expect(failedReview.contextual).toEqual({ errors: 0, warnings: 0 });
     expect(result.manifest.revisions.some((r) => r.id === 'vlm-fixture')).toBe(true);
   });
   it('has no contextual audit when no model is assigned to the role', async () => {
@@ -367,5 +381,18 @@ describe('real generation orchestration with offline dependencies', () => {
     expect(run.seenPictures).toEqual([]);
     expect(result.manifest.artifacts.map((a) => a.path)).not.toContain('audit-contextual.json');
     expect(run.warnings.some((w) => w.code === 'contextual-audit-skipped')).toBe(true);
+    const skippedReview = JSON.parse(
+      await readFile(join(run.outputDir, 'final-review.json'), 'utf8'),
+    );
+    expect(skippedReview.status).toBe('unknown');
+    expect(skippedReview.contextual).toEqual({ errors: 0, warnings: 0 });
+  });
+  it('records a clean picture review as complete', async () => {
+    const run = await exercise('review-clean');
+    await run.result;
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review.status).toBe('complete');
+    expect(review.contextual).toEqual({ errors: 0, warnings: 0 });
+    expect(review.errors).toBe(0);
   });
 });

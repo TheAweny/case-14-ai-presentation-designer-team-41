@@ -680,18 +680,17 @@ export async function generatePresentation(options: GenerateOptions) {
     });
     await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
     await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
-    await writeFile(
-      join(options.outputDir, 'final-review.json'),
-      JSON.stringify(finalReview, null, 2),
-    );
     signal.throwIfAborted();
     // The contextual half: the questions of the case asked of the picture of every slide. A review
     // that fails or does not fit the time left never costs the variant; the user is told.
     let contextual: VisualReview | null = null;
+    let visualState: 'not-requested' | 'complete' | 'incomplete' | 'failed' | 'skipped' =
+      options.reviewer ? 'failed' : 'not-requested';
     let reviewerAgent: LoadedAgent | null = null;
     if (options.reviewer) {
       const left = RUN_DEADLINE_MS - (Date.now() - started) - REVIEW_RESERVE_MS;
       if (left < REVIEW_MIN_MS) {
+        visualState = 'skipped';
         await emit({
           type: 'warning',
           stage,
@@ -702,30 +701,43 @@ export async function generatePresentation(options: GenerateOptions) {
         try {
           const reviewer = await loadAgent(join(options.registryDir, 'slide-reviewer'));
           reviewerAgent = reviewer;
+          const reviewController = new AbortController();
+          const reviewSignal = AbortSignal.any([signal, reviewController.signal]);
           let timer: NodeJS.Timeout | undefined;
           const expired = new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error('time is up')), left);
+            timer = setTimeout(() => {
+              const reason = new Error('time is up');
+              reviewController.abort(reason);
+              reject(reason);
+            }, left);
           });
+          const review = reviewVariantVisually({
+            engine: options.engine,
+            agent: reviewer,
+            provider: options.reviewer.provider,
+            brief: options.brief,
+            goal: written[0]?.title ?? '',
+            pptxPath: output.outputPath,
+            mediaDir: join(options.outputDir, 'media'),
+            previews: output.previews,
+            seed: options.seed ?? 42,
+            outputDir: options.outputDir,
+            signal: reviewSignal,
+          });
+          void review.then(
+            () => undefined,
+            () => undefined,
+          );
           try {
-            contextual = await Promise.race([
-              reviewVariantVisually({
-                engine: options.engine,
-                agent: reviewer,
-                provider: options.reviewer.provider,
-                brief: options.brief,
-                goal: written[0]?.title ?? '',
-                pptxPath: output.outputPath,
-                mediaDir: join(options.outputDir, 'media'),
-                previews: output.previews,
-                seed: options.seed ?? 42,
-                outputDir: options.outputDir,
-                signal,
-              }),
-              expired,
-            ]);
+            contextual = await Promise.race([review, expired]);
           } finally {
             clearTimeout(timer);
+            reviewController.abort();
           }
+          visualState =
+            contextual.failures.length > 0 || contextual.reviews.length < contextual.slideCount
+              ? 'incomplete'
+              : 'complete';
           for (const failure of contextual.failures) {
             await emit({
               type: 'warning',
@@ -743,6 +755,7 @@ export async function generatePresentation(options: GenerateOptions) {
           }
         } catch (error) {
           signal.throwIfAborted();
+          visualState = 'failed';
           await emit({
             type: 'warning',
             stage,
@@ -755,6 +768,7 @@ export async function generatePresentation(options: GenerateOptions) {
       }
     }
     if (!options.reviewer) {
+      visualState = 'not-requested';
       await emit({
         type: 'warning',
         stage,
@@ -763,6 +777,36 @@ export async function generatePresentation(options: GenerateOptions) {
           'Смысловой аудит по картинкам слайдов не выполнен: роли «Визуальная проверка» не назначена модель.',
       });
     }
+    const visualFindings =
+      contextual !== null && (visualState === 'complete' || visualState === 'incomplete')
+        ? contextual.findings
+        : [];
+    const visualErrors = visualFindings.filter(
+      (finding) => finding.severity === 'blocker' || finding.severity === 'major',
+    ).length;
+    const visualWarnings = visualFindings.length - visualErrors;
+    const textualContextual = finalReview.contextual ?? { errors: 0, warnings: 0 };
+    // A picture review that did not finish cannot be ranked as clean: status `unknown` makes
+    // the chat ignore the file, while the counters below keep every defect already confirmed.
+    const recorded = finalReviewSchema.parse({
+      ...finalReview,
+      status:
+        visualState !== 'complete'
+          ? 'unknown'
+          : finalReview.status === 'requires-review' || visualErrors > 0
+            ? 'requires-review'
+            : 'complete',
+      contextual: {
+        errors: textualContextual.errors + visualErrors,
+        warnings: textualContextual.warnings + visualWarnings,
+      },
+      errors: finalReview.errors + visualErrors,
+      warnings: finalReview.warnings + visualWarnings,
+    });
+    await writeFile(
+      join(options.outputDir, 'final-review.json'),
+      JSON.stringify(recorded, null, 2),
+    );
     signal.throwIfAborted();
     if (output.missingFonts.length > 0) {
       const fonts = output.missingFonts.join(', ');

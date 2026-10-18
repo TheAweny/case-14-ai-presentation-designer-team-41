@@ -24,6 +24,8 @@ export interface ContextualAuditOptions {
   /** Slides reviewed at once. The model calls of a deck run in parallel within this bound. */
   readonly concurrency?: number;
   readonly checks?: readonly ContextualCheck[];
+  /** Stops slides that have not started. A slide already in flight receives the same signal. */
+  readonly signal?: AbortSignal;
 }
 
 export interface ContextualAuditResult {
@@ -241,12 +243,15 @@ export function findingsOf(
 async function pool<T>(
   count: number,
   limit: number,
+  signal: AbortSignal | undefined,
   work: (index: number) => Promise<T>,
 ): Promise<T[]> {
   const results: T[] = new Array<T>(count);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, count) }, async () => {
-    while (next < count) {
+    while (true) {
+      if (signal?.aborted) return;
+      if (next >= count) return;
       const index = next;
       next += 1;
       results[index] = await work(index);
@@ -273,22 +278,28 @@ export async function runContextualAudit(
   const outcomes = await pool(
     slides.length,
     options.concurrency ?? DEFAULT_CONCURRENCY,
+    options.signal,
     async (i) => {
       const slide = slides[i] as SlideIr;
+      options.signal?.throwIfAborted();
       const image = options.images?.[slide.slideId];
       try {
         const review = await runAgent<SlideReview>(provider, {
           agent,
           input: inputFor(slides, i, options),
           seed,
+          signal: options.signal,
           ...(image ? { images: [image] } : {}),
         });
+        options.signal?.throwIfAborted();
         return { slide, review };
       } catch (error) {
+        if (options.signal?.aborted) throw error;
         return { slide, error: error instanceof Error ? error.message : String(error) };
       }
     },
   );
+  options.signal?.throwIfAborted();
   const result: ContextualAuditResult = { findings: [], reviews: [], failures: [] };
   for (const outcome of outcomes) {
     if ('review' in outcome && outcome.review) {

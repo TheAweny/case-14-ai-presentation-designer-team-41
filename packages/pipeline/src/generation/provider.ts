@@ -210,6 +210,11 @@ export function throttleModelSlots(ms: number): void {
   requests.throttle(ms);
 }
 
+/** The process-wide pool. A vision call uses it unless a test passes its own limiter. */
+export function sharedModelLimiter(): RequestLimiter {
+  return requests;
+}
+
 /** Answers that mean "busy, ask again", not "wrong request". */
 export const BUSY_STATUSES: ReadonlySet<number> = new Set([429, 502, 503]);
 
