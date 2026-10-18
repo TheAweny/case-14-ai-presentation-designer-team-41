@@ -24,9 +24,19 @@ export class TemplateLayoutError extends Error {
 
 export type LayoutBox = { x: number; y: number; cx: number; cy: number };
 
+export type SemanticRole = 'slide-title' | 'card-heading' | 'body' | 'caption' | 'unknown';
+
+export type LayoutGroup = {
+  id: string;
+  kind: 'card' | 'step' | 'column';
+  slotIds: string[];
+};
+
 export type LayoutTextSlot = {
   slotId: string;
   role: 'title' | 'body';
+  semanticRole: SemanticRole;
+  groupId?: string;
   maxChars: number;
   maxLines: number;
   fontSize: number;
@@ -41,7 +51,6 @@ export type LayoutImageSlot = {
   box: LayoutBox;
 };
 
-/** Fields the index actually stores. Groups and card headings are not among them. */
 export type LayoutSemantics = {
   kind: CompositionNote['kind'];
   items: number;
@@ -69,8 +78,10 @@ export type TemplateLayoutView = {
   imageSlotsTruncated: boolean;
   imageCount: number;
   semantics: LayoutSemantics | null;
-  groups: 'unknown';
-  cardHeadings: 'unknown';
+  /** Groups that own a text slot on this page. Unknown until a matching index names them. */
+  groups: 'unknown' | LayoutGroup[];
+  /** Slot ids on this page whose index role is card-heading. Unknown until the index says. */
+  cardHeadings: 'unknown' | string[];
 };
 
 function clip(value: string, max = LABEL_LIMIT): string {
@@ -112,10 +123,71 @@ function matchingNote(
   };
 }
 
-function textSlot(slot: Composition['slots'][number], sampleMax: number): LayoutTextSlot {
+type SlotMeaning = { role: SemanticRole; groupId?: string };
+
+function indexSemantics(
+  profile: GenerationProfile,
+  index: unknown,
+  patternId: string,
+): {
+  meanings: Map<string, SlotMeaning>;
+  groups: CompositionNote['groups'];
+  namedRoles: boolean;
+} | null {
+  const parsed = storedTemplateIndexSchema.safeParse(index);
+  if (!parsed.success || parsed.data.templateHash !== profile.templateHash) return null;
+  const note = parsed.data.notes.find((item) => item.patternId === patternId);
+  if (!note) return null;
+  const known = new Set(
+    profile.compositions
+      .find((item) => item.patternId === patternId)
+      ?.slots.map((slot) => slot.slotId) ?? [],
+  );
+  const groups: NonNullable<CompositionNote['groups']> = [];
+  const taken = new Set<string>();
+  const seenGroupIds = new Set<string>();
+  for (const group of note.groups ?? []) {
+    if (seenGroupIds.has(group.id)) continue;
+    const slotIds: string[] = [];
+    const local = new Set<string>();
+    for (const slotId of group.slotIds) {
+      if (!known.has(slotId) || taken.has(slotId) || local.has(slotId)) continue;
+      local.add(slotId);
+      slotIds.push(slotId);
+    }
+    if (slotIds.length === 0) continue;
+    seenGroupIds.add(group.id);
+    for (const slotId of slotIds) taken.add(slotId);
+    groups.push({ id: group.id, kind: group.kind, slotIds });
+  }
+  const members = new Map(groups.map((group) => [group.id, new Set(group.slotIds)]));
+  const meanings = new Map<string, SlotMeaning>();
+  for (const item of note.slotSemantics ?? []) {
+    if (!known.has(item.slotId) || meanings.has(item.slotId)) continue;
+    meanings.set(item.slotId, {
+      role: item.role,
+      ...(item.groupId && members.get(item.groupId)?.has(item.slotId)
+        ? { groupId: item.groupId }
+        : {}),
+    });
+  }
+  return {
+    meanings,
+    groups: note.groups ? groups : undefined,
+    namedRoles: note.slotSemantics !== undefined,
+  };
+}
+
+function textSlot(
+  slot: Composition['slots'][number],
+  sampleMax: number,
+  meaning: SlotMeaning | undefined,
+): LayoutTextSlot {
   return {
     slotId: slot.slotId,
     role: slot.role,
+    semanticRole: meaning?.role ?? 'unknown',
+    ...(meaning?.groupId ? { groupId: meaning.groupId } : {}),
     maxChars: slot.maxChars,
     maxLines: slot.maxLines,
     fontSize: slot.fontSize,
@@ -133,6 +205,21 @@ function imageSlotOf(slot: ImageSlot): LayoutImageSlot {
   };
 }
 
+function pageGroups(
+  textSlots: LayoutTextSlot[],
+  groups: CompositionNote['groups'],
+): 'unknown' | LayoutGroup[] {
+  if (!groups) return 'unknown';
+  const onPage = new Set(textSlots.map((slot) => slot.slotId));
+  return groups
+    .map((group) => ({
+      id: group.id,
+      kind: group.kind,
+      slotIds: group.slotIds.filter((slotId) => onPage.has(slotId)),
+    }))
+    .filter((group) => group.slotIds.length > 0);
+}
+
 function viewOf(
   profile: GenerationProfile,
   composition: Composition,
@@ -146,6 +233,8 @@ function viewOf(
   const textNext = offset + textSlots.length;
   const imageNext = imageOffset + imageSlots.length;
   const images = composition.imageSlots ?? [];
+  const semantics = indexSemantics(profile, index, composition.patternId);
+  const namedRoles = semantics?.namedRoles === true;
   return {
     templateHash: profile.templateHash,
     patternId: composition.patternId,
@@ -163,8 +252,10 @@ function viewOf(
     imageSlotsTruncated: imageNext < images.length,
     imageCount: composition.imageCount,
     semantics: matchingNote(profile, index, composition.patternId, labelMax),
-    groups: 'unknown',
-    cardHeadings: 'unknown',
+    groups: pageGroups(textSlots, semantics?.groups),
+    cardHeadings: namedRoles
+      ? textSlots.filter((slot) => slot.semanticRole === 'card-heading').map((slot) => slot.slotId)
+      : 'unknown',
   };
 }
 
@@ -208,7 +299,15 @@ export function inspectTemplateLayout(
       index,
       offset,
       imageOffset,
-      composition.slots.slice(offset, offset + textTake).map((slot) => textSlot(slot, sampleMax)),
+      composition.slots
+        .slice(offset, offset + textTake)
+        .map((slot) =>
+          textSlot(
+            slot,
+            sampleMax,
+            indexSemantics(parsed, index, composition.patternId)?.meanings.get(slot.slotId),
+          ),
+        ),
       images.slice(imageOffset, imageOffset + imageTake).map(imageSlotOf),
       sampleMax,
     );

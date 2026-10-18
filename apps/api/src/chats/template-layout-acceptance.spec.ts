@@ -14,13 +14,63 @@ function profile() {
 }
 
 describe('independent template inspection counterexamples', () => {
+  it('uses named card roles without assigning a slot to a group which does not own it', () => {
+    const source = profile();
+    const layout = source.compositions[0];
+    const base = layout?.slots[0];
+    if (!layout || !base) throw new Error('Missing fixture composition');
+    layout.slots = ['a', 'b', 'c'].map((slotId) => ({
+      ...base,
+      slotId,
+      role: 'body' as const,
+      fontSize: 96,
+    }));
+    const index = {
+      templateHash: source.templateHash,
+      revision: 'tested',
+      notes: [
+        {
+          patternId: layout.patternId,
+          kind: 'cards',
+          items: 2,
+          title: 'Cards',
+          useFor: '',
+          skip: false,
+          special: false,
+          requiredContent: [],
+          groups: [{ id: 'card-a', kind: 'card', slotIds: ['a'] }],
+          slotSemantics: [
+            { slotId: 'a', role: 'card-heading', groupId: 'card-a' },
+            { slotId: 'b', role: 'body', groupId: 'card-a' },
+          ],
+        },
+      ],
+    };
+    const result = inspectTemplateLayout(source, index, layout.patternId);
+    expect(result.textSlots[0]).toMatchObject({
+      role: 'body',
+      semanticRole: 'card-heading',
+      groupId: 'card-a',
+    });
+    expect(result.textSlots[1]?.groupId).toBeUndefined();
+    expect(result.textSlots[2]).toMatchObject({ role: 'body', semanticRole: 'unknown' });
+    const stale = inspectTemplateLayout(
+      source,
+      { ...index, templateHash: 'f'.repeat(64) },
+      layout.patternId,
+    );
+    expect(stale.textSlots.every((slot) => slot.semanticRole === 'unknown')).toBe(true);
+    expect(stale.cardHeadings).toBe('unknown');
+  });
+
   it('can enumerate every opaque slot identifier without exceeding the response budget', () => {
     const source = profile();
     const layout = source.compositions[0];
     if (!layout?.slots[0]) throw new Error('Missing fixture composition');
+    const originalSlot = layout.slots[0];
     layout.patternId = 'unseen-layout';
     layout.slots = Array.from({ length: 30 }, (_, i) => ({
-      ...layout.slots[0]!,
+      ...originalSlot,
       slotId: `text-${i}-${'x'.repeat(500)}`,
     }));
     layout.imageSlots = Array.from({ length: 25 }, (_, i) => ({

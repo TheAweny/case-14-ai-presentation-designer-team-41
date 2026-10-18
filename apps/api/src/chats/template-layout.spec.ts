@@ -258,4 +258,165 @@ describe('inspectTemplateLayout', () => {
       expect(error).toMatchObject({ code: 'unknown_layout' });
     }
   });
+
+  it('reports a card heading only when the matching index names that body slot', () => {
+    const profile = unfamiliar('layout-unfamiliar-cards', HASH_A, 'Unfamiliar cards');
+    const composition = profile.compositions[0];
+    if (!composition) throw new Error('missing composition');
+    composition.slots = [
+      {
+        slotId: 'title-1',
+        role: 'title',
+        sample: 'Title',
+        maxChars: 40,
+        maxLines: 1,
+        font: 'Face',
+        fontSize: 28,
+      },
+      {
+        slotId: 'body-huge',
+        role: 'body',
+        sample: 'Card label',
+        maxChars: 40,
+        maxLines: 1,
+        font: 'Face',
+        fontSize: 96,
+      },
+      {
+        slotId: 'body-copy',
+        role: 'body',
+        sample: 'Card copy',
+        maxChars: 120,
+        maxLines: 3,
+        font: 'Face',
+        fontSize: 14,
+      },
+    ];
+    const base = {
+      templateHash: HASH_A,
+      revision: 'template-indexer@1.4.0+test',
+      notes: [
+        {
+          patternId: 'layout-unfamiliar-cards',
+          kind: 'cards' as const,
+          items: 1,
+          useFor: 'one card',
+          title: 'One card',
+          skip: false,
+          special: false,
+          requiredContent: [],
+          slotSemantics: [
+            { slotId: 'body-huge', role: 'card-heading' as const, groupId: 'card-1' },
+            { slotId: 'body-copy', role: 'body' as const, groupId: 'card-1' },
+            { slotId: 'not-a-slot', role: 'caption' as const, groupId: 'card-1' },
+          ],
+          groups: [
+            {
+              id: 'card-1',
+              kind: 'card' as const,
+              slotIds: ['body-huge', 'body-copy', 'not-a-slot'],
+            },
+          ],
+        },
+      ],
+    };
+    const page = inspectTemplateLayout(profile, base, 'layout-unfamiliar-cards');
+    expect(page.textSlots.map((slot) => slot.role)).toEqual(['title', 'body', 'body']);
+    expect(page.textSlots.find((slot) => slot.slotId === 'body-huge')).toMatchObject({
+      role: 'body',
+      semanticRole: 'card-heading',
+      fontSize: 96,
+      groupId: 'card-1',
+    });
+    expect(page.textSlots.find((slot) => slot.slotId === 'body-copy')?.semanticRole).toBe('body');
+    expect(page.textSlots.find((slot) => slot.slotId === 'title-1')?.semanticRole).toBe('unknown');
+    expect(page.cardHeadings).toEqual(['body-huge']);
+    expect(page.groups).toEqual([
+      { id: 'card-1', kind: 'card', slotIds: ['body-huge', 'body-copy'] },
+    ]);
+
+    const old = inspectTemplateLayout(
+      profile,
+      note(HASH_A, 'layout-unfamiliar-cards'),
+      'layout-unfamiliar-cards',
+    );
+    expect(old.textSlots.every((slot) => slot.semanticRole === 'unknown')).toBe(true);
+    expect(old.groups).toBe('unknown');
+    expect(old.cardHeadings).toBe('unknown');
+
+    const stale = inspectTemplateLayout(
+      profile,
+      { ...base, templateHash: HASH_STALE },
+      'layout-unfamiliar-cards',
+    );
+    expect(stale.semantics).toBeNull();
+    expect(stale.textSlots.every((slot) => slot.semanticRole === 'unknown')).toBe(true);
+    expect(stale.groups).toBe('unknown');
+    expect(stale.cardHeadings).toBe('unknown');
+  });
+  it('omits a group id when the named group does not contain the slot', () => {
+    const profile = unfamiliar('layout-unfamiliar-cards', HASH_A, 'Unfamiliar cards');
+    const composition = profile.compositions[0];
+    if (!composition) throw new Error('missing composition');
+    composition.slots = [
+      {
+        slotId: 'body-huge',
+        role: 'body',
+        sample: 'Card label',
+        maxChars: 40,
+        maxLines: 1,
+        font: 'Face',
+        fontSize: 96,
+      },
+      {
+        slotId: 'body-copy',
+        role: 'body',
+        sample: 'Card copy',
+        maxChars: 80,
+        maxLines: 2,
+        font: 'Face',
+        fontSize: 14,
+      },
+    ];
+    const page = inspectTemplateLayout(
+      profile,
+      {
+        templateHash: HASH_A,
+        revision: 'template-indexer@1.4.0+test',
+        notes: [
+          {
+            patternId: 'layout-unfamiliar-cards',
+            kind: 'cards' as const,
+            items: 2,
+            useFor: 'two cards',
+            title: 'Two cards',
+            skip: false,
+            special: false,
+            requiredContent: [],
+            slotSemantics: [
+              { slotId: 'body-huge', role: 'card-heading' as const, groupId: 'card-2' },
+              { slotId: 'body-copy', role: 'body' as const, groupId: 'card-2' },
+            ],
+            groups: [
+              { id: 'card-1', kind: 'card' as const, slotIds: ['body-huge'] },
+              { id: 'card-2', kind: 'card' as const, slotIds: ['body-copy', 'body-huge'] },
+              { id: 'card-1', kind: 'step' as const, slotIds: ['body-copy'] },
+            ],
+          },
+        ],
+      },
+      'layout-unfamiliar-cards',
+    );
+    expect(page.textSlots.find((slot) => slot.slotId === 'body-huge')).toMatchObject({
+      semanticRole: 'card-heading',
+    });
+    expect(page.textSlots.find((slot) => slot.slotId === 'body-huge')).not.toHaveProperty(
+      'groupId',
+    );
+    expect(page.textSlots.find((slot) => slot.slotId === 'body-copy')?.groupId).toBe('card-2');
+    expect(page.groups).toEqual([
+      { id: 'card-1', kind: 'card', slotIds: ['body-huge'] },
+      { id: 'card-2', kind: 'card', slotIds: ['body-copy'] },
+    ]);
+  });
 });

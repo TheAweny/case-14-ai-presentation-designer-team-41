@@ -4,6 +4,7 @@ import type { z } from 'zod';
 import { generationProfileSchema, type CompositionNote } from '@lct/contracts';
 import {
   indexTemplate,
+  settleNote,
   settleNotes,
   templateIndexRevision,
   type IndexProgress,
@@ -170,6 +171,102 @@ describe('settleNotes', () => {
     ]);
     expect(reference?.requiredContent).toEqual([]);
     expect(speaker?.requiredContent).toEqual(['person-name', 'image']);
+  });
+});
+
+describe('settleNote semantics', () => {
+  const source = first.slots[0];
+  if (!source) throw new Error('Fixture has no slot.');
+  const body = { ...source, role: 'body' as const, fontSize: 96 };
+  const answer = {
+    patternId: first.patternId,
+    kind: 'cards' as const,
+    items: 2,
+    useFor: 'cards',
+    title: 'Cards',
+    special: false,
+    requiredContent: [] as CompositionNote['requiredContent'],
+  };
+
+  it('keeps a card heading only when the index names that slot id', () => {
+    const huge = { ...body, fontSize: 96 };
+    const pattern = {
+      ...first,
+      slots: first.slots.map((slot) => (slot.slotId === body.slotId ? huge : slot)),
+    };
+    const unnamed = settleNote(answer, pattern);
+    expect(unnamed.slotSemantics).toBeUndefined();
+    const named = settleNote(
+      {
+        ...answer,
+        slotSemantics: [
+          { slotId: huge.slotId, role: 'card-heading' as const, groupId: 'card-1' },
+          { slotId: 'not-in-pattern', role: 'caption' as const },
+        ],
+        groups: [
+          { id: 'card-1', kind: 'card' as const, slotIds: [huge.slotId, 'not-in-pattern'] },
+          { id: 'card-2', kind: 'card' as const, slotIds: [huge.slotId] },
+        ],
+      },
+      pattern,
+    );
+    expect(named.slotSemantics).toEqual([
+      { slotId: huge.slotId, role: 'card-heading', groupId: 'card-1' },
+    ]);
+    expect(named.groups).toEqual([{ id: 'card-1', kind: 'card', slotIds: [huge.slotId] }]);
+    expect(huge.fontSize).toBe(96);
+    expect(huge.role).toBe('body');
+  });
+
+  it('drops a group id that names a real group the slot does not belong to', () => {
+    const other = { ...body, slotId: body.slotId + '-copy', role: 'body' as const, fontSize: 12 };
+    const pattern = {
+      ...first,
+      slots: [...first.slots.filter((slot) => slot.slotId !== body.slotId), body, other],
+    };
+    const named = settleNote(
+      {
+        ...answer,
+        slotSemantics: [{ slotId: body.slotId, role: 'card-heading' as const, groupId: 'card-2' }],
+        groups: [
+          { id: 'card-1', kind: 'card' as const, slotIds: [body.slotId] },
+          { id: 'card-2', kind: 'card' as const, slotIds: [other.slotId] },
+        ],
+      },
+      pattern,
+    );
+    expect(named.slotSemantics).toEqual([{ slotId: body.slotId, role: 'card-heading' }]);
+    expect(named.groups?.map((group) => group.id)).toEqual(['card-1', 'card-2']);
+  });
+
+  it('sends the raw slot id to the indexer and does not read font size from the brief', async () => {
+    let seen: unknown;
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        _agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        seen = input;
+        const ids = (input as { compositions: { patternId: string }[] }).compositions.map(
+          (composition) => composition.patternId,
+        );
+        return schema.parse({ notes: ids.map((id) => note(id)) });
+      },
+    };
+    await indexTemplate({
+      provider,
+      instructions: '',
+      profile,
+      signal: AbortSignal.timeout(1000),
+    });
+    const slot = (
+      seen as { compositions: { slots: { slotId: string; fontSize?: number; role: string }[] }[] }
+    ).compositions[0]?.slots[0];
+    expect(slot?.slotId).toBe(first.slots[0]?.slotId);
+    expect(slot).not.toHaveProperty('fontSize');
   });
 });
 

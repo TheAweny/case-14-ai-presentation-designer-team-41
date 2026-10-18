@@ -9,7 +9,7 @@ import {
   type StoredTemplateIndex,
 } from '@lct/contracts';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
-import { distinctCompositions, plannerComposition, writerSlots } from './workflow.js';
+import { distinctCompositions, plannerComposition, slotBriefs, writerSlots } from './workflow.js';
 
 /** Compositions per model call: small enough that one answer never runs out of tokens. */
 const BATCH = 12;
@@ -40,6 +40,58 @@ type AnswerNote = z.infer<typeof answerNoteSchema>;
  * point; no slide shows more points than it has blocks to write. `inSpecialGroup` — the
  * composition follows a catalog heading of special content.
  */
+const SEMANTIC_ROLES = new Set(['slide-title', 'card-heading', 'body', 'caption', 'unknown']);
+const GROUP_KINDS = new Set(['card', 'step', 'column']);
+
+/**
+ * Keeps only semantic ids that exist on this composition. Unknown ids, a repeated slot, and a
+ * group that would put one slot in two groups are dropped. Font size is never consulted.
+ */
+function settledSemantics(
+  answer: AnswerNote,
+  pattern: Pattern,
+): Pick<CompositionNote, 'slotSemantics' | 'groups'> {
+  const known = new Set(pattern.slots.map((slot) => slot.slotId));
+  const groups: NonNullable<CompositionNote['groups']> = [];
+  const taken = new Set<string>();
+  const groupIds = new Set<string>();
+  for (const group of answer.groups ?? []) {
+    if (!GROUP_KINDS.has(group.kind) || groupIds.has(group.id)) continue;
+    const slotIds: string[] = [];
+    const local = new Set<string>();
+    for (const slotId of group.slotIds) {
+      if (!known.has(slotId) || taken.has(slotId) || local.has(slotId)) continue;
+      local.add(slotId);
+      slotIds.push(slotId);
+    }
+    if (slotIds.length === 0) continue;
+    groupIds.add(group.id);
+    for (const slotId of slotIds) taken.add(slotId);
+    groups.push({ id: group.id, kind: group.kind, slotIds });
+    if (groups.length === 40) break;
+  }
+  const members = new Map(groups.map((group) => [group.id, new Set(group.slotIds)]));
+  const seen = new Set<string>();
+  const slotSemantics: NonNullable<CompositionNote['slotSemantics']> = [];
+  for (const item of answer.slotSemantics ?? []) {
+    if (!known.has(item.slotId) || seen.has(item.slotId) || !SEMANTIC_ROLES.has(item.role))
+      continue;
+    seen.add(item.slotId);
+    const groupId =
+      item.groupId && members.get(item.groupId)?.has(item.slotId) ? item.groupId : undefined;
+    slotSemantics.push({
+      slotId: item.slotId,
+      role: item.role,
+      ...(groupId ? { groupId } : {}),
+    });
+    if (slotSemantics.length === 200) break;
+  }
+  return {
+    ...(slotSemantics.length > 0 ? { slotSemantics } : {}),
+    ...(groups.length > 0 ? { groups } : {}),
+  };
+}
+
 export function settleNote(
   answer: AnswerNote,
   pattern: Pattern,
@@ -48,13 +100,15 @@ export function settleNote(
   const reference = answer.kind === 'reference';
   const blocks = writerSlots(pattern).filter((slot) => slot.role !== 'title').length;
   const single = ['cover', 'section', 'statement'].includes(answer.kind);
+  const { slotSemantics: _semantics, groups: _groups, ...rest } = answer;
   return {
-    ...answer,
+    ...rest,
     title: answer.title.replace(/\s+/g, ' ').trim(),
     items: single ? 1 : Math.min(answer.items, Math.max(blocks, 1)),
     skip: reference,
     special: !reference && (answer.special || inSpecialGroup),
     requiredContent: reference ? [] : [...new Set(answer.requiredContent)],
+    ...settledSemantics(answer, pattern),
   };
 }
 
@@ -126,6 +180,16 @@ export async function indexTemplate(options: {
           // Neighbouring slides of a template usually belong to one group.
           slide: pattern.sourceIndex + 1,
           ...plannerComposition(pattern),
+          // The planner brief omits slot ids. The indexer needs them to name roles.
+          slots: slotBriefs(writerSlots(pattern)).map((slot) => ({
+            slotId: slot.slotId,
+            role: slot.role,
+            sample: slot.sample.replace(/\s+/g, ' ').trim().slice(0, 60),
+            ...(slot.prompt ? { prompt: true as const } : {}),
+            fitChars: slot.fitChars,
+            row: slot.row,
+            column: slot.column,
+          })),
         })),
       },
       schema,

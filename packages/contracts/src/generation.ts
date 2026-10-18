@@ -309,6 +309,31 @@ export const compositionNoteSchema = z.object({
       ]),
     )
     .default([]),
+  /**
+   * Semantic role of a text slot, named by the indexer from the slot id it was given.
+   * Absent on indexes written before this field. Never inferred from font size.
+   */
+  slotSemantics: z
+    .array(
+      z.object({
+        slotId: z.string().min(1),
+        role: z.enum(['slide-title', 'card-heading', 'body', 'caption', 'unknown']),
+        groupId: z.string().min(1).max(80).optional(),
+      }),
+    )
+    .max(200)
+    .optional(),
+  /** Parallel groups of those slots: one card, one step, or one column. */
+  groups: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(80),
+        kind: z.enum(['card', 'step', 'column']),
+        slotIds: z.array(z.string().min(1)).max(40),
+      }),
+    )
+    .max(40)
+    .optional(),
 });
 export const templateIndexSchema = z.object({ notes: z.array(compositionNoteSchema) });
 export const storedTemplateIndexSchema = templateIndexSchema.extend({
