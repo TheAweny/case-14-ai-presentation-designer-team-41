@@ -372,7 +372,7 @@ describe('reviewVariantVisually asked again about some slides', () => {
     expect(asked).toEqual(['s2']);
     expect(again.findings.map((f) => f.target.slideId)).toEqual(['s1']);
     expect(again.reviews.map((r) => r.slideId).sort()).toEqual(['s1', 's2']);
-    expect(again.pictures).toBe(1);
+    expect(again.pictures).toBe(2);
     expect(again.failures).toEqual([]);
   });
 
@@ -432,7 +432,123 @@ describe('reviewVariantVisually asked again about some slides', () => {
     expect(again.findings.map((f) => f.target.slideId)).toEqual(['s1']);
     expect(again.reviews.map((r) => r.slideId)).toEqual(['s1']);
     expect(again.failures.map((f) => f.slideId)).toEqual(['s2']);
+    expect(again.pictures).toBe(2);
+  });
+
+  it('drops the picture of a targeted slide whose preview is gone', async () => {
+    const dir = await folder();
+    const previews = [join(dir, 'slide-1.png'), join(dir, 'slide-2.png')];
+    await Promise.all(previews.map((p) => writeFile(p, 'png-bytes')));
+    const engine = {
+      importDeck: () =>
+        Promise.resolve({
+          schemaVersion: 1 as const,
+          slides: [slide('s1', 0, 'One', 'Retention'), slide('s2', 1, 'Two', 'Revenue')],
+        }),
+    };
+    const first = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: {
+        name: 'scripted',
+        complete: (request) => {
+          const slideId = (request.input as { slideId: string }).slideId;
+          return Promise.resolve(JSON.stringify(yes(slideId)));
+        },
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+    });
+    const again = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: {
+        name: 'scripted',
+        complete: () => Promise.resolve(JSON.stringify(yes('s2'))),
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews: [previews[0]!, join(dir, 'missing.png')],
+      seed: 1,
+      outputDir: dir,
+      only: new Set([2]),
+      previous: first,
+    });
     expect(again.pictures).toBe(1);
+    expect(again.failures.map((f) => f.slideId)).toEqual(['s2']);
+  });
+
+  it('does not count the same pictured slide twice across repeated only passes', async () => {
+    const dir = await folder();
+    const previews = [join(dir, 'slide-1.png'), join(dir, 'slide-2.png'), join(dir, 'slide-3.png')];
+    await Promise.all(previews.map((p) => writeFile(p, 'png-bytes')));
+    const engine = {
+      importDeck: () =>
+        Promise.resolve({
+          schemaVersion: 1 as const,
+          slides: [
+            slide('s1', 0, 'One', 'Retention'),
+            slide('s2', 1, 'Two', 'Revenue'),
+            slide('s3', 2, 'Three', 'Margin'),
+          ],
+        }),
+    };
+    const answer = {
+      name: 'scripted' as const,
+      complete: (request: ModelRequest) => {
+        const slideId = (request.input as { slideId: string }).slideId;
+        return Promise.resolve(JSON.stringify(yes(slideId)));
+      },
+    };
+    const first = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: answer,
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+    });
+    expect(first.pictures).toBe(3);
+    const second = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: answer,
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+      only: new Set([3]),
+      previous: first,
+    });
+    const third = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: answer,
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+      only: new Set([1]),
+      previous: second,
+    });
+    expect(third.pictures).toBe(3);
   });
 });
 
