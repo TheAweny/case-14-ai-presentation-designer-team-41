@@ -5,6 +5,7 @@ import type { EngineClient } from '@lct/engine-client';
 import type { LoadedAgent } from '@lct/registry';
 import { runContextualAudit } from '../audit/contextual-audit.js';
 import type { ModelProvider } from '../models/provider.js';
+import { slideIndexOf } from './self-check.js';
 
 export interface VisualReviewOptions {
   engine: Pick<EngineClient, 'importDeck'>;
@@ -21,6 +22,10 @@ export interface VisualReviewOptions {
   previews: readonly string[];
   seed: number;
   outputDir: string;
+  /** Ask only about the slides with these 1-based numbers; absent: all of them. */
+  only?: ReadonlySet<number>;
+  /** The earlier review of the deck: what it said of the slides not asked about now is kept. */
+  previous?: VisualReview;
   signal?: AbortSignal;
 }
 
@@ -73,8 +78,29 @@ export async function reviewVariantVisually(options: VisualReviewOptions): Promi
     provider: options.provider,
     seed: options.seed,
     images,
+    ...(options.only
+      ? {
+          only: new Set(
+            slides.flatMap((slide, index) => (options.only?.has(index + 1) ? [slide.slideId] : [])),
+          ),
+        }
+      : {}),
   });
   const review: VisualReview = { ...result, slideCount: slides.length };
+  const { only, previous } = options;
+  if (only && previous) {
+    // Slides asked about again replace their old answers; the rest of the deck stays as it was.
+    const kept = (slideId: string) => {
+      const index = slideIndexOf(slideId);
+      return index !== null && !only.has(index + 1);
+    };
+    review.findings = [
+      ...previous.findings.filter((f) => kept(f.target.slideId)),
+      ...review.findings,
+    ];
+    review.reviews = [...previous.reviews.filter((r) => kept(r.slideId)), ...review.reviews];
+    review.failures = [...previous.failures.filter((f) => kept(f.slideId)), ...review.failures];
+  }
   await writeFile(
     join(options.outputDir, 'audit-contextual.json'),
     JSON.stringify(

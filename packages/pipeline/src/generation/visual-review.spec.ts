@@ -189,6 +189,79 @@ describe('reviewVariantVisually', () => {
   });
 });
 
+describe('reviewVariantVisually asked again about some slides', () => {
+  it('asks only about them and keeps the earlier answers for the rest', async () => {
+    const dir = await folder();
+    const previews = [join(dir, 'slide-1.png'), join(dir, 'slide-2.png')];
+    await Promise.all(previews.map((p) => writeFile(p, 'png-bytes')));
+    const asked: string[] = [];
+    const answer = (slideId: string, verdict: 'yes' | 'no'): SlideReview => ({
+      schemaVersion: 1,
+      slideId,
+      answers: [
+        { checkId: 'no-typos', verdict, confidence: 0.9, evidence: 'Revenue', suggestion: '' },
+      ],
+    });
+    const provider: ModelProvider = {
+      name: 'scripted',
+      complete: (request) => {
+        const slideId = (request.input as { slideId: string }).slideId;
+        asked.push(slideId);
+        return Promise.resolve(JSON.stringify(answer(slideId, 'yes')));
+      },
+    };
+    const engine = {
+      importDeck: () =>
+        Promise.resolve({
+          schemaVersion: 1 as const,
+          slides: [slide('s1', 0, 'One', 'Retention'), slide('s2', 1, 'Two', 'Revenue')],
+        }),
+    };
+    const earlier = await reviewVariantVisually({
+      engine,
+      agent,
+      provider: {
+        name: 'scripted',
+        complete: (request) => {
+          const slideId = (request.input as { slideId: string }).slideId;
+          return Promise.resolve(JSON.stringify(answer(slideId, 'no')));
+        },
+      },
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+    });
+    expect(earlier.findings.map((f) => f.target.slideId).sort()).toEqual(['s1', 's2']);
+
+    const again = await reviewVariantVisually({
+      engine,
+      agent,
+      provider,
+      brief: 'Brief',
+      goal: '',
+      pptxPath: join(dir, 'deck.pptx'),
+      mediaDir: join(dir, 'media'),
+      previews,
+      seed: 1,
+      outputDir: dir,
+      only: new Set([2]),
+      previous: earlier,
+    });
+    // Only slide 2 was asked about; its old finding is replaced, slide 1's is kept.
+    expect(asked).toEqual(['s2']);
+    expect(again.findings.map((f) => f.target.slideId)).toEqual(['s1']);
+    expect(again.reviews.map((r) => r.slideId).sort()).toEqual(['s1', 's2']);
+    const written = JSON.parse(await readFile(join(dir, 'audit-contextual.json'), 'utf8')) as {
+      findings: unknown[];
+    };
+    expect(written.findings).toHaveLength(1);
+  });
+});
+
 describe('VisionProvider', () => {
   const request = (): ModelRequest => ({
     agent,
