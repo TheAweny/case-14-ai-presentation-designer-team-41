@@ -272,7 +272,7 @@ test('keeps the next files while an answer is running and restores completed too
   const disclosure = trace.getByRole('button', { expanded: false });
   await expect(disclosure).toContainText('Выполнено 2 действия');
   await disclosure.click();
-  await expect(trace.locator('ul [data-task-state=done]')).toHaveCount(2);
+  await expect(trace.locator('ul > li > [data-tool-call][data-call-state="done"]')).toHaveCount(2);
   await expect(trace.locator('[data-task-state=running]')).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });

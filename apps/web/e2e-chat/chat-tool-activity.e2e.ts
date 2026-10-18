@@ -161,6 +161,16 @@ for (const narrow of [false, true]) {
       finish();
       await expect(call).toHaveAttribute('data-call-state', 'failed');
       await expect(page.locator('[data-active-researchers="1"]')).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Завершено, есть ошибки: 1', exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText('Работа прервалась', { exact: true })).toHaveCount(0);
+      const failure = page.getByRole('alert');
+      await expect(failure.getByText('Не удалось завершить ответ', { exact: true })).toBeVisible();
+      await failure.locator('details > summary').click();
+      await expect(
+        failure.locator('details[open]').getByText('Ответ прервался', { exact: true }),
+      ).toBeVisible();
       const summary = page.locator('.thought-line button[aria-expanded]').first();
       if ((await summary.getAttribute('aria-expanded')) === 'false') await summary.click();
       await call.locator(':scope > details > summary').click();
@@ -169,6 +179,9 @@ for (const narrow of [false, true]) {
       ).toBeVisible();
       await page.reload();
       await expect(page.locator('[data-active-researchers="1"]')).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Завершено, есть ошибки: 1', exact: true }),
+      ).toBeVisible();
       await page.locator('.thought-line button[aria-expanded="false"]').first().click();
       await expect(page.locator('[data-tool-call="research-call"]')).toHaveAttribute(
         'data-call-state',
