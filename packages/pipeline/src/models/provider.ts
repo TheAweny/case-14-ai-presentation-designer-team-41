@@ -122,7 +122,9 @@ export async function runAgent<T = unknown>(
   let feedback: string | undefined;
   let answer = '';
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    request.signal?.throwIfAborted();
     answer = await provider.complete(call, feedback);
+    request.signal?.throwIfAborted();
     try {
       const parsed = schema.safeParse(extractJson(answer));
       if (parsed.success) {

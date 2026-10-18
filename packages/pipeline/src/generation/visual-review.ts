@@ -1,6 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { AuditFinding, ContentPack, SlideReview } from '@lct/contracts';
+import { readFile } from 'node:fs/promises';
+import type { AuditFinding, ContentPack, LayoutVariant, SlideReview } from '@lct/contracts';
 import type { EngineClient } from '@lct/engine-client';
 import type { LoadedAgent } from '@lct/registry';
 import { runContextualAudit } from '../audit/contextual-audit.js';
@@ -24,6 +23,8 @@ export interface VisualReviewOptions {
   outputDir: string;
   /** Ask only about the slides with these 1-based numbers; absent: all of them. */
   only?: ReadonlySet<number>;
+  /** Density stamped on every imported slide. Absent: balanced. */
+  variant?: LayoutVariant;
   /** The earlier review of the deck: what it said of the slides not asked about now is kept. */
   previous?: VisualReview;
   signal?: AbortSignal;
@@ -34,6 +35,7 @@ export interface VisualReview {
   failures: { slideId: string; error: string }[];
   reviews: SlideReview[];
   slideCount: number;
+  pictures: number;
 }
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
@@ -58,18 +60,43 @@ function packOf(brief: string, goal: string): ContentPack {
  * are written next to the deterministic ones as `audit-contextual.json`.
  */
 export async function reviewVariantVisually(options: VisualReviewOptions): Promise<VisualReview> {
-  const { slides } = await options.engine.importDeck(
+  options.signal?.throwIfAborted();
+  const imported = await options.engine.importDeck(
     { schemaVersion: 1, pptxPath: options.pptxPath, mediaDir: options.mediaDir },
     options.signal,
   );
+  options.signal?.throwIfAborted();
+  const slides = imported.slides.map((slide) => ({
+    ...slide,
+    variant: options.variant ?? 'balanced',
+  }));
   const images: Record<string, string> = {};
+  const missingByIndex: ({ slideId: string; error: string } | undefined)[] = [];
   await Promise.all(
     slides.map(async (slide, index) => {
+      if (options.only && !options.only.has(index + 1)) return;
+      const unavailable = { slideId: slide.slideId, error: 'Slide preview unavailable.' };
       const path = options.previews[index];
-      if (path === undefined) return;
-      const bytes = await readFile(path);
-      images[slide.slideId] = `data:image/png;base64,${bytes.toString('base64')}`;
+      if (path === undefined) {
+        missingByIndex[index] = unavailable;
+        return;
+      }
+      try {
+        const bytes = await readFile(path);
+        if (bytes.length === 0) {
+          missingByIndex[index] = unavailable;
+          return;
+        }
+        images[slide.slideId] = `data:image/png;base64,${bytes.toString('base64')}`;
+      } catch {
+        missingByIndex[index] = unavailable;
+      }
     }),
+  );
+  options.signal?.throwIfAborted();
+  const missing = missingByIndex.flatMap((failure) => (failure ? [failure] : []));
+  const wanted = slides.flatMap((slide, index) =>
+    !options.only || options.only.has(index + 1) ? [slide.slideId] : [],
   );
   const result = await runContextualAudit({
     slides,
@@ -78,18 +105,17 @@ export async function reviewVariantVisually(options: VisualReviewOptions): Promi
     provider: options.provider,
     seed: options.seed,
     images,
-    ...(options.only
-      ? {
-          only: new Set(
-            slides.flatMap((slide, index) => (options.only?.has(index + 1) ? [slide.slideId] : [])),
-          ),
-        }
-      : {}),
+    only: new Set(wanted.filter((id) => images[id] !== undefined)),
     ...(options.signal ? { signal: options.signal } : {}),
   });
   // A review that was stopped writes nothing: its file would land after the run is done.
   options.signal?.throwIfAborted();
-  const review: VisualReview = { ...result, slideCount: slides.length };
+  const review: VisualReview = {
+    ...result,
+    failures: [...result.failures, ...missing],
+    slideCount: slides.length,
+    pictures: Object.keys(images).length,
+  };
   const { only, previous } = options;
   if (only && previous) {
     // Slides asked about again replace their old answers; the rest of the deck stays as it was.
@@ -104,21 +130,5 @@ export async function reviewVariantVisually(options: VisualReviewOptions): Promi
     review.reviews = [...previous.reviews.filter((r) => kept(r.slideId)), ...review.reviews];
     review.failures = [...previous.failures.filter((f) => kept(f.slideId)), ...review.failures];
   }
-  await writeFile(
-    join(options.outputDir, 'audit-contextual.json'),
-    JSON.stringify(
-      {
-        model: options.provider.name,
-        agent: `${options.agent.config.id}@${options.agent.config.version}`,
-        slides: slides.length,
-        pictures: Object.keys(images).length,
-        findings: review.findings,
-        failures: review.failures,
-        reviews: review.reviews,
-      },
-      null,
-      2,
-    ),
-  );
   return review;
 }
