@@ -7604,6 +7604,119 @@ class LayoutVariantsResponse(BaseModel):
     )
 
 
+class Format2(StrEnum):
+    text = "text"
+    table = "table"
+
+
+class MaterialExtractRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: Format2
+    limit: conint(ge=1, le=100)
+    offset: conint(ge=0, le=100000)
+    path: constr(min_length=1, max_length=4000)
+    range: (
+        constr(
+            pattern=r"^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+            max_length=4000,
+        )
+        | None
+    ) = None
+    schemaVersion: Literal[1]
+    sheet: constr(min_length=1, max_length=200) | None = None
+
+
+class Kind11(StrEnum):
+    text = "text"
+    table = "table"
+
+
+class Locator(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    page: conint(le=9007199254740991, gt=0) | None
+    paragraph: conint(le=9007199254740991, gt=0) | None
+    range: (
+        constr(
+            pattern=r"^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+            max_length=4000,
+        )
+        | None
+    )
+    sheet: constr(min_length=1, max_length=200) | None
+
+
+class Segment(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    index: conint(ge=0, le=9007199254740991)
+    locator: Locator
+    text: constr(max_length=12000)
+
+
+class Cell(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    address: constr(max_length=4000)
+    cached: bool
+    column: conint(le=9007199254740991, gt=0)
+    formula: constr(max_length=4000) | None
+    row: conint(le=9007199254740991, gt=0)
+    value: constr(max_length=4000) | float | bool | None
+
+
+class MergedRange(
+    RootModel[
+        constr(
+            pattern=r"^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+            max_length=4000,
+        )
+    ]
+):
+    root: constr(
+        pattern=r"^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+        max_length=4000,
+    )
+
+
+class Table(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cells: list[Cell] = Field(..., max_length=200)
+    mergedRanges: list[MergedRange] = Field(..., max_length=200)
+    range: constr(
+        pattern=r"^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+        max_length=4000,
+    )
+    sheet: constr(min_length=1, max_length=200)
+
+
+class Warning5(RootModel[constr(max_length=4000)]):
+    root: constr(max_length=4000)
+
+
+class MaterialExtractResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Kind11
+    needsOcr: bool
+    nextOffset: conint(ge=0, le=9007199254740991) | None
+    offset: conint(ge=0, le=9007199254740991)
+    schemaVersion: Literal[1]
+    segments: list[Segment] = Field(..., max_length=100)
+    sourceSha256: constr(pattern=r"^[0-9a-fA-F]{64}$")
+    table: Table | None
+    truncated: bool
+    warnings: list[Warning5] = Field(..., max_length=20)
+
+
 class Box36(BaseModel):
     """
     Where the template puts it, in EMU.
@@ -8422,7 +8535,7 @@ class Color24(BaseModel):
     )
 
 
-class Kind11(StrEnum):
+class Kind12(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -8456,7 +8569,7 @@ class Background8(BaseModel):
         extra="forbid",
     )
     color: Color24 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind11
+    kind: Kind12
     stops: list[Stop6] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8531,7 +8644,7 @@ class Fill13(BaseModel):
         extra="forbid",
     )
     color: Color25 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind11
+    kind: Kind12
     stops: list[Stop7] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8736,7 +8849,7 @@ class Background9(BaseModel):
         extra="forbid",
     )
     color: Color27 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind11
+    kind: Kind12
     stops: list[Stop8] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8789,7 +8902,7 @@ class Fill14(BaseModel):
         extra="forbid",
     )
     color: Color28 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind11
+    kind: Kind12
     stops: list[Stop9] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8994,7 +9107,7 @@ class Background10(BaseModel):
         extra="forbid",
     )
     color: Color30 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind11
+    kind: Kind12
     stops: list[Stop10] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9047,7 +9160,7 @@ class Fill15(BaseModel):
         extra="forbid",
     )
     color: Color31 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind11
+    kind: Kind12
     stops: list[Stop11] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9215,7 +9328,7 @@ class Code6(StrEnum):
     no_slide_layout = "no-slide-layout"
 
 
-class Warning5(BaseModel):
+class Warning6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -9255,7 +9368,7 @@ class TemplateIR(BaseModel):
     )
     themeColors: list[ThemeColor] = Field(..., description="One entry per theme part.")
     themeFonts: ThemeFonts
-    warnings: list[Warning5] = Field(..., description="Empty when nothing was lost.")
+    warnings: list[Warning6] = Field(..., description="Empty when nothing was lost.")
 
 
 class TemplatePreviewsRequest(BaseModel):
@@ -9341,6 +9454,12 @@ class ContractsBundle(BaseModel):
     )
     LayoutVariantsResponse_1: LayoutVariantsResponse | None = Field(
         None, alias="LayoutVariantsResponse"
+    )
+    MaterialExtractRequest_1: MaterialExtractRequest | None = Field(
+        None, alias="MaterialExtractRequest"
+    )
+    MaterialExtractResponse_1: MaterialExtractResponse | None = Field(
+        None, alias="MaterialExtractResponse"
     )
     PatternCatalog_1: PatternCatalog | None = Field(None, alias="PatternCatalog")
     RunConfig_1: RunConfig | None = Field(None, alias="RunConfig")

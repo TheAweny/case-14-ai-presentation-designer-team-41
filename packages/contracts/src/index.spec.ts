@@ -77,6 +77,8 @@ describe('contract registry', () => {
       'JobEvent',
       'LayoutVariantsRequest',
       'LayoutVariantsResponse',
+      'MaterialExtractRequest',
+      'MaterialExtractResponse',
       'PatternCatalog',
       'RunConfig',
       'SlideIR',

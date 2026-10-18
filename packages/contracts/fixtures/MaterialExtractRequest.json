@@ -1,0 +1,31 @@
+{
+  "contract": "MaterialExtractRequest",
+  "valid": [
+    {
+      "name": "a text file read from the start",
+      "payload": {
+        "schemaVersion": 1,
+        "path": "uploads/notes.md",
+        "format": "text",
+        "offset": 0,
+        "limit": 20
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a spreadsheet range that is not A1:B100",
+      "why": "a range is two A1 cells separated by a colon",
+      "path": ["range"],
+      "payload": {
+        "schemaVersion": 1,
+        "path": "uploads/budget.xlsx",
+        "format": "table",
+        "offset": 0,
+        "limit": 20,
+        "sheet": "Q1",
+        "range": "A1"
+      }
+    }
+  ]
+}

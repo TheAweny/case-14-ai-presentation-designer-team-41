@@ -1,0 +1,45 @@
+{
+  "contract": "MaterialExtractResponse",
+  "valid": [
+    {
+      "name": "one paragraph from a text file",
+      "payload": {
+        "schemaVersion": 1,
+        "kind": "text",
+        "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "segments": [
+          {
+            "index": 0,
+            "locator": { "page": 1, "paragraph": 1, "sheet": null, "range": null },
+            "text": "Первый абзац"
+          }
+        ],
+        "table": null,
+        "offset": 0,
+        "nextOffset": null,
+        "truncated": false,
+        "needsOcr": false,
+        "warnings": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a digest shorter than 64 hex characters",
+      "why": "sourceSha256 is the hex digest of the file that was read",
+      "path": ["sourceSha256"],
+      "payload": {
+        "schemaVersion": 1,
+        "kind": "text",
+        "sourceSha256": "abcd",
+        "segments": [],
+        "table": null,
+        "offset": 0,
+        "nextOffset": null,
+        "truncated": false,
+        "needsOcr": true,
+        "warnings": []
+      }
+    }
+  ]
+}

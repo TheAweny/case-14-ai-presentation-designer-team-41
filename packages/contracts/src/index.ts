@@ -432,6 +432,12 @@ export {
   type MaterialResearchResult,
 } from './material-research.js';
 export {
+  materialExtractRequestSchema,
+  materialExtractResponseSchema,
+  type MaterialExtractRequest,
+  type MaterialExtractResponse,
+} from './material-extraction.js';
+export {
   ASSUMPTION_KINDS,
   CLAIM_STATUSES,
   assumptionKindSchema,

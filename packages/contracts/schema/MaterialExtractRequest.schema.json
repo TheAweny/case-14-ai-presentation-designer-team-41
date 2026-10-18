@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "enum": [
+        "text",
+        "table"
+      ],
+      "type": "string"
+    },
+    "limit": {
+      "default": 20,
+      "maximum": 100,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "offset": {
+      "default": 0,
+      "maximum": 100000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "path": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "range": {
+      "maxLength": 4000,
+      "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sheet": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "path",
+    "format",
+    "offset",
+    "limit"
+  ],
+  "title": "MaterialExtractRequest",
+  "type": "object"
+}

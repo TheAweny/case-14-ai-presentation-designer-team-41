@@ -29,6 +29,10 @@ import {
   templatePreviewsRequestSchema,
   templatePreviewsResponseSchema,
 } from './template-previews.js';
+import {
+  materialExtractRequestSchema,
+  materialExtractResponseSchema,
+} from './material-extraction.js';
 
 /**
  * Every schema that gets exported to JSON Schema and, from there, to Pydantic.
@@ -51,6 +55,8 @@ export const contractRegistry = {
   TemplateIR: templateIrSchema,
   TemplatePreviewsRequest: templatePreviewsRequestSchema,
   TemplatePreviewsResponse: templatePreviewsResponseSchema,
+  MaterialExtractRequest: materialExtractRequestSchema,
+  MaterialExtractResponse: materialExtractResponseSchema,
   ContentPack: contentPackSchema,
   DesignSystem: designSystemSchema,
   PatternCatalog: patternCatalogSchema,

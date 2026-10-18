@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "enum": [
+        "text",
+        "table"
+      ],
+      "type": "string"
+    },
+    "needsOcr": {
+      "type": "boolean"
+    },
+    "nextOffset": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "offset": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "segments": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "properties": {
+              "page": {
+                "anyOf": [
+                  {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "paragraph": {
+                "anyOf": [
+                  {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "range": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sheet": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "paragraph",
+              "sheet",
+              "range"
+            ],
+            "type": "object"
+          },
+          "text": {
+            "maxLength": 12000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "locator",
+          "text"
+        ],
+        "type": "object"
+      },
+      "maxItems": 100,
+      "type": "array"
+    },
+    "sourceSha256": {
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "type": "string"
+    },
+    "table": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cells": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "address": {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  "cached": {
+                    "type": "boolean"
+                  },
+                  "column": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  },
+                  "formula": {
+                    "anyOf": [
+                      {
+                        "maxLength": 4000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "row": {
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "type": "integer"
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "maxLength": 4000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "address",
+                  "row",
+                  "column",
+                  "value",
+                  "formula",
+                  "cached"
+                ],
+                "type": "object"
+              },
+              "maxItems": 200,
+              "type": "array"
+            },
+            "mergedRanges": {
+              "items": {
+                "maxLength": 4000,
+                "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+                "type": "string"
+              },
+              "maxItems": 200,
+              "type": "array"
+            },
+            "range": {
+              "maxLength": 4000,
+              "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
+              "type": "string"
+            },
+            "sheet": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "sheet",
+            "range",
+            "cells",
+            "mergedRanges"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "maxLength": 4000,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "sourceSha256",
+    "segments",
+    "table",
+    "offset",
+    "nextOffset",
+    "truncated",
+    "needsOcr",
+    "warnings"
+  ],
+  "title": "MaterialExtractResponse",
+  "type": "object"
+}
