@@ -23,10 +23,23 @@ export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } fr
 /** The three renderings of one brief. They differ in composition and density, not in facts. */
 export type DeckVariant = 'dense' | 'balanced' | 'airy';
 
+/**
+ * How a variant remaps a shared plan onto its catalog. `density` is the production choice:
+ * the same block count, or one more or fewer when that is all the catalog has. The strict
+ * policy never changes the number of content blocks.
+ */
+export type LayoutRemapPolicy = 'density' | 'preserve-block-count';
+
 export interface GenerationDependencies {
   provider: TextProvider;
   /** Which rendering to lay out and write. Absent: balanced. */
   variant?: DeckVariant;
+  /**
+   * How a variant picks a layout for a shared plan. Absent and `density` keep the existing
+   * choice, including a layout one block away. `preserve-block-count` keeps the planned layout
+   * unless the variant has one with the same number of content blocks.
+   */
+  layoutRemapPolicy?: LayoutRemapPolicy;
   /** The one plan the variants of a brief share. Absent: this run plans for itself. */
   sharedPlan?: SharedPlan;
   plannerInstructions: string;
@@ -684,6 +697,81 @@ export function distinctCompositions<T extends GenerationProfile['compositions']
   });
 }
 
+/**
+ * The catalog one variant plans and remaps with. This is the filter the generation step uses:
+ * template pages, missing assets, picture frames and cramped slots leave before a variant takes
+ * its two thirds, and covers stay the template's own covers.
+ */
+export function prepareVariantCatalog<T extends GenerationProfile['compositions'][number]>(
+  profile: { compositions: readonly T[] },
+  compositionNotes: readonly CompositionNote[],
+  options: { imagesAvailable: boolean; variant: DeckVariant },
+) {
+  const notes = new Map(compositionNotes.map((note) => [note.patternId, note]));
+  const compositions = profile.compositions.map(withCardHeadings);
+  const all = distinctCompositions(compositions);
+  const hasMissingAsset = (pattern: (typeof all)[number]) =>
+    notes
+      .get(pattern.patternId)
+      ?.requiredContent.some((item) =>
+        item === 'image'
+          ? !options.imagesAvailable
+          : item === 'brand-asset' || item === 'screenshot',
+      ) ?? false;
+  const keepsSamplePhotos = (pattern: (typeof all)[number]) =>
+    notes.get(pattern.patternId)?.special === true &&
+    (pattern.imageSlots ?? []).some((slot) => slot.kind === 'photo');
+  const assetSafe = all.filter(
+    (pattern) => !hasMissingAsset(pattern) && !keepsSamplePhotos(pattern),
+  );
+  const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
+  const readable = usable.length >= 3 ? usable : assetSafe;
+  const textOnly = readable.filter(
+    (pattern) => !pattern.imageSlots?.some((slot) => slot.kind !== 'photo'),
+  );
+  const distinct = options.imagesAvailable || textOnly.length < 3 ? readable : textOnly;
+  if (!distinct.length)
+    throw new Error('Template has no composition usable without an external image or asset.');
+  const spacious = distinct.filter(
+    (pattern) =>
+      pattern.slots.some((slot) => slot.role === 'title' && slot.maxChars >= SHORT_CLAIM_CHARS) &&
+      writerSlots(pattern).every((slot) => slot.maxChars >= 12),
+  );
+  const framing = distinct.filter((pattern) => {
+    const note = notes.get(pattern.patternId);
+    return note && !note.special && (note.kind === 'cover' || note.kind === 'closing');
+  });
+  const full = spacious.length
+    ? distinct.filter((pattern) => spacious.includes(pattern) || framing.includes(pattern))
+    : distinct;
+  const titleSizes = full
+    .flatMap((pattern) =>
+      pattern.slots.filter((slot) => slot.role === 'title').map((slot) => slot.fontSize),
+    )
+    .sort((a, b) => a - b);
+  const typicalTitle = titleSizes[Math.floor(titleSizes.length / 2)] ?? 24;
+  const coversOf = (list: typeof full) =>
+    list.filter(
+      (pattern) =>
+        pattern.slots.length <= 3 &&
+        pattern.slots.some((slot) => slot.role === 'title' && slot.fontSize > typicalTitle),
+    );
+  const indexedCovers = full.filter((pattern) => notes.get(pattern.patternId)?.kind === 'cover');
+  const plainCovers = indexedCovers.filter((pattern) => !notes.get(pattern.patternId)?.special);
+  const covers = plainCovers.length
+    ? plainCovers
+    : indexedCovers.length
+      ? indexedCovers
+      : coversOf(full);
+  return {
+    notes,
+    compositions,
+    full,
+    covers,
+    catalog: variantCatalog(full, options.variant, covers),
+  };
+}
+
 function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) {
   const slots = visualSlots(pattern);
   const visual = slots.length
@@ -962,76 +1050,12 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     inputSchema,
     outputSchema: z.array(taskSchema),
     execute: async ({ inputData }) => {
-      const notes = new Map((deps.notes ?? []).map((note) => [note.patternId, note]));
-      // Pages about the template itself are not slides. Keep them only if the indexer left
-      // too little to build a deck from, which means it misread the template.
-      const compositions = inputData.profile.compositions.map(withCardHeadings);
-      const all = distinctCompositions(compositions);
-      // A partner asset or a product screenshot cannot be supplied, and a required picture only
-      // when an image model draws them: a slide needing one must not reach the planner.
-      const hasMissingAsset = (pattern: (typeof all)[number]) =>
-        notes
-          .get(pattern.patternId)
-          ?.requiredContent.some((item) =>
-            item === 'image'
-              ? !deps.imagesAvailable
-              : item === 'brand-asset' || item === 'screenshot',
-          ) ?? false;
-      // A special layout (a chart sample, a screen) is never illustrated, so its sample photos
-      // would stay: pictures of a chart with made-up series under the deck's own figures.
-      const keepsSamplePhotos = (pattern: (typeof all)[number]) =>
-        notes.get(pattern.patternId)?.special === true &&
-        (pattern.imageSlots ?? []).some((slot) => slot.kind === 'photo');
-      const assetSafe = all.filter(
-        (pattern) => !hasMissingAsset(pattern) && !keepsSamplePhotos(pattern),
-      );
-      const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
-      const readable = usable.length >= 3 ? usable : assetSafe;
-      // Without an image model a place for a picture would be removed on export and leave a
-      // hole, so such compositions are not offered while the rest can carry the deck. A sample
-      // photo stays in place without a picture for it, so a composition with only those is kept.
-      const textOnly = readable.filter(
-        (pattern) => !pattern.imageSlots?.some((slot) => slot.kind !== 'photo'),
-      );
-      const distinct = deps.imagesAvailable || textOnly.length < 3 ? readable : textOnly;
-      if (!distinct.length)
-        throw new Error('Template has no composition usable without an external image or asset.');
-      // A title on a pill holds a short claim, not a sentence, so the floor is a few words.
-      // Numbering is written by code and does not need room for a phrase.
-      const spacious = distinct.filter(
-        (p) =>
-          p.slots.some((s) => s.role === 'title' && s.maxChars >= SHORT_CLAIM_CHARS) &&
-          writerSlots(p).every((s) => s.maxChars >= 12),
-      );
-      // A deck opens and ends on the template's own cover and closing, and those carry short
-      // lines (a date, a tag, the speaker) the floor above would drop them for.
-      const framing = distinct.filter((p) => {
-        const note = notes.get(p.patternId);
-        return note && !note.special && (note.kind === 'cover' || note.kind === 'closing');
-      });
-      const full = spacious.length
-        ? distinct.filter((p) => spacious.includes(p) || framing.includes(p))
-        : distinct;
       const variant = deps.variant ?? 'balanced';
-      const titleSizes = full
-        .flatMap((p) => p.slots.filter((s) => s.role === 'title').map((s) => s.fontSize))
-        .sort((a, b) => a - b);
-      const typicalTitle = titleSizes[Math.floor(titleSizes.length / 2)] ?? 24;
-      const coversOf = (list: typeof full) =>
-        list.filter(
-          (p) =>
-            p.slots.length <= 3 &&
-            p.slots.some((s) => s.role === 'title' && s.fontSize > typicalTitle),
-        );
-      const indexedCovers = full.filter((p) => notes.get(p.patternId)?.kind === 'cover');
-      // A special cover (a partner's co-branding) opens a deck only when nothing else can.
-      const plainCovers = indexedCovers.filter((p) => !notes.get(p.patternId)?.special);
-      const covers = plainCovers.length
-        ? plainCovers
-        : indexedCovers.length
-          ? indexedCovers
-          : coversOf(full);
-      const catalog = variantCatalog(full, variant, covers);
+      const prepared = prepareVariantCatalog(inputData.profile, deps.notes ?? [], {
+        imagesAvailable: deps.imagesAvailable === true,
+        variant,
+      });
+      const { compositions, full, catalog, covers, notes } = prepared;
       // The story is planned once for all three variants, on the full catalog; each variant then
       // lays the same slides out on its own compositions (remapPlan).
       const outline = inputData.outline ?? null;
@@ -1141,6 +1165,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         variant,
         covers,
         notes,
+        deps.layoutRemapPolicy ?? 'density',
       );
       const tasks = result.slides.map((slide, index) => {
         const composition = compositions.find((p) => p.patternId === layouts[index]);
@@ -1350,6 +1375,7 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   variant: DeckVariant,
   covers: readonly T[] = [],
   notes: ReadonlyMap<string, CompositionNote> = new Map(),
+  policy: LayoutRemapPolicy = 'density',
 ): string[] {
   if (variant === 'balanced') return [...patternIds];
   // Blocks as the planner counted them: numbering and mirrored copies are not points.
@@ -1387,11 +1413,14 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
     // such a layout in this variant's set the slide keeps the one the planner chose for it.
     const sameCount = compatible.filter((p) => blocks(p) === blocks(planned));
     // Lighter, not emptier: a layout holding far less than the planned one drops the slide's
-    // points, as a quote layout would for four figures.
+    // points, as a quote layout would for four figures. A strict block-count policy does not
+    // borrow a layout one block away: the planned composition stays when none matches exactly.
     const near = (
       sameCount.length
         ? sameCount
-        : compatible.filter((p) => blocks(p) > 0 && Math.abs(blocks(p) - blocks(planned)) <= 1)
+        : policy === 'preserve-block-count'
+          ? []
+          : compatible.filter((p) => blocks(p) > 0 && Math.abs(blocks(p) - blocks(planned)) <= 1)
     ).filter((p) =>
       variant === 'dense'
         ? capacity(p) >= capacity(planned)

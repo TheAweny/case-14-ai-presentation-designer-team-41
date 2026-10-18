@@ -80,7 +80,14 @@ export {
   remapPlan,
   SharedPlan,
   type DeckVariant,
+  type LayoutRemapPolicy,
+  prepareVariantCatalog,
 } from './generation/workflow.js';
+export {
+  compareLayoutRemap,
+  LayoutRemapComparisonError,
+  type LayoutRemapComparison,
+} from './generation/remap-evaluation.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
 export {
   AttemptBudget,

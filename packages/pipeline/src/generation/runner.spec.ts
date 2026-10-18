@@ -8,6 +8,7 @@ import { generationProfileSchema } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import { generatePresentation } from './runner.js';
 import { minChars } from './workflow.js';
+import type { LayoutRemapPolicy } from './workflow.js';
 import type { ModelRequest } from '../models/provider.js';
 import type { TextProvider } from './provider.js';
 
@@ -38,6 +39,7 @@ async function exercise(
     | 'empty-import'
     | 'clean-vision'
     | 'expired',
+  layoutRemapPolicy?: LayoutRemapPolicy,
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
@@ -252,6 +254,7 @@ async function exercise(
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
+    ...(layoutRemapPolicy ? { layoutRemapPolicy } : {}),
     ...(mode === 'reviewed' ||
     mode === 'self-corrected' ||
     mode === 'review-down' ||
@@ -321,6 +324,13 @@ describe('real generation orchestration with offline dependencies', () => {
     const result = await run.result;
     expect(run.events.at(-1)).toBe('done');
     expect(result.manifest.artifacts.map((a) => a.kind)).toContain('audit');
+    const policy = result.manifest.revisions.find((item) => item.id === 'layout-remap-policy');
+    expect(policy).toMatchObject({ kind: 'config', version: '1.0.0' });
+    const strict = await exercise('clean', 'preserve-block-count');
+    const strictPolicy = (await strict.result).manifest.revisions.find(
+      (item) => item.id === 'layout-remap-policy',
+    );
+    expect(strictPolicy?.hash).not.toBe(policy?.hash);
     const history = JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'));
     expect(history.at(-1).contentHash).toBe(result.manifest.contentHash);
   });

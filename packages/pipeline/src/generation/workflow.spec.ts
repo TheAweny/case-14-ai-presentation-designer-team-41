@@ -185,6 +185,102 @@ describe('template generation workflow', () => {
     expect(result.status).toBe('success');
     expect(plannerCalls).toBe(2);
   });
+
+  it('hands the writer the composition chosen by the remap policy', async () => {
+    const slot = (slotId: string, maxChars: number) => ({
+      slotId,
+      role: 'body' as const,
+      sample: '',
+      maxChars,
+      maxLines: 4,
+      font: 'A',
+      fontSize: 16,
+    });
+    const pattern = (patternId: string, bodies: number[]) => ({
+      ...composition,
+      patternId,
+      name: patternId,
+      slots: [
+        {
+          slotId: 't',
+          role: 'title' as const,
+          sample: '',
+          maxChars: 40,
+          maxLines: 1,
+          font: 'A',
+          fontSize: patternId === 'cover' ? 44 : 24,
+        },
+        ...bodies.map((maxChars, index) => slot(`b${index}`, maxChars)),
+      ],
+    });
+    const catalog = [
+      pattern('cover', []),
+      pattern('planned', [300, 300]),
+      pattern('one', [800]),
+      pattern('three', [900, 900, 900]),
+      pattern('four', [1200, 1200, 1200, 1200]),
+      pattern('five', [1500, 1500, 1500, 1500, 1500]),
+      pattern('six', [1800, 1800, 1800, 1800, 1800, 1800]),
+    ];
+    const written: string[] = [];
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        if (agent === 'planner') {
+          return schema.parse({
+            title: 'Policy',
+            slides: Array.from({ length: 10 }, (_, index) => ({
+              patternId: index === 0 ? 'cover' : 'planned',
+              purpose: `Point ${index + 1}`,
+              imageQuery: '',
+            })),
+          });
+        }
+        const task = input as { composition: { patternId: string } };
+        const patternId = task.composition.patternId;
+        if (patternId !== 'cover') {
+          written.push(patternId);
+          throw new Error('Writer composition captured');
+        }
+        return schema.parse({
+          patternId,
+          textsBySlot: { t: 'Title' },
+          speakerNotes: '',
+        });
+      },
+    };
+    const run = async (layoutRemapPolicy?: 'density' | 'preserve-block-count') => {
+      written.length = 0;
+      const workflow = createGenerationWorkflow({
+        provider,
+        plannerInstructions: '',
+        writerInstructions: '',
+        variant: 'dense',
+        concurrency: 1,
+        ...(layoutRemapPolicy ? { layoutRemapPolicy } : {}),
+        signal: AbortSignal.timeout(10000),
+      });
+      const result = await (
+        await workflow.createRun()
+      ).start({
+        inputData: {
+          brief: 'Policy',
+          slideCount: 10,
+          profile: { ...profile, compositions: catalog },
+        },
+      });
+      expect(result.status).toBe('failed');
+      return written[0];
+    };
+    expect(await run()).toBe('three');
+    expect(await run('density')).toBe('three');
+    expect(await run('preserve-block-count')).toBe('planned');
+  });
   it('retries auto mode when the planner returns fewer than 10 slides', async () => {
     let plannerCalls = 0;
     const provider: TextProvider = {
@@ -1320,6 +1416,162 @@ describe('one plan, three layouts', () => {
       notes,
     );
     expect(layouts).toEqual(['cover', 'one-450']);
+  });
+
+  it('borrows one block in density mode and keeps the planned count when asked', () => {
+    const note = (patternId: string, kind: CompositionNote['kind'] = 'statement') =>
+      [
+        patternId,
+        {
+          patternId,
+          kind,
+          items: 1,
+          useFor: 'one point',
+          title: patternId,
+          skip: false,
+          special: false,
+          requiredContent: [] as CompositionNote['requiredContent'],
+        },
+      ] as const;
+    const one = composition('one-450', [450]);
+    const two = composition('two-200', [200, 200]);
+    const three = composition('three-300', [300, 300, 300]);
+    const notes = new Map([note('one-450'), note('two-200'), note('three-300')]);
+    const fewer = ['cover', 'two-200'];
+    const fewerFull = [cover, one, two];
+    expect(remapPlan(fewer, fewerFull, [cover, one], 'dense', [cover], notes)).toEqual([
+      'cover',
+      'one-450',
+    ]);
+    expect(
+      remapPlan(fewer, fewerFull, [cover, one], 'dense', [cover], notes, 'preserve-block-count'),
+    ).toEqual(fewer);
+    expect(remapPlan(fewer, fewerFull, [cover, one], 'dense', [cover], notes, 'density')).toEqual([
+      'cover',
+      'one-450',
+    ]);
+    const more = ['cover', 'two-200'];
+    const moreFull = [cover, two, three];
+    expect(remapPlan(more, moreFull, [cover, three], 'dense', [cover], notes)).toEqual([
+      'cover',
+      'three-300',
+    ]);
+    expect(
+      remapPlan(more, moreFull, [cover, three], 'dense', [cover], notes, 'preserve-block-count'),
+    ).toEqual(more);
+  });
+
+  it('still changes a layout that has the same number of content blocks', () => {
+    const plan = ['cover', 'one-450'];
+    const dense = remapPlan(
+      plan,
+      full,
+      variantCatalog(full, 'dense', [cover]),
+      'dense',
+      [cover],
+      new Map(),
+      'preserve-block-count',
+    );
+    expect(dense[1]).not.toBe('one-450');
+    expect(dense[1]?.startsWith('one-')).toBe(true);
+  });
+
+  it('does not count numbering or a mirrored copy as a content block', () => {
+    const slot = (
+      slotId: string,
+      role: 'title' | 'body',
+      sample: string,
+      box: { x: number; y: number; cx: number; cy: number },
+    ) => ({
+      slotId,
+      role,
+      sample,
+      maxChars: 40,
+      maxLines: 1,
+      font: 'A',
+      fontSize: role === 'title' ? 30 : 16,
+      box,
+    });
+    const numbered = {
+      ...composition('numbered', [40]),
+      slots: [
+        slot('t', 'title', '', { x: 0, y: 0, cx: 400, cy: 40 }),
+        slot('n1', 'body', '01', { x: 0, y: 80, cx: 40, cy: 20 }),
+        slot('n2', 'body', '02', { x: 200, y: 80, cx: 40, cy: 20 }),
+        slot('b', 'body', 'Point', { x: 50, y: 80, cx: 140, cy: 40 }),
+      ],
+    };
+    const mirror = {
+      ...composition('mirror', [40]),
+      slots: [
+        slot('t', 'title', '', { x: 0, y: 0, cx: 400, cy: 40 }),
+        slot('a', 'body', 'Same', { x: 0, y: 80, cx: 180, cy: 40 }),
+        slot('b', 'body', 'Same', { x: 0, y: 80, cx: 180, cy: 40 }),
+      ],
+    };
+    const one = composition('one-450', [450]);
+    const catalog = [cover, numbered, mirror, one];
+    expect(
+      remapPlan(
+        ['cover', 'numbered'],
+        catalog,
+        catalog,
+        'dense',
+        [cover],
+        new Map(),
+        'preserve-block-count',
+      )[1],
+    ).toBe('one-450');
+    expect(
+      remapPlan(
+        ['cover', 'mirror'],
+        catalog,
+        catalog,
+        'dense',
+        [cover],
+        new Map(),
+        'preserve-block-count',
+      )[1],
+    ).toBe('one-450');
+  });
+
+  it('keeps cover, special, framing and required-content guards under the strict policy', () => {
+    const note = (
+      patternId: string,
+      kind: CompositionNote['kind'],
+      extra: Partial<CompositionNote> = {},
+    ) =>
+      [
+        patternId,
+        {
+          patternId,
+          kind,
+          items: 1,
+          useFor: kind,
+          title: patternId,
+          skip: false,
+          special: false,
+          requiredContent: [] as CompositionNote['requiredContent'],
+          ...extra,
+        },
+      ] as const;
+    const special = composition('special-one', [900]);
+    const section = composition('section-one', [150]);
+    const named = composition('named-one', [900]);
+    const ordinary = composition('one-450', [450]);
+    const catalog = [cover, special, section, named, ordinary, composition('one-1200', [1200])];
+    const notes = new Map<string, CompositionNote>([
+      note('cover', 'cover'),
+      note('special-one', 'statement', { special: true }),
+      note('section-one', 'section'),
+      note('named-one', 'statement', { requiredContent: ['person-name'] }),
+      note('one-450', 'statement'),
+      note('one-1200', 'statement'),
+    ]);
+    const plan = ['cover', 'special-one', 'section-one', 'one-450'];
+    expect(
+      remapPlan(plan, catalog, catalog, 'dense', [cover], notes, 'preserve-block-count'),
+    ).toEqual(['cover', 'special-one', 'section-one', 'one-1200']);
   });
 });
 

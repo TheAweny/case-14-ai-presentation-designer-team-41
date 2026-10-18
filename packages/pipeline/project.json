@@ -21,6 +21,13 @@
     "test": {
       "executor": "nx:run-commands",
       "options": { "command": "vitest run --passWithNoTests", "cwd": "packages/pipeline" }
+    },
+    "compare-layout-remap": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx scripts/compare-layout-remap.mts",
+        "cwd": "."
+      }
     }
   }
 }

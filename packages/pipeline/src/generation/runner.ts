@@ -23,6 +23,7 @@ import {
   critiqueSchema,
   type DeckVariant,
   fitChars,
+  type LayoutRemapPolicy,
   minChars,
   thinMessage,
   type SharedPlan,
@@ -80,6 +81,11 @@ export interface GenerateOptions {
   seed?: number;
   /** Which of the three renderings this run produces. Absent: balanced. */
   variant?: DeckVariant;
+  /**
+   * How this variant remaps the shared plan. Absent keeps the existing density choice.
+   * `preserve-block-count` refuses a layout whose content-block count differs.
+   */
+  layoutRemapPolicy?: LayoutRemapPolicy;
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
   /** The day the deck is dated by. Absent: today. */
@@ -256,6 +262,7 @@ export async function generatePresentation(options: GenerateOptions) {
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
       variant: options.variant ?? 'balanced',
+      ...(options.layoutRemapPolicy ? { layoutRemapPolicy: options.layoutRemapPolicy } : {}),
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
       today,
       imagesAvailable: illustrations !== null,
@@ -981,6 +988,14 @@ export async function generatePresentation(options: GenerateOptions) {
           hash: toManifestEntry(agent).instructionsSha256,
         }))
         .concat([
+          {
+            kind: 'config',
+            id: 'layout-remap-policy',
+            version: '1.0.0',
+            hash: createHash('sha256')
+              .update(options.layoutRemapPolicy ?? 'density')
+              .digest('hex'),
+          },
           {
             kind: 'model',
             id: options.provider.model,
