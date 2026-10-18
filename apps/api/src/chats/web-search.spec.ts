@@ -69,4 +69,25 @@ describe('web search adapter', () => {
     await vi.advanceTimersByTimeAsync(0);
     await expect(settled).resolves.toMatchObject({ kind: 'aborted' });
   });
+
+  it('keeps general results free of image fields and of the images category', async () => {
+    let requested = '';
+    const client = createWebSearch({
+      baseUrl: 'http://search:8080',
+      resolve: async () => ['8.8.8.8'],
+      fetch: async (input) => {
+        requested = String(input);
+        return Response.json({
+          results: [{ ...hit, img_src: 'https://example.org/pic.jpg', license: 'CC-BY-4.0' }],
+        });
+      },
+    });
+    const answer = await client.search('отчёт', new AbortController().signal);
+    const params = new URL(requested).searchParams;
+    expect(params.get('categories')).toBeNull();
+    expect(params.get('format')).toBe('json');
+    expect(Object.keys(answer.results[0] ?? {}).sort()).toEqual(
+      ['publishedAt', 'snippet', 'title', 'url'].sort(),
+    );
+  });
 });

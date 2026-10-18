@@ -20,6 +20,9 @@ const MAX_URL_LENGTH = 2_000;
 const MAX_ENGINES = 10;
 const MAX_ENGINE_NAME = 100;
 const MAX_ANSWER_JSON = 10_000;
+const MAX_LICENSE_LENGTH = 200;
+
+export type WebSearchCategory = 'general' | 'images';
 
 export const SEARCH_TRUST = 'search-results-not-evidence' as const;
 
@@ -29,6 +32,8 @@ export type ResolveName = (host: string) => Promise<readonly string[]>;
 
 export interface WebSearchOptions {
   readonly baseUrl: string;
+  /** Defaults to general. `images` asks SearXNG for `categories=images`. */
+  readonly category?: WebSearchCategory;
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
   readonly now?: () => Date;
@@ -40,6 +45,10 @@ export interface WebSearchResult {
   readonly title: string;
   readonly snippet: string;
   readonly publishedAt: string | null;
+  /** Present only for `category: 'images'`. The picture address, not fetched. */
+  readonly imageUrl?: string;
+  /** Present only for `category: 'images'`. Source `license` field, or `unknown`. */
+  readonly license?: string;
 }
 
 export interface WebSearchAnswer {
@@ -92,6 +101,7 @@ export function webSearchBaseUrl(env: Readonly<Record<string, string | undefined
 
 export function createWebSearch(options: WebSearchOptions): WebSearch {
   const base = parseBase(options.baseUrl);
+  const category = normalizeCategory(options.category);
   const run = options.fetch ?? fetch;
   const timeoutMs = normalizeTimeout(options.timeoutMs);
   const now = options.now ?? (() => new Date());
@@ -116,6 +126,7 @@ export function createWebSearch(options: WebSearchOptions): WebSearch {
       endpoint.hash = '';
       endpoint.searchParams.set('q', text);
       endpoint.searchParams.set('format', 'json');
+      if (category === 'images') endpoint.searchParams.set('categories', 'images');
 
       const controller = new AbortController();
       let timedOut = false;
@@ -184,7 +195,7 @@ export function createWebSearch(options: WebSearchOptions): WebSearch {
         }
         ensureLive();
         const parsed = parsePayload(payload);
-        const results = await collectResults(parsed.results, count, resolve, ensureLive);
+        const results = await collectResults(parsed.results, count, resolve, ensureLive, category);
         ensureLive();
         return fitAnswer({
           query: text,
@@ -234,6 +245,12 @@ function normalizeTimeout(timeoutMs: number | undefined): number {
     throw new WebSearchError('invalid-base', 'invalid-timeout');
   }
   return Math.min(timeoutMs, MAX_TIMEOUT_MS);
+}
+
+function normalizeCategory(category: WebSearchCategory | undefined): WebSearchCategory {
+  if (category === undefined || category === 'general') return 'general';
+  if (category === 'images') return 'images';
+  throw new WebSearchError('invalid-base');
 }
 
 function normalizeQuery(query: string): string {
@@ -354,13 +371,14 @@ async function collectResults(
   limit: number,
   resolve: ResolveName,
   ensureLive: () => void,
+  category: WebSearchCategory,
 ): Promise<WebSearchResult[]> {
   const results: WebSearchResult[] = [];
   const seen = new Set<string>();
   for (const item of items.slice(0, MAX_CANDIDATES)) {
     if (results.length >= limit) break;
     ensureLive();
-    const parsed = await parseItem(item, resolve, ensureLive);
+    const parsed = await parseItem(item, resolve, ensureLive, category);
     if (parsed === null || seen.has(parsed.url)) continue;
     seen.add(parsed.url);
     results.push(parsed);
@@ -372,6 +390,7 @@ async function parseItem(
   item: unknown,
   resolve: ResolveName,
   ensureLive: () => void,
+  category: WebSearchCategory,
 ): Promise<WebSearchResult | null> {
   if (typeof item !== 'object' || item === null || Array.isArray(item)) return null;
   const record = item as {
@@ -379,12 +398,12 @@ async function parseItem(
     title?: unknown;
     content?: unknown;
     publishedDate?: unknown;
+    img_src?: unknown;
+    license?: unknown;
   };
-  if (
-    typeof record.url !== 'string' ||
-    typeof record.title !== 'string' ||
-    typeof record.content !== 'string'
-  ) {
+  if (typeof record.url !== 'string' || typeof record.title !== 'string') return null;
+  if (category === 'general' && typeof record.content !== 'string') return null;
+  if (category === 'images' && record.content !== undefined && typeof record.content !== 'string') {
     return null;
   }
   if (
@@ -399,12 +418,28 @@ async function parseItem(
   if (url === null) return null;
   const title = bound(record.title, MAX_TITLE_LENGTH);
   if (title === '') return null;
-  return {
+  const result: WebSearchResult = {
     url,
     title,
-    snippet: bound(record.content, MAX_SNIPPET_LENGTH),
+    snippet: bound(typeof record.content === 'string' ? record.content : '', MAX_SNIPPET_LENGTH),
     publishedAt: publishedAt(record.publishedDate),
   };
+  if (category !== 'images') return result;
+  if (typeof record.img_src !== 'string') return null;
+  const imageUrl = await publicUrl(record.img_src, resolve, ensureLive);
+  if (imageUrl === null) return null;
+  return {
+    ...result,
+    imageUrl,
+    license: sourceLicense(record.license),
+  };
+}
+
+function sourceLicense(value: unknown): string {
+  if (typeof value !== 'string') return 'unknown';
+  const text = value.trim();
+  if (text === '' || text.length > MAX_LICENSE_LENGTH) return 'unknown';
+  return text;
 }
 
 function fitAnswer(answer: WebSearchAnswer): WebSearchAnswer {
@@ -436,6 +471,8 @@ async function publicUrl(
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
   if (url.username !== '' || url.password !== '') return null;
+  const defaultPort = url.protocol === 'http:' ? '80' : '443';
+  if (url.port !== '' && url.port !== defaultPort) return null;
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (host === '' || host === 'localhost' || host.endsWith('.localhost')) return null;
   url.hash = '';
