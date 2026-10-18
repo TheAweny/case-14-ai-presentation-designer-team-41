@@ -30,11 +30,11 @@ import {
   designSystemSchema,
   deckImportResponseSchema,
   generationRequestSchema,
-  slideIrSchema,
   storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
 import type { SlideIr } from '@lct/contracts';
+import { validateExportMedia, writeExportMedia } from './export-media.js';
 import { buildOf, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -423,20 +423,21 @@ export class GenerationController {
   @ApiErrors(400, 404, 503)
   async exportEdited(
     @Param('id') id: string,
-    @Body() body: { slides?: unknown; variant?: unknown; format?: unknown },
+    @Body() body: unknown,
     @CurrentAccount() account: Account,
   ): Promise<{ exportId: string; previews: string[] }> {
     await this.completed(id, account);
-    const slides = Array.isArray(body.slides)
-      ? body.slides.map((slide) => slideIrSchema.parse(slide))
-      : [];
-    if (!slides.length) throw new BadRequestException('At least one slide is required.');
-    const variant = body.variant === 'dense' || body.variant === 'airy' ? body.variant : 'balanced';
+    const parsed = exportRequestSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(parsed.error.message);
+    const request = parsed.data;
+    const slides = request.slides;
+    const validatedMedia = validateExportMedia(slides, request.media);
+    const variant = request.variant ?? 'balanced';
     // The requested download decides what the engine builds: a PPTX pays for neither PDF nor
     // previews, PDF skips previews, PNG and HTML are built from the rendered previews.
     const format =
-      body.format === 'pdf' || body.format === 'png' || body.format === 'html'
-        ? body.format
+      request.format === 'pdf' || request.format === 'png' || request.format === 'html'
+        ? request.format
         : 'pptx';
     const formats: ('pptx' | 'pdf')[] = format === 'pdf' ? ['pptx', 'pdf'] : ['pptx'];
     const previews = format === 'png' || format === 'html';
@@ -444,6 +445,7 @@ export class GenerationController {
     const outputDir = join(this.directory(id), 'exports', exportId);
     await mkdir(outputDir, { recursive: true });
     try {
+      const media = await writeExportMedia(outputDir, validatedMedia);
       await this.engine.exportDeck({
         schemaVersion: 1,
         templatePath: join(this.directory(id), 'deck.pptx'),
@@ -452,6 +454,7 @@ export class GenerationController {
         outputDir,
         formats,
         previews,
+        media,
       });
       await rename(join(outputDir, `${variant}.pptx`), join(outputDir, 'deck.pptx'));
       if (format === 'pdf')

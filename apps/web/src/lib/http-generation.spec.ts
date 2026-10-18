@@ -10,6 +10,7 @@ import {
 } from './http-generation';
 import type { ExportRequest } from './deck-export';
 import { mediaUrls } from './deck-source';
+import { qrImageElement } from '../components/editor/qr-insert';
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -25,6 +26,8 @@ const stored = {
   templateIr: fixture('CompositionExportResponse').templateIr,
 };
 const deck = decodeGeneratedDeck(stored);
+const firstSlide = deck.slides[0];
+if (!firstSlide) throw new Error('Expected fixture slide');
 it('uses the engine-rendered first slide for the cover preview', () => {
   expect(deck.coverPreviewUrl).toBe('/api/backend/generation/run-test/artifacts/slide-1.png');
 });
@@ -93,6 +96,70 @@ const source = () =>
   );
 
 describe('generated artifact download', () => {
+  it('posts referenced image bytes once and returns the downloaded PPTX blob', async () => {
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN2kAAAAASUVORK5CYII=';
+    const file = new Blob([Buffer.from(png, 'base64')], { type: 'image/png' });
+    const image = qrImageElement('upload/qr.png', { x: 0, y: 0, cx: 1104900, cy: 1104900 }, 'qr');
+    const slides = [{ ...firstSlide, elements: [image, { ...image, elementId: 'copy' }] }];
+    let posted: unknown;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, init) => {
+        if (String(url).endsWith('/export')) {
+          posted = JSON.parse(String(init?.body));
+          return Response.json({ exportId: 'qr-export', previews: [] });
+        }
+        return new Response('pptx with QR', {
+          headers: { 'content-type': 'application/octet-stream' },
+        });
+      }),
+    );
+    const objectUrl = vi.fn((_blob: Blob) => 'blob:qr-pptx');
+    vi.stubGlobal('URL', { createObjectURL: objectUrl });
+    const result = await createHttpExporter({ file: () => file }).export(
+      { ...input(), slides },
+      vi.fn(),
+      AbortSignal.timeout(1000),
+    );
+    expect(posted).toMatchObject({
+      slides,
+      media: [{ mediaPart: 'upload/qr.png', dataUrl: `data:image/png;base64,${png}` }],
+    });
+    expect(result.url).toBe('blob:qr-pptx');
+    expect(await objectUrl.mock.calls[0]?.[0].text()).toBe('pptx with QR');
+  });
+  it('does not issue an export request when an image is missing or collection is cancelled', async () => {
+    const image = qrImageElement(
+      'upload/missing.png',
+      { x: 0, y: 0, cx: 1104900, cy: 1104900 },
+      'qr',
+    );
+    const slides = [{ ...firstSlide, elements: [image] }];
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    await expect(
+      createHttpExporter({ file: () => null }).export(
+        { ...input(), slides },
+        vi.fn(),
+        AbortSignal.timeout(1000),
+      ),
+    ).rejects.toThrow('Не найден файл');
+    const controller = new AbortController();
+    const blob = new Blob(['image'], { type: 'image/png' });
+    vi.spyOn(blob, 'arrayBuffer').mockImplementation(async () => {
+      controller.abort(new Error('cancelled'));
+      return new ArrayBuffer(0);
+    });
+    await expect(
+      createHttpExporter({ file: () => blob }).export(
+        { ...input(), slides },
+        vi.fn(),
+        controller.signal,
+      ),
+    ).rejects.toThrow('cancelled');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it('sends auto as null and preserves the requested project', async () => {
     const fetcher = vi.fn(async (url, init) => {
       const path = String(url);

@@ -10,6 +10,8 @@ import { apiFetch, publicApiUrl } from './api';
 import type { DeckGenerator, GenerationResult, ServerRun, StreamedSlide } from './deck-generator';
 import { DeckNotFoundError, type Deck, type DeckSource } from './deck-source';
 import type { DeckExporter } from './deck-export';
+import { collectExportMedia } from './export-media';
+import { uploadedMedia, type MediaRegistry } from './media-registry';
 import { templateLayoutsFromIr, templateSlideFromIr } from './template-profile';
 
 const storedDeckSchema = z.object({
@@ -271,7 +273,9 @@ export function createHttpGenerator(): DeckGenerator {
   };
 }
 
-export function createHttpExporter(): DeckExporter {
+export function createHttpExporter(
+  registry: Pick<MediaRegistry, 'file'> = uploadedMedia,
+): DeckExporter {
   return {
     async export(input, onEvent, signal) {
       signal.throwIfAborted();
@@ -296,6 +300,15 @@ export function createHttpExporter(): DeckExporter {
         throw new Error(message);
       };
       if (!input.slides.length) fail('Нельзя экспортировать колоду без слайдов.');
+      const media = await collectExportMedia(input.slides, registry, signal);
+      const body = JSON.stringify({
+        slides: input.slides,
+        variant: input.variant,
+        format: input.format,
+        media,
+      });
+      if (new TextEncoder().encode(body).length > 5 * 1024 * 1024)
+        fail('Колода превышает допустимый размер запроса экспорта 5 МиБ.');
       push({ type: 'stage-started', stage: 'rendering' });
       const exported = z
         // A PPTX or PDF download needs no previews: the server skips rendering them.
@@ -306,11 +319,7 @@ export function createHttpExporter(): DeckExporter {
             headers: { 'content-type': 'application/json' },
             // The format lets the server build exactly what the download needs: a PPTX export
             // does not pay for a PDF conversion or slide previews it will never return.
-            body: JSON.stringify({
-              slides: input.slides,
-              variant: input.variant,
-              format: input.format,
-            }),
+            body,
             signal,
           }),
         );

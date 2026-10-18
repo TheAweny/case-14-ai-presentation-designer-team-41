@@ -83,6 +83,7 @@ function planMessage(status: 'proposed' | 'approved'): ChatMessage {
 describe('chat tools by mode', () => {
   it('talks, reads and edits pointed objects in the chat mode, and builds nothing', () => {
     expect(chat('chat').tools.map((tool) => tool.name)).toEqual([
+      'generate_qr',
       'list_templates',
       'describe_template',
       'inspect_template_layout',

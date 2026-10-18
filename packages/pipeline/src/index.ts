@@ -109,3 +109,9 @@ export {
   type IndexProgress,
 } from './generation/indexer.js';
 export * from './chat/index.js';
+export {
+  generateQrCode,
+  minimumQrSizeEmu,
+  qrUrlsInText,
+  type QrCodeImage,
+} from './assets/qr-code.js';

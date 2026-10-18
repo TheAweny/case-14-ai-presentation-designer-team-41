@@ -40,6 +40,13 @@
                   "pattern": "^media\\/[\\w.-]+\\.(?:png|jpe?g)$",
                   "type": "string"
                 },
+                "purpose": {
+                  "enum": [
+                    "qr",
+                    "illustration"
+                  ],
+                  "type": "string"
+                },
                 "slotId": {
                   "description": "An imageSlots id of the composition.",
                   "minLength": 1,

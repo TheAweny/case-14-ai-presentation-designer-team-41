@@ -148,3 +148,9 @@ When `corrections.exactSlideCount` is present, return that exact count. When it 
 `firstSlidePatternMustBeOneOf`, use one of those ids on the first slide. When it contains
 `overusedPatternIds`, use none of those ids more than `maximumUsesPerPattern` times and spread the
 slides over other compositions of the catalog. Apply all corrections in one response.
+
+## Deterministic QR assets
+
+`allowedQrUrls` contains exact URLs from the source material (including a user-approved outline, never a model-proposed outline). A catalog composition may declare `qrSlotIds`: existing picture candidates with explicit QR meaning in the template. These slots are separate from ordinary `imageSlots`; a QR does not require an image model, even when `imagesAvailable` is false. Use the QR composition when a QR link supports the slide's purpose and an appropriate URL exists in `allowedQrUrls`.
+
+For each declared QR slot, return `qrRequests: [{"slotId":"declared id","url":"exact allowed URL"}]` on that slide, at most 10. Copy the complete URL verbatim, preserving Unicode, percent encoding, path, query, fragment and signatures. A host prefix, shortened URL, normalized spelling, invented address or URL from your own proposed outline is not evidence. Do not put QR drawing instructions in imageQuery or request a QR from the illustrator. Keep imageQuery empty for QR-only slides. When no suitable exact URL exists, choose an ordinary composition without QR slots. Code validates source equality and physical slot size before the writer, and selects an ordinary composition if QR cannot safely fit.

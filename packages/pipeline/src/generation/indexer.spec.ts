@@ -47,6 +47,55 @@ const note = (patternId: string, extra: Partial<CompositionNote> = {}): Composit
 });
 
 describe('indexTemplate', () => {
+  it('passes compact picture candidates including tiny ones and validates declared QR ids', async () => {
+    const candidate = {
+      slotId: 'tiny',
+      kind: 'photo' as const,
+      box: { x: 0, y: 0, cx: 100, cy: 100 },
+    };
+    const image = {
+      ...candidate,
+      slotId: 'large',
+      box: { ...candidate.box, cx: 4_000_000, cy: 4_000_000 },
+    };
+    const pattern = { ...first, imageSlots: [image], qrCandidateSlots: [candidate, image] };
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        _agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        expect(input).toMatchObject({
+          compositions: [
+            {
+              qrCandidates: [
+                { slotId: 'large', kind: 'photo' },
+                { slotId: 'tiny', kind: 'photo' },
+              ],
+            },
+          ],
+        });
+        const candidates = (input as { compositions: { qrCandidates: unknown[] }[] })
+          .compositions[0]?.qrCandidates;
+        expect(JSON.stringify(candidates)).not.toContain('box');
+        return schema.parse({
+          notes: [note(pattern.patternId, { qrSlotIds: ['tiny', 'tiny', 'unknown'] })],
+        });
+      },
+    };
+    const notes = await indexTemplate({
+      provider,
+      instructions: '',
+      profile: { ...base, compositions: [pattern] },
+      signal: AbortSignal.timeout(10_000),
+    });
+    expect(notes[0]).toMatchObject({ qrSlotIds: ['tiny'], special: true });
+    const noQrAnswer = note(pattern.patternId);
+    expect(settleNote(noQrAnswer, pattern).qrSlotIds).toEqual([]);
+    expect(settleNote({ ...noQrAnswer, qrSlotIds: ['unknown'] }, pattern).qrSlotIds).toEqual([]);
+  });
   it('describes every distinct composition once, in batches the model can answer', async () => {
     const batches: string[][] = [];
     const provider: TextProvider = {

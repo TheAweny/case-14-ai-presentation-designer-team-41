@@ -10,6 +10,7 @@ import {
 } from '@lct/contracts';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 import { distinctCompositions, plannerComposition, slotBriefs, writerSlots } from './workflow.js';
+import { declaredQrSlots } from './qr-assets.js';
 
 /** Compositions per model call: small enough that one answer never runs out of tokens. */
 const BATCH = 12;
@@ -106,8 +107,22 @@ export function settleNote(
     title: answer.title.replace(/\s+/g, ' ').trim(),
     items: single ? 1 : Math.min(answer.items, Math.max(blocks, 1)),
     skip: reference,
-    special: !reference && (answer.special || inSpecialGroup),
-    requiredContent: reference ? [] : [...new Set(answer.requiredContent)],
+    special:
+      !reference &&
+      (answer.special ||
+        inSpecialGroup ||
+        declaredQrSlots(pattern, { ...answer, skip: false }).length > 0),
+    qrSlotIds: reference ? [] : declaredQrSlots(pattern, { ...answer, skip: false }),
+    requiredContent: reference
+      ? []
+      : [...new Set(answer.requiredContent)].filter(
+          (item) =>
+            item !== 'image' ||
+            !declaredQrSlots(pattern, { ...answer, skip: false }).length ||
+            (pattern.imageSlots ?? []).some(
+              (slot) => !declaredQrSlots(pattern, { ...answer, skip: false }).includes(slot.slotId),
+            ),
+        ),
     ...settledSemantics(answer, pattern),
   };
 }
@@ -180,6 +195,14 @@ export async function indexTemplate(options: {
           // Neighbouring slides of a template usually belong to one group.
           slide: pattern.sourceIndex + 1,
           ...plannerComposition(pattern),
+          qrCandidates: [
+            ...new Map(
+              [...(pattern.imageSlots ?? []), ...(pattern.qrCandidateSlots ?? [])].map((slot) => [
+                slot.slotId,
+                { slotId: slot.slotId, kind: slot.kind },
+              ]),
+            ).values(),
+          ],
           // The planner brief omits slot ids. The indexer needs them to name roles.
           slots: slotBriefs(writerSlots(pattern)).map((slot) => ({
             slotId: slot.slotId,

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +30,85 @@ const imported = JSON.parse(
     'utf8',
   ),
 ).valid[0].payload;
+
+describe('POST /generation/:id/export uploaded media', () => {
+  const PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN2kAAAAASUVORK5CYII=';
+  const image = {
+    kind: 'image',
+    role: 'image',
+    elementId: 'qr-image',
+    sourceShapeId: null,
+    mediaPart: 'upload/qr.png',
+    fit: 'contain',
+    box: { x: 0, y: 0, cx: 1104900, cy: 1104900 },
+  };
+  const body = () => ({
+    slides: [{ ...imported.slides[0], elements: [image] }],
+    format: 'pptx',
+    media: [{ mediaPart: 'upload/qr.png', dataUrl: `data:image/png;base64,${PNG}` }],
+  });
+  it('sends the engine an owned generated path containing the exact PNG and preserves the upload key', async () => {
+    let sent:
+      | { outputDir: string; media: { mediaPart: string; path: string }[]; slides: unknown[] }
+      | undefined;
+    vi.stubGlobal('fetch', async (_url: unknown, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body));
+      if (!sent) throw new Error('Expected engine request');
+      const request = sent;
+      expect(request.media).toHaveLength(1);
+      const media = request.media[0];
+      if (!media) throw new Error('Expected media mapping');
+      expect(
+        media.path.startsWith(join(request.outputDir, 'media') + '\\') ||
+          media.path.startsWith(join(request.outputDir, 'media') + '/'),
+      ).toBe(true);
+      expect(await readFile(media.path)).toEqual(Buffer.from(PNG, 'base64'));
+      await writeFile(join(request.outputDir, 'balanced.pptx'), 'engine pptx');
+      return Response.json({
+        schemaVersion: 1,
+        variant: 'balanced',
+        files: [{ format: 'pptx', path: join(request.outputDir, 'balanced.pptx') }],
+      });
+    });
+    const routes = controllerOf(repository, {} as ModelSettingsService);
+    const result = await routes.exportEdited(RUN, body(), owner);
+    expect(sent?.slides).toEqual(body().slides);
+    expect(sent?.media[0]?.mediaPart).toBe('upload/qr.png');
+    expect(await readFile(join(root, RUN, 'exports', result.exportId, 'deck.pptx'), 'utf8')).toBe(
+      'engine pptx',
+    );
+  });
+  it('checks ownership and completion before any file write', async () => {
+    const routes = withEngine(null);
+    await expect(routes.exportEdited(RUN, body(), stranger)).rejects.toThrow(
+      'Completed deck not found',
+    );
+    await expect(
+      routes.exportEdited('run-00000000-0000-4000-8000-000000000099', body(), owner),
+    ).rejects.toThrow('Completed deck not found');
+    expect((await readdir(join(root, RUN))).includes('exports')).toBe(false);
+    expect(posted).toEqual([]);
+  });
+  it('refuses missing bytes, path traversal and supplied disk paths before creating an export directory', async () => {
+    const routes = withEngine(null);
+    for (const invalid of [
+      { ...body(), media: [] },
+      {
+        ...body(),
+        media: [{ mediaPart: 'upload/../deck.pptx', dataUrl: `data:image/png;base64,${PNG}` }],
+      },
+      { ...body(), media: [{ ...body().media[0], path: join(root, RUN, 'metadata.json') }] },
+      { ...body(), media: [{ ...body().media[0], dataUrl: 'data:image/png;base64,YWJj' }] },
+    ])
+      await expect(routes.exportEdited(RUN, invalid, owner)).rejects.toThrow();
+    expect((await readdir(join(root, RUN))).includes('exports')).toBe(false);
+    expect(posted).toEqual([]);
+    expect(JSON.parse(await readFile(join(root, RUN, 'metadata.json'), 'utf8')).ownerId).toBe(
+      owner.id,
+    );
+  });
+});
 
 /** A repository where the one run is finished, which is all the deck routes ask of it. */
 const repository = {

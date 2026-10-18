@@ -16,6 +16,13 @@
     "@lct/run-store": "workspace:^",
     "@mastra/core": "1.66.0",
     "@mastra/libsql": "1.22.5",
+    "qrcode": "1.5.4",
     "zod": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/pngjs": "6.0.5",
+    "@types/qrcode": "^1",
+    "jsqr": "1.4.0",
+    "pngjs": "7.0.0"
   }
 }

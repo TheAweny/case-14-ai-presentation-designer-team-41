@@ -148,6 +148,20 @@ export const exportRequestSchema = z.object({
   slides: z.array(slideIrSchema).min(1).describe('Слайды, как они сейчас в редакторе.'),
   variant: layoutVariantSchema.optional(),
   format: z.enum(['pptx', 'pdf', 'png', 'html']).optional(),
+  media: z
+    .array(
+      z
+        .object({
+          mediaPart: z.string().regex(/^upload\/[\w.-]+\.(png|jpe?g)$/),
+          dataUrl: z.string().max(1398136),
+        })
+        .strict(),
+    )
+    .max(32)
+    .optional()
+    .describe(
+      'PNG/JPEG загруженных изображений, на которые ссылаются слайды; до 1 МиБ каждое и 3 МиБ всего.',
+    ),
 });
 
 export const deckPatchSchema = z.object({

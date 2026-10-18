@@ -37,6 +37,7 @@ import { createAssetSearch, type AssetSearch } from './asset-search.js';
 import { researchWebTopic } from './web-research.js';
 import { materialTools } from './material-tools.js';
 import { inspectionTools } from './inspection-tools.js';
+import { qrTool } from './qr-tool.js';
 import { inspectChatSources } from './source-provenance.js';
 import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
 import { fetchWebSource, type WebSourceOptions, type WebSourcePage } from './web-source.js';
@@ -971,6 +972,7 @@ export function chatTools(
   };
 
   return [
+    qrTool(scope),
     listTemplates,
     describeTemplate,
     inspectTemplate,

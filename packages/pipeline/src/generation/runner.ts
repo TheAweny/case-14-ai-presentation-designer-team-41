@@ -39,6 +39,7 @@ import { approvedCoverage } from './final-review.js';
 import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import type { ModelProvider } from '../models/provider.js';
+import { saveQrAssets } from './qr-assets.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 import {
   contextualCorrections,
@@ -256,6 +257,7 @@ export async function generatePresentation(options: GenerateOptions) {
           }),
         );
     };
+    let qrImages = new Map<number, NonNullable<z.infer<typeof writtenSchema>['slide']['images']>>();
     const workflow = createGenerationWorkflow({
       provider: options.provider,
       plannerInstructions: planner.instructions,
@@ -268,6 +270,17 @@ export async function generatePresentation(options: GenerateOptions) {
       imagesAvailable: illustrations !== null,
       outlineIsSource: options.outlineSource !== 'model',
       onPlan,
+      qrSourceBrief: sourceBrief,
+      onQrPlan: async (slides) => {
+        const assets = await saveQrAssets(
+          options.outputDir,
+          slides,
+          new Map((options.notes ?? []).map((note) => [note.patternId, note])),
+          sourceBrief,
+          signal,
+        );
+        qrImages = assets.images;
+      },
       signal,
       concurrency: 3,
       ...(options.notes ? { notes: options.notes } : {}),
@@ -322,6 +335,10 @@ export async function generatePresentation(options: GenerateOptions) {
       .array(writtenSchema)
       .parse(result.result)
       .sort((a, b) => a.index - b.index);
+    for (const current of written) {
+      const images = qrImages.get(current.index);
+      if (images?.length) current.slide = { ...current.slide, images };
+    }
     timings.push({ stage, ms: Date.now() - started });
     await emit({ type: 'stage-finished', stage, durationMs: timings[0]?.ms ?? 0 });
     stage = 'auditing';
@@ -539,7 +556,7 @@ export async function generatePresentation(options: GenerateOptions) {
       }
       for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
         const current = written.find((s) => s.index === update.index);
-        if (current) current.slide = update.slide;
+        if (current) current.slide = { ...update.slide, images: current.slide.images };
       }
     }
     await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
@@ -752,7 +769,7 @@ export async function generatePresentation(options: GenerateOptions) {
         if (repaired.status === 'success') {
           for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
             const current = written.find((s) => s.index === update.index);
-            if (current) current.slide = update.slide;
+            if (current) current.slide = { ...update.slide, images: current.slide.images };
           }
           await settleFit();
           output = await options.engine.exportCompositions(exportRequest(), signal);
@@ -951,6 +968,7 @@ export async function generatePresentation(options: GenerateOptions) {
       ['audit', join(options.outputDir, 'final-review.json')],
       ...(contextual ? [['audit', join(options.outputDir, 'audit-contextual.json')] as const] : []),
       ['audit', join(options.outputDir, 'self-check.json')],
+      ['audit', join(options.outputDir, 'qr-assets.json')],
       ...output.previews.map((p) => ['preview', p]),
     ] as const) {
       const bytes = await readFile(path);
@@ -994,6 +1012,23 @@ export async function generatePresentation(options: GenerateOptions) {
             version: '1.0.0',
             hash: createHash('sha256')
               .update(options.layoutRemapPolicy ?? 'density')
+              .digest('hex'),
+          },
+          {
+            kind: 'config',
+            id: 'qr-encoding',
+            version: '1.0.0',
+            hash: createHash('sha256')
+              .update(
+                JSON.stringify({
+                  encoder: 'qrcode@1.5.4',
+                  mode: 'byte',
+                  encoding: 'UTF-8',
+                  errorCorrectionLevel: 'M',
+                  margin: 4,
+                  scale: 8,
+                }),
+              )
               .digest('hex'),
           },
           {

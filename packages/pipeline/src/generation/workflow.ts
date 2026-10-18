@@ -18,6 +18,7 @@ import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { tearsAWord } from './fit.js';
 import type { TextProvider } from './provider.js';
+import { declaredQrSlots, safeQrPlan, sourceQrUrls } from './qr-assets.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
 /** The three renderings of one brief. They differ in composition and density, not in facts. */
@@ -63,6 +64,10 @@ export interface GenerationDependencies {
   outlineIsSource?: boolean;
   /** The laid-out slides, as soon as the plan is made: pictures are drawn while copy is written. */
   onPlan?: (slides: readonly PlannedSlide[]) => void;
+  /** All tasks, including special QR compositions, after deterministic QR validation. */
+  onQrPlan?: (slides: readonly PlannedSlide[]) => void | Promise<void>;
+  /** Original source only; a model outline never authorizes a QR URL. */
+  qrSourceBrief?: string;
 }
 
 /** A planned slide with its composition, as the illustrator needs it. */
@@ -74,6 +79,7 @@ export interface PlannedSlide {
   audience: string;
   goal: string;
   composition: GenerationProfile['compositions'][number];
+  qrRequests?: z.infer<typeof compositionPlanSchema>['slides'][number]['qrRequests'];
 }
 const inputSchema = z.object({
   brief: z.string(),
@@ -663,7 +669,10 @@ export function plannerComposition(
     ...(note ? { requiredContent: note.requiredContent } : {}),
     imageCount: pattern.imageCount,
     /** Places this composition has for a generated picture. */
-    imageSlots: pattern.imageSlots?.length ?? 0,
+    imageSlots: (pattern.imageSlots ?? []).filter(
+      (s) => !declaredQrSlots(pattern, note).includes(s.slotId),
+    ).length,
+    ...(note?.qrSlotIds?.length ? { qrSlotIds: declaredQrSlots(pattern, note) } : {}),
     contentSlots: slots.filter((slot) => slot.role !== 'title').length,
     slots: slotBriefs(slots).map((slot) => ({
       role: slot.role,
@@ -689,6 +698,8 @@ export function distinctCompositions<T extends GenerationProfile['compositions']
     const key = JSON.stringify([
       pattern.name,
       pattern.imageCount,
+      pattern.imageSlots,
+      pattern.qrCandidateSlots,
       pattern.slots.map((slot) => [slot.role, slot.sample.trim(), slot.maxChars, slot.maxLines]),
     ]);
     if (seen.has(key)) return false;
@@ -715,21 +726,40 @@ export function prepareVariantCatalog<T extends GenerationProfile['compositions'
       .get(pattern.patternId)
       ?.requiredContent.some((item) =>
         item === 'image'
-          ? !options.imagesAvailable
+          ? !options.imagesAvailable &&
+            (!declaredQrSlots(pattern, notes.get(pattern.patternId)).length ||
+              (pattern.imageSlots ?? []).some(
+                (slot) =>
+                  !declaredQrSlots(pattern, notes.get(pattern.patternId)).includes(slot.slotId),
+              ))
           : item === 'brand-asset' || item === 'screenshot',
       ) ?? false;
   const keepsSamplePhotos = (pattern: (typeof all)[number]) =>
     notes.get(pattern.patternId)?.special === true &&
-    (pattern.imageSlots ?? []).some((slot) => slot.kind === 'photo');
+    (pattern.imageSlots ?? []).some(
+      (slot) =>
+        slot.kind === 'photo' &&
+        !declaredQrSlots(pattern, notes.get(pattern.patternId)).includes(slot.slotId),
+    );
   const assetSafe = all.filter(
     (pattern) => !hasMissingAsset(pattern) && !keepsSamplePhotos(pattern),
   );
   const usable = assetSafe.filter((pattern) => !notes.get(pattern.patternId)?.skip);
   const readable = usable.length >= 3 ? usable : assetSafe;
   const textOnly = readable.filter(
-    (pattern) => !pattern.imageSlots?.some((slot) => slot.kind !== 'photo'),
+    (pattern) =>
+      !pattern.imageSlots?.some(
+        (slot) =>
+          slot.kind !== 'photo' &&
+          !declaredQrSlots(pattern, notes.get(pattern.patternId)).includes(slot.slotId),
+      ),
   );
-  const distinct = options.imagesAvailable || textOnly.length < 3 ? readable : textOnly;
+  const distinct =
+    options.imagesAvailable || textOnly.length < 3
+      ? readable
+      : readable.filter(
+          (p) => textOnly.includes(p) || declaredQrSlots(p, notes.get(p.patternId)).length > 0,
+        );
   if (!distinct.length)
     throw new Error('Template has no composition usable without an external image or asset.');
   const spacious = distinct.filter(
@@ -1060,6 +1090,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       // lays the same slides out on its own compositions (remapPlan).
       const outline = inputData.outline ?? null;
       const slideCount = outline?.slides.length ?? inputData.slideCount;
+      const qrSourceBrief =
+        deps.qrSourceBrief ??
+        (outline && deps.outlineIsSource !== false
+          ? JSON.stringify({ brief: inputData.brief, approvedOutline: outline })
+          : inputData.brief);
       const computePlan = async () => {
         const plan = (
           corrections?: Record<string, unknown>,
@@ -1073,6 +1108,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               slideCount,
               ...(outline ? { outline } : {}),
               imagesAvailable: deps.imagesAvailable === true,
+              allowedQrUrls: sourceQrUrls(qrSourceBrief),
               catalog: full.map((pattern) =>
                 plannerComposition(pattern, notes.get(pattern.patternId)),
               ),
@@ -1155,9 +1191,18 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         );
         return outline ? keepOutline(result, outline) : result;
       };
-      const result = deps.sharedPlan
+      const sharedResult = deps.sharedPlan
         ? await deps.sharedPlan.once(computePlan)
         : await computePlan();
+      const result = await safeQrPlan(
+        sharedResult,
+        compositions,
+        notes,
+        qrSourceBrief,
+        deps.imagesAvailable === true,
+        deps.signal,
+        full,
+      );
       const layouts = remapPlan(
         result.slides.map((slide) => slide.patternId),
         full,
@@ -1167,6 +1212,10 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         notes,
         deps.layoutRemapPolicy ?? 'density',
       );
+      // A validated QR binding remains on its original composition in all three variants.
+      result.slides.forEach((slide, index) => {
+        if (slide.qrRequests?.length) layouts[index] = slide.patternId;
+      });
       const tasks = result.slides.map((slide, index) => {
         const composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
@@ -1189,9 +1238,26 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           composition,
         };
       });
-      // A special composition frames a QR code, a device screen or code: content the brief
-      // brings, never a drawn picture. Its frame gets nothing and leaves the slide on export.
-      deps.onPlan?.(tasks.filter((task) => !notes.get(task.composition.patternId)?.special));
+      // QR uses every task, including special layouts; ordinary illustrations keep their
+      // existing callback semantics, with the QR picture ids removed from the frames.
+      await deps.onQrPlan?.(tasks);
+      deps.onPlan?.(
+        tasks
+          .filter((task) => !notes.get(task.composition.patternId)?.special)
+          .map((task) => ({
+            ...task,
+            composition: {
+              ...task.composition,
+              imageSlots: (task.composition.imageSlots ?? []).filter(
+                (slot) =>
+                  !declaredQrSlots(
+                    task.composition,
+                    notes.get(task.composition.patternId),
+                  ).includes(slot.slotId),
+              ),
+            },
+          })),
+      );
       return tasks;
     },
   });

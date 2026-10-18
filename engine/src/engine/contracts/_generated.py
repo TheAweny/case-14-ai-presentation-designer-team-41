@@ -2275,6 +2275,11 @@ class Fit1(StrEnum):
     contain = "contain"
 
 
+class Purpose(StrEnum):
+    qr = "qr"
+    illustration = "illustration"
+
+
 class Image(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2287,6 +2292,7 @@ class Image(BaseModel):
         ...,
         description="The picture file, relative to the run directory: media/<name>.png.",
     )
+    purpose: Purpose | None = None
     slotId: constr(min_length=1) = Field(
         ..., description="An imageSlots id of the composition."
     )
@@ -3395,6 +3401,14 @@ class Format(StrEnum):
     pdf = "pdf"
 
 
+class MediaItem1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    mediaPart: constr(pattern=r"^upload\/[\w.-]+\.(?:png|jpe?g)$")
+    path: constr(min_length=1)
+
+
 class Background4(StrEnum):
     """
     A palette role, or six hex digits without a hash when a user chose their own.
@@ -4048,6 +4062,7 @@ class DeckExportRequest(BaseModel):
     formats: list[Format] | None = Field(
         None, description="Absent: pptx and pdf.", min_length=1
     )
+    media: list[MediaItem1] | None = Field(None, max_length=32)
     outputDir: constr(min_length=1) = Field(
         ..., description="Local directory the files are written to."
     )
@@ -5523,6 +5538,15 @@ class ImageSlot(BaseModel):
     slotId: constr(min_length=1)
 
 
+class QrCandidateSlot(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box26
+    kind: Kind9
+    slotId: constr(min_length=1)
+
+
 class Role25(StrEnum):
     title = "title"
     body = "body"
@@ -5556,6 +5580,7 @@ class Composition(BaseModel):
     imageSlots: list[ImageSlot] | None = None
     name: str
     patternId: constr(min_length=1)
+    qrCandidateSlots: list[QrCandidateSlot] | None = None
     slots: list[Slot1] = Field(..., min_length=1)
     sourceIndex: conint(ge=0, le=9007199254740991)
 
@@ -5652,7 +5677,7 @@ class PaletteItem2(BaseModel):
     role: Role26
 
 
-class Box28(BaseModel):
+class Box29(BaseModel):
     """
     Where it sits, in EMU.
     """
@@ -5706,7 +5731,7 @@ class ProtectedZone2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box28 = Field(..., description="Where it sits, in EMU.")
+    box: Box29 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
@@ -6118,7 +6143,7 @@ class JobEvent3(BaseModel):
     type: Literal["stage-finished"]
 
 
-class Kind10(StrEnum):
+class Kind11(StrEnum):
     deck_plan = "deck-plan"
     slide_ir = "slide-ir"
     preview = "preview"
@@ -6144,7 +6169,7 @@ class JobEvent4(BaseModel):
         extra="forbid",
     )
     at: constr(min_length=1) = Field(..., description="ISO 8601 timestamp, UTC.")
-    kind: Kind10
+    kind: Kind11
     path: constr(min_length=1) = Field(
         ..., description="Relative to the run directory."
     )
@@ -6566,7 +6591,7 @@ class ProtectedZone3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box28 = Field(..., description="Where it sits, in EMU.")
+    box: Box29 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
@@ -6893,7 +6918,7 @@ class DesignSystem3(BaseModel):
     )
 
 
-class Box30(BaseModel):
+class Box31(BaseModel):
     """
     Where the template puts it, in EMU.
     """
@@ -6940,7 +6965,7 @@ class Slot2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box30 = Field(..., description="Where the template puts it, in EMU.")
+    box: Box31 = Field(..., description="Where the template puts it, in EMU.")
     maxChars: conint(le=9007199254740991, gt=0) | None = Field(
         ...,
         description="Rough capacity at the template size. Null when the slot is not textual.",
@@ -7000,7 +7025,7 @@ class PatternCatalog2(BaseModel):
     )
 
 
-class Box31(BaseModel):
+class Box32(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7099,7 +7124,7 @@ class Elements15(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box31
+    box: Box32
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -7139,7 +7164,7 @@ class Elements16(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box31
+    box: Box32
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -7267,7 +7292,7 @@ class Elements17(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box31
+    box: Box32
     cellStyles: list[list[CellStyles3 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -7322,7 +7347,7 @@ class Elements18(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box31
+    box: Box32
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -7478,7 +7503,7 @@ class Elements19(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box31
+    box: Box32
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -7628,7 +7653,7 @@ class MaterialExtractRequest(BaseModel):
     sheet: constr(min_length=1, max_length=200) | None = None
 
 
-class Kind11(StrEnum):
+class Kind12(StrEnum):
     text = "text"
     table = "table"
 
@@ -7705,7 +7730,7 @@ class MaterialExtractResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    kind: Kind11
+    kind: Kind12
     needsOcr: bool
     nextOffset: conint(ge=0, le=9007199254740991) | None
     offset: conint(ge=0, le=9007199254740991)
@@ -7717,7 +7742,7 @@ class MaterialExtractResponse(BaseModel):
     warnings: list[Warning5] = Field(..., max_length=20)
 
 
-class Box36(BaseModel):
+class Box37(BaseModel):
     """
     Where the template puts it, in EMU.
     """
@@ -7764,7 +7789,7 @@ class Slot3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box36 = Field(..., description="Where the template puts it, in EMU.")
+    box: Box37 = Field(..., description="Where the template puts it, in EMU.")
     maxChars: conint(le=9007199254740991, gt=0) | None = Field(
         ...,
         description="Rough capacity at the template size. Null when the slot is not textual.",
@@ -7894,7 +7919,7 @@ class RunConfig(BaseModel):
     )
 
 
-class Box37(BaseModel):
+class Box38(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7993,7 +8018,7 @@ class Elements20(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box37
+    box: Box38
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -8033,7 +8058,7 @@ class Elements21(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box37
+    box: Box38
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -8161,7 +8186,7 @@ class Elements22(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box37
+    box: Box38
     cellStyles: list[list[CellStyles4 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -8208,7 +8233,7 @@ class Elements23(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box37
+    box: Box38
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -8364,7 +8389,7 @@ class Elements24(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box37
+    box: Box38
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -8535,7 +8560,7 @@ class Color24(BaseModel):
     )
 
 
-class Kind12(StrEnum):
+class Kind13(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -8569,13 +8594,13 @@ class Background8(BaseModel):
         extra="forbid",
     )
     color: Color24 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind12
+    kind: Kind13
     stops: list[Stop6] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
-class Box42(BaseModel):
+class Box43(BaseModel):
     """
     Null when the shape inherits its position from a layout.
     """
@@ -8644,7 +8669,7 @@ class Fill13(BaseModel):
         extra="forbid",
     )
     color: Color25 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind12
+    kind: Kind13
     stops: list[Stop7] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8722,7 +8747,7 @@ class Shape8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box42 | None = Field(
+    box: Box43 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -8849,7 +8874,7 @@ class Background9(BaseModel):
         extra="forbid",
     )
     color: Color27 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind12
+    kind: Kind13
     stops: list[Stop8] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8902,7 +8927,7 @@ class Fill14(BaseModel):
         extra="forbid",
     )
     color: Color28 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind12
+    kind: Kind13
     stops: list[Stop9] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -8980,7 +9005,7 @@ class Shape9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box42 | None = Field(
+    box: Box43 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -9060,6 +9085,23 @@ class Master1(BaseModel):
     )
 
 
+class MediaItem2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bytes: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Size of the part."
+    )
+    contentType: str = Field(..., description="File extension, lower-cased.")
+    heightPx: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
+        ..., description="Pixel height, null for non-raster parts."
+    )
+    part: constr(min_length=1) = Field(..., description="Package part name.")
+    widthPx: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
+        ..., description="Pixel width, null for non-raster parts."
+    )
+
+
 class Color30(BaseModel):
     """
     Set for a solid fill.
@@ -9107,7 +9149,7 @@ class Background10(BaseModel):
         extra="forbid",
     )
     color: Color30 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind12
+    kind: Kind13
     stops: list[Stop10] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9160,7 +9202,7 @@ class Fill15(BaseModel):
         extra="forbid",
     )
     color: Color31 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind12
+    kind: Kind13
     stops: list[Stop11] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9238,7 +9280,7 @@ class Shape10(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box42 | None = Field(
+    box: Box43 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -9350,7 +9392,7 @@ class TemplateIR(BaseModel):
     )
     layouts: list[Layout1]
     masters: list[Master1]
-    media: list[MediaItem] = Field(
+    media: list[MediaItem2] = Field(
         ..., description="Inventory of ppt/media, ordered by part name."
     )
     schemaVersion: Literal[1] = Field(

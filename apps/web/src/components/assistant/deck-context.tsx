@@ -42,6 +42,11 @@ export interface AssistantDeckBridge {
    * её, как свою, через Ctrl+Z.
    */
   writeText(slideId: string, elementId: string, paragraphs: readonly Paragraph[]): void;
+  /** Explicitly insert an image on the current slide, only at a readable size. */
+  insertImage?(input: {
+    file: File;
+    minimumSizeEmu: number;
+  }): 'inserted' | 'cannot-fit' | 'no-slide';
 }
 
 const BridgeContext = createContext<AssistantDeckBridge | null>(null);

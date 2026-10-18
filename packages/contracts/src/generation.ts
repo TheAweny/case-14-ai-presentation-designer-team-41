@@ -45,6 +45,8 @@ export const compositionSchema = z.object({
   imageCount: z.number().int().nonnegative(),
   /** Places for a picture. Absent in profiles read before pictures were generated. */
   imageSlots: z.array(imageSlotSchema).optional(),
+  /** All picture candidates, including small ones; only the indexer assigns QR semantics. */
+  qrCandidateSlots: z.array(imageSlotSchema).optional(),
 });
 export const generationProfileSchema = z.object({
   schemaVersion: z.literal(1),
@@ -98,6 +100,7 @@ export const composedSlideSchema = z.object({
         fit: z
           .enum(['cover', 'contain'])
           .describe('cover crops the picture to fill the box; contain fits it whole inside.'),
+        purpose: z.enum(['qr', 'illustration']).optional(),
       }),
     )
     .optional()
@@ -237,6 +240,10 @@ export const compositionPlanSchema = z.object({
         patternId: z.string(),
         purpose: z.string().min(1).max(600),
         imageQuery: z.string().default(''),
+        qrRequests: z
+          .array(z.object({ slotId: z.string().min(1), url: z.string().min(1) }))
+          .max(10)
+          .optional(),
         /** Exact excerpts proving that a composition's required facts are in the source. */
         sourceEvidence: z.record(z.string(), z.string()).default({}),
       }),
@@ -303,6 +310,8 @@ export const compositionNoteSchema = z.object({
    * partner's logo — and is used only when the brief has it.
    */
   special: z.boolean().default(false),
+  /** Existing picture ids with explicit QR meaning in the template's text cues. */
+  qrSlotIds: z.array(z.string().min(1)).max(10).optional(),
   /** Source material that must exist before this composition can be used. */
   requiredContent: z
     .array(

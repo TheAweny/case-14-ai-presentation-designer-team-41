@@ -31,6 +31,7 @@ let details: Record<string, { kinds: string[] }> | null = null;
 /** Kinds the person set by hand, as the API keeps them. */
 let manualKinds: Record<string, string[]> = {};
 let templates: unknown[] = [];
+let generationDeck: { runId: string } | null = null;
 /** Original template bytes for GET /files/templates/:id/download. An unknown id is 404. */
 const templateDownloads = new Map<
   string,
@@ -46,8 +47,20 @@ const server = createServer(async (request, response) => {
     details = null;
     manualKinds = {};
     templates = [];
+    generationDeck = null;
     templateDownloads.clear();
     response.end('{}');
+  } else if (request.url === '/__set-generation-deck' && request.method === 'POST') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    generationDeck = JSON.parse(body) as { runId: string };
+    response.end('{}');
+  } else if (
+    generationDeck &&
+    (request.url === `/generation/${generationDeck.runId}/deck` ||
+      request.url === `/generation/${generationDeck.runId}/summary`)
+  ) {
+    response.end(JSON.stringify(generationDeck));
   } else if (request.url === '/__set-templates' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);

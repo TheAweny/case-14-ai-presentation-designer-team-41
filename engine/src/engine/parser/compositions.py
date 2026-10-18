@@ -184,6 +184,26 @@ def _image_slots(placed: list[Any], slide_area: int) -> list[dict[str, Any]]:
     return slots
 
 
+def _qr_candidates(placed: list[Any]) -> list[dict[str, Any]]:
+    """Every picture and picture placeholder on the slide, whatever its size.
+
+    A small picture is as likely a logo as a QR code, and this layer cannot tell them apart.
+    It only names the shapes a code could replace. The caller decides which of them, if any,
+    actually holds one. Panels are not candidates: a code replaces a picture, not an empty card.
+    """
+    candidates = []
+    for shape, transform in placed:
+        box = _slide_box(shape, transform)
+        if shape.is_placeholder and shape.placeholder_format.type in _IMAGE_PLACEHOLDERS:
+            kind = "placeholder"
+        elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            kind = "photo"
+        else:
+            continue
+        candidates.append({"slotId": str(shape.shape_id), "kind": kind, "box": box})
+    return candidates
+
+
 def _prompt(shape: Any, slide: Any) -> str | None:
     """I read the prompt an empty placeholder inherits from its layout or master.
 
@@ -336,6 +356,7 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
                     "slots": slots,
                     "imageCount": image_count,
                     "imageSlots": _image_slots(placed, slide_area),
+                    "qrCandidateSlots": _qr_candidates(placed),
                 }
             )
     if not patterns:

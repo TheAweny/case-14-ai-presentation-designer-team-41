@@ -147,15 +147,18 @@ def _picture_file(run: Path, path: str) -> Path:
     return file
 
 
-def _place_picture(slide: Any, slot_id: str, file: Path, fit: str) -> None:
+def _place_picture(slide: Any, slot_id: str, file: Path, fit: str, *, qr: bool = False) -> None:
     """I put a picture where an image slot is and remove the slot.
 
     The picture takes the slot's box and its place in the drawing order. `cover` crops it to fill
     the box, `contain` fits it whole and centres it; neither stretches it. A card's geometry, such
-    as rounded corners, carries over, so the picture keeps the frame the template drew.
+    as rounded corners, carries over, so the picture keeps the frame the template drew. A QR code
+    is the exception: it must stay a rectangle, fitted whole, or the mask clips modules off it.
     """
     found = _find(slide.shapes, slot_id)
     if found is None:
+        if qr:
+            raise ValueError(f"QR slot {slot_id} was not found on the slide.")
         return
     shape, collection = found
     left, top, width, height = (
@@ -164,7 +167,9 @@ def _place_picture(slide: Any, slot_id: str, file: Path, fit: str) -> None:
     with Image.open(file) as image:
         image_ratio = image.width / image.height
     box_ratio = width / max(1, height)
-    if fit == "contain":
+    # A QR code is never cropped, even when the caller asked for cover: a clipped module is a
+    # code that does not scan. The box stays the slot's box, and the picture sits inside it.
+    if fit == "contain" or qr:
         if image_ratio > box_ratio:
             fitted = round(width / image_ratio)
             top, height = top + (height - fitted) // 2, fitted
@@ -172,19 +177,20 @@ def _place_picture(slide: Any, slot_id: str, file: Path, fit: str) -> None:
             fitted = round(height * image_ratio)
             left, width = left + (width - fitted) // 2, fitted
     picture = collection.add_picture(str(file), left, top, width, height)
-    if fit != "contain":
+    if fit != "contain" and not qr:
         if image_ratio > box_ratio:
             side = (1 - box_ratio / image_ratio) / 2
             picture.crop_left = picture.crop_right = side
         else:
             side = (1 - image_ratio / box_ratio) / 2
             picture.crop_top = picture.crop_bottom = side
-    geometry = shape._element.find(f".//{_A}prstGeom")
-    if geometry is not None:
-        properties = picture._element.spPr
-        current = properties.find(f"{_A}prstGeom")
-        if current is not None:
-            properties.replace(current, deepcopy(geometry))
+    if not qr:
+        geometry = shape._element.find(f".//{_A}prstGeom")
+        if geometry is not None:
+            properties = picture._element.spPr
+            current = properties.find(f"{_A}prstGeom")
+            if current is not None:
+                properties.replace(current, deepcopy(geometry))
     picture.name = f"Illustration {slot_id}"
     element = shape._element
     parent = element.getparent()
@@ -298,15 +304,37 @@ def export_compositions(
         # Every image slot gets its picture or leaves the slide: an empty frame or a blank card
         # reads as a slide nobody finished.
         pictures = {p["slotId"]: p for p in item.get("images") or []}
+        if len(pictures) != len(item.get("images") or []):
+            raise ValueError("Bind each picture slot at most once.")
+        qr_slots = {
+            s["slotId"]
+            for s in (pattern.get("qrCandidateSlots") or []) + (pattern.get("imageSlots") or [])
+        }
+        for slot_id, chosen in pictures.items():
+            if chosen.get("purpose") != "qr":
+                continue
+            if slot_id not in qr_slots:
+                raise ValueError(f"Unknown QR slot {slot_id}.")
+            _place_picture(
+                slide, slot_id, _picture_file(output.parent, chosen["path"]), "contain", qr=True
+            )
         for image_slot in pattern.get("imageSlots") or []:
             chosen = pictures.get(image_slot["slotId"])
+            if chosen is not None and chosen.get("purpose") == "qr":
+                continue
             if chosen is None:
                 # A sample photo with no picture for it stays: the slide keeps a photo, not a hole.
                 if image_slot.get("kind") != "photo":
                     _remove_shape(slide, image_slot["slotId"])
             else:
                 file = _picture_file(output.parent, chosen["path"])
-                _place_picture(slide, image_slot["slotId"], file, chosen["fit"])
+                _place_picture(
+                    slide,
+                    image_slot["slotId"],
+                    file,
+                    chosen["fit"],
+                    qr=chosen.get("purpose") == "qr",
+                )
         _drop_empty_placeholders(slide)
         notes = slide.notes_slide.notes_text_frame
         if notes is not None:

@@ -1,4 +1,5 @@
 import apiDocs from './api-docs.json';
+import qrCode from './qr-code.json';
 import assistant from './assistant.json';
 import auth from './auth.json';
 import auditPanel from './audit-panel.json';
@@ -41,6 +42,7 @@ import toolRail from './tool-rail.json';
  * `file-bar.json` лежит под ключом `fileBar` и относится к компоненту `file-bar.tsx`.
  */
 const messages = {
+  qrCode,
   metadata,
   localeSwitcher,
   editor,

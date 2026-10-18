@@ -4537,6 +4537,13 @@
                       "pattern": "^media\\/[\\w.-]+\\.(?:png|jpe?g)$",
                       "type": "string"
                     },
+                    "purpose": {
+                      "enum": [
+                        "qr",
+                        "illustration"
+                      ],
+                      "type": "string"
+                    },
                     "slotId": {
                       "description": "An imageSlots id of the composition.",
                       "minLength": 1,
@@ -7310,6 +7317,28 @@
             "type": "string"
           },
           "minItems": 1,
+          "type": "array"
+        },
+        "media": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "mediaPart": {
+                "pattern": "^upload\\/[\\w.-]+\\.(?:png|jpe?g)$",
+                "type": "string"
+              },
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "mediaPart",
+              "path"
+            ],
+            "type": "object"
+          },
+          "maxItems": 32,
           "type": "array"
         },
         "outputDir": {
@@ -12557,6 +12586,68 @@
               "patternId": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "qrCandidateSlots": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "box": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    "kind": {
+                      "enum": [
+                        "placeholder",
+                        "panel",
+                        "photo"
+                      ],
+                      "type": "string"
+                    },
+                    "slotId": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slotId",
+                    "kind",
+                    "box"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
               },
               "slots": {
                 "items": {

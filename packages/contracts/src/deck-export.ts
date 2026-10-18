@@ -17,6 +17,16 @@ export const deckExportRequestSchema = z.object({
   variant: layoutVariantNameSchema,
   slides: z.array(slideIrSchema).min(1),
   outputDir: z.string().min(1).describe('Local directory the files are written to.'),
+  /** Validated uploaded raster assets to include in the edited deck. */
+  media: z
+    .array(
+      z.object({
+        mediaPart: z.string().regex(/^upload\/[\w.-]+\.(?:png|jpe?g)$/),
+        path: z.string().min(1),
+      }),
+    )
+    .max(32)
+    .optional(),
   formats: z.array(exportFormatSchema).min(1).optional().describe('Absent: pptx and pdf.'),
   previews: z
     .boolean()

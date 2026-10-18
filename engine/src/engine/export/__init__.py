@@ -82,6 +82,7 @@ def export_pptx(
     template_path: Path,
     destination: Path,
     draw_visual: DrawVisual | None = None,
+    external_media: dict[str, bytes] | None = None,
 ) -> Path:
     """Write the deck as a .pptx built on the uploaded template.
 
@@ -91,6 +92,8 @@ def export_pptx(
         template_path: Source template that supplies masters, theme and layout definitions.
         destination: Where to write the resulting presentation.
         draw_visual: Writes tables and charts. Without it they are left out.
+        external_media: Pictures the editor added, keyed by their exact media part. The API has
+            already read the files; this layer only embeds the bytes it is given.
 
     Returns:
         Path to the written file.
@@ -99,7 +102,7 @@ def export_pptx(
     source_slides = list(presentation.slides)
     # The template's pictures must be read before its slides are dropped: removing them from the
     # presentation part severs the relationships the package walk follows to the media.
-    media = _template_media(presentation)
+    media = _merge_template_media(presentation, external_media)
     palette = {entry["role"]: entry["hex"] for entry in design_system["palette"]}
     type_scale = {style["role"]: style for style in design_system["typeScale"]}
     serialized_slides = [
@@ -604,7 +607,31 @@ def _template_media(presentation: PresentationDocument) -> dict[str, bytes]:
     return media
 
 
+def _merge_template_media(
+    presentation: PresentationDocument, external_media: dict[str, bytes] | None
+) -> dict[str, bytes]:
+    """Template pictures plus editor uploads, which are addressed only by their exact key.
+
+    A template picture is also found by its file name, so older decks that stored just the name
+    still resolve. An upload is not: 'upload/logo.png' must not be mistaken for a template part
+    that happens to share the name, and a bare name must not pick an upload either.
+    """
+    media = _template_media(presentation)
+    for key, blob in (external_media or {}).items():
+        if (
+            re.fullmatch(r"upload/[\w.-]+\.(?:png|jpe?g)", key) is None
+            or ".." in key
+            or key in media
+            or not blob
+        ):
+            raise ValueError(f"External picture {key} is not an upload part.")
+        media[key] = blob
+    return media
+
+
 def _media_blob(media: dict[str, bytes], media_part: str) -> bytes | None:
+    if media_part.startswith("upload/"):
+        return media.get(media_part)
     key = media_part.lstrip("/")
     return media.get(key) or media.get(key.rsplit("/", 1)[-1])
 

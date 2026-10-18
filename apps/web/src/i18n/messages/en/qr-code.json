@@ -1,0 +1,14 @@
+{
+  "title": "QR code",
+  "preview": "QR code preview",
+  "download": "Download PNG",
+  "insert": "Insert on current slide",
+  "notChecked": "Link availability has not been checked.",
+  "fetched": "The resource was fetched while reading the source.",
+  "openEditor": "Open the deck editor to insert the QR code.",
+  "sizeHint": "The code will keep its white margins and a size suitable for scanning.",
+  "inserted": "QR code inserted. Undo with Ctrl+Z.",
+  "cannot-fit": "There is not enough room for a readable QR code. Choose another slide or download the PNG.",
+  "no-slide": "Select a slide to insert the code.",
+  "invalid": "The QR code data is damaged. Ask to create it again."
+}

@@ -11,6 +11,7 @@ import { ChatBuild, ChatResult } from './chat-build';
 import { MessageMarkdown } from './message-markdown';
 import { PlanCard } from './plan-card';
 import { SlideEditCard } from '@/components/assistant/slide-edit-card';
+import { QrCodeCard } from '@/components/assistant/qr-code-card';
 import { QuestionCard } from './question-card';
 import { chatStore } from './session';
 import { MessageActions, ThinkingLine, UserMessage, useMessageText } from './thread-messages';
@@ -229,6 +230,8 @@ function AssistantMessage({
             />
           ) : part.type === 'slide-edit' ? (
             <SlideEditCard key={part.editId} part={part} currentDeckId={currentDeckId} />
+          ) : part.type === 'qr-code' ? (
+            <QrCodeCard key={part.qrId} part={part} />
           ) : part.type === 'error' ? (
             <ModelErrorCard
               part={part}

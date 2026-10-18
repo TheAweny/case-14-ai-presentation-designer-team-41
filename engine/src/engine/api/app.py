@@ -2,10 +2,12 @@
 
 import base64
 import hashlib
+import re
 import subprocess
 import tempfile
 import time
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -438,6 +440,73 @@ def _styled(slides: list[SlideIR], design_system: dict[str, Any]) -> list[SlideI
     return [SlideIR.model_validate(s) for s in visuals.style_visuals(dumped, design_system)]
 
 
+def _export_media(request: DeckExportRequest) -> dict[str, bytes]:
+    """Read only referenced uploads contained in this export's own media directory."""
+    entries = request.media or []
+    referenced = {
+        element.mediaPart
+        for slide in request.slides
+        for element in slide.elements
+        if element.kind == "image" and element.mediaPart.startswith("upload/")
+    }
+    keys = [entry.mediaPart for entry in entries]
+    if (
+        len(entries) > 32
+        or len(set(keys)) != len(keys)
+        or set(keys) != referenced
+        or any(re.fullmatch(r"upload/[\w.-]+\.(?:png|jpe?g)", key) is None for key in keys)
+        or any(".." in key for key in keys)
+    ):
+        raise ValueError("Export media must bind each referenced upload part exactly once.")
+    if not entries:
+        return {}
+    output = Path(request.outputDir).resolve()
+    media = output / "media"
+    if media.resolve(strict=True) != media:
+        raise ValueError("Export media directory must be under the output directory.")
+    files = []
+    total = 0
+    # Validate every path and size before opening any file for its contents.
+    for entry in entries:
+        file = Path(entry.path).resolve(strict=True)
+        if file == media or not file.is_relative_to(media) or not file.is_file():
+            raise ValueError("Export media file must be under the output media directory.")
+        size = file.stat().st_size
+        total += size
+        if not 0 < size <= 1024 * 1024 or total > 3 * 1024 * 1024:
+            raise ValueError("Export media exceeds 1 MiB per file or 3 MiB total.")
+        files.append((entry.mediaPart, file))
+    result = {}
+    total = 0
+    for key, file in files:
+        with file.open("rb") as stream:
+            blob = stream.read(1024 * 1024 + 1)
+        total += len(blob)
+        if not 0 < len(blob) <= 1024 * 1024 or total > 3 * 1024 * 1024:
+            raise ValueError("Export media exceeds 1 MiB per file or 3 MiB total.")
+        expected = "PNG" if key.endswith(".png") else "JPEG"
+        signature = (
+            blob.startswith(b"\x89PNG\r\n\x1a\n")
+            if expected == "PNG"
+            else (blob.startswith(b"\xff\xd8\xff") and blob.endswith(b"\xff\xd9"))
+        )
+        if not signature:
+            raise ValueError("Export media must have a matching PNG or JPEG signature.")
+        with Image.open(BytesIO(blob)) as picture:
+            if (
+                picture.format != expected
+                or not 1 <= picture.width <= 8192
+                or not 1 <= picture.height <= 8192
+                or picture.width * picture.height > 40_000_000
+            ):
+                raise ValueError("Export media has an invalid format or dimensions.")
+            picture.verify()
+        with Image.open(BytesIO(blob)) as picture:
+            picture.load()
+        result[key] = blob
+    return result
+
+
 @app.post(
     "/v1/exports",
     response_model=DeckExportResponse,
@@ -450,6 +519,10 @@ def export_deck(request: DeckExportRequest) -> DeckExportResponse:
     template_path = Path(request.templatePath).resolve()
     if not template_path.is_file():
         raise HTTPException(status_code=404, detail="Template PPTX was not found.")
+    try:
+        external_media = _export_media(request)
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as error:
+        raise HTTPException(status_code=422, detail=f"Invalid export media: {error}") from error
     design_system, _ = parser.template_profile_of(template_path)
     variant = str(getattr(request.variant, "value", request.variant))
     slides = [
@@ -467,6 +540,7 @@ def export_deck(request: DeckExportRequest) -> DeckExportResponse:
         template_path,
         output_dir / f"{variant}.pptx",
         visuals.draw_visual,
+        external_media=external_media,
     )
     files = [{"format": "pptx", "path": str(pptx_path)}] if "pptx" in formats else []
     if "pdf" in formats:

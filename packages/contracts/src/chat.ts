@@ -123,7 +123,82 @@ export const modelFailureSchema = z.object({
 });
 export type ModelFailure = z.infer<typeof modelFailureSchema>;
 
+/** Preserve the exact UTF-8 payload; URL parsing is validation only. */
+export const qrUrlSchema = z
+  .string()
+  .min(1)
+  .max(2048)
+  .refine((value) => {
+    if (!/^https?:\/\/[^/?#]/i.test(value) || /[\s\p{Cc}\\]/u.test(value)) return false;
+    if (/^https?:\/\/[^/?#]*@/i.test(value)) return false;
+    // TextEncoder replaces unpaired surrogates, which would silently change the QR payload.
+    for (let i = 0; i < value.length; i += 1) {
+      const unit = value.charCodeAt(i);
+      if (unit >= 0xd800 && unit <= 0xdbff) {
+        const next = value.charCodeAt(++i);
+        if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      } else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+    }
+    if (new TextEncoder().encode(value).length > 2048) return false;
+    try {
+      const parsed = new URL(value);
+      return Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+    } catch {
+      return false;
+    }
+  }, 'Expected an exact HTTP(S) URL of at most 2048 UTF-8 bytes without credentials');
+
+/** UI-only binary asset. Tool outputs and model history contain compact metadata instead. */
+export const qrCodePartSchema = z
+  .object({
+    type: z.literal('qr-code'),
+    callId: z.string().min(1),
+    qrId: z.string().uuid(),
+    url: qrUrlSchema,
+    pngDataUrl: z
+      .string()
+      .max(262144)
+      .regex(/^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/i),
+    width: z.number().int().min(232).max(1480),
+    height: z.number().int().min(232).max(1480),
+    moduleCount: z
+      .number()
+      .int()
+      .min(21)
+      .max(177)
+      .refine((n) => (n - 21) % 4 === 0),
+    minSizeEmu: z.number().int().min(900000).max(7048500),
+    source: z.object({
+      kind: z.enum(['user', 'web-source', 'material']),
+      messageId: z.string().uuid(),
+      callId: z.string().min(1).optional(),
+      fileId: z.string().uuid().optional(),
+    }),
+    reachability: z.discriminatedUnion('status', [
+      z.object({ status: z.literal('not-checked') }),
+      z.object({ status: z.literal('fetched'), fetchedAt: z.iso.datetime({ offset: true }) }),
+    ]),
+  })
+  .superRefine((part, context) => {
+    if (
+      part.width !== (part.moduleCount + 8) * 8 ||
+      part.height !== part.width ||
+      part.minSizeEmu !== Math.max(900000, (part.moduleCount + 8) * 38100)
+    ) {
+      context.addIssue({ code: 'custom', message: 'Inconsistent QR dimensions' });
+    }
+    if (
+      (part.source.kind !== 'user' && !part.source.callId) ||
+      (part.source.kind === 'material' && !part.source.fileId)
+    ) {
+      context.addIssue({ code: 'custom', message: 'Missing QR provenance' });
+    }
+  });
+export type QrCodePart = z.infer<typeof qrCodePartSchema>;
+
 export const chatPartSchema = z.discriminatedUnion('type', [
+  qrCodePartSchema,
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({
     type: z.literal('tool'),

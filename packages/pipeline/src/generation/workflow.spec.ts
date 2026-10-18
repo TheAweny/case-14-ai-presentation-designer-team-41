@@ -33,6 +33,7 @@ import {
   validateBindings,
   variantCatalog,
   withoutMissingContent,
+  prepareVariantCatalog,
 } from './workflow.js';
 import type { TextProvider } from './provider.js';
 
@@ -47,6 +48,43 @@ const composition = profile.compositions[0];
 if (!composition) throw new Error('Fixture has no composition.');
 
 describe('template generation workflow', () => {
+  it('offers a QR-only composition without an image provider but excludes QR mixed with a required photo', () => {
+    const qrSlot = {
+      slotId: 'qr-image',
+      kind: 'photo' as const,
+      box: { x: 0, y: 0, cx: 4_000_000, cy: 4_000_000 },
+    };
+    const qr = {
+      ...composition,
+      patternId: 'qr',
+      name: 'QR link',
+      imageSlots: [qrSlot],
+      qrCandidateSlots: [qrSlot],
+    };
+    const mixed = {
+      ...qr,
+      patternId: 'mixed',
+      name: 'QR with photo',
+      imageSlots: [qrSlot, { ...qrSlot, slotId: 'photo' }],
+    };
+    const notes: CompositionNote[] = [qr, mixed].map((p) => ({
+      patternId: p.patternId,
+      kind: 'statement',
+      items: 1,
+      title: 'QR',
+      useFor: 'QR',
+      skip: false,
+      special: true,
+      qrSlotIds: ['qr-image'],
+      requiredContent: ['image'],
+    }));
+    const catalog = prepareVariantCatalog({ compositions: [composition, qr, mixed] }, notes, {
+      imagesAvailable: false,
+      variant: 'balanced',
+    });
+    expect(catalog.full.map((p) => p.patternId)).toContain('qr');
+    expect(catalog.full.map((p) => p.patternId)).not.toContain('mixed');
+  });
   it.each([
     { brief: 'Short', count: 10 },
     { brief: 'Detailed', count: 23 },

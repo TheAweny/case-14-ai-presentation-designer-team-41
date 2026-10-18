@@ -20,7 +20,8 @@ import type { Deck, SlideLayout } from '@/lib/deck-source';
 import { PRESENT_PARAM } from '@/lib/library-menu';
 import { cn } from '@/lib/utils';
 import { NARROW_SCREEN, useMediaQuery } from '@/lib/use-media-query';
-import { useMediaResolver } from '@/lib/media-registry';
+import { uploadedMedia, useMediaResolver } from '@/lib/media-registry';
+import { placeQr, qrImageElement } from '@/components/editor/qr-insert';
 import { imageFilesOf } from '@/lib/image-files';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { ZoomBasis } from '@/components/editor/canvas-zoom';
@@ -381,6 +382,23 @@ export function EditorShell({
   const assistantVisible =
     tab === 'assistant' &&
     (narrow ? sheetOpen : inspector === 'open' || (inspector === 'auto' && wide));
+  const insertAssistantImage = useCallback(
+    ({ file, minimumSizeEmu }: { file: File; minimumSizeEmu: number }) => {
+      if (!slide) return 'no-slide' as const;
+      const placement = placeQr(
+        gridForSlide(designSystem.grid, slide.slideCx, slide.slideCy),
+        minimumSizeEmu,
+      );
+      if (!placement) return 'cannot-fit' as const;
+      const mediaPart = uploadedMedia.register(file);
+      const element = qrImageElement(mediaPart, placement.box, crypto.randomUUID());
+      insert(slide.slideId, [element]);
+      setSelectedIds([element.elementId]);
+      setTool('select');
+      return 'inserted' as const;
+    },
+    [designSystem.grid, insert, slide],
+  );
   const assistantContext = useAssistantContext({
     slides,
     slideId,
@@ -388,6 +406,7 @@ export function EditorShell({
     active: assistantVisible,
     reveal,
     writeText: setText,
+    insertImage: insertAssistantImage,
   });
   const addToAssistant = assistantContext.add;
   /** Положить объекты в поле ассистента, открыть его вкладку и поставить фокус в поле. */

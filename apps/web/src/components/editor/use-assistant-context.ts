@@ -26,6 +26,7 @@ export function useAssistantContext({
   active,
   reveal,
   writeText,
+  insertImage,
 }: {
   slides: readonly SlideIr[];
   /** Открытый слайд. */
@@ -36,6 +37,7 @@ export function useAssistantContext({
   reveal: (target: DeckSelection) => void;
   /** Правка текста журналом редактора: ею агент пишет в черновик. */
   writeText: AssistantDeckBridge['writeText'];
+  insertImage?: AssistantDeckBridge['insertImage'];
 }) {
   const [refs, setRefs] = useState<readonly SlideRef[]>([]);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -108,8 +110,9 @@ export function useAssistantContext({
         return pending;
       },
       writeText,
+      insertImage,
     }),
-    [focusRequest, ghost, refs, reveal, selectedIds, slideId, slides, writeText],
+    [focusRequest, ghost, refs, reveal, selectedIds, slideId, slides, writeText, insertImage],
   );
 
   /**
