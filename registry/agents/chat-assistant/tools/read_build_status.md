@@ -1,0 +1,1 @@
+Read the state of a build that is already in this chat. buildId must match that build. At most three variant runs are reported, each with its repository state and whether it is still running. The build error is included when present. Events are not returned, and the tool does not start, cancel, or retry a build.
