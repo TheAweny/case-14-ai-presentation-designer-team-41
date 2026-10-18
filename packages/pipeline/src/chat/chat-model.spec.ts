@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ModelRequestError } from './model-failure.js';
 import { OpenAICompatibleChatModel, ThinkingFilter, type ToolSpec } from './chat-model.js';
 
 const tools: ToolSpec[] = [
@@ -342,5 +343,108 @@ describe('OpenAICompatibleChatModel', () => {
       signal: AbortSignal.timeout(5000),
     });
     expect(step).toMatchObject({ text: 'Просто текст.', toolCalls: [] });
+  });
+
+  it('throws a native 400 quota error before the tools fallback and does not leak the body', async () => {
+    const body = JSON.stringify({
+      error: {
+        code: 'insufficient_quota',
+        message: 'Function tools quota exhausted secret',
+      },
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status: 400 }));
+    let thrown: unknown;
+    try {
+      await model(fetchImpl).step({
+        messages: [{ role: 'user', content: 'Привет' }],
+        tools,
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(ModelRequestError);
+    const requestError = thrown as ModelRequestError;
+    expect(requestError.failure).toEqual({ kind: 'quota-exhausted', modelId: expect.any(String) });
+    expect(requestError.message).not.toContain('secret');
+    expect(JSON.stringify(requestError.failure)).not.toContain('secret');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a 403 quota error and keeps the body for classification', async () => {
+    const body = JSON.stringify({
+      error: { code: 'token_quota_exhausted', type: 'token_quota_exhausted', message: 'secret' },
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status: 403 }));
+    let thrown: unknown;
+    try {
+      await model(fetchImpl).step({
+        messages: [{ role: 'user', content: 'Привет' }],
+        tools: [],
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(ModelRequestError);
+    const requestError = thrown as ModelRequestError;
+    expect(requestError.failure.kind).toBe('quota-exhausted');
+    expect(requestError.message).not.toContain('secret');
+    expect(JSON.stringify(requestError.failure)).not.toContain('secret');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a 429 quota error even with Retry-After', async () => {
+    const body = JSON.stringify({ error: { type: 'insufficient_quota', message: 'secret' } });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(body, { status: 429, headers: { 'retry-after': '1' } }));
+    let thrown: unknown;
+    try {
+      await model(fetchImpl).step({
+        messages: [{ role: 'user', content: 'Привет' }],
+        tools: [],
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(ModelRequestError);
+    const requestError = thrown as ModelRequestError;
+    expect(requestError.failure.kind).toBe('quota-exhausted');
+    expect(requestError.message).not.toContain('secret');
+    expect(JSON.stringify(requestError.failure)).not.toContain('secret');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries an ordinary 429 then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          new Response('busy', { status: 429, headers: { 'retry-after': '0' } }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            choices: [
+              {
+                message: { content: '{"say":"Ок","tool":"","arguments":""}' },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+        );
+      const pending = model(fetchImpl).step({
+        messages: [{ role: 'user', content: 'Привет' }],
+        tools: [],
+        signal: new AbortController().signal,
+      });
+      await vi.runAllTimersAsync();
+      await expect(pending).resolves.toMatchObject({ text: 'Ок' });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

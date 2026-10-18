@@ -991,7 +991,7 @@ export class ChatsService implements OnApplicationShutdown {
         ? await this.models.resolve(request.model, actor)
         : ((await this.models.resolveRole('assistant', actor)) ??
           (await this.models.resolve(null, actor)));
-    return new OpenAICompatibleChatModel({
+    const model = new OpenAICompatibleChatModel({
       apiKey: resolved.apiKey,
       baseUrl: resolved.baseUrl,
       model: resolved.model,
@@ -1000,6 +1000,7 @@ export class ChatsService implements OnApplicationShutdown {
       jsonModeInstructions: agent.jsonMode,
       reasoningEffort: request.reasoningEffort,
     });
+    return withConnection(model, resolved.connectionId);
   }
 
   private async answer(
@@ -1402,6 +1403,27 @@ export class ChatsService implements OnApplicationShutdown {
     this.saving.set(state.id, next);
     return next;
   }
+}
+
+/**
+ * Attach the resolved connection to a model failure. The key and provider headers stay on the
+ * inner model and are not part of this public surface.
+ */
+function withConnection(model: OpenAICompatibleChatModel, connectionId: string): ChatModel {
+  return {
+    model: model.model,
+    get contextOverheadChars() {
+      return model.contextOverheadChars;
+    },
+    async step(request) {
+      try {
+        return await model.step(request);
+      } catch (error) {
+        if (!(error instanceof ModelRequestError)) throw error;
+        throw new ModelRequestError(error.message, { ...error.failure, connectionId });
+      }
+    },
+  };
 }
 
 export type { Turn };

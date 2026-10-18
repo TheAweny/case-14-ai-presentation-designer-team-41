@@ -17,31 +17,35 @@ export function modelHttpFailure(
   body = '',
 ): ModelRequestError {
   let code = '';
+  let type = '';
   try {
     const parsed = JSON.parse(body) as { error?: { code?: unknown; type?: unknown } };
-    const value = parsed.error?.code ?? parsed.error?.type;
-    if (typeof value === 'string') code = value;
+    if (typeof parsed.error?.code === 'string') code = parsed.error.code;
+    if (typeof parsed.error?.type === 'string') type = parsed.error.type;
   } catch {
     /* Non-JSON provider responses still have an HTTP status. */
   }
-  const kind: ModelFailure['kind'] = [
-    'context_length_exceeded',
-    'context_window_exceeded',
-  ].includes(code)
-    ? 'context'
-    : status === 401 || status === 403
-      ? 'unauthorized'
-      : status === 429
-        ? 'rate-limit'
-        : status === 404
-          ? 'not-configured'
-          : status === 408 || status === 504
-            ? 'timeout'
-            : status === 400 || status === 422 || status === 501
-              ? 'unsupported'
-              : status >= 500
-                ? 'unavailable'
-                : 'unknown';
+  const quotaCodes = ['token_quota_exhausted', 'insufficient_quota'] as const;
+  const quotaExhausted = quotaCodes.some((value) => value === code || value === type);
+  const contextCodes = ['context_length_exceeded', 'context_window_exceeded'] as const;
+  const contextExceeded = contextCodes.some((value) => value === code || value === type);
+  const kind: ModelFailure['kind'] = quotaExhausted
+    ? 'quota-exhausted'
+    : contextExceeded
+      ? 'context'
+      : status === 401 || status === 403
+        ? 'unauthorized'
+        : status === 429
+          ? 'rate-limit'
+          : status === 404
+            ? 'not-configured'
+            : status === 408 || status === 504
+              ? 'timeout'
+              : status === 400 || status === 422 || status === 501
+                ? 'unsupported'
+                : status >= 500
+                  ? 'unavailable'
+                  : 'unknown';
   const delay = retryAfter === null ? NaN : Number(retryAfter);
   const retryAt =
     retryAfter === null
@@ -52,7 +56,9 @@ export function modelHttpFailure(
   return new ModelRequestError(`Model API HTTP ${status} for ${modelId}.`, {
     kind,
     modelId,
-    ...(Number.isFinite(retryAt) ? { retryAt: Math.max(Date.now(), retryAt) } : {}),
+    ...(kind !== 'quota-exhausted' && Number.isFinite(retryAt)
+      ? { retryAt: Math.max(Date.now(), retryAt) }
+      : {}),
   });
 }
 

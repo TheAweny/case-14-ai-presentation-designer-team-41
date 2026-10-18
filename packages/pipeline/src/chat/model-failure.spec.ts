@@ -30,9 +30,87 @@ describe('model failures', () => {
       vi.restoreAllMocks();
     }
   });
+
+  it('recognizes a known context type even when the code is unknown or absent', () => {
+    expect(
+      modelHttpFailure(
+        400,
+        'a',
+        null,
+        JSON.stringify({ error: { code: 'not_a_known_code', type: 'context_length_exceeded' } }),
+      ).failure.kind,
+    ).toBe('context');
+    expect(
+      modelHttpFailure(
+        400,
+        'a',
+        null,
+        JSON.stringify({ error: { type: 'context_window_exceeded' } }),
+      ).failure.kind,
+    ).toBe('context');
+  });
   it('keeps unknown failures generic and distinguishes connection and timeout failures', () => {
     expect(modelFailureOf(new Error('something'))).toEqual({ kind: 'unknown' });
     expect(modelFailureOf(new TypeError('network'))).toEqual({ kind: 'unavailable' });
     expect(modelFailureOf(new DOMException('slow', 'TimeoutError'))).toEqual({ kind: 'timeout' });
+  });
+
+  it('classifies a structured 403 quota error without retryAt or leaking the provider body', () => {
+    const body = JSON.stringify({
+      error: {
+        code: 'token_quota_exhausted',
+        type: 'token_quota_exhausted',
+        message: 'secret',
+      },
+    });
+    const error = modelHttpFailure(403, 'model-a', '60', body);
+    expect(error.failure).toEqual({ kind: 'quota-exhausted', modelId: 'model-a' });
+    expect(error.failure.retryAt).toBeUndefined();
+    expect(error.message).toBe('Model API HTTP 403 for model-a.');
+    expect(error.message).not.toContain('secret');
+    expect(JSON.stringify(error.failure)).not.toContain('secret');
+  });
+
+  it('classifies a structured 429 quota error without retryAt', () => {
+    const error = modelHttpFailure(
+      429,
+      'model-a',
+      '30',
+      JSON.stringify({ error: { code: 'insufficient_quota', message: 'secret' } }),
+    );
+    expect(error.failure).toEqual({ kind: 'quota-exhausted', modelId: 'model-a' });
+    expect(error.failure.retryAt).toBeUndefined();
+    expect(error.message).not.toContain('secret');
+  });
+
+  it('recognizes a known quota type even when the code is unknown', () => {
+    const error = modelHttpFailure(
+      403,
+      'model-a',
+      null,
+      JSON.stringify({ error: { code: 'not_a_known_code', type: 'token_quota_exhausted' } }),
+    );
+    expect(error.failure.kind).toBe('quota-exhausted');
+  });
+
+  it('keeps a 403 with an unknown or invalid code as unauthorized', () => {
+    expect(
+      modelHttpFailure(
+        403,
+        'model-a',
+        null,
+        JSON.stringify({ error: { code: 'not_a_known_code' } }),
+      ).failure.kind,
+    ).toBe('unauthorized');
+    expect(
+      modelHttpFailure(403, 'model-a', null, JSON.stringify({ error: { code: 12 } })).failure.kind,
+    ).toBe('unauthorized');
+    expect(modelHttpFailure(403, 'model-a', null, 'secret').failure.kind).toBe('unauthorized');
+  });
+
+  it('keeps an ordinary 429 as a rate limit', () => {
+    const error = modelHttpFailure(429, 'model-a', '60', '{"error":{"message":"secret"}}');
+    expect(error.failure.kind).toBe('rate-limit');
+    expect(error.message).not.toContain('secret');
   });
 });

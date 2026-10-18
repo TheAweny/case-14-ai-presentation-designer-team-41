@@ -175,11 +175,17 @@ export class OpenAICompatibleChatModel implements ChatModel {
       if (response.ok || !BUSY_STATUSES.has(response.status) || attempt >= 2) {
         return response;
       }
+      const classifiedBody = await response
+        .clone()
+        .text()
+        .catch(() => '');
       const failure = modelHttpFailure(
         response.status,
         this.model,
         response.headers.get('retry-after'),
+        classifiedBody,
       );
+      if (failure.failure.kind === 'quota-exhausted') return response;
       const delay = Math.max(
         1500 * (attempt + 1),
         (failure.failure.retryAt ?? Date.now()) - Date.now(),
@@ -207,15 +213,17 @@ export class OpenAICompatibleChatModel implements ChatModel {
     );
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      if ([400, 404, 422, 501].includes(response.status) && /tool|function/i.test(detail)) {
-        return 'tools-refused';
-      }
-      throw modelHttpFailure(
+      const failure = modelHttpFailure(
         response.status,
         this.model,
         response.headers.get('retry-after'),
         detail,
       );
+      if (failure.failure.kind === 'quota-exhausted') throw failure;
+      if ([400, 404, 422, 501].includes(response.status) && /tool|function/i.test(detail)) {
+        return 'tools-refused';
+      }
+      throw failure;
     }
     return readCompletion(response, request.onText, request.onToolCall);
   }

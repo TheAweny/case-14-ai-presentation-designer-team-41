@@ -109,6 +109,7 @@ export const modelFailureSchema = z.object({
   kind: z.enum([
     'rate-limit',
     'unauthorized',
+    'quota-exhausted',
     'unavailable',
     'timeout',
     'context',
