@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@lct/contracts';
 import { generationBrief } from './chat-brief.js';
-import { inspectChatSources } from './source-provenance.js';
+import { chatSourceFacts, inspectChatSources } from './source-provenance.js';
 
 function messages(): ChatMessage[] {
   const page = {
@@ -62,6 +62,78 @@ function messages(): ChatMessage[] {
 }
 
 describe('independent provenance acceptance', () => {
+  it('retains research evidence beside typed HTTP failures while still rejecting invalid output', () => {
+    const output = {
+      outputTruncated: false,
+      searchedQuery: 'report',
+      complete: true,
+      unresponsiveEngines: [],
+      summary: 'A quoted fact',
+      openQuestions: [],
+      coverage: [],
+      manifest: null,
+      evidence: [
+        {
+          url: 'https://example.org/report',
+          title: 'Report',
+          quote: 'A quoted fact',
+          start: 0,
+          fetchedAt: '2026-10-18T00:00:00Z',
+          contentHash: 'a'.repeat(64),
+          support: 'unverified',
+        },
+      ],
+      failures: [
+        {
+          url: 'https://other.example/denied',
+          message: 'web_http_403',
+          code: 'web_source_failed',
+          error: 'web_http_403',
+          kind: 'http',
+          status: 403,
+          retryable: false,
+          action: 'try_another_source',
+        },
+      ],
+    };
+    const history = (value: unknown): ChatMessage[] => [
+      {
+        role: 'assistant',
+        id: crypto.randomUUID(),
+        createdAt: 1,
+        status: 'done',
+        parts: [
+          {
+            type: 'tool',
+            callId: 'research',
+            name: 'research_topic',
+            status: 'done',
+            input: {},
+            output: value,
+          },
+        ],
+      },
+    ];
+    expect(chatSourceFacts(history(output))).toMatchObject([
+      { kind: 'research_topic', quote: 'A quoted fact', support: 'unverified' },
+    ]);
+    expect(inspectChatSources(history(output)).items).toHaveLength(1);
+    const legacy = {
+      ...output,
+      failures: [{ url: 'https://other.example/denied', message: 'http' }],
+    };
+    expect(chatSourceFacts(history(legacy))).toHaveLength(1);
+    for (const invalid of [
+      { status: '403' },
+      { retryable: 'false' },
+      { body: 'PRIVATE_BODY' },
+      { action: 'execute-command' },
+    ]) {
+      const malformed = { ...output, failures: [{ ...output.failures[0], ...invalid }] };
+      expect(chatSourceFacts(history(malformed))).toEqual([]);
+    }
+  });
+
   it('keeps completed source data from an interrupted answer separate from model prose and snippets', () => {
     const history = messages();
     const brief = generationBrief(history, null, 'model', []);

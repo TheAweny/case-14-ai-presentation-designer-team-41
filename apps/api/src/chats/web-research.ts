@@ -6,6 +6,9 @@ import {
 } from '@lct/contracts';
 import type { WebSearchAnswer, WebSearchResult } from './web-search.js';
 import type { WebSourcePage } from './web-source.js';
+import { z } from 'zod';
+import { WebSourceError, type WebSourceFailureKind } from './web-source.js';
+import { WEB_SOURCE_CODES, webSourceFailure, type WebSourceAction } from './web-source-failure.js';
 
 /**
  * One search and up to three page reads for a chat question.
@@ -23,8 +26,28 @@ const MAX_EVIDENCE = 3;
 const MAX_OPEN_QUESTIONS = 5;
 const MAX_OPEN_QUESTION = 300;
 const MAX_FAILURES = 3;
-const MAX_ERROR = 200;
 const MAX_JSON = 10_000;
+
+const WEB_SOURCE_FAILURE_KINDS = [
+  'invalid-url',
+  'blocked',
+  'timeout',
+  'http',
+  'redirect',
+  'too-large',
+  'unsupported',
+  'hash-mismatch',
+  'unreachable',
+] as const;
+
+const webSourceFailurePayloadSchema = z.object({
+  code: z.literal('web_source_failed'),
+  error: z.enum(WEB_SOURCE_CODES),
+  kind: z.enum(WEB_SOURCE_FAILURE_KINDS),
+  status: z.number().int().min(100).max(599).optional(),
+  retryable: z.boolean(),
+  action: z.enum(['try_another_source', 'retry_later', 'stop']),
+});
 
 export interface WebResearchCallbacks {
   readonly search: (query: string, signal: AbortSignal, limit: number) => Promise<WebSearchAnswer>;
@@ -49,6 +72,10 @@ export interface WebResearchEvidence {
 export interface WebResearchFailure {
   readonly url: string;
   readonly message: string;
+  readonly status?: number;
+  readonly kind?: WebSourceFailureKind;
+  readonly retryable?: boolean;
+  readonly action?: WebSourceAction;
 }
 
 export interface WebResearchCoverage {
@@ -130,7 +157,7 @@ export async function researchWebTopic(
       if (failures.length < MAX_FAILURES) {
         failures.push({
           url,
-          message: bound(error instanceof Error ? error.message : 'fetch-failed', MAX_ERROR),
+          ...failureFields(error),
         });
       }
     }
@@ -315,5 +342,44 @@ function halt(signal: AbortSignal): void {
 
 function aborted(error: unknown, signal: AbortSignal): boolean {
   if (signal.aborted) return true;
-  return error instanceof WebResearchError && error.kind === 'aborted';
+  if (error instanceof WebResearchError && error.kind === 'aborted') return true;
+  if (error instanceof WebSourceError && error.kind === 'aborted') return true;
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+/** A stable reason. Unknown errors become a generic code so bodies and secrets stay out. */
+function failureFields(error: unknown): Omit<WebResearchFailure, 'url'> {
+  if (error instanceof WebSourceError) {
+    try {
+      const mapped = webSourceFailure(error);
+      return {
+        message: mapped.error,
+        kind: mapped.kind,
+        ...(mapped.status !== undefined ? { status: mapped.status } : {}),
+        retryable: mapped.retryable,
+        action: mapped.action,
+      };
+    } catch {
+      return { message: 'fetch-failed' };
+    }
+  }
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'output' in error &&
+    typeof (error as { output?: unknown }).output === 'object' &&
+    (error as { output?: unknown }).output !== null
+  ) {
+    const parsed = webSourceFailurePayloadSchema.safeParse((error as { output: unknown }).output);
+    if (parsed.success) {
+      return {
+        message: parsed.data.error,
+        kind: parsed.data.kind,
+        ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+        retryable: parsed.data.retryable,
+        action: parsed.data.action,
+      };
+    }
+  }
+  return { message: 'fetch-failed' };
 }

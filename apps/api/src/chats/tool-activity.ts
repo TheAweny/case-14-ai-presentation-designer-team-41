@@ -1,5 +1,7 @@
 import type { ChatToolActivity } from '@lct/contracts';
 import type { ToolContext } from '@lct/pipeline';
+import { WebSourceError } from './web-source.js';
+import { isWebSourceCode, webSourceFailure } from './web-source-failure.js';
 
 /**
  * Tool context plus the optional activity callback. The pipeline may type this field later;
@@ -46,8 +48,8 @@ function publicUrl(value: string): string {
   }
 }
 
-/** Neutral telemetry code. Raw error text can carry keys, URLs and response bodies. */
-function activityCode(error: unknown, signal: AbortSignal): 'cancelled' | 'operation_failed' {
+/** Whitelist telemetry code. Raw error text can carry keys, URLs and response bodies. */
+function activityCode(error: unknown, signal: AbortSignal): string {
   if (signal.aborted) return 'cancelled';
   if (error instanceof Error && error.name === 'AbortError') return 'cancelled';
   if (
@@ -58,7 +60,24 @@ function activityCode(error: unknown, signal: AbortSignal): 'cancelled' | 'opera
   ) {
     return 'cancelled';
   }
+  if (error instanceof WebSourceError) {
+    try {
+      return webSourceFailure(error).error;
+    } catch {
+      return 'cancelled';
+    }
+  }
+  const carried = failureCode(error);
+  if (carried) return carried;
   return 'operation_failed';
+}
+
+function failureCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('output' in error)) return undefined;
+  const output = (error as { output?: unknown }).output;
+  if (typeof output !== 'object' || output === null || !('error' in output)) return undefined;
+  const code = (output as { error?: unknown }).error;
+  return typeof code === 'string' && isWebSourceCode(code) ? code : undefined;
 }
 
 function reportActivity(context: ActivityContext, activity: ChatToolActivity): void {

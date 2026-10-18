@@ -189,7 +189,7 @@ describe('researchWebTopic', () => {
     );
     expect(fetchPage.mock.calls.map((call) => call[0])).toEqual([healthy, broken]);
     expect(result.evidence).toHaveLength(1);
-    expect(result.failures).toEqual([{ url: broken, message: 'x'.repeat(200) }]);
+    expect(result.failures).toEqual([{ url: broken, message: 'fetch-failed' }]);
     expect(result.manifest).toEqual(manifest);
     expect(result.complete).toBe(false);
     expect(result.unresponsiveEngines).toEqual(['engine-a']);
@@ -215,7 +215,7 @@ describe('researchWebTopic', () => {
     expect(result.openQuestions).toEqual([
       'Не удалось прочитать ни одну страницу по этому вопросу.',
     ]);
-    expect(result.failures[0]?.message).toBe('down');
+    expect(result.failures[0]?.message).toBe('fetch-failed');
   });
 
   it('stops before search or fetch when the caller aborts', async () => {

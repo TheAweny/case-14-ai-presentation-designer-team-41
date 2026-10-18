@@ -326,7 +326,16 @@ describe('toolkit core', () => {
       JSON.stringify({ url: 'https://example.com/down' }),
       context,
     );
-    expect(page).toMatchObject({ failed: true, output: { error: 'page down' } });
+    expect(page).toMatchObject({
+      failed: true,
+      output: {
+        code: 'web_source_failed',
+        error: 'web_unreachable',
+        kind: 'unreachable',
+        retryable: true,
+        action: 'retry_later',
+      },
+    });
     const ninth = await dispatcher.dispatch(
       'search_web',
       JSON.stringify({ query: 'ninth' }),

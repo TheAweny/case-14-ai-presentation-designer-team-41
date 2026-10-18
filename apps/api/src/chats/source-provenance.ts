@@ -2,6 +2,7 @@ import { isIP } from 'node:net';
 import { z } from 'zod';
 import type { ChatAttachment, ChatMessage } from '@lct/contracts';
 import { isPublicWebAddress } from './web-address.js';
+import { WEB_SOURCE_CODES } from './web-source-failure.js';
 
 /**
  * Facts a later brief may repeat. Only a person's attachments and successful server tool
@@ -55,7 +56,32 @@ const researchTopicOutputSchema = z
     evidence: z.array(researchEvidenceSchema).max(3),
     openQuestions: z.array(z.string().max(300)).max(5),
     failures: z
-      .array(z.object({ url: z.string().max(MAX_URL), message: z.string().max(200) }).strict())
+      .array(
+        z
+          .object({
+            url: z.string().max(MAX_URL),
+            message: z.string().max(200),
+            code: z.literal('web_source_failed').optional(),
+            error: z.enum(WEB_SOURCE_CODES).optional(),
+            kind: z
+              .enum([
+                'invalid-url',
+                'blocked',
+                'timeout',
+                'http',
+                'redirect',
+                'too-large',
+                'unsupported',
+                'hash-mismatch',
+                'unreachable',
+              ])
+              .optional(),
+            status: z.number().int().min(100).max(599).optional(),
+            retryable: z.boolean().optional(),
+            action: z.enum(['try_another_source', 'retry_later', 'stop']).optional(),
+          })
+          .strict(),
+      )
       .max(3),
     coverage: z
       .array(

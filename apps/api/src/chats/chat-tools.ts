@@ -41,6 +41,12 @@ import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.
 import { fetchWebSource, type WebSourceOptions, type WebSourcePage } from './web-source.js';
 import { activityDetail, withToolActivity, type ActivityContext } from './tool-activity.js';
 import { WebBudget, WebBudgetError, webBudgetOutput } from './web-budget.js';
+import { WebSourceError } from './web-source.js';
+import {
+  isNonRetryableHttp,
+  webSourceFailure,
+  type WebSourceFailure,
+} from './web-source-failure.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -211,6 +217,41 @@ export function chatTools(
     }
   }
   const fetchSource = web?.fetchSource ?? fetchWebSource;
+  const deniedFetches = new Map<string, WebSourceFailure>();
+
+  function throwIfDenied(url: string, signal: AbortSignal): void {
+    signal.throwIfAborted();
+    const key = deniedPageKey(url);
+    if (key === null) return;
+    const denied = deniedFetches.get(key);
+    if (denied) throw new StoredWebSourceFailure(denied);
+  }
+
+  async function readPublicPage(
+    url: string,
+    signal: AbortSignal,
+    options?: WebSourceOptions,
+  ): Promise<WebSourcePage> {
+    signal.throwIfAborted();
+    const key = deniedPageKey(url);
+    if (key !== null) {
+      const denied = deniedFetches.get(key);
+      if (denied) throw new StoredWebSourceFailure(denied);
+    }
+    try {
+      return await fetchSource(url, signal, options);
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof WebSourceError && error.kind === 'aborted') throw error;
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+      if (!(error instanceof WebSourceError)) {
+        throw new StoredWebSourceFailure(webSourceFailure(new WebSourceError('unreachable')));
+      }
+      const failure = webSourceFailure(error);
+      if (key !== null && isNonRetryableHttp(failure.status)) deniedFetches.set(key, failure);
+      throw new StoredWebSourceFailure(failure);
+    }
+  }
 
   async function webCall<T>(key: string, signal: AbortSignal, load: () => Promise<T>): Promise<T> {
     const operation = key.startsWith('assets:')
@@ -560,6 +601,7 @@ export function chatTools(
     async run(input, context) {
       context.signal.throwIfAborted();
       const request = fetchSourceInput.parse(input);
+      throwIfDenied(request.url, context.signal);
       const output = await webCall(
         'fetch:' +
           request.url +
@@ -571,7 +613,7 @@ export function chatTools(
           (request.expectedContentHash ?? ''),
         context.signal,
         () =>
-          fetchSource(request.url, context.signal, {
+          readPublicPage(request.url, context.signal, {
             offset: request.offset,
             maxChars: request.maxChars,
             ...(request.expectedContentHash
@@ -617,17 +659,20 @@ export function chatTools(
               ),
             ),
           fetch: (url, signal) =>
-            webCall('fetch:' + url + ':0:8000:', signal, () =>
-              withToolActivity(
-                context,
-                {
-                  kind: 'tool',
-                  name: 'fetch_source',
-                  ...urlDetail(url),
-                  parentId: context.callId,
-                },
-                () => fetchSource(url, signal, { offset: 0, maxChars: 8000 }),
-              ),
+            withToolActivity(
+              context,
+              {
+                kind: 'tool',
+                name: 'fetch_source',
+                ...urlDetail(url),
+                parentId: context.callId,
+              },
+              async () => {
+                throwIfDenied(url, signal);
+                return webCall('fetch:' + url + ':0:8000:', signal, () =>
+                  readPublicPage(url, signal, { offset: 0, maxChars: 8000 }),
+                );
+              },
             ),
           run: (question, sources, signal) =>
             withToolActivity(
@@ -952,6 +997,8 @@ export function chatTools(
           context.signal.throwIfAborted();
           if (error instanceof WebBudgetError)
             return { failed: true, output: webBudgetOutput(error) };
+          if (error instanceof StoredWebSourceFailure)
+            return { failed: true, output: error.failure };
           throw error;
         }
       },
@@ -966,6 +1013,40 @@ function activityOf(context: ToolContext): ActivityContext['activity'] {
 function urlDetail(url: string): { detail?: string } {
   const detail = activityDetail(url, 'url');
   return detail ? { detail } : {};
+}
+
+/**
+ * Identity of one public page for this turn. Query strings stay distinct because they can name
+ * different resources. Fragments do not. Invalid URLs, credentials and nonstandard ports are
+ * excluded so these requests still go through the original address validation.
+ */
+export function deniedPageKey(url: string): string | null {
+  if (typeof url !== 'string' || url.length > 2048) return null;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.href.length > 2048) return null;
+    if (parsed.username !== '' || parsed.password !== '') return null;
+    const defaultPort = parsed.protocol === 'http:' ? '80' : '443';
+    if (parsed.port !== '' && parsed.port !== defaultPort) return null;
+    parsed.hash = '';
+    if (parsed.pathname === '') parsed.pathname = '/';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** A mapped fetch failure. The model output is the whitelist object, never the raw error. */
+class StoredWebSourceFailure extends Error {
+  override readonly name = 'StoredWebSourceFailure';
+
+  constructor(readonly failure: WebSourceFailure) {
+    super(failure.error);
+    this.output = failure;
+  }
+
+  readonly output: WebSourceFailure;
 }
 
 /**
