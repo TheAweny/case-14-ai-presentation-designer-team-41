@@ -529,6 +529,28 @@ describe('shared and personal connections', () => {
       connectionId: shared.connectionId,
     });
   });
+
+  it('clears an administrator’s own choice without the default under it', async () => {
+    const { service } = setup();
+    const shared = await service.saveConnection(cloud(KEY), ADMIN);
+    const personal = await service.saveConnection({ ...cloud(KEY), shared: false }, ADMIN);
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId: shared.connectionId, modelId: 'm' },
+      ADMIN,
+    );
+    await service.setRole(
+      { role: 'writer', kind: 'model', connectionId: personal.connectionId, modelId: 'own' },
+      ADMIN,
+    );
+    const writerOf = async (actor: typeof ANN) =>
+      (await service.get(actor)).roles.find((role) => role.role === 'writer');
+    await service.setRole({ role: 'writer', kind: 'unassigned' }, ADMIN);
+    expect(await writerOf(ADMIN)).toMatchObject({ connectionId: shared.connectionId });
+    expect(await writerOf(ANN)).toMatchObject({ connectionId: shared.connectionId });
+    // With no choice of their own left, clearing is clearing the default.
+    await service.setRole({ role: 'writer', kind: 'unassigned' }, ADMIN);
+    expect(await writerOf(ANN)).toEqual({ role: 'writer', kind: 'unassigned' });
+  });
 });
 
 describe('headers of a connection', () => {
