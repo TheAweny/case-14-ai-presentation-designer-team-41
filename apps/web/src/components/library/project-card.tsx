@@ -63,13 +63,13 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
             <FontSample system={template?.designSystem} className="size-12 text-xl" />
           )}
           <div className="flex min-w-0 flex-col gap-0.5">
-            <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+            <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
               <ProjectLook appearance={project.appearance} size="sm" />
               <span className="truncate">
                 <ProjectName>{project.name}</ProjectName>
               </span>
               <ProjectPinMark pinned={project.pinned} />
-            </h3>
+            </h2>
             {template ? (
               <p className="truncate text-xs text-muted-foreground">{template.fileName}</p>
             ) : null}

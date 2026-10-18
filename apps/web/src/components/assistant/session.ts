@@ -9,6 +9,7 @@ import { createTemplateImports, type TemplateImport } from '@/lib/template-impor
 import { createHttpGenerator } from '@/lib/http-generation';
 import { createDemoTemplateImporter } from '@/mocks/demo-template-importer';
 import { apiFetch } from '@/lib/api';
+import { uploadErrorMessage } from '@/lib/upload-errors';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
 import { templateLayoutsFromIr } from '@/lib/template-profile';
 
@@ -20,18 +21,13 @@ import { templateLayoutsFromIr } from '@/lib/template-profile';
 async function registerTemplate(file: File): Promise<TemplateSummary> {
   const form = new FormData();
   form.set('file', file);
-  const response = await apiFetch('/files/template', { method: 'POST', body: form });
-  if (!response.ok) {
-    let detail = '';
-    try {
-      const body = (await response.json()) as { detail?: unknown; message?: unknown };
-      if (typeof body.detail === 'string') detail = body.detail;
-      else if (typeof body.message === 'string') detail = body.message;
-    } catch {
-      // Keep the HTTP status when the proxy returned a non-JSON error page.
-    }
-    throw new Error(`Template upload failed (${response.status})${detail ? `: ${detail}` : ''}`);
+  let response: Response;
+  try {
+    response = await apiFetch('/files/template', { method: 'POST', body: form });
+  } catch (error) {
+    throw new Error(uploadErrorMessage('template', error), { cause: error });
   }
+  if (!response.ok) throw new Error(uploadErrorMessage('template', response.status));
   const payload = (await response.json()) as {
     fileId: string;
     fileName: string;
@@ -91,8 +87,13 @@ export const generationRuns = createGenerationRuns(deckGenerator);
 async function uploadContent(file: File) {
   const body = new FormData();
   body.set('file', file);
-  const response = await apiFetch('/files/content', { method: 'POST', body });
-  if (!response.ok) throw new Error(`Content upload failed (${response.status})`);
+  let response: Response;
+  try {
+    response = await apiFetch('/files/content', { method: 'POST', body });
+  } catch (error) {
+    throw new Error(uploadErrorMessage('content', error), { cause: error });
+  }
+  if (!response.ok) throw new Error(uploadErrorMessage('content', response.status));
   const uploaded = (await response.json()) as { fileId: string; fileName?: string };
   return { fileId: uploaded.fileId, name: uploaded.fileName ?? file.name, size: file.size };
 }

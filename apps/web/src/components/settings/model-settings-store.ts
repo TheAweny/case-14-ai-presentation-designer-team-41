@@ -1,37 +1,74 @@
 'use client';
 
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { getModelSettingsAction } from '@/app/settings-actions';
+import { useAccount } from '@/components/auth/account-context';
 import type { ModelSettings, PipelineRole } from '@/lib/model-settings';
 import { writerModels, type WriterModels } from '@/lib/writer-models';
+import {
+  createModelSettingsCache,
+  EMPTY_MODEL_SETTINGS,
+  type ModelSettingsView,
+} from './model-settings-cache';
 
 /**
- * Последние известные настройки моделей во вкладке. Их читают поля ввода — чтобы показать выбор
- * модели, — а окно настроек кладёт сюда каждый свой ответ сервера: подключили модель — выбор у
- * поля появился сразу, без перезагрузки.
+ * Последние известные настройки моделей во вкладке, отдельно на каждый аккаунт.
+ * Окно настроек и поля ввода читают один кэш. Запрос идёт действием уже вошедшего
+ * пользователя. userId выбирает слот и сразу уходит в действие: там он сверяется
+ * с сессией, и настройки чужого аккаунта не возвращаются.
  */
-let current: ModelSettings | null = null;
-let loading = false;
-const listeners = new Set<() => void>();
+const cache = createModelSettingsCache((userId) => getModelSettingsAction(userId));
 
-export function publishModelSettings(settings: ModelSettings): void {
-  current = settings;
-  for (const listener of listeners) listener();
+export function subscribeModelSettings(listener: () => void): () => void {
+  return cache.subscribe(listener);
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+export function readModelSettings(userId: string | null): ModelSettingsView {
+  return cache.read(userId);
 }
 
-function load(): void {
-  if (loading) return;
-  loading = true;
-  getModelSettingsAction()
-    .then(publishModelSettings, () => undefined)
-    .finally(() => {
-      loading = false;
-    });
+export function loadModelSettings(userId: string | null): Promise<void> {
+  return cache.load(userId);
+}
+
+/** Ответ окна настроек. Второй аргумент — аккаунт, которому принадлежит снимок. */
+export function publishModelSettings(settings: ModelSettings, userId: string | null): void {
+  cache.publish(userId, settings);
+}
+
+/**
+ * Настройки и ошибка загрузки текущего аккаунта. Снимок прошлого аккаунта не читается:
+ * после выхода и смены аккаунта вид пустой, пока не придёт ответ этого аккаунта.
+ */
+export function useModelSettingsState(): {
+  settings: ModelSettings | null;
+  failed: boolean;
+  reload: () => void;
+  setSettings: (settings: ModelSettings) => void;
+} {
+  const userId = useAccount()?.userId ?? null;
+  const view = useSyncExternalStore(
+    subscribeModelSettings,
+    () => readModelSettings(userId),
+    () => EMPTY_MODEL_SETTINGS,
+  );
+
+  useEffect(() => {
+    void loadModelSettings(userId);
+  }, [userId]);
+
+  const reload = useCallback(() => {
+    void loadModelSettings(userId);
+  }, [userId]);
+
+  const setSettings = useCallback(
+    (settings: ModelSettings) => {
+      publishModelSettings(settings, userId);
+    },
+    [userId],
+  );
+
+  return { settings: view.settings, failed: view.failed, reload, setSettings };
 }
 
 /**
@@ -39,13 +76,7 @@ function load(): void {
  * перечитывает настройки: их могли поменять в другой вкладке.
  */
 export function useModelSettingsSnapshot(): ModelSettings | null {
-  const settings = useSyncExternalStore(
-    subscribe,
-    () => current,
-    () => null,
-  );
-  useEffect(load, []);
-  return settings;
+  return useModelSettingsState().settings;
 }
 
 export function useWriterModels(role: PipelineRole = 'writer'): WriterModels | null {

@@ -1,36 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslations } from 'next-intl';
-import { getModelSettingsAction } from '@/app/settings-actions';
 import { MODEL_CHECK_TIMEOUT_MS } from '@lct/contracts';
-import type { CheckError, ModelSettings } from '@/lib/model-settings';
-import { publishModelSettings } from './model-settings-store';
+import type { CheckError } from '@/lib/model-settings';
+import { useModelSettingsState } from './model-settings-store';
 
 /**
- * Настройки моделей для окна: загружаются, когда открыт раздел, и заменяются целиком ответом
- * каждого действия — так окно не расходится с сервером, даже если настройки правили в другой
- * вкладке.
+ * Настройки моделей для окна. Своего состояния нет: окно и поля ввода читают один кэш
+ * текущего аккаунта. Ответ действия публикуется сразу и не затирается поздней загрузкой.
  */
 export function useModelSettings() {
-  const [settings, setSettings] = useState<ModelSettings | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  // Каждый ответ сервера — и в общий стор: выбор модели у полей ввода следует за окном.
-  useEffect(() => {
-    if (settings) publishModelSettings(settings);
-  }, [settings]);
-
-  const load = useCallback(() => {
-    setFailed(false);
-    getModelSettingsAction().then(setSettings, () => setFailed(true));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return { settings, failed, reload: load, setSettings };
+  return useModelSettingsState();
 }
 
 /** Причина неудачной проверки короткой фразой — для карточки и для формы. */

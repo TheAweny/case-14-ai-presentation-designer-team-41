@@ -163,9 +163,7 @@ export function ModelSettingsPanel() {
     );
   }
 
-  const connections = settings.managesShared
-    ? settings.connections.filter((item) => item.managed || item.shared)
-    : settings.connections;
+  const connections = settings.connections;
   const changeRole = (next: RoleAssignment) => {
     void apply(() => setRoleAction(next));
   };

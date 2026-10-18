@@ -48,6 +48,23 @@ function settings(
 }
 
 describe('writerModels', () => {
+  it('shares manual role models across text pickers without including image-only or disabled models', () => {
+    const data = settings([{ ...connection('personal', []), manualKinds: { drawing: ['image'] } }]);
+    data.roles = [
+      { role: 'writer', kind: 'model', connectionId: 'personal', modelId: 'manual-writer' },
+      { role: 'assistant', kind: 'model', connectionId: 'personal', modelId: 'manual-assistant' },
+      { role: 'image', kind: 'model', connectionId: 'personal', modelId: 'drawing' },
+    ];
+    expect(writerModels(data, 'assistant').groups).toEqual(writerModels(data, 'writer').groups);
+    expect(writerModels(data).groups[0]?.models).toEqual(['manual-writer', 'manual-assistant']);
+    expect(
+      writerModels({
+        ...data,
+        connections: [{ ...connection('personal', []), enabledModels: ['manual-assistant'] }],
+      }).groups[0]?.models,
+    ).toEqual(['manual-assistant']);
+  });
+
   it('lists models of checked connections and skips empty or failed ones', () => {
     const list = writerModels(
       settings([connection('ollama', ['qwen3:8b', 'llama3.1:8b']), connection('down', null)]),

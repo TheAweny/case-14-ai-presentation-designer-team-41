@@ -327,6 +327,7 @@ export {
   modelIdSchema,
   connectionCheckSchema,
   modelConnectionSchema,
+  connectionModelIds,
   roleAssignmentSchema,
   modelRefSchema,
   modelSettingsSchema,

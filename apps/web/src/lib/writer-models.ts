@@ -4,11 +4,13 @@ import {
   modelFamily,
   modelsForRole,
   modelOffered,
+  modelKindsOf,
   type ModelFamily,
   type ModelRef,
   type ModelSettings,
   type PipelineRole,
 } from './model-settings';
+import { roleKind } from '@lct/contracts';
 
 /**
  * Какой моделью писать текст колоды — выбор у поля ввода, как в чатах. Список — модели
@@ -69,16 +71,19 @@ export function writerModels(settings: ModelSettings, role: PipelineRole = 'writ
   const groups = settings.connections
     .map((connection) => {
       const known = modelsForRole(connection, role);
-      const manual =
-        assigned?.connectionId === connection.connectionId &&
-        !known.includes(assigned.modelId) &&
-        modelOffered(connection, assigned.modelId)
-          ? [assigned.modelId]
-          : [];
+      const manual = settings.roles.flatMap((item) =>
+        item.kind === 'model' &&
+        item.connectionId === connection.connectionId &&
+        !known.includes(item.modelId) &&
+        modelOffered(connection, item.modelId) &&
+        modelKindsOf(connection, item.modelId).kinds.includes(roleKind(role))
+          ? [item.modelId]
+          : [],
+      );
       return {
         connectionId: connection.connectionId,
         name: connection.name,
-        models: [...manual, ...known],
+        models: [...new Set([...manual, ...known])],
       };
     })
     .filter((group) => group.models.length > 0);

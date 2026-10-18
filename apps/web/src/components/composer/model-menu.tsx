@@ -22,7 +22,10 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
-import { useWriterModels } from '@/components/settings/model-settings-store';
+import {
+  useWriterModels,
+  useModelSettingsSnapshot,
+} from '@/components/settings/model-settings-store';
 import type { ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
 import {
@@ -67,6 +70,7 @@ export function ModelMenu({
 }) {
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
+  const settings = useModelSettingsSnapshot();
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
   const [open, setOpen] = useState(false);
   const capabilities = useModelCapabilities(models ? effectiveModel(models, value) : null);
@@ -78,6 +82,13 @@ export function ModelMenu({
   );
 
   const selected = effectiveModel(models, value);
+  const separateRoles =
+    settings?.roles.filter(
+      (assignment) =>
+        (assignment.role === 'planner' || assignment.role === 'critic') &&
+        assignment.kind === 'model' &&
+        !sameModel(assignment, selected),
+    ) ?? [];
   if (models.count === 0) {
     // В узкой панели подпись не помещается — значок с подсказкой.
     if (compact && !label) {
@@ -191,6 +202,23 @@ export function ModelMenu({
             openSettings('models');
           }}
         />
+        {separateRoles.length > 0 ? (
+          <div className="grid gap-1 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            <p>{t('separateRoles')}</p>
+            {separateRoles.map((assignment) =>
+              assignment.kind === 'model' &&
+              (assignment.role === 'planner' || assignment.role === 'critic') ? (
+                <p key={assignment.role} className="truncate" title={assignment.modelId}>
+                  {t(`roles.${assignment.role}`)}: {shortModelName(assignment.modelId)}
+                  {' · '}
+                  {settings?.connections.find(
+                    (connection) => connection.connectionId === assignment.connectionId,
+                  )?.name ?? assignment.connectionId}
+                </p>
+              ) : null,
+            )}
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
@@ -270,6 +298,8 @@ export function ModelList({
   onPick,
   onUseDefault,
   onManage,
+  defaultLabel,
+  manageLabel,
 }: {
   models: WriterModels;
   /** Явно выбранная модель. Null — человек следует модели по умолчанию. */
@@ -281,7 +311,11 @@ export function ModelList({
   onEffort: (value: ReasoningEffort) => void;
   onPick: (ref: ModelRef) => void;
   onUseDefault: () => void;
-  onManage: () => void;
+  onManage?: () => void;
+  /** Подпись строки «по умолчанию», когда список выбирает роль, а не чат. */
+  defaultLabel?: string;
+  /** Подпись нижней кнопки вместо «Настроить модели». */
+  manageLabel?: string;
 }) {
   const t = useTranslations('composer.model');
   const listId = useId();
@@ -529,7 +563,7 @@ export function ModelList({
               onClick={onUseDefault}
               className={styles.fallback}
             >
-              <span className="min-w-0 flex-1 truncate">{t('useDefault')}</span>
+              <span className="min-w-0 flex-1 truncate">{defaultLabel ?? t('useDefault')}</span>
               <CheckIcon
                 aria-hidden
                 className={cn('size-3.5 shrink-0', followingDefault ? 'opacity-100' : 'opacity-0')}
@@ -592,16 +626,18 @@ export function ModelList({
           />
         </div>
       ) : null}
-      <div className="border-t border-border p-1">
-        <button
-          type="button"
-          onClick={onManage}
-          className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent"
-        >
-          <SettingsIcon className="size-3.5" aria-hidden />
-          {t('manage')}
-        </button>
-      </div>
+      {onManage ? (
+        <div className="border-t border-border p-1">
+          <button
+            type="button"
+            onClick={onManage}
+            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent"
+          >
+            <SettingsIcon className="size-3.5" aria-hidden />
+            {manageLabel ?? t('manage')}
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

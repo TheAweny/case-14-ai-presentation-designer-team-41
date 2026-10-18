@@ -367,7 +367,7 @@
           "hint": "Needs a model with an OpenAI-compatible POST /audio/transcriptions."
         }
       },
-      "descriptionShared": "You are an administrator: these roles are the defaults for every user. Only shared connections are offered here; anyone can pick their own.",
+      "descriptionShared": "Shared assignments apply to everyone. A model from a personal connection applies only to you.",
       "inherited": "Default for everyone — pick a model to use your own.",
       "writerDefault": "Use primary model",
       "primaryName": "Primary model",
@@ -377,7 +377,7 @@
     "advanced": "Customize models for individual tasks",
     "separateActive": "Separate task models are configured",
     "primaryActive": "Text tasks use the primary model unless overridden",
-    "primaryShared": "As administrator, you set the defaults for everyone.",
+    "primaryShared": "Shared assignments apply to everyone. A model from a personal connection is selected only for you.",
     "primaryPersonal": "Your preferences. A model picked in chat applies to that conversation only.",
     "visualModels": "Images, voice and visual review"
   },

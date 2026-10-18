@@ -148,7 +148,7 @@ export function LoginForm({ next, hasAccounts }: { next: string; hasAccounts: bo
             <p
               id={errorId}
               role="alert"
-              className="-mt-1 text-xs text-destructive animate-in duration-200 fade-in"
+              className="-mt-1 text-xs text-destructive animate-in duration-200 fade-in motion-reduce:animate-none"
             >
               {t(`errors.${state.error}`)}
             </p>

@@ -10,18 +10,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { BackIcon, SearchIcon } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
-import {
-  modelFamily,
-  modelKindsOf,
-  reportedModels,
-  type ModelConnection,
-  type ModelFamily,
-} from '@/lib/model-settings';
+import { modelKindsOf, type ModelConnection } from '@/lib/model-settings';
+import { connectionModelIds } from '@lct/contracts';
 import { cn } from '@/lib/utils';
-import { byFamily } from '@/lib/writer-models';
+import {
+  MANUFACTURERS,
+  MANUFACTURER_LABEL,
+  modelManufacturer,
+  type ManufacturerId,
+} from '@/lib/model-manufacturers';
 import { ModelKindMenu } from './model-kind-menu';
 
-type FamilyFilter = ModelFamily | 'all';
+type FamilyFilter = ManufacturerId | 'all';
 type ModelKindList = Parameters<typeof setModelKindsAction>[1]['kinds'];
 
 /**
@@ -41,7 +41,7 @@ function nextEnabled(
     if (on) kept.add(id);
     else kept.delete(id);
   }
-  if (reported.every((id) => kept.has(id))) return null;
+  if (reported.length > 0 && reported.every((id) => kept.has(id))) return null;
   return [
     ...reported.filter((id) => kept.has(id)),
     ...[...kept].filter((id) => !reported.includes(id)),
@@ -69,7 +69,8 @@ export function ConnectionModels({
 }) {
   const t = useTranslations('settings.models.connections.models');
   const tFamilies = useTranslations('composer.model');
-  const reported = reportedModels(connection);
+  const reported = connectionModelIds({ ...connection, enabledModels: null });
+  const catalog = [...new Set([...reported, ...(connection.enabledModels ?? [])])];
   // Подключение из .env правит администратор — так же, как общее. Остальным список только показывают.
   const editable = connection.managed ? canEditManaged : connection.editable !== false;
   const [query, setQuery] = useState('');
@@ -78,19 +79,20 @@ export function ConnectionModels({
 
   const enabled = connection.enabledModels ?? null;
   const on = (modelId: string) => enabled === null || enabled.includes(modelId);
-  const families = byFamily(reported);
+  const present = new Set(catalog.map(modelManufacturer));
+  const makers = [...MANUFACTURERS, 'other' as const].filter((id) => present.has(id));
   const needle = query.trim().toLowerCase();
   const filtered = family !== 'all' || needle !== '';
   const visible = useMemo(
     () =>
-      reported.filter(
+      catalog.filter(
         (modelId) =>
-          (family === 'all' || modelFamily(modelId) === family) &&
+          (family === 'all' || modelManufacturer(modelId) === family) &&
           (needle === '' || modelId.toLowerCase().includes(needle)),
       ),
-    [reported, family, needle],
+    [catalog, family, needle],
   );
-  const enabledCount = reported.filter(on).length;
+  const enabledCount = catalog.filter(on).length;
 
   const setKinds = (modelId: string, kinds: ModelKindList | null) => {
     if (!editable || pending) return;
@@ -106,7 +108,7 @@ export function ConnectionModels({
     void apply(() =>
       setConnectionModelsAction({
         connectionId: connection.connectionId,
-        enabledModels: nextEnabled(reported, enabled, ids, next),
+        enabledModels: nextEnabled(catalog, enabled, ids, next),
       }),
     ).finally(() => setPending(false));
   };
@@ -131,7 +133,7 @@ export function ConnectionModels({
         </div>
       </div>
 
-      {reported.length === 0 ? (
+      {catalog.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
           {t('unchecked')}
         </p>
@@ -150,9 +152,9 @@ export function ConnectionModels({
               className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
-          {families.length > 1 ? (
+          {makers.length > 1 ? (
             <div className="flex gap-1 overflow-x-auto">
-              {(['all', ...families.map((group) => group.family)] as const).map((option) => (
+              {(['all', ...makers] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -164,7 +166,11 @@ export function ConnectionModels({
                     family === option && 'bg-accent text-accent-foreground',
                   )}
                 >
-                  {option === 'all' ? tFamilies('all') : tFamilies(`families.${option}`)}
+                  {option === 'all'
+                    ? tFamilies('all')
+                    : option === 'other'
+                      ? tFamilies('families.other')
+                      : MANUFACTURER_LABEL[option]}
                 </button>
               ))}
             </div>
@@ -172,8 +178,8 @@ export function ConnectionModels({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <p role="status" className="mr-auto text-xs text-muted-foreground">
               {enabled === null
-                ? t('summaryAll', { count: reported.length })
-                : t('summary', { enabled: enabledCount, count: reported.length })}
+                ? t('summaryAll', { count: catalog.length })
+                : t('summary', { enabled: enabledCount, count: catalog.length })}
             </p>
             {editable ? (
               <div className="flex gap-1.5">

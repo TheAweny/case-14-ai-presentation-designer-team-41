@@ -1,23 +1,11 @@
 'use client';
 
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { CheckIcon, ChevronDownIcon } from '@/components/ui/icons';
+import { ChevronDownIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuPortal,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ModelList } from '@/components/composer/model-menu';
 import {
   MODEL_ID_MAX_LENGTH,
   isRoleOptional,
@@ -28,23 +16,18 @@ import {
   type ModelConnection,
   type RoleAssignment,
 } from '@/lib/model-settings';
+import { shortModelName, writerModels } from '@/lib/writer-models';
+import { useModelSettingsSnapshot } from './model-settings-store';
 import { cn } from '@/lib/utils';
-import { MODEL_SEARCH_FROM, byFamily, shortModelName } from '@/lib/writer-models';
 import { StatusDot } from './status-dot';
-
-/** Значение пункта меню: пара «подключение, модель» без риска склеить разделитель с id. */
-const modelValue = (connectionId: string, modelId: string) =>
-  JSON.stringify([connectionId, modelId]);
-const DISABLED_VALUE = 'disabled';
 
 /** Атрибут поля, которое само решает, что делать с Esc: окно настроек от него не закрывается. */
 export const OWN_ESCAPE_ATTRIBUTE = 'data-own-escape';
 
 /**
- * Строка роли: что роль делает и кто её выполняет. Модель выбирают из списка последней проверки
- * подключения; если списка нет — или нужной модели в нём нет, — id вписывают вручную. Длинный
- * список подключения разложен по семействам, каждое — своим подменю. У подключения, где часть
- * моделей выключена, вписать id нельзя: так обходили бы выключение.
+ * Строка роли: что роль делает и кто её выполняет. Модель выбирают тем же списком, что и в
+ * композере: поиск и производители. Если списка нет — или нужной модели в нём нет, — id вписывают
+ * вручную. У подключения, где часть моделей выключена, вписать id нельзя: так обходили бы выключение.
  */
 export function RoleRow({
   assignment,
@@ -58,13 +41,11 @@ export function RoleRow({
   primary?: boolean;
 }) {
   const t = useTranslations('settings.models.roles');
-  const tFamilies = useTranslations('composer.model.families');
   const { role } = assignment;
+  const [open, setOpen] = useState(false);
   const [manualFor, setManualFor] = useState<string | null>(null);
-  const manualAsked = useRef<string | null>(null);
   const optional = isRoleOptional(role);
   const name = primary ? t('primaryName') : t(`items.${role}.name`);
-  // Подсказка о типе модели — там, где подойдёт не любая: у зрения и иллюстратора.
   const hint =
     role === 'vision'
       ? t('items.vision.hint')
@@ -74,15 +55,16 @@ export function RoleRow({
           ? t('items.speech.hint')
           : null;
 
-  const current =
+  const settings = useModelSettingsSnapshot();
+  const catalog = writerModels(
+    settings ?? { connections: [...connections], roles: [assignment] },
+    role,
+  );
+  const selected =
     assignment.kind === 'model'
-      ? modelValue(assignment.connectionId, assignment.modelId)
-      : assignment.kind === 'disabled'
-        ? DISABLED_VALUE
-        : assignment.kind === 'default' ||
-            (assignment.kind === 'unassigned' && usesWriterModelByDefault(role))
-          ? 'default'
-          : '';
+      ? { connectionId: assignment.connectionId, modelId: assignment.modelId }
+      : null;
+  const models = { ...catalog, assigned: null };
   const manualConnection = connections.find((item) => item.connectionId === manualFor) ?? null;
 
   return (
@@ -123,20 +105,18 @@ export function RoleRow({
             }}
           />
         ) : connections.length === 0 && !optional ? (
-          // Выбирать не из чего: почему — сказано один раз над списком ролей.
           <p className="flex h-8 items-center gap-2 text-xs text-muted-foreground sm:justify-end">
             <StatusDot tone="warning" />
             {t('unassigned')}
           </p>
         ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="lg"
                 className="relative h-10 w-full justify-between gap-2 rounded-lg bg-muted/25 px-3 font-normal shadow-xs transition-[background-color,border-color,box-shadow] duration-150 data-[state=open]:border-ring/50 data-[state=open]:bg-muted/60"
               >
-                {/* Для чтения с экрана — какая роль, а видимое значение кнопки остаётся её именем. */}
                 <span className="sr-only">{t('picker.label', { role: name })}: </span>
                 <PickerValue assignment={assignment} connections={connections} />
                 <ChevronDownIcon
@@ -144,127 +124,90 @@ export function RoleRow({
                   className="text-muted-foreground transition-transform duration-200 group-data-[state=open]/button:rotate-180 motion-reduce:transition-none"
                 />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
+            </PopoverTrigger>
+            <PopoverContent
               align="end"
-              className="w-80 max-w-[calc(100vw-2rem)] p-1.5"
-              onCloseAutoFocus={(event) => {
-                if (manualAsked.current === null) return;
-                // Поле открываем, когда меню закрылось: иначе оно вернуло бы фокус на кнопку.
-                event.preventDefault();
-                setManualFor(manualAsked.current);
-                manualAsked.current = null;
-              }}
+              className="flex max-h-[calc(100dvh-2rem)] w-[22rem] max-w-[calc(100vw-2rem)] flex-col p-0"
             >
-              <DropdownMenuRadioGroup
-                value={current}
-                onValueChange={(value) => {
-                  if (value === DISABLED_VALUE) {
-                    onChange({ role, kind: 'disabled' });
-                    return;
-                  }
-                  if (value === 'default') {
-                    onChange({ role, kind: 'default' });
-                    return;
-                  }
-                  const [connectionId, modelId] = JSON.parse(value) as [string, string];
-                  onChange({ role, kind: 'model', connectionId, modelId });
+              <ModelList
+                models={models}
+                selected={selected}
+                followingDefault={false}
+                depth={false}
+                effort="high"
+                onEffort={() => undefined}
+                onPick={(ref) => {
+                  onChange({
+                    role,
+                    kind: 'model',
+                    connectionId: ref.connectionId,
+                    modelId: ref.modelId,
+                  });
+                  setOpen(false);
                 }}
-              >
-                {usesWriterModelByDefault(role) ? (
-                  <DropdownMenuRadioItem value="default">
-                    {t('writerDefault')}
-                  </DropdownMenuRadioItem>
-                ) : null}
-                {connections.map((connection, index) => {
-                  const models = [...modelsForRole(connection, role)];
-                  // Вписанная вручную модель тоже видна в списке и отмечена, пока её не выключили.
-                  if (
-                    assignment.kind === 'model' &&
-                    assignment.connectionId === connection.connectionId &&
-                    !models.includes(assignment.modelId) &&
-                    modelOffered(connection, assignment.modelId)
-                  ) {
-                    models.unshift(assignment.modelId);
-                  }
-                  const families = byFamily(models);
-                  const grouped = models.length >= MODEL_SEARCH_FROM && families.length > 1;
-                  const item = (modelId: string) => (
-                    <DropdownMenuRadioItem
-                      key={modelId}
-                      value={modelValue(connection.connectionId, modelId)}
-                      className="font-normal data-[state=checked]:bg-accent/70"
+                onUseDefault={() => undefined}
+              />
+              <div className="grid max-h-40 shrink-0 gap-0.5 overflow-y-auto border-t border-border p-1.5">
+                {connections
+                  .filter((connection) => !modelsLimited(connection))
+                  .map((connection) => (
+                    <Button
+                      key={connection.connectionId}
+                      type="button"
+                      variant="ghost"
+                      className="h-8 w-full min-w-0 justify-start overflow-hidden px-2 font-normal text-muted-foreground"
+                      onClick={() => {
+                        setOpen(false);
+                        setTimeout(() => setManualFor(connection.connectionId), 0);
+                      }}
                     >
-                      <span className="truncate" title={modelId}>
-                        {shortModelName(modelId)}
+                      <span className="min-w-0 truncate">
+                        {t('picker.manual')} · {connection.name}
                       </span>
-                    </DropdownMenuRadioItem>
-                  );
-                  return (
-                    <div key={connection.connectionId} role="group" aria-label={connection.name}>
-                      {index > 0 ? <DropdownMenuSeparator /> : null}
-                      <DropdownMenuLabel className="truncate">{connection.name}</DropdownMenuLabel>
-                      {models.length === 0 ? (
-                        <DropdownMenuItem disabled>{t('picker.noModels')}</DropdownMenuItem>
-                      ) : grouped ? (
-                        families.map((group) => (
-                          <DropdownMenuSub key={group.family}>
-                            <DropdownMenuSubTrigger>
-                              <span className="min-w-0 flex-1 truncate">
-                                {tFamilies(group.family)}
-                              </span>
-                              {group.models.some(
-                                (modelId) =>
-                                  modelValue(connection.connectionId, modelId) === current,
-                              ) ? (
-                                <CheckIcon aria-hidden />
-                              ) : null}
-                              <span className="text-muted-foreground tabular-nums">
-                                {group.models.length}
-                              </span>
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuPortal>
-                              <DropdownMenuSubContent className="max-h-80 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto">
-                                {group.models.map(item)}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuPortal>
-                          </DropdownMenuSub>
-                        ))
-                      ) : (
-                        models.map(item)
-                      )}
-                      {modelsLimited(connection) ? null : (
-                        <DropdownMenuItem
-                          className="text-muted-foreground"
-                          onSelect={() => {
-                            manualAsked.current = connection.connectionId;
-                          }}
-                        >
-                          {t('picker.manual')}
-                        </DropdownMenuItem>
-                      )}
-                    </div>
-                  );
-                })}
-                {optional ? (
-                  <>
-                    {connections.length > 0 ? <DropdownMenuSeparator /> : null}
-                    <DropdownMenuRadioItem value={DISABLED_VALUE}>
-                      {t(role === 'speech' ? 'disabledSpeech' : 'disabled')}
-                    </DropdownMenuRadioItem>
-                  </>
+                    </Button>
+                  ))}
+                {usesWriterModelByDefault(role) ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 w-full justify-start px-2 font-normal"
+                    onClick={() => {
+                      onChange({ role, kind: 'default' });
+                      setOpen(false);
+                    }}
+                  >
+                    {t('writerDefault')}
+                  </Button>
                 ) : null}
-              </DropdownMenuRadioGroup>
-              {assignment.kind !== 'unassigned' ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => onChange({ role, kind: 'unassigned' })}>
+                {optional ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 w-full justify-start px-2 font-normal"
+                    onClick={() => {
+                      onChange({ role, kind: 'disabled' });
+                      setOpen(false);
+                    }}
+                  >
+                    {t(role === 'speech' ? 'disabledSpeech' : 'disabled')}
+                  </Button>
+                ) : null}
+                {assignment.kind !== 'unassigned' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 w-full justify-start px-2 font-normal"
+                    onClick={() => {
+                      onChange({ role, kind: 'unassigned' });
+                      setOpen(false);
+                    }}
+                  >
                     {t('picker.clear')}
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  </Button>
+                ) : null}
+              </div>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
     </div>

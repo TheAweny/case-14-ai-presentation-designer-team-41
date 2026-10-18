@@ -31,6 +31,7 @@ let details: Record<string, { kinds: string[] }> | null = null;
 /** Kinds the person set by hand, as the API keeps them. */
 let manualKinds: Record<string, string[]> = {};
 let templates: unknown[] = [];
+let projects: unknown[] = [];
 let generationDeck: { runId: string } | null = null;
 /** Original template bytes for GET /files/templates/:id/download. An unknown id is 404. */
 const templateDownloads = new Map<
@@ -47,6 +48,7 @@ const server = createServer(async (request, response) => {
     details = null;
     manualKinds = {};
     templates = [];
+    projects = [];
     generationDeck = null;
     templateDownloads.clear();
     response.end('{}');
@@ -68,6 +70,13 @@ const server = createServer(async (request, response) => {
     response.end('{}');
   } else if (request.url === '/files/templates') {
     response.end(JSON.stringify(templates));
+  } else if (request.url === '/__set-projects' && request.method === 'POST') {
+    let body = '';
+    for await (const chunk of request) body += String(chunk);
+    projects = JSON.parse(body) as unknown[];
+    response.end('{}');
+  } else if (request.url === '/library/projects') {
+    response.end(JSON.stringify(projects));
   } else if (request.url === '/__set-template-download' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);
@@ -171,7 +180,7 @@ const server = createServer(async (request, response) => {
         ...modelSettings,
         connections: modelSettings.connections.map((connection) => ({
           ...connection,
-          manualKinds,
+          manualKinds: { ...connection.manualKinds, ...manualKinds },
           lastCheck:
             details && connection.lastCheck?.ok
               ? { ...connection.lastCheck, details }

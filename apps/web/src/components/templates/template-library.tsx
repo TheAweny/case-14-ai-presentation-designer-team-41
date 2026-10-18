@@ -112,7 +112,11 @@ export function TemplateUpload({ className }: { className?: string }) {
         onChange={choose}
       />
       <Button type="button" disabled={running} onClick={() => input.current?.click()}>
-        {running ? <SpinnerIcon className="animate-spin" /> : <UploadIcon />}
+        {running ? (
+          <SpinnerIcon className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <UploadIcon />
+        )}
         {running ? t('uploading', { name: item.file.name }) : t('upload')}
       </Button>
       {failed ? (
@@ -422,7 +426,7 @@ function TemplateCard({
                 variant="secondary"
                 size="icon"
                 aria-label={t('menu', { name: template.fileName })}
-                className="absolute top-3 right-3 size-7 opacity-0 shadow-sm group-hover/template:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                className="absolute top-3 right-3 size-7 opacity-0 shadow-sm group-hover/template:opacity-100 group-focus-within/template:opacity-100 pointer-coarse:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
               >
                 <MoreIcon size={16} />
               </Button>

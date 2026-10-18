@@ -49,7 +49,11 @@ import {
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { actorOf, GenerationService } from '../generation/generation.service.js';
-import { ModelSettingsService, ModelNotConfiguredError } from '../models/model-settings.service.js';
+import {
+  ModelSettingsService,
+  ModelNotConfiguredError,
+  type ResolvedModel,
+} from '../models/model-settings.service.js';
 import { ModelCapabilityService } from '../models/model-capabilities.js';
 import {
   resultOf,
@@ -986,13 +990,24 @@ export class ChatsService implements OnApplicationShutdown {
   }
 
   /** The model of the chat: the one picked in the chat, the assistant's, or the writer's. */
-  private async chatModel(request: ChatTurnRequest, account: Account, agent: ChatAgent) {
+  private async resolvedChatModel(
+    request: ChatTurnRequest,
+    account: Account,
+  ): Promise<ResolvedModel> {
     const actor = actorOf(account);
-    const resolved =
-      request.model !== null
-        ? await this.models.resolve(request.model, actor)
-        : ((await this.models.resolveRole('assistant', actor)) ??
+    return request.model !== null
+      ? await this.models.resolve(request.model, actor)
+      : ((await this.models.resolveRole('assistant', actor)) ??
           (await this.models.resolve(null, actor)));
+  }
+
+  private async chatModel(
+    request: ChatTurnRequest,
+    account: Account,
+    agent: ChatAgent,
+    preResolved?: ResolvedModel,
+  ) {
+    const resolved = preResolved ?? (await this.resolvedChatModel(request, account));
     const model = new OpenAICompatibleChatModel({
       apiKey: resolved.apiKey,
       baseUrl: resolved.baseUrl,
@@ -1038,7 +1053,7 @@ export class ChatsService implements OnApplicationShutdown {
       sync();
       return current();
     });
-    const scope: ChatToolScope = {
+    let scope: ChatToolScope = {
       account,
       chatId: state.id,
       projectId: state.projectId,
@@ -1099,9 +1114,12 @@ export class ChatsService implements OnApplicationShutdown {
     try {
       await this.save(state);
       const agent = await this.loadAgent();
+      const resolved = await this.resolvedChatModel(request, account);
+      const effectiveRef = { connectionId: resolved.connectionId, modelId: resolved.model };
+      scope = { ...scope, model: effectiveRef };
       let model: ChatModel | null = null;
       try {
-        model = await this.chatModel(request, account, agent);
+        model = await this.chatModel(request, account, agent, resolved);
       } catch (error) {
         if (!prepared.approved) throw error;
         // An approved plan is built without the model; only the comment after it needs one.
@@ -1201,12 +1219,12 @@ export class ChatsService implements OnApplicationShutdown {
           type: 'error',
           message: (error instanceof Error ? error.message : 'Не удалось ответить.').slice(0, 2000),
           failure: {
+            ...(request.model
+              ? { modelId: request.model.modelId, connectionId: request.model.connectionId }
+              : {}),
             ...modelFailureOf(error),
             ...(error instanceof ModelNotConfiguredError
               ? { kind: 'not-configured' as const }
-              : {}),
-            ...(request.model
-              ? { modelId: request.model.modelId, connectionId: request.model.connectionId }
               : {}),
           },
         });

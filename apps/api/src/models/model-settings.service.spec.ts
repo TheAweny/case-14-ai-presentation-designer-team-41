@@ -55,6 +55,37 @@ const cloud = (apiKey?: string) => ({
 });
 
 describe('ModelSettingsService', () => {
+  it('resolves an undiscovered personal model with its own key and rejects another account and disabled ids', async () => {
+    const { service } = setup();
+    const shared = await service.saveConnection(cloud(SERVER_KEY), ADMIN);
+    const personal = await service.saveConnection(cloud(KEY), ANN);
+    await service.setConnectionModels(
+      { connectionId: personal.connectionId, enabledModels: ['same-model'] },
+      ANN,
+    );
+    const ownRef = { connectionId: personal.connectionId, modelId: 'same-model' };
+    expect((await service.get(ANN)).connections.map((item) => item.connectionId)).toContain(
+      personal.connectionId,
+    );
+    expect((await service.get(ADMIN)).connections.map((item) => item.connectionId)).not.toContain(
+      personal.connectionId,
+    );
+    await expect(service.resolve(ownRef, ANN)).resolves.toMatchObject({
+      apiKey: KEY,
+      model: 'same-model',
+      connectionId: personal.connectionId,
+    });
+    await expect(
+      service.resolve({ connectionId: shared.connectionId, modelId: 'same-model' }, ANN),
+    ).resolves.toMatchObject({ apiKey: SERVER_KEY, connectionId: shared.connectionId });
+    await expect(service.resolve(ownRef, ADMIN)).rejects.toBeInstanceOf(ModelNotConfiguredError);
+    await service.setConnectionModels(
+      { connectionId: personal.connectionId, enabledModels: [] },
+      ANN,
+    );
+    await expect(service.resolve(ownRef, ANN)).rejects.toBeInstanceOf(ModelNotConfiguredError);
+  });
+
   it('starts empty without a server model: no connections, every role unassigned', async () => {
     const settings = await setup().service.get(ADMIN);
     expect(settings.connections).toEqual([]);

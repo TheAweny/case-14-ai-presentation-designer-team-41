@@ -45,7 +45,22 @@ function fixture(messages: ChatMessage[]) {
   const generation = { template: vi.fn(async () => ({})) } as unknown as GenerationService;
   const service = new ChatsService(
     generation,
-    {} as ModelSettingsService,
+    {
+      resolve: vi.fn(async () => ({
+        connectionId: 'writer-connection',
+        baseUrl: 'https://models.example/v1',
+        apiKey: 'test-key',
+        model: 'writer-model',
+        headers: {},
+      })),
+      resolveRole: vi.fn(async () => ({
+        connectionId: 'assistant-connection',
+        baseUrl: 'https://models.example/v1',
+        apiKey: 'test-key',
+        model: 'assistant-model',
+        headers: {},
+      })),
+    } as unknown as ModelSettingsService,
     {} as ModelCapabilityService,
   );
   services.push(service);

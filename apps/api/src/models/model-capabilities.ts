@@ -1,7 +1,7 @@
 import {
   MODEL_KINDS,
   NO_REASONING_CHOICE,
-  enabledModelIds,
+  connectionModelIds,
   modelKindsOf,
   type ModelCapabilities,
   type ModelConnection,
@@ -103,26 +103,23 @@ export class ModelCapabilityService {
   }
 
   private offered(connection: ModelConnection): readonly string[] {
-    return connection.lastCheck?.ok
-      ? enabledModelIds(connection.lastCheck.models, connection.enabledModels ?? null)
-      : [];
+    return connectionModelIds(connection);
   }
 
   /** The settings with the kinds the person set by hand on each connection. */
   async withManualKinds(settings: ModelSettings, actor: SettingsActor): Promise<ModelSettings> {
     const connections = await Promise.all(
       settings.connections.map(async (connection): Promise<ModelConnection> => {
-        if (!connection.lastCheck?.ok) return connection;
         const stored = await this.store.listCapabilities(connection);
         const manualKinds: Record<string, ModelKind[]> = {};
         let reasoningKnown = false;
-        for (const modelId of this.offered(connection)) {
-          const found = stored.get(modelId);
-          if (found?.manualKinds) manualKinds[modelId] = [...found.manualKinds];
-          if (found?.reasoning) reasoningKnown = true;
+        for (const [modelId, found] of stored) {
+          if (found.manualKinds) manualKinds[modelId] = [...found.manualKinds];
+          if (found.reasoning) reasoningKnown = true;
         }
         // A connection checked before thinking was settled at check time: settle it once now.
-        if (!reasoningKnown) void this.check(connection.connectionId, actor, false);
+        if (connection.lastCheck?.ok && !reasoningKnown)
+          void this.check(connection.connectionId, actor, false);
         return { ...connection, manualKinds };
       }),
     );

@@ -55,8 +55,13 @@ function failure(error: unknown): SettingsFailure {
   throw error;
 }
 
-export async function getModelSettingsAction(): Promise<ModelSettings> {
+export async function getModelSettingsAction(
+  expectedUserId: string | undefined = undefined,
+): Promise<ModelSettings> {
   const account = await requireAccount();
+  if (expectedUserId !== undefined && account.userId !== expectedUserId) {
+    throw new Error('Model settings were requested for a different account.');
+  }
   return modelSettingsSource(account.userId).get();
 }
 

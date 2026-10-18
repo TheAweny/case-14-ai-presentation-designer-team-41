@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { reasoningCapabilitySchema } from './reasoning.js';
+import { isModelEnabled } from './model-families.js';
 
 /**
  * Model settings: connections to OpenAI-compatible servers and which model performs each role of
@@ -184,6 +185,20 @@ export const modelConnectionSchema = z.object({
   editable: z.boolean().optional(),
 });
 export type ModelConnection = z.infer<typeof modelConnectionSchema>;
+
+/** Discoverable and explicitly configured models, with the connection's allowlist applied. */
+export function connectionModelIds(
+  connection: Pick<ModelConnection, 'lastCheck' | 'enabledModels' | 'manualKinds'>,
+): string[] {
+  const reported = connection.lastCheck?.ok ? connection.lastCheck.models : [];
+  return [
+    ...new Set([
+      ...reported,
+      ...(connection.enabledModels ?? []),
+      ...Object.keys(connection.manualKinds ?? {}),
+    ]),
+  ].filter((id) => isModelEnabled(id, connection.enabledModels ?? null));
+}
 
 /** Who performs a role: a model on a connection, nobody (optional roles only) or not yet set. */
 export const roleAssignmentSchema = z.discriminatedUnion('kind', [

@@ -1,8 +1,8 @@
 import {
   CONNECTION_NAME_MAX_LENGTH,
+  connectionModelIds,
   PIPELINE_ROLES,
   VK_AI_SPACE_BASE_URL,
-  enabledModelIds,
   isModelEnabled,
   isRoleOptional,
   modelKindsOf,
@@ -201,10 +201,9 @@ export function rolesUsingConnection(
     .map((item) => item.role);
 }
 
-/** Модели из последней успешной проверки; не проверяли или не вышло — пусто. */
+/** Найденные и явно добавленные модели с учётом ограничений подключения. */
 export function knownModels(connection: ModelConnection): readonly string[] {
-  const reported = connection.lastCheck?.ok === true ? connection.lastCheck.models : [];
-  return enabledModelIds(reported, connection.enabledModels ?? null);
+  return connectionModelIds(connection);
 }
 
 /**

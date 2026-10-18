@@ -678,11 +678,11 @@ test('saves the primary choice and lets a task explicitly follow it', async ({ p
   await dialog.getByText('Настроить модели для отдельных задач', { exact: false }).click();
   const assistantPicker = dialog.getByRole('button', { name: /Модель для роли «Ассистент»/ });
   await assistantPicker.click();
-  await page.getByRole('menuitemradio', { name: 'Использовать основную', exact: true }).click();
+  await page.getByRole('button', { name: 'Использовать основную', exact: true }).click();
   await expect(assistantPicker).toContainText('Использовать основную');
   const primary = dialog.getByRole('button', { name: /Модель для роли «Основная модель»/ });
   await primary.click();
-  await page.getByRole('menuitemradio', { name: 'beta', exact: true }).click();
+  await page.getByRole('option', { name: 'beta', exact: true }).click();
   await expect(primary).toContainText('beta');
   await page.reload();
   await expect(
@@ -734,7 +734,7 @@ test('animates model menus and uses a styled accessible task disclosure', async 
   await expect(advanced).toHaveAttribute('aria-expanded', 'true');
   const primary = dialog.getByRole('button', { name: /Модель для роли «Основная модель»/ });
   await primary.click();
-  const menu = page.getByRole('menu');
+  const menu = page.locator('[data-slot="popover-content"]');
   expect(await menu.evaluate((element) => getComputedStyle(element).animationName)).not.toBe(
     'none',
   );
@@ -744,7 +744,9 @@ test('animates model menus and uses a styled accessible task disclosure', async 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await primary.click();
   expect(
-    await page.getByRole('menu').evaluate((element) => getComputedStyle(element).animationName),
+    await page
+      .locator('[data-slot="popover-content"]')
+      .evaluate((element) => getComputedStyle(element).animationName),
   ).toBe('none');
 });
 
@@ -881,12 +883,14 @@ test('offers the thinking switch only where probing found one, whatever the name
   });
   expect(assigned.ok()).toBeTruthy();
   await openChat(page);
-  const toggle = page.getByRole('button', { name: 'Размышление' });
+  const toggle = page.getByRole('button', { name: 'Думать при сборке' });
   await expect(page.getByRole('button', { name: /Модель: Qwen\/Qwen3-8B/ })).toBeVisible();
   await expect(toggle).toHaveCount(0);
 
   await probed(page, 'Qwen/Qwen3-8B', { toggle: 'enable-thinking', levels: false });
   await page.reload();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
@@ -902,7 +906,9 @@ test('offers the thinking switch only where probing found one, whatever the name
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('lets a hybrid model think on request with a depth only while thinking', async ({ page }) => {
+test('lets a hybrid model think on request while retaining the chat reasoning depth', async ({
+  page,
+}) => {
   let sent: { thinking?: unknown; reasoningEffort?: unknown } = {};
   await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
     sent = route.request().postDataJSON();
@@ -920,9 +926,11 @@ test('lets a hybrid model think on request with a depth only while thinking', as
   expect(assigned.ok()).toBeTruthy();
   await probed(page, 'house-model', { toggle: 'reasoning-effort', levels: true });
   await openChat(page);
-  const toggle = page.getByRole('button', { name: 'Размышление' });
+  const toggle = page.getByRole('button', { name: 'Думать при сборке' });
   const menu = page.getByRole('button', { name: 'Модель: house-model. Сменить модель' });
   const depth = page.getByRole('slider', { name: 'Глубина размышления' });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
   await menu.click();
@@ -951,7 +959,7 @@ test('lets a hybrid model think on request with a depth only while thinking', as
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await menu.click();
-  await expect(depth).toHaveCount(0);
+  await expect(depth).toBeVisible();
 });
 
 test('offers only models the provider describes as chat models in the chat menu', async ({

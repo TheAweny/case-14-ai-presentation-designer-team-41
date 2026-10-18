@@ -4,6 +4,7 @@ import * as React from 'react';
 import { cn } from 'cn';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import { CheckIcon, ChevronRightIcon } from '@/components/ui/icons';
+import { menuItemClass, menuSurfaceClass } from '@/components/ui/menu-styles';
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
@@ -40,7 +41,8 @@ function DropdownMenuContent({
         align={align}
         collisionPadding={12}
         className={cn(
-          'z-[5000] max-h-(--radix-dropdown-menu-content-available-height) w-[max(var(--radix-dropdown-menu-trigger-width),11rem)] min-w-32 max-w-[min(20rem,calc(100vw-2rem))] origin-bottom overflow-x-hidden overflow-y-auto rounded-xl bg-popover p-1.5 text-popover-foreground shadow-xl shadow-black/10 ring-1 ring-foreground/10 data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left',
+          menuSurfaceClass,
+          'max-h-(--radix-dropdown-menu-content-available-height) w-[max(var(--radix-dropdown-menu-trigger-width),11rem)] min-w-32 max-w-[min(20rem,calc(100vw-2rem))] origin-bottom overflow-x-hidden overflow-y-auto data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left',
           glow && 'menu-glow-root',
           className,
         )}
@@ -151,10 +153,7 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(
-        "group/dropdown-menu-item relative flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[0.8125rem]/relaxed outline-hidden select-none transition-colors duration-100 motion-reduce:transition-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7.5 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 data-[variant=destructive]:*:[svg]:text-destructive",
-        className,
-      )}
+      className={cn(menuItemClass, 'group/dropdown-menu-item cursor-pointer', className)}
       {...props}
     />
   );
@@ -290,7 +289,8 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[0.8125rem] outline-hidden select-none transition-colors duration-100 motion-reduce:transition-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7.5 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        menuItemClass,
+        'cursor-pointer data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
         className,
       )}
       {...props}
@@ -309,7 +309,8 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        'z-[5000] min-w-32 origin-bottom overflow-hidden rounded-xl bg-popover p-1.5 text-popover-foreground shadow-xl shadow-black/10 ring-1 ring-foreground/10 data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left',
+        menuSurfaceClass,
+        'min-w-32 origin-bottom overflow-hidden data-[side=bottom]:origin-top data-[side=left]:origin-right data-[side=right]:origin-left',
         className,
       )}
       {...props}

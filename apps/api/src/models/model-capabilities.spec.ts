@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ModelDetails, ModelRef, ModelSettings } from '@lct/contracts';
+import { connectionModelIds } from '@lct/contracts';
 import { ModelCapabilityService } from './model-capabilities.js';
 import { MemoryModelSettingsStore } from './model-settings-store.js';
 import type { ModelSettingsService, ResolvedModel } from './model-settings.service.js';
@@ -53,6 +54,59 @@ function gateway() {
 }
 
 describe('ModelCapabilityService', () => {
+  it('keeps personal manual kinds without discovery and never mixes scopes or enables excluded models', async () => {
+    const store = new MemoryModelSettingsStore();
+    const connection = (connectionId: string, enabledModels: string[] | null) => ({
+      connectionId,
+      baseUrl,
+      name: connectionId,
+      preset: 'custom' as const,
+      hasKey: true,
+      keyHint: null,
+      managed: false,
+      lastCheck: null,
+      enabledModels,
+    });
+    const settings: ModelSettings = {
+      connections: [
+        connection('shared', null),
+        connection('personal', ['voice']),
+        connection('disabled', []),
+      ],
+      roles: [],
+    };
+    await store.setManualKinds({ connectionId: 'personal', baseUrl }, 'voice', ['speech']);
+    await store.setManualKinds({ connectionId: 'personal', baseUrl }, 'excluded', ['image']);
+    await store.setManualKinds({ connectionId: 'disabled', baseUrl }, 'voice', ['speech']);
+    const resolve = vi.fn(async (ref: ModelRef) => ({
+      connectionId: ref.connectionId,
+      model: ref.modelId,
+      baseUrl,
+      apiKey: 'personal-test-key',
+      headers: {},
+    }));
+    const fetchImpl = gateway();
+    const service = new ModelCapabilityService(
+      store,
+      { get: async () => settings, resolve } as unknown as ModelSettingsService,
+      prompts,
+      fetchImpl,
+    );
+    const view = await service.withManualKinds(settings, actor);
+    expect(view.connections.map((item) => item.manualKinds)).toEqual([
+      {},
+      { voice: ['speech'], excluded: ['image'] },
+      { voice: ['speech'] },
+    ]);
+    expect(view.connections.map(connectionModelIds)).toEqual([[], ['voice'], []]);
+    await expect(service.speechModel(actor)).resolves.toMatchObject({
+      connectionId: 'personal',
+      model: 'voice',
+    });
+    expect(resolve).toHaveBeenCalledWith({ connectionId: 'personal', modelId: 'voice' }, actor);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('takes thinking from the description and asks the rest once, for free', async () => {
     const fetchImpl = gateway();
     const store = new MemoryModelSettingsStore();
