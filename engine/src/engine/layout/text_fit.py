@@ -46,6 +46,28 @@ def measured_lines(text: str, slot: dict[str, Any]) -> int:
     return total
 
 
+def broken_words(text: str, slot: dict[str, Any]) -> list[str]:
+    """Words wider than the text box on their own: set in the template font, they are torn.
+
+    A line can only wrap between words, so a word that does not fit the width is cut wherever the
+    box ends, with no hyphen. The lines it adds can still be inside the slot's limit, which is how
+    a title like "Возможности и риски" passes the line count and reads "Возможност / и и риски".
+    """
+    font = _font(slot.get("font", ""), slot["fontSize"])
+    width = slot.get("textWidthPt", 100)
+
+    def length(value: str) -> float:
+        return font.getlength(value) / 4 if font else len(value) * slot["fontSize"] * 0.58
+
+    seen: list[str] = []
+    for word in text.replace("\v", "\n").split():
+        # Punctuation hangs on a word but does not make it a different one.
+        bare = word.strip(".,;:!?«»\"'()[]")
+        if bare and length(bare) > width and bare not in seen:
+            seen.append(bare)
+    return seen
+
+
 def check_composition_text(
     pattern: dict[str, Any], texts: list[dict[str, str]]
 ) -> list[dict[str, Any]]:
@@ -57,6 +79,21 @@ def check_composition_text(
         if not text:
             continue
         lines = measured_lines(text, slot)
+        torn = broken_words(text, slot)
+        if torn:
+            named = ", ".join(f"«{word}»" for word in torn[:3])
+            findings.append(
+                {
+                    "code": "word-break",
+                    "slotId": slot["slotId"],
+                    "severity": "error",
+                    "lines": lines,
+                    "maxLines": slot["maxLines"],
+                    "maxChars": max(4, min(slot["maxChars"], len(text))),
+                    "message": f"The word {named} is wider than the text box and would be torn "
+                    "in the middle. Replace it with a shorter word; do not hyphenate it.",
+                }
+            )
         if lines > slot["maxLines"] or len(text) > slot["maxChars"]:
             findings.append(
                 {

@@ -262,6 +262,38 @@ def text_height(
     return total, lines_total
 
 
+def widest_word(
+    element: dict[str, Any],
+    template: Template,
+    size_override: float | None,
+    char_width_em: float,
+    min_chars: int,
+) -> tuple[str, int, int] | None:
+    """The word of an element that is wider than its box, with the width it needs and has.
+
+    A line wraps only between words, so a word wider than the box is torn wherever the box ends.
+    The width is estimated as `char_width_em` of the size per character, like the overflow check
+    does; words shorter than `min_chars` are left out, a box that narrow is a layout of its own.
+    Returns the word that overshoots the most, or None when every word fits.
+    """
+    insets = insets_of(element)
+    width = max(int(element["box"]["cx"]) - insets["l"] - insets["r"], 1)
+    worst: tuple[str, int, int] | None = None
+    for paragraph in paragraphs_of(element):
+        sizes = [
+            float(run["sizePt"]) for run in paragraph.get("runs", []) if run.get("sizePt")
+        ] or [template.default_size(element["role"])]
+        size_emu = (size_override or max(sizes)) * EMU_PER_PT
+        available = max(width - int(paragraph.get("level", 0)) * size_emu * 1.5, 1)
+        for word in paragraph_text(paragraph).split():
+            bare = word.strip(".,;:!?«»\"'()[]")
+            needed = int(len(bare) * char_width_em * size_emu)
+            torn = len(bare) >= min_chars and needed > available
+            if torn and (worst is None or needed - available > worst[1] - worst[2]):
+                worst = (bare, needed, int(available))
+    return worst
+
+
 def _wrapped_lines(text: str, per_line: int) -> int:
     lines = 0
     for chunk in text.split("\n"):

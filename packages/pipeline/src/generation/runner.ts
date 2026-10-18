@@ -46,6 +46,7 @@ type EventData = {
 }[JobEvent['type']];
 /** Checks of the deterministic audit whose findings a rewrite of the slot's copy can fix. */
 const REWRITABLE = new Set([
+  'word-break',
   'placeholder-text',
   'bullet-length',
   'bullet-count',
@@ -295,7 +296,9 @@ export async function generatePresentation(options: GenerateOptions) {
     // Geometry cannot authorize deleting content or restoring an older, unaudited wording.
     const settleFit = async () => {
       const { findings } = await options.engine.checkCompositions(exportRequest(), signal);
-      const errors = findings.filter((f) => f.severity === 'error');
+      // A torn word goes to the rewriter and the audit, but never costs the variant: a deck with
+      // one ugly line is worth more than none, and the three are all required.
+      const errors = findings.filter((f) => f.severity === 'error' && f.code !== 'word-break');
       if (errors.length) throw new ContentFitError(errors);
     };
     let contentRevision = 1;

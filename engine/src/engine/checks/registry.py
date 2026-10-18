@@ -77,6 +77,19 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         defaults={"charWidthEm": 0.55, "lineHeight": 1.2, "slack": 1.05, "minSizePt": 10},
     ),
     CheckDefinition(
+        id="word-break",
+        category="layout",
+        title="No word is torn across lines",
+        description=(
+            "Estimates the width of every word at its size and compares it with the width of its "
+            "box. A word wider than the box is torn in the middle without a hyphen, which the "
+            "line count does not show. The finding proposes a smaller size from the template "
+            "scale at which the word fits, and asks for a shorter word when none does."
+        ),
+        severity="major",
+        defaults={"charWidthEm": 0.55, "minWordChars": 5, "minSizePt": 10},
+    ),
+    CheckDefinition(
         id="grid-alignment",
         category="layout",
         title="Blocks sit on the layout guides",
