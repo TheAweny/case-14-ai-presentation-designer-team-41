@@ -30,6 +30,8 @@ from engine.contracts import (
     HealthCheck,
     LayoutVariantsRequest,
     LayoutVariantsResponse,
+    MaterialExtractRequest,
+    MaterialExtractResponse,
     SlideIR,
     Status,
     TemplatePreviewsRequest,
@@ -45,6 +47,7 @@ from engine.export.compositions import export_compositions
 from engine.layout.text_fit import check_composition_text
 from engine.parser._errors import TemplateParseError
 from engine.parser.compositions import extract_compositions
+from engine.parser.materials import MaterialError, extract_material
 
 _STARTED_AT = time.monotonic()
 
@@ -118,6 +121,20 @@ def template_profile(request: TemplateProfileRequest) -> dict:
         "templateIr": template_ir,
         "previewDataUrl": preview_data_url,
     }
+
+
+@app.post(
+    "/v1/material-extract",
+    response_model=MaterialExtractResponse,
+    summary="Read a slice of an uploaded text or spreadsheet file",
+)
+def material_extract(request: MaterialExtractRequest) -> MaterialExtractResponse:
+    """Return characters or cells from a saved document. The engine does not call a model."""
+    try:
+        payload = extract_material(request)
+    except MaterialError as error:
+        raise HTTPException(status_code=error.status, detail=error.detail) from error
+    return MaterialExtractResponse.model_validate(payload)
 
 
 #: English Metric Units per inch: how OOXML measures a slide.
