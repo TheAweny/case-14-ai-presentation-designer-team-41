@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import type { MaterialResearchSource } from '@lct/contracts';
-import { loadMaterialResearchAgent, researchMaterials } from './material-research.js';
+import { loadAgent } from '@lct/registry';
+import {
+  loadMaterialResearchAgent,
+  MaterialResearchError,
+  researchMaterials,
+} from './material-research.js';
 import { AnswerWriter, loadChatAgent, runChatTurn, toolSpecs, type ChatTool } from './agent.js';
 import type { ChatModel, ModelStep } from './chat-model.js';
 import { OpenAICompatibleChatModel } from './chat-model.js';
@@ -23,6 +28,20 @@ const step = (answer: unknown): ModelStep => ({
   inputTokens: 30,
   outputTokens: 20,
 });
+const INCOMPLETE = 'The material researcher returned an incomplete answer.';
+async function incomplete(options: Awaited<ReturnType<typeof setup>>) {
+  try {
+    await researchMaterials(options);
+  } catch (error) {
+    expect(error).toBeInstanceOf(MaterialResearchError);
+    if (!(error instanceof MaterialResearchError)) throw error;
+    expect(error.kind).toBe('incomplete');
+    expect(error.message).toBe(INCOMPLETE);
+    expect(error.cause).toBeUndefined();
+    return error;
+  }
+  throw new Error('expected material research to reject');
+}
 async function setup(answer: unknown) {
   const model: ChatModel = { model: 'recorded', step: vi.fn(async () => step(answer)) };
   const agent = await loadMaterialResearchAgent(REGISTRY);
@@ -243,25 +262,95 @@ describe('isolated material researcher', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['length', 'protocol_error', 'content_filter'] as const)(
+  it.each(['length', 'protocol_error', 'content_filter', 'interrupted'] as const)(
     'rejects incomplete %s output',
     async (finishReason) => {
-      const options = await setup({ excerpts: [], openQuestions: [] });
-      options.model.step = async () => ({
-        ...step({ excerpts: [], openQuestions: [] }),
+      const secret = 'RAW_' + finishReason + '_PAYLOAD';
+      const answer = {
+        excerpts: [{ sourceId: source.sourceId, quote: 'Бюджет: 25 рублей.' }],
+        openQuestions: [],
+      };
+      const options = await setup(answer);
+      options.model.step = vi.fn(async () => ({
+        ...step(answer),
+        text: secret + JSON.stringify(answer),
         finishReason,
-      });
-      await expect(researchMaterials(options)).rejects.toThrow(/incomplete/);
+      }));
+      const error = await incomplete(options);
+      expect(error.reason).toBe(finishReason);
+      expect(error.message).not.toContain(secret);
+      expect(options.model.step).toHaveBeenCalledTimes(1);
     },
   );
 
   it('refuses tools from the child', async () => {
-    const options = await setup({ excerpts: [], openQuestions: [] });
-    options.model.step = async () => ({
-      ...step({}),
-      toolCalls: [{ id: 'nested', name: 'build_deck', arguments: '{}' }],
-    });
-    await expect(researchMaterials(options)).rejects.toThrow(/incomplete/);
+    const secret = 'TOOL_SECRET_PAYLOAD';
+    const answer = {
+      excerpts: [{ sourceId: source.sourceId, quote: 'Бюджет: 25 рублей.' }],
+      openQuestions: [],
+    };
+    const options = await setup(answer);
+    options.model.step = vi.fn(async () => ({
+      ...step(answer),
+      toolCalls: [{ id: 'nested', name: 'build_deck', arguments: JSON.stringify({ x: secret }) }],
+    }));
+    const error = await incomplete(options);
+    expect(error.reason).toBe('tool_calls');
+    expect(error.message).not.toContain(secret);
+    expect(error.message).not.toContain('build_deck');
+    expect(options.model.step).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a tool_calls finish without executing a call', async () => {
+    const answer = {
+      excerpts: [{ sourceId: source.sourceId, quote: 'Бюджет: 25 рублей.' }],
+      openQuestions: [],
+    };
+    const options = await setup(answer);
+    options.model.step = vi.fn(async () => ({
+      ...step(answer),
+      finishReason: 'tool_calls' as const,
+    }));
+    const error = await incomplete(options);
+    expect(error.reason).toBe('tool_calls');
+    expect(options.model.step).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not accept a complete JSON object cut off by the token limit', async () => {
+    const answer = {
+      excerpts: [{ sourceId: source.sourceId, quote: 'Бюджет: 25 рублей.' }],
+      openQuestions: [],
+    };
+    const options = await setup(answer);
+    options.model.step = vi.fn(async () => ({
+      ...step(answer),
+      truncated: true,
+      finishReason: 'stop' as const,
+    }));
+    const error = await incomplete(options);
+    expect(error.reason).toBe('length');
+    expect(options.model.step).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['', '   ', '\n'])('rejects an empty answer as empty', async (text) => {
+    const options = await setup({});
+    options.model.step = vi.fn(async () => ({ ...step({}), text, finishReason: 'stop' as const }));
+    const error = await incomplete(options);
+    expect(error.reason).toBe('empty');
+    expect(options.model.step).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    'not-json RAW_PROTOCOL_PAYLOAD',
+    '{"excerpts":"RAW_PROTOCOL_PAYLOAD"}',
+    '{"openQuestions":["RAW_PROTOCOL_PAYLOAD"]}',
+  ])('rejects an unusable answer as protocol_error without the raw text', async (text) => {
+    const options = await setup({});
+    options.model.step = vi.fn(async () => ({ ...step({}), text, finishReason: 'stop' as const }));
+    const error = await incomplete(options);
+    expect(error.reason).toBe('protocol_error');
+    expect(error.message).not.toContain('RAW_PROTOCOL_PAYLOAD');
+    expect(options.model.step).toHaveBeenCalledTimes(1);
   });
 
   it('honours parent cancellation even when the child ignores its signal', async () => {
@@ -271,6 +360,7 @@ describe('isolated material researcher', () => {
     const running = researchMaterials({ ...options, signal: controller.signal });
     controller.abort(new Error('Stopped by user'));
     await expect(running).rejects.toThrow('Stopped by user');
+    await expect(running).rejects.not.toBeInstanceOf(MaterialResearchError);
   });
 
   it('stops a stuck child at the deadline', async () => {
@@ -282,6 +372,7 @@ describe('isolated material researcher', () => {
       const rejected = expect(running).rejects.toThrow(/timed out/);
       await vi.advanceTimersByTimeAsync(30001);
       await rejected;
+      await expect(running).rejects.not.toBeInstanceOf(MaterialResearchError);
     } finally {
       vi.useRealTimers();
     }
@@ -294,6 +385,19 @@ describe('isolated material researcher', () => {
       return step({});
     };
     await expect(researchMaterials(options)).rejects.toThrow(/Nested/);
+  });
+
+  it('keeps one inner JSON and a conditional transport wrapper', async () => {
+    const agent = await loadAgent(join(REGISTRY, 'web-researcher'));
+    expect(agent.config.version).toBe('1.1.0');
+    expect(agent.config.generation.maxOutputTokens).toBe(4096);
+    expect(agent.instructions).toContain('около 300 символов');
+    expect(agent.instructions).toContain(
+      'Если транспорт требует say/tool/arguments, помести JSON excerpts/openQuestions в say, ' +
+        'tool/arguments оставь пустыми.',
+    );
+    expect(agent.instructions).not.toContain('Без второго формата');
+    expect(agent.instructions).not.toContain('Верни только JSON');
   });
 
   it('runs parent -> researcher -> parent using recorded responses and stores the verified tool output', async () => {

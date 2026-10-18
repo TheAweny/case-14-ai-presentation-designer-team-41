@@ -72,7 +72,7 @@ describe('independent web research isolation acceptance', () => {
     ]);
     expect(result.manifest).toMatchObject({
       agentId: 'web-researcher',
-      agentVersion: '1.0.0',
+      agentVersion: '1.1.0',
       seed: 42,
     });
     expect(result.coverage).toMatchObject([{ offset: 13, truncated: true, nextOffset: 69 }]);

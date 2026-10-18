@@ -3,14 +3,16 @@
 # Search snippets are not evidence.
 
 id: web-researcher
-version: 1.0.0
+version: 1.1.0
 description: 'Research child for public web pages: exact excerpts only. Search results are not evidence.'
 modelId: assistant-default
 
+# Reasoning shares this budget with the JSON answer. Three ~300-character quotes fit in the old
+# 2048 visible tokens; 4096 leaves the rest for reasoning so a finished answer is not cut off.
 generation:
   temperature: 0.2
   topP: 0.95
-  maxOutputTokens: 2048
+  maxOutputTokens: 4096
 
 outputSchema: MaterialResearchResult
 instructionsFile: instructions.md

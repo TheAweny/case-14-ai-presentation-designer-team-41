@@ -178,11 +178,23 @@ export async function researchWebTopic(
       ...shared,
     });
   }
-  const child = await callbacks.run(
-    text,
-    pages.map((item) => item.source),
-    signal,
-  );
+  let child: MaterialResearchResult;
+  try {
+    child = await callbacks.run(
+      text,
+      pages.map((item) => item.source),
+      signal,
+    );
+  } catch (error) {
+    if (aborted(error, signal)) throw new WebResearchError('aborted');
+    return pack({
+      evidence: [],
+      openQuestions: [childOpenQuestion(error)],
+      failures,
+      manifest: null,
+      ...shared,
+    });
+  }
   halt(signal);
   return pack({
     ...checked(child, pages),
@@ -345,6 +357,38 @@ function aborted(error: unknown, signal: AbortSignal): boolean {
   if (error instanceof WebResearchError && error.kind === 'aborted') return true;
   if (error instanceof WebSourceError && error.kind === 'aborted') return true;
   return error instanceof Error && error.name === 'AbortError';
+}
+
+const CHILD_STOPPED = 'Исследователь не завершил ответ; используйте прочитанные источники.';
+
+const CHILD_REASON_QUESTION = {
+  length: 'Исследователь не завершил ответ: не хватило длины. Используйте прочитанные источники.',
+  protocol_error:
+    'Исследователь не завершил ответ: нарушен формат. Используйте прочитанные источники.',
+  content_filter:
+    'Исследователь не завершил ответ: сработал фильтр. Используйте прочитанные источники.',
+  tool_calls:
+    'Исследователь не завершил ответ: лишний вызов инструмента. Используйте прочитанные источники.',
+  empty: 'Исследователь не завершил ответ: пустой результат. Используйте прочитанные источники.',
+  interrupted:
+    'Исследователь не завершил ответ: выполнение прервано. Используйте прочитанные источники.',
+} as const;
+
+type ChildStopReason = keyof typeof CHILD_REASON_QUESTION;
+
+/** A typed incomplete child only. The message and any other reason stay out of the result. */
+function childOpenQuestion(error: unknown): string {
+  const reason = childStopReason(error);
+  return reason ? CHILD_REASON_QUESTION[reason] : CHILD_STOPPED;
+}
+
+function childStopReason(error: unknown): ChildStopReason | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  if ((error as { kind?: unknown }).kind !== 'incomplete') return undefined;
+  const reason = (error as { reason?: unknown }).reason;
+  if (typeof reason === 'string' && Object.hasOwn(CHILD_REASON_QUESTION, reason))
+    return reason as ChildStopReason;
+  return undefined;
 }
 
 /** A stable reason. Unknown errors become a generic code so bodies and secrets stay out. */

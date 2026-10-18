@@ -9,12 +9,44 @@ import {
   type MaterialResearchSource,
 } from '@lct/contracts';
 import { loadAgent, toManifestEntry, type LoadedAgent } from '@lct/registry';
-import type { ChatModel } from './chat-model.js';
+import type { ChatModel, ModelStep } from './chat-model.js';
 import { fitChatContext } from './context-budget.js';
 import { parseModelJson } from '../generation/provider.js';
 
 const depth = new AsyncLocalStorage<boolean>();
 const DEADLINE_MS = 30000;
+const INCOMPLETE_MESSAGE = 'The material researcher returned an incomplete answer.';
+
+export type MaterialResearchIncompleteReason =
+  'length' | 'protocol_error' | 'content_filter' | 'tool_calls' | 'empty' | 'interrupted';
+
+/** Closed reason for a child that did not finish. The message never carries model text. */
+export class MaterialResearchError extends Error {
+  override readonly name = 'MaterialResearchError';
+  readonly kind = 'incomplete' as const;
+
+  constructor(readonly reason: MaterialResearchIncompleteReason) {
+    super(INCOMPLETE_MESSAGE);
+  }
+}
+
+function incompleteReason(step: ModelStep): MaterialResearchIncompleteReason | null {
+  if (step.finishReason === 'content_filter') return 'content_filter';
+  if (step.finishReason === 'interrupted') return 'interrupted';
+  // Token limit wins over a partial tool call. The parent keeps coverage and does not retry.
+  if (step.truncated || step.finishReason === 'length') return 'length';
+  if (step.toolCalls.length > 0 || step.finishReason === 'tool_calls') return 'tool_calls';
+  if (step.finishReason !== undefined && step.finishReason !== 'stop') return 'protocol_error';
+  return null;
+}
+
+function readAnswer(text: string) {
+  try {
+    return parseModelJson(text, materialResearchAnswerSchema);
+  } catch {
+    throw new MaterialResearchError('protocol_error');
+  }
+}
 
 export function loadMaterialResearchAgent(registryDir: string): Promise<LoadedAgent> {
   return loadAgent(join(registryDir, 'material-researcher'));
@@ -72,14 +104,10 @@ export async function researchMaterials(
         cancelled,
       ]);
       signal.throwIfAborted();
-      if (
-        step.truncated ||
-        step.toolCalls.length ||
-        (step.finishReason !== undefined && step.finishReason !== 'stop')
-      ) {
-        throw new Error('The material researcher returned an incomplete answer.');
-      }
-      const answer = parseModelJson(step.text, materialResearchAnswerSchema);
+      const reason = incompleteReason(step);
+      if (reason) throw new MaterialResearchError(reason);
+      if (step.text.trim() === '') throw new MaterialResearchError('empty');
+      const answer = readAnswer(step.text);
       const evidence: MaterialResearchResult['evidence'] = [];
       let rejected = false;
       for (const excerpt of answer.excerpts) {
