@@ -267,6 +267,20 @@ const READ_TOOLS = [
   'research_materials',
   'read_deck',
   'read_audit',
+  'search_materials',
+  'inspect_template_layout',
+  'preview_slide',
+  'check_slide_fit',
+  'check_content_coverage',
+  'search_web',
+  'fetch_source',
+  'research_topic',
+  'calculate',
+  'extract_material',
+  'read_table',
+  'inspect_sources',
+  'search_assets',
+  'read_build_status',
 ] as const;
 type ReadTool = (typeof READ_TOOLS)[number];
 
