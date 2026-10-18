@@ -56,6 +56,8 @@ export interface ChatAgent {
   readonly jsonMode: string;
   /** Said to the model after an answer that looped was cut off. */
   readonly loopNudge: string;
+  /** Said on the last step, when tools are closed and the turn must end in an answer. */
+  readonly finalizeNudge: string;
 }
 
 export const CHAT_AGENT_ID = 'chat-assistant';
@@ -64,12 +66,13 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
   const directory = join(registryDir, CHAT_AGENT_ID);
   const agent = await loadAgent(directory);
   const read = (...path: string[]) => readFile(join(directory, ...path), 'utf8');
-  const [chat, plan, auto, jsonMode, loopNudge] = await Promise.all([
+  const [chat, plan, auto, jsonMode, loopNudge, finalizeNudge] = await Promise.all([
     read('modes', 'chat.md'),
     read('modes', 'plan.md'),
     read('modes', 'auto.md'),
     read('json-mode.md'),
     read('loop-nudge.md'),
+    read('finalize.md'),
   ]);
   const toolFiles = (await readdir(join(directory, 'tools'))).filter((name) =>
     name.endsWith('.md'),
@@ -79,7 +82,14 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
       toolFiles.map(async (file) => [file.slice(0, -3), (await read('tools', file)).trim()]),
     ),
   );
-  return { agent, modes: { chat, plan, auto }, tools, jsonMode, loopNudge: loopNudge.trim() };
+  return {
+    agent,
+    modes: { chat, plan, auto },
+    tools,
+    jsonMode,
+    loopNudge: loopNudge.trim(),
+    finalizeNudge: finalizeNudge.trim(),
+  };
 }
 
 /** The system prompt of a turn: the agent, its mode, and the facts of this chat as data. */
@@ -255,6 +265,11 @@ export interface ChatTurnOptions {
   readonly mode: ChatMode;
   /** Said to the model once when its answer loops; without it a looping answer ends the turn. */
   readonly loopNudge?: string;
+  /**
+   * Trusted system text for the last model step. That step offers no tools and counts inside
+   * maxSteps. Omit it and every step, including the last, may still call tools.
+   */
+  readonly finalizeNudge?: string;
 }
 
 export interface ChatTurnResult {
@@ -277,6 +292,8 @@ export interface ChatTurnResult {
  * Answer one turn: ask the model, run the tools it calls, give it their results, and again, until
  * it answers without a tool, a tool waits for the person, or the steps run out. A tool that fails
  * or gets bad input does not end the turn: the model reads the error and can try otherwise.
+ * With finalizeNudge, the last of maxSteps is reserved: the nudge is appended as a system message,
+ * the model is asked with no tools, and a tool call it returns anyway is not run.
  */
 export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnResult> {
   const { writer, signal } = options;
@@ -291,13 +308,18 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
   let inputTokens = 0;
   let outputTokens = 0;
   let nudged = false;
+  const finalizeNudge = options.finalizeNudge?.trim() ?? '';
   for (let step = 1; step <= maxSteps; step++) {
     signal.throwIfAborted();
+    // The summary reuses the last slot. It is not a step after maxSteps.
+    const finalizing = finalizeNudge.length > 0 && step === maxSteps;
+    if (finalizing) messages.push({ role: 'system', content: finalizeNudge });
+    const offered = finalizing ? [] : options.specs;
     let context: ModelMessage[];
     try {
       context = fitChatContext(
         messages,
-        options.specs,
+        offered,
         undefined,
         options.model.contextOverheadChars ?? 0,
       );
@@ -338,7 +360,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     const provisional = new Map<number, string>();
     const step$ = options.model.step({
       messages: context,
-      tools: options.specs,
+      tools: offered,
       signal: stepControl.signal,
       onText: (delta) => {
         if (stepControl.signal.aborted) return;
@@ -359,7 +381,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
         said = '';
       },
       onToolCall: (name) => {
-        if (stepControl.signal.aborted) return;
+        if (finalizing || stepControl.signal.aborted) return;
         begun.push({
           name,
           index: writer.show({
@@ -414,6 +436,10 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
       if (!answer.text.trim())
         return { steps: step, inputTokens, outputTokens, end: 'incomplete', reason: 'empty' };
       return { steps: step, inputTokens, outputTokens, end: 'answer' };
+    }
+    if (finalizing) {
+      sealBegun();
+      return { steps: step, inputTokens, outputTokens, end: 'limit' };
     }
     messages.push({ role: 'assistant', content: answer.text, toolCalls: answer.toolCalls });
     let waiting = false;

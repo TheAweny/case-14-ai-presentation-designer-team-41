@@ -1158,6 +1158,8 @@ export class ChatsService implements OnApplicationShutdown {
         writer,
         signal,
         loopNudge: agent.loopNudge,
+        maxSteps: 24,
+        finalizeNudge: agent.finalizeNudge,
       });
       if (result.end === 'limit')
         throw new Error(

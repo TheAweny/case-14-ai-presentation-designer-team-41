@@ -556,9 +556,10 @@ describe('runChatTurn', () => {
 
   it('stops after the step limit when the model keeps calling tools', async () => {
     const call = { toolCalls: [{ id: 'c', name: 'echo', arguments: '{"word":"ещё"}' }] };
+    const model = scripted([call, call, call]);
     const { writer: answer } = writer();
     const result = await runChatTurn({
-      model: scripted([call, call, call]),
+      model,
       instructions: 'system',
       history: [],
       tools: [echo],
@@ -572,6 +573,147 @@ describe('runChatTurn', () => {
       maxSteps: 3,
     });
     expect(result).toMatchObject({ steps: 3, end: 'limit' });
+    expect(model.requests).toHaveLength(3);
+    expect(model.requests.every((request) => request.tools.length > 0)).toBe(true);
+  });
+
+  it('uses the last step to summarize without tools', async () => {
+    const model = scripted([
+      { text: 'Ищу.', toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+      { text: 'Нашёл только «да».' },
+    ]);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [echo],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      maxSteps: 2,
+      finalizeNudge: 'Подведи итог.',
+    });
+    expect(result).toMatchObject({ steps: 2, end: 'answer' });
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[0]?.tools.map((tool) => tool.name)).toEqual(['echo', 'ask_user']);
+    expect(model.requests[1]?.tools).toEqual([]);
+    expect(model.requests[1]?.messages.at(-1)).toEqual({
+      role: 'system',
+      content: 'Подведи итог.',
+    });
+    expect(answer.parts.map((part) => part.type)).toEqual(['text', 'tool', 'text']);
+  });
+
+  it('does not run a tool the model calls on the reserved final step', async () => {
+    const run = vi.fn(echo.run);
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }] },
+      {
+        text: 'Ещё проверю.',
+        toolCalls: [{ id: 'c2', name: 'echo', arguments: '{"word":"нет"}' }],
+      },
+    ]);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [{ ...echo, run }],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      maxSteps: 2,
+      finalizeNudge: 'Подведи итог.',
+    });
+    expect(result).toMatchObject({ steps: 2, end: 'limit' });
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]?.tools).toEqual([]);
+    expect(run).toHaveBeenCalledTimes(1);
+    const tools = answer.parts.filter((part) => part.type === 'tool');
+    expect(tools.map((part) => part.status)).toEqual(['done']);
+  });
+
+  it('does not dispatch a tool when the reserved final step is cancelled', async () => {
+    const control = new AbortController();
+    const run = vi.fn(echo.run);
+    const { writer: answer } = writer();
+    const pending = runChatTurn({
+      model: {
+        model: 'cancel-final',
+        async step(request) {
+          if (request.tools.length > 0) {
+            request.onToolCall?.('echo');
+            return {
+              text: '',
+              toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }],
+              truncated: false,
+              inputTokens: 1,
+              outputTokens: 1,
+            };
+          }
+          control.abort();
+          request.onToolCall?.('echo');
+          return {
+            text: 'Итог',
+            toolCalls: [{ id: 'c2', name: 'echo', arguments: '{"word":"нет"}' }],
+            truncated: false,
+            inputTokens: 1,
+            outputTokens: 1,
+          };
+        },
+      },
+      instructions: 'system',
+      history: [],
+      tools: [{ ...echo, run }],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: control.signal,
+      maxSteps: 2,
+      finalizeNudge: 'Подведи итог.',
+    });
+    await expect(pending).rejects.toThrow();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops at a waiting tool without spending the reserved final step', async () => {
+    const model = scripted([
+      {
+        toolCalls: [{ id: 'c1', name: 'ask_user', arguments: '{"question":"Какой шаблон?"}' }],
+      },
+      { text: 'Лишний итог.' },
+    ]);
+    const { writer: answer } = writer();
+    const result = await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [],
+      tools: [echo, ask],
+      specs: [
+        { name: 'echo', description: 'Echo.', parameters: {} },
+        { name: 'ask_user', description: 'Ask.', parameters: {} },
+      ],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      maxSteps: 2,
+      finalizeNudge: 'Подведи итог.',
+    });
+    expect(result.end).toBe('waiting');
+    expect(model.requests).toHaveLength(1);
+    expect(model.requests[0]?.tools.length).toBeGreaterThan(0);
   });
 });
 
@@ -647,6 +789,7 @@ describe('the chat agent in the registry', () => {
     );
     expect(specs.every((spec) => spec.description.length > 40)).toBe(true);
     expect(() => toolSpecs(agent, [named('unknown_tool')])).toThrow(/unknown_tool/);
+    expect(agent.finalizeNudge).toContain('Do not call any tool');
   });
 });
 
