@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ChatPart, ModelRef } from '@lct/contracts';
 import { ModelMenu } from '@/components/composer/model-menu';
@@ -10,7 +10,9 @@ import {
 } from '@/components/settings/model-settings-store';
 import { openSettings } from '@/components/settings/open-settings';
 import { Button } from '@/components/ui/button';
-import { RetryIcon, WarningIcon } from '@/components/ui/icons';
+import { ChevronDownIcon, RetryIcon, WarningIcon } from '@/components/ui/icons';
+import { AnimatedCollapse } from '@/components/ui/animated-collapse';
+import { cn } from '@/lib/utils';
 import { effectiveModel, sameModel, shortModelName } from '@/lib/writer-models';
 import { chatStore, useChat } from './session';
 
@@ -87,13 +89,15 @@ export function ModelErrorCard({
     !chat?.draft.template &&
     !chat?.draft.attachments?.length &&
     !chat?.draft.context?.length;
+  const detailsId = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
     <div
       role="alert"
-      className="grid gap-3 rounded-xl bg-destructive/5 p-3 ring-1 ring-destructive/15"
+      className="grid min-w-0 gap-3 rounded-xl border border-border bg-card p-3 text-card-foreground"
     >
-      <div className="flex items-start gap-2">
-        <WarningIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+      <div className="flex min-w-0 items-start gap-2">
+        <WarningIcon className="mt-0.5 size-4 shrink-0 text-destructive/80" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{t(`reasons.${kind}`)}</p>
           {quota ? (
@@ -102,10 +106,27 @@ export function ModelErrorCard({
           {original ? (
             <p className="mt-1 break-all text-xs text-muted-foreground">{original}</p>
           ) : null}
-          <details className="mt-1 text-xs text-muted-foreground">
-            <summary className="cursor-pointer">{t('details')}</summary>
-            <p className="mt-1 break-words">{part.message}</p>
-          </details>
+          <button
+            type="button"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            onClick={() => setDetailsOpen((open) => !open)}
+            className="mt-1 inline-flex min-h-6 items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t('details')}
+            <ChevronDownIcon
+              aria-hidden
+              className={cn(
+                'size-3 shrink-0 transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none',
+                !detailsOpen && '-rotate-90',
+              )}
+            />
+          </button>
+          <AnimatedCollapse open={detailsOpen} id={detailsId}>
+            <p className="mt-1 max-w-full cursor-text select-text break-words text-xs text-muted-foreground">
+              {part.message}
+            </p>
+          </AnimatedCollapse>
         </div>
       </div>
       {active ? (
