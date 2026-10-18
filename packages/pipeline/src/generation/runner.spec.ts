@@ -347,6 +347,10 @@ describe('real generation orchestration with offline dependencies', () => {
     expect(contextual.model).toBe('vlm-fixture');
     expect(contextual.findings[0]?.origin).toBe('contextual');
     expect(result.manifest.artifacts.map((a) => a.path)).toContain('audit-contextual.json');
+    // A slide read back from the file is `imported-1`: the lane names its number, not its id.
+    expect(run.warnings.find((w) => w.message.startsWith('Смысловой аудит'))?.message).toMatch(
+      /^Смысловой аудит, слайд 1: /,
+    );
     expect(result.manifest.revisions).toContainEqual(
       expect.objectContaining({ kind: 'model', id: 'vlm-fixture' }),
     );

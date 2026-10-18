@@ -121,6 +121,11 @@ interface PendingPicture {
 function orderedImageSlots(slots: readonly ImageSlot[]): ImageSlot[] {
   return [...slots].sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
 }
+/** The number a slide id ends with: `s3` and `imported-3` are both the third slide. */
+function slideNumber(slideId: string): string {
+  return /(\d+)$/.exec(slideId)?.[1] ?? slideId;
+}
+
 export async function generatePresentation(options: GenerateOptions) {
   const started = Date.now();
   const signal = AbortSignal.any([
@@ -731,13 +736,13 @@ export async function generatePresentation(options: GenerateOptions) {
               type: 'warning',
               stage,
               code: 'contextual-audit-failed',
-              message: `Смысловой аудит, слайд ${failure.slideId.slice(1)}: ответ модели не получен.`,
+              message: `Смысловой аудит, слайд ${slideNumber(failure.slideId)}: ответ модели не получен.`,
             });
           }
           for (const finding of contextual.findings.filter(
             (f) => f.severity === 'blocker' || f.severity === 'major',
           )) {
-            const message = `Смысловой аудит, слайд ${finding.target.slideId.slice(1)}: ${finding.title}`;
+            const message = `Смысловой аудит, слайд ${slideNumber(finding.target.slideId)}: ${finding.title}`;
             reviewWarnings.push(message);
             await emit({ type: 'warning', stage, code: 'content-review-required', message });
           }
