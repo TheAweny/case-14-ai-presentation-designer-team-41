@@ -27,7 +27,7 @@ export function ThinkingToggle({
 }) {
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
-  const on = useSyncExternalStore(subscribeThinking, readThinking, () => true);
+  const on = useSyncExternalStore(subscribeThinking, readThinking, () => false);
   const selected = models ? effectiveModel(models, model) : null;
   const capabilities = useModelCapabilities(selected);
   if (!capabilities?.reasoning.toggle) return null;

@@ -65,7 +65,7 @@ export function ModelMenu({
   const t = useTranslations('composer.model');
   const models = useWriterModels('assistant');
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
-  const thinking = useSyncExternalStore(subscribeThinking, readThinking, () => true);
+  const thinking = useSyncExternalStore(subscribeThinking, readThinking, () => false);
   const [open, setOpen] = useState(false);
   const capabilities = useModelCapabilities(models ? effectiveModel(models, value) : null);
   if (!models) return null;
