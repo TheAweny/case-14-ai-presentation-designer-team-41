@@ -45,6 +45,7 @@ import {
   type ChatAgent,
   type ChatEventBody,
   type ChatModel,
+  type ChatUsage,
 } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
@@ -134,6 +135,27 @@ export function titleOf(text: string, attachments: readonly ChatAttachment[]): s
   if (line.length <= 60) return line;
   const cut = line.slice(0, 60);
   return `${cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`;
+}
+
+/** Usage grows with every streamed chunk; the person needs only a few updates a second. */
+const USAGE_INTERVAL_MS = 250;
+
+function usageEvents(messageId: string, emit: (event: ChatEventBody) => void) {
+  let latest: ChatUsage | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const flush = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (latest) emit({ type: 'usage', messageId, ...latest });
+    latest = null;
+  };
+  return {
+    report: (usage: ChatUsage) => {
+      latest = usage;
+      timer ??= setTimeout(flush, USAGE_INTERVAL_MS);
+    },
+    flush,
+  };
 }
 
 /**
@@ -1029,6 +1051,7 @@ export class ChatsService implements OnApplicationShutdown {
       turn.emit(event);
       this.saveSoon(state);
     });
+    const usage = usageEvents(message.id, (event) => turn.emit(event));
     let status: AssistantChatMessage['status'] = 'streaming';
     const current = (): AssistantChatMessage => ({ ...message, status, parts: [...writer.parts] });
     const sync = () => {
@@ -1068,6 +1091,7 @@ export class ChatsService implements OnApplicationShutdown {
       },
     };
     const finishAnswer = async () => {
+      usage.flush();
       if (status === 'streaming') status = 'done';
       const nested = status === 'failed' ? 'failed' : 'cancelled';
       for (let index = 0; index < writer.parts.length; index += 1) {
@@ -1161,6 +1185,7 @@ export class ChatsService implements OnApplicationShutdown {
         loopNudge: agent.loopNudge,
         maxSteps: 24,
         finalizeNudge: agent.finalizeNudge,
+        onUsage: usage.report,
       });
       if (result.end === 'limit')
         throw new Error(

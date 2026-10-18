@@ -13,10 +13,13 @@ import { TaskGlyph } from './task-glyph';
 export function ThoughtLine({
   state,
   label,
+  meta,
   children,
 }: {
   state: 'running' | 'done' | 'failed' | 'cancelled' | 'partial';
   label: string;
+  /** Рядом с подписью, без переливания: время и токены хода. */
+  meta?: ReactNode;
   children?: ReactNode;
 }) {
   const id = useId();
@@ -38,6 +41,7 @@ export function ThoughtLine({
           />
         </AnimatePresence>
       </span>
+      {meta}
     </>
   );
   return (

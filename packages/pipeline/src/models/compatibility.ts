@@ -22,7 +22,10 @@ export class CompatibleRequests {
         body.max_completion_tokens = body.max_tokens;
         delete body.max_tokens;
       }
-      if (this.buffered && body.stream === true) body.stream = false;
+      if (this.buffered && body.stream === true) {
+        body.stream = false;
+        delete body.stream_options;
+      }
       const format = body.response_format as { type?: string } | undefined;
       if (format && this.format === 'off') delete body.response_format;
       else if (format?.type === 'json_schema' && this.format === 'object')
@@ -79,7 +82,7 @@ export class CompatibleRequests {
     if (!rejected) return false;
     const mentions = (field: string) =>
       param === field || new RegExp(`\\b${field}\\b`).test(message);
-    for (const field of ['seed', 'temperature', 'top_p']) {
+    for (const field of ['seed', 'temperature', 'top_p', 'stream_options']) {
       if (field in body && mentions(field)) {
         this.omitted.add(field);
         return true;

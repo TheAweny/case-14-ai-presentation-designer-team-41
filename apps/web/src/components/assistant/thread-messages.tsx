@@ -151,9 +151,9 @@ export function MessageActions({
  * Агент принял реплику и ещё не ответил. У демо ответ приходит сразу, у настоящего агента пауза
  * заметна — без знака кажется, что сообщение потерялось.
  */
-export function ThinkingLine() {
+export function ThinkingLine({ meta }: { meta?: ReactNode }) {
   const t = useTranslations('assistant.actions');
-  return <ThoughtLine state="running" label={t('thinking')} />;
+  return <ThoughtLine state="running" label={t('thinking')} meta={meta} />;
 }
 
 /** Заголовок хода сборки словами интерфейса — для обеих карточек хода. */

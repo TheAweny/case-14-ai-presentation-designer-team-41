@@ -277,5 +277,9 @@
     },
     "retryQuota": "Retry after changing the quota",
     "continueQuota": "Continue after changing the quota"
+  },
+  "usage": {
+    "tokens": "{count, plural, one {token} other {tokens}}",
+    "title": "Sent to the model: {input, number}, received: {output, number} tokens. Estimated while the model writes."
   }
 }

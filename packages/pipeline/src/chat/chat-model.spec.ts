@@ -314,7 +314,41 @@ describe('OpenAICompatibleChatModel', () => {
       outputTokens: 7,
     });
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
-    expect(body).toMatchObject({ stream: true, tool_choice: 'auto' });
+    expect(body).toMatchObject({
+      stream: true,
+      stream_options: { include_usage: true },
+      tool_choice: 'auto',
+    });
+  });
+
+  it('counts reasoning and tool arguments among the characters it generated', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      stream([
+        { choices: [{ delta: { reasoning_content: 'Думаю' } }] },
+        { choices: [{ delta: { content: 'Да.' } }] },
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'call-1', function: { name: 'list_templates', arguments: '{}' } },
+                ],
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      ]),
+    );
+    const generated: number[] = [];
+    const step = await model(fetchImpl).step({
+      messages: [{ role: 'user', content: 'Привет' }],
+      tools,
+      signal: AbortSignal.timeout(5000),
+      onGenerated: (characters) => generated.push(characters),
+    });
+    expect(generated).toEqual([5, 3, 16]);
+    expect(step).toMatchObject({ text: 'Да.', inputTokens: 0, outputTokens: 0 });
   });
 
   it('asks in the JSON mode once the server refuses tools, and keeps doing so', async () => {

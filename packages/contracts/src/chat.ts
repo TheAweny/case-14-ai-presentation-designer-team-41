@@ -381,8 +381,8 @@ export type ChatTurnRequest = z.infer<typeof chatTurnRequestSchema>;
 
 /**
  * Events of a turn, numbered within the chat. `message` puts a whole message (new or replaced),
- * `part` puts one part of an assistant message at its index, `text-delta` appends to a text part.
- * `turn-end` closes the stream; `ping` keeps an idle connection open.
+ * `part` puts one part of an assistant message at its index, `text-delta` appends to a text part,
+ * `usage` says how many tokens the answer has spent. `turn-end` closes the stream; `ping` keeps an idle connection open.
  */
 export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('message'), seq: z.number().int(), message: chatMessageSchema }),
@@ -399,6 +399,17 @@ export const chatEventSchema = z.discriminatedUnion('type', [
     messageId: z.string().uuid(),
     index: z.number().int().nonnegative(),
     delta: z.string(),
+  }),
+  /**
+   * Tokens the answer has spent so far, totals rather than increments. While a step streams they
+   * are estimated from its characters; once the server reports a step's usage they are its own.
+   */
+  z.object({
+    type: z.literal('usage'),
+    seq: z.number().int(),
+    messageId: z.string().uuid(),
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal('turn-end'), seq: z.number().int() }),
   z.object({ type: z.literal('ping'), seq: z.number().int() }),

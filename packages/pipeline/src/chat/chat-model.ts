@@ -62,6 +62,11 @@ export interface ModelStepRequest {
    * long to write, and the person sees what the agent is doing meanwhile.
    */
   readonly onToolCall?: (name: string) => void;
+  /**
+   * Characters the model has just produced: text, reasoning and tool arguments alike. The person
+   * watches the tokens grow by them before the server reports the step's usage.
+   */
+  readonly onGenerated?: (characters: number) => void;
 }
 
 /** The model a chat turn talks to. Tests replace it with recorded steps. */
@@ -216,6 +221,8 @@ export class OpenAICompatibleChatModel implements ChatModel {
     const response = await this.post(
       {
         stream: !this.buffered,
+        // Without it a streamed answer reports no usage at all.
+        ...(this.buffered ? {} : { stream_options: { include_usage: true } }),
         ...(request.tools.length > 0
           ? {
               tools: request.tools.map((tool) => ({
@@ -251,7 +258,12 @@ export class OpenAICompatibleChatModel implements ChatModel {
       }
       throw failure;
     }
-    const answer = await readCompletion(response, request.onText, request.onToolCall);
+    const answer = await readCompletion(
+      response,
+      request.onText,
+      request.onToolCall,
+      request.onGenerated,
+    );
     if (
       answer.bufferedRetry &&
       !this.buffered &&
@@ -363,6 +375,9 @@ interface Chunk {
   choices?: {
     delta?: {
       content?: string | null;
+      /** Reasoning as vLLM, DeepSeek and OpenRouter stream it, apart from the answer. */
+      reasoning_content?: string | null;
+      reasoning?: string | null;
       tool_calls?: {
         index?: number;
         id?: string;
@@ -434,6 +449,7 @@ async function readCompletion(
   response: Response,
   onText?: (delta: string) => void,
   onToolCall?: (name: string) => void,
+  onGenerated?: (characters: number) => void,
 ): Promise<ModelStep & { bufferedRetry?: boolean }> {
   const thinking = new ThinkingFilter();
   let text = '';
@@ -504,6 +520,17 @@ async function readCompletion(
       const choice = chunk.choices?.[0];
       if (!choice) return;
       if (choice.finish_reason) finish = choice.finish_reason;
+      const delta = choice.delta;
+      const generated =
+        (delta?.content?.length ?? 0) +
+        (delta?.reasoning_content?.length ?? 0) +
+        (delta?.reasoning?.length ?? 0) +
+        (delta?.tool_calls ?? []).reduce(
+          (sum, part) =>
+            sum + (part.function?.name?.length ?? 0) + (part.function?.arguments?.length ?? 0),
+          0,
+        );
+      if (generated > 0) onGenerated?.(generated);
       if (choice.delta?.content) say(choice.delta.content);
       for (const part of choice.delta?.tool_calls ?? []) {
         const index = part.index;
