@@ -475,7 +475,7 @@ describe('reviewVariantVisually asked again about some slides', () => {
       goal: '',
       pptxPath: join(dir, 'deck.pptx'),
       mediaDir: join(dir, 'media'),
-      previews: [previews[0]!, join(dir, 'missing.png')],
+      previews: [join(dir, 'slide-1.png'), join(dir, 'missing.png')],
       seed: 1,
       outputDir: dir,
       only: new Set([2]),
