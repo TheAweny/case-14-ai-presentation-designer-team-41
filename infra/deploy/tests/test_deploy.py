@@ -148,3 +148,32 @@ def test_runtime_compose_is_private_and_persistent():
     for name in ("api", "web", "engine"):
         assert "build" not in services[name]
         assert "@sha256" not in services[name]["image"]  # I supply digests in the release env.
+
+
+def test_consistent_backup_resumes_current_release_on_snapshot_failure(tmp_path):
+    instance = prepare(tmp_path)
+
+    def fail_snapshot(_sha):
+        instance.calls.append("snapshot")
+        raise RuntimeError("Disk full")
+
+    instance.backup_files = fail_snapshot
+    with pytest.raises(RuntimeError, match="Disk full"):
+        deploy.Deployment.backup(instance, SHA)
+    assert instance.calls == ["stop", "snapshot", ("start", OLD_SHA), "ready"]
+
+
+def test_daily_backup_does_not_interrupt_the_application(tmp_path):
+    instance = prepare(tmp_path)
+    instance.backup_files = lambda _sha: instance.calls.append("snapshot")
+    deploy.Deployment.backup(instance, SHA, quiesce=False)
+    assert instance.calls == ["snapshot"]
+
+
+def test_readiness_requires_a_real_active_account(tmp_path):
+    from types import SimpleNamespace
+
+    instance = deploy.Deployment(tmp_path)
+    instance.compose = lambda *_args, **_kwargs: SimpleNamespace(stdout="")
+    with pytest.raises(RuntimeError, match="active administrator"):
+        instance.ready()

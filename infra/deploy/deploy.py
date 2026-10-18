@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -135,9 +136,20 @@ class Deployment:
                 if result.stdout.strip() != payload["sha"]:
                     raise RuntimeError("Image revision does not match the requested commit")
 
-    def backup(self, sha):
+    def backup(self, sha, quiesce=True):
         if not (self.state / "current.json").exists():
             return
+        current = json.loads((self.state / "current.json").read_text())
+        try:
+            if quiesce:
+                self.stop_apps()
+            self.backup_files(sha)
+        finally:
+            if quiesce:
+                self.start(current)
+                self.ready()
+
+    def backup_files(self, sha):
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         directory = self.root / "backups" / f"{stamp}-{sha[:12]}"
         directory.mkdir(mode=0o700, parents=True)
@@ -171,6 +183,23 @@ class Deployment:
         self.compose("up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "240")
 
     def ready(self):
+        account = self.compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "lct26",
+            "-d",
+            "lct26",
+            "-Atc",
+            "SELECT id FROM app_users WHERE role = 'admin' AND disabled_at IS NULL "
+            "ORDER BY created_at LIMIT 1",
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if not re.fullmatch(r"[a-f0-9-]{36}", account):
+            raise RuntimeError("Readiness requires an active administrator")
         # I test protected dependencies from inside API so the service token never leaves it.
         self.compose(
             "exec",
@@ -180,9 +209,10 @@ class Deployment:
             "-e",
             "(async()=>{for(const p of ['/health','/health/database','/health/engine']){"
             "const r=await fetch('http://127.0.0.1:3001'+p,{headers:{"
-            "'x-lct-service-token':process.env.API_SERVICE_TOKEN}});"
+            "'x-lct-service-token':process.env.API_SERVICE_TOKEN,'x-lct-user':process.argv[1]}});"
             "if(!r.ok||(await r.json()).status!=='ok')process.exit(1)}})()"
             ".catch(()=>process.exit(1))",
+            account,
         )
         self.run(
             [
@@ -259,11 +289,20 @@ class Deployment:
 
 def main():
     os.umask(0o077)
+
+    def interrupted(_number, _frame):
+        # I finish the recovery path even if the SSH connection has gone away.
+        for name in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+            signal.signal(name, signal.SIG_IGN)
+        raise RuntimeError("Deployment interrupted; recovering the previous release")
+
+    for name in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+        signal.signal(name, interrupted)
     instance = Deployment()
     with deployment_lock(instance.state / "deploy.lock"):
         if sys.argv[1:] == ["--backup"]:
             current = json.loads((instance.state / "current.json").read_text())
-            instance.backup(current["sha"])
+            instance.backup(current["sha"], quiesce=False)
             print(f"Backed up {current['sha']}")
         elif sys.argv[1:] == ["--rollback"]:
             previous = json.loads((instance.state / "previous.json").read_text())
