@@ -2,19 +2,20 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  width: fit-content;
+  align-items: stretch;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   color: var(--muted-foreground);
 }
 .row {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 7px;
   min-height: 34px;
   min-width: 0;
+  width: 100%;
   max-width: 100%;
   padding: 5px 10px;
   border-radius: 9px;
@@ -47,6 +48,7 @@
 .detail {
   position: relative;
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -54,7 +56,7 @@
 .time {
   position: relative;
   flex-shrink: 0;
-  margin-left: 3px;
+  margin-left: auto;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -96,9 +98,10 @@
 .children {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 2px;
   min-width: 0;
+  width: 100%;
   max-width: 100%;
   margin: 4px 0 2px;
   padding: 0 0 0 16px;
@@ -107,8 +110,9 @@
 .childRow {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   min-width: 0;
+  width: 100%;
   max-width: 100%;
 }
 .children .row {
@@ -126,13 +130,14 @@
 }
 .more {
   min-width: 0;
+  width: 100%;
   max-width: 100%;
   margin: 2px 0 4px 26px;
   font-size: 11px;
 }
 .more > summary {
   cursor: pointer;
-  width: fit-content;
+  width: 100%;
   color: var(--muted-foreground);
 }
 .more > summary:focus-visible {
@@ -212,10 +217,11 @@
 }
 .more {
   margin: 0;
-  width: fit-content;
+  width: 100%;
 }
 .more > summary {
   display: flex;
+  width: 100%;
   max-width: 100%;
   list-style: none;
 }

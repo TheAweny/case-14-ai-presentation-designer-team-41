@@ -95,7 +95,7 @@ function calculate(): Extract<ChatPart, { type: 'tool' }> {
     type: 'tool',
     callId: 'calc-call',
     name: 'calculate',
-    input: { operation: 'сумма бюджета кампании 1280 + 640' },
+    input: {},
     status: 'done',
     phase: 'executing',
     startedAt: startedAt + 2500,
@@ -265,6 +265,92 @@ async function expectChipSurface(page: Page) {
   expect(Number.parseFloat(styles.rowBorderWidth) === 0).toBe(true);
 }
 
+async function expectEqualChipWidths(page: Page) {
+  const metrics = await page.evaluate(() => {
+    const list = document.querySelector('[data-active-agents] ul');
+    const research = document.querySelector('[data-tool-call="research-call"]');
+    const calc = document.querySelector('[data-tool-call="calc-call"]');
+    const assets = document.querySelector('[data-tool-call="assets-call"]');
+    if (!list || !research || !calc || !assets) return null;
+    return {
+      listWidth: list.getBoundingClientRect().width,
+      viewport: window.innerWidth,
+      research: surface(research),
+      calc: surface(calc),
+      assets: surface(assets),
+      nested: surface(research.querySelector('[data-activity-id="nested-page"]')),
+      parent: surface(research.querySelector('[data-activity-id="researcher"]')),
+      topic: surface(research.querySelector('[data-activity-id="topic-search"]')),
+    };
+
+    function surface(root: Element | null) {
+      if (!root) return null;
+      const details = root.querySelector(':scope > details');
+      const summary = details?.querySelector(':scope > summary') ?? null;
+      const host = summary ?? root;
+      const row =
+        Array.from(host.children).find(
+          (node) =>
+            node instanceof HTMLElement && Boolean(node.querySelector('time, [data-glyph-state]')),
+        ) ?? host.querySelector('div');
+      const time = row?.querySelector('time') ?? null;
+      const rowBox = row?.getBoundingClientRect();
+      const timeBox = time?.getBoundingClientRect();
+      return {
+        hasDetails: Boolean(details),
+        summaryWidth: summary?.getBoundingClientRect().width ?? 0,
+        rowWidth: rowBox?.width ?? 0,
+        rowRight: rowBox?.right ?? 0,
+        timeRight: timeBox?.right ?? 0,
+        paddingRight: row ? Number.parseFloat(getComputedStyle(row).paddingRight) : 0,
+      };
+    }
+  });
+  expect(metrics).not.toBeNull();
+  if (!metrics) return;
+  expect(metrics.research).not.toBeNull();
+  expect(metrics.calc).not.toBeNull();
+  expect(metrics.assets).not.toBeNull();
+  if (!metrics.research || !metrics.calc || !metrics.assets) return;
+  expect(Math.abs(metrics.research.rowWidth - metrics.calc.rowWidth)).toBeLessThan(1);
+  expect(Math.abs(metrics.research.rowWidth - metrics.assets.rowWidth)).toBeLessThan(1);
+  expect(metrics.research.summaryWidth).toBeGreaterThan(0);
+  expect(Math.abs(metrics.research.summaryWidth - metrics.research.rowWidth)).toBeLessThan(1);
+  expect(Math.abs(metrics.assets.summaryWidth - metrics.assets.rowWidth)).toBeLessThan(1);
+  expect(metrics.calc.hasDetails).toBe(false);
+  expect(metrics.research.rowWidth).toBeGreaterThan(metrics.listWidth * 0.98);
+  expect(Math.abs(metrics.research.rowWidth - metrics.listWidth)).toBeLessThan(1);
+  expect(metrics.research.rowWidth).toBeLessThanOrEqual(metrics.viewport);
+  expect(metrics.calc.timeRight).toBeGreaterThan(0);
+  expect(metrics.research.timeRight).toBeGreaterThan(0);
+  expect(metrics.assets.timeRight).toBeGreaterThan(0);
+  expect(metrics.calc.rowRight - metrics.calc.timeRight).toBeGreaterThanOrEqual(0);
+  expect(
+    Math.abs(metrics.calc.rowRight - metrics.calc.timeRight - metrics.calc.paddingRight),
+  ).toBeLessThan(1);
+  expect([7, 10]).toContain(metrics.calc.paddingRight);
+  expect(Math.abs(metrics.research.timeRight - metrics.assets.timeRight)).toBeLessThan(1);
+  expect(
+    Math.abs(
+      metrics.research.rowRight -
+        metrics.research.timeRight -
+        (metrics.assets.rowRight - metrics.assets.timeRight),
+    ),
+  ).toBeLessThan(1);
+  expect(metrics.research.rowRight - metrics.research.timeRight).toBeGreaterThan(
+    metrics.calc.paddingRight,
+  );
+  expect(metrics.nested).not.toBeNull();
+  expect(metrics.parent).not.toBeNull();
+  expect(metrics.topic).not.toBeNull();
+  if (metrics.nested && metrics.parent && metrics.topic) {
+    expect(metrics.nested.rowRight).toBeLessThanOrEqual(metrics.parent.rowRight + 0.5);
+    expect(metrics.parent.rowRight).toBeLessThanOrEqual(metrics.topic.rowRight + 0.5);
+    expect(metrics.topic.rowRight).toBeLessThanOrEqual(metrics.research.rowRight + 0.5);
+    expect(metrics.parent.rowWidth).toBeGreaterThan(metrics.nested.rowWidth);
+  }
+}
+
 for (const narrow of [false, true]) {
   test(`minimal tool chips keep the expanded group and settle without remount (${narrow ? 'mobile' : 'desktop'})`, async ({
     page,
@@ -361,12 +447,14 @@ for (const narrow of [false, true]) {
       expect(sheet).toBe(true);
       await expectExpandedGroup(page);
       await expectChipSurface(page);
+      await expectEqualChipWidths(page);
       await noHorizontalOverflow(page);
       await page.screenshot({
         path: `test-results/chat/call-chip-polish-${narrow ? 'mobile' : 'desktop'}-done.png`,
         fullPage: true,
       });
       await expandChipDetails(page);
+      await expectEqualChipWidths(page);
       await expect(page.locator('[data-tool-call="assets-call"]')).toContainText(
         'Достигнут лимит этого типа веб-запросов',
       );

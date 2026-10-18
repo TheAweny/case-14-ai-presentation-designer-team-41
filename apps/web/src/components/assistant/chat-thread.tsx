@@ -295,10 +295,10 @@ function ToolLines({
         </p>
       ) : null}
       <ThoughtLine state={state === 'done' && issues > 0 ? 'failed' : state} label={summary}>
-        <ul className="flex min-w-0 flex-col items-start gap-1">
+        <ul className="flex w-full min-w-0 flex-col items-stretch gap-1">
           {/* Streamed positions stay stable when a provisional call id is replaced. */}
           {chips.map((chip, index) => (
-            <li key={index} className="w-fit max-w-full min-w-0">
+            <li key={index} className="w-full max-w-full min-w-0">
               <ToolCallChip chip={chip} now={now} />
             </li>
           ))}
