@@ -707,27 +707,33 @@ export async function generatePresentation(options: GenerateOptions) {
         try {
           const reviewer = await loadAgent(join(options.registryDir, 'slide-reviewer'));
           reviewerAgent = reviewer;
+          // The review has its own stop: when its time is up the requests still in flight are
+          // cancelled, so they neither hold the model's slots nor write after the run is done.
+          const stop = new AbortController();
           let timer: NodeJS.Timeout | undefined;
           const expired = new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error('time is up')), left);
+            timer = setTimeout(() => {
+              stop.abort();
+              reject(new Error('time is up'));
+            }, left);
           });
           try {
-            contextual = await Promise.race([
-              reviewVariantVisually({
-                engine: options.engine,
-                agent: reviewer,
-                provider: options.reviewer.provider,
-                brief: options.brief,
-                goal: written[0]?.title ?? '',
-                pptxPath: output.outputPath,
-                mediaDir: join(options.outputDir, 'media'),
-                previews: output.previews,
-                seed: options.seed ?? 42,
-                outputDir: options.outputDir,
-                signal,
-              }),
-              expired,
-            ]);
+            const asked = reviewVariantVisually({
+              engine: options.engine,
+              agent: reviewer,
+              provider: options.reviewer.provider,
+              brief: options.brief,
+              goal: written[0]?.title ?? '',
+              pptxPath: output.outputPath,
+              mediaDir: join(options.outputDir, 'media'),
+              previews: output.previews,
+              seed: options.seed ?? 42,
+              outputDir: options.outputDir,
+              signal: AbortSignal.any([signal, stop.signal]),
+            });
+            // Once the race is lost nobody awaits it: its late failure must not go unhandled.
+            asked.catch(() => undefined);
+            contextual = await Promise.race([asked, expired]);
           } finally {
             clearTimeout(timer);
           }
@@ -757,6 +763,27 @@ export async function generatePresentation(options: GenerateOptions) {
               (error instanceof Error ? error.message : String(error)),
           });
         }
+      }
+    }
+    // The final review was written before the pictures were read. What they showed counts in it
+    // too, or a deck with a blocker in its picture would be called complete and recommended.
+    if (contextual) {
+      const seen = contextual.findings.filter((f) => f.origin === 'contextual');
+      const errors = seen.filter((f) => f.severity === 'blocker' || f.severity === 'major').length;
+      const warnings = seen.filter((f) => f.severity === 'minor').length;
+      if (errors || warnings) {
+        const known = finalReview.contextual ?? { errors: 0, warnings: 0 };
+        const updated = finalReviewSchema.parse({
+          ...finalReview,
+          status: errors ? 'requires-review' : finalReview.status,
+          contextual: { errors: known.errors + errors, warnings: known.warnings + warnings },
+          errors: finalReview.errors + errors,
+          warnings: finalReview.warnings + warnings,
+        });
+        await writeFile(
+          join(options.outputDir, 'final-review.json'),
+          JSON.stringify(updated, null, 2),
+        );
       }
     }
     if (!options.reviewer) {

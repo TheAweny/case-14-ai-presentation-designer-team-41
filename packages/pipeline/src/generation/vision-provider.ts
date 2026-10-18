@@ -4,6 +4,7 @@ import {
   backoff,
   BUSY_RETRIES,
   BUSY_STATUSES,
+  modelSlotSucceeded,
   retryDelay,
   throttleModelSlots,
 } from './provider.js';
@@ -56,7 +57,11 @@ export class VisionProvider implements ModelProvider {
   }
 
   async complete(request: ModelRequest, feedback?: string): Promise<string> {
-    const { answerFormat, signal = new AbortController().signal } = this.options;
+    const { answerFormat } = this.options;
+    // The run's signal and the request's own: either one stops the request.
+    const signal = AbortSignal.any(
+      [this.options.signal, request.signal].filter((one): one is AbortSignal => one !== undefined),
+    );
     const generation = request.agent.config.generation;
     const system = answerFormat
       ? `${request.agent.instructions}\n\n${answerFormat.format.replace(
@@ -122,7 +127,10 @@ export class VisionProvider implements ModelProvider {
         } else {
           const data = (await response.json()) as Completion;
           const content = data.choices?.[0]?.message?.content;
-          if (content) return content;
+          if (content) {
+            modelSlotSucceeded();
+            return content;
+          }
           throw new Error('The vision model returned an empty answer.');
         }
       } catch (error) {

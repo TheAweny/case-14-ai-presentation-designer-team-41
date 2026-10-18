@@ -73,7 +73,10 @@ export async function reviewVariantVisually(options: VisualReviewOptions): Promi
     provider: options.provider,
     seed: options.seed,
     images,
+    ...(options.signal ? { signal: options.signal } : {}),
   });
+  // A review that was stopped writes nothing: its file would land after the run is done.
+  options.signal?.throwIfAborted();
   const review: VisualReview = { ...result, slideCount: slides.length };
   await writeFile(
     join(options.outputDir, 'audit-contextual.json'),
