@@ -8,6 +8,7 @@ import {
   storedTemplateIndexSchema,
   materialResearchInputSchema,
   materialResearchResultSchema,
+  generationProfileSchema,
   type MaterialResearchSource,
   type ChatMessage,
   type ChatMode,
@@ -26,8 +27,18 @@ import {
   type VariantEnd,
 } from '../generation/generation.service.js';
 import { generationBrief } from './chat-brief.js';
+import { calculate, calculationInputSchema } from './calculation.js';
 import { readFinalReview } from './final-review.js';
 import { readResearchMaterial, type MaterialResearchDependency } from './material-research.js';
+import { searchMaterialFile } from './material-search.js';
+import { inspectTemplateLayout } from './template-layout.js';
+import { createAssetSearch, type AssetSearch } from './asset-search.js';
+import { researchWebTopic } from './web-research.js';
+import { materialTools } from './material-tools.js';
+import { inspectionTools } from './inspection-tools.js';
+import { inspectChatSources } from './source-provenance.js';
+import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
+import { fetchWebSource, type WebSourceOptions, type WebSourcePage } from './web-source.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -123,6 +134,34 @@ export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
 
 const TEXT_FILE = /\.(txt|md|csv|tsv)$/i;
 const MAX_FILE_CHARS = 8000;
+const MAX_SEARCH_CALLS = 8;
+const MAX_WEB_CALLS = 8;
+
+function attachedFileIds(scope: ChatToolScope): Set<string> {
+  return new Set(
+    scope
+      .messages()
+      .flatMap((message) =>
+        message.role === 'user'
+          ? message.attachments.flatMap((item) => (item.kind === 'file' ? [item.fileId] : []))
+          : [],
+      ),
+  );
+}
+
+/** Test double for the public web. Production builds it from WEB_SEARCH_URL and fetchWebSource. */
+export interface ChatWebDependency {
+  readonly search: WebSearch | null;
+  readonly fetchSource: (
+    url: string,
+    signal: AbortSignal,
+    options?: WebSourceOptions,
+  ) => Promise<WebSourcePage>;
+  /** Material researcher for one later isolated step. It does not call a model of its own. */
+  readonly research?: MaterialResearchDependency;
+  /** Image leads. Production builds this from WEB_SEARCH_URL when no web dependency is passed. */
+  readonly assets?: AssetSearch;
+}
 
 /**
  * The tools of the chat agent for one turn. They read and build through the same services as the
@@ -132,10 +171,58 @@ export function chatTools(
   generation: GenerationService,
   scope: ChatToolScope,
   research?: MaterialResearchDependency,
+  web?: ChatWebDependency,
 ): ChatTool[] {
   const { pool } = generation;
   const account = scope.account;
   let researchCalls = 0;
+  let searchCalls = 0;
+  const searchCache = new Map<string, unknown>();
+  let webCalls = 0;
+  const webCache = new Map<string, unknown>();
+  let researchTopicCalls = 0;
+  const researchTopicCache = new Map<string, unknown>();
+  const baseUrl = web ? null : webSearchBaseUrl(process.env);
+  let searchClient: WebSearch | null = null;
+  let assetClient: AssetSearch | null = null;
+  if (web) {
+    searchClient = web.search;
+    assetClient = web.assets ?? null;
+  } else if (baseUrl !== null) {
+    try {
+      searchClient = createWebSearch({ baseUrl });
+    } catch {
+      searchClient = null;
+    }
+    try {
+      assetClient = createAssetSearch({ baseUrl });
+    } catch {
+      assetClient = null;
+    }
+  }
+  if (web && assetClient === null) {
+    const assetBase = webSearchBaseUrl(process.env);
+    if (assetBase !== null) {
+      try {
+        assetClient = createAssetSearch({ baseUrl: assetBase });
+      } catch {
+        assetClient = null;
+      }
+    }
+  }
+  const fetchSource = web?.fetchSource ?? fetchWebSource;
+
+  async function webCall<T>(key: string, signal: AbortSignal, load: () => Promise<T>): Promise<T> {
+    signal.throwIfAborted();
+    const cached = webCache.get(key);
+    if (cached !== undefined) return cached as T;
+    if (webCalls >= MAX_WEB_CALLS) throw new Error('The web call limit for this turn was reached.');
+    webCalls += 1;
+    const output = await load();
+    signal.throwIfAborted();
+    webCache.set(key, output);
+    return output;
+  }
 
   const researchMaterials: ChatTool = {
     name: 'research_materials',
@@ -148,15 +235,7 @@ export function chatTools(
         throw new Error('The material research call limit for this turn was reached.');
       researchCalls += 1;
       const request = materialResearchInputSchema.parse(input);
-      const attached = new Set(
-        scope
-          .messages()
-          .flatMap((message) =>
-            message.role === 'user'
-              ? message.attachments.flatMap((item) => (item.kind === 'file' ? [item.fileId] : []))
-              : [],
-          ),
-      );
+      const attached = attachedFileIds(scope);
       if (request.fileIds.some((id) => !attached.has(id))) {
         throw new Error('Research may read only materials attached by the person in this chat.');
       }
@@ -276,10 +355,12 @@ export function chatTools(
       const { templateId } = input as { templateId: string };
       const row = await templateRow(templateId);
       const index = storedTemplateIndexSchema.safeParse(row.profile?.index);
+      const generationProfile = generationProfileSchema.safeParse(row.profile?.generation);
       const layouts = index.success
         ? index.data.notes
             .filter((note) => !note.skip)
             .map((note) => ({
+              patternId: note.patternId,
               kind: note.kind,
               title: note.title,
               useFor: note.useFor,
@@ -287,7 +368,12 @@ export function chatTools(
               ...(note.special ? { special: true } : {}),
               ...(note.requiredContent.length ? { requiredContent: note.requiredContent } : {}),
             }))
-        : null;
+        : generationProfile.success
+          ? generationProfile.data.compositions.map((composition) => ({
+              patternId: composition.patternId,
+              sourceIndex: composition.sourceIndex,
+            }))
+          : null;
       return {
         output: {
           templateId,
@@ -318,6 +404,9 @@ export function chatTools(
         offset = 0,
         limit = MAX_FILE_CHARS,
       } = input as { fileId: string; offset?: number; limit?: number };
+      if (!attachedFileIds(scope).has(fileId)) {
+        throw new Error('Read may use only materials attached by the person in this chat.');
+      }
       const result = await pool.query<{ file_name: string; storage_path: string }>(
         `SELECT file_name, storage_path FROM stored_files
          WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
@@ -338,6 +427,229 @@ export function chatTools(
           totalChars: text.length,
         },
       };
+    },
+  };
+
+  const searchInput = z.object({
+    fileId: z.string().uuid(),
+    query: z.string().trim().min(1).max(200),
+    offset: z.number().int().min(0).max(2_000_000).default(0),
+    limit: z.number().int().min(1).max(10).default(5),
+  });
+  const searchMaterials: ChatTool = {
+    name: 'search_materials',
+    input: searchInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = searchInput.parse(input);
+      const key = JSON.stringify([request.fileId, request.query, request.offset, request.limit]);
+      const cached = searchCache.get(key);
+      if (cached) return { output: cached };
+      if (searchCalls >= MAX_SEARCH_CALLS) {
+        throw new Error('The material search call limit for this turn was reached.');
+      }
+      if (!attachedFileIds(scope).has(request.fileId)) {
+        throw new Error('Search may read only materials attached by the person in this chat.');
+      }
+      searchCalls += 1;
+      const found = await pool.query<{ file_name: string; storage_path: string }>(
+        "SELECT file_name, storage_path FROM stored_files WHERE id = $1 AND kind = 'content' AND " +
+          visibleFile(2),
+        [request.fileId, account.id],
+      );
+      const stored = found.rows[0];
+      if (!stored) throw new Error('There is no such material available to this account.');
+      context.signal.throwIfAborted();
+      const output = await searchMaterialFile({
+        sourceId: request.fileId,
+        name: stored.file_name,
+        path: stored.storage_path,
+        query: request.query,
+        offset: request.offset,
+        limit: request.limit,
+        signal: context.signal,
+      });
+      context.signal.throwIfAborted();
+      searchCache.set(key, output);
+      return { output };
+    },
+  };
+
+  const inspectInput = z.object({
+    templateId: z.string().uuid(),
+    patternId: z.string().trim().min(1).max(200),
+    offset: z.number().int().nonnegative().default(0),
+    imageOffset: z.number().int().nonnegative().default(0),
+  });
+  const inspectTemplate: ChatTool = {
+    name: 'inspect_template_layout',
+    input: inspectInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = inspectInput.parse(input);
+      let row = await templateRow(request.templateId);
+      if (!generationProfileSchema.safeParse(row.profile?.generation).success) {
+        context.signal.throwIfAborted();
+        await generation.prepare(request.templateId, scope.model, account);
+        context.signal.throwIfAborted();
+        row = await templateRow(request.templateId);
+      }
+      return {
+        output: inspectTemplateLayout(
+          row.profile?.generation,
+          row.profile?.index,
+          request.patternId,
+          request.offset,
+          request.imageOffset,
+        ),
+      };
+    },
+  };
+
+  const calculateTool: ChatTool = {
+    name: 'calculate',
+    input: calculationInputSchema,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input) {
+      return { output: calculate(input) };
+    },
+  };
+
+  const searchWebInput = z.object({
+    query: z.string().trim().min(1).max(300),
+    limit: z.number().int().min(1).max(8).default(5),
+  });
+  const searchWeb: ChatTool = {
+    name: 'search_web',
+    input: searchWebInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = searchWebInput.parse(input);
+      if (!searchClient) throw new Error('Web search is unavailable.');
+      const output = await webCall(
+        'search:' + request.query + ':' + String(request.limit),
+        context.signal,
+        () => searchClient.search(request.query, context.signal, request.limit),
+      );
+      return { output };
+    },
+  };
+
+  const fetchSourceInput = z.object({
+    url: z.string().trim().min(1).max(2048),
+    offset: z.number().int().min(0).default(0),
+    maxChars: z.number().int().min(1).max(8000).default(8000),
+    expectedContentHash: z
+      .string()
+      .regex(/^[0-9a-fA-F]{64}$/)
+      .optional(),
+  });
+  const fetchSourceTool: ChatTool = {
+    name: 'fetch_source',
+    input: fetchSourceInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = fetchSourceInput.parse(input);
+      const output = await webCall(
+        'fetch:' +
+          request.url +
+          ':' +
+          String(request.offset) +
+          ':' +
+          String(request.maxChars) +
+          ':' +
+          (request.expectedContentHash ?? ''),
+        context.signal,
+        () =>
+          fetchSource(request.url, context.signal, {
+            offset: request.offset,
+            maxChars: request.maxChars,
+            ...(request.expectedContentHash
+              ? { expectedContentHash: request.expectedContentHash }
+              : {}),
+          }),
+      );
+      return { output };
+    },
+  };
+
+  const researchTopicInput = z.object({
+    question: z.string().trim().min(1).max(1000),
+  });
+  const researchTopic: ChatTool = {
+    name: 'research_topic',
+    input: researchTopicInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = researchTopicInput.parse(input);
+      const researcher = web?.research;
+      if (!searchClient || !researcher) throw new Error('Web research is unavailable.');
+      const client = searchClient;
+      const cached = researchTopicCache.get(request.question);
+      if (cached !== undefined) return { output: cached };
+      if (researchTopicCalls >= 2) {
+        throw new Error('The web research call limit for this turn was reached.');
+      }
+      researchTopicCalls += 1;
+      const output = await researchWebTopic(
+        request.question,
+        {
+          search: (query, signal, limit) =>
+            webCall('search:' + query + ':' + String(limit), signal, () =>
+              client.search(query, signal, limit),
+            ),
+          fetch: (url, signal) =>
+            webCall('fetch:' + url + ':0:8000:', signal, () =>
+              fetchSource(url, signal, { offset: 0, maxChars: 8000 }),
+            ),
+          run: (question, sources, signal) => researcher.run(question, sources, signal),
+        },
+        context.signal,
+      );
+      researchTopicCache.set(request.question, output);
+      return { output };
+    },
+  };
+
+  const searchAssetsInput = z.object({
+    query: z.string().trim().min(1).max(300),
+    limit: z.number().int().min(1).max(5).default(5),
+  });
+  const searchAssets: ChatTool = {
+    name: 'search_assets',
+    input: searchAssetsInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = searchAssetsInput.parse(input);
+      const assets = assetClient;
+      if (!assets) throw new Error('Asset search is unavailable.');
+      const output = await webCall(
+        'assets:' + request.query + ':' + String(request.limit),
+        context.signal,
+        () => assets.search(request.query, context.signal, request.limit),
+      );
+      return { output };
+    },
+  };
+
+  const inspectSourcesInput = z.object({
+    offset: z.number().int().min(0).default(0),
+    limit: z.number().int().min(1).max(20).default(10),
+  });
+  const inspectSources: ChatTool = {
+    name: 'inspect_sources',
+    input: inspectSourcesInput,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input, context) {
+      context.signal.throwIfAborted();
+      const request = inspectSourcesInput.parse(input);
+      return { output: inspectChatSources(scope.messages(), request) };
     },
   };
 
@@ -579,10 +891,20 @@ export function chatTools(
   return [
     listTemplates,
     describeTemplate,
+    inspectTemplate,
     readFileTool,
+    ...(attachedFileIds(scope).size > 0 ? [searchMaterials] : []),
     ...(research ? [researchMaterials] : []),
+    ...materialTools(generation, scope),
+    calculateTool,
+    ...(searchClient ? [searchWeb] : []),
+    ...(searchClient && web?.research ? [researchTopic] : []),
+    ...(assetClient ? [searchAssets] : []),
+    fetchSourceTool,
+    inspectSources,
     readDeck,
     readAudit,
+    ...inspectionTools(generation, scope),
     askUser,
     proposePlan,
     buildDeck,

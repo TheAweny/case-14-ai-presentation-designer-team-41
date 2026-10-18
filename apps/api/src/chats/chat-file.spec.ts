@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { ChatMessage } from '@lct/contracts';
 import type { ToolContext } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import type { GenerationService } from '../generation/generation.service.js';
@@ -21,6 +22,17 @@ describe('read_file pagination', () => {
     const path = join(directory, 'brief.txt');
     const text = `${'а'.repeat(21000)}Исправление: бюджет 9 млн`;
     await writeFile(path, text);
+    const fileId = '00000000-0000-4000-8000-0000000000a1';
+    const messages: ChatMessage[] = [
+      {
+        role: 'user',
+        id: 'user',
+        createdAt: 1,
+        mode: 'plan',
+        text: 'Материал',
+        attachments: [{ kind: 'file', fileId, name: 'brief.txt', size: text.length }],
+      },
+    ];
     const generation = {
       pool: { query: async () => ({ rows: [{ file_name: 'brief.txt', storage_path: path }] }) },
     } as unknown as GenerationService;
@@ -30,7 +42,7 @@ describe('read_file pagination', () => {
       projectId: null,
       mode: 'plan',
       model: null,
-      messages: () => [],
+      messages: () => messages,
       updatePart: () => undefined,
       addDecks: () => undefined,
     };
@@ -42,20 +54,14 @@ describe('read_file pagination', () => {
       show: () => 0,
       update: () => undefined,
     };
-    const first = await tool.run(
-      tool.input.parse({ fileId: crypto.randomUUID(), offset: 0, limit: 8000 }),
-      context,
-    );
+    const first = await tool.run(tool.input.parse({ fileId, offset: 0, limit: 8000 }), context);
     const metadata = first.output as { offset: number; nextOffset: number; totalChars: number };
     expect([metadata.offset, metadata.nextOffset, metadata.totalChars]).toEqual([
       0,
       8000,
       text.length,
     ]);
-    const last = await tool.run(
-      tool.input.parse({ fileId: crypto.randomUUID(), offset: 21000, limit: 8000 }),
-      context,
-    );
+    const last = await tool.run(tool.input.parse({ fileId, offset: 21000, limit: 8000 }), context);
     expect(last.output).toMatchObject({
       text: 'Исправление: бюджет 9 млн',
       offset: 21000,

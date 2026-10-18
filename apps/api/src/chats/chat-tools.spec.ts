@@ -40,7 +40,12 @@ function chat(mode: ChatMode, messages: ChatMessage[] = [], generation = {} as G
     updatePart: (messageId, index, part) => updated.push({ messageId, index, part }),
     addDecks: () => undefined,
   };
-  const tools = chatTools(generation, scope);
+  const tools = chatTools(generation, scope, undefined, {
+    search: null,
+    fetchSource: async () => {
+      throw new Error('Web fetch is not used in this test.');
+    },
+  });
   const context: ToolContext = {
     signal: AbortSignal.timeout(5000),
     callId: 'call-1',
@@ -80,9 +85,17 @@ describe('chat tools by mode', () => {
     expect(chat('chat').tools.map((tool) => tool.name)).toEqual([
       'list_templates',
       'describe_template',
+      'inspect_template_layout',
       'read_file',
+      'calculate',
+      'fetch_source',
+      'inspect_sources',
       'read_deck',
       'read_audit',
+      'preview_slide',
+      'check_slide_fit',
+      'check_content_coverage',
+      'read_build_status',
       'edit_slide',
     ]);
     expect(chat('plan').tools.map((tool) => tool.name)).toContain('build_deck');
