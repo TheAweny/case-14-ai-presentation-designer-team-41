@@ -125,6 +125,13 @@
     "inspect_sources": "Посмотрел источники",
     "search_assets": "Поискал иллюстрации",
     "read_build_status": "Посмотрел статус сборки",
+    "preparing": "Готовит вызов",
+    "waiting": "Основной агент ожидает",
+    "agents": "Основной агент · активных задач агентов: {count}",
+    "building": "Собирает",
+    "built": "Собрал колоду",
+    "completedWithErrors": "Завершено, есть ошибки: {count}",
+    "details": "Подробности",
     "running": {
       "list_templates": "Смотрю шаблоны…",
       "describe_template": "Изучаю шаблон…",
@@ -151,7 +158,20 @@
       "build_deck": "Запускаю сборку…",
       "edit_slide": "Правлю текст…"
     },
-    "failed": "Не получилось: {name}"
+    "failed": "Не получилось: {name}",
+    "ask_user": "Вопрос",
+    "propose_plan": "План колоды",
+    "edit_slide": "Правка слайда",
+    "build_deck": "Сборка колоды",
+    "agentNames": {
+      "planner": "Планировщик",
+      "writer": "Автор",
+      "critic": "Критик",
+      "rewriter": "Редактор",
+      "illustrator": "Иллюстратор",
+      "webResearcher": "Веб-исследователь",
+      "materialResearcher": "Исследователь материалов"
+    }
   },
   "plan": {
     "title": "План презентации",

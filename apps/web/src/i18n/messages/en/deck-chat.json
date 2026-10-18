@@ -125,6 +125,13 @@
     "inspect_sources": "Looked at the sources",
     "search_assets": "Searched for illustrations",
     "read_build_status": "Checked the build status",
+    "preparing": "Preparing the call",
+    "waiting": "Main agent is waiting",
+    "agents": "Main agent · active agent tasks: {count}",
+    "building": "Building",
+    "built": "Built the deck",
+    "completedWithErrors": "Finished, with errors: {count}",
+    "details": "Details",
     "running": {
       "list_templates": "Looking at the templates…",
       "describe_template": "Studying the template…",
@@ -151,7 +158,20 @@
       "build_deck": "Starting the build…",
       "edit_slide": "Editing the text…"
     },
-    "failed": "Didn’t work: {name}"
+    "failed": "Didn’t work: {name}",
+    "ask_user": "Question",
+    "propose_plan": "Deck plan",
+    "edit_slide": "Slide edit",
+    "build_deck": "Deck build",
+    "agentNames": {
+      "planner": "Planner",
+      "writer": "Writer",
+      "critic": "Critic",
+      "rewriter": "Rewriter",
+      "illustrator": "Illustrator",
+      "webResearcher": "Web researcher",
+      "materialResearcher": "Material researcher"
+    }
   },
   "plan": {
     "title": "Presentation plan",

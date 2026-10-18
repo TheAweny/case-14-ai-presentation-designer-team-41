@@ -3,13 +3,10 @@
 import { Fragment } from 'react';
 import { useTranslations } from 'next-intl';
 import type { AssistantChatMessage, ChatPart } from '@lct/contracts';
-import { motion, useReducedMotion } from 'motion/react';
-import { CallChip, StatusMark } from './status-mark';
 import { ThoughtLine } from './thought-line';
 import { partsOf, pendingQuestion } from '@/lib/chat-records';
 import { canRetryAnswer, type ChatView } from '@/lib/chat-store';
 import type { TemplateSummary } from '@/lib/library-source';
-import { cn } from '@/lib/utils';
 import { ChatBuild, ChatResult } from './chat-build';
 import { MessageMarkdown } from './message-markdown';
 import { PlanCard } from './plan-card';
@@ -19,9 +16,15 @@ import { chatStore } from './session';
 import { MessageActions, ThinkingLine, UserMessage, useMessageText } from './thread-messages';
 import { ChatFeedback } from './chat-feedback';
 import { ModelErrorCard } from './model-error-card';
-
-/** Инструменты, которые показывают себя своей карточкой: плана, вопроса, сборки. */
-const CARD_TOOLS = new Set(['ask_user', 'propose_plan', 'build_deck', 'edit_slide']);
+import { useNow } from './elapsed';
+import { ToolCallChip, toolChipLabel } from './tool-call-chip';
+import {
+  activeAgentCount,
+  activeResearcherCount,
+  groupState,
+  toolChip,
+  toolLineVisible,
+} from './tool-activity';
 
 type ToolPart = Extract<ChatPart, { type: 'tool' }>;
 
@@ -135,8 +138,7 @@ function visibleParts(message: AssistantChatMessage): ChatPart[] {
   );
   return message.parts.filter((part) => {
     if (part.type === 'text') return part.text.trim() !== '';
-    if (part.type === 'tool' && CARD_TOOLS.has(part.name))
-      return part.status === 'running' && !cards.has(part.callId);
+    if (part.type === 'tool') return toolLineVisible(part, cards, message.status);
     return true;
   });
 }
@@ -260,41 +262,6 @@ function AssistantMessage({
   );
 }
 
-const READ_TOOLS = [
-  'list_templates',
-  'describe_template',
-  'read_file',
-  'research_materials',
-  'read_deck',
-  'read_audit',
-  'search_materials',
-  'inspect_template_layout',
-  'preview_slide',
-  'check_slide_fit',
-  'check_content_coverage',
-  'search_web',
-  'fetch_source',
-  'research_topic',
-  'calculate',
-  'extract_material',
-  'read_table',
-  'inspect_sources',
-  'search_assets',
-  'read_build_status',
-] as const;
-type ReadTool = (typeof READ_TOOLS)[number];
-
-function isReadTool(name: string): name is ReadTool {
-  return (READ_TOOLS as readonly string[]).includes(name);
-}
-
-type CardTool = 'ask_user' | 'propose_plan' | 'build_deck' | 'edit_slide';
-
-function isCardTool(name: string): name is CardTool {
-  return CARD_TOOLS.has(name);
-}
-
-/** Что агент прочитал — тихими строками, как шаги агента в Claude. */
 function ToolLines({
   parts,
   messageStatus,
@@ -303,70 +270,39 @@ function ToolLines({
   messageStatus: AssistantChatMessage['status'];
 }) {
   const t = useTranslations('deckChat.tools');
-  const reduce = useReducedMotion();
-  const stateOf = (part: ToolPart) =>
-    part.status === 'running' && messageStatus !== 'streaming'
-      ? messageStatus === 'failed'
-        ? 'failed'
-        : 'cancelled'
-      : part.status;
-  const running = parts.findLast((part) => stateOf(part) === 'running');
-  const state = running
-    ? 'running'
-    : parts.some((part) => stateOf(part) === 'failed')
-      ? 'failed'
-      : parts.some((part) => stateOf(part) === 'cancelled')
-        ? 'cancelled'
-        : 'done';
-  const runningName = running && (isReadTool(running.name) || isCardTool(running.name));
+  const chips = parts.map((part) => toolChip(part, messageStatus));
+  const live = chips.some((chip) => chip.state === 'running' || chip.state === 'preparing');
+  const now = useNow(live);
+  const agents = activeAgentCount(parts, messageStatus);
+  const researchers = activeResearcherCount(parts, messageStatus);
+  const issues = chips.reduce((count, chip) => count + chip.issues, 0);
+  const running = chips.findLast((chip) => chip.state === 'running' || chip.state === 'preparing');
+  const state = groupState(chips);
   const summary = running
-    ? runningName
-      ? t(`running.${running.name as ReadTool | CardTool}`)
-      : running.name
-    : t(state === 'done' ? 'completed' : state === 'failed' ? 'interrupted' : 'cancelled', {
-        count: parts.length,
-      });
+    ? toolChipLabel(running.name, running.state, t)
+    : chips.some((chip) => chip.state === 'failed')
+      ? t('interrupted')
+      : issues > 0
+        ? t('completedWithErrors', { count: issues })
+        : state === 'cancelled'
+          ? t('cancelled')
+          : t('completed', { count: parts.length });
   return (
-    <ThoughtLine state={state} label={summary}>
-      <ul className="flex flex-col gap-1">
-        {parts.map((part) => {
-          const tool = isReadTool(part.name) ? part.name : null;
-          const card = isCardTool(part.name) ? part.name : null;
-          const partState = stateOf(part);
-          const label =
-            partState === 'cancelled'
-              ? t('cancelledTool', { name: tool ? t(tool) : part.name })
-              : partState === 'failed'
-                ? t('failed', { name: tool ? t(tool) : part.name })
-                : card
-                  ? t(`running.${card}`)
-                  : !tool
-                    ? part.name
-                    : part.status === 'running'
-                      ? t(`running.${tool}`)
-                      : t(tool);
-          return (
-            <motion.li
-              key={part.callId}
-              layout="position"
-              initial={{ opacity: 0, y: reduce ? 0 : 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: reduce ? 0 : 0.2 }}
-              className={cn(
-                'flex items-center gap-2 px-1 py-1 text-[0.8125rem]',
-                partState === 'failed' ? 'text-destructive' : 'text-muted-foreground',
-              )}
-            >
-              <StatusMark status={partState} />
-              <CallChip active={partState === 'running'} failed={partState === 'failed'}>
-                <span className={partState === 'running' ? 'assistant-shimmer' : undefined}>
-                  {label}
-                </span>
-              </CallChip>
-            </motion.li>
-          );
-        })}
-      </ul>
-    </ThoughtLine>
+    <div data-active-agents={agents} data-active-researchers={researchers}>
+      {messageStatus === 'streaming' && live ? (
+        <p className="px-1 text-xs text-muted-foreground">
+          {agents > 0 ? t('agents', { count: agents }) : t('waiting')}
+        </p>
+      ) : null}
+      <ThoughtLine state={state === 'done' && issues > 0 ? 'failed' : state} label={summary}>
+        <ul className="flex min-w-0 flex-col gap-1">
+          {chips.map((chip, index) => (
+            <li key={index}>
+              <ToolCallChip chip={chip} now={now} />
+            </li>
+          ))}
+        </ul>
+      </ThoughtLine>
+    </div>
   );
 }
