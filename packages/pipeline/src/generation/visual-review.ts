@@ -1,10 +1,11 @@
-import { readFile } from 'node:fs/promises';
-import type { AuditFinding, ContentPack, SlideIr, SlideReview } from '@lct/contracts';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { AuditFinding, ContentPack, SlideReview } from '@lct/contracts';
 import type { EngineClient } from '@lct/engine-client';
 import type { LoadedAgent } from '@lct/registry';
 import { runContextualAudit } from '../audit/contextual-audit.js';
 import type { ModelProvider } from '../models/provider.js';
-import type { DeckVariant } from './workflow.js';
+import { slideIndexOf } from './self-check.js';
 
 export interface VisualReviewOptions {
   engine: Pick<EngineClient, 'importDeck'>;
@@ -21,9 +22,11 @@ export interface VisualReviewOptions {
   previews: readonly string[];
   seed: number;
   outputDir: string;
+  /** Ask only about the slides with these 1-based numbers; absent: all of them. */
+  only?: ReadonlySet<number>;
+  /** The earlier review of the deck: what it said of the slides not asked about now is kept. */
+  previous?: VisualReview;
   signal?: AbortSignal;
-  /** Layout variant of this run. Imported slides are labeled with it before findings are built. */
-  variant?: DeckVariant;
 }
 
 export interface VisualReview {
@@ -31,8 +34,6 @@ export interface VisualReview {
   failures: { slideId: string; error: string }[];
   reviews: SlideReview[];
   slideCount: number;
-  /** Previews that were read. A missing or unreadable preview is a failure, not a review. */
-  pictures: number;
 }
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
@@ -53,60 +54,71 @@ function packOf(brief: string, goal: string): ContentPack {
 /**
  * The contextual half of the audit for one written variant: the content validation questions of
  * the case asked of the picture of every slide. The slides are read back from the file the user
- * gets, so the questions are about what is really there, not about what was planned. The caller
- * publishes the findings once the review has finished inside its deadline.
+ * gets, so the questions are about what is really there, not about what was planned. Findings
+ * are written next to the deterministic ones as `audit-contextual.json`.
  */
 export async function reviewVariantVisually(options: VisualReviewOptions): Promise<VisualReview> {
-  if (options.signal?.aborted) throw options.signal.reason;
-  const { slides: imported } = await options.engine.importDeck(
+  const { slides } = await options.engine.importDeck(
     { schemaVersion: 1, pptxPath: options.pptxPath, mediaDir: options.mediaDir },
     options.signal,
   );
-  if (options.signal?.aborted) throw options.signal.reason;
-  const variant = options.variant;
-  const slides = variant
-    ? imported.map((slide) => (slide.variant === variant ? slide : { ...slide, variant }))
-    : imported;
   const images: Record<string, string> = {};
-  const unread: { slideId: string; error: string }[] = [];
-  const pictured: SlideIr[] = [];
-  for (const [index, slide] of slides.entries()) {
-    if (options.signal?.aborted) throw options.signal.reason;
-    const path = options.previews[index];
-    if (path === undefined) {
-      unread.push({ slideId: slide.slideId, error: 'preview missing' });
-      continue;
-    }
-    try {
+  await Promise.all(
+    slides.map(async (slide, index) => {
+      const path = options.previews[index];
+      if (path === undefined) return;
       const bytes = await readFile(path);
       images[slide.slideId] = `data:image/png;base64,${bytes.toString('base64')}`;
-      pictured.push(slide);
-    } catch (error) {
-      unread.push({
-        slideId: slide.slideId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    }),
+  );
+  const result = await runContextualAudit({
+    slides,
+    pack: packOf(options.brief, options.goal),
+    agent: options.agent,
+    provider: options.provider,
+    seed: options.seed,
+    images,
+    ...(options.only
+      ? {
+          only: new Set(
+            slides.flatMap((slide, index) => (options.only?.has(index + 1) ? [slide.slideId] : [])),
+          ),
+        }
+      : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
+  // A review that was stopped writes nothing: its file would land after the run is done.
+  options.signal?.throwIfAborted();
+  const review: VisualReview = { ...result, slideCount: slides.length };
+  const { only, previous } = options;
+  if (only && previous) {
+    // Slides asked about again replace their old answers; the rest of the deck stays as it was.
+    const kept = (slideId: string) => {
+      const index = slideIndexOf(slideId);
+      return index !== null && !only.has(index + 1);
+    };
+    review.findings = [
+      ...previous.findings.filter((f) => kept(f.target.slideId)),
+      ...review.findings,
+    ];
+    review.reviews = [...previous.reviews.filter((r) => kept(r.slideId)), ...review.reviews];
+    review.failures = [...previous.failures.filter((f) => kept(f.slideId)), ...review.failures];
   }
-  if (options.signal?.aborted) throw options.signal.reason;
-  const result =
-    pictured.length === 0
-      ? { findings: [], reviews: [], failures: [] }
-      : await runContextualAudit({
-          slides: pictured,
-          pack: packOf(options.brief, options.goal),
-          agent: options.agent,
-          provider: options.provider,
-          seed: options.seed,
-          images,
-          signal: options.signal,
-        });
-  if (options.signal?.aborted) throw options.signal.reason;
-  return {
-    findings: result.findings,
-    failures: [...unread, ...result.failures],
-    reviews: result.reviews,
-    slideCount: slides.length,
-    pictures: pictured.length,
-  };
+  await writeFile(
+    join(options.outputDir, 'audit-contextual.json'),
+    JSON.stringify(
+      {
+        model: options.provider.name,
+        agent: `${options.agent.config.id}@${options.agent.config.version}`,
+        slides: slides.length,
+        pictures: Object.keys(images).length,
+        findings: review.findings,
+        failures: review.failures,
+        reviews: review.reviews,
+      },
+      null,
+      2,
+    ),
+  );
+  return review;
 }

@@ -24,7 +24,9 @@ export interface ContextualAuditOptions {
   /** Slides reviewed at once. The model calls of a deck run in parallel within this bound. */
   readonly concurrency?: number;
   readonly checks?: readonly ContextualCheck[];
-  /** Stops slides that have not started. A slide already in flight receives the same signal. */
+  /** Ask only about these slides (by id); the others still count as neighbours and headlines. */
+  readonly only?: ReadonlySet<string>;
+  /** Stops the review: the slides not yet asked about are not asked. */
   readonly signal?: AbortSignal;
 }
 
@@ -243,15 +245,12 @@ export function findingsOf(
 async function pool<T>(
   count: number,
   limit: number,
-  signal: AbortSignal | undefined,
   work: (index: number) => Promise<T>,
 ): Promise<T[]> {
   const results: T[] = new Array<T>(count);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, count) }, async () => {
-    while (true) {
-      if (signal?.aborted) return;
-      if (next >= count) return;
+    while (next < count) {
       const index = next;
       next += 1;
       results[index] = await work(index);
@@ -275,31 +274,30 @@ export async function runContextualAudit(
 ): Promise<ContextualAuditResult> {
   const { slides, agent, provider, seed } = options;
   const checks = options.checks ?? CONTEXTUAL_CHECKS;
+  const asked = slides.flatMap((slide, i) =>
+    options.only === undefined || options.only.has(slide.slideId) ? [i] : [],
+  );
   const outcomes = await pool(
-    slides.length,
+    asked.length,
     options.concurrency ?? DEFAULT_CONCURRENCY,
-    options.signal,
-    async (i) => {
+    async (position) => {
+      const i = asked[position] as number;
       const slide = slides[i] as SlideIr;
-      options.signal?.throwIfAborted();
       const image = options.images?.[slide.slideId];
       try {
         const review = await runAgent<SlideReview>(provider, {
           agent,
           input: inputFor(slides, i, options),
           seed,
-          signal: options.signal,
           ...(image ? { images: [image] } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
         });
-        options.signal?.throwIfAborted();
         return { slide, review };
       } catch (error) {
-        if (options.signal?.aborted) throw error;
         return { slide, error: error instanceof Error ? error.message : String(error) };
       }
     },
   );
-  options.signal?.throwIfAborted();
   const result: ContextualAuditResult = { findings: [], reviews: [], failures: [] };
   for (const outcome of outcomes) {
     if ('review' in outcome && outcome.review) {

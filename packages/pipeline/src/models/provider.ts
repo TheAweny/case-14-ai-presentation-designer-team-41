@@ -16,10 +16,7 @@ export interface ModelRequest {
   readonly images?: readonly string[];
   /** JSON Schema of the answer, for runtimes that can hold a model to it (structured output). */
   readonly responseSchema?: { readonly name: string; readonly schema: Record<string, unknown> };
-  /**
-   * Cancels this call, including the one schema-repair retry. A provider that never reads it still
-   * stops at the next attempt, because the loop checks the signal itself.
-   */
+  /** Cancels this request alone, as when the review it belongs to has run out of time. */
   readonly signal?: AbortSignal;
 }
 
@@ -125,9 +122,7 @@ export async function runAgent<T = unknown>(
   let feedback: string | undefined;
   let answer = '';
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    call.signal?.throwIfAborted();
     answer = await provider.complete(call, feedback);
-    call.signal?.throwIfAborted();
     try {
       const parsed = schema.safeParse(extractJson(answer));
       if (parsed.success) {
