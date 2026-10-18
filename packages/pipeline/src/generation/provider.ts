@@ -36,6 +36,11 @@ interface Options {
   /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
   headers?: Readonly<Record<string, string>>;
   /**
+   * One logical `generate` call, retries included. `running` means the agent was asked, not that
+   * a GPU is busy: the limiter's queue is not a separate agent. Events carry no prompt or answer.
+   */
+  onActivity?: (event: AgentActivity) => void;
+  /**
    * The shared prompts from the registry that carry the JSON Schema of an answer in the
    * instructions and ask once to repair an answer that misses it: a model that ignores
    * structured output still answers in shape. Without them only `response_format` holds it.
@@ -46,6 +51,30 @@ interface Options {
    * Omitted, only the local cap of {@link BUSY_RETRIES} applies, as before.
    */
   attemptBudget?: AttemptBudget;
+}
+
+/** A logical agent call. Retries stay on the same id; the event holds no prompt, answer, or key. */
+export interface AgentActivity {
+  id: string;
+  name: string;
+  status: 'running' | 'done' | 'failed' | 'cancelled';
+  startedAt: number;
+  finishedAt?: number;
+}
+
+function reportActivity(report: Options['onActivity'], event: AgentActivity): void {
+  if (!report) return;
+  try {
+    report(event);
+  } catch {
+    // A listener that throws must not change the model answer.
+  }
+}
+
+/** The call stopped because the caller cancelled it, not because the model refused. */
+function cancelledCall(error: unknown, signal: AbortSignal): boolean {
+  if (error instanceof Error && error.name === 'AbortError') return true;
+  return signal.aborted && error === signal.reason;
 }
 
 /** What is wrong with an answer, one problem a line, for the request to repair it. */
@@ -273,169 +302,196 @@ export class OpenAICompatibleProvider implements TextProvider {
     schema: z.ZodType<T>,
     signal: AbortSignal,
   ): Promise<T> {
-    const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
-    const generation = this.generation.get(agent);
-    const answerFormat = this.options.answerFormat;
-    const system = answerFormat
-      ? `${instructions}\n\n${answerFormat.format.replace('{{schema}}', JSON.stringify(outputSchema))}`
-      : instructions;
-    // An answer that missed the schema, with what is wrong, while it is being repaired. A model
-    // is asked to repair once; after that a miss is drawn again from scratch.
-    let repair: { answer: string; problems: string } | null = null;
-    let repaired = false;
-    // Two budgets: `attempt` counts draws that came back unusable (empty, truncated, off-schema,
-    // timed out, dropped) and grows the token budget; `busy` counts refusals for load, which say
-    // nothing about the answer and only cost a wait.
-    let attempt = 0;
-    let busy = 0;
-    const budget = this.options.attemptBudget;
-    // Every repeat — busy HTTP, bad JSON, a truncated answer, a timeout, a dropped connection —
-    // spends one shared attempt. The first send does not. Without a budget the local caps stand.
-    const allowRetry = (used: number, cap: number): boolean =>
-      used < cap && (budget === undefined || budget.tryTake());
-    for (;;) {
-      signal.throwIfAborted();
-      const release = await this.limiter.acquire(signal);
-      const started = Date.now();
-      let wait = 500;
-      try {
+    // An already cancelled caller never asked the agent, so it is not a task.
+    signal.throwIfAborted();
+    const activityId = crypto.randomUUID();
+    const startedAt = Date.now();
+    const reportedName = agent.slice(0, 100);
+    let outcome: AgentActivity['status'] = 'done';
+    reportActivity(this.options.onActivity, {
+      id: activityId,
+      name: reportedName,
+      status: 'running',
+      startedAt,
+    });
+    try {
+      const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
+      const generation = this.generation.get(agent);
+      const answerFormat = this.options.answerFormat;
+      const system = answerFormat
+        ? `${instructions}\n\n${answerFormat.format.replace('{{schema}}', JSON.stringify(outputSchema))}`
+        : instructions;
+      // An answer that missed the schema, with what is wrong, while it is being repaired. A model
+      // is asked to repair once; after that a miss is drawn again from scratch.
+      let repair: { answer: string; problems: string } | null = null;
+      let repaired = false;
+      // Two budgets: `attempt` counts draws that came back unusable (empty, truncated, off-schema,
+      // timed out, dropped) and grows the token budget; `busy` counts refusals for load, which say
+      // nothing about the answer and only cost a wait.
+      let attempt = 0;
+      let busy = 0;
+      const budget = this.options.attemptBudget;
+      // Every repeat — busy HTTP, bad JSON, a truncated answer, a timeout, a dropped connection —
+      // spends one shared attempt. The first send does not. Without a budget the local caps stand.
+      const allowRetry = (used: number, cap: number): boolean =>
+        used < cap && (budget === undefined || budget.tryTake());
+      for (;;) {
         signal.throwIfAborted();
-        const response = await this.fetchImpl(this.endpoint, {
-          method: 'POST',
-          headers: {
-            ...this.options.headers,
-            ...(this.options.apiKey.trim()
-              ? { Authorization: `Bearer ${this.options.apiKey}` }
-              : {}),
-            'Content-Type': 'application/json',
-          },
-          // A redirect would carry the key to wherever the server points; refuse it instead.
-          redirect: 'error',
-          signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
-          body: JSON.stringify({
-            model: this.model,
-            seed: this.options.seed ?? 42,
-            temperature: generation?.temperature ?? 0.35,
-            top_p: generation?.topP ?? 1,
-            max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
-            ...reasoningRequestFields(this.model, undefined, { thinking: false }),
-            response_format: {
-              type: 'json_schema',
-              json_schema: {
-                name: agent.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'output',
-                strict: true,
-                schema: outputSchema,
-              },
+        const release = await this.limiter.acquire(signal);
+        const started = Date.now();
+        let wait = 500;
+        try {
+          signal.throwIfAborted();
+          const response = await this.fetchImpl(this.endpoint, {
+            method: 'POST',
+            headers: {
+              ...this.options.headers,
+              ...(this.options.apiKey.trim()
+                ? { Authorization: `Bearer ${this.options.apiKey}` }
+                : {}),
+              'Content-Type': 'application/json',
             },
-            messages: [
-              { role: 'system', content: system },
-              { role: 'user', content: JSON.stringify(input) },
-              ...(repair && answerFormat
-                ? [
-                    { role: 'assistant', content: repair.answer },
-                    {
-                      role: 'user',
-                      content: answerFormat.repair.replace('{{problems}}', repair.problems),
-                    },
-                  ]
-                : []),
-            ],
-          }),
-        });
-        if (!response.ok) {
-          await response.body?.cancel();
-          const allowed = BUSY_STATUSES.has(response.status) && allowRetry(busy, BUSY_RETRIES);
-          if (!allowed) {
-            const retrying = BUSY_STATUSES.has(response.status) && busy < BUSY_RETRIES;
-            throw new Error(
-              `Model API HTTP ${response.status} for ${this.model}` +
-                (busy ? ` after ${busy} retries` : '') +
-                (retrying ? '; the shared attempt budget is exhausted' : '') +
-                '; no alternate model was used.',
-            );
-          }
-          wait = retryDelay(busy++, response.headers.get('retry-after'));
-          // 502 is a gateway hiccup; 429 and 503 say the provider is overloaded, so every
-          // request in the process backs off, not only this one.
-          if (response.status !== 502) this.limiter.throttle(wait);
-        } else {
-          const data = (await response.json()) as Completion;
-          const choice = data.choices?.[0];
-          const content =
-            typeof choice?.message?.content === 'string' ? choice.message.content : '';
-          const reasoning =
-            typeof choice?.message?.reasoning_content === 'string'
-              ? choice.message.reasoning_content
-              : '';
-          const refusal =
-            typeof choice?.message?.refusal === 'string' ? choice.message.refusal : '';
-          const maxTokens = (generation?.maxOutputTokens ?? 3600) * (attempt + 1);
-          if (!content.trim() || refusal.trim() || choice?.finish_reason === 'length') {
-            if (allowRetry(attempt, 2)) {
+            // A redirect would carry the key to wherever the server points; refuse it instead.
+            redirect: 'error',
+            signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
+            body: JSON.stringify({
+              model: this.model,
+              seed: this.options.seed ?? 42,
+              temperature: generation?.temperature ?? 0.35,
+              top_p: generation?.topP ?? 1,
+              max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1),
+              ...reasoningRequestFields(this.model, undefined, { thinking: false }),
+              response_format: {
+                type: 'json_schema',
+                json_schema: {
+                  name: agent.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'output',
+                  strict: true,
+                  schema: outputSchema,
+                },
+              },
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: JSON.stringify(input) },
+                ...(repair && answerFormat
+                  ? [
+                      { role: 'assistant', content: repair.answer },
+                      {
+                        role: 'user',
+                        content: answerFormat.repair.replace('{{problems}}', repair.problems),
+                      },
+                    ]
+                  : []),
+              ],
+            }),
+          });
+          if (!response.ok) {
+            await response.body?.cancel();
+            const allowed = BUSY_STATUSES.has(response.status) && allowRetry(busy, BUSY_RETRIES);
+            if (!allowed) {
+              const retrying = BUSY_STATUSES.has(response.status) && busy < BUSY_RETRIES;
+              throw new Error(
+                `Model API HTTP ${response.status} for ${this.model}` +
+                  (busy ? ` after ${busy} retries` : '') +
+                  (retrying ? '; the shared attempt budget is exhausted' : '') +
+                  '; no alternate model was used.',
+              );
+            }
+            wait = retryDelay(busy++, response.headers.get('retry-after'));
+            // 502 is a gateway hiccup; 429 and 503 say the provider is overloaded, so every
+            // request in the process backs off, not only this one.
+            if (response.status !== 502) this.limiter.throttle(wait);
+          } else {
+            const data = (await response.json()) as Completion;
+            const choice = data.choices?.[0];
+            const content =
+              typeof choice?.message?.content === 'string' ? choice.message.content : '';
+            const reasoning =
+              typeof choice?.message?.reasoning_content === 'string'
+                ? choice.message.reasoning_content
+                : '';
+            const refusal =
+              typeof choice?.message?.refusal === 'string' ? choice.message.refusal : '';
+            const maxTokens = (generation?.maxOutputTokens ?? 3600) * (attempt + 1);
+            if (!content.trim() || refusal.trim() || choice?.finish_reason === 'length') {
+              if (allowRetry(attempt, 2)) {
+                attempt += 1;
+                continue;
+              }
+              const finish = ['stop', 'length', 'content_filter', 'tool_calls'].includes(
+                choice?.finish_reason ?? '',
+              )
+                ? choice?.finish_reason
+                : 'unknown';
+              const count = (value: unknown): number =>
+                typeof value === 'number' && Number.isFinite(value) ? value : 0;
+              const usage = {
+                prompt_tokens: count(data.usage?.prompt_tokens),
+                completion_tokens: count(data.usage?.completion_tokens),
+              };
+              const metadata = {
+                model: this.model.slice(0, 128),
+                agent: agent.slice(0, 128),
+                finish_reason: finish,
+                contentChars: content.trim().length,
+                reasoningChars: reasoning.trim().length,
+                hasRefusal: refusal.trim().length > 0,
+                attempts: attempt + 1,
+                maxTokens,
+                usage,
+              };
+              throw new Error(
+                'Model returned empty or truncated JSON. ' + JSON.stringify(metadata),
+              );
+            }
+            let result: T;
+            try {
+              result = parseModelJson(content, schema);
+            } catch (error) {
+              // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
+              // miss is a sampling accident, and a fresh draw follows.
+              if (!allowRetry(attempt, 2)) throw error;
               attempt += 1;
+              repair =
+                answerFormat && !repaired
+                  ? { answer: content.slice(0, 20000), problems: problemsOf(error) }
+                  : null;
+              if (repair) repaired = true;
               continue;
             }
-            const finish = ['stop', 'length', 'content_filter', 'tool_calls'].includes(
-              choice?.finish_reason ?? '',
-            )
-              ? choice?.finish_reason
-              : 'unknown';
-            const count = (value: unknown): number =>
-              typeof value === 'number' && Number.isFinite(value) ? value : 0;
-            const usage = {
-              prompt_tokens: count(data.usage?.prompt_tokens),
-              completion_tokens: count(data.usage?.completion_tokens),
-            };
-            const metadata = {
-              model: this.model.slice(0, 128),
-              agent: agent.slice(0, 128),
-              finish_reason: finish,
-              contentChars: content.trim().length,
-              reasoningChars: reasoning.trim().length,
-              hasRefusal: refusal.trim().length > 0,
-              attempts: attempt + 1,
-              maxTokens,
-              usage,
-            };
-            throw new Error('Model returned empty or truncated JSON. ' + JSON.stringify(metadata));
+            this.limiter.succeeded();
+            this.calls.push({
+              agent,
+              ms: Date.now() - started,
+              inputTokens: data.usage?.prompt_tokens ?? 0,
+              outputTokens: data.usage?.completion_tokens ?? 0,
+              provider: this.provider,
+            });
+            return result;
           }
-          let result: T;
-          try {
-            result = parseModelJson(content, schema);
-          } catch (error) {
-            // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
-            // miss is a sampling accident, and a fresh draw follows.
-            if (!allowRetry(attempt, 2)) throw error;
-            attempt += 1;
-            repair =
-              answerFormat && !repaired
-                ? { answer: content.slice(0, 20000), problems: problemsOf(error) }
-                : null;
-            if (repair) repaired = true;
-            continue;
-          }
-          this.limiter.succeeded();
-          this.calls.push({
-            agent,
-            ms: Date.now() - started,
-            inputTokens: data.usage?.prompt_tokens ?? 0,
-            outputTokens: data.usage?.completion_tokens ?? 0,
-            provider: this.provider,
-          });
-          return result;
+        } catch (error) {
+          // One slow answer or dropped connection must not sink the deck: a request that hit its
+          // own time limit or lost the network (fetch rejects with a TypeError) is retried, while
+          // cancellation of the whole run still stops at once.
+          const timedOut = error instanceof Error && error.name === 'TimeoutError';
+          const dropped = error instanceof TypeError;
+          if (!(timedOut || dropped) || signal.aborted || !allowRetry(attempt, 2)) throw error;
+          attempt += 1;
+        } finally {
+          release();
         }
-      } catch (error) {
-        // One slow answer or dropped connection must not sink the deck: a request that hit its
-        // own time limit or lost the network (fetch rejects with a TypeError) is retried, while
-        // cancellation of the whole run still stops at once.
-        const timedOut = error instanceof Error && error.name === 'TimeoutError';
-        const dropped = error instanceof TypeError;
-        if (!(timedOut || dropped) || signal.aborted || !allowRetry(attempt, 2)) throw error;
-        attempt += 1;
-      } finally {
-        release();
+        await backoff(wait, signal);
       }
-      await backoff(wait, signal);
+    } catch (error) {
+      outcome = cancelledCall(error, signal) ? 'cancelled' : 'failed';
+      throw error;
+    } finally {
+      reportActivity(this.options.onActivity, {
+        id: activityId,
+        name: reportedName,
+        status: outcome,
+        startedAt,
+        finishedAt: Date.now(),
+      });
     }
   }
 }

@@ -26,6 +26,7 @@ import {
   type LayoutVariant,
   type ModelRef,
   type StoredTemplateIndex,
+  type ChatToolActivity,
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
@@ -375,6 +376,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     input: GenerationRequest,
     account: Account,
     retry?: { variant: LayoutVariant; buildId: string; plan?: CompositionPlan },
+    onActivity?: (activity: ChatToolActivity) => void,
   ): Promise<StartedBuild> {
     // Every generation runs three variants, each counted as one active run.
     if (this.active.size >= 2 * VARIANTS.length)
@@ -433,6 +435,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         headers: model.headers,
         seed: input.seed,
         answerFormat,
+        onActivity: (event) => onActivity?.({ ...event, kind: 'agent' }),
       });
     const fallback = providerOf(writer);
     const provider = new RoutedTextProvider(

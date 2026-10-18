@@ -39,6 +39,7 @@ import { inspectionTools } from './inspection-tools.js';
 import { inspectChatSources } from './source-provenance.js';
 import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
 import { fetchWebSource, type WebSourceOptions, type WebSourcePage } from './web-source.js';
+import { activityDetail, withToolActivity, type ActivityContext } from './tool-activity.js';
 
 /** What a tool may know and change of the chat whose turn it runs in. */
 export interface ChatToolScope {
@@ -260,7 +261,16 @@ export function chatTools(
         );
       }
       const output = materialResearchResultSchema.parse(
-        await research.run(request.question, sources, context.signal),
+        await withToolActivity(
+          context,
+          {
+            kind: 'agent',
+            name: 'material-researcher',
+            detail: activityDetail(request.question, 'question'),
+            parentId: context.callId,
+          },
+          () => research.run(request.question, sources, context.signal),
+        ),
       );
       context.signal.throwIfAborted();
       return { output };
@@ -601,13 +611,41 @@ export function chatTools(
         {
           search: (query, signal, limit) =>
             webCall('search:' + query + ':' + String(limit), signal, () =>
-              client.search(query, signal, limit),
+              withToolActivity(
+                context,
+                {
+                  kind: 'tool',
+                  name: 'search_web',
+                  detail: activityDetail(query, 'question'),
+                  parentId: context.callId,
+                },
+                () => client.search(query, signal, limit),
+              ),
             ),
           fetch: (url, signal) =>
             webCall('fetch:' + url + ':0:8000:', signal, () =>
-              fetchSource(url, signal, { offset: 0, maxChars: 8000 }),
+              withToolActivity(
+                context,
+                {
+                  kind: 'tool',
+                  name: 'fetch_source',
+                  ...urlDetail(url),
+                  parentId: context.callId,
+                },
+                () => fetchSource(url, signal, { offset: 0, maxChars: 8000 }),
+              ),
             ),
-          run: (question, sources, signal) => researcher.run(question, sources, signal),
+          run: (question, sources, signal) =>
+            withToolActivity(
+              context,
+              {
+                kind: 'agent',
+                name: 'web-researcher',
+                detail: activityDetail(question, 'question'),
+                parentId: context.callId,
+              },
+              () => researcher.run(question, sources, signal),
+            ),
         },
         context.signal,
       );
@@ -912,6 +950,16 @@ export function chatTools(
   ].filter((tool) => tool.modes.includes(scope.mode));
 }
 
+function activityOf(context: ToolContext): ActivityContext['activity'] {
+  const activity = (context as ActivityContext).activity;
+  return typeof activity === 'function' ? activity : undefined;
+}
+
+function urlDetail(url: string): { detail?: string } {
+  const detail = activityDetail(url, 'url');
+  return detail ? { detail } : {};
+}
+
 /**
  * Build a deck and wait for it: prepare the template if it has not been, start the three
  * variants, follow them in a build part, and put their result into the chat. Stopping the turn
@@ -1050,20 +1098,21 @@ export async function runBuild(
     }
     context.signal.throwIfAborted();
     await persist();
-    const build = await generation.start(
-      {
-        templateId: request.templateId,
-        brief,
-        slideCount: null,
-        outline: request.outline,
-        outlineSource,
-        projectId: scope.projectId,
-        contentIds: [...request.fileIds],
-        seed: 42,
-        model: scope.model,
-      },
-      scope.account,
-    );
+    const generationInput = {
+      templateId: request.templateId,
+      brief,
+      slideCount: null as null,
+      outline: request.outline,
+      outlineSource,
+      projectId: scope.projectId,
+      contentIds: [...request.fileIds],
+      seed: 42,
+      model: scope.model,
+    };
+    const onActivity = activityOf(context);
+    const build = onActivity
+      ? await generation.start(generationInput, scope.account, undefined, onActivity)
+      : await generation.start(generationInput, scope.account);
     startedRunId = build.runId;
     const stop = () => generation.cancel(build.runId);
     context.signal.addEventListener('abort', stop, { once: true });
@@ -1077,7 +1126,9 @@ export async function runBuild(
       startedAt: Date.now(),
     });
     await persist();
-    const settled = await settleWithGrace(build);
+    // With telemetry, wait for every variant. Grace would end the tool while two are still
+    // running, and their later events would be closed as cancelled.
+    const settled = onActivity ? await build.settled : await settleWithGrace(build);
     context.signal.throwIfAborted();
     const done = settled.filter((variant) => variant.state === 'done');
     if (done.length === 0) {
@@ -1200,7 +1251,7 @@ function buildFailureMessage(reason: string | null): string {
 }
 
 /** How long the other variants may keep the person waiting once the balanced one is ready. */
-const VARIANT_GRACE_MS = 60000;
+export const VARIANT_GRACE_MS = 60000;
 
 /**
  * Wait for the variants of a build, but not for a straggler: once the balanced variant is done,

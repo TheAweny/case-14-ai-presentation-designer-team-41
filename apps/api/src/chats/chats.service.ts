@@ -24,6 +24,7 @@ import {
   type ChatPart,
   type ChatSummary,
   type ChatTurnRequest,
+  type ChatToolActivity,
   type DeckOutline,
 } from '@lct/contracts';
 import { loadAgent } from '@lct/registry';
@@ -39,6 +40,8 @@ import {
   toolSpecs,
   loadMaterialResearchAgent,
   researchMaterials,
+  closeToolPart,
+  mergeToolActivity,
   type ChatAgent,
   type ChatEventBody,
   type ChatModel,
@@ -752,12 +755,29 @@ export class ChatsService implements OnApplicationShutdown {
         message.parts.some(
           (part) =>
             (part.type === 'build' && (part.status === 'preparing' || part.status === 'running')) ||
-            (part.type === 'tool' && part.status === 'running'),
+            (part.type === 'tool' &&
+              (part.status === 'running' ||
+                part.activities?.some((item) => item.status === 'running') === true)),
         );
       if (!active) return message;
       changed = true;
       const explanation =
         'Ответ прерван после остановки сервера. Проверьте результаты в библиотеке перед повторной сборкой.';
+      const interrupted =
+        message.status === 'streaming' ||
+        message.parts.some(
+          (part) =>
+            (part.type === 'build' && (part.status === 'preparing' || part.status === 'running')) ||
+            (part.type === 'tool' && part.status === 'running'),
+        );
+      if (!interrupted) {
+        return {
+          ...message,
+          parts: message.parts.map((part): ChatPart =>
+            part.type === 'tool' ? closeToolPart(part, 'failed', part.output, 'cancelled') : part,
+          ),
+        };
+      }
       return {
         ...message,
         status: 'failed' as const,
@@ -765,12 +785,15 @@ export class ChatsService implements OnApplicationShutdown {
           ...message.parts.map((part): ChatPart => {
             if (part.type === 'build' && (part.status === 'preparing' || part.status === 'running'))
               return { ...part, status: 'failed', finishedAt: Date.now(), error: explanation };
-            if (part.type === 'tool' && part.status === 'running')
-              return {
-                ...part,
-                status: 'failed',
-                output: { error: 'interrupted', message: explanation },
-              };
+            if (part.type === 'tool')
+              return closeToolPart(
+                part,
+                'failed',
+                part.status === 'running'
+                  ? { error: 'interrupted', message: explanation }
+                  : part.output,
+                'cancelled',
+              );
             return part;
           }),
           { type: 'error' as const, message: explanation },
@@ -1038,6 +1061,18 @@ export class ChatsService implements OnApplicationShutdown {
     };
     const finishAnswer = async () => {
       if (status === 'streaming') status = 'done';
+      const nested = status === 'failed' ? 'failed' : 'cancelled';
+      for (let index = 0; index < writer.parts.length; index += 1) {
+        const part = writer.parts[index];
+        if (part?.type !== 'tool') continue;
+        const closed = closeToolPart(
+          part,
+          'failed',
+          part.status === 'running' ? (part.output ?? { error: 'Interrupted.' }) : part.output,
+          nested,
+        );
+        if (closed !== part) writer.update(index, closed);
+      }
       sync();
       try {
         await this.save(state);
@@ -1178,6 +1213,7 @@ export class ChatsService implements OnApplicationShutdown {
     plan: ApprovedPlan,
   ): Promise<boolean> {
     const callId = `call-${crypto.randomUUID()}`;
+    const startedAt = Date.now();
     const input = { templateId: plan.templateId, planId: plan.planId, brief: '', fileIds: [] };
     const part: Extract<ChatPart, { type: 'tool' }> = {
       type: 'tool',
@@ -1185,6 +1221,8 @@ export class ChatsService implements OnApplicationShutdown {
       name: 'build_deck',
       input,
       status: 'running',
+      phase: 'executing',
+      startedAt,
     };
     const index = writer.show(part);
     const fileIds = scope
@@ -1194,6 +1232,12 @@ export class ChatsService implements OnApplicationShutdown {
           ? message.attachments.flatMap((item) => (item.kind === 'file' ? [item.fileId] : []))
           : [],
       );
+    const activity = (item: ChatToolActivity) => {
+      const live = writer.parts[index];
+      if (live?.type !== 'tool') return;
+      const merged = mergeToolActivity(live, item);
+      if (merged) writer.update(index, merged);
+    };
     try {
       const outcome = await runBuild(
         this.generation,
@@ -1203,6 +1247,7 @@ export class ChatsService implements OnApplicationShutdown {
           callId,
           show: (shown) => writer.show(shown),
           update: (at, shown) => writer.update(at, shown),
+          activity,
         },
         {
           templateId: plan.templateId,
@@ -1214,19 +1259,35 @@ export class ChatsService implements OnApplicationShutdown {
           fileIds: [...new Set(fileIds)].slice(0, 10),
         },
       );
-      writer.update(index, {
-        ...part,
-        input: { ...input, fileIds },
-        status: outcome.failed ? 'failed' : 'done',
-        output: outcome.output,
-      });
+      const live = writer.parts[index];
+      const current = live?.type === 'tool' ? live : part;
+      writer.update(
+        index,
+        closeToolPart(
+          {
+            ...current,
+            input: { ...input, fileIds },
+            phase: 'executing',
+            startedAt: current.startedAt ?? startedAt,
+          },
+          outcome.failed ? 'failed' : 'done',
+          outcome.output,
+          outcome.failed ? 'failed' : 'cancelled',
+        ),
+      );
       return !outcome.failed;
     } catch (error) {
-      writer.update(index, {
-        ...part,
-        status: 'failed',
-        output: { error: error instanceof Error ? error.message : 'The build failed.' },
-      });
+      const live = writer.parts[index];
+      const current = live?.type === 'tool' ? live : part;
+      writer.update(
+        index,
+        closeToolPart(
+          current,
+          'failed',
+          { error: error instanceof Error ? error.message : 'The build failed.' },
+          signal.aborted ? 'cancelled' : 'failed',
+        ),
+      );
       throw error;
     }
   }
