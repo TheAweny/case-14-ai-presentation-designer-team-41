@@ -57,34 +57,59 @@ function SlidingHighlight({ children }: { children: React.ReactNode }) {
   const root = React.useRef<HTMLDivElement>(null);
   const mark = React.useRef<HTMLSpanElement>(null);
   const fresh = React.useRef(true);
+  const frame = React.useRef(0);
   React.useLayoutEffect(() => {
     const el = root.current;
     const glow = mark.current;
     if (!el || !glow) return;
-    const place = () => {
+    const place = (instant = false) => {
       const row = el.querySelector<HTMLElement>('[data-highlighted]');
       if (!row) {
         glow.style.opacity = '0';
         return;
       }
-      if (fresh.current) glow.style.transition = 'none';
-      glow.style.transform = `translateY(${row.offsetTop}px)`;
-      glow.style.height = `${row.offsetHeight}px`;
+      const box = row.getBoundingClientRect();
+      const base = el.getBoundingClientRect();
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const snap = fresh.current || instant || reduce;
+      glow.style.transition = snap
+        ? 'none'
+        : 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1), opacity 160ms ease';
+      glow.style.transform = `translateY(${box.top - base.top + el.scrollTop}px)`;
+      glow.style.height = `${box.height}px`;
+      glow.style.clipPath = clipToAncestors(row, el, box);
       glow.style.opacity = '1';
-      if (fresh.current) {
-        fresh.current = false;
-        void glow.offsetHeight;
-        glow.style.transition = '';
-      }
+      fresh.current = false;
     };
     place();
-    const observer = new MutationObserver(place);
+    const observer = new MutationObserver(() => place(false));
     observer.observe(el, {
       subtree: true,
       attributes: true,
       attributeFilter: ['data-highlighted'],
     });
-    return () => observer.disconnect();
+    const onScroll = () => {
+      cancelAnimationFrame(frame.current);
+      frame.current = requestAnimationFrame(() => place(true));
+    };
+    el.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    motionQuery.addEventListener('change', onScroll);
+    const resize = new ResizeObserver(() => {
+      cancelAnimationFrame(frame.current);
+      frame.current = requestAnimationFrame(() => place(true));
+    });
+    resize.observe(el);
+    for (const node of el.querySelectorAll<HTMLElement>('*')) {
+      if (node.scrollHeight > node.clientHeight + 1) resize.observe(node);
+    }
+    return () => {
+      observer.disconnect();
+      resize.disconnect();
+      cancelAnimationFrame(frame.current);
+      motionQuery.removeEventListener('change', onScroll);
+      el.removeEventListener('scroll', onScroll, true);
+    };
   }, []);
   return (
     <div ref={root} className="relative">
@@ -92,6 +117,20 @@ function SlidingHighlight({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+function clipToAncestors(row: HTMLElement, root: HTMLElement, box: DOMRect) {
+  let top = 0;
+  let bottom = 0;
+  for (let node = row.parentElement; node && node !== root; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (!/(auto|scroll|hidden|clip)/.test(`${style.overflowY} ${style.overflow}`)) continue;
+    if (node.scrollHeight <= node.clientHeight + 1) continue;
+    const view = node.getBoundingClientRect();
+    top = Math.max(top, view.top - box.top);
+    bottom = Math.max(bottom, box.bottom - view.bottom);
+  }
+  return top > 0 || bottom > 0 ? `inset(${top}px 0 ${bottom}px 0)` : '';
 }
 
 function DropdownMenuGroup({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>) {

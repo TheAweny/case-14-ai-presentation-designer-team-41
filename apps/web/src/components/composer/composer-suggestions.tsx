@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useId, useState, type KeyboardEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
@@ -32,6 +40,10 @@ export function useComposerSuggestions({
   const t = useTranslations('deckChat.input');
   const reduce = useReducedMotion();
   const id = useId();
+  const list = useRef<HTMLDivElement>(null);
+  const glow = useRef<HTMLSpanElement>(null);
+  const fresh = useRef(true);
+  const frame = useRef(0);
   const [caret, setCaret] = useState(text.length);
   const [cursor, setCursor] = useState(0);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -48,6 +60,7 @@ export function useComposerSuggestions({
           .slice(0, 30)
       : [];
   const active = Math.min(cursor, Math.max(0, rows.length - 1));
+  const rowSignature = rows.map((row) => row.key + ':' + (row.description?.length ?? 0)).join('|');
   useEffect(() => {
     if (!rows.length) return;
     const dismissOutside = (event: Event) => {
@@ -64,6 +77,50 @@ export function useComposerSuggestions({
       document.removeEventListener('focusin', dismissOutside);
     };
   }, [rows.length, field, id, stamp]);
+  const placeGlow = (instant: boolean) => {
+    const el = list.current;
+    const mark = glow.current;
+    const row = el?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!mark || !row) return;
+    const snap =
+      fresh.current || instant || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    mark.style.transition = snap
+      ? 'none'
+      : 'transform 160ms cubic-bezier(0.23, 1, 0.32, 1), opacity 160ms ease';
+    mark.style.transform = `translateY(${row.offsetTop}px)`;
+    mark.style.height = `${row.offsetHeight}px`;
+    mark.style.opacity = '1';
+    fresh.current = false;
+  };
+  useLayoutEffect(() => {
+    placeGlow(false);
+  }, [active, rowSignature, stamp, reduce]);
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const onScroll = () => {
+      cancelAnimationFrame(frame.current);
+      frame.current = requestAnimationFrame(() => placeGlow(true));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    motionQuery.addEventListener('change', onScroll);
+    let initialResize = true;
+    const resize = new ResizeObserver(() => {
+      if (initialResize) {
+        initialResize = false;
+        return;
+      }
+      onScroll();
+    });
+    resize.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      motionQuery.removeEventListener('change', onScroll);
+      resize.disconnect();
+      cancelAnimationFrame(frame.current);
+    };
+  }, [rows.length, reduce]);
   const choose = (row: ComposerSuggestion) => {
     if (!token) return;
     onText(text.slice(0, token.start) + text.slice(token.end));
@@ -129,11 +186,13 @@ export function useComposerSuggestions({
               {t(token?.kind === 'command' ? 'commands' : 'context')}
             </p>
             <div
+              ref={list}
               id={id}
               role="listbox"
               aria-label={t(token?.kind === 'command' ? 'commands' : 'context')}
-              className="max-h-64 overflow-y-auto overscroll-contain"
+              className="relative max-h-64 overflow-y-auto overscroll-contain"
             >
+              <span ref={glow} aria-hidden className="menu-glow" />
               {rows.map((row, index) => (
                 <button
                   key={row.key}
@@ -146,8 +205,8 @@ export function useComposerSuggestions({
                   onPointerEnter={() => setCursor(index)}
                   onClick={() => choose(row)}
                   className={cn(
-                    'flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left text-sm outline-none',
-                    index === active && 'bg-accent text-accent-foreground',
+                    'relative z-1 flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left text-sm outline-none',
+                    index === active && 'text-accent-foreground',
                   )}
                 >
                   <span className="truncate">{row.name}</span>
