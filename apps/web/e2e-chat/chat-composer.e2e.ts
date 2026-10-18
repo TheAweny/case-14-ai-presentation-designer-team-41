@@ -881,28 +881,31 @@ test('offers the thinking switch only where probing found one, whatever the name
   });
   expect(assigned.ok()).toBeTruthy();
   await openChat(page);
-  const toggle = page.getByRole('button', { name: 'Размышление' });
+  const toggle = page.getByRole('button', { name: 'Думать при сборке' });
   await expect(page.getByRole('button', { name: /Модель: Qwen\/Qwen3-8B/ })).toBeVisible();
   await expect(toggle).toHaveCount(0);
 
   await probed(page, 'Qwen/Qwen3-8B', { toggle: 'enable-thinking', levels: false });
   await page.reload();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.click();
+  // Deck builds do not think until the person switches it on.
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
   await field(page).fill('Короткий ответ');
   await page.getByRole('button', { name: 'Отправить', exact: true }).click();
   await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
-  expect(thinking).toBe(false);
+  expect(thinking).toBe(true);
 
   await page.reload();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('lets a hybrid model think on request with a depth only while thinking', async ({ page }) => {
+test('lets a hybrid model think while building on request, with a depth either way', async ({
+  page,
+}) => {
   let sent: { thinking?: unknown; reasoningEffort?: unknown } = {};
   await page.route(`**/api/backend/chats/${ID}/turns`, (route) => {
     sent = route.request().postDataJSON();
@@ -920,9 +923,11 @@ test('lets a hybrid model think on request with a depth only while thinking', as
   expect(assigned.ok()).toBeTruthy();
   await probed(page, 'house-model', { toggle: 'reasoning-effort', levels: true });
   await openChat(page);
-  const toggle = page.getByRole('button', { name: 'Размышление' });
+  const toggle = page.getByRole('button', { name: 'Думать при сборке' });
   const menu = page.getByRole('button', { name: 'Модель: house-model. Сменить модель' });
   const depth = page.getByRole('slider', { name: 'Глубина размышления' });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
   await menu.click();
@@ -948,10 +953,11 @@ test('lets a hybrid model think on request with a depth only while thinking', as
   await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
   expect(sent).toMatchObject({ thinking: true, reasoningEffort: 'high' });
 
+  // The chat itself always thinks where it can, so the depth stays while builds do not think.
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await menu.click();
-  await expect(depth).toHaveCount(0);
+  await expect(depth).toBeVisible();
 });
 
 test('offers only models the provider describes as chat models in the chat menu', async ({
