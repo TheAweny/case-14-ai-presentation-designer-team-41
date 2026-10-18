@@ -26,6 +26,7 @@ import {
   type ChatTurnRequest,
   type DeckOutline,
 } from '@lct/contracts';
+import { loadAgent } from '@lct/registry';
 import {
   AnswerWriter,
   ModelRequestError,
@@ -59,8 +60,13 @@ import {
   readAuditCounts,
   runBuild,
   type ChatToolScope,
+  type ChatWebDependency,
 } from './chat-tools.js';
 import { acquireChatLease, type ChatLease } from './chat-lease.js';
+import { join } from 'node:path';
+import { createAssetSearch, type AssetSearch } from './asset-search.js';
+import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
+import { fetchWebSource } from './web-source.js';
 
 export const CHAT_ID = /^[0-9a-f-]{36}$/i;
 const TITLE_MAX_LENGTH = 200;
@@ -220,6 +226,51 @@ export class ChatsService implements OnApplicationShutdown {
       throw error;
     });
     return this.agent;
+  }
+
+  private webDependency(
+    request: ChatTurnRequest,
+    account: Account,
+    agent: ChatAgent,
+  ): ChatWebDependency {
+    const baseUrl = webSearchBaseUrl(process.env);
+    let search: WebSearch | null = null;
+    let assets: AssetSearch | null = null;
+    if (baseUrl !== null) {
+      try {
+        search = createWebSearch({ baseUrl });
+      } catch {
+        search = null;
+      }
+      try {
+        assets = createAssetSearch({ baseUrl });
+      } catch {
+        assets = null;
+      }
+    }
+    return {
+      search,
+      fetchSource: fetchWebSource,
+      ...(assets ? { assets } : {}),
+      research: {
+        run: async (question, sources, researchSignal) => {
+          const researcher = await loadAgent(join(this.generation.registryDir(), 'web-researcher'));
+          const researchModel = await this.chatModel(request, account, {
+            ...agent,
+            agent: researcher,
+          });
+          researchSignal.throwIfAborted();
+          return researchMaterials({
+            question,
+            sources,
+            model: researchModel,
+            agent: researcher,
+            signal: researchSignal,
+            seed: 42,
+          });
+        },
+      },
+    };
   }
 
   async list(
@@ -1021,24 +1072,29 @@ export class ChatsService implements OnApplicationShutdown {
       }
       if (!model) return;
       sync();
-      const tools = chatTools(this.generation, scope, {
-        run: async (question, sources, researchSignal) => {
-          const researcher = await loadMaterialResearchAgent(this.generation.registryDir());
-          const researchModel = await this.chatModel(request, account, {
-            ...agent,
-            agent: researcher,
-          });
-          researchSignal.throwIfAborted();
-          return researchMaterials({
-            question,
-            sources,
-            model: researchModel,
-            agent: researcher,
-            signal: researchSignal,
-            seed: 42,
-          });
+      const tools = chatTools(
+        this.generation,
+        scope,
+        {
+          run: async (question, sources, researchSignal) => {
+            const researcher = await loadMaterialResearchAgent(this.generation.registryDir());
+            const researchModel = await this.chatModel(request, account, {
+              ...agent,
+              agent: researcher,
+            });
+            researchSignal.throwIfAborted();
+            return researchMaterials({
+              question,
+              sources,
+              model: researchModel,
+              agent: researcher,
+              signal: researchSignal,
+              seed: 42,
+            });
+          },
         },
-      });
+        this.webDependency(request, account, agent),
+      );
       // The agent tells the person whether the deck gets pictures, and does not promise them
       // when no image model is assigned.
       const imagesAvailable = await this.generation.imagesAvailable(account).catch(() => false);
