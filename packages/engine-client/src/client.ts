@@ -14,6 +14,8 @@ import {
   editableDeckResponseSchema,
   healthCheckSchema,
   layoutVariantsResponseSchema,
+  materialExtractRequestSchema,
+  materialExtractResponseSchema,
   type AuditReport,
   type AuditRequest,
   type DeckExportRequest,
@@ -27,6 +29,8 @@ import {
   type HealthCheck,
   type LayoutVariantsRequest,
   type LayoutVariantsResponse,
+  type MaterialExtractRequest,
+  type MaterialExtractResponse,
 } from '@lct/contracts';
 
 export interface EngineClientOptions {
@@ -155,6 +159,21 @@ export class EngineClient {
   ): Promise<TemplatePreviewsResponse> {
     return templatePreviewsResponseSchema.parse(
       await this.post('/v1/template-previews', request, signal),
+    );
+  }
+
+  /**
+   * `POST /v1/material-extract` — a slice of an uploaded text or spreadsheet file.
+   * Omitted `offset` and `limit` are sent as the contract defaults, 0 and 20.
+   */
+  async extractMaterial(
+    request: Omit<MaterialExtractRequest, 'offset' | 'limit'> &
+      Partial<Pick<MaterialExtractRequest, 'offset' | 'limit'>>,
+    signal?: AbortSignal,
+  ): Promise<MaterialExtractResponse> {
+    const body = materialExtractRequestSchema.parse(request);
+    return materialExtractResponseSchema.parse(
+      await this.post('/v1/material-extract', body, signal),
     );
   }
 
