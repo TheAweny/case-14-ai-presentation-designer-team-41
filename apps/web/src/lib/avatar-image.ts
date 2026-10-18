@@ -13,10 +13,22 @@ export class AvatarImageError extends Error {
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 /**
- * Фото, выбранное человеком, как его хранит API: квадрат из середины кадра, 256 px, WebP (там,
- * где браузер его не пишет, — JPEG). Ужимаем здесь, в браузере: на сервер уходят десятки
+ * Фото, выбранное человеком, как его хранит API: квадрат 256 px, WebP (там, где браузер его не
+ * пишет, — JPEG). У вертикального снимка квадрат берётся ближе к верху — там обычно лицо, и
+ * середина кадра срезала бы голову. Ужимаем здесь, в браузере: на сервер уходят десятки
  * килобайт, а не снимок с телефона.
  */
+
+/**
+ * Верх квадрата в исходном кадре. У портрета над кадром остаётся 15% лишней высоты: лицо обычно
+ * выше середины. У квадрата и широкого снимка сдвигать нечего — квадрат и так на всю высоту.
+ */
+export function portraitCropTop(width: number, height: number, side: number): number {
+  const spare = height - side;
+  if (spare <= 0 || height <= width) return 0;
+  return spare * 0.15;
+}
+
 export async function avatarFromFile(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) throw new AvatarImageError('notImage');
   if (file.size > MAX_FILE_BYTES) throw new AvatarImageError('tooLarge');
@@ -36,7 +48,7 @@ export async function avatarFromFile(file: File): Promise<string> {
   context.drawImage(
     bitmap,
     (bitmap.width - side) / 2,
-    (bitmap.height - side) / 2,
+    portraitCropTop(bitmap.width, bitmap.height, side),
     side,
     side,
     0,

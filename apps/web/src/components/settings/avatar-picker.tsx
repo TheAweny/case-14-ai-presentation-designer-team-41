@@ -11,7 +11,7 @@ import { AVATAR_PRESETS, avatarView, defaultAvatarIndex, presetAvatar } from '@/
 import type { Account } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
-/** Кружок выбора: знак или фото, отмеченный — с кольцом, нажатие — лёгкое сжатие. */
+/** Кружок выбора: портрет или фото, отмеченный — с кольцом, нажатие — лёгкое сжатие. */
 const optionClass = cn(
   'relative block size-10 shrink-0 overflow-hidden rounded-full outline-none',
   'ring-1 ring-black/5 dark:ring-white/10',
@@ -23,8 +23,8 @@ const optionClass = cn(
 );
 
 /**
- * Аватар в настройках аккаунта: один из десяти знаков или своё фото. Выбор сохраняется сразу,
- * без кнопки «Сохранить»; не сохранился — возвращается прежний и видно почему. Знак по умолчанию
+ * Аватар в настройках аккаунта: один из десяти портретов или своё фото. Выбор сохраняется сразу,
+ * без кнопки «Сохранить»; не сохранился — возвращается прежний и видно почему. Портрет по умолчанию
  * помечен: к нему можно вернуться, и он же у всех, кто ничего не выбирал.
  */
 export function AvatarPicker({ account }: { account: Account }) {
@@ -37,7 +37,7 @@ export function AvatarPicker({ account }: { account: Account }) {
   const [saving, startSaving] = useTransition();
   const view = avatarView(value, account.userId);
   const ownIndex = defaultAvatarIndex(account.userId);
-  // Фото остаётся в ряду, пока человек не загрузил другое: к нему можно вернуться после знака.
+  // Фото остаётся в ряду, пока человек не загрузил другое: к нему можно вернуться после портрета.
   const [photo, setPhoto] = useState<string | null>(view.kind === 'image' ? view.src : null);
 
   const save = (next: string | null) => {
@@ -56,7 +56,7 @@ export function AvatarPicker({ account }: { account: Account }) {
   };
 
   const pickMark = (index: number) =>
-    // Свой знак по умолчанию храним как пустое значение: так он и останется «по id».
+    // Свой портрет по умолчанию храним как пустое значение: так он и останется «по id».
     save(index === ownIndex ? null : presetAvatar(index));
 
   const upload = async (file: File) => {
@@ -142,7 +142,7 @@ export function AvatarPicker({ account }: { account: Account }) {
             >
               <AvatarMark index={index} />
               {index === ownIndex ? (
-                // Точка у «своего» знака: тот, что выдан по id, и к нему вернёт любой выбор.
+                // Точка у своего портрета: тот, что выдан по id, и к нему вернёт любой выбор.
                 <span
                   aria-hidden
                   className="absolute right-0.5 bottom-0.5 size-2 rounded-full bg-background ring-2 ring-foreground/70"
