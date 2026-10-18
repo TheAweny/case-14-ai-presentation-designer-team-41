@@ -1179,12 +1179,11 @@ export class ChatsService implements OnApplicationShutdown {
         throw new ModelRequestError(
           `${explanations[result.reason ?? 'protocol_error']} Ответ не завершён.`,
           {
+            // A broken chunk or format is usually a one-off: the person may ask again.
             kind:
               result.reason === 'context_budget' || result.reason === 'length'
                 ? 'context'
-                : result.reason === 'protocol_error'
-                  ? 'unsupported'
-                  : 'unavailable',
+                : 'unavailable',
             modelId: model.model,
           },
         );
