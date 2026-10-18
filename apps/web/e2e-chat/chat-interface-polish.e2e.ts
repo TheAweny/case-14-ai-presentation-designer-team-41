@@ -72,6 +72,9 @@ test('mixed results use a partial glyph and the error disclosure is keyboard acc
   );
   await open(page);
   await expect(page.locator('.thought-line [data-task-state="partial"]')).toHaveCount(1);
+  const partialGlyph = page.locator('.thought-line [data-task-state="partial"]');
+  await expect(partialGlyph.locator('svg')).toHaveCount(0);
+  await expect(partialGlyph.locator('[data-glyph-layer="settled"] [data-lit]')).toHaveCount(4);
   await expect(page.locator('.thought-line [data-task-state="failed"]')).toHaveCount(0);
   const card = page.getByRole('alert');
   await expect(card.locator('details')).toHaveCount(0);

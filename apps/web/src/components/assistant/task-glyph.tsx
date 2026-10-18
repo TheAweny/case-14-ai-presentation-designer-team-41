@@ -7,7 +7,8 @@ import styles from './task-glyph.module.css';
 // Adapted from React Bits LatticeLoader by David Haz, via prototypes/motion-lab.
 // License: docs/third-party/react-bits-license.txt (MIT + Commons Clause).
 // 4x4 orbit. The centre four cells are empty while it runs; done and failed
-// light the prototype check and cross, which do not fit on a 3x3.
+// light the prototype check and cross, which do not fit on a 3x3. Partial
+// uses the same check mask, tinted amber by the stylesheet.
 const ORBIT = [0, 1, 2, 3, 11, null, null, 4, 10, null, null, 5, 9, 8, 7, 6];
 const CHECK = [7, 8, 10, 13];
 const CROSS = [0, 3, 5, 6, 9, 10, 12, 15];
@@ -18,7 +19,7 @@ const LOOP = 648;
 type TaskGlyphState = 'running' | 'done' | 'failed' | 'pending' | 'cancelled' | 'partial';
 
 function settledLit(state: TaskGlyphState, index: number) {
-  if (state === 'done') return CHECK.includes(index);
+  if (state === 'done' || state === 'partial') return CHECK.includes(index);
   if (state === 'failed') return CROSS.includes(index);
   if (state === 'pending' || state === 'cancelled') return REST.includes(index);
   return false;
@@ -58,10 +59,6 @@ export function TaskGlyph({ state, className }: { state: TaskGlyphState; classNa
           ))}
         </span>
       </span>
-      <svg viewBox="0 0 20 20" className={cn('absolute size-5 overflow-visible', styles.mark)}>
-        <circle className={styles.ring} cx="10" cy="10" r="7.25" pathLength="1" />
-        <path className={styles.check} d="M6.2 10.3 8.7 12.8 13.9 7.4" pathLength="1" />
-      </svg>
     </span>
   );
 }
