@@ -889,24 +889,23 @@ test('offers the thinking switch only where probing found one, whatever the name
 
   await probed(page, 'Qwen/Qwen3-8B', { toggle: 'enable-thinking', levels: false });
   await page.reload();
+  // Deck builds do not think until the person switches it on.
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
   await field(page).fill('Короткий ответ');
   await page.getByRole('button', { name: 'Отправить', exact: true }).click();
   await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
-  expect(thinking).toBe(false);
+  expect(thinking).toBe(true);
 
   await page.reload();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('lets a hybrid model think on request while retaining the chat reasoning depth', async ({
+test('lets a hybrid model think while building on request, with a depth either way', async ({
   page,
 }) => {
   let sent: { thinking?: unknown; reasoningEffort?: unknown } = {};
@@ -956,6 +955,7 @@ test('lets a hybrid model think on request while retaining the chat reasoning de
   await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
   expect(sent).toMatchObject({ thinking: true, reasoningEffort: 'high' });
 
+  // The chat itself always thinks where it can, so the depth stays while builds do not think.
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await menu.click();
