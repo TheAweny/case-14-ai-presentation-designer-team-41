@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   Injectable,
   type OnApplicationShutdown,
@@ -35,6 +36,13 @@ export async function directoryBytes(path: string): Promise<number> {
 /** Shared admission and storage hooks. Existing editor autosave remains unchanged. */
 @Injectable()
 export class AccountUsageService implements OnApplicationShutdown {
+  private readonly editContext = new AsyncLocalStorage<{
+    ownerId: string;
+    operationId: string;
+    worker: string | null;
+    client: PoolClient;
+    check: () => Promise<void>;
+  }>();
   private readonly reservationContext = new AsyncLocalStorage<{
     ownerId: string;
     limit: number;
@@ -103,11 +111,69 @@ export class AccountUsageService implements OnApplicationShutdown {
     return existing.rowCount ? 0 : bytes.length;
   }
   async snapshotReserve(ownerId: string, deckId: string, key: string, value: unknown) {
-    const existing = await this.pool.query(
+    const db = this.editContext.getStore()?.client ?? this.pool;
+    const existing = await db.query(
       'SELECT 1 FROM editor_idempotency WHERE account_id=$1 AND deck_id=$2 AND idempotency_key=$3',
       [ownerId, deckId, key],
     );
     return existing.rowCount ? 0 : Buffer.byteLength(JSON.stringify(value)) * 8 + 65536;
+  }
+  /** A live PostgreSQL session guard spans admission, storage waiting and snapshot commit. */
+  async edit<T>(ownerId: string, operationId: string, work: () => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    const key = `account-operation:${ownerId}:${operationId}`;
+    let broken = false;
+    let worker: string | null = null;
+    const lost = () => {
+      broken = true;
+    };
+    client.on('error', lost);
+    try {
+      await client.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [key]);
+      worker = await this.translate(() =>
+        this.store.admit(ownerId, operationId, 'edit', new Date(), client),
+      );
+      return await this.editContext.run(
+        {
+          ownerId,
+          operationId,
+          worker,
+          client,
+          check: async () => {
+            if (broken)
+              throw new ConflictException('Сохранение прервано. Повторите отправку редакции.');
+            await client.query('SELECT 1');
+          },
+        },
+        work,
+      );
+    } finally {
+      // Success is already counted by the snapshot transaction. Release only an unfinished edit.
+      if (worker && !broken)
+        await this.store.finish(ownerId, operationId, false, worker, client).catch(() => {
+          broken = true;
+        });
+      if (!broken)
+        await client.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [key]).catch(() => {
+          broken = true;
+        });
+      client.off('error', lost);
+      client.release(broken);
+    }
+  }
+  /** Fence the operation row inside the snapshot transaction, before its success trigger runs. */
+  async verifyEditOperation(ownerId: string, operationId: string, db: PoolClient) {
+    const edit = this.editContext.getStore();
+    if (!edit || edit.ownerId !== ownerId || edit.operationId !== operationId)
+      throw new ConflictException('Нет допуска к сохранению редакции.');
+    await edit.check();
+    if (!edit.worker) return;
+    const owned = await db.query(
+      "SELECT 1 FROM account_operations WHERE owner_id=$1 AND operation_id=$2 AND worker_id=$3 AND status='active' FOR UPDATE",
+      [ownerId, operationId, edit.worker],
+    );
+    if (!owned.rowCount)
+      throw new ConflictException('Допуск к сохранению истёк. Повторите отправку редакции.');
   }
   /** Called inside the editor transaction, before its revision and idempotency outcome commit. */
   async verifySnapshotStorage(ownerId: string, db: PoolClient) {
@@ -158,7 +224,9 @@ export class AccountUsageService implements OnApplicationShutdown {
   ): Promise<T> {
     if (!Number.isSafeInteger(reservedBytes) || reservedBytes < 0)
       throw new BadRequestException('Invalid storage reservation');
-    const client = await this.pool.connect();
+    const edit = this.editContext.getStore();
+    if (edit && edit.ownerId !== ownerId) throw new Error('Edit reservation ownership mismatch');
+    const client = edit?.client ?? (await this.pool.connect());
     const lock = `account-storage:${ownerId}`;
     const reservation = randomUUID();
     try {
@@ -167,7 +235,7 @@ export class AccountUsageService implements OnApplicationShutdown {
       if (!policy) return await work();
       // An orphan is reclaimed only while holding its account lock: no other writer can be alive.
       await client.query('DELETE FROM account_storage_reservations WHERE owner_id=$1', [ownerId]);
-      const before = await this.storageBytes(ownerId);
+      const before = await this.storageBytes(ownerId, client);
       if (before + reservedBytes > policy.limit) throw new AccountLimitError('storage', null);
       // A renderer's size is unknown beforehand. Reserve the remaining allowance and serialize
       // its staging write; actual excess is removed before the export id is returned.
@@ -181,7 +249,7 @@ export class AccountUsageService implements OnApplicationShutdown {
         { ownerId, limit: policy.limit, lock: client },
         work,
       );
-      const actual = await this.storageBytes(ownerId);
+      const actual = await this.storageBytes(ownerId, client);
       if (actual > policy.limit && rollback) {
         throw new AccountLimitError('storage', null);
       }
@@ -197,7 +265,7 @@ export class AccountUsageService implements OnApplicationShutdown {
       await client
         .query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [lock])
         .catch(() => undefined);
-      client.release();
+      if (!edit) client.release();
     }
   }
   removeStaging(path: string) {

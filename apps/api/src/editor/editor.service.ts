@@ -75,34 +75,39 @@ export class EditorService implements OnApplicationBootstrap {
     if (prior) return prior;
     const operation = `edit:${account.id}:${deckId}:${parsed.data.idempotencyKey}`;
     const usage = this.usage;
-    const worker = usage
-      ? await usage.translate(() => usage.store.admit(account.id, operation, 'edit'))
-      : null;
     try {
-      const save = () =>
-        this.store.save(
+      const persist = async () => {
+        // A duplicate may have completed while this request waited for the operation guard.
+        const replay = await this.store.savedOutcome?.(
           account.id,
           deckId,
-          parsed.data,
-          (client) => this.usage?.verifySnapshotStorage(account.id, client) ?? Promise.resolve(),
+          parsed.data.idempotencyKey,
         );
-      const result = this.usage
-        ? await this.usage.write(
+        if (replay) return replay;
+        const save = () =>
+          this.store.save(
             account.id,
-            await this.usage.snapshotReserve(
+            deckId,
+            parsed.data,
+            (client) => this.usage?.verifySnapshotStorage(account.id, client) ?? Promise.resolve(),
+            (client) =>
+              this.usage?.verifyEditOperation(account.id, operation, client) ?? Promise.resolve(),
+          );
+        return this.usage
+          ? await this.usage.write(
               account.id,
-              deckId,
-              parsed.data.idempotencyKey,
-              parsed.data,
-            ),
-            save,
-          )
-        : await save();
-      if (worker)
-        await this.usage?.store.finish(account.id, operation, result.kind === 'saved', worker);
-      return result;
+              await this.usage.snapshotReserve(
+                account.id,
+                deckId,
+                parsed.data.idempotencyKey,
+                parsed.data,
+              ),
+              save,
+            )
+          : await save();
+      };
+      return usage ? await usage.edit(account.id, operation, persist) : await persist();
     } catch (error) {
-      if (worker) await this.usage?.store.finish(account.id, operation, false, worker);
       if (error instanceof EditorMediaMissingError) {
         throw new ConflictException('Нужные картинки ещё не записаны. Снимок не опубликован.');
       }

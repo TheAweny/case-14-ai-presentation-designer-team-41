@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, it, expect } from 'vitest';
-import { PostgresRunRepository } from '@lct/run-store';
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
+import { AccountUsageStore, PostgresRunRepository } from '@lct/run-store';
 import { SessionsService } from './sessions.service.js';
 import { AccountUsageService } from '../accounts/account-usage.service.js';
 import { AccountGuard } from '../accounts/account.guard.js';
@@ -13,6 +13,8 @@ import { Reflector } from '@nestjs/core';
 import type { ExecutionContext } from '@nestjs/common';
 import { PostgresEditorSnapshotStore } from '../editor/snapshot-store.js';
 import { editorSnapshotSaveRequestSchema } from '@lct/contracts';
+import { EditorService } from '../editor/editor.service.js';
+import type { GenerationService } from '../generation/generation.service.js';
 
 const databaseUrl = process.env.RUN_STORE_TEST_DATABASE_URL;
 describe.skipIf(!databaseUrl)('enterprise auth and storage on PostgreSQL', () => {
@@ -64,6 +66,248 @@ describe.skipIf(!databaseUrl)('enterprise auth and storage on PostgreSQL', () =>
     );
     return id;
   }
+  function snapshotRequest(expectedRevision = 0) {
+    return editorSnapshotSaveRequestSchema.parse({
+      schemaVersion: 1,
+      expectedRevision,
+      idempotencyKey: randomUUID(),
+      base: 'fixture',
+      media: [],
+      slides: [
+        {
+          schemaVersion: 1,
+          slideId: 's1',
+          variant: 'balanced',
+          index: 0,
+          patternId: 'synthetic',
+          slideCx: 100,
+          slideCy: 100,
+          elements: [],
+        },
+      ],
+    });
+  }
+  it.each(['lock', 'scan'])(
+    'retains the edit admission during a long storage %s and counts the snapshot once',
+    async (phase) => {
+      const id = await user();
+      const deck = `run-${randomUUID()}`;
+      const input = snapshotRequest();
+      const operation = `edit:${id}:${deck}:${input.idempotencyKey}`;
+      const account = await accounts.find(id);
+      if (!account) throw new Error('Missing fixture account');
+      const editor = new EditorService(
+        {
+          pool,
+          root,
+          directory: (value: string) => join(root, value),
+          library: { visible: async () => true, read: async () => ({ variant: 'balanced' }) },
+        } as unknown as GenerationService,
+        usage,
+      );
+      await usage.store.setPolicy(
+        id,
+        {
+          edit: { limit: 1, period: 'lifetime', timezone: 'UTC' },
+          storage: { limit: 1_000_000, period: 'lifetime', timezone: 'UTC' },
+        },
+        'access-admin',
+      );
+      const storage = await pool.connect();
+      if (phase === 'lock')
+        await storage.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [
+          `account-storage:${id}`,
+        ]);
+      let releaseScan = () => undefined as void;
+      const waitScan = new Promise<void>((resolve) => {
+        releaseScan = resolve;
+      });
+      const originalBytes = usage.storageBytes.bind(usage);
+      const scan =
+        phase === 'scan'
+          ? vi.spyOn(usage, 'storageBytes').mockImplementationOnce(async (...args) => {
+              await waitScan;
+              return originalBytes(...args);
+            })
+          : null;
+      const pending = editor.save(deck, input, account);
+      void pending.catch(() => undefined);
+      try {
+        await vi.waitFor(async () =>
+          expect(
+            (
+              await pool.query('SELECT status FROM account_operations WHERE operation_id=$1', [
+                operation,
+              ])
+            ).rows[0]?.status,
+          ).toBe('active'),
+        );
+        if (scan) await vi.waitFor(() => expect(scan).toHaveBeenCalled());
+        // Simulate waiting beyond the lease; do not spend a minute sleeping in a regression.
+        await pool.query(
+          "UPDATE account_operations SET lease_until=now()-interval '1 minute' WHERE operation_id=$1",
+          [operation],
+        );
+        expect(
+          (await usage.store.view(id)).metrics.find((row) => row.metric === 'edit'),
+        ).toMatchObject({ active: 1, completed: 0 });
+        await expect(
+          usage.store.admit(id, `edit:${id}:${deck}:${randomUUID()}`, 'edit'),
+        ).rejects.toMatchObject({ code: 'account-limit' });
+        releaseScan();
+        if (phase === 'lock')
+          await storage.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [
+            `account-storage:${id}`,
+          ]);
+        const result = await pending;
+        expect(result.kind).toBe('saved');
+        expect(
+          (await usage.store.view(id)).metrics.find((row) => row.metric === 'edit'),
+        ).toMatchObject({ active: 0, completed: 1 });
+        expect(await editor.save(deck, input, account)).toEqual(result);
+        await expect(editor.save(deck, snapshotRequest(1), account)).rejects.toMatchObject({
+          status: 403,
+        });
+      } finally {
+        releaseScan();
+        if (phase === 'lock')
+          await storage.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [
+            `account-storage:${id}`,
+          ]);
+        storage.release();
+        await pending.catch(() => undefined);
+        scan?.mockRestore();
+      }
+    },
+  );
+  it('reconciles an edit whose guard connection died and retries with a one-connection usage pool', async () => {
+    const id = await user();
+    const deck = `run-${randomUUID()}`;
+    const input = snapshotRequest();
+    const operation = `edit:${id}:${deck}:${input.idempotencyKey}`;
+    const account = await accounts.find(id);
+    if (!account) throw new Error('Missing account');
+    const one = new Pool({
+      connectionString: pool.options.connectionString,
+      max: 1,
+      connectionTimeoutMillis: 2000,
+    });
+    const replica = new AccountUsageService();
+    await replica.pool.end();
+    Object.assign(replica, { pool: one, root, store: new AccountUsageStore(one) });
+    const editor = new EditorService(
+      {
+        pool,
+        root,
+        directory: (value: string) => join(root, value),
+        library: { visible: async () => true, read: async () => ({ variant: 'balanced' }) },
+      } as unknown as GenerationService,
+      replica,
+    );
+    await usage.store.setPolicy(
+      id,
+      {
+        edit: { limit: 1, period: 'lifetime', timezone: 'UTC' },
+        storage: { limit: 1_000_000, period: 'lifetime', timezone: 'UTC' },
+      },
+      'access-admin',
+    );
+    const connection = await one.connect();
+    const pid = (await connection.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+    connection.release();
+    const storage = await pool.connect();
+    await storage.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [
+      `account-storage:${id}`,
+    ]);
+    const pending = editor.save(deck, input, account);
+    void pending.catch(() => undefined);
+    try {
+      await vi.waitFor(async () =>
+        expect(
+          (
+            await pool.query('SELECT status FROM account_operations WHERE operation_id=$1', [
+              operation,
+            ])
+          ).rows[0]?.status,
+        ).toBe('active'),
+      );
+      await pool.query(
+        "UPDATE account_operations SET lease_until=now()-interval '1 minute' WHERE operation_id=$1",
+        [operation],
+      );
+      await pool.query('SELECT pg_terminate_backend($1)', [pid]);
+      await expect(pending).rejects.toThrow();
+      expect(
+        (await usage.store.view(id)).metrics.find((row) => row.metric === 'edit'),
+      ).toMatchObject({ completed: 0, active: 0 });
+      await storage.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [
+        `account-storage:${id}`,
+      ]);
+      expect((await editor.save(deck, input, account)).kind).toBe('saved');
+      expect(
+        (await usage.store.view(id)).metrics.find((row) => row.metric === 'edit'),
+      ).toMatchObject({ completed: 1, active: 0 });
+      expect(
+        (
+          await pool.query('SELECT count(*)::int AS n FROM editor_snapshots WHERE account_id=$1', [
+            id,
+          ])
+        ).rows[0].n,
+      ).toBe(1);
+    } finally {
+      await storage.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [
+        `account-storage:${id}`,
+      ]);
+      storage.release();
+      await pending.catch(() => undefined);
+      await one.end();
+    }
+  });
+  it('rejects a fenced edit before changing the last snapshot or counting another worker success', async () => {
+    const id = await user();
+    const deck = `run-${randomUUID()}`;
+    const account = await accounts.find(id);
+    if (!account) throw new Error('Missing account');
+    const editor = new EditorService(
+      {
+        pool,
+        root,
+        directory: (value: string) => join(root, value),
+        library: { visible: async () => true, read: async () => ({ variant: 'balanced' }) },
+      } as unknown as GenerationService,
+      usage,
+    );
+    await editor.save(deck, snapshotRequest(), account);
+    const input = snapshotRequest(1);
+    const operation = `edit:${id}:${deck}:${input.idempotencyKey}`;
+    const nextWorker = randomUUID();
+    const reserve = usage.snapshotReserve.bind(usage);
+    const inject = vi.spyOn(usage, 'snapshotReserve').mockImplementationOnce(async (...args) => {
+      await pool.query('UPDATE account_operations SET worker_id=$2 WHERE operation_id=$1', [
+        operation,
+        nextWorker,
+      ]);
+      return reserve(...args);
+    });
+    try {
+      await expect(editor.save(deck, input, account)).rejects.toMatchObject({ status: 409 });
+      expect((await editor.load(deck, account)).snapshot?.revision).toBe(1);
+      expect(
+        (
+          await pool.query(
+            'SELECT 1 FROM editor_idempotency WHERE account_id=$1 AND idempotency_key=$2',
+            [id, input.idempotencyKey],
+          )
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (await usage.store.view(id)).metrics.find((row) => row.metric === 'edit'),
+      ).toMatchObject({ completed: 1, active: 1 });
+    } finally {
+      inject.mockRestore();
+      await usage.store.finish(id, operation, false, nextWorker);
+    }
+  });
   it('revokes a copied token at logout, while keeping another session valid', async () => {
     const id = await user();
     const first = await sessions.create(id, 'fixture-password');

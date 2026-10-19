@@ -74,8 +74,12 @@ export async function assertAccountEnabled(db: Queryable, ownerId: string) {
 /** Account-wide transaction lock serializes admissions across replicas and model connections. */
 export class AccountUsageStore {
   constructor(readonly pool: Pool) {}
-  async transaction<T>(ownerId: string, work: (client: PoolClient) => Promise<T>) {
-    const client = await this.pool.connect();
+  async transaction<T>(
+    ownerId: string,
+    work: (client: PoolClient) => Promise<T>,
+    connection?: PoolClient,
+  ) {
+    const client = connection ?? (await this.pool.connect());
     try {
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
@@ -88,7 +92,7 @@ export class AccountUsageStore {
       await client.query('ROLLBACK');
       throw error;
     } finally {
-      client.release();
+      if (!connection) client.release();
     }
   }
   async setPolicy(scope: string, value: unknown, actorId: string) {
@@ -139,6 +143,14 @@ export class AccountUsageStore {
         operation.metric === 'edit'
           ? operation.operation_id.slice(`edit:${ownerId}:`.length).split(':')[0]
           : null;
+      if (edit) {
+        // Protect the whole edit, including its storage queue and size scan before withDeck.
+        const guard = await client.query(
+          'SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired',
+          [`account-operation:${ownerId}:${operation.operation_id}`],
+        );
+        if (!guard.rows[0].acquired) continue;
+      }
       if (chat || edit) {
         const acquired = await client.query(
           `SELECT pg_try_advisory_xact_lock(${chat ? 'hashtextextended($1,0)' : 'hashtext($1)'}) AS acquired`,
@@ -153,47 +165,57 @@ export class AccountUsageStore {
       );
     }
   }
-  async admit(ownerId: string, operationId: string, metric: OperationMetric, now = new Date()) {
-    return this.transaction(ownerId, async (client) => {
-      await assertAccountEnabled(client, ownerId);
-      await this.reconcile(client, ownerId);
-      const existing = await client.query(
-        'SELECT * FROM account_operations WHERE operation_id=$1 FOR UPDATE',
-        [operationId],
-      );
-      const old = existing.rows[0];
-      if (old && (old.owner_id !== ownerId || old.metric !== metric))
-        throw new Error('Operation ownership mismatch');
-      if (old?.status === 'completed' || old?.status === 'active')
-        return old.worker_id as string | null;
-      const { effective } = await effectivePolicy(client, ownerId);
-      const limit = effective[metric];
-      const window = policyWindow(limit, now);
-      if (limit) {
-        const used = await client.query(
-          `SELECT count(*)::int AS n FROM account_operations WHERE owner_id=$1 AND metric=$2
+  async admit(
+    ownerId: string,
+    operationId: string,
+    metric: OperationMetric,
+    now = new Date(),
+    connection?: PoolClient,
+  ) {
+    return this.transaction(
+      ownerId,
+      async (client) => {
+        await assertAccountEnabled(client, ownerId);
+        await this.reconcile(client, ownerId);
+        const existing = await client.query(
+          'SELECT * FROM account_operations WHERE operation_id=$1 FOR UPDATE',
+          [operationId],
+        );
+        const old = existing.rows[0];
+        if (old && (old.owner_id !== ownerId || old.metric !== metric))
+          throw new Error('Operation ownership mismatch');
+        if (old?.status === 'completed' || old?.status === 'active')
+          return old.worker_id as string | null;
+        const { effective } = await effectivePolicy(client, ownerId);
+        const limit = effective[metric];
+        const window = policyWindow(limit, now);
+        if (limit) {
+          const used = await client.query(
+            `SELECT count(*)::int AS n FROM account_operations WHERE owner_id=$1 AND metric=$2
           AND status IN ('active','completed') AND admitted_at >= $3 AND ($4::timestamptz IS NULL OR admitted_at<$4)`,
-          [ownerId, metric, window.start, window.end],
-        );
-        if (used.rows[0].n >= limit.limit) throw new AccountLimitError(metric, window.end);
-      }
-      if (metric === 'generation' && effective.concurrency) {
-        const used = await client.query(
-          "SELECT count(*)::int AS n FROM account_operations WHERE owner_id=$1 AND metric='generation' AND status='active'",
-          [ownerId],
-        );
-        if (used.rows[0].n >= effective.concurrency.limit)
-          throw new AccountLimitError('concurrency', null);
-      }
-      const worker = randomUUID();
-      await client.query(
-        `INSERT INTO account_operations(operation_id,owner_id,metric,status,admitted_at,admission_window,worker_id,lease_until)
+            [ownerId, metric, window.start, window.end],
+          );
+          if (used.rows[0].n >= limit.limit) throw new AccountLimitError(metric, window.end);
+        }
+        if (metric === 'generation' && effective.concurrency) {
+          const used = await client.query(
+            "SELECT count(*)::int AS n FROM account_operations WHERE owner_id=$1 AND metric='generation' AND status='active'",
+            [ownerId],
+          );
+          if (used.rows[0].n >= effective.concurrency.limit)
+            throw new AccountLimitError('concurrency', null);
+        }
+        const worker = randomUUID();
+        await client.query(
+          `INSERT INTO account_operations(operation_id,owner_id,metric,status,admitted_at,admission_window,worker_id,lease_until)
         VALUES($1,$2,$3,'active',$4,$5::jsonb,$6,now()+interval '60 seconds') ON CONFLICT(operation_id) DO UPDATE
         SET status='active',admitted_at=excluded.admitted_at,admission_window=excluded.admission_window,worker_id=$6,lease_until=excluded.lease_until,updated_at=now()`,
-        [operationId, ownerId, metric, now.toISOString(), JSON.stringify(window), worker],
-      );
-      return worker;
-    });
+          [operationId, ownerId, metric, now.toISOString(), JSON.stringify(window), worker],
+        );
+        return worker;
+      },
+      connection,
+    );
   }
   async renew(ownerId: string, operationId: string, worker: string) {
     await assertAccountEnabled(this.pool, ownerId);
@@ -209,15 +231,25 @@ export class AccountUsageStore {
       [operationId, ownerId, worker, resultId],
     );
   }
-  async finish(ownerId: string, operationId: string, success: boolean, worker?: string | null) {
-    return this.transaction(ownerId, async (client) => {
-      await client.query(
-        `UPDATE account_operations SET status=$3,completed_at=CASE WHEN $3='completed' THEN now() ELSE NULL END,
+  async finish(
+    ownerId: string,
+    operationId: string,
+    success: boolean,
+    worker?: string | null,
+    connection?: PoolClient,
+  ) {
+    return this.transaction(
+      ownerId,
+      async (client) => {
+        await client.query(
+          `UPDATE account_operations SET status=$3,completed_at=CASE WHEN $3='completed' THEN now() ELSE NULL END,
         worker_id=NULL,lease_until=NULL,updated_at=now() WHERE operation_id=$1 AND owner_id=$2 AND status='active'
         AND ($4::text IS NULL OR worker_id=$4)`,
-        [operationId, ownerId, success ? 'completed' : 'released', worker ?? null],
-      );
-    });
+          [operationId, ownerId, success ? 'completed' : 'released', worker ?? null],
+        );
+      },
+      connection,
+    );
   }
   async view(ownerId: string, now = new Date()) {
     return this.transaction(ownerId, async (client) => {

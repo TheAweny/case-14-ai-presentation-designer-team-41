@@ -76,9 +76,13 @@ test('isolated access: optional policy UI and logout revoke a copied cookie', as
     const stolen = await copied.newPage();
     await stolen.goto('/?settings=account');
     expect((await stolen.request.get('/api/backend/chats')).status()).toBe(200);
+    const health = await stolen.request.get('/api/service-status');
+    expect(health.status()).toBe(200);
+    expect((await health.json()).services).toEqual({ api: 'ok', engine: 'ok', database: 'ok' });
     await target.getByRole('button', { name: /^(Выйти|Sign out)$/ }).click();
     await target.waitForURL('**/login');
     expect((await stolen.request.get('/api/backend/chats')).status()).toBe(401);
+    expect((await stolen.request.get('/api/service-status')).status()).toBe(401);
     expect(
       (
         await request.get(`${api}/users`, {

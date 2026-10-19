@@ -51,6 +51,7 @@ export interface EditorSnapshotStore {
     deckId: string,
     request: EditorSnapshotSaveRequest,
     beforeCommit?: (client: PoolClient) => Promise<void>,
+    beforeWrite?: (client: PoolClient) => Promise<void>,
   ): Promise<EditorSnapshotSaveResponse>;
   putMedia(
     accountId: string,
@@ -370,11 +371,13 @@ export class PostgresEditorSnapshotStore implements EditorSnapshotStore {
     deckId: string,
     request: EditorSnapshotSaveRequest,
     beforeCommit?: (client: PoolClient) => Promise<void>,
+    beforeWrite?: (client: PoolClient) => Promise<void>,
   ): Promise<EditorSnapshotSaveResponse> {
     return this.withDeck(
       accountId,
       deckId,
       async (client) => {
+        await beforeWrite?.(client);
         const prior = await client.query<{ outcome: EditorSnapshotSaveResponse }>(
           `SELECT outcome FROM editor_idempotency
          WHERE account_id = $1 AND deck_id = $2 AND idempotency_key = $3`,
