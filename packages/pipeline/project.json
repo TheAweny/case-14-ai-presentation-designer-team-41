@@ -5,6 +5,26 @@
   "sourceRoot": "packages/pipeline/src",
   "tags": ["scope:api", "type:lib"],
   "targets": {
+    "recovery-runtime": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node scripts/recovery/runtime.mjs", "cwd": "{workspaceRoot}" }
+    },
+    "access-runtime": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node scripts/recovery/access-policy.mjs", "cwd": "{workspaceRoot}" }
+    },
+    "recovery-restart": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node scripts/recovery/restart.mjs", "cwd": "{workspaceRoot}" }
+    },
+    "recovery-benchmark": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "command": "node scripts/recovery/content-benchmark.mjs",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": { "command": "tsc -p tsconfig.lib.json", "cwd": "packages/pipeline" },

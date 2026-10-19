@@ -26,6 +26,24 @@ describe('proxiedApiPath', () => {
     expect(proxiedApiPath(['generation', 'run-1', 'artifacts', 'deck.pdf'], 'GET')).toBe(
       '/generation/run-1/artifacts/deck.pdf',
     );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'snapshot'], 'GET')).toBe(
+      '/editor/decks/run-1/snapshot',
+    );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'snapshot'], 'POST')).toBe(
+      '/editor/decks/run-1/snapshot',
+    );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'media'], 'POST')).toBe(
+      '/editor/decks/run-1/media',
+    );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'media', 'upload/pic.png'], 'GET')).toBe(
+      '/editor/decks/run-1/media/upload%2Fpic.png',
+    );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'revisions', '3', 'export'], 'POST')).toBe(
+      '/editor/decks/run-1/revisions/3/export',
+    );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'exports', 'abc', 'deck.pptx'], 'GET')).toBe(
+      '/editor/decks/run-1/exports/abc/deck.pptx',
+    );
   });
 
   it('keeps server-only routes away from the browser', () => {

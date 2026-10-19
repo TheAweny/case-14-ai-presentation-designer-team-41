@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { CloseIcon, CloudUploadIcon, SavedIcon, WarningIcon } from '@/components/ui/icons';
+import { CloudUploadIcon, SavedIcon, WarningIcon } from '@/components/ui/icons';
 import type { SlideIr } from '@lct/contracts';
 import type { Deck } from '@/lib/deck-source';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/lib/deck-draft';
 import { createAutosave, type SaveStatus } from '@/lib/draft-autosave';
 import { browserDraftStore, createDraftStorage } from '@/lib/draft-storage';
+import { createEditorSession, SnapshotConflictError, decideOpen } from '@/lib/editor-sync';
 import { slideImageUrls } from '@/lib/asset-readiness';
 import { uploadedMedia } from '@/lib/media-registry';
 import { cn } from '@/lib/utils';
@@ -35,12 +36,9 @@ import { FontAvailabilityProvider } from '@/components/editor/font-availability-
 import { templateFonts } from '@/components/editor/inspector/text-model';
 
 /**
- * Редактор колоды с черновиком в браузере. Пока API сохранения нет, правки после каждой паузы
- * уходят в IndexedDB и переживают перезагрузку; при открытии черновик этой колоды
- * возвращается, а плашка предлагает от него отказаться.
- *
- * Черновик подменяет колоду целиком: оболочка открывается заново со слайдами черновика, и
- * журнал правок начинается с них. Отказ от черновика так же открывает исходную колоду.
+ * Редактор колоды. Правки сначала остаются в IndexedDB, а «сохранено» загорается только после
+ * ответа сервера. Серверная редакция новее локальной копии не подменяется сама: человек
+ * выбирает, что открыть. Журнал отмены и смена колоды живут в оболочке, как раньше.
  */
 export function DeckEditor({
   deck,
@@ -84,14 +82,19 @@ export function DeckEditor({
     slides: deck.slides,
     generation: 0,
   });
-  /** Слайды восстановленного черновика, пока видна плашка. */
-  const [restored, setRestored] = useState<readonly SlideIr[] | null>(null);
+  /** Локальная копия, которую человек ещё не принял и не отклонил. */
+  const [choice, setChoice] = useState<
+    | { kind: 'legacy'; slides: readonly SlideIr[] }
+    | { kind: 'choose'; local: readonly SlideIr[] }
+    | null
+  >(null);
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [hasDraft, setHasDraft] = useState(false);
   const storage = useMemo(() => {
     const store = browserDraftStore();
     return store ? createDraftStorage(store) : null;
   }, []);
+  const session = useMemo(() => createEditorSession(), []);
   // Пока черновик не прочитан, писать нельзя: исходная колода стёрла бы его.
   const loaded = useRef(false);
   const latest = useRef<readonly SlideIr[] | null>(null);
@@ -102,20 +105,38 @@ export function DeckEditor({
     () =>
       createAutosave<readonly SlideIr[]>({
         write: async (slides) => {
-          if (!storage) throw new Error('IndexedDB is not available');
-          if (sameSlides(slides, origin)) {
+          const untouched =
+            sameSlides(slides, origin) &&
+            session.state.ackedRevision === null &&
+            !session.state.conflict;
+          // IndexedDB — страховка до ответа сервера. Исходную колоду стираем только когда
+          // серверной редакции нет: иначе откат должен пережить обрыв и доехать повторной записью.
+          if (storage) {
+            if (untouched) await storage.clear(deck.deckId);
+            else
+              await storage.save(createDraft(deck.deckId, base, slides, Date.now()), uploadedMedia);
+          }
+          persisted.current = slides;
+          setHasDraft(!sameSlides(slides, origin));
+          if (untouched) return;
+          if (
+            session.state.ackedSlides &&
+            sameSlides(slides, session.state.ackedSlides) &&
+            !session.state.conflict
+          ) {
+            return;
+          }
+          await session.publish(deck.deckId, base, slides, uploadedMedia);
+          if (storage && sameSlides(slides, origin)) {
             await storage.clear(deck.deckId);
             persisted.current = origin;
             setHasDraft(false);
-            return;
           }
-          await storage.save(createDraft(deck.deckId, base, slides, Date.now()), uploadedMedia);
-          persisted.current = slides;
-          setHasDraft(true);
         },
+        classifyError: (error) => (error instanceof SnapshotConflictError ? 'conflict' : 'error'),
         onStatus: setStatus,
       }),
-    [base, deck.deckId, origin, storage],
+    [base, deck.deckId, origin, session, storage],
   );
   useEffect(() => () => autosave.dispose(), [autosave]);
 
@@ -129,50 +150,75 @@ export function DeckEditor({
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    // `stored` — что лежит в хранилище: исходная колода (черновика нет), неоткрытый черновик
-    // или null, если прочитать не удалось.
     const finish = (stored: readonly SlideIr[] | null) => {
       loaded.current = true;
       persisted.current = stored;
       setReady(true);
-      // Человек успел что-то поправить, пока черновик читался: его правка важнее.
       if (latest.current && !sameSlides(latest.current, origin)) {
         autosave.schedule(latest.current);
       }
     };
-    if (!storage) {
-      finish(origin);
-      return;
-    }
+    const openSlides = (
+      slides: readonly SlideIr[],
+      next:
+        | { kind: 'legacy'; slides: readonly SlideIr[] }
+        | { kind: 'choose'; local: readonly SlideIr[] }
+        | null,
+    ) => {
+      if (latest.current && !sameSlides(latest.current, origin)) {
+        finish(null);
+        return;
+      }
+      setOpened((current) => ({ slides, generation: current.generation + 1 }));
+      setChoice(next);
+      setHasDraft(!sameSlides(slides, origin));
+      loaded.current = true;
+      persisted.current = slides;
+      setReady(true);
+    };
     const timer = window.setTimeout(() => {
       if (!cancelled) setReady(true);
     }, DRAFT_READ_TIMEOUT_MS);
-    storage
-      .load(deck.deckId, base, uploadedMedia)
-      .then((draft) => {
-        if (cancelled) return;
-        window.clearTimeout(timer);
+    void (async () => {
+      const server = await session.load(deck.deckId);
+      if (cancelled) return;
+      if (server && server !== 'unavailable') {
+        await session.restoreMedia(deck.deckId, server.media, uploadedMedia).catch(() => undefined);
+      }
+      if (cancelled) return;
+      const draft = storage
+        ? await storage.load(deck.deckId, base, uploadedMedia).catch(() => null)
+        : null;
+      if (cancelled) return;
+      window.clearTimeout(timer);
+      if (server === 'unavailable') {
         if (draft && shouldRestoreDraft(draft, origin, latest.current)) {
-          setOpened((current) => ({ slides: draft.slides, generation: current.generation + 1 }));
-          setRestored(draft.slides);
-          setHasDraft(true);
-          loaded.current = true;
-          persisted.current = draft.slides;
-          setReady(true);
+          openSlides(draft.slides, { kind: 'legacy', slides: draft.slides });
           return;
         }
         finish(draft ? draft.slides : origin);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        window.clearTimeout(timer);
-        finish(null);
+        return;
+      }
+      const decision = decideOpen({
+        originBase: base,
+        originSlides: origin,
+        server: server && { revision: server.revision, base: server.base, slides: server.slides },
+        local: draft && { base: draft.base, slides: draft.slides },
       });
+      if (decision.kind === 'server') openSlides(decision.slides, null);
+      else if (decision.kind === 'legacy')
+        openSlides(decision.slides, { kind: 'legacy', slides: decision.slides });
+      else if (decision.kind === 'choose')
+        openSlides(decision.serverSlides, { kind: 'choose', local: decision.localSlides });
+      else finish(origin);
+    })().catch(() => {
+      if (!cancelled) finish(null);
+    });
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [autosave, base, deck.deckId, origin, storage]);
+  }, [autosave, base, deck.deckId, origin, session, storage]);
 
   const onSlidesChange = useCallback(
     (slides: readonly SlideIr[]) => {
@@ -185,7 +231,11 @@ export function DeckEditor({
       if (kept && !autosave.busy() && sameSlides(slides, kept)) return;
       // Плашка про восстановленное уходит с первой новой правкой: отказ от черновика дальше
       // стёр бы и её.
-      setRestored((shown) => (shown && !sameSlides(slides, shown) ? null : shown));
+      setChoice((shown) => {
+        if (shown?.kind === 'legacy' && !sameSlides(slides, shown.slides)) return null;
+        if (shown?.kind === 'choose') return null;
+        return shown;
+      });
       autosave.schedule(slides);
     },
     [autosave],
@@ -193,11 +243,64 @@ export function DeckEditor({
 
   /** Отказ от черновика: исходная колода, а черновик стирается сразу же. */
   const discard = useCallback(() => {
-    setRestored(null);
+    setChoice(null);
     setOpened((current) => ({ slides: deck.slides, generation: current.generation + 1 }));
     autosave.schedule(origin);
     void autosave.flush();
   }, [autosave, deck.slides, origin]);
+
+  const publishLegacy = useCallback(() => {
+    setChoice(null);
+    autosave.schedule(latest.current ?? origin);
+    void autosave.flush();
+  }, [autosave, origin]);
+
+  const applyLocal = useCallback(
+    (localSlides: readonly SlideIr[]) => {
+      setChoice(null);
+      persisted.current = null;
+      latest.current = localSlides;
+      setOpened((current) => ({ slides: localSlides, generation: current.generation + 1 }));
+      // expectedRevision уже равен серверной редакции: её прочитали при открытии.
+      autosave.schedule(localSlides);
+      void autosave.flush();
+    },
+    [autosave],
+  );
+
+  const keepServer = useCallback(() => {
+    setChoice(null);
+    const slides = session.state.ackedSlides ?? origin;
+    persisted.current = slides;
+    if (!storage) return;
+    if (sameSlides(slides, origin)) void storage.clear(deck.deckId);
+    else void storage.save(createDraft(deck.deckId, base, slides, Date.now()), uploadedMedia);
+  }, [base, deck.deckId, origin, session, storage]);
+
+  const reloadConflict = useCallback(() => {
+    const server = session.acceptServer();
+    if (!server) return;
+    latest.current = server.slides;
+    persisted.current = server.slides;
+    setHasDraft(!sameSlides(server.slides, origin));
+    setStatus('saved');
+    setOpened((current) => ({ slides: server.slides, generation: current.generation + 1 }));
+    if (storage) {
+      if (sameSlides(server.slides, origin)) void storage.clear(deck.deckId);
+      else
+        void storage.save(createDraft(deck.deckId, base, server.slides, Date.now()), uploadedMedia);
+    }
+    // Очередь конфликта держит отвергнутую копию. Подменяем её серверными слайдами,
+    // которые уже подтверждены, чтобы повтор не записал её поверх.
+    autosave.schedule(server.slides);
+    void autosave.flush();
+  }, [autosave, base, deck.deckId, origin, session, storage]);
+
+  const keepConflict = useCallback(() => {
+    session.keepMine();
+    autosave.schedule(latest.current ?? origin);
+    void autosave.flush();
+  }, [autosave, origin, session]);
 
   // Уйти со страницы, пока правка не записана, — потерять её: браузер переспросит. Запись при
   // этом продолжается, и если человек останется, она дойдёт.
@@ -228,6 +331,35 @@ export function DeckEditor({
    * показывает `loading.tsx` маршрута, эта заставка продолжает её.
    */
   const tSplash = useTranslations('splash');
+  const tDraft = useTranslations('draft');
+  /**
+   * Дождаться записи и вернуть номер, который уйдёт в файл. Правки после этого вызова
+   * номер не меняют: оболочка кладёт его в запрос один раз. Несохранённое и конфликт
+   * экспорт не начинают.
+   */
+  const prepareExport = useCallback(async () => {
+    const acknowledged = (slidesNow: readonly SlideIr[]) => {
+      const { ackedRevision, ackedSlides } = session.state;
+      if (ackedRevision !== null && ackedSlides && sameSlides(slidesNow, ackedSlides))
+        return ackedRevision;
+      if (ackedRevision === null && sameSlides(slidesNow, origin)) return null;
+      return undefined;
+    };
+    await autosave.flush();
+    if (session.state.conflict) throw new Error(tDraft('exportConflict'));
+    // Пока оболочка не сообщила жест, на экране открытая колода, а не исходная:
+    // иначе экспорт успел бы записать исходник поверх уже принятой редакции.
+    let slidesNow = latest.current ?? opened.slides;
+    const readyRevision = acknowledged(slidesNow);
+    if (readyRevision !== undefined) return readyRevision;
+    autosave.schedule(slidesNow);
+    await autosave.flush();
+    if (session.state.conflict) throw new Error(tDraft('exportConflict'));
+    slidesNow = latest.current ?? opened.slides;
+    const again = acknowledged(slidesNow);
+    if (again !== undefined) return again;
+    throw new Error(tDraft('exportUnsaved'));
+  }, [autosave, opened.slides, origin, session, tDraft]);
   const searchParams = useSearchParams();
   const [firstSlide] = useState(() =>
     slideIndexFromParam(deck.slides, searchParams.get(SLIDE_PARAM)),
@@ -256,7 +388,14 @@ export function DeckEditor({
               // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
               presentOnOpen={present && opened.generation === 0}
               onSlidesChange={onSlidesChange}
-              saveStatus={<SaveIndicator status={status} hasDraft={hasDraft} />}
+              prepareExport={prepareExport}
+              saveStatus={
+                <SaveIndicator
+                  status={status}
+                  hasDraft={hasDraft}
+                  onRetry={() => void autosave.flush()}
+                />
+              }
               assistant={
                 <AssistantPanel
                   chatId={chatId}
@@ -268,8 +407,30 @@ export function DeckEditor({
               openAssistant={chatId !== null}
             />
           </EditorChatContext>
-          {restored ? (
-            <DraftRestored onDiscard={discard} onDismiss={() => setRestored(null)} />
+          {status === 'conflict' ? (
+            <DraftRestored
+              message={tDraft('conflict')}
+              confirm={tDraft('conflictKeep')}
+              dismiss={tDraft('conflictReload')}
+              onConfirm={keepConflict}
+              onDismiss={reloadConflict}
+            />
+          ) : choice?.kind === 'legacy' ? (
+            <DraftRestored
+              message={tDraft('restored')}
+              confirm={tDraft('discard')}
+              dismiss={tDraft('dismiss')}
+              onConfirm={discard}
+              onDismiss={publishLegacy}
+            />
+          ) : choice?.kind === 'choose' ? (
+            <DraftRestored
+              message={tDraft('choose')}
+              confirm={tDraft('chooseApply')}
+              dismiss={tDraft('chooseServer')}
+              onConfirm={() => applyLocal(choice.local)}
+              onDismiss={keepServer}
+            />
           ) : null}
         </FontAvailabilityProvider>
       ) : null}
@@ -287,29 +448,46 @@ export function DeckEditor({
  * Значок состояния черновика в подвале списка слайдов. Пока правок нет, его нет: беречь
  * нечего. Подпись — в подсказке и для чтения с экрана.
  */
-function SaveIndicator({ status, hasDraft }: { status: SaveStatus; hasDraft: boolean }) {
+function SaveIndicator({
+  status,
+  hasDraft,
+  onRetry,
+}: {
+  status: SaveStatus;
+  hasDraft: boolean;
+  onRetry: () => void;
+}) {
   const t = useTranslations('draft');
   const busy = status === 'pending' || status === 'saving';
-  if (!busy && status !== 'error' && !(status === 'saved' && hasDraft)) return null;
-  const label = status === 'error' ? t('error') : busy ? t('saving') : t('saved');
-  const StatusIcon = status === 'error' ? WarningIcon : busy ? CloudUploadIcon : SavedIcon;
+  const attention = status === 'error' || status === 'conflict';
+  if (!busy && !attention && !(status === 'saved' && hasDraft)) return null;
+  const label =
+    status === 'conflict'
+      ? t('conflict')
+      : status === 'error'
+        ? t('error')
+        : busy
+          ? t('saving')
+          : t('saved');
+  const StatusIcon = attention ? WarningIcon : busy ? CloudUploadIcon : SavedIcon;
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
+          <button
+            type="button"
             role="status"
-            aria-label={label}
+            aria-label={status === 'error' ? t('retry') : label}
             data-save-status={status}
-            tabIndex={0}
+            onClick={status === 'error' ? onRetry : undefined}
             className={cn(
               'grid size-7 shrink-0 place-items-center rounded-md outline-none',
               'focus-visible:ring-2 focus-visible:ring-ring/50',
-              status === 'error' ? 'text-destructive' : 'text-muted-foreground',
+              attention ? 'text-destructive' : 'text-muted-foreground',
             )}
           >
             <StatusIcon size={15} />
-          </span>
+          </button>
         </TooltipTrigger>
         <TooltipContent side="top">{label}</TooltipContent>
       </Tooltip>
@@ -317,9 +495,20 @@ function SaveIndicator({ status, hasDraft }: { status: SaveStatus; hasDraft: boo
   );
 }
 
-/** Плашка «правки восстановлены» с отказом от них. Внизу по центру, над нижней панелью телефона. */
-function DraftRestored({ onDiscard, onDismiss }: { onDiscard: () => void; onDismiss: () => void }) {
-  const t = useTranslations('draft');
+/** Плашка выбора редакции. Внизу по центру, над нижней панелью телефона. */
+function DraftRestored({
+  message,
+  confirm,
+  dismiss,
+  onConfirm,
+  onDismiss,
+}: {
+  message: string;
+  confirm: string;
+  dismiss: string;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
   return (
     <div
       role="status"
@@ -332,31 +521,30 @@ function DraftRestored({ onDiscard, onDismiss }: { onDiscard: () => void; onDism
         'max-md:bottom-[calc(4.5rem+env(safe-area-inset-bottom))]',
       )}
     >
-      <span className="min-w-0 truncate">{t('restored')}</span>
+      <span className="min-w-0 truncate">{message}</span>
       <button
         type="button"
         onMouseDown={keepCanvasFocus}
-        onClick={onDiscard}
+        onClick={onConfirm}
         className={cn(
           'shrink-0 rounded-md px-2 py-1.5 font-medium text-primary outline-none',
           'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50',
           'max-md:min-h-11',
         )}
       >
-        {t('discard')}
+        {confirm}
       </button>
       <button
         type="button"
-        aria-label={t('dismiss')}
         onMouseDown={keepCanvasFocus}
         onClick={onDismiss}
         className={cn(
-          'grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none',
-          'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-          'max-md:size-11',
+          'shrink-0 rounded-md px-2 py-1.5 font-medium outline-none',
+          'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50',
+          'max-md:min-h-11',
         )}
       >
-        <CloseIcon size={14} />
+        {dismiss}
       </button>
     </div>
   );

@@ -1164,6 +1164,37 @@
       ],
       "type": "object"
     },
+    "fontReadiness": {
+      "additionalProperties": false,
+      "properties": {
+        "missing": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requested": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "missing",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "requested",
+        "missing"
+      ],
+      "type": "object"
+    },
     "schemaVersion": {
       "const": 1,
       "type": "number"

@@ -9,13 +9,33 @@ never a picture of one, so both stay editable.
 from itertools import cycle
 from typing import Any, cast
 
-from pptx.chart.data import CategoryChartData
+from pptx.chart.data import CategoryChartData, XyChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION
+from pptx.enum.text import PP_ALIGN
 from pptx.shapes.shapetree import SlideShapes
 from pptx.util import Emu, Pt
 
-__all__ = ["draw_visual", "style_visuals"]
+from engine.visuals.build import build_visual, capabilities
+from engine.visuals.contact import contact_sheet_svg
+from engine.visuals.signature import compare_subjects, structural_signature
+
+__all__ = [
+    "build_visual",
+    "capabilities",
+    "compare_subjects",
+    "contact_sheet_svg",
+    "draw_visual",
+    "structural_signature",
+    "style_visuals",
+]
+
+_ALIGN = {
+    "left": PP_ALIGN.LEFT,
+    "center": PP_ALIGN.CENTER,
+    "right": PP_ALIGN.RIGHT,
+    "justify": PP_ALIGN.JUSTIFY,
+}
 
 #: Palette roles a table takes its look from, when the template has them.
 _HEADER_FILL = "accent"
@@ -173,6 +193,10 @@ def _draw_table(
                 cell.fill.fore_color.rgb = fill
             elif r > 0:
                 cell.fill.background()
+            own = styles[r][c] if r < len(styles) and c < len(styles[r]) else None
+            align = own.get("align") if own else None
+            if align in _ALIGN:
+                cell.text_frame.paragraphs[0].alignment = _ALIGN[align]
             if run is None:
                 continue
             run.font.name = style["font"]
@@ -187,11 +211,14 @@ def _draw_chart(
     shapes: SlideShapes, element: dict[str, Any], design_system: dict[str, Any]
 ) -> None:
     box = element["box"]
+    kind = element["chartType"]
+    if kind == "line" and _unequal_positions(element):
+        _draw_xy_line(shapes, element, design_system)
+        return
     data = CategoryChartData()
     data.categories = element["categories"]
     for series in element["series"]:
-        data.add_series(series["name"], series["values"])
-    kind = element["chartType"]
+        data.add_series(series["name"], _chart_values(series))
     # python-pptx types add_chart as taking ChartData and returning a Chart; it takes any chart
     # data and returns the graphic frame that holds the chart.
     frame = cast(
@@ -242,6 +269,67 @@ def _draw_chart(
         chart.value_axis.has_major_gridlines = True
         chart.value_axis.major_gridlines.format.line.color.rgb = RGBColor.from_string(rule)
         chart.value_axis.major_gridlines.format.line.width = Emu(_HAIRLINE_EMU)
+
+
+def _chart_values(series: dict[str, Any]) -> list[float | None]:
+    """None stays a gap. A measured zero stays zero."""
+    return [None if value is None else float(value) for value in series["values"]]
+
+
+def _unequal_positions(element: dict[str, Any]) -> bool:
+    positions = element.get("positions")
+    categories = element.get("categories") or []
+    if not isinstance(positions, list) or len(positions) != len(categories) or len(positions) < 3:
+        return False
+    gaps = [
+        float(positions[index + 1]) - float(positions[index]) for index in range(len(positions) - 1)
+    ]
+    if any(gap <= 0 for gap in gaps):
+        return False
+    return max(gaps) - min(gaps) > 1e-9
+
+
+def _draw_xy_line(
+    shapes: SlideShapes, element: dict[str, Any], design_system: dict[str, Any]
+) -> None:
+    """A line on the category positions, so unequal steps are not drawn as equal slots."""
+    box = element["box"]
+    data = XyChartData()
+    positions = [float(value) for value in element["positions"]]
+    for series in element["series"]:
+        added = data.add_series(series["name"])
+        for position, value in zip(positions, _chart_values(series), strict=False):
+            added.add_data_point(position, value)
+    frame = cast(
+        Any,
+        shapes.add_chart(
+            XL_CHART_TYPE.XY_SCATTER_LINES,
+            Emu(box["x"]),
+            Emu(box["y"]),
+            Emu(box["cx"]),
+            Emu(box["cy"]),
+            cast(Any, data),
+        ),
+    )
+    chart = frame.chart
+    style = _body_style(design_system)
+    chart.font.name = style["font"]
+    chart.font.size = Pt(float(style["sizePt"]))
+    chart.has_legend = len(element["series"]) > 1
+    if chart.has_legend:
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
+    palette = _palette(design_system)
+    colours = [RGBColor.from_string(palette[role]) for role in _SERIES_ROLES if role in palette]
+    for series, colour in zip(chart.series, cycle(colours), strict=False):
+        series.format.line.color.rgb = colour
+    for axis, title in (
+        (chart.category_axis, element.get("xTitle") or ""),
+        (chart.value_axis, element.get("yTitle") or ""),
+    ):
+        if title:
+            axis.has_title = True
+            axis.axis_title.text_frame.text = title
 
 
 def _label_values(plot: Any, kind: str, style: dict[str, Any], palette: dict[str, str]) -> None:

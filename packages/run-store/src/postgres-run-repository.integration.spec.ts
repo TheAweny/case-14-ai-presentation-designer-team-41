@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgresRunRepository } from './postgres-run-repository.js';
@@ -13,6 +14,7 @@ describeWithPostgres('PostgresRunRepository integration', () => {
   let sequence = 0;
 
   beforeAll(async () => {
+    await admin.query('CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public');
     await admin.query(`CREATE SCHEMA ${schema}`);
   });
 
@@ -29,7 +31,10 @@ describeWithPostgres('PostgresRunRepository integration', () => {
     const result = await admin.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM ${schema}.schema_migrations`,
     );
-    expect(result.rows[0]?.count).toBe('3');
+    const migrations = await readdir(new URL('../migrations/', import.meta.url));
+    expect(Number(result.rows[0]?.count)).toBe(
+      migrations.filter((name) => name.endsWith('.sql')).length,
+    );
     await repository.close();
   });
 
@@ -102,6 +107,6 @@ function requiredDatabaseUrl(): string {
 
 function withSearchPath(connectionString: string, schema: string): string {
   const url = new URL(connectionString);
-  url.searchParams.set('options', `-csearch_path=${schema}`);
+  url.searchParams.set('options', `-csearch_path=${schema},public`);
   return url.toString();
 }

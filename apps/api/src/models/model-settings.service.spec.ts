@@ -348,6 +348,7 @@ describe('resolve', () => {
     const { service } = setup({ env: SERVER_ENV });
     expect(await service.resolve(null, ADMIN)).toEqual({
       connectionId: 'server',
+      connectionScope: 'server',
       baseUrl: 'https://llm.api.cloud.yandex.net/v1',
       apiKey: SERVER_KEY,
       model: SERVER_ENV.LLM_MODEL,

@@ -240,7 +240,9 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
 
     const result = await this.pool
       .query<AccountRow>(
-        `UPDATE app_users SET
+        `WITH previous AS (
+           SELECT id,email,name,role,disabled_at,avatar FROM app_users WHERE id=$1 FOR UPDATE
+         ), changed AS (UPDATE app_users SET
            email = COALESCE($2, email),
            name = COALESCE($3, name),
            password_hash = CASE WHEN $4::text IS NULL THEN password_hash
@@ -249,8 +251,13 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
            disabled_at = CASE WHEN $6::boolean IS NULL THEN disabled_at
                               WHEN $6::boolean THEN COALESCE(disabled_at, now()) ELSE NULL END,
            avatar = CASE WHEN $7::boolean THEN $8::text ELSE avatar END
-         WHERE id = $1
-         RETURNING ${COLUMNS}`,
+         WHERE id = (SELECT id FROM previous)
+         RETURNING ${COLUMNS}), audited AS (
+           INSERT INTO account_policy_audit(actor_id,scope,before_policy,after_policy,action)
+           SELECT $9,changed.id,to_jsonb(previous),
+             to_jsonb(changed)||jsonb_build_object('passwordReset',$4::text IS NOT NULL),
+             'account-update' FROM previous,changed RETURNING id
+         ) SELECT ${COLUMNS} FROM changed`,
         [
           id,
           typeof patch.email === 'string' ? normalizeEmail(patch.email) : null,
@@ -260,6 +267,7 @@ export class AccountsService implements OnApplicationBootstrap, OnApplicationShu
           typeof patch.disabled === 'boolean' ? patch.disabled : null,
           patch.avatar !== undefined,
           typeof patch.avatar === 'string' ? patch.avatar : null,
+          actorId,
         ],
       )
       .catch((error: unknown) => {

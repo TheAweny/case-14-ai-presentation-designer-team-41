@@ -1,0 +1,55 @@
+{
+  "contract": "VisualCompareResponse",
+  "valid": [
+    {
+      "name": "variants differ and the control collapses",
+      "payload": {
+        "schemaVersion": 1,
+        "signatures": [
+          {
+            "id": "balanced",
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "id": "recolored",
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "variantsDistinct": true,
+        "controls": [{ "id": "recolored", "like": "balanced", "collapsed": true }],
+        "accepted": true
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "digest is not a sha256",
+      "why": "A signature digest is a 64-digit hex sha256.",
+      "path": ["signatures", 0, "digest"],
+      "payload": {
+        "schemaVersion": 1,
+        "signatures": [{ "id": "balanced", "digest": "abc" }],
+        "variantsDistinct": false,
+        "controls": [],
+        "accepted": false
+      }
+    },
+    {
+      "name": "unknown schema version",
+      "why": "A version the engine does not know must be refused.",
+      "path": ["schemaVersion"],
+      "payload": {
+        "schemaVersion": 2,
+        "signatures": [
+          {
+            "id": "balanced",
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "variantsDistinct": false,
+        "controls": [],
+        "accepted": false
+      }
+    }
+  ]
+}

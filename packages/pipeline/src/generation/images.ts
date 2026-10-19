@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
-import { backoff, RequestLimiter } from './provider.js';
+import { backoff, RequestLimiter, sharedModelLimiter, retryDelay } from './provider.js';
 
 /** Sizes every OpenAI-compatible image server accepts; a slot's box picks the nearest shape. */
 export const IMAGE_SIZES = ['1024x1024', '1536x1024', '1024x1536'] as const;
@@ -62,17 +62,20 @@ export class OpenAICompatibleImageProvider implements ImageProvider {
   private readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly queueGroup: string;
 
   constructor(options: {
     baseUrl: string;
     apiKey: string;
     model: string;
     fetchImpl?: typeof fetch;
+    queueGroup?: string;
   }) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.apiKey = options.apiKey;
     this.model = options.model;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.queueGroup = options.queueGroup ?? 'images';
   }
 
   async generate(request: ImageRequest, signal: AbortSignal): Promise<GeneratedImage> {
@@ -81,6 +84,7 @@ export class OpenAICompatibleImageProvider implements ImageProvider {
       for (let attempt = 0; ; attempt++) {
         const call = AbortSignal.any([signal, AbortSignal.timeout(IMAGE_TIMEOUT_MS)]);
         let response: Response;
+        const releaseModel = await sharedModelLimiter().acquire(call, this.queueGroup);
         try {
           response = await this.fetchImpl(`${this.baseUrl}/images/generations`, {
             method: 'POST',
@@ -109,13 +113,13 @@ export class OpenAICompatibleImageProvider implements ImageProvider {
             `Image API unreachable: ${error instanceof Error ? error.message : 'network error'}`,
             { cause: error },
           );
+        } finally {
+          releaseModel();
         }
         if ([429, 502, 503].includes(response.status) && attempt < 2) {
-          const retryAfter = Number(response.headers.get('retry-after'));
-          await backoff(
-            Math.min(8000, Math.max(1500 * (attempt + 1), retryAfter * 1000 || 0)),
-            signal,
-          );
+          const delay = retryDelay(attempt, response.headers.get('retry-after'));
+          if (response.status !== 502) sharedModelLimiter().throttle(delay);
+          await backoff(delay, signal);
           continue;
         }
         // The body of an error may echo the request; only the status leaves this function.

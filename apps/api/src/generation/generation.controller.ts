@@ -6,6 +6,7 @@ import {
   HttpCode,
   Get,
   Inject,
+  Optional,
   Logger,
   NotFoundException,
   Param,
@@ -30,15 +31,16 @@ import {
   designSystemSchema,
   deckImportResponseSchema,
   generationRequestSchema,
-  storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
 import type { SlideIr } from '@lct/contracts';
+import { currentTemplateIndexRevision, templateIndexState } from '@lct/pipeline';
 import { validateExportMedia, writeExportMedia } from './export-media.js';
 import { buildOf, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { GenerationService, pickedModel, type PrepareProgress } from './generation.service.js';
+import { AccountUsageService } from '../accounts/account-usage.service.js';
 import { ApiAccountRoutes, ApiErrors, ApiFile, ApiJsonBody } from '../docs/decorators.js';
 import {
   deckPatchSchema,
@@ -73,13 +75,24 @@ export interface TemplatePreparation {
   /** Its slides are being drawn right now; `drawn` — the pictures are there. */
   drawing: boolean;
   drawn: boolean;
+  readiness?: {
+    index: 'missing' | 'partial' | 'stale' | 'ready';
+    geometry: boolean;
+    fonts: 'ready' | 'missing' | 'unknown';
+    compositions: number;
+    textSlots: number;
+    imageSlots: number;
+  };
 }
 
 @Controller('generation')
 @ApiAccountRoutes('generation')
 export class GenerationController {
   private readonly logger = new Logger(GenerationController.name);
-  constructor(@Inject(GenerationService) private readonly generation: GenerationService) {}
+  constructor(
+    @Inject(GenerationService) private readonly generation: GenerationService,
+    @Optional() @Inject(AccountUsageService) private readonly accountUsage?: AccountUsageService,
+  ) {}
 
   private get pool() {
     return this.generation.pool;
@@ -150,13 +163,41 @@ export class GenerationController {
   ): Promise<TemplatePreparation> {
     const row = await this.generation.template(templateId, account);
     const { progress, drawing } = this.generation.preparationOf(templateId);
+    const profile = row.profile.generation;
+    const index = profile
+      ? templateIndexState(
+          profile,
+          row.profile.index,
+          await currentTemplateIndexRevision(this.generation.registryDir()),
+        )
+      : 'missing';
     return {
       stage: progress?.stage ?? null,
       described: progress?.described ?? 0,
       total: progress?.total ?? 0,
-      indexed: storedTemplateIndexSchema.safeParse(row.profile?.index).success,
+      indexed: index === 'ready',
       drawing,
       drawn: Array.isArray(row.profile?.previews),
+      ...(profile
+        ? {
+            readiness: {
+              index,
+              geometry: profile.compositions.every((composition) =>
+                composition.slots.every((slot) => slot.box !== undefined),
+              ),
+              fonts: profile.fontReadiness?.state ?? 'unknown',
+              compositions: profile.compositions.length,
+              textSlots: profile.compositions.reduce(
+                (sum, composition) => sum + composition.slots.length,
+                0,
+              ),
+              imageSlots: profile.compositions.reduce(
+                (sum, composition) => sum + (composition.imageSlots?.length ?? 0),
+                0,
+              ),
+            },
+          }
+        : {}),
     };
   }
 
@@ -211,8 +252,21 @@ export class GenerationController {
   async cancel(@Param('id') id: string, @CurrentAccount() account: Account) {
     if (!(await this.library.visible(id, account.id)))
       throw new NotFoundException('Run not found.');
-    this.generation.cancel(id);
+    await this.generation.cancel(id);
     return { ok: true };
+  }
+
+  @Get(':id/usage')
+  @ApiOperation({ summary: 'Накопленный расход сборки, включая неудачные попытки и продолжения' })
+  async usage(@Param('id') id: string, @CurrentAccount() account: Account) {
+    return this.generation.usage(id, account);
+  }
+
+  @Post(':id/resume')
+  @ApiOperation({ summary: 'Продолжить сборку с сохранённых задач' })
+  async resume(@Param('id') id: string, @CurrentAccount() account: Account) {
+    const build = await this.generation.resume(id, account);
+    return { runId: build.runId, variants: build.variants };
   }
 
   @Get()
@@ -443,6 +497,47 @@ export class GenerationController {
     const previews = format === 'png' || format === 'html';
     const exportId = randomUUID();
     const outputDir = join(this.directory(id), 'exports', exportId);
+    if (this.accountUsage)
+      return this.accountUsage.write(
+        account.id,
+        0,
+        () =>
+          this.buildEditedExport(
+            id,
+            slides,
+            validatedMedia,
+            variant,
+            format,
+            formats,
+            previews,
+            exportId,
+            outputDir,
+          ),
+        () => rm(outputDir, { recursive: true, force: true }),
+      );
+    return this.buildEditedExport(
+      id,
+      slides,
+      validatedMedia,
+      variant,
+      format,
+      formats,
+      previews,
+      exportId,
+      outputDir,
+    );
+  }
+  private async buildEditedExport(
+    id: string,
+    slides: readonly SlideIr[],
+    validatedMedia: ReturnType<typeof validateExportMedia>,
+    variant: 'dense' | 'balanced' | 'airy',
+    format: string,
+    formats: ('pptx' | 'pdf')[],
+    previews: boolean,
+    exportId: string,
+    outputDir: string,
+  ): Promise<{ exportId: string; previews: string[] }> {
     await mkdir(outputDir, { recursive: true });
     try {
       const media = await writeExportMedia(outputDir, validatedMedia);

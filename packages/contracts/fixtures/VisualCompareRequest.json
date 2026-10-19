@@ -1,0 +1,155 @@
+{
+  "contract": "VisualCompareRequest",
+  "valid": [
+    {
+      "name": "three variants and one cosmetic control",
+      "payload": {
+        "schemaVersion": 1,
+        "subjects": [
+          {
+            "id": "balanced",
+            "role": "variant",
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "value",
+                "role": "kpi-value",
+                "box": { "x": 0, "y": 0, "cx": 400000, "cy": 200000 },
+                "sourceShapeId": null,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "0",
+                        "font": "",
+                        "sizePt": 28,
+                        "bold": true,
+                        "italic": false,
+                        "color": ""
+                      }
+                    ],
+                    "lineSpacing": 1
+                  }
+                ],
+                "overflow": null
+              }
+            ]
+          },
+          {
+            "id": "recolored",
+            "role": "control",
+            "like": "balanced",
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "value-copy",
+                "role": "kpi-value",
+                "box": { "x": 0, "y": 0, "cx": 400000, "cy": 200000 },
+                "sourceShapeId": null,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "0",
+                        "font": "Other Face",
+                        "sizePt": 32,
+                        "bold": true,
+                        "italic": false,
+                        "color": "FF00AA"
+                      }
+                    ],
+                    "lineSpacing": 1
+                  }
+                ],
+                "overflow": null
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown subject role",
+      "why": "A role outside variant and control would let a cosmetic clone pose as a design.",
+      "path": ["subjects", 0, "role"],
+      "payload": {
+        "schemaVersion": 1,
+        "subjects": [
+          {
+            "id": "balanced",
+            "role": "clone",
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "value",
+                "role": "kpi-value",
+                "box": { "x": 0, "y": 0, "cx": 100, "cy": 100 },
+                "sourceShapeId": null,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "0",
+                        "font": "",
+                        "sizePt": 12,
+                        "bold": false,
+                        "italic": false,
+                        "color": ""
+                      }
+                    ],
+                    "lineSpacing": 1
+                  }
+                ],
+                "overflow": null
+              }
+            ]
+          },
+          {
+            "id": "other",
+            "role": "variant",
+            "elements": [
+              {
+                "kind": "text",
+                "elementId": "other",
+                "role": "body",
+                "box": { "x": 0, "y": 0, "cx": 100, "cy": 100 },
+                "sourceShapeId": null,
+                "paragraphs": [
+                  {
+                    "level": 0,
+                    "runs": [
+                      {
+                        "text": "0",
+                        "font": "",
+                        "sizePt": 12,
+                        "bold": false,
+                        "italic": false,
+                        "color": ""
+                      }
+                    ],
+                    "lineSpacing": 1
+                  }
+                ],
+                "overflow": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "fewer than two subjects",
+      "why": "A comparison needs at least a pair.",
+      "path": ["subjects"],
+      "payload": {
+        "schemaVersion": 1,
+        "subjects": []
+      }
+    }
+  ]
+}

@@ -55,6 +55,40 @@ def test_export_preserves_geometry_and_font(tmp_path: Path) -> None:
     assert shape.text_frame.paragraphs[0].runs[0].font.size == Pt(30)
 
 
+@pytest.mark.parametrize("original_wrap", [False, True])
+def test_export_wraps_replacement_copy_as_measured_without_resizing(
+    tmp_path: Path, original_wrap: bool
+) -> None:
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    box = (Inches(0.6), Inches(0.6), Inches(4), Inches(5.8))
+    shape = slide.shapes.add_textbox(*box)
+    shape.text_frame.word_wrap = original_wrap
+    run = shape.text_frame.paragraphs[0].add_run()
+    run.text, run.font.size = "Исследование пилота", Pt(32)
+    source, output = tmp_path / "source.pptx", tmp_path / "result.pptx"
+    deck.save(str(source))
+    pattern = extract_compositions(source)[0]
+    text = "Ограничения исследования"
+    export_compositions(
+        source,
+        output,
+        [
+            {
+                "patternId": pattern["patternId"],
+                "texts": [{"slotId": pattern["slots"][0]["slotId"], "text": text}],
+                "speakerNotes": "",
+            }
+        ],
+        [pattern],
+    )
+    exported = cast(Shape, Presentation(str(output)).slides[0].shapes[0])
+    assert exported.text_frame.word_wrap is True
+    assert exported.text == text
+    assert (exported.left, exported.top, exported.width, exported.height) == box
+    assert exported.text_frame.paragraphs[0].runs[0].font.size == Pt(32)
+
+
 def test_export_rejects_unknown_pattern(tmp_path: Path) -> None:
     source = template(tmp_path / "source.pptx")
     with pytest.raises(ValueError, match="pattern"):

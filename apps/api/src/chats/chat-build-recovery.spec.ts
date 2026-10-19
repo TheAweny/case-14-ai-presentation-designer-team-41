@@ -79,6 +79,11 @@ function fixture(status?: 'failed' | 'cancelled' | 'running' | 'preparing') {
       variants: [{ variant: 'balanced', runId: 'new-run' }],
       each: [Promise.resolve({ variant: 'balanced', runId: 'new-run', state: 'failed' })],
     })),
+    resume: vi.fn(async () => ({
+      runId: 'previous-run',
+      variants: [{ variant: 'balanced', runId: 'previous-run' }],
+      each: [Promise.resolve({ variant: 'balanced', runId: 'previous-run', state: 'failed' })],
+    })),
     directory: () => 'missing-fixture-directory',
     cancel: vi.fn(),
   };
@@ -151,15 +156,16 @@ describe('failed chat build recovery', () => {
     async (status) => {
       const f = fixture(status);
       await f.invoke(true);
-      expect(f.generation.start).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ outline, outlineSource: 'user', templateId }),
+      expect(f.generation.resume).toHaveBeenCalledExactlyOnceWith(
+        'previous-run',
         expect.anything(),
       );
+      expect(f.generation.start).not.toHaveBeenCalled();
       // A second call must inspect the latest attempt, not the first failure in history.
       expect(await f.invoke(true)).toMatchObject({
-        output: { status: 'failed', runId: 'new-run', canRetry: false },
+        output: { status: 'failed', runId: 'previous-run', canRetry: false },
       });
-      expect(f.generation.start).toHaveBeenCalledTimes(1);
+      expect(f.generation.resume).toHaveBeenCalledTimes(1);
     },
   );
 });

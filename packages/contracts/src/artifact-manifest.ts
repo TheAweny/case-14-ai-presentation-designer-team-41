@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { jobStageSchema } from './job-event.js';
+import { generationUsageSchema } from './generation-usage.js';
 
 /**
  * ArtifactManifest — what a run was made of, written so the run can be defended.
@@ -46,8 +47,8 @@ export const modelCallSummarySchema = z.object({
   agentId: z.string().min(1),
   modelId: z.string().min(1),
   calls: z.number().int().nonnegative(),
-  inputTokens: z.number().int().nonnegative(),
-  outputTokens: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative().nullable(),
+  outputTokens: z.number().int().nonnegative().nullable(),
 });
 
 export const artifactManifestSchema = z.object({
@@ -69,6 +70,8 @@ export const artifactManifestSchema = z.object({
     .min(1)
     .describe('Every component that could change the output.'),
   modelCalls: z.array(modelCallSummarySchema).describe('Empty for a run on the fake provider.'),
+  modelCallsScope: z.enum(['run', 'build']).optional(),
+  providerUsage: generationUsageSchema.optional(),
   artifacts: z.array(runArtifactSchema),
   timings: z.array(stageTimingSchema).describe('One entry per stage that ran.'),
   totalMs: z.number().int().nonnegative().describe('Wall clock, against the five minute budget.'),

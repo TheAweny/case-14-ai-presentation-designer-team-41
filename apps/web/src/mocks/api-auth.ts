@@ -28,10 +28,18 @@ async function accountOf(response: Response): Promise<Account | null> {
   if (!response.ok) return null;
   const text = await response.text();
   if (text.trim() === '') return null;
-  const payload = JSON.parse(text) as { account?: ApiAccount | null } | ApiAccount | null;
+  const payload = JSON.parse(text) as
+    { account?: ApiAccount | null; session?: { token?: string } } | ApiAccount | null;
   if (payload === null) return null;
   const row = 'account' in payload ? payload.account : (payload as ApiAccount);
-  return row && typeof row.id === 'string' ? account(row) : null;
+  return row && typeof row.id === 'string'
+    ? {
+        ...account(row),
+        ...('session' in payload && payload.session?.token
+          ? { sessionToken: payload.session.token }
+          : {}),
+      }
+    : null;
 }
 
 export function createApiAuth(): AuthSource {

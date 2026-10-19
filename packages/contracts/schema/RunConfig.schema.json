@@ -84,7 +84,7 @@
     "slideCount": {
       "description": "Number of slides to produce.",
       "maximum": 15,
-      "minimum": 10,
+      "minimum": 5,
       "type": "integer"
     },
     "templatePath": {

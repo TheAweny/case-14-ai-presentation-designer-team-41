@@ -352,7 +352,10 @@ def _look(placed: _Placement, scope: _Scope, origin: _Origin) -> dict[str, Any]:
         look["groupIds"] = list(scope.group_ids)
     if origin.kind != "slide":
         # Graphics of the master and the layout cannot be picked on a slide in PowerPoint either.
+        # Export that clones the source slide already paints them through the layout, so it must
+        # not draw this copy a second time on top of the slide.
         look["locked"] = True
+        look["sourcePart"] = origin.kind
     return look
 
 

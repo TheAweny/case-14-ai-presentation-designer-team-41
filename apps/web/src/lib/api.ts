@@ -38,6 +38,10 @@ export interface ApiFetchOptions {
 }
 
 type ActingUserResolver = () => Promise<string | null>;
+const SESSION_RESOLVER = Symbol.for('lct.api.session');
+export function setSessionResolver(resolver: ActingUserResolver): void {
+  (globalThis as { [SESSION_RESOLVER]?: ActingUserResolver })[SESSION_RESOLVER] = resolver;
+}
 
 /**
  * Kept on `globalThis`: Next evaluates this module separately for pages, actions and route
@@ -70,5 +74,11 @@ export async function apiFetch(
   headers.set(SERVICE_TOKEN_HEADER, process.env.API_SERVICE_TOKEN ?? '');
   const userId = await actingUser(options);
   if (userId) headers.set(USER_HEADER, userId);
+  const sessionResolver = (globalThis as { [SESSION_RESOLVER]?: ActingUserResolver })[
+    SESSION_RESOLVER
+  ];
+  const session = sessionResolver ? await sessionResolver() : null;
+  headers.delete('x-lct-session');
+  if (session) headers.set('x-lct-session', session);
   return fetch(`${internalApiUrl()}${path}`, { ...init, headers, cache: 'no-store' });
 }

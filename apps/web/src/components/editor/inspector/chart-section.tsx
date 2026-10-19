@@ -248,10 +248,18 @@ export function ChartSection({
                     <td key={s}>
                       <CellInput
                         numeric
-                        value={String(series.values[c] ?? 0)}
+                        value={
+                          series.values[c] === null || series.values[c] === undefined
+                            ? ''
+                            : String(series.values[c])
+                        }
                         ariaLabel={t('valueLabel', { series: series.name, category })}
                         onPasteRange={pasteAt({ row: c + 1, column: s + 1 })}
                         onCommit={(text) => {
+                          if (text.trim() === '') {
+                            apply(setValue(data, s, c, null));
+                            return true;
+                          }
                           const value = parseNumber(text);
                           if (value === null) return false;
                           apply(setValue(data, s, c, value));

@@ -14,3 +14,8 @@ In a later turn, an explicit request to continue, repeat, or try the build again
 `planId`, `templateId`, and `retry: true`. Do not propose or approve a new plan merely to
 retry. A request to explain the error is not a retry. Running and completed operations are
 reused, never duplicated.
+Use `operation: resume` when the person asks to continue an interrupted or failed build. Accepted
+tasks and successful variants are reused, and costs remain cumulative. `operation: regenerate`
+creates a new build and may repeat charged tasks; use it only when the person explicitly asks for
+a fresh generation. `start` is idempotent for an existing operation. A broken connection is not
+an instruction to stop or regenerate.

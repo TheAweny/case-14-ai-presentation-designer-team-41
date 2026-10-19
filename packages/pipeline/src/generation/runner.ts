@@ -15,11 +15,13 @@ import {
   type JobStage,
   type StageTiming,
   type RunArtifact,
+  type GenerationUsage,
 } from '@lct/contracts';
 import { createMastra, closeMastra } from '../mastra.js';
 import {
   createGenerationWorkflow,
   createRepairWorkflow,
+  compositionStructure,
   critiqueSchema,
   type DeckVariant,
   fitChars,
@@ -27,6 +29,7 @@ import {
   minChars,
   thinMessage,
   type SharedPlan,
+  type SharedContent,
   repairedSlideSchema,
   type repairTaskSchema,
   briefYears,
@@ -36,10 +39,11 @@ import {
 } from './workflow.js';
 import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
 import { approvedCoverage } from './final-review.js';
-import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
+import type { TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
+import { generationFailure } from './failure.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 import {
   contextualCorrections,
@@ -65,6 +69,8 @@ const REWRITABLE = new Set([
 ]);
 
 export interface GenerateOptions {
+  planId?: string;
+  providerUsage?: () => Promise<GenerationUsage>;
   runId: string;
   templatePath: string;
   outputDir: string;
@@ -89,6 +95,7 @@ export interface GenerateOptions {
   layoutRemapPolicy?: LayoutRemapPolicy;
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
+  sharedContent?: SharedContent;
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
   /**
@@ -108,6 +115,8 @@ export interface GenerateOptions {
   deadlineAt?: number;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
+  /** Dense event sequence continues across execution attempts of the same product run. */
+  eventSequence?: number;
 }
 
 /** Time kept for export, audit and render after the pictures are awaited, in ms. */
@@ -163,7 +172,7 @@ export async function generatePresentation(options: GenerateOptions) {
     AbortSignal.timeout(Math.max(0, remaining)),
     ...(options.signal ? [options.signal] : []),
   ]);
-  let seq = 0;
+  let seq = options.eventSequence ?? 0;
   let events = Promise.resolve();
   let terminal = false;
   const timings: StageTiming[] = [];
@@ -202,10 +211,7 @@ export async function generatePresentation(options: GenerateOptions) {
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
-    if (
-      options.provider instanceof OpenAICompatibleProvider ||
-      options.provider instanceof RoutedTextProvider
-    ) {
+    if (options.provider.setAgentGeneration) {
       for (const [role, agent] of [
         ['planner', planner],
         ['writer', writer],
@@ -266,6 +272,7 @@ export async function generatePresentation(options: GenerateOptions) {
       variant: options.variant ?? 'balanced',
       ...(options.layoutRemapPolicy ? { layoutRemapPolicy: options.layoutRemapPolicy } : {}),
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
+      ...(options.sharedContent ? { sharedContent: options.sharedContent } : {}),
       today,
       imagesAvailable: illustrations !== null,
       outlineIsSource: options.outlineSource !== 'model',
@@ -327,14 +334,55 @@ export async function generatePresentation(options: GenerateOptions) {
       },
     });
     if (result.status !== 'success')
-      throw new Error(
-        result.status === 'failed' ? result.error.message : `Workflow ${result.status}`,
-      );
+      throw result.status === 'failed' ? result.error : new Error(`Workflow ${result.status}`);
     signal.throwIfAborted();
     const written = z
       .array(writtenSchema)
       .parse(result.result)
       .sort((a, b) => a.index - b.index);
+    const designIntent = {
+      dense: 'analytical-comparison',
+      balanced: 'narrative-sequence',
+      airy: 'editorial-hierarchy',
+    }[options.variant ?? 'balanced'];
+    await writeFile(
+      join(options.outputDir, 'design-plan.json'),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          variant: options.variant ?? 'balanced',
+          intent: designIntent,
+          slides: written.map((item) => {
+            const composition = profile.compositions.find(
+              (p) => p.patternId === item.slide.patternId,
+            );
+            return {
+              index: item.index,
+              patternId: item.slide.patternId,
+              structure: composition ? compositionStructure(composition) : null,
+              visual:
+                item.slide.visual?.kind === 'native'
+                  ? item.slide.visual.block.kind
+                  : (item.slide.visual?.kind ?? null),
+            };
+          }),
+        },
+        null,
+        2,
+      ),
+    );
+    if (
+      new Set(profile.compositions.map(compositionStructure)).size < 3 &&
+      !written.some((item) => item.slide.visual?.kind === 'native')
+    ) {
+      await emit({
+        type: 'warning',
+        stage,
+        code: 'content-review-required',
+        message:
+          'В шаблоне недостаточно разных композиций для трёх самостоятельных дизайнов. Факты сохранены; различия вариантов требуют проверки.',
+      });
+    }
     for (const current of written) {
       const images = qrImages.get(current.index);
       if (images?.length) current.slide = { ...current.slide, images };
@@ -987,7 +1035,7 @@ export async function generatePresentation(options: GenerateOptions) {
       finishedAt: new Date().toISOString(),
       templateHash: options.profile.templateHash,
       contentPackId: createHash('sha256').update(sourceBrief).digest('hex'),
-      planId: options.runId,
+      planId: options.planId ?? options.runId,
       contentRevision,
       contentHash: contentHash(),
       seed: options.seed ?? 42,
@@ -1060,16 +1108,15 @@ export async function generatePresentation(options: GenerateOptions) {
               ]
             : []),
         ]),
-      modelCalls:
-        options.provider instanceof OpenAICompatibleProvider
-          ? options.provider.calls.map((call) => ({
-              agentId: call.agent,
-              modelId: options.provider.model,
-              calls: 1,
-              inputTokens: call.inputTokens,
-              outputTokens: call.outputTokens,
-            }))
-          : [],
+      modelCalls: (options.provider.calls ?? []).map((call) => ({
+        agentId: call.agent,
+        modelId: call.modelId ?? options.provider.model,
+        calls: 1,
+        inputTokens: call.inputTokens,
+        outputTokens: call.outputTokens,
+      })),
+      modelCallsScope: options.planId ? 'build' : 'run',
+      ...(options.providerUsage ? { providerUsage: await options.providerUsage() } : {}),
       artifacts,
       timings,
       totalMs: Date.now() - started,
@@ -1082,11 +1129,15 @@ export async function generatePresentation(options: GenerateOptions) {
     await emit({ type: 'done', totalMs: Date.now() - started, manifestPath: 'manifest.json' });
     return { deck, output, manifest };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Generation failed.';
+    const diagnostic = error as { message?: unknown } | null;
+    const message =
+      typeof diagnostic?.message === 'string' ? diagnostic.message : 'Generation failed.';
+    const failure = generationFailure(error, signal);
     await writeFile(
       join(options.outputDir, 'failure.json'),
       JSON.stringify({
-        message,
+        diagnostic: message,
+        ...failure,
         elapsedMs: Date.now() - started,
         ...(error instanceof ContentFitError
           ? { requiresReview: true, code: error.code, findings: error.findings }
@@ -1096,13 +1147,7 @@ export async function generatePresentation(options: GenerateOptions) {
     await emit({
       type: 'failed',
       stage,
-      code: signal.aborted
-        ? 'budget-exceeded'
-        : message.includes('Model API')
-          ? 'model-unavailable'
-          : 'internal',
-      message,
-      retryable: true,
+      ...failure,
     });
     throw error;
   } finally {

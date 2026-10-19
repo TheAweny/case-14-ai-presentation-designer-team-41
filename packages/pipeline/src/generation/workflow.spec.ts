@@ -1309,10 +1309,10 @@ describe('one plan, three layouts', () => {
     expect(compute).not.toHaveBeenCalled();
   });
 
-  it('builds the deck even when keeping the plan fails', async () => {
+  it('does not accept a plan whose persistence failed', async () => {
     const plan = { audience: '', goal: '', title: 'T', slides: [] };
     const shared = new SharedPlan(undefined, () => Promise.reject(new Error('disk full')));
-    await expect(shared.once(() => Promise.resolve(plan))).resolves.toBe(plan);
+    await expect(shared.once(() => Promise.resolve(plan))).rejects.toThrow('disk full');
   });
 
   it('keeps the planner layouts for balanced and the cover everywhere', () => {

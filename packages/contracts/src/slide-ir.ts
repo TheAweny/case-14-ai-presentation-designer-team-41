@@ -71,6 +71,14 @@ const elementLook = {
         'run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a ' +
         'group are consecutive in paint order. Absent: the element is in no group.',
     ),
+  sourcePart: z
+    .enum(['slide', 'layout', 'master'])
+    .optional()
+    .describe(
+      'Which part the shape was read from. Master and layout graphics are already painted when ' +
+        'a slide of that layout is cloned, so an export that keeps the source slide must not ' +
+        'draw them again. Absent means the slide itself.',
+    ),
 };
 
 /**
@@ -238,6 +246,19 @@ export const tableElementSchema = z.object({
 
 export const chartTypeSchema = z.enum(['bar', 'column', 'line', 'pie', 'area']);
 
+/**
+ * One series of a native chart.
+ *
+ * `values` keeps a hole as null. Zero is a measured zero and is never used as a stand-in for a
+ * hole. `unit` is the series unit when the slide states one; a chart that mixes units is more
+ * than one chart.
+ */
+export const chartSeriesSchema = z.object({
+  name: z.string().min(1),
+  values: z.array(z.number().nullable()).min(1),
+  unit: z.string().min(1).optional(),
+});
+
 export const chartElementSchema = z.object({
   kind: z.literal('chart'),
   elementId: z.string().min(1),
@@ -247,9 +268,17 @@ export const chartElementSchema = z.object({
   sourceShapeId: z.number().int().nullable(),
   chartType: chartTypeSchema,
   categories: z.array(z.string()).min(1),
-  series: z.array(z.object({ name: z.string().min(1), values: z.array(z.number()).min(1) })).min(1),
+  series: z.array(chartSeriesSchema).min(1),
   xTitle: z.string(),
   yTitle: z.string(),
+  positions: z
+    .array(z.number().finite())
+    .min(1)
+    .optional()
+    .describe(
+      'Numeric position of each category, in category order. Present when the steps are not ' +
+        'equal, so a line uses this axis instead of equal slots.',
+    ),
 });
 
 /** Geometry of a decoration, drawn inside its box. An arrow is a `line` with an arrow tail. */
@@ -410,6 +439,7 @@ export type ImageCrop = z.infer<typeof imageCropSchema>;
 export type TextInsets = z.infer<typeof textInsetsSchema>;
 export type DecorGeometry = z.infer<typeof decorGeometrySchema>;
 export type ChartType = z.infer<typeof chartTypeSchema>;
+export type ChartSeries = z.infer<typeof chartSeriesSchema>;
 export type TableCellStyle = z.infer<typeof tableCellStyleSchema>;
 export type TableBorders = z.infer<typeof tableBordersSchema>;
 export type TableElement = z.infer<typeof tableElementSchema>;

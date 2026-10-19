@@ -6,6 +6,7 @@ import { USER_HEADER } from '../auth/service-token.guard.js';
 import { AccountGuard, AdminOnly, AnonymousRoute } from './account.guard.js';
 import type { Account } from './account-rules.js';
 import type { AccountsService } from './accounts.service.js';
+import type { SessionsService } from '../auth/sessions.service.js';
 
 function account(id: string, patch: Partial<Account> = {}): Account {
   return {
@@ -25,15 +26,22 @@ const known = new Map<string, Account>([
   ['gone', account('gone', { disabled: true })],
 ]);
 
-const guard = new AccountGuard(new Reflector(), {
-  find: async (id: string) => known.get(id) ?? null,
-} as unknown as AccountsService);
+const guard = new AccountGuard(
+  new Reflector(),
+  {
+    find: async (id: string) => known.get(id) ?? null,
+  } as unknown as AccountsService,
+  {
+    owner: async (token: string) => (token.startsWith('session:') ? token.slice(8) : null),
+  } as unknown as SessionsService,
+);
 
 function context(userId: string | undefined, decorate?: MethodDecorator) {
   const holder = { handler: () => undefined };
   if (decorate) decorate(holder, 'handler', { value: holder.handler });
   const headers: Record<string, string> = userId === undefined ? {} : { [USER_HEADER]: userId };
   const request = { headers };
+  if (userId) headers['x-lct-session'] = `session:${userId}`;
   return {
     request,
     context: {
@@ -45,6 +53,13 @@ function context(userId: string | undefined, decorate?: MethodDecorator) {
 }
 
 describe('AccountGuard', () => {
+  it('does not accept a forged user header or a session belonging to another user', async () => {
+    for (const token of ['', 'session:root']) {
+      const value = context('ann');
+      value.request.headers['x-lct-session'] = token;
+      await expect(guard.canActivate(value.context)).rejects.toBeInstanceOf(UnauthorizedException);
+    }
+  });
   it('lets a known account in', async () => {
     await expect(guard.canActivate(context('ann').context)).resolves.toBe(true);
   });

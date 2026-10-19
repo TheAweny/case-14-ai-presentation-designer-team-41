@@ -246,6 +246,11 @@ function Running({ job, onHide }: { job: DeckExportJob; onHide: () => void }) {
             })}
           </p>
         ) : null}
+        {request?.revision != null ? (
+          <p className="text-xs text-muted-foreground">
+            {t('revisionNote', { revision: request.revision })}
+          </p>
+        ) : null}
         <div
           role="progressbar"
           aria-label={t('progress')}
@@ -315,8 +320,21 @@ function Done({ job, onClose }: { job: DeckExportJob; onClose: () => void }) {
       <div className="flex flex-col gap-3 px-5 pt-4 pb-5">
         <p className="flex items-center gap-2 text-sm text-foreground">
           <SuccessIcon size={18} />
-          {t('done', { file: result?.fileName ?? '' })}
+          {t('done', {
+            file: result?.fileName ?? '',
+            revision:
+              result?.revision != null
+                ? String(result.revision)
+                : job.request?.revision != null
+                  ? String(job.request.revision)
+                  : 'none',
+          })}
         </p>
+        {job.request?.revision != null ? (
+          <p className="text-xs text-muted-foreground">
+            {t('revisionNote', { revision: job.request.revision })}
+          </p>
+        ) : null}
         <ol className="flex flex-col gap-1.5">
           {progress?.stages.map((stage) => (
             <StageRow key={stage.stage} stage={stage} />

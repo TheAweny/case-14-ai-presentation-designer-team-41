@@ -62,10 +62,12 @@ PPTX с нативными PowerPoint text boxes. Внутри endpoint нет �
 Три варианта производятся двумя путями:
 
 - **Основной путь генерации** (`packages/pipeline`): API запускает три прогона
-  `generatePresentation` параллельно (`dense`, `balanced`, `airy`), каждый со своим
-  писателем, но с общим планом `SharedPlan` и общими иллюстрациями `SharedIllustrations`.
-  Модель выбирает композиции, но не генерирует координаты; `dense` получает поправку и
-  перепланирует, если один макет занял больше трети колоды.
+  `generatePresentation` параллельно (`dense`, `balanced`, `airy`) с общим планом
+  `SharedPlan`, содержанием `SharedContent` и иллюстрациями `SharedIllustrations`.
+  Базовый текст каждого слайда пишется один раз; варианты получают совместимые композиции
+  по геометрии, ролям и измеренной вместимости. Модель не генерирует координаты.
+  Подтверждённые задачи сохраняются для resume; владение сборкой защищено lease/fencing.
+  Спецификация и границы проверенных результатов — в [GENERATION-RECOVERY.md](GENERATION-RECOVERY.md).
 - **Детерминированный слой движка** (`engine.layout.build_slide_ir`, `POST /v1/layouts`):
   тот же план раскладывается без модели тремя способами (в тестах и eval).
 
@@ -330,9 +332,10 @@ streaming; инструменты из неполного потока не ис
 
 `GenerationController` использует Postgres run store, реальный `generatePresentation` и typed
 `EngineClient`. Каждый `POST /generation` запускает **три прогона** (`dense`, `balanced`,
-`airy`) параллельно: один `deck-planner` строит `SharedPlan`, writers пишут тексты под свой
-вариант плотности, `SharedIllustrations` рисует картинки один раз на бриф, детерминированный
-и контекстный аудит идут по каждому варианту. Все промпты находятся в registry; planner,
+`airy`) параллельно: один `deck-planner` строит `SharedPlan`, `SharedContent` переиспользует
+подтверждённый текст каждого слайда, `SharedIllustrations` рисует картинки один раз на бриф.
+Смысловая проверка неизменного текста общая, проверки каждого конечного файла сохраняются.
+Все промпты находятся в registry; planner,
 writer, critic, slot-rewriter, copy-fitter — роли одной модели, template-indexer готовит
 шаблон вне timed-бюджета.
 

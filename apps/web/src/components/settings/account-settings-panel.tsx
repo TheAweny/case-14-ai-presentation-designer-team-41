@@ -11,6 +11,7 @@ import { AccountAvatar } from '@/components/auth/account-menu';
 import { Button } from '@/components/ui/button';
 import { AvatarPicker } from './avatar-picker';
 import type { Account } from '@/lib/auth';
+import { AccountPolicyPanel } from './account-policy-panel';
 
 /**
  * «Аккаунт»: кто вошёл, своя картинка, смена своего пароля и выход. Имя и почту меняет администратор в разделе
@@ -39,6 +40,7 @@ export function AccountSettingsPanel({ account }: { account: Account }) {
       </div>
 
       <ChangePassword />
+      <AccountPolicyPanel />
 
       <div className="flex items-center justify-between gap-4">
         <span className="text-sm">{t('signOutHint')}</span>

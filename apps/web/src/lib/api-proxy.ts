@@ -12,8 +12,8 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   // How far the preparation of a template has got.
   { method: 'GET', pattern: /^generation\/prepare\/[\w-]+$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/export$/ },
-  { method: 'POST', pattern: /^generation\/[\w-]+\/cancel$/ },
-  { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|summary|previews)$/ },
+  { method: 'POST', pattern: /^generation\/[\w-]+\/(cancel|resume)$/ },
+  { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|summary|previews|usage)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/exports\/[\w-]+\/[\w.-]+$/ },
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },
@@ -26,6 +26,16 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   { method: 'GET', pattern: /^chats(\/[\w-]+(\/stream)?)?$/ },
   { method: 'POST', pattern: /^chats\/[\w-]+\/(turns|cancel|variants\/retry)$/ },
   { method: 'PATCH', pattern: /^chats\/[\w-]+$/ },
+  // Editor snapshots: one account's deck, its pictures, and an export of one stored revision.
+  { method: 'GET', pattern: /^editor\/decks\/[\w-]+\/snapshot$/ },
+  { method: 'POST', pattern: /^editor\/decks\/[\w-]+\/snapshot$/ },
+  { method: 'POST', pattern: /^editor\/decks\/[\w-]+\/media$/ },
+  { method: 'GET', pattern: /^editor\/decks\/[\w-]+\/media\/[\w.%~-]+$/ },
+  { method: 'POST', pattern: /^editor\/decks\/[\w-]+\/revisions\/\d+\/export$/ },
+  {
+    method: 'GET',
+    pattern: /^editor\/decks\/[\w-]+\/exports\/[\w-]+\/(deck\.pptx|deck\.pdf|slide-\d+\.png)$/,
+  },
 ];
 
 /**

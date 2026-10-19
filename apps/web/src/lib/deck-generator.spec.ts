@@ -44,7 +44,7 @@ describe('константы из контрактов', () => {
   });
 
   it('границы числа слайдов — из схемы прогона', () => {
-    expect(SLIDE_COUNT_RANGE).toEqual({ min: 10, max: 15 });
+    expect(SLIDE_COUNT_RANGE).toEqual({ min: 5, max: 15 });
   });
 });
 

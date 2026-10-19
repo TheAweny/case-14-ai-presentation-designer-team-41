@@ -3,6 +3,7 @@ import { designSystemSchema } from './design-system.js';
 import { boxSchema, templateIrSchema } from './template-ir.js';
 import { modelRefSchema } from './model-settings.js';
 import { reasoningEffortSchema } from './reasoning.js';
+import { visualBlockSchema } from './visuals.js';
 
 export const compositionSlotSchema = z.object({
   slotId: z.string().min(1),
@@ -53,6 +54,13 @@ export const generationProfileSchema = z.object({
   templateHash: z.string().length(64),
   designSystem: designSystemSchema,
   compositions: z.array(compositionSchema).min(1),
+  fontReadiness: z
+    .object({
+      state: z.enum(['ready', 'missing', 'unknown']),
+      requested: z.array(z.string()),
+      missing: z.array(z.string()),
+    })
+    .optional(),
 });
 /**
  * A native table or chart drawn in place of one text slot of a composition. The slot's box is
@@ -79,7 +87,17 @@ export const slotChartSchema = z.object({
   yTitle: z.string().describe('The value axis title with its unit.'),
 });
 
-export const slotVisualSchema = z.discriminatedUnion('kind', [slotTableSchema, slotChartSchema]);
+export const slotNativeSchema = z.object({
+  kind: z.literal('native'),
+  slotId: z.string().min(1),
+  block: visualBlockSchema,
+  variant: z.enum(['dense', 'balanced', 'airy']).optional(),
+});
+export const slotVisualSchema = z.discriminatedUnion('kind', [
+  slotTableSchema,
+  slotChartSchema,
+  slotNativeSchema,
+]);
 
 export const composedSlideSchema = z.object({
   patternId: z.string().min(1),
@@ -149,8 +167,8 @@ export const slideKindSchema = z.enum([
 ]);
 export type SlideKind = z.infer<typeof slideKindSchema>;
 
-/** Slides of a deck the pipeline builds: an automatic deck is 10 to 60 slides long. */
-export const OUTLINE_SLIDES = { min: 10, max: 60 } as const;
+/** Automatic and approved decks may contain 5 to 60 slides; manual sizing is 5 to 15. */
+export const OUTLINE_SLIDES = { min: 5, max: 60 } as const;
 
 export const outlineSlideSchema = z.object({
   /** The claim of the slide, as its title would say it. */
@@ -175,11 +193,24 @@ export const deckOutlineSchema = z.object({
 export type DeckOutline = z.infer<typeof deckOutlineSchema>;
 
 export const generationRequestSchema = z.object({
+  /** Reuse this id on transport retries; a new id explicitly regenerates the deck. */
+  requestId: z.string().uuid().optional(),
+  budget: z
+    .object({
+      maxHttpRequests: z.number().int().min(1).max(240),
+      maxReservedTokens: z.number().int().min(1).max(2_000_000),
+      maxCost: z.number().finite().positive().optional(),
+      currency: z
+        .string()
+        .regex(/^[A-Z]{3}$/)
+        .optional(),
+    })
+    .optional(),
   /** A model draft guides the story but cannot independently substantiate its facts. */
   outlineSource: z.enum(['user', 'model']).optional(),
   templateId: z.string().uuid(),
   brief: z.string().trim().min(10).max(60000),
-  slideCount: z.number().int().min(10).max(15).nullable().default(null),
+  slideCount: z.number().int().min(5).max(15).nullable().default(null),
   /**
    * The approved story of the deck. With it the planner keeps these slides, in this order, and
    * only chooses a composition for each; `slideCount` is then the length of the outline.
@@ -248,7 +279,7 @@ export const compositionPlanSchema = z.object({
         sourceEvidence: z.record(z.string(), z.string()).default({}),
       }),
     )
-    .min(10)
+    .min(OUTLINE_SLIDES.min)
     .max(60),
 });
 
@@ -354,6 +385,7 @@ export const compositionNoteSchema = z.object({
 });
 export const templateIndexSchema = z.object({ notes: z.array(compositionNoteSchema) });
 export const storedTemplateIndexSchema = templateIndexSchema.extend({
+  profileHash: z.string().length(64).optional(),
   templateHash: z.string().length(64),
   /** Indexer version and instruction hash: a new prompt re-indexes the template. */
   revision: z.string().min(1),

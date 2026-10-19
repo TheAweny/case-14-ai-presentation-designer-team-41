@@ -24,6 +24,7 @@ function fixture(abortDuringStart = false) {
       };
     },
     cancel: vi.fn(),
+    interrupt: vi.fn(),
   } as unknown as GenerationService;
   const messages: ChatMessage[] = [
     {
@@ -59,7 +60,7 @@ function fixture(abortDuringStart = false) {
 }
 
 describe('build cancellation at persistence boundaries', () => {
-  it('cancels all variants when saving the started operation fails', async () => {
+  it('interrupts all variants without recording user Stop when saving the started operation fails', async () => {
     const f = fixture();
     await expect(
       runBuild(f.generation, f.scope, f.context, {
@@ -69,7 +70,8 @@ describe('build cancellation at persistence boundaries', () => {
         fileIds: [],
       }),
     ).rejects.toThrow(/Persistence failed/);
-    expect(f.generation.cancel).toHaveBeenCalledWith('balanced');
+    expect(f.generation.interrupt).toHaveBeenCalledWith('balanced');
+    expect(f.generation.cancel).not.toHaveBeenCalled();
   });
 
   it('cancels a build if the turn was stopped while generation.start was pending', async () => {

@@ -92,7 +92,7 @@ export function createGenerationRuns(
   };
 
   /** Запустить запрос прогона или, с `resume`, досмотреть прогон, уже идущий на сервере. */
-  const launch = (runId: string, resume?: ServerRun) => {
+  const launch = (runId: string, resume?: ServerRun, continueWork = false) => {
     const run = runs.get(runId);
     if (!run) return;
     const controller = new AbortController();
@@ -112,9 +112,11 @@ export function createGenerationRuns(
       update(runId, ({ slides }) => ({ slides: [...slides, slide] }));
     };
     const pending = resume
-      ? generator.follow
-        ? generator.follow(resume, onEvent, controller.signal, onSlide)
-        : Promise.reject(new Error('This generator cannot follow a server run.'))
+      ? continueWork && generator.resume
+        ? generator.resume(resume, onEvent, controller.signal, onSlide)
+        : generator.follow
+          ? generator.follow(resume, onEvent, controller.signal, onSlide)
+          : Promise.reject(new Error('This generator cannot follow a server run.'))
       : generator.generate(run.request, onEvent, controller.signal, onSlide, (server) => {
           if (current()) update(runId, () => ({ server }));
         });
@@ -160,7 +162,7 @@ export function createGenerationRuns(
       const runId = newRunId();
       runs.set(runId, {
         runId,
-        request,
+        request: { ...request, requestId: request.requestId ?? crypto.randomUUID() },
         returnHref,
         phase: 'running',
         progress: initialProgress(plannedStages()),
@@ -201,9 +203,12 @@ export function createGenerationRuns(
     cancel(runId) {
       if (runs.get(runId)?.phase !== 'running') return;
       stop(runId);
+      const server = runs.get(runId)?.server;
+      if (server) void generator.cancel?.(server);
       update(runId, () => ({ phase: 'cancelled', finishedAt: now() }));
     },
     retry(runId) {
+      const server = runs.get(runId)?.server ?? undefined;
       stop(runId);
       update(runId, () => ({
         phase: 'running',
@@ -211,11 +216,10 @@ export function createGenerationRuns(
         slides: [],
         result: null,
         failure: null,
-        startedAt: now(),
         finishedAt: null,
-        server: null,
+        server: server ?? null,
       }));
-      launch(runId);
+      launch(runId, server, true);
     },
   };
 }

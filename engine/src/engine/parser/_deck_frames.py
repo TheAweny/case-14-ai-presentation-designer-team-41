@@ -222,7 +222,7 @@ def chart_fields(blob: bytes) -> tuple[dict[str, Any] | None, str]:
         return None, "chart has no plot area"
     for element in plot:
         name = etree.QName(element).localname if isinstance(element.tag, str) else ""
-        kind = _CHART_TYPES.get(name)
+        kind = "line" if name == "scatterChart" else _CHART_TYPES.get(name)
         if kind is None:
             continue
         if kind == "bar":
@@ -230,18 +230,34 @@ def chart_fields(blob: bytes) -> tuple[dict[str, Any] | None, str]:
             kind = "column" if direction is None or direction.get("val") == "col" else "bar"
         series_elements = element.findall(f"{_C}ser")
         categories: list[str] = []
+        positions: list[float] | None = None
         series: list[dict[str, Any]] = []
         for number, ser in enumerate(series_elements, start=1):
-            values_points = _cached(ser.find(f"{_C}val"))
-            if not values_points:
+            values_ref = ser.find(f"{_C}{'yVal' if name == 'scatterChart' else 'val'}")
+            values_points = _cached(values_ref)
+            declared = values_ref.find(f".//{_C}ptCount") if values_ref is not None else None
+            declared_length = int(declared.get("val", "0")) if declared is not None else 0
+            length = max(declared_length, max((i + 1 for i, _ in values_points), default=0))
+            if not length:
                 continue
-            length = max(i for i, _ in values_points) + 1
-            values = [0.0] * length
+            values: list[float | None] = [None] * length
             for index, text in values_points:
                 try:
                     values[index] = float(text)
                 except ValueError:
-                    values[index] = 0.0
+                    values[index] = None
+            if name == "scatterChart":
+                x_points = _cached(ser.find(f"{_C}xVal"))
+                if [index for index, _ in x_points] != list(range(length)):
+                    return None, "XY series has missing x positions"
+                try:
+                    own_positions = [float(text) for _, text in x_points]
+                except ValueError:
+                    return None, "XY positions are not numeric"
+                if positions is not None and own_positions != positions:
+                    return None, "XY series use different x positions"
+                positions = own_positions
+                categories = [format(value, "g") for value in positions]
             name_points = _cached(ser.find(f"{_C}tx"))
             series.append(
                 {"name": name_points[0][1] if name_points else f"{number}", "values": values}
@@ -265,5 +281,16 @@ def chart_fields(blob: bytes) -> tuple[dict[str, Any] | None, str]:
             "series": series,
             "xTitle": _title(plot.find(f"{_C}catAx")),
             "yTitle": _title(plot.find(f"{_C}valAx")),
+            **(
+                {
+                    "positions": positions,
+                    "xTitle": _title(plot.findall(f"{_C}valAx")[0]),
+                    "yTitle": _title(plot.findall(f"{_C}valAx")[1])
+                    if len(plot.findall(f"{_C}valAx")) > 1
+                    else "",
+                }
+                if positions is not None and plot.findall(f"{_C}valAx")
+                else {}
+            ),
         }, ""
     return None, "chart type has no SlideIR counterpart"

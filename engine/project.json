@@ -1,0 +1,62 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "engine",
+  "projectType": "library",
+  "sourceRoot": "engine/src",
+  "tags": ["scope:engine", "type:lib"],
+  "implicitDependencies": ["contracts"],
+  "targets": {
+    "recovery-evidence": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node scripts/recovery/engine-linux.mjs --evidence",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "fix-imports": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run ruff check --select I --fix engine",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test-linux": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node scripts/recovery/engine-linux.mjs", "cwd": "{workspaceRoot}" }
+    },
+    "recovery-fixture": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run python scripts/recovery/synthetic_template.py runs/recovery-runtime/synthetic.pptx",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": { "command": "uv run ruff format engine", "cwd": "{workspaceRoot}" }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "command": "uv run pytest", "cwd": "{workspaceRoot}" }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": { "command": "uv run pyright", "cwd": "{workspaceRoot}" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["uv run ruff check engine", "uv run ruff format --check engine"],
+        "parallel": false,
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "boundaries": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run lint-imports --config engine/pyproject.toml",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

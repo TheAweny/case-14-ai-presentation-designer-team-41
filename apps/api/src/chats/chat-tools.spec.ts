@@ -27,7 +27,12 @@ const outline: DeckOutline = {
 };
 
 /** A chat with the tools of one mode, recording what they show and change. */
-function chat(mode: ChatMode, messages: ChatMessage[] = [], generation = {} as GenerationService) {
+function chat(
+  mode: ChatMode,
+  messages: ChatMessage[] = [],
+  generation = {} as GenerationService,
+  preferences: Partial<ChatToolScope> = {},
+) {
   const shown: ChatPart[] = [];
   const updated: { messageId: string; index: number; part: ChatPart }[] = [];
   const scope: ChatToolScope = {
@@ -39,6 +44,7 @@ function chat(mode: ChatMode, messages: ChatMessage[] = [], generation = {} as G
     messages: () => messages,
     updatePart: (messageId, index, part) => updated.push({ messageId, index, part }),
     addDecks: () => undefined,
+    ...preferences,
   };
   const tools = chatTools(generation, scope, undefined, {
     search: null,
@@ -81,6 +87,68 @@ function planMessage(status: 'proposed' | 'approved'): ChatMessage {
 }
 
 describe('chat tools by mode', () => {
+  it('passes the selected five-slide count through the actual build tool', async () => {
+    const started: unknown[] = [];
+    const templateId = '00000000-0000-4000-8000-0000000000aa';
+    const generation = {
+      template: async () => ({ file_name: 'Synthetic.pptx', profile: null }),
+      prepare: async () => undefined,
+      start: async (input: unknown) => {
+        started.push(input);
+        throw new Error('Captured request');
+      },
+    } as unknown as GenerationService;
+    const { tool, context } = chat(
+      'auto',
+      [
+        {
+          role: 'user',
+          id: crypto.randomUUID(),
+          text: 'Сделай ровно пять слайдов',
+          attachments: [],
+          mode: 'auto',
+          createdAt: 1,
+        },
+      ],
+      generation,
+      { preferredSlideCount: 5 },
+    );
+    const build = tool('build_deck');
+    await build
+      .run(build.input.parse({ templateId, brief: 'Исследование пилота' }), context)
+      .catch(() => undefined);
+    expect(started).toEqual([expect.objectContaining({ slideCount: 5, templateId })]);
+  });
+
+  it('uses the sole project template and refuses a count or template ambiguity', async () => {
+    const templateId = '00000000-0000-4000-8000-0000000000aa';
+    let templates = [{ templateId, name: 'Research' }];
+    const generation = {
+      projectTemplates: async () => templates,
+      pool: {
+        query: async (_sql: string, values: string[]) => {
+          expect(values[1]).toBe(account.id);
+          return { rows: [{ id: values[0], name: 'Research', profile: null }] };
+        },
+      },
+    } as unknown as GenerationService;
+    const { tool, context, shown } = chat('plan', [], generation, {
+      projectId: crypto.randomUUID(),
+      preferredSlideCount: 5,
+    });
+    const propose = tool('propose_plan');
+    const five = { ...outline, slides: outline.slides.slice(0, 5) };
+    await propose.run(propose.input.parse({ outline: five }), context);
+    expect(shown[0]).toMatchObject({ type: 'plan', templateId, outline: five });
+    await expect(propose.run(propose.input.parse({ outline }), context)).rejects.toThrow('ровно 5');
+    templates = [
+      ...templates,
+      { templateId: '00000000-0000-4000-8000-0000000000bb', name: 'Operations' },
+    ];
+    await expect(
+      propose.run(propose.input.parse({ outline: five, templateId }), context),
+    ).rejects.toThrow(/несколько|выбер/i);
+  });
   it('talks, reads and edits pointed objects in the chat mode, and builds nothing', () => {
     expect(chat('chat').tools.map((tool) => tool.name)).toEqual([
       'generate_qr',

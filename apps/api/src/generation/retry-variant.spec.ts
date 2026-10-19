@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunRepository } from '@lct/run-store';
+import { GenerationBuildStore, type BuildRecord } from '@lct/run-store';
 import type { Account } from '../accounts/account-rules.js';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
 import type { ModelCapabilityService } from '../models/model-capabilities.js';
@@ -24,6 +25,16 @@ function accountOf(id: string): Account {
   };
 }
 const owner = accountOf('owner');
+const durableBuild = {
+  id: BUILD,
+  owner_id: owner.id,
+  spec_hash: 'fingerprint',
+  spec: {},
+  variants: [{ variant: 'dense', runId: RUN }],
+  status: 'failed',
+  fence: '1',
+  worker_id: null,
+} satisfies BuildRecord;
 
 const plan = {
   audience: 'Правление',
@@ -42,6 +53,7 @@ let state: string;
 let service: GenerationService;
 
 beforeEach(async () => {
+  vi.spyOn(GenerationBuildStore.prototype, 'get').mockResolvedValue(durableBuild);
   root = await mkdtemp(join(tmpdir(), 'lct-retry-'));
   vi.stubEnv('RUNS_DIR', root);
   state = 'failed';
@@ -72,6 +84,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   await rm(root, { recursive: true, force: true });
 });
@@ -86,14 +99,18 @@ describe('building a failed variant again', () => {
     expect(start).toHaveBeenCalledWith(
       expect.objectContaining({ templateId: TEMPLATE, brief: 'Итоги пилота чат-бота за квартал.' }),
       owner,
-      { variant: 'dense', buildId: BUILD, plan },
+      { variant: 'dense', buildId: BUILD, plan, build: durableBuild },
     );
   });
 
   it('plans anew when the build failed before its plan was made', async () => {
     const start = vi.spyOn(service, 'start').mockResolvedValue(started as unknown as StartedBuild);
     await service.retryVariant(RUN, owner);
-    expect(start.mock.calls[0]?.[2]).toEqual({ variant: 'dense', buildId: BUILD });
+    expect(start.mock.calls[0]?.[2]).toEqual({
+      variant: 'dense',
+      buildId: BUILD,
+      build: durableBuild,
+    });
   });
 
   it('answers another account as if the run were missing', async () => {

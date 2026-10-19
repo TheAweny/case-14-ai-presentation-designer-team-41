@@ -142,6 +142,28 @@ describe('autosave', () => {
     expect(autosave.status()).toBe('saved');
   });
 
+  it('конфликт оставляет значение в очереди и повторяет его', async () => {
+    let fail = true;
+    const written: number[] = [];
+    const autosave = createAutosave<number>({
+      write: async (value) => {
+        if (fail) throw new Error('conflict');
+        written.push(value);
+      },
+      classifyError: () => 'conflict',
+    });
+    autosave.schedule(5);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(autosave.status()).toBe('conflict');
+    expect(autosave.busy()).toBe(true);
+    expect(written).toEqual([]);
+    fail = false;
+    await autosave.flush();
+    expect(written).toEqual([5]);
+    expect(autosave.status()).toBe('saved');
+    expect(autosave.busy()).toBe(false);
+  });
+
   it('dispose останавливает отложенную запись', async () => {
     const write = vi.fn(async () => undefined);
     const autosave = createAutosave<number>({ write });

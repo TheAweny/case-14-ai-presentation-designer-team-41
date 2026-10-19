@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PostgresProviderLedger } from '@lct/run-store';
 import { ModelRequestError } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import type { GenerationService } from '../generation/generation.service.js';
@@ -10,10 +11,15 @@ import type { ChatTurnRequest } from '@lct/contracts';
 
 const account = { id: 'owner' } as Account;
 const services: ChatsService[] = [];
+beforeEach(() => {
+  vi.spyOn(PostgresProviderLedger.prototype, 'begin').mockResolvedValue('test-attempt');
+  vi.spyOn(PostgresProviderLedger.prototype, 'end').mockResolvedValue(undefined);
+});
 
 afterEach(async () => {
   await Promise.all(services.splice(0).map((service) => service.onApplicationShutdown()));
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const quotaBody = JSON.stringify({

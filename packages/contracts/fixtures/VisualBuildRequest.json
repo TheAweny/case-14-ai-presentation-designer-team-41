@@ -1,0 +1,278 @@
+{
+  "contract": "VisualBuildRequest",
+  "valid": [
+    {
+      "name": "a present zero with an unverified source",
+      "payload": {
+        "schemaVersion": 1,
+        "designSystem": {
+          "schemaVersion": 1,
+          "templateHash": "abababababababababababababababababababababababababababababababab",
+          "aspect": "16:9",
+          "palette": [
+            {
+              "role": "background",
+              "hex": "FFFFFF",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            },
+            {
+              "role": "text",
+              "hex": "1A1A1A",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            },
+            {
+              "role": "accent",
+              "hex": "0B3A66",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "surfaces": [
+            {
+              "tone": "light",
+              "background": "FFFFFF",
+              "text": "1A1A1A",
+              "accent": "0B3A66",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "typeFamilies": [
+            {
+              "role": "primary",
+              "font": "Fixture Face",
+              "declared": "Fixture Face",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "typeScale": [
+            {
+              "role": "kpi-value",
+              "font": "Fixture Face",
+              "sizePt": 28,
+              "bold": true,
+              "italic": false,
+              "lineSpacing": 1.1,
+              "colorRole": "text",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "grid": {
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "marginLeft": 457200,
+            "marginRight": 457200,
+            "marginTop": 365760,
+            "marginBottom": 365760,
+            "columns": 12,
+            "gutter": 182880,
+            "baseline": 114300,
+            "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+          },
+          "strokes": [],
+          "radii": [],
+          "shadows": {
+            "present": false,
+            "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+          },
+          "protectedZones": [],
+          "warnings": []
+        },
+        "variant": "balanced",
+        "elementId": "kpi-1",
+        "box": { "x": 457200, "y": 1200000, "cx": 8000000, "cy": 3000000 },
+        "language": "ru",
+        "block": {
+          "kind": "kpi",
+          "items": [
+            {
+              "value": { "state": "present", "literal": "0", "value": 0 },
+              "unit": "шт",
+              "unitAmbiguous": false,
+              "caption": "Остаток",
+              "period": "2024",
+              "periodKnown": true,
+              "sources": [
+                { "itemId": "pack-1", "quote": "Остаток 0 шт за 2024.", "status": "unverified" }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown variant",
+      "why": "Only the three density variants exist.",
+      "path": ["variant"],
+      "payload": {
+        "schemaVersion": 1,
+        "designSystem": {
+          "schemaVersion": 1,
+          "templateHash": "abababababababababababababababababababababababababababababababab",
+          "aspect": "16:9",
+          "palette": [
+            {
+              "role": "text",
+              "hex": "1A1A1A",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "surfaces": [
+            {
+              "tone": "light",
+              "background": "FFFFFF",
+              "text": "1A1A1A",
+              "accent": null,
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "typeFamilies": [
+            {
+              "role": "primary",
+              "font": "Fixture Face",
+              "declared": "Fixture Face",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "typeScale": [
+            {
+              "role": "body",
+              "font": "Fixture Face",
+              "sizePt": 16,
+              "bold": false,
+              "italic": false,
+              "lineSpacing": 1.1,
+              "colorRole": "text",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "grid": {
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "marginLeft": 0,
+            "marginRight": 0,
+            "marginTop": 0,
+            "marginBottom": 0,
+            "columns": 1,
+            "gutter": 0,
+            "baseline": 114300,
+            "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+          },
+          "strokes": [],
+          "radii": [],
+          "shadows": {
+            "present": false,
+            "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+          },
+          "protectedZones": [],
+          "warnings": []
+        },
+        "variant": "wide",
+        "elementId": "kpi-1",
+        "box": { "x": 0, "y": 0, "cx": 1000, "cy": 1000 },
+        "language": "ru",
+        "block": {
+          "kind": "kpi",
+          "items": [
+            {
+              "value": { "state": "missing" },
+              "unit": "",
+              "unitAmbiguous": false,
+              "caption": "Нет",
+              "period": "",
+              "periodKnown": false,
+              "sources": [{ "itemId": "pack-1", "quote": "Нет данных.", "status": "unverified" }]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "unknown evidence status",
+      "why": "A status outside grounded and unverified would let display invent grounding.",
+      "path": ["block", "items", 0, "sources", 0, "status"],
+      "payload": {
+        "schemaVersion": 1,
+        "designSystem": {
+          "schemaVersion": 1,
+          "templateHash": "abababababababababababababababababababababababababababababababab",
+          "aspect": "16:9",
+          "palette": [
+            {
+              "role": "text",
+              "hex": "1A1A1A",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "surfaces": [
+            {
+              "tone": "light",
+              "background": "FFFFFF",
+              "text": "1A1A1A",
+              "accent": null,
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "typeFamilies": [
+            {
+              "role": "primary",
+              "font": "Fixture Face",
+              "declared": "Fixture Face",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "typeScale": [
+            {
+              "role": "body",
+              "font": "Fixture Face",
+              "sizePt": 16,
+              "bold": false,
+              "italic": false,
+              "lineSpacing": 1.1,
+              "colorRole": "text",
+              "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+            }
+          ],
+          "grid": {
+            "slideCx": 12192000,
+            "slideCy": 6858000,
+            "marginLeft": 0,
+            "marginRight": 0,
+            "marginTop": 0,
+            "marginBottom": 0,
+            "columns": 1,
+            "gutter": 0,
+            "baseline": 114300,
+            "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+          },
+          "strokes": [],
+          "radii": [],
+          "shadows": {
+            "present": false,
+            "meta": { "source": "observed", "count": 1, "share": 1, "confidence": 1, "parts": [] }
+          },
+          "protectedZones": [],
+          "warnings": []
+        },
+        "variant": "balanced",
+        "elementId": "kpi-1",
+        "box": { "x": 0, "y": 0, "cx": 1000, "cy": 1000 },
+        "language": "ru",
+        "block": {
+          "kind": "kpi",
+          "items": [
+            {
+              "value": { "state": "missing" },
+              "unit": "",
+              "unitAmbiguous": false,
+              "caption": "Нет",
+              "period": "",
+              "periodKnown": false,
+              "sources": [{ "itemId": "pack-1", "quote": "Нет данных.", "status": "confirmed" }]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

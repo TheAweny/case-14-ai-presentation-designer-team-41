@@ -24,6 +24,43 @@ function accountOf(id: string): Account {
 const owner = accountOf('owner');
 const stranger = accountOf('stranger');
 
+describe('direct generation slide count boundary', () => {
+  it.each([5, 10, 15])(
+    'preserves exactly %i requested slides at POST /generation',
+    async (count) => {
+      const repository = new MemoryRunRepository();
+      const run = await repository.create();
+      const start = vi.fn(async () => ({
+        runId: run.runId,
+        variants: [{ variant: 'balanced', runId: run.runId }],
+      }));
+      const controller = new GenerationController({
+        start,
+        repository,
+      } as unknown as GenerationService);
+      await controller.create(
+        {
+          templateId: '00000000-0000-4000-8000-0000000000aa',
+          brief: 'Исследование пилота',
+          slideCount: count,
+        },
+        owner,
+      );
+      expect(start).toHaveBeenCalledWith(expect.objectContaining({ slideCount: count }), owner);
+      await expect(
+        controller.create(
+          {
+            templateId: '00000000-0000-4000-8000-0000000000aa',
+            brief: 'Исследование пилота',
+            slideCount: 4,
+          },
+          owner,
+        ),
+      ).rejects.toThrow();
+    },
+  );
+});
+
 const imported = JSON.parse(
   await readFile(
     new URL('../../../../packages/contracts/fixtures/DeckImportResponse.json', import.meta.url),
@@ -171,6 +208,45 @@ afterEach(async () => {
 });
 
 describe('GET /generation/:id/deck', () => {
+  it('keeps unknown usage visible and rejects another account before reading totals', async () => {
+    const routes = controllerOf(repository, {} as ModelSettingsService);
+    if (!service) throw new Error('Missing service');
+    await writeFile(
+      join(root, RUN, 'metadata.json'),
+      JSON.stringify({
+        ownerId: owner.id,
+        buildId: 'build',
+        templateId: 'template',
+        projectId: null,
+        updatedAt: 1,
+      }),
+    );
+    const query = vi.spyOn(service.pool, 'query').mockResolvedValue({
+      rows: [
+        {
+          attempts: 3,
+          tasks: 2,
+          input: '20',
+          output: '10',
+          unknown_usage: 1,
+          cost: null,
+          unknown_cost: 3,
+          currency: null,
+        },
+      ],
+    } as never);
+    await expect(routes.usage(RUN, stranger)).rejects.toThrow('Run not found');
+    expect(query).not.toHaveBeenCalled();
+    expect(await routes.usage(RUN, owner)).toMatchObject({
+      httpAttempts: 3,
+      logicalTasks: 2,
+      knownInputTokens: 20,
+      unknownUsageAttempts: 1,
+      knownCost: null,
+      unknownCostAttempts: 3,
+    });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('owner_id=$2'), ['build', owner.id]);
+  });
   it('answers the slides the engine read from the finished file', async () => {
     const deck = (await withEngine(imported).deck(RUN, owner)) as Record<string, unknown>;
 

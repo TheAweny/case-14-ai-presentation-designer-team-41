@@ -1452,6 +1452,15 @@
                       "minimum": 0,
                       "type": "number"
                     },
+                    "sourcePart": {
+                      "description": "Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+                      "enum": [
+                        "slide",
+                        "layout",
+                        "master"
+                      ],
+                      "type": "string"
+                    },
                     "sourceShapeId": {
                       "anyOf": [
                         {
@@ -1659,6 +1668,15 @@
                       "exclusiveMaximum": 360,
                       "minimum": 0,
                       "type": "number"
+                    },
+                    "sourcePart": {
+                      "description": "Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+                      "enum": [
+                        "slide",
+                        "layout",
+                        "master"
+                      ],
+                      "type": "string"
                     },
                     "sourceShapeId": {
                       "anyOf": [
@@ -2014,6 +2032,15 @@
                       "minItems": 1,
                       "type": "array"
                     },
+                    "sourcePart": {
+                      "description": "Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+                      "enum": [
+                        "slide",
+                        "layout",
+                        "master"
+                      ],
+                      "type": "string"
+                    },
                     "sourceShapeId": {
                       "anyOf": [
                         {
@@ -2121,6 +2148,14 @@
                       "minimum": 0,
                       "type": "number"
                     },
+                    "positions": {
+                      "description": "Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
                     "role": {
                       "enum": [
                         "title",
@@ -2154,9 +2189,16 @@
                             "minLength": 1,
                             "type": "string"
                           },
+                          "unit": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
                           "values": {
                             "items": {
-                              "type": "number"
+                              "type": [
+                                "number",
+                                "null"
+                              ]
                             },
                             "minItems": 1,
                             "type": "array"
@@ -2170,6 +2212,15 @@
                       },
                       "minItems": 1,
                       "type": "array"
+                    },
+                    "sourcePart": {
+                      "description": "Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+                      "enum": [
+                        "slide",
+                        "layout",
+                        "master"
+                      ],
+                      "type": "string"
                     },
                     "sourceShapeId": {
                       "anyOf": [
@@ -2544,6 +2595,15 @@
                         "triangle",
                         "diamond",
                         "line"
+                      ],
+                      "type": "string"
+                    },
+                    "sourcePart": {
+                      "description": "Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+                      "enum": [
+                        "slide",
+                        "layout",
+                        "master"
                       ],
                       "type": "string"
                     },

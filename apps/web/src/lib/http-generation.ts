@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   designSystemSchema,
+  editorRevisionExportResponseSchema,
   jobEventSchema,
   slideIrSchema,
   templateIrSchema,
@@ -142,10 +143,6 @@ async function followRun(
   signal: AbortSignal,
   onSlide?: (slide: StreamedSlide) => void,
 ): Promise<GenerationResult> {
-  const cancel = () => {
-    void request(`/generation/${run.runId}/cancel`, { method: 'POST' }).catch(() => undefined);
-  };
-  signal.addEventListener('abort', cancel, { once: true });
   let sequence = -1;
   try {
     for (;;) {
@@ -219,7 +216,7 @@ async function followRun(
     if (!variants.length) throw new Error('The generated deck has no slides.');
     return { templateSubstituted: false, variants };
   } finally {
-    signal.removeEventListener('abort', cancel);
+    /* Detaching an observer does not stop the server build. */
   }
 }
 
@@ -258,6 +255,7 @@ export function createHttpGenerator(): DeckGenerator {
           projectId: input.projectId,
           contentIds,
           model: input.model,
+          requestId: input.requestId ?? crypto.randomUUID(),
         }),
         signal,
       })) as { runId: string; variants?: { variant: string; runId: string }[] };
@@ -270,6 +268,16 @@ export function createHttpGenerator(): DeckGenerator {
       return followRun(run, onEvent, signal, onSlide);
     },
     follow: followRun,
+    async resume(run, onEvent, signal, onSlide) {
+      const result = (await request(`/generation/${encodeURIComponent(run.runId)}/resume`, {
+        method: 'POST',
+        signal,
+      })) as ServerRun;
+      return followRun({ ...run, ...result }, onEvent, signal, onSlide);
+    },
+    async cancel(run) {
+      await request(`/generation/${encodeURIComponent(run.runId)}/cancel`, { method: 'POST' });
+    },
   };
 }
 
@@ -299,30 +307,47 @@ export function createHttpExporter(
         push({ type: 'failed', stage: 'exporting', code: 'internal', message, retryable: false });
         throw new Error(message);
       };
-      if (!input.slides.length) fail('Нельзя экспортировать колоду без слайдов.');
-      const media = await collectExportMedia(input.slides, registry, signal);
-      const body = JSON.stringify({
-        slides: input.slides,
-        variant: input.variant,
-        format: input.format,
-        media,
-      });
-      if (new TextEncoder().encode(body).length > 5 * 1024 * 1024)
+      const revisionExport = input.revision != null;
+      if (!revisionExport && !input.slides.length)
+        fail('Нельзя экспортировать колоду без слайдов.');
+      const body = revisionExport
+        ? JSON.stringify({
+            schemaVersion: 1,
+            format: input.format,
+            variant: input.variant,
+            ...(input.slideIds && input.slideIds.length > 0
+              ? { slideIds: [...input.slideIds] }
+              : {}),
+          })
+        : JSON.stringify({
+            slides: input.slides,
+            variant: input.variant,
+            format: input.format,
+            media: await collectExportMedia(input.slides, registry, signal),
+          });
+      if (!revisionExport && new TextEncoder().encode(body).length > 5 * 1024 * 1024)
         fail('Колода превышает допустимый размер запроса экспорта 5 МиБ.');
       push({ type: 'stage-started', stage: 'rendering' });
-      const exported = z
-        // A PPTX or PDF download needs no previews: the server skips rendering them.
-        .object({ exportId: z.string(), previews: z.array(z.string()) })
-        .parse(
-          await request(`/generation/${encodeURIComponent(input.deckId)}/export`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            // The format lets the server build exactly what the download needs: a PPTX export
-            // does not pay for a PDF conversion or slide previews it will never return.
-            body,
-            signal,
-          }),
-        );
+      const exportPath = revisionExport
+        ? `/editor/decks/${encodeURIComponent(input.deckId)}/revisions/${input.revision}/export`
+        : `/generation/${encodeURIComponent(input.deckId)}/export`;
+      const raw = await request(exportPath, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // The format lets the server build exactly what the download needs: a PPTX export
+        // does not pay for a PDF conversion or slide previews it will never return.
+        // A revision export sends no slides: the server reads the stored revision.
+        body,
+        signal,
+      });
+      const looseExport = z.object({ exportId: z.string(), previews: z.array(z.string()) });
+      const exported = revisionExport
+        ? editorRevisionExportResponseSchema.parse(raw)
+        : looseExport.parse(raw);
+      const exportId = exported.exportId;
+      const previewNames = exported.previews;
+      const savedRevision = 'revision' in exported ? exported.revision : undefined;
+      const savedHash = 'contentSha256' in exported ? exported.contentSha256 : undefined;
       push({
         type: 'stage-progress',
         stage: 'rendering',
@@ -332,44 +357,50 @@ export function createHttpExporter(
       });
       push({ type: 'stage-finished', stage: 'rendering', durationMs: Date.now() - startedAt });
       push({ type: 'stage-started', stage: 'exporting' });
-      const artifact = (name: string) =>
-        publicApiUrl(
-          `/generation/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exported.exportId)}/${name}`,
-        );
+      const artifactRoot = revisionExport
+        ? `/editor/decks/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exportId)}`
+        : `/generation/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exportId)}`;
+      const artifact = (name: string) => publicApiUrl(`${artifactRoot}/${name}`);
       const previewFiles = async () => {
         const files: { name: string; blob: Blob }[] = [];
-        const total = Math.max(1, exported.previews.length);
-        for (let index = 0; index < exported.previews.length; index += 1) {
-          const name = exported.previews[index];
+        const total = Math.max(1, previewNames.length);
+        for (let index = 0; index < previewNames.length; index += 1) {
+          const name = previewNames[index];
           if (name === undefined) continue;
           files.push({ name, blob: await artifactBlob(artifact(name), signal) });
           push({ type: 'stage-progress', stage: 'exporting', done: index + 1, total, note: '' });
         }
         return files;
       };
+      const stamp = <T extends { fileName: string; url: string | null }>(value: T) =>
+        savedRevision !== undefined && savedHash !== undefined
+          ? { ...value, revision: savedRevision, contentSha256: savedHash }
+          : value;
       const result =
         input.format === 'html'
-          ? {
+          ? stamp({
               fileName: `${input.fileName}.html`,
               url: URL.createObjectURL(
                 new Blob([standaloneHtml(input.fileName, await htmlImages(previewFiles()))], {
                   type: 'text/html;charset=utf-8',
                 }),
               ),
-            }
+            })
           : input.format === 'png'
-            ? {
+            ? stamp({
                 fileName: `${input.fileName}.zip`,
                 url: URL.createObjectURL(await zipPreviews(await previewFiles())),
-              }
+              })
             : (() => {
                 const blobPromise = artifactBlob(artifact(`deck.${input.format}`), signal);
                 // One unit: the whole file downloads in a single fetch.
                 push({ type: 'stage-progress', stage: 'exporting', done: 1, total: 1, note: '' });
-                return blobPromise.then((blob) => ({
-                  fileName: `${input.fileName}.${input.format}`,
-                  url: URL.createObjectURL(blob),
-                }));
+                return blobPromise.then((blob) =>
+                  stamp({
+                    fileName: `${input.fileName}.${input.format}`,
+                    url: URL.createObjectURL(blob),
+                  }),
+                );
               })();
       push({ type: 'stage-finished', stage: 'exporting', durationMs: Date.now() - startedAt });
       push({

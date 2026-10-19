@@ -2,9 +2,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { illustrationPromptSchema, type DesignSystem, type ImageSlot } from '@lct/contracts';
 import { loadAgent, type LoadedAgent } from '@lct/registry';
+import { z } from 'zod';
 import type { ImageProvider, ImageSize } from './images.js';
-import { sizeFor } from './images.js';
-import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
+import { sizeFor, IMAGE_SIZES } from './images.js';
+import type { TextProvider } from './provider.js';
+import { dependencyKey, type TaskCheckpoints } from './checkpoints.js';
 
 /** A picture drawn for one slot of one planned slide, before it is written into a run. */
 export interface Illustration {
@@ -58,6 +60,7 @@ function shapeOf(size: ImageSize): 'wide' | 'square' | 'tall' {
 }
 
 export interface IllustratorDependencies {
+  checkpoints?: TaskCheckpoints;
   images: ImageProvider;
   text: TextProvider;
   instructions: string;
@@ -88,8 +91,7 @@ export class SharedIllustrations {
     registryDir: string,
   ): Promise<SharedIllustrations> {
     const agent = await loadAgent(join(registryDir, 'illustrator'));
-    if (deps.text instanceof OpenAICompatibleProvider || deps.text instanceof RoutedTextProvider)
-      deps.text.setAgentGeneration('illustrator', agent.config.generation);
+    deps.text.setAgentGeneration?.('illustrator', agent.config.generation);
     return new SharedIllustrations({ ...deps, instructions: agent.instructions }, agent);
   }
 
@@ -99,16 +101,46 @@ export class SharedIllustrations {
 
   request(request: IllustrationRequest): Promise<Illustration | null> {
     const size = sizeFor(request.box);
-    const key = `${request.index}:${request.ordinal}:${size}`;
+    const { box: _box, ...content } = request;
+    const identity = {
+      kind: 'illustration',
+      content,
+      size,
+      model: this.model,
+      seed: this.deps.seed,
+      instructions: this.deps.instructions,
+      style: styleOf(this.deps.designSystem),
+    };
+    const key = dependencyKey(identity);
     let pending = this.pending.get(key);
     if (!pending) {
-      pending = this.draw(request, size).catch((error: unknown) => {
-        this.failures.push({
-          key,
-          message: error instanceof Error ? error.message : 'Illustration failed.',
+      const draw = async () => {
+        const picture = await this.draw(request, size);
+        return { ...picture, bytes: picture.bytes.toString('base64') };
+      };
+      const saved = this.deps.checkpoints
+        ? this.deps.checkpoints.once(
+            identity,
+            z.object({
+              bytes: z.string().base64(),
+              extension: z.enum(['png', 'jpg']),
+              prompt: z.string(),
+              seed: z.number(),
+              size: z.enum(IMAGE_SIZES),
+              model: z.string(),
+            }),
+            draw,
+          )
+        : draw();
+      pending = saved
+        .then((picture) => ({ ...picture, bytes: Buffer.from(picture.bytes, 'base64') }))
+        .catch((error: unknown) => {
+          this.failures.push({
+            key,
+            message: error instanceof Error ? error.message : 'Illustration failed.',
+          });
+          return null;
         });
-        return null;
-      });
       this.pending.set(key, pending);
     }
     return pending;

@@ -10,7 +10,7 @@ export interface BackendServices {
 
 type HealthFetch = (path: string, init: RequestInit) => Promise<Response>;
 
-async function probe(
+export async function probeService(
   fetchHealth: HealthFetch,
   path: string,
   service: string,
@@ -30,11 +30,11 @@ async function probe(
 
 /** Check the API first; dependent services cannot be diagnosed while it is unreachable. */
 export async function checkBackendServices(fetchHealth: HealthFetch): Promise<BackendServices> {
-  const api = await probe(fetchHealth, '/health', 'api');
+  const api = await probeService(fetchHealth, '/health', 'api');
   if (api === 'down') return { api, engine: 'unknown', database: 'unknown' };
   const [engine, database] = await Promise.all([
-    probe(fetchHealth, '/health/engine', 'engine'),
-    probe(fetchHealth, '/health/database', 'postgresql'),
+    probeService(fetchHealth, '/health/engine', 'engine'),
+    probeService(fetchHealth, '/health/database', 'postgresql'),
   ]);
   return { api, engine, database };
 }

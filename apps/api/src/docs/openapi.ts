@@ -25,6 +25,7 @@ export const OPENAPI_JSON_PATH = '/docs-json';
 
 export const DOCS_TAGS = {
   generation: 'Генерация',
+  editor: 'Редактор',
   files: 'Файлы и шаблоны',
   chats: 'Чаты',
   runs: 'Прогоны',
@@ -38,6 +39,8 @@ export const DOCS_TAGS = {
 const TAG_DESCRIPTIONS: Record<keyof typeof DOCS_TAGS, string> = {
   generation:
     'Подготовка шаблона, сборка трёх вариантов колоды, редактор и экспорт в PPTX, PDF, PNG и HTML.',
+  editor:
+    'Серверные снимки колоды из редактора: редакция, картинки и экспорт зафиксированной редакции.',
   files: 'Загрузка шаблона `.pptx`/`.potx` и материалов; библиотека шаблонов и их превью.',
   chats: 'Разговор с ассистентом: ход отвечает потоком server-sent events.',
   runs: 'Состояние прогона и журнал его событий по этапам пайплайна.',

@@ -24,7 +24,7 @@ from typing import Any
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_LINE_DASH_STYLE
-from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE, MSO_SHAPE_TYPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.presentation import Presentation as PresentationDocument
@@ -164,24 +164,35 @@ def _export_from_source_slides(
     for data in slides:
         slide = _clone_slide(presentation, source_slides[data["index"]])
         _apply_source_background(slide, data, palette)
+        elements = data.get("elements", [])
         known_shapes = {
             str(shape.shape_id): (shape, in_group) for shape, in_group in _all_shapes(slide.shapes)
         }
-        bound_shape_ids = {
-            str(element["sourceShapeId"])
-            for element in data.get("elements", [])
-            if element.get("sourceShapeId") is not None
-        }
+        # Ids of shapes that live on the slide. Master and layout ids are a different namespace
+        # and must not keep, or hide, a slide shape that happens to share the number.
+        bound_shape_ids = _slide_shape_ids(elements)
         _remove_unbound_text_shapes(slide, bound_shape_ids)
-        for element in data.get("elements", []):
+        _remove_unbound_pictures(slide, bound_shape_ids)
+        paint_order: list[Any] = []
+        for element in elements:
+            if _inherited(element):
+                # The clone still inherits this graphic. Drawing it again appends a second copy
+                # above the slide's own text.
+                continue
             source_id = element.get("sourceShapeId")
             source = known_shapes.get(str(source_id)) if source_id is not None else None
             if source is not None:
                 _apply_existing_element(source[0], element, palette, source[1])
+                paint_order.append(source[0]._element)
             else:
+                before = {id(shape._element) for shape, _group in _all_shapes(slide.shapes)}
                 _draw_element(
                     slide, element, design_system, palette, type_scale, media, draw_visual
                 )
+                for shape, _group in _all_shapes(slide.shapes):
+                    if id(shape._element) not in before:
+                        paint_order.append(shape._element)
+        _order_with_parents(paint_order)
 
     _remove_initial_slides(presentation, len(source_slides))
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -225,6 +236,20 @@ def _apply_source_background(slide: Any, data: dict[str, Any], palette: dict[str
     slide.background.fill.fore_color.rgb = RGBColor.from_string(background)
 
 
+def _inherited(element: dict[str, Any]) -> bool:
+    """True when the element is master or layout artwork, not a shape of the slide."""
+    return element.get("sourcePart") in {"layout", "master"}
+
+
+def _slide_shape_ids(elements: Sequence[dict[str, Any]]) -> set[str]:
+    """Shape ids the editor still shows that belong to the slide part."""
+    return {
+        str(element["sourceShapeId"])
+        for element in elements
+        if element.get("sourceShapeId") is not None and not _inherited(element)
+    }
+
+
 def _remove_unbound_text_shapes(slide: Any, bound_shape_ids: set[str]) -> None:
     """Remove top-level text boxes the editor removed from the slide IR."""
     for shape in list(slide.shapes):
@@ -234,6 +259,40 @@ def _remove_unbound_text_shapes(slide: Any, bound_shape_ids: set[str]) -> None:
             and str(shape.shape_id) not in bound_shape_ids
         ):
             shape._element.getparent().remove(shape._element)
+
+
+def _remove_unbound_pictures(slide: Any, bound_shape_ids: set[str]) -> None:
+    """Remove slide pictures the editor deleted. Inherited pictures are not on this tree."""
+    for shape, _group in list(_all_shapes(slide.shapes)):
+        if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
+            continue
+        if str(shape.shape_id) in bound_shape_ids:
+            continue
+        parent = shape._element.getparent()
+        if parent is not None:
+            parent.remove(shape._element)
+
+
+def _order_with_parents(ordered: Sequence[Any]) -> None:
+    """Put shapes in paint order inside the parent they already belong to.
+
+    OOXML draws a parent's children from back to front. Moving each kept shape to the end of its
+    own parent, in SlideIR order, leaves a picture that the editor placed behind text behind it,
+    and a picture the editor placed in front in front. A shape inside a group stays in that group.
+    """
+    by_parent: dict[Any, list[Any]] = {}
+    for element in ordered:
+        parent = element.getparent()
+        while parent is not None:
+            by_parent.setdefault(parent, []).append(element)
+            if parent.tag != qn("p:grpSp"):
+                break
+            element = parent
+            parent = element.getparent()
+    for parent, elements in by_parent.items():
+        for element in elements:
+            parent.remove(element)
+            parent.append(element)
 
 
 def _apply_existing_element(
@@ -248,6 +307,9 @@ def _apply_existing_element(
         shape.height = Emu(box["cy"])
     if element.get("rotation") is not None and not in_group:
         shape.rotation = element["rotation"]
+    opacity = element.get("opacity")
+    if isinstance(opacity, (int, float)) and 0 <= opacity < 1:
+        _apply_opacity(shape, float(opacity))
     if element.get("kind") != "text" or not shape.has_text_frame:
         return
     _replace_text_from_ir(shape, element, palette)
@@ -361,6 +423,22 @@ def _draw_element(
         _draw_image(slide.shapes, element, media)
     elif kind == "decor":
         _draw_decor(slide.shapes, element, palette)
+
+
+def draw_native_element(
+    shapes: Any, element: dict[str, Any], design_system: dict[str, Any], draw_visual: DrawVisual
+) -> None:
+    """API bridge for native visual blocks; document layers stay independent."""
+    palette = {entry["role"]: entry["hex"] for entry in design_system["palette"]}
+    scale = {entry["role"]: entry for entry in design_system["typeScale"]}
+    if element["kind"] == "text":
+        _draw_text(shapes, element, palette, scale)
+    elif element["kind"] == "decor":
+        _draw_decor(shapes, element, palette)
+    elif element["kind"] in {"table", "chart"}:
+        draw_visual(shapes, element, design_system)
+    else:
+        raise ValueError("Unsupported native visual element.")
 
 
 def _draw_background(
@@ -481,6 +559,9 @@ def _draw_image(shapes: Any, element: dict[str, Any], media: dict[str, bytes]) -
         )
     if element.get("rotation"):
         picture.rotation = element["rotation"]
+    opacity = element.get("opacity")
+    if isinstance(opacity, (int, float)) and 0 <= opacity < 1:
+        _apply_opacity(picture, float(opacity))
 
 
 def _place_fitted(
@@ -573,6 +654,18 @@ def _apply_stroke(shape: Any, stroke: Any, palette: dict[str, str]) -> None:
     dash = stroke.get("dash")
     if dash in _DASH_STYLES:
         shape.line.dash_style = _DASH_STYLES[dash]
+
+
+def _apply_opacity(shape: Any, alpha: float) -> None:
+    """Fade a picture or a solid shape. Absent opacity leaves the native fill alone."""
+    blip = shape._element.find(f".//{qn('a:blip')}")
+    if blip is not None:
+        existing = blip.find(qn("a:alphaModFix"))
+        if existing is not None:
+            blip.remove(existing)
+        blip.append(blip.makeelement(qn("a:alphaModFix"), {"amt": str(round(alpha * 100000))}))
+        return
+    _set_fill_alpha(shape, alpha)
 
 
 def _set_fill_alpha(shape: Shape, alpha: float) -> None:

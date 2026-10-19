@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import {
@@ -23,14 +23,15 @@ import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { Button } from '@/components/ui/button';
 import { LAYOUT_VARIANTS } from '@/lib/deck-generator';
 import type { DeckResult, FailedVariant, VariantReview } from '@/lib/variant-review';
-import { datedFileName, safeFileName } from '@/lib/deck-export';
-import { browserDraftStore, editedSlidesOf } from '@/lib/draft-storage';
+import { datedFileName, safeFileName, type DeckExporter } from '@/lib/deck-export';
+import { createEditorSession, loadPublishedDeck } from '@/lib/editor-sync';
 import { createHttpExporter } from '@/lib/http-generation';
+import { useMediaResolver } from '@/lib/media-registry';
 import { deckHref } from '@/lib/library-menu';
 import { cn } from '@/lib/utils';
 import { formatElapsed } from './elapsed';
 import { SlidesDialog } from './slides-dialog';
-import { mediaResolver, useVariantDeck, type VariantDeck } from './use-variant-deck';
+import { useVariantDeck, type VariantDeck } from './use-variant-deck';
 
 /**
  * Итог сборки: три варианта вёрстки одного плана, аудит каждого и совет агента. Отсюда колоду
@@ -488,27 +489,52 @@ function VariantViews({
   const t = useTranslations('assistant.result');
   const tSlides = useTranslations('assistant.slides');
   const tEditor = useTranslations('editor');
+  const tExport = useTranslations('exportDialog');
   const prefs = useEditorPrefs();
-  const [exporter] = useState(() => createHttpExporter());
+  const offline = useRef(tExport('offline'));
+  offline.current = tExport('offline');
+  const exporter = useMemo<DeckExporter>(() => {
+    const inner = createHttpExporter();
+    return {
+      async export(request, onEvent, signal) {
+        const published = await loadPublishedDeck(request.deckId);
+        if (published === 'unavailable') throw new Error(offline.current);
+        if (!published) return inner.export(request, onEvent, signal);
+        const ids = new Set(request.slides.map((slide) => slide.slideId));
+        const chosen = published.slides.filter((slide) => ids.has(slide.slideId));
+        const frozen = chosen.length > 0 ? chosen : published.slides;
+        const subset = frozen.length < published.slides.length;
+        return inner.export(
+          {
+            ...request,
+            slides: frozen,
+            revision: published.revision,
+            ...(subset ? { slideIds: frozen.map((slide) => slide.slideId) } : {}),
+          },
+          onEvent,
+          signal,
+        );
+      },
+    };
+  }, []);
   const job = useDeckExport(exporter);
   const { deck, media } = variantDeck;
-  const resolveMedia = mediaResolver(media);
-  // Правки редактора живут в черновике браузера: экспорт идёт по ним, а не по исходной колоде —
-  // удаление и перестановка объектов доезжают до файла.
+  const resolveMedia = useMediaResolver(media);
+  // Чистая сессия берёт сохранённую редакцию, а не черновик IndexedDB.
   const [editedSlides, setEditedSlides] = useState<readonly SlideIr[] | null>(null);
   useEffect(() => {
     let live = true;
-    void editedSlidesOf(browserDraftStore(), deck.deckId, deck.slides)
-      .then((slides) => {
-        if (live) setEditedSlides(slides);
-      })
-      .catch(() => {
-        if (live) setEditedSlides(null);
-      });
+    const session = createEditorSession();
+    void session.load(deck.deckId).then(async (loaded) => {
+      if (!live || loaded === 'unavailable' || !loaded) return;
+      await session.restoreMedia(deck.deckId, loaded.media).catch(() => undefined);
+      if (!live) return;
+      setEditedSlides(loaded.slides);
+    });
     return () => {
       live = false;
     };
-  }, [deck.deckId, deck.slides]);
+  }, [deck.deckId]);
   const slides = editedSlides ?? deck.slides;
   const labels = slides.map((_, at) => tSlides('slide', { number: at + 1 }));
 

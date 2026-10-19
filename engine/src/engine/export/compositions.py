@@ -13,6 +13,9 @@ from pptx.oxml.xmlchemy import OxmlElement
 
 def _replace_text(shape: Any, text: str) -> None:
     frame = shape.text_frame
+    # Composition fit measures wrapped copy in the original box. A template's
+    # no-wrap flag must not make accepted replacement text spill beyond that box.
+    frame.word_wrap = True
     originals = list(frame._txBody.p_lst)
     prototypes = [deepcopy(p) for p in originals]
     for paragraph in originals:
@@ -223,6 +226,9 @@ def _replace_with_visual(slide: Any, visual: dict[str, Any], draw: DrawVisual) -
         "cy": int(shape.height),
     }
     shape._element.getparent().remove(shape._element)
+    if visual["kind"] == "native":
+        draw(slide.shapes, {**visual, "box": box})
+        return
     element: dict[str, Any] = {
         "elementId": f"visual-{visual['slotId']}",
         "role": visual["kind"],

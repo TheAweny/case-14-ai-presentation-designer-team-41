@@ -7,6 +7,7 @@ import {
   slotChartSchema,
   slotRewriteChoicesSchema,
   slotTableSchema,
+  slotNativeSchema,
   templateSlotCopySchema,
   type ComposedSlide,
   type CompositionNote,
@@ -19,6 +20,7 @@ import { z } from 'zod';
 import { tearsAWord } from './fit.js';
 import type { TextProvider } from './provider.js';
 import { declaredQrSlots, safeQrPlan, sourceQrUrls } from './qr-assets.js';
+import { dependencyKey } from './checkpoints.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
 /** The three renderings of one brief. They differ in composition and density, not in facts. */
@@ -29,7 +31,7 @@ export type DeckVariant = 'dense' | 'balanced' | 'airy';
  * the same block count, or one more or fewer when that is all the catalog has. The strict
  * policy never changes the number of content blocks.
  */
-export type LayoutRemapPolicy = 'density' | 'preserve-block-count';
+export type LayoutRemapPolicy = 'density' | 'preserve-block-count' | 'conceptual';
 
 export interface GenerationDependencies {
   provider: TextProvider;
@@ -43,6 +45,8 @@ export interface GenerationDependencies {
   layoutRemapPolicy?: LayoutRemapPolicy;
   /** The one plan the variants of a brief share. Absent: this run plans for itself. */
   sharedPlan?: SharedPlan;
+  /** One canonical writer task per slide; variants adapt its accepted copy. */
+  sharedContent?: SharedContent;
   plannerInstructions: string;
   writerInstructions: string;
   repairInstructions?: string;
@@ -83,7 +87,7 @@ export interface PlannedSlide {
 }
 const inputSchema = z.object({
   brief: z.string(),
-  slideCount: z.number().int().min(10).max(15).nullable(),
+  slideCount: z.number().int().min(5).max(15).nullable(),
   profile: generationProfileSchema,
   /** The approved story: its slides, in its order, are what the planner lays out. */
   outline: deckOutlineSchema.nullish(),
@@ -102,6 +106,7 @@ const taskSchema = z.object({
   purpose: z.string(),
   imageQuery: z.string(),
   composition: compositionSchema,
+  canonicalComposition: compositionSchema.optional(),
 });
 export const writtenSchema = z.object({
   index: z.number(),
@@ -809,6 +814,7 @@ function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) 
         .union([
           slotTableSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
           slotChartSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
+          slotNativeSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
         ])
         .nullable()
         .default(null)
@@ -839,6 +845,74 @@ function figuresOf(text: string): number[] {
   );
 }
 
+/** Reject unsupported literals, units and source quotations before deterministic placement. */
+function groundedNative(
+  visual: Extract<SlotVisual, { kind: 'native' }>,
+  brief: string,
+): SlotVisual | null {
+  const norm = (text: string) => text.normalize('NFKC').replace(/\s+/g, ' ').trim();
+  const contains = (text: string, value: string) => !value || norm(text).includes(norm(value));
+  const sources =
+    visual.block.kind === 'kpi'
+      ? visual.block.items.flatMap((item) => item.sources)
+      : visual.block.sources;
+  if (sources.some((source) => !contains(brief, source.quote))) return null;
+  const quotes = sources.map((source) => source.quote).join('\n');
+  const measured = (
+    value: { state: string; literal?: string; value?: number },
+    unit: string,
+    evidence: string,
+  ) => {
+    if (value.state === 'missing') return value.literal === undefined && value.value === undefined;
+    if (value.literal === undefined || value.value === undefined) return false;
+    const parsed = Number(value.literal.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'));
+    return (
+      Number.isFinite(parsed) &&
+      parsed === value.value &&
+      contains(evidence, value.literal) &&
+      contains(evidence, unit)
+    );
+  };
+  const block = visual.block;
+  if (block.kind === 'kpi') {
+    if (
+      block.items.some((item) => {
+        const evidence = item.sources.map((source) => source.quote).join('\n');
+        return (
+          !measured(item.value, item.unit, evidence) ||
+          (item.periodKnown && !contains(evidence, item.period)) ||
+          (!!item.caveat && !contains(brief, item.caveat)) ||
+          (!!item.comparison &&
+            (!measured(item.comparison.base, item.comparison.baseUnit, evidence) ||
+              !contains(evidence, item.comparison.basePeriod)))
+        );
+      })
+    )
+      return null;
+  } else if (block.kind === 'chart') {
+    if (
+      block.series.some(
+        (series) =>
+          series.values.length !== block.categories.length ||
+          series.values.some((value) => !measured(value, series.unit, quotes)),
+      ) ||
+      block.categories.some((category) => !contains(quotes, category.label)) ||
+      (!!block.caveat && !contains(brief, block.caveat))
+    )
+      return null;
+  } else if (
+    block.rows.some(
+      (row) =>
+        row.cells.length !== block.columns.length ||
+        row.cells.some((cell) => !cell.missing && !contains(quotes, cell.text)),
+    ) ||
+    !contains(brief, block.notes) ||
+    (!!block.caveat && !contains(brief, block.caveat))
+  )
+    return null;
+  return visual;
+}
+
 /**
  * A visual only when every figure in it is in the brief: a chart is where an invented number
  * would do most harm, so a visual that cannot be traced to the source is dropped and the slot
@@ -850,6 +924,7 @@ export function groundedVisual(
   brief: string,
 ): SlotVisual | null {
   if (!visual) return null;
+  if (visual.kind === 'native') return groundedNative(visual, brief);
   const known = new Set(figuresOf(brief));
   const figures =
     visual.kind === 'chart'
@@ -1144,11 +1219,13 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         let result: z.infer<typeof compositionPlanSchema>;
         try {
           result = await plan();
-        } catch {
+        } catch (error) {
+          deps.signal.throwIfAborted();
+          if (!(error instanceof z.ZodError)) throw error;
           result = await plan({
-            minimumSlideCount: 10,
+            minimumSlideCount: 5,
             exactSlideCount: slideCount,
-            message: 'Return 10 to 60 slides in auto mode, or exactly the requested count.',
+            message: 'Return 5 to 60 slides in auto mode, or exactly the requested count.',
           });
         }
         // One layout repeated over most of the deck reads as the same slide again and again; the
@@ -1217,8 +1294,19 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         if (slide.qrRequests?.length) layouts[index] = slide.patternId;
       });
       const tasks = result.slides.map((slide, index) => {
-        const composition = compositions.find((p) => p.patternId === layouts[index]);
+        const canonicalComposition = compositions.find((p) => p.patternId === slide.patternId);
+        let composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
+        if (deps.sharedContent && canonicalComposition) {
+          // A deterministic one-to-one mapping cannot drop a mandatory fact. A poorer template
+          // keeps its original composition instead of discarding or inventing content blocks.
+          const signature = (p: GenerationProfile['compositions'][number]) =>
+            [true, false]
+              .map((title) => writerSlots(p).filter((s) => (s.role === 'title') === title).length)
+              .join(':');
+          if (signature(composition) !== signature(canonicalComposition))
+            composition = canonicalComposition;
+        }
         return {
           ...slide,
           patternId: composition.patternId,
@@ -1236,6 +1324,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               ? JSON.stringify({ brief: inputData.brief, approvedOutline: outline })
               : inputData.brief,
           composition,
+          ...(deps.sharedContent && canonicalComposition ? { canonicalComposition } : {}),
         };
       });
       // QR uses every task, including special layouts; ordinary illustrations keep their
@@ -1269,21 +1358,55 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       let slide: ComposedSlide | undefined;
       // The deck title goes under its own name: as `title` the writer took it for the title
       // of the slide and put it on slide after slide.
-      const { title: deckTitle, ...task } = inputData;
-      const raw = await deps.provider.generate(
-        'writer',
-        deps.writerInstructions,
-        {
-          ...task,
-          deckTitle,
-          variant: deps.variant ?? 'balanced',
-          composition: writingComposition(inputData.composition, deps.variant ?? 'balanced'),
-          visualSlots: visualSlots(inputData.composition),
-        },
-        boundedSlideSchema(inputData.composition),
-        deps.signal,
-      );
-      const visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
+      const { title: deckTitle, canonicalComposition, ...task } = inputData;
+      const base = canonicalComposition ?? inputData.composition;
+      const writeInput = {
+        ...task,
+        deckTitle,
+        variant: deps.sharedContent ? 'balanced' : (deps.variant ?? 'balanced'),
+        composition: writingComposition(
+          base,
+          deps.sharedContent ? 'balanced' : (deps.variant ?? 'balanced'),
+        ),
+        visualSlots: visualSlots(base),
+      };
+      const compute = () =>
+        deps.provider.generate(
+          'writer',
+          deps.writerInstructions,
+          writeInput,
+          boundedSlideSchema(base),
+          deps.signal,
+        );
+      let raw = deps.sharedContent
+        ? await deps.sharedContent.once(
+            { instructions: deps.writerInstructions, input: writeInput },
+            compute,
+          )
+        : await compute();
+      if (base.patternId !== inputData.composition.patternId) {
+        const map = new Map<string, string>();
+        for (const title of [true, false]) {
+          const source = writerSlots(base).filter((s) => (s.role === 'title') === title);
+          const target = writerSlots(inputData.composition).filter(
+            (s) => (s.role === 'title') === title,
+          );
+          source.forEach((slot, index) => {
+            if (target[index]) map.set(slot.slotId, target[index].slotId);
+          });
+        }
+        const visual = raw.visual as SlotVisual | null;
+        raw = {
+          ...raw,
+          patternId: inputData.composition.patternId,
+          textsBySlot: Object.fromEntries(
+            Object.entries(raw.textsBySlot).map(([id, text]) => [map.get(id) ?? id, text]),
+          ),
+          visual: visual ? { ...visual, slotId: map.get(visual.slotId) ?? visual.slotId } : null,
+        };
+      }
+      let visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
+      if (visual?.kind === 'native') visual = { ...visual, variant: deps.variant ?? 'balanced' };
       const texts = raw.textsBySlot as Record<string, string | undefined>;
       const context: CopyContext = {
         brief: inputData.brief,
@@ -1414,11 +1537,30 @@ export class SharedPlan {
     compute: () => Promise<z.infer<typeof compositionPlanSchema>>,
   ): Promise<z.infer<typeof compositionPlanSchema>> {
     this.pending ??= compute().then(async (plan) => {
-      // Keeping the plan is a convenience: a failed write must not fail the deck.
-      await this.onReady?.(plan).catch(() => undefined);
+      // Accepted work is durable before it is handed to another stage.
+      await this.onReady?.(plan);
       return plan;
     });
     return this.pending;
+  }
+}
+
+/** Shared accepted narrative copy. Rejections are never cached as a successful task. */
+export class SharedContent {
+  private readonly pending = new Map<string, Promise<unknown>>();
+  async once<T>(task: unknown, compute: () => Promise<T>): Promise<T> {
+    const key = dependencyKey(task);
+    let pending = this.pending.get(key);
+    if (!pending) {
+      pending = compute();
+      this.pending.set(key, pending);
+    }
+    try {
+      return structuredClone(await pending) as T;
+    } catch (error) {
+      this.pending.delete(key);
+      throw error;
+    }
   }
 }
 
@@ -1443,6 +1585,7 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   notes: ReadonlyMap<string, CompositionNote> = new Map(),
   policy: LayoutRemapPolicy = 'density',
 ): string[] {
+  if (policy === 'conceptual') return conceptualLayouts(patternIds, full, variant, covers, notes);
   if (variant === 'balanced') return [...patternIds];
   // Blocks as the planner counted them: numbering and mirrored copies are not points.
   const content = (p: T) => writerSlots(p).filter((s) => s.role !== 'title');
@@ -1508,6 +1651,101 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
     used.set(choice.patternId, (used.get(choice.patternId) ?? 0) + 1);
     return choice.patternId;
   });
+}
+
+/** Measured geometry and hierarchy, independent of names, colors and template identity. */
+export function compositionStructure(pattern: GenerationProfile['compositions'][number]): string {
+  return dependencyKey(
+    writerSlots(pattern).map((slot) => ({
+      role: slot.role,
+      box: slot.box ?? null,
+      hierarchy: slot.fontSize / Math.max(...pattern.slots.map((item) => item.fontSize)),
+    })),
+  );
+}
+
+/** Three coordinated composition plans. Sparse catalogs explicitly retain the only safe layout. */
+export function conceptualLayouts<T extends GenerationProfile['compositions'][number]>(
+  patternIds: readonly string[],
+  full: readonly T[],
+  variant: DeckVariant,
+  covers: readonly T[],
+  notes: ReadonlyMap<string, CompositionNote>,
+): string[] {
+  if (variant === 'balanced') return [...patternIds];
+  const coverIds = new Set(covers.map((pattern) => pattern.patternId));
+  const signature = (pattern: T) =>
+    [true, false]
+      .map(
+        (title) => writerSlots(pattern).filter((slot) => (slot.role === 'title') === title).length,
+      )
+      .join(':');
+  const body = (pattern: T) => writerSlots(pattern).filter((slot) => slot.role !== 'title');
+  const hierarchy = (pattern: T) => {
+    const title = pattern.slots.find((slot) => slot.role === 'title');
+    const copy = body(pattern);
+    return (title?.fontSize ?? 1) / Math.max(1, ...copy.map((slot) => slot.fontSize));
+  };
+  const columns = (pattern: T) =>
+    new Set(
+      body(pattern).map((slot) =>
+        slot.box ? Math.round(slot.box.x / Math.max(1, slot.box.cx)) : 0,
+      ),
+    ).size;
+  const result = patternIds.map((id, index) => {
+    const base = full.find((pattern) => pattern.patternId === id);
+    if (!base || index === 0 || coverIds.has(id) || notes.get(id)?.special) return id;
+    const requirements = new Set(notes.get(id)?.requiredContent ?? []);
+    const candidates = full.filter((candidate) => {
+      if (
+        coverIds.has(candidate.patternId) ||
+        notes.get(candidate.patternId)?.skip ||
+        notes.get(candidate.patternId)?.special
+      )
+        return false;
+      if (signature(candidate) !== signature(base)) return false;
+      if (
+        FRAMING_KINDS.has(notes.get(candidate.patternId)?.kind ?? 'other') !==
+        FRAMING_KINDS.has(notes.get(id)?.kind ?? 'other')
+      )
+        return false;
+      if (
+        (notes.get(candidate.patternId)?.requiredContent ?? []).some(
+          (requirement) => !requirements.has(requirement),
+        )
+      )
+        return false;
+      return body(candidate).every(
+        (slot, position) =>
+          slot.maxChars >= (body(base)[position]?.maxChars ?? 0) * MIN_CAPACITY_SHARE,
+      );
+    });
+    const distinct = [
+      ...new Map(
+        candidates.map((candidate) => [compositionStructure(candidate), candidate]),
+      ).values(),
+    ].filter((candidate) => compositionStructure(candidate) !== compositionStructure(base));
+    // Analytical: parallel comparisons and peer groups. Editorial: strongest claim hierarchy.
+    const analytical = [...distinct].sort(
+      (a, b) =>
+        columns(b) - columns(a) ||
+        hierarchy(a) - hierarchy(b) ||
+        a.patternId.localeCompare(b.patternId),
+    )[0];
+    const editorial = [...distinct]
+      .filter(
+        (candidate) =>
+          !analytical || compositionStructure(candidate) !== compositionStructure(analytical),
+      )
+      .sort(
+        (a, b) =>
+          hierarchy(b) - hierarchy(a) ||
+          columns(a) - columns(b) ||
+          a.patternId.localeCompare(b.patternId),
+      )[0];
+    return (variant === 'dense' ? analytical : editorial)?.patternId ?? id;
+  });
+  return result;
 }
 
 /**
@@ -1708,7 +1946,9 @@ async function rewriteSlide(
         deps.signal,
       );
     } catch (error) {
-      // A broken answer is one more draw, not the end of the deck: keep the last error and retry.
+      // Transport retries belong to the provider. Never multiply auth/quota/budget
+      // failures by another semantic retry loop.
+      if (!(error instanceof SyntaxError) && !(error instanceof z.ZodError)) throw error;
       if (attempt + 1 >= MAX_REWRITE_ATTEMPTS) throw error;
       lastError = error;
       continue;

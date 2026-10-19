@@ -65,7 +65,7 @@ def composition_slides(
                         "overflow": None,
                     }
                 )
-            elif visual and shape["kind"] in {"table", "chart"}:
+            elif visual and visual["kind"] != "native" and shape["kind"] in {"table", "chart"}:
                 element = {
                     **base,
                     "elementId": f"visual-{visual['slotId']}",

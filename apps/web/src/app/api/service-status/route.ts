@@ -1,19 +1,16 @@
+// Register the request-scoped API identity/session resolvers; do not depend on currentAccount.
+import '@/app/auth-session';
 import { cookies } from 'next/headers';
 import { apiFetch } from '@/lib/api';
 import { SESSION_COOKIE, authSecret } from '@/lib/auth';
-import { checkBackendServices } from '@/lib/service-health';
-import { verifySessionToken } from '@/lib/session-token';
+import { serviceStatusResponse } from '@/lib/service-status-response';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<Response> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const userId = await verifySessionToken(token, authSecret());
-  if (!userId) return Response.json({ message: 'Sign in first.' }, { status: 401 });
-
-  const services = await checkBackendServices((path, init) => apiFetch(path, init, { userId }));
-  return Response.json(
-    { services, checkedAt: Date.now() },
-    { headers: { 'cache-control': 'no-store' } },
+  return serviceStatusResponse(
+    (await cookies()).get(SESSION_COOKIE)?.value,
+    authSecret(),
+    (path, init, userId) => apiFetch(path, init, { userId }),
   );
 }
