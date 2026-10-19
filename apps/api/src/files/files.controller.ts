@@ -14,6 +14,8 @@ import {
   UseInterceptors,
   BadRequestException,
   Logger,
+  Inject,
+  Optional,
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -41,6 +43,7 @@ import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { ApiAccountRoutes, ApiErrors, ApiFile, ApiJsonBody } from '../docs/decorators.js';
 import { storedFileSchema, templatePatchSchema } from '../docs/schemas.js';
+import { AccountUsageService } from '../accounts/account-usage.service.js';
 
 interface UploadedFile {
   readonly originalname: string;
@@ -96,6 +99,9 @@ const TEMPLATE_EXAMPLE = {
 @Controller('files')
 @ApiAccountRoutes('files')
 export class FilesController implements OnApplicationShutdown {
+  constructor(
+    @Optional() @Inject(AccountUsageService) private readonly usage?: AccountUsageService,
+  ) {}
   private readonly logger = new Logger(FilesController.name);
   private readonly root = resolve(process.env.RUNS_DIR ?? join(process.cwd(), 'runs'));
   private readonly engine = new EngineClient({
@@ -130,6 +136,28 @@ export class FilesController implements OnApplicationShutdown {
     if (file.size === 0) throw new BadRequestException('The uploaded template is empty.');
     const fileId = randomUUID();
     const directory = join(this.root, 'templates', fileId);
+    if (this.usage)
+      return this.usage.write(
+        account.id,
+        file.size + 65536,
+        () => this.saveTemplate(file, fileName, fileId, directory, account),
+        async () => {
+          await this.usage?.removeStaging(directory);
+          await this.pool.query('DELETE FROM stored_files WHERE id=$1 AND owner_id=$2', [
+            fileId,
+            account.id,
+          ]);
+        },
+      );
+    return this.saveTemplate(file, fileName, fileId, directory, account);
+  }
+  private async saveTemplate(
+    file: UploadedFile,
+    fileName: string,
+    fileId: string,
+    directory: string,
+    account: Account,
+  ): Promise<StoredFile> {
     await mkdir(directory, { recursive: true });
     const templatePath = join(directory, fileName);
     await writeFile(templatePath, file.buffer);
@@ -198,6 +226,28 @@ export class FilesController implements OnApplicationShutdown {
     if (file.size === 0) throw new BadRequestException('The uploaded content file is empty.');
     const fileId = randomUUID();
     const directory = join(this.root, 'content', fileId);
+    if (this.usage)
+      return this.usage.write(
+        account.id,
+        file.size,
+        () => this.saveContent(file, fileName, fileId, directory, account),
+        async () => {
+          await this.usage?.removeStaging(directory);
+          await this.pool.query('DELETE FROM stored_files WHERE id=$1 AND owner_id=$2', [
+            fileId,
+            account.id,
+          ]);
+        },
+      );
+    return this.saveContent(file, fileName, fileId, directory, account);
+  }
+  private async saveContent(
+    file: UploadedFile,
+    fileName: string,
+    fileId: string,
+    directory: string,
+    account: Account,
+  ): Promise<StoredFile> {
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, fileName), file.buffer);
     await this.pool.query(

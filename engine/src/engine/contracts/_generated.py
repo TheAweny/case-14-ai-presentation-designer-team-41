@@ -6560,6 +6560,8 @@ class Code4(StrEnum):
     model_refused = "model-refused"
     budget_exceeded = "budget-exceeded"
     usage_budget_exceeded = "usage-budget-exceeded"
+    account_limit = "account-limit"
+    account_disabled = "account-disabled"
     engine_failed = "engine-failed"
     cancelled = "cancelled"
     interrupted = "interrupted"

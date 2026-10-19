@@ -44,7 +44,7 @@ export class ModelCapabilityService {
     private readonly prompts: () => Promise<CapabilityProbe>,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly now: () => number = Date.now,
-    private readonly probeTransport?: (ownerId: string) => typeof fetch,
+    private readonly probeTransport?: (ownerId: string, model: ResolvedModel) => typeof fetch,
   ) {}
 
   /**
@@ -168,7 +168,7 @@ export class ModelCapabilityService {
     let pending = this.running.get(key) as Promise<Probed<ReasoningCapability | null>> | undefined;
     if (!pending) {
       pending = this.prompts().then(({ prompt }) =>
-        probeReasoning(model, prompt, this.probeTransport?.(ownerId) ?? this.fetchImpl),
+        probeReasoning(model, prompt, this.probeTransport?.(ownerId, model) ?? this.fetchImpl),
       );
       this.running.set(key, pending);
       void pending.finally(() => this.running.delete(key)).catch(() => undefined);

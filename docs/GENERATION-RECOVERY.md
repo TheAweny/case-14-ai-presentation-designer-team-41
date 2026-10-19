@@ -236,11 +236,12 @@ or absent tariffs as zero, and do not log credentials or full prompts.
 
 `MODEL_PRICING_FILE` optionally names a JSON catalog with `version`, `source`, `effectiveAt` and
 `models` keyed by exact model revision. Rows supply currency, inputPerMillion and outputPerMillion.
-No guessed rates ship. Without a matching row, price is unknown. Request `budget.maxCost` requires
-`currency`; unknown prices cannot pass that cap. Request/token caps work without tariffs.
+No guessed rates ship. Without a matching row, price is unknown. Monetary enforcement has been
+removed by the current [enterprise access policy](AUTH-QUOTAS.md); legacy `budget.maxCost` and
+`currency` are compatibility fields. Request/token caps work without tariffs.
 
 Default build caps are 240 HTTP attempts and 2,000,000 reserved tokens. Interactive non-build
-traffic uses an account-level cumulative allowance of 10,000 attempts / 100,000,000 tokens.
+traffic uses an account-level allowance over the preceding hour of 10,000 attempts / 100,000,000 tokens.
 These are operational ceilings, not measured provider limits or an authorized spending budget.
 Pending/unknown outcomes remain reserved on resume.
 

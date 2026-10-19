@@ -1,6 +1,49 @@
 import { expect, test, type Page } from '@playwright/test';
 import { editorReady, freeObject, objectById } from './editor';
 
+let restorePolicy: (() => Promise<void>) | undefined;
+test.beforeEach(async ({ request }) => {
+  if (process.env.RECOVERY_ACCESS !== '1' || !process.env.RECOVERY_RUN_ID) return;
+  const api = process.env.RECOVERY_API ?? 'http://127.0.0.1:13019';
+  const service = process.env.RECOVERY_SERVICE_TOKEN ?? 'recovery-isolated-test-service-token-2026';
+  const login = await request.post(`${api}/auth/verify`, {
+    headers: { 'x-lct-service-token': service },
+    data: { email: 'recovery@example.test', password: 'recovery-local-only' },
+  });
+  expect(login.ok()).toBe(true);
+  const auth = await login.json();
+  const headers = {
+    'x-lct-service-token': service,
+    'x-lct-user': auth.account.id,
+    'x-lct-session': auth.session.token,
+  };
+  const path = `${api}/account-usage/${auth.account.id}`;
+  const previous = await (await request.get(path, { headers })).json();
+  const generation = previous.metrics.find(
+    (row: { metric: string }) => row.metric === 'generation',
+  );
+  const edit = previous.metrics.find((row: { metric: string }) => row.metric === 'edit');
+  const policy = {
+    ...previous.override,
+    generation: { limit: generation.completed, period: 'lifetime', timezone: 'UTC' },
+    edit: { limit: edit.completed + 10, period: 'lifetime', timezone: 'UTC' },
+    storage: {
+      limit: previous.storageBytes + 50 * 1024 * 1024,
+      period: 'lifetime',
+      timezone: 'UTC',
+    },
+  };
+  expect((await request.put(path, { headers, data: policy })).ok()).toBe(true);
+  restorePolicy = async () => {
+    expect((await request.put(path, { headers, data: previous.override })).ok()).toBe(true);
+    await request.post(`${api}/auth/logout`, { headers });
+  };
+});
+test.afterEach(async () => {
+  await restorePolicy?.();
+  restorePolicy = undefined;
+});
+
 test('isolated API: editor revision survives a fresh browser context and exports', async ({
   browser,
   page,
@@ -43,6 +86,7 @@ test('isolated API: editor revision survives a fresh browser context and exports
       `/api/backend/editor/decks/${runId}/revisions/${saved.snapshot.revision}/export`,
       {
         data: { schemaVersion: 1, format: 'pptx' },
+        headers: { origin: new URL(fresh.url()).origin },
         timeout: 90000,
       },
     );

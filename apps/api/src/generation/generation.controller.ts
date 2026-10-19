@@ -6,6 +6,7 @@ import {
   HttpCode,
   Get,
   Inject,
+  Optional,
   Logger,
   NotFoundException,
   Param,
@@ -39,6 +40,7 @@ import { buildOf, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
 import type { Account } from '../accounts/account-rules.js';
 import { GenerationService, pickedModel, type PrepareProgress } from './generation.service.js';
+import { AccountUsageService } from '../accounts/account-usage.service.js';
 import { ApiAccountRoutes, ApiErrors, ApiFile, ApiJsonBody } from '../docs/decorators.js';
 import {
   deckPatchSchema,
@@ -87,7 +89,10 @@ export interface TemplatePreparation {
 @ApiAccountRoutes('generation')
 export class GenerationController {
   private readonly logger = new Logger(GenerationController.name);
-  constructor(@Inject(GenerationService) private readonly generation: GenerationService) {}
+  constructor(
+    @Inject(GenerationService) private readonly generation: GenerationService,
+    @Optional() @Inject(AccountUsageService) private readonly accountUsage?: AccountUsageService,
+  ) {}
 
   private get pool() {
     return this.generation.pool;
@@ -492,6 +497,47 @@ export class GenerationController {
     const previews = format === 'png' || format === 'html';
     const exportId = randomUUID();
     const outputDir = join(this.directory(id), 'exports', exportId);
+    if (this.accountUsage)
+      return this.accountUsage.write(
+        account.id,
+        0,
+        () =>
+          this.buildEditedExport(
+            id,
+            slides,
+            validatedMedia,
+            variant,
+            format,
+            formats,
+            previews,
+            exportId,
+            outputDir,
+          ),
+        () => rm(outputDir, { recursive: true, force: true }),
+      );
+    return this.buildEditedExport(
+      id,
+      slides,
+      validatedMedia,
+      variant,
+      format,
+      formats,
+      previews,
+      exportId,
+      outputDir,
+    );
+  }
+  private async buildEditedExport(
+    id: string,
+    slides: readonly SlideIr[],
+    validatedMedia: ReturnType<typeof validateExportMedia>,
+    variant: 'dense' | 'balanced' | 'airy',
+    format: string,
+    formats: ('pptx' | 'pdf')[],
+    previews: boolean,
+    exportId: string,
+    outputDir: string,
+  ): Promise<{ exportId: string; previews: string[] }> {
     await mkdir(outputDir, { recursive: true });
     try {
       const media = await writeExportMedia(outputDir, validatedMedia);

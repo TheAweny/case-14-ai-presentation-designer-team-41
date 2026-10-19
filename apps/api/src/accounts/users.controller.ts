@@ -21,6 +21,7 @@ import { AdminOnly, CurrentAccount } from './account.guard.js';
 import type { Account } from './account-rules.js';
 import { AccountsService, type AccountPatch } from './accounts.service.js';
 import { AccountDataService } from './account-data.service.js';
+import { SessionsService } from '../auth/sessions.service.js';
 import { ApiAccountRoutes, ApiErrors, ApiJsonBody } from '../docs/decorators.js';
 import {
   accountInputSchema,
@@ -50,6 +51,7 @@ export class UsersController {
   constructor(
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(AccountDataService) private readonly data: AccountDataService,
+    @Inject(SessionsService) private readonly sessions: SessionsService,
   ) {}
 
   @Get('me')
@@ -156,5 +158,13 @@ export class UsersController {
     await this.accounts.assertRemovable(id, actor.id);
     await this.data.removeAllOf(id);
     await this.accounts.remove(id, actor.id);
+  }
+
+  @Post(':id/revoke-sessions')
+  @ApiOperation({ summary: 'Отозвать все сессии аккаунта' })
+  @AdminOnly()
+  @HttpCode(204)
+  revokeSessions(@Param('id') id: string, @CurrentAccount() actor: Account) {
+    return this.sessions.revokeAll(id, actor.id);
   }
 }

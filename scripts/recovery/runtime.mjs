@@ -43,6 +43,7 @@ const auth = await api('/auth/verify', {
   password: 'recovery-local-only',
 });
 headers['x-lct-user'] = auth.account.id;
+headers['x-lct-session'] = auth.session.token;
 const file = new FormData();
 file.set('file', new Blob([await readFile(new URL('synthetic.pptx', root))]), 'synthetic.pptx');
 const uploaded = await api('/files/template', file);

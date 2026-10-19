@@ -7,6 +7,9 @@ import { UsersController } from '../accounts/users.controller.js';
 import { AccountsService } from '../accounts/accounts.service.js';
 import { AccountDataService } from '../accounts/account-data.service.js';
 import { AuthController } from '../auth/auth.controller.js';
+import { SessionsService } from '../auth/sessions.service.js';
+import { AccountUsageService } from '../accounts/account-usage.service.js';
+import { AccountPolicyController } from '../accounts/account-policy.controller.js';
 import { ChatsController } from '../chats/chats.controller.js';
 import { ChatsService } from '../chats/chats.service.js';
 import { FilesController } from '../files/files.controller.js';
@@ -23,6 +26,7 @@ import { DOCS_TAGS, buildOpenApiDocument, convertSchema } from './openapi.js';
 
 const CONTROLLERS = [
   UsersController,
+  AccountPolicyController,
   AuthController,
   ChatsController,
   FilesController,
@@ -35,6 +39,8 @@ const CONTROLLERS = [
 
 const SERVICES: Type<unknown>[] = [
   AccountsService,
+  SessionsService,
+  AccountUsageService,
   AccountDataService,
   ChatsService,
   GenerationService,

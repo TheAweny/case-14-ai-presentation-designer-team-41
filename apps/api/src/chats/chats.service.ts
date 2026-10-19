@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Optional,
   Logger,
   NotFoundException,
   type OnApplicationShutdown,
@@ -77,6 +78,7 @@ import { join } from 'node:path';
 import { createAssetSearch, type AssetSearch } from './asset-search.js';
 import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
 import { fetchWebSource } from './web-source.js';
+import { AccountUsageService } from '../accounts/account-usage.service.js';
 
 export const CHAT_ID = /^[0-9a-f-]{36}$/i;
 const TITLE_MAX_LENGTH = 200;
@@ -155,6 +157,7 @@ class Turn {
   finished = false;
   lease: ChatLease | null = null;
   stopWhenUnwatched = false;
+  operation: { id: string; worker: string } | null = null;
 
   constructor(readonly chatId: string) {}
 
@@ -223,6 +226,7 @@ export class ChatsService implements OnApplicationShutdown {
     @Inject(GenerationService) private readonly generation: GenerationService,
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
     @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
+    @Optional() @Inject(AccountUsageService) private readonly usage?: AccountUsageService,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
@@ -664,8 +668,33 @@ export class ChatsService implements OnApplicationShutdown {
       if (!turn.lease) throw new ConflictException('The chat is answering already.');
       const state = await this.openChat(id, request, account);
       if (this.recoverInterrupted(state)) await this.save(state);
-      const prepared = await this.acceptInput(state, request, account, turn);
+      const operationId = `chat:${id}:${request.requestId ?? (request.input.type === 'message' ? crypto.randomUUID() : request.input.type === 'answer' ? request.input.questionId : request.input.planId)}`;
+      const usage = this.usage;
+      const worker =
+        usage && request.input.type !== 'approve-plan'
+          ? await usage.translate(() =>
+              usage.store.admit(account.id, operationId, 'assistant-response'),
+            )
+          : null;
+      const operationHeartbeat = worker
+        ? setInterval(() => {
+            void this.usage?.store
+              .renew(account.id, operationId, worker)
+              .catch((error) => turn.controller.abort(error));
+          }, 15000)
+        : null;
+      turn.operation = worker ? { id: operationId, worker } : null;
+      let prepared: AcceptedInput;
+      try {
+        prepared = await this.acceptInput(state, request, account, turn);
+      } catch (error) {
+        if (operationHeartbeat) clearInterval(operationHeartbeat);
+        if (worker) await this.usage?.store.finish(account.id, operationId, false, worker);
+        throw error;
+      }
       if (prepared.replay) {
+        if (operationHeartbeat) clearInterval(operationHeartbeat);
+        if (worker) await this.usage?.store.finish(account.id, operationId, false, worker);
         for (const message of state.messages) turn.emit({ type: 'message', message });
         turn.finished = true;
         this.turns.delete(id);
@@ -680,6 +709,10 @@ export class ChatsService implements OnApplicationShutdown {
           );
         })
         .finally(async () => {
+          if (operationHeartbeat) clearInterval(operationHeartbeat);
+          // Only the durable message transaction counts success. An in-memory done message
+          // whose final save failed must never consume a successful-response allowance.
+          if (worker) await this.usage?.store.finish(account.id, operationId, false, worker);
           turn.finished = true;
           this.turns.delete(id);
           this.currentAnswer.delete(id);
@@ -1028,6 +1061,9 @@ export class ChatsService implements OnApplicationShutdown {
           cost: null,
         }),
         'chat',
+        fetch,
+        undefined,
+        resolved,
       ),
     });
     return withConnection(model, resolved.connectionId);
@@ -1048,6 +1084,13 @@ export class ChatsService implements OnApplicationShutdown {
       status: 'streaming',
       createdAt: Date.now(),
     };
+    if (turn.operation)
+      await this.usage?.store.bindResult(
+        account.id,
+        turn.operation.id,
+        turn.operation.worker,
+        message.id,
+      );
     state.messages.push(message);
     turn.emit({ type: 'message', message });
     const writer = new AnswerWriter(message.id, (event) => {

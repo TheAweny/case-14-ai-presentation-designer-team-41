@@ -116,8 +116,11 @@ export class GenerationBuildStore {
 
   async finish(lease: BuildLease, status: 'done' | 'failed' | 'interrupted'): Promise<void> {
     const result = await this.pool.query(
-      `UPDATE generation_builds SET status=$4,worker_id=NULL,lease_until=NULL,updated_at=now()
-       WHERE id=$1 AND worker_id=$2 AND fence=$3 AND status='running' AND lease_until>now()`,
+      `WITH finished AS (UPDATE generation_builds SET status=$4,worker_id=NULL,lease_until=NULL,updated_at=now()
+       WHERE id=$1 AND worker_id=$2 AND fence=$3 AND status='running' AND lease_until>now() RETURNING id),
+       accounted AS (UPDATE account_operations SET status=CASE WHEN $4='done' THEN 'completed' ELSE 'released' END,
+         completed_at=CASE WHEN $4='done' THEN now() ELSE NULL END,worker_id=NULL,lease_until=NULL,updated_at=now()
+         WHERE operation_id IN (SELECT id::text FROM finished) AND status='active') SELECT id FROM finished`,
       [lease.build.id, lease.workerId, lease.fence, status],
     );
     if (!result.rowCount)
@@ -168,6 +171,11 @@ export class GenerationBuildStore {
           [variant.runId],
         );
       }
+      if (stopped.rowCount)
+        await client.query(
+          "UPDATE account_operations SET status='released',worker_id=NULL,lease_until=NULL,updated_at=now() WHERE operation_id=$1 AND owner_id=$2 AND status='active'",
+          [id, ownerId],
+        );
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');

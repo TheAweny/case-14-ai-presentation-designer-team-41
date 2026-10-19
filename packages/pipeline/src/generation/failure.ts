@@ -75,6 +75,18 @@ export function generationFailure(
     );
   }
   const named = error as { name?: string; code?: string; requiresReview?: boolean } | null;
+  if (named?.code === 'account-limit')
+    return {
+      code: 'account-limit',
+      message: 'Достигнут лимит, установленный администратором. Готовые результаты доступны.',
+      retryable: false,
+    };
+  if (named?.code === 'account-disabled')
+    return {
+      code: 'account-disabled',
+      message: 'Аккаунт отключён. Готовые результаты сохранены.',
+      retryable: false,
+    };
   if (named?.code === 'usage-budget-exceeded')
     return {
       code: 'usage-budget-exceeded',

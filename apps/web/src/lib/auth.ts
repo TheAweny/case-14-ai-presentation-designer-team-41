@@ -25,6 +25,8 @@ export interface Account {
   readonly role: AccountRole;
   /** Картинка: null — знак по id, `preset:N` — выбранный знак, иначе data URL (`avatars.ts`). */
   readonly avatar?: string | null;
+  /** Server-only login handoff; never placed in account context or serialized to the browser. */
+  readonly sessionToken?: string;
 }
 
 export interface AuthSource {

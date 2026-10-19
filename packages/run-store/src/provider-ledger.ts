@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { BuildLease } from './generation-build-store.js';
+import { assertAccountEnabled } from './account-usage.js';
 
 export interface AttemptIntent {
   taskKey: string;
@@ -10,6 +11,8 @@ export interface AttemptIntent {
   estimatedCost: number | null;
   pricingVersion: string | null;
   currency: string | null;
+  connectionId?: string;
+  connectionScope?: 'personal' | 'shared' | 'server';
 }
 export interface AttemptOutcome {
   status: string;
@@ -42,6 +45,7 @@ export class PostgresProviderLedger {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      await assertAccountEnabled(client, this.ownerId);
       const scope = this.lease?.build.id ?? `chat:${this.ownerId}`;
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [scope]);
       if (this.lease) {
@@ -60,7 +64,7 @@ export class PostgresProviderLedger {
         `SELECT count(*) AS requests, COALESCE(sum(COALESCE(input_tokens+output_tokens,reserved_tokens)),0) AS tokens,
           COALESCE(sum(COALESCE(actual_cost,estimated_cost)),0) AS cost,
           COALESCE(bool_or(actual_cost IS NULL AND estimated_cost IS NULL),false) AS unknown_cost
-         FROM provider_attempts WHERE ${this.lease ? 'build_id=$1' : 'build_id IS NULL AND owner_id=$1'}`,
+         FROM provider_attempts WHERE ${this.lease ? 'build_id=$1' : "build_id IS NULL AND owner_id=$1 AND created_at>=now()-interval '1 hour'"}`,
         [this.lease?.build.id ?? this.ownerId],
       );
       const used = totals.rows[0];
@@ -70,17 +74,10 @@ export class PostgresProviderLedger {
         Number(used.tokens) + intent.reservedTokens > this.limits.tokens
       )
         throw new UsageBudgetError('Исчерпан общий бюджет запросов или токенов сборки.');
-      if (
-        this.limits.cost !== null &&
-        (intent.currency !== this.limits.currency ||
-          intent.estimatedCost === null ||
-          used.unknown_cost ||
-          Number(used.cost) + intent.estimatedCost > this.limits.cost)
-      )
-        throw new UsageBudgetError('Стоимость неизвестна или превышает согласованный бюджет.');
+      // Cost remains technical analytics. Enterprise policy never requires a tariff or balance.
       await client.query(
-        `INSERT INTO provider_attempts(id,build_id,owner_id,task_key,model_id,kind,reserved_tokens,estimated_cost,pricing_version,currency)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        `INSERT INTO provider_attempts(id,build_id,owner_id,task_key,model_id,kind,reserved_tokens,estimated_cost,pricing_version,currency,connection_id,connection_scope)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [
           id,
           this.lease?.build.id ?? null,
@@ -92,6 +89,8 @@ export class PostgresProviderLedger {
           intent.estimatedCost,
           intent.pricingVersion,
           intent.currency,
+          intent.connectionId ?? null,
+          intent.connectionScope ?? null,
         ],
       );
       await client.query('COMMIT');

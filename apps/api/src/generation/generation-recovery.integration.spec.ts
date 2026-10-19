@@ -77,6 +77,11 @@ describe.skipIf(!databaseUrl)(
       url = connection.toString();
       repository = new PostgresRunRepository({ connectionString: url });
       await repository.migrate();
+      const seed = new Pool({ connectionString: url });
+      await seed.query(
+        "INSERT INTO app_users(id,email,name,password_hash) VALUES('owner','recovery-owner@example.test','Owner','hash')",
+      );
+      await seed.end();
       pool = new Pool({ connectionString: url });
       store = new GenerationBuildStore(pool);
     });
@@ -330,6 +335,51 @@ describe.skipIf(!databaseUrl)(
       await Promise.all([first.settled, second.settled]);
       expect((await continued.settled).every((end) => end.state === 'done')).toBe(true);
       expect(calls).toHaveLength(6);
+    });
+
+    it('reserves a generation across three variants and accounts durable success once', async () => {
+      const limited = { ...owner, id: randomUUID() };
+      await pool.query(
+        "INSERT INTO app_users(id,email,name,password_hash) VALUES($1,$2,'Limited','hash')",
+        [limited.id, `${limited.id}@example.test`],
+      );
+      const usage = new (await import('@lct/run-store')).AccountUsageStore(pool);
+      await pool.query(
+        "INSERT INTO app_users(id,email,name,password_hash,role) VALUES('quota-admin','quota-admin@example.test','Admin','hash','admin') ON CONFLICT DO NOTHING",
+      );
+      await usage.setPolicy(
+        limited.id,
+        { generation: { limit: 1, period: 'lifetime', timezone: 'UTC' } },
+        'quota-admin',
+      );
+      const service = serviceOf();
+      mode = 'hold';
+      const input = request();
+      const first = await service.start(input, limited);
+      expect(await service.start(input, limited)).toBe(first);
+      await expect(service.start(request(), limited)).rejects.toMatchObject({
+        code: 'account-limit',
+      });
+      expect((await usage.view(limited.id)).metrics[0]).toMatchObject({ active: 1, completed: 0 });
+      unblock.release();
+      await first.settled;
+      expect((await usage.view(limited.id)).metrics[0]).toMatchObject({ active: 0, completed: 1 });
+      await expect(service.resume(first.runId, limited)).resolves.toMatchObject({
+        runId: first.runId,
+      });
+      expect((await usage.view(limited.id)).metrics[0].completed).toBe(1);
+    });
+
+    it('continues accepted work when tariff data is missing or changes', async () => {
+      vi.stubEnv('MODEL_PRICING_FILE', join(root, 'missing-prices.json'));
+      const service = serviceOf();
+      const first = await service.start(request(), owner);
+      await first.settled;
+      await writeFile(join(root, 'missing-prices.json'), 'not a tariff catalog');
+      mode = 'success';
+      const resumed = await service.resume(first.runId, owner);
+      expect((await resumed.settled).every((end) => end.state === 'done')).toBe(true);
+      expect(plannerCalls).toBe(1);
     });
 
     it('releases and invalidates its lease on graceful shutdown instead of waiting 30 seconds', async () => {

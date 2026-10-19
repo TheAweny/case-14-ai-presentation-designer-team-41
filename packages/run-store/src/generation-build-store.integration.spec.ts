@@ -21,6 +21,9 @@ describe.skipIf(!databaseUrl)('generation ownership and accounting on actual Pos
     pool = new Pool({ connectionString: url.toString() });
     repository = new PostgresRunRepository({ connectionString: url.toString() });
     await repository.migrate();
+    await pool.query(
+      "INSERT INTO app_users(id,email,name,password_hash) VALUES('owner','ledger-owner@example.test','Owner','hash')",
+    );
     store = new GenerationBuildStore(pool);
   });
   afterAll(async () => {
@@ -184,7 +187,7 @@ describe.skipIf(!databaseUrl)('generation ownership and accounting on actual Pos
     await expect(ledger.begin(intent)).rejects.toThrow('истекло');
   });
 
-  it('rejects unknown prices under an explicit cost budget', async () => {
+  it('keeps unknown and estimated costs as analytics without a monetary balance', async () => {
     const lease = await leased();
     const ledger = new PostgresProviderLedger(pool, 'owner', lease, {
       requests: 10,
@@ -192,20 +195,19 @@ describe.skipIf(!databaseUrl)('generation ownership and accounting on actual Pos
       cost: 1,
       currency: 'USD',
     });
-    await expect(ledger.begin(intent)).rejects.toThrow('неизвестна');
+    await ledger.begin(intent);
     await ledger.begin({
       ...intent,
       estimatedCost: 0.8,
       pricingVersion: 'fixture-v1',
       currency: 'USD',
     });
-    await expect(
-      ledger.begin({
-        ...intent,
-        estimatedCost: 0.3,
-        pricingVersion: 'fixture-v1',
-        currency: 'USD',
-      }),
-    ).rejects.toThrow('бюджет');
+    await ledger.begin({
+      ...intent,
+      estimatedCost: 0.3,
+      pricingVersion: 'fixture-v1',
+      currency: 'USD',
+    });
+    expect(await ledger.summary()).toMatchObject({ requests: 3, unknown_cost: 3 });
   });
 });

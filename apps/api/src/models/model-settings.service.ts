@@ -78,6 +78,7 @@ export class ModelNotConfiguredError extends Error {
 
 /** Everything a provider needs to call a model. Lives only for the run that asked for it. */
 export interface ResolvedModel {
+  readonly connectionScope?: 'personal' | 'shared' | 'server';
   readonly connectionId: string;
   readonly baseUrl: string;
   readonly apiKey: string;
@@ -570,6 +571,7 @@ export class ModelSettingsService {
       }
       return {
         connectionId: SERVER_CONNECTION_ID,
+        connectionScope: 'server',
         baseUrl: server.baseUrl,
         apiKey: server.apiKey,
         model: ref.modelId,
@@ -603,6 +605,7 @@ export class ModelSettingsService {
     }
     return {
       connectionId: stored.connectionId,
+      connectionScope: stored.ownerId === null ? 'shared' : 'personal',
       baseUrl: stored.baseUrl,
       apiKey: apiKey ?? '',
       model: ref.modelId,

@@ -62,15 +62,24 @@ function probePrompts(): () => Promise<CapabilityProbe> {
       provide: ModelCapabilityService,
       inject: [MODEL_SETTINGS_STORE, ModelSettingsService, MODEL_SETTINGS_POOL],
       useFactory: (store: ModelSettingsStore, settings: ModelSettingsService, pool: Pool) =>
-        new ModelCapabilityService(store, settings, probePrompts(), fetch, Date.now, (ownerId) =>
-          ledgerFetch(
-            new PostgresProviderLedger(pool, ownerId, null, {
-              requests: 10000,
-              tokens: 100_000_000,
-              cost: null,
-            }),
-            'capability-probe',
-          ),
+        new ModelCapabilityService(
+          store,
+          settings,
+          probePrompts(),
+          fetch,
+          Date.now,
+          (ownerId, model) =>
+            ledgerFetch(
+              new PostgresProviderLedger(pool, ownerId, null, {
+                requests: 10000,
+                tokens: 100_000_000,
+                cost: null,
+              }),
+              'capability-probe',
+              fetch,
+              undefined,
+              model,
+            ),
         ),
     },
   ],

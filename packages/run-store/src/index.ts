@@ -12,6 +12,13 @@ export {
 } from './postgres-run-repository.js';
 export { MemoryRunRepository } from './memory-run-repository.js';
 export {
+  AccountUsageStore,
+  AccountLimitError,
+  effectivePolicy,
+  assertAccountEnabled,
+  policyWindow,
+} from './account-usage.js';
+export {
   GenerationBuildStore,
   BuildConflictError,
   type BuildRecord,

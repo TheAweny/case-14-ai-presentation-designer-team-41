@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Inject,
+  Optional,
   Injectable,
   Logger,
   NotFoundException,
@@ -67,6 +68,7 @@ import { effectiveModelPlan } from './model-plan.js';
 import { loadAnswerFormat } from '@lct/registry';
 import {
   GenerationBuildStore,
+  AccountUsageStore,
   BuildConflictError,
   PostgresProviderLedger,
   type BuildRecord,
@@ -84,6 +86,7 @@ import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
 import { readPreparedMaterial } from '../materials/prepared-material.js';
+import { AccountUsageService, directoryBytes } from '../accounts/account-usage.service.js';
 
 /** The account as model settings see it: whose connections and role choices apply. */
 export function actorOf(account: Account) {
@@ -213,6 +216,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     @Inject(RUN_REPOSITORY) readonly repository: RunRepository,
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
     @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
+    @Optional() @Inject(AccountUsageService) private readonly accountUsage?: AccountUsageService,
   ) {}
 
   directory(id: string): string {
@@ -327,6 +331,9 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             cost: null,
           }),
           'template-index',
+          fetch,
+          undefined,
+          resolved,
         ),
       });
       const provider = new CheckpointTextProvider(
@@ -701,7 +708,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         ),
       );
       const attemptBudget = new AttemptBudget();
-      let transport: typeof fetch = async () => {
+      let transport: (
+        model: ResolvedModel,
+        ...args: Parameters<typeof fetch>
+      ) => ReturnType<typeof fetch> = async () => {
         throw new Error('Журнал запросов ещё не открыт.');
       };
       const providerOf = (model: ResolvedModel, reasoning: ReasoningCapability | undefined) =>
@@ -717,7 +727,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           answerFormat,
           attemptBudget,
           queueGroup: schedulingGroup,
-          fetchImpl: (...args) => transport(...args),
+          fetchImpl: (...args) => transport(model, ...args),
           onActivity: (event) => onActivity?.({ ...event, kind: 'agent' }),
         });
       const fallback = providerOf(writer, writerReasoning);
@@ -743,12 +753,15 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           ? index.data.notes
           : undefined;
       const requestKey = schedulingGroup;
-      const pricingBytes = process.env.MODEL_PRICING_FILE
-        ? await readFile(process.env.MODEL_PRICING_FILE, 'utf8')
-        : null;
-      const prices = pricingBytes ? tokenPriceResolver(JSON.parse(pricingBytes)) : undefined;
-      if (input.budget?.maxCost && !input.budget.currency)
-        throw new BadRequestException('Для бюджета стоимости укажите валюту.');
+      let prices: ReturnType<typeof tokenPriceResolver> | undefined;
+      try {
+        const pricingBytes = process.env.MODEL_PRICING_FILE
+          ? await readFile(process.env.MODEL_PRICING_FILE, 'utf8')
+          : null;
+        prices = pricingBytes ? tokenPriceResolver(JSON.parse(pricingBytes)) : undefined;
+      } catch {
+        this.logger.warn('Tariff catalog is invalid; usage cost remains unknown.');
+      }
       const previous =
         retry?.build ??
         (input.requestId ? await this.builds.byRequest(account.id, requestKey) : null);
@@ -775,7 +788,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         profile: prepared.data,
         ...(notes ? { notes } : {}),
         registryHash,
-        ...(pricingBytes ? { pricingHash: dependencyKey(pricingBytes) } : {}),
+        // Pricing describes each physical attempt; it cannot invalidate accepted content on resume.
+        ...(previous && generationSpecSchema.parse(previous.spec).pricingHash
+          ? { pricingHash: generationSpecSchema.parse(previous.spec).pricingHash }
+          : {}),
         today: previous
           ? generationSpecSchema.parse(previous.spec).today
           : `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
@@ -847,13 +863,17 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       }
       const executionLease = lease;
       this.leases.set(buildRecord.id, executionLease);
+      const admit = () =>
+        new AccountUsageStore(this.pool).admit(account.id, buildRecord.id, 'generation');
+      if (this.accountUsage) await this.accountUsage.translate(admit);
+      else await admit();
       const ledger = new PostgresProviderLedger(this.pool, account.id, executionLease, {
         requests: input.budget?.maxHttpRequests ?? 240,
         tokens: input.budget?.maxReservedTokens ?? 2_000_000,
-        cost: input.budget?.maxCost ?? null,
-        ...(input.budget?.currency ? { currency: input.budget.currency } : {}),
+        cost: null,
       });
-      transport = ledgerFetch(ledger, 'generation', fetch, prices);
+      transport = (model, ...args) =>
+        ledgerFetch(ledger, 'generation', fetch, prices, model)(...args);
       const assertOwner = async () => {
         signal.throwIfAborted();
         await this.builds.assert(executionLease);
@@ -894,14 +914,18 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
               answerFormat,
               signal,
               attemptBudget,
-              fetchImpl: ledgerFetch(ledger, 'vision', fetch, prices),
+              fetchImpl: ledgerFetch(ledger, 'vision', fetch, prices, vision),
               queueGroup: schedulingGroup,
             }),
           }
         : null;
       // Pictures too are drawn once per brief. Without an image model the planner is not offered
       // a place for a picture, so no slide is left with an empty frame.
-      const images = imageProviderOf(imageModel, process.env, ledgerFetch(ledger, 'images'));
+      const images = imageProviderOf(
+        imageModel,
+        process.env,
+        ledgerFetch(ledger, 'images', fetch, prices, imageModel ?? undefined),
+      );
       const illustrations = images
         ? await gate(() =>
             SharedIllustrations.load(
@@ -946,11 +970,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           runs.push({ run, variant });
           this.active.set(run.runId, controller);
           if (signal.aborted) throw buildStopReason(signal);
-          await mkdir(this.directory(run.runId), { recursive: true });
-          if (signal.aborted) throw buildStopReason(signal);
-          await writeFile(
-            join(this.directory(run.runId), 'metadata.json'),
-            JSON.stringify({
+          const runFiles = {
+            'metadata.json': JSON.stringify({
               templateId: input.templateId,
               projectId: input.projectId,
               ownerId: account.id,
@@ -958,23 +979,20 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
               buildId,
               updatedAt: Date.now(),
             }),
-          );
-          if (signal.aborted) throw buildStopReason(signal);
-          // What the build was asked for, to build a failed variant again from it.
-          await writeFile(join(this.directory(run.runId), 'request.json'), JSON.stringify(input));
-          if (signal.aborted) throw buildStopReason(signal);
-          await writeFile(
-            join(this.directory(run.runId), 'model-plan.json'),
-            JSON.stringify(modelPlan),
-          );
-          if (signal.aborted) throw buildStopReason(signal);
-          if (retry?.plan) {
-            await writeFile(
-              join(this.directory(run.runId), 'composition-plan.json'),
-              JSON.stringify(retry.plan),
-            );
-            if (signal.aborted) throw buildStopReason(signal);
+            'request.json': JSON.stringify(input),
+            'model-plan.json': JSON.stringify(modelPlan),
+            ...(retry?.plan ? { 'composition-plan.json': JSON.stringify(retry.plan) } : {}),
+          };
+          if (this.accountUsage)
+            await this.accountUsage.writeFiles(account.id, this.directory(run.runId), runFiles);
+          else {
+            await mkdir(this.directory(run.runId), { recursive: true });
+            for (const [name, contents] of Object.entries(runFiles)) {
+              if (signal.aborted) throw buildStopReason(signal);
+              await writeFile(join(this.directory(run.runId), name), contents);
+            }
           }
+          if (signal.aborted) throw buildStopReason(signal);
         }
       } catch (error) {
         for (const { run } of runs) {
@@ -1036,32 +1054,40 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           await assertOwner();
           if (!done) throw new Error('Сборка не подтвердила завершение.');
           await atomicJson(join(attemptDir, 'provider-usage.json'), await ledger.summary());
-          await this.builds.publish(executionLease, done, async () => {
-            const names = (await readdir(attemptDir)).filter((name) => name !== 'manifest.json');
-            // The manifest is the final publication marker. A stale worker writes only its
-            // own execution directory and can never replace these files after lease loss.
-            for (const name of [...names, 'manifest.json']) {
-              signal.throwIfAborted();
-              const target = join(this.directory(run.runId), name);
-              const temporary = `${target}.${executionLease.fence}.publish`;
-              await cp(join(attemptDir, name), temporary, { recursive: true, force: true });
-              // Directory publication (previews/media) uses a fence-specific name in the
-              // original deck paths; existing root directories can be merged safely here.
-              try {
-                await rename(temporary, target);
-              } catch (error) {
-                if (
-                  !['EEXIST', 'ENOTEMPTY', 'EPERM'].includes(
-                    (error as NodeJS.ErrnoException).code ?? '',
+          const publication = () =>
+            this.builds.publish(executionLease, done as JobEvent, async () => {
+              const names = (await readdir(attemptDir)).filter((name) => name !== 'manifest.json');
+              // The manifest is the final publication marker. A stale worker writes only its
+              // own execution directory and can never replace these files after lease loss.
+              for (const name of [...names, 'manifest.json']) {
+                signal.throwIfAborted();
+                const target = join(this.directory(run.runId), name);
+                const temporary = `${target}.${executionLease.fence}.publish`;
+                await cp(join(attemptDir, name), temporary, { recursive: true, force: true });
+                // Directory publication (previews/media) uses a fence-specific name in the
+                // original deck paths; existing root directories can be merged safely here.
+                try {
+                  await rename(temporary, target);
+                } catch (error) {
+                  if (
+                    !['EEXIST', 'ENOTEMPTY', 'EPERM'].includes(
+                      (error as NodeJS.ErrnoException).code ?? '',
+                    )
                   )
-                )
-                  throw error;
-                await cp(temporary, target, { recursive: true, force: true });
-                await rm(temporary, { recursive: true, force: true });
+                    throw error;
+                  await cp(temporary, target, { recursive: true, force: true });
+                  await rm(temporary, { recursive: true, force: true });
+                }
               }
-            }
-            signal.throwIfAborted();
-          });
+              signal.throwIfAborted();
+            });
+          if (this.accountUsage)
+            await this.accountUsage.write(
+              account.id,
+              await directoryBytes(attemptDir),
+              publication,
+            );
+          else await publication();
           return 'done' as const;
         } catch (error) {
           this.logger.warn(`Variant ${run.runId} failed: ${String(error)}`);

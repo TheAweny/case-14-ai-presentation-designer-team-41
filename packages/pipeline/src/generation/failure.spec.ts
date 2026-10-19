@@ -3,6 +3,14 @@ import { generationFailure } from './failure.js';
 import { modelHttpFailure } from '../chat/model-failure.js';
 
 describe('generation failure classification', () => {
+  it('distinguishes administrator policy from provider quota and technical caps', () => {
+    expect(
+      generationFailure({ code: 'account-limit' }, new AbortController().signal),
+    ).toMatchObject({ code: 'account-limit', retryable: false });
+    expect(
+      generationFailure({ code: 'account-disabled' }, new AbortController().signal),
+    ).toMatchObject({ code: 'account-disabled', retryable: false });
+  });
   it('retains provider categories after Mastra serializes an Error to plain data', () => {
     expect(
       generationFailure(

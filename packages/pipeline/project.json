@@ -9,6 +9,10 @@
       "executor": "nx:run-commands",
       "options": { "command": "node scripts/recovery/runtime.mjs", "cwd": "{workspaceRoot}" }
     },
+    "access-runtime": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node scripts/recovery/access-policy.mjs", "cwd": "{workspaceRoot}" }
+    },
     "recovery-restart": {
       "executor": "nx:run-commands",
       "options": { "command": "node scripts/recovery/restart.mjs", "cwd": "{workspaceRoot}" }

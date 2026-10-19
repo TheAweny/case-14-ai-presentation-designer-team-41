@@ -10,6 +10,8 @@ export interface AttemptLedger {
     estimatedCost: number | null;
     pricingVersion: string | null;
     currency: string | null;
+    connectionId?: string;
+    connectionScope?: 'personal' | 'shared' | 'server';
   }): Promise<string>;
   end(
     id: string,
@@ -37,6 +39,7 @@ export function ledgerFetch(
   kind: string,
   transport: typeof fetch = fetch,
   prices?: TokenPrice | ((model: string) => TokenPrice | undefined),
+  connection?: { connectionId: string; connectionScope?: 'personal' | 'shared' | 'server' },
 ): typeof fetch {
   return async (url, init) => {
     const body = typeof init?.body === 'string' ? init.body : '';
@@ -64,6 +67,9 @@ export function ledgerFetch(
       estimatedCost: cost,
       pricingVersion: price?.version ?? null,
       currency: price?.currency ?? null,
+      ...(connection
+        ? { connectionId: connection.connectionId, connectionScope: connection.connectionScope }
+        : {}),
     });
     let response: Response;
     try {

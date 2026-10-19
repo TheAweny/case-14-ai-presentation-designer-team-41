@@ -382,6 +382,8 @@
     "visualModels": "Images, voice and visual review"
   },
   "users": {
+    "policyAccount": "Account limits",
+    "policyDefault": "Common policy",
     "title": "Users",
     "description": "There is no sign-up: the administrator creates accounts. A switched-off person cannot sign in and keeps their presentations; deleting erases their presentations, chats and private templates.",
     "add": "Add user",

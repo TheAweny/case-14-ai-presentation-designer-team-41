@@ -4,6 +4,7 @@ import {
   HttpException,
   Inject,
   Injectable,
+  Optional,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import type { Account } from '../accounts/account-rules.js';
 import { writeExportMedia, type ValidatedExportMedia } from '../generation/export-media.js';
 import { GenerationService } from '../generation/generation.service.js';
 import { decodeEditorMedia } from './editor-media.js';
+import { AccountUsageService } from '../accounts/account-usage.service.js';
 import {
   EditorMediaConflictError,
   EditorMediaMissingError,
@@ -46,7 +48,10 @@ const variantSchema = z.enum(['dense', 'balanced', 'airy']);
 export class EditorService implements OnApplicationBootstrap {
   private readonly store: EditorSnapshotStore;
 
-  constructor(@Inject(GenerationService) private readonly generation: GenerationService) {
+  constructor(
+    @Inject(GenerationService) private readonly generation: GenerationService,
+    @Optional() @Inject(AccountUsageService) private readonly usage?: AccountUsageService,
+  ) {
     this.store = new PostgresEditorSnapshotStore(
       this.generation.pool,
       join(this.generation.root, 'editor-media'),
@@ -66,9 +71,38 @@ export class EditorService implements OnApplicationBootstrap {
     await this.owned(deckId, account);
     const parsed = editorSnapshotSaveRequestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.message);
+    const prior = await this.store.savedOutcome?.(account.id, deckId, parsed.data.idempotencyKey);
+    if (prior) return prior;
+    const operation = `edit:${account.id}:${deckId}:${parsed.data.idempotencyKey}`;
+    const usage = this.usage;
+    const worker = usage
+      ? await usage.translate(() => usage.store.admit(account.id, operation, 'edit'))
+      : null;
     try {
-      return await this.store.save(account.id, deckId, parsed.data);
+      const save = () =>
+        this.store.save(
+          account.id,
+          deckId,
+          parsed.data,
+          (client) => this.usage?.verifySnapshotStorage(account.id, client) ?? Promise.resolve(),
+        );
+      const result = this.usage
+        ? await this.usage.write(
+            account.id,
+            await this.usage.snapshotReserve(
+              account.id,
+              deckId,
+              parsed.data.idempotencyKey,
+              parsed.data,
+            ),
+            save,
+          )
+        : await save();
+      if (worker)
+        await this.usage?.store.finish(account.id, operation, result.kind === 'saved', worker);
+      return result;
     } catch (error) {
+      if (worker) await this.usage?.store.finish(account.id, operation, false, worker);
       if (error instanceof EditorMediaMissingError) {
         throw new ConflictException('Нужные картинки ещё не записаны. Снимок не опубликован.');
       }
@@ -86,13 +120,21 @@ export class EditorService implements OnApplicationBootstrap {
     const request = parsed.data;
     const decoded = decodeEditorMedia(request.mediaPart, request.dataUrl);
     try {
-      return await this.store.putMedia(
-        account.id,
-        deckId,
-        decoded.mediaPart,
-        decoded.bytes,
-        decoded.contentType,
-      );
+      const put = () =>
+        this.store.putMedia(
+          account.id,
+          deckId,
+          decoded.mediaPart,
+          decoded.bytes,
+          decoded.contentType,
+        );
+      return this.usage
+        ? await this.usage.write(
+            account.id,
+            await this.usage.mediaReserve(account.id, deckId, decoded.bytes),
+            put,
+          )
+        : await put();
     } catch (error) {
       if (error instanceof EditorMediaConflictError) {
         throw new ConflictException('Эта картинка уже сохранена с другими байтами.');
@@ -134,12 +176,59 @@ export class EditorService implements OnApplicationBootstrap {
     const previews = format === 'png' || format === 'html';
     const exportId = randomUUID();
     const outputDir = join(owned.directory, 'exports', exportId);
+    if (this.usage)
+      return this.usage.write(
+        account.id,
+        0,
+        () =>
+          this.buildRevisionExport(
+            deckId,
+            snapshot,
+            slides,
+            variant,
+            format,
+            formats,
+            previews,
+            exportId,
+            outputDir,
+            owned.directory,
+            account,
+          ),
+        () => rm(outputDir, { recursive: true, force: true }),
+      );
+    return this.buildRevisionExport(
+      deckId,
+      snapshot,
+      slides,
+      variant,
+      format,
+      formats,
+      previews,
+      exportId,
+      outputDir,
+      owned.directory,
+      account,
+    );
+  }
+  private async buildRevisionExport(
+    deckId: string,
+    snapshot: EditorSnapshot,
+    slides: readonly SlideIr[],
+    variant: LayoutVariantName,
+    format: string,
+    formats: ('pptx' | 'pdf')[],
+    previews: boolean,
+    exportId: string,
+    outputDir: string,
+    sourceDir: string,
+    account: Account,
+  ): Promise<EditorRevisionExportResponse> {
     await mkdir(outputDir, { recursive: true });
     try {
       const media = await this.mediaFor(account.id, deckId, slides, outputDir);
       await this.generation.engine.exportDeck({
         schemaVersion: 1,
-        templatePath: join(owned.directory, 'deck.pptx'),
+        templatePath: join(sourceDir, 'deck.pptx'),
         variant,
         slides: slides as SlideIr[],
         outputDir,

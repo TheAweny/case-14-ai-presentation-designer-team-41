@@ -39,12 +39,18 @@ export interface StoredMedia extends EditorMediaRef {
 }
 
 export interface EditorSnapshotStore {
+  savedOutcome?(
+    accountId: string,
+    deckId: string,
+    key: string,
+  ): Promise<EditorSnapshotSaveResponse | null>;
   load(accountId: string, deckId: string): Promise<EditorSnapshot | null>;
   loadRevision(accountId: string, deckId: string, revision: number): Promise<EditorSnapshot | null>;
   save(
     accountId: string,
     deckId: string,
     request: EditorSnapshotSaveRequest,
+    beforeCommit?: (client: PoolClient) => Promise<void>,
   ): Promise<EditorSnapshotSaveResponse>;
   putMedia(
     accountId: string,
@@ -238,10 +244,23 @@ export class PostgresEditorSnapshotStore implements EditorSnapshotStore {
     private readonly mediaRoot: string,
   ) {}
 
+  async savedOutcome(
+    accountId: string,
+    deckId: string,
+    key: string,
+  ): Promise<EditorSnapshotSaveResponse | null> {
+    const result = await this.pool.query(
+      'SELECT outcome FROM editor_idempotency WHERE account_id=$1 AND deck_id=$2 AND idempotency_key=$3',
+      [accountId, deckId, key],
+    );
+    return result.rows[0] ? editorSnapshotSaveResponseSchema.parse(result.rows[0].outcome) : null;
+  }
+
   private async withDeck<T>(
     accountId: string,
     deckId: string,
     run: (client: PoolClient) => Promise<T>,
+    beforeCommit?: (client: PoolClient) => Promise<void>,
   ): Promise<T> {
     const client = await this.pool.connect();
     try {
@@ -250,6 +269,7 @@ export class PostgresEditorSnapshotStore implements EditorSnapshotStore {
         `editor:${accountId}:${deckId}`,
       ]);
       const result = await run(client);
+      await beforeCommit?.(client);
       await client.query('COMMIT');
       return result;
     } catch (error) {
@@ -349,127 +369,133 @@ export class PostgresEditorSnapshotStore implements EditorSnapshotStore {
     accountId: string,
     deckId: string,
     request: EditorSnapshotSaveRequest,
+    beforeCommit?: (client: PoolClient) => Promise<void>,
   ): Promise<EditorSnapshotSaveResponse> {
-    return this.withDeck(accountId, deckId, async (client) => {
-      const prior = await client.query<{ outcome: EditorSnapshotSaveResponse }>(
-        `SELECT outcome FROM editor_idempotency
+    return this.withDeck(
+      accountId,
+      deckId,
+      async (client) => {
+        const prior = await client.query<{ outcome: EditorSnapshotSaveResponse }>(
+          `SELECT outcome FROM editor_idempotency
          WHERE account_id = $1 AND deck_id = $2 AND idempotency_key = $3`,
-        [accountId, deckId, request.idempotencyKey],
-      );
-      if (prior.rows[0]) return editorSnapshotSaveResponseSchema.parse(prior.rows[0].outcome);
-      for (const item of request.media) {
-        const media = await client.query<{
-          sha256: string;
-          byte_size: number;
-          storage_key: string;
-        }>(
-          `SELECT sha256, byte_size, storage_key FROM editor_media
-           WHERE account_id = $1 AND deck_id = $2 AND media_part = $3`,
-          [accountId, deckId, item.mediaPart],
+          [accountId, deckId, request.idempotencyKey],
         );
-        const row = media.rows[0];
-        if (!row || row.sha256 !== item.sha256 || row.byte_size !== item.byteSize) {
-          throw new EditorMediaMissingError(item.mediaPart);
+        if (prior.rows[0]) return editorSnapshotSaveResponseSchema.parse(prior.rows[0].outcome);
+        for (const item of request.media) {
+          const media = await client.query<{
+            sha256: string;
+            byte_size: number;
+            storage_key: string;
+          }>(
+            `SELECT sha256, byte_size, storage_key FROM editor_media
+           WHERE account_id = $1 AND deck_id = $2 AND media_part = $3`,
+            [accountId, deckId, item.mediaPart],
+          );
+          const row = media.rows[0];
+          if (!row || row.sha256 !== item.sha256 || row.byte_size !== item.byteSize) {
+            throw new EditorMediaMissingError(item.mediaPart);
+          }
+          try {
+            await stat(join(this.mediaRoot, row.storage_key));
+          } catch {
+            throw new EditorMediaMissingError(item.mediaPart);
+          }
         }
-        try {
-          await stat(join(this.mediaRoot, row.storage_key));
-        } catch {
-          throw new EditorMediaMissingError(item.mediaPart);
-        }
-      }
-      const head = await client.query<SnapshotRow>(
-        `SELECT revision, base, slides, media, content_sha256, created_at
+        const head = await client.query<SnapshotRow>(
+          `SELECT revision, base, slides, media, content_sha256, created_at
          FROM editor_snapshots
          WHERE account_id = $1 AND deck_id = $2
          ORDER BY revision DESC
          LIMIT 1
          FOR UPDATE`,
-        [accountId, deckId],
-      );
-      const current = head.rows[0]?.revision ?? 0;
-      if (current !== request.expectedRevision) {
-        if (!head.rows[0]) throw new EditorRevisionError();
-        const conflictId = randomUUID();
-        const outcome: EditorSnapshotSaveResponse = {
-          schemaVersion: 1,
-          kind: 'conflict',
-          conflict: {
+          [accountId, deckId],
+        );
+        const current = head.rows[0]?.revision ?? 0;
+        if (current !== request.expectedRevision) {
+          if (!head.rows[0]) throw new EditorRevisionError();
+          const conflictId = randomUUID();
+          const outcome: EditorSnapshotSaveResponse = {
             schemaVersion: 1,
-            conflictId,
-            expectedRevision: request.expectedRevision,
-            server: rowToSnapshot(deckId, head.rows[0]),
-            rejected: { base: request.base, slides: request.slides, media: request.media },
-          },
-        };
-        await client.query(
-          `INSERT INTO editor_conflicts
+            kind: 'conflict',
+            conflict: {
+              schemaVersion: 1,
+              conflictId,
+              expectedRevision: request.expectedRevision,
+              server: rowToSnapshot(deckId, head.rows[0]),
+              rejected: { base: request.base, slides: request.slides, media: request.media },
+            },
+          };
+          await client.query(
+            `INSERT INTO editor_conflicts
              (id, account_id, deck_id, expected_revision, base, slides, media)
            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)`,
+            [
+              conflictId,
+              accountId,
+              deckId,
+              request.expectedRevision,
+              request.base,
+              JSON.stringify(request.slides),
+              JSON.stringify(request.media),
+            ],
+          );
+          await client.query(
+            `INSERT INTO editor_idempotency (account_id, deck_id, idempotency_key, outcome)
+           VALUES ($1, $2, $3, $4::jsonb)`,
+            [accountId, deckId, request.idempotencyKey, JSON.stringify(outcome)],
+          );
+          if (request.media.length)
+            await client.query(
+              'UPDATE editor_media SET referenced=true WHERE account_id=$1 AND deck_id=$2 AND media_part=ANY($3::text[])',
+              [accountId, deckId, request.media.map((item) => item.mediaPart)],
+            );
+          return outcome;
+        }
+        const revision = current + 1;
+        const savedAt = new Date();
+        const contentSha256 = sha256(JSON.stringify(request.slides));
+        await client.query(
+          `INSERT INTO editor_snapshots
+           (account_id, deck_id, revision, base, slides, media, content_sha256, created_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
           [
-            conflictId,
             accountId,
             deckId,
-            request.expectedRevision,
+            revision,
             request.base,
             JSON.stringify(request.slides),
             JSON.stringify(request.media),
+            contentSha256,
+            savedAt,
           ],
         );
-        await client.query(
-          `INSERT INTO editor_idempotency (account_id, deck_id, idempotency_key, outcome)
-           VALUES ($1, $2, $3, $4::jsonb)`,
-          [accountId, deckId, request.idempotencyKey, JSON.stringify(outcome)],
-        );
-        if (request.media.length)
+        if (request.media.length) {
           await client.query(
-            'UPDATE editor_media SET referenced=true WHERE account_id=$1 AND deck_id=$2 AND media_part=ANY($3::text[])',
+            `UPDATE editor_media SET referenced = true
+           WHERE account_id = $1 AND deck_id = $2 AND media_part = ANY($3::text[])`,
             [accountId, deckId, request.media.map((item) => item.mediaPart)],
           );
-        return outcome;
-      }
-      const revision = current + 1;
-      const savedAt = new Date();
-      const contentSha256 = sha256(JSON.stringify(request.slides));
-      await client.query(
-        `INSERT INTO editor_snapshots
-           (account_id, deck_id, revision, base, slides, media, content_sha256, created_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
-        [
-          accountId,
+        }
+        const snapshot: EditorSnapshot = {
+          schemaVersion: 1,
           deckId,
           revision,
-          request.base,
-          JSON.stringify(request.slides),
-          JSON.stringify(request.media),
+          base: request.base,
+          savedAt: savedAt.toISOString(),
           contentSha256,
-          savedAt,
-        ],
-      );
-      if (request.media.length) {
+          slides: request.slides,
+          media: request.media,
+        };
+        const outcome: EditorSnapshotSaveResponse = { schemaVersion: 1, kind: 'saved', snapshot };
         await client.query(
-          `UPDATE editor_media SET referenced = true
-           WHERE account_id = $1 AND deck_id = $2 AND media_part = ANY($3::text[])`,
-          [accountId, deckId, request.media.map((item) => item.mediaPart)],
-        );
-      }
-      const snapshot: EditorSnapshot = {
-        schemaVersion: 1,
-        deckId,
-        revision,
-        base: request.base,
-        savedAt: savedAt.toISOString(),
-        contentSha256,
-        slides: request.slides,
-        media: request.media,
-      };
-      const outcome: EditorSnapshotSaveResponse = { schemaVersion: 1, kind: 'saved', snapshot };
-      await client.query(
-        `INSERT INTO editor_idempotency (account_id, deck_id, idempotency_key, outcome)
+          `INSERT INTO editor_idempotency (account_id, deck_id, idempotency_key, outcome)
          VALUES ($1, $2, $3, $4::jsonb)`,
-        [accountId, deckId, request.idempotencyKey, JSON.stringify(outcome)],
-      );
-      return outcome;
-    });
+          [accountId, deckId, request.idempotencyKey, JSON.stringify(outcome)],
+        );
+        return outcome;
+      },
+      beforeCommit,
+    );
   }
 
   async recoverOrphans(now = Date.now()): Promise<number> {
