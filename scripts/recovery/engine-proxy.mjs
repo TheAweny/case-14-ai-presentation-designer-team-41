@@ -1,5 +1,5 @@
 import http from 'node:http';
-let failExport = true;
+let failExport = process.env.RECOVERY_FAIL_EXPORT !== '0';
 http
   .createServer(async (req, res) => {
     let raw = '';
@@ -27,5 +27,5 @@ http
     }
   })
   .listen(18020, '0.0.0.0', () =>
-    console.log('Fault injection proxy: one export failure on 18020'),
+    console.log(`Engine proxy 18020; export failure injection: ${failExport}`),
   );

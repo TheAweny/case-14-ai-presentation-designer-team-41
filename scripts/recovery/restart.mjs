@@ -21,15 +21,20 @@ async function api(path, body) {
 const control = (body) =>
   fetch('http://127.0.0.1:19019/control', { method: 'POST', body: JSON.stringify(body) });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-for (let i = 0; i < 100; i++) {
-  const ready = await fetch(base + '/health').then(
-    (r) => r.ok,
-    () => false,
-  );
-  if (ready) break;
-  if (i === 99) throw new Error('Isolated API did not start');
-  await sleep(100);
+async function waitReady() {
+  for (const service of [base, 'http://127.0.0.1:18019']) {
+    for (let i = 0; i < 100; i++) {
+      const ready = await fetch(service + '/health').then(
+        (r) => r.ok,
+        () => false,
+      );
+      if (ready) break;
+      if (i === 99) throw new Error('Isolated API did not start');
+      await sleep(100);
+    }
+  }
 }
+await waitReady();
 const request = JSON.parse(await readFile(new URL('faults-request.json', root), 'utf8'));
 request.requestId = randomUUID();
 request.slideCount = 10;
@@ -62,6 +67,7 @@ try {
     .map(JSON.parse);
   const killed = spawnSync('docker', ['kill', 'lct-recovery-api-faults'], { encoding: 'utf8' });
   if (killed.status !== 0) throw new Error('Could not kill isolated worker');
+  const killedAt = Date.now();
   const restarted = spawnSync('docker', ['start', 'lct-recovery-api-faults'], { encoding: 'utf8' });
   if (restarted.status !== 0) throw new Error('Could not restart isolated worker');
   await control({ holdFrom: null });
@@ -70,10 +76,13 @@ try {
       killedAfterAcceptedWriters: 7,
       buildId: metadata.buildId,
       runIds: build.variants.map((v) => v.runId),
-      waitingForLeaseExpiryMs: 31000,
+      resumeBeforeLeaseExpiry: true,
     }),
   );
-  await sleep(31000);
+  await waitReady();
+  const resumeDelayMs = Date.now() - killedAt;
+  if (resumeDelayMs >= 25000)
+    throw new Error('Restart took too long to test the live-lease window');
   const resume = await Promise.all([
     api(`/generation/${build.runId}/resume`, {}),
     api(`/generation/${build.runId}/resume`, {}),
@@ -93,6 +102,8 @@ try {
       if (repeated.length) throw new Error('Restart repeated accepted tasks');
       const trace = {
         buildId: metadata.buildId,
+        resumeDelayMs,
+        resumeBeforeLeaseExpiry: true,
         acceptedBeforeKill: 7,
         repeatedAcceptedTasks: repeated.length,
         newWriterIndexes: added.filter((r) => r.name === 'writer').map((r) => r.index),

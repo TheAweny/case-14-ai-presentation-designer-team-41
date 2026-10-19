@@ -104,20 +104,45 @@ the already-wrapped positive case and actual rendered fixture were also checked.
 The health adapter imports the generated health enum after schema generation changed enum names.
 No generated Pydantic source was edited by hand. Engine layer boundaries remain enforced.
 
+## Bugbot recovery follow-up
+
+The three [Bugbot findings on PR 14](https://github.com/TheAweny/case-14-ai-presentation-designer-team-41/pull/14#pullrequestreview-5571447349)
+were independently reproduced and repaired:
+
+- Continue during an orphan's still-valid lease waits safely, then claims and executes after
+  expiry instead of returning failed. Graceful shutdown releases its own leases as interrupted.
+- Retry of a failed variant while siblings run queues that variant, preserving its stable id.
+  Concurrent equivalent retries observe one executor; another failure does not loop indefinitely.
+- Whole-build resume and variant retry seed SharedPlan with the validated saved plan, including
+  the case where that plan exists but a planner task checkpoint does not.
+
+Eleven PostgreSQL/GenerationService regressions cover these paths, renewal of a real live lease,
+Stop during either wait, distinct-layout retries, bounded waiting and duplicate start at full local
+capacity. These tests replace only `generatePresentation`; network/model calls are forbidden.
+The capacity case additionally found and fixed duplicate start being rejected as new work;
+a rejected third build no longer leaves durable orphan records.
+
+The actual API kill harness now sends its first two Continue requests **4.071 seconds after the
+kill**, before the old lease expires. All three ten-slide variants completed under the next fence,
+with no repeated planner or accepted writer tasks. This uses the real engine/export/render with
+the fake gateway. An initial run after starting the stopped stack reached the engine before it was
+ready; the harness now checks both health endpoints before preparing the fixture. Waiting and
+recovered execution share the same 290-second recovery request budget.
+
 ## Evidence and baseline comparison
 
 Static: typecheck and lint passed for contracts, pipeline, API, web, engine and run-store.
 Engine import boundaries: three contracts kept, zero broken. No dependency versions changed.
 
-| Suite           | Passed | Environment                                     |
-| --------------- | -----: | ----------------------------------------------- |
-| Contracts       |    331 | offline                                         |
-| Pipeline        |    542 | offline, actual Mastra workflow + fake provider |
-| API             |    517 | offline, editor PostgreSQL integration enabled  |
-| Web             |   1068 | offline                                         |
-| Run store       |     19 | actual PostgreSQL 17                            |
-| Engine/tools    |    546 | Linux, Python 3.12, actual LibreOffice          |
-| Editor recovery |      1 | Chromium, actual isolated web/API/DB/engine     |
+| Suite           | Passed | Environment                                                 |
+| --------------- | -----: | ----------------------------------------------------------- |
+| Contracts       |    331 | offline                                                     |
+| Pipeline        |    542 | offline, actual Mastra workflow + fake provider             |
+| API             |    528 | offline, editor and recovery PostgreSQL integration enabled |
+| Web             |   1068 | offline                                                     |
+| Run store       |     19 | actual PostgreSQL 17                                        |
+| Engine/tools    |    546 | Linux, Python 3.12, actual LibreOffice                      |
+| Editor recovery |      1 | Chromium, actual isolated web/API/DB/engine                 |
 
 Windows-only shell/font limitations were superseded by the full Linux run. An Nx plugin loader
 failed before one Linux invocation started; the standalone rerun passed. An API regression in
@@ -153,20 +178,21 @@ rejects `RECOVERY_LIVE=1`; it does not switch models or keys. Unknown charge is 
 
 Artifacts stay under ignored `runs/recovery-runtime/`; they are not committed:
 
-| File / identifier                                | Purpose                                                         |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `content-benchmark.json`                         | 30-to-10 workflow comparison with explicit measurement limits   |
-| `runtime-result.json`                            | Last ordinary fake build: all three variants done               |
-| `resume-trace.json`                              | Export failure/resume, global fake-send counter unchanged at 81 |
-| `restart-trace.json`                             | Actual kill after 7 accepted writers; zero accepted repeats     |
-| `artifact-evidence.json`, `contact-sheet.png`    | Final-file import, facts, signatures and actual previews        |
-| `browser-editor.png`                             | Editor after server recovery in a fresh browser context         |
-| `live-result.json`, `live-corrected-result.json` | Historical failed cloud trials; do not replay                   |
+| File / identifier                                | Purpose                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `content-benchmark.json`                         | 30-to-10 workflow comparison with explicit measurement limits    |
+| `runtime-result.json`                            | Last ordinary fake build: all three variants done                |
+| `resume-trace.json`                              | Export failure/resume, global fake-send counter unchanged at 81  |
+| `restart-trace.json`                             | Actual kill, Continue before lease expiry, zero accepted repeats |
+| `restart-trace-pre-bugbot.json`                  | Earlier kill test that waited for lease expiry before Continue   |
+| `artifact-evidence.json`, `contact-sheet.png`    | Final-file import, facts, signatures and actual previews         |
+| `browser-editor.png`                             | Editor after server recovery in a fresh browser context          |
+| `live-result.json`, `live-corrected-result.json` | Historical failed cloud trials; do not replay                    |
 
 Last ordinary build: `406d6d09-d409-4cee-8e02-818a0c60ab32`; balanced run:
 `run-dceca653-a9fb-462b-a53f-aa1664687d0c`.
-Restart build: `ae7b18c7-cf8b-4cdd-b8ec-268b6e202038`; balanced run:
-`run-188891c5-cbe6-40b7-8e90-b8a59d470ae6`.
+Restart build: `a1c8dce5-2d20-4112-8c9c-807eacb44434`; balanced run:
+`run-a9205f81-21dd-4841-924b-77706f9ba29d`.
 Contact sheet uses the last ordinary build. Export-failure/resume balanced run:
 `run-802d2932-e021-49c3-9154-28de2b56dd8f`.
 
@@ -193,7 +219,8 @@ an export. A publication manifest is installed last under ownership/fence protec
 `POST /generation/:id/resume` keeps the spec, accepted tasks and cumulative usage. Concurrent
 calls return the same build. A new `requestId` explicitly regenerates. Stop persists its intent
 and prevents automatic recovery; a later explicit resume can proceed. SSE disconnection only
-detaches observation. Missing/expired leases permit recovery; do not force a second live owner.
+detaches observation. Continue during an active lease observes it and reclaims after expiry if
+needed; it never preempts a renewing owner. Graceful shutdown releases its own leases.
 
 A changed registry, profile, schema, model/endpoint policy or tariff blocks reuse and requires a
 new build. Legacy runs without a compatible spec fail closed. Keep their finished artifacts;
@@ -243,7 +270,7 @@ Configure the isolated API explicitly for the fake gateway before any runtime ch
 `RECOVERY_FAULTS=1` and `RECOVERY_API=http://127.0.0.1:13020`. The proxy injects one export failure.
 
 `pipeline:recovery-restart` intentionally kills **only** `lct-recovery-api-faults` after seven
-accepted writers, waits for lease expiry and resumes. Run it only against that disposable stack,
+accepted writers and sends Continue before lease expiry. Run it only against that disposable stack,
 after producing `faults-build.json`. `engine:recovery-evidence` inspects the resulting PPTX files
 and previews. `web:e2e --grep="isolated API"` needs web :13119, `E2E_PORT=13119`, and
 `RECOVERY_RUN_ID` pointing to a disposable completed balanced run; it edits that deck and checks

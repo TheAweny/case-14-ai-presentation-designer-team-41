@@ -118,6 +118,17 @@ export interface VariantEnd {
   readonly state: 'done' | 'failed';
 }
 
+interface BuildRetry {
+  variant?: LayoutVariant;
+  buildId: string;
+  plan?: CompositionPlan;
+  build?: BuildRecord;
+  /** A competing retry already owns execution: observe it rather than queue another retry. */
+  observeExisting?: boolean;
+  /** Keep time spent waiting for a lease inside the same bounded recovery request. */
+  startedAt?: number;
+}
+
 /**
  * The revision of the engine's generation profile. Raise it when the engine reads something new
  * from a template, so templates prepared before are read again: 2 added places for pictures,
@@ -180,6 +191,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   });
   private readonly active = new Map<string, AbortController>();
   private readonly executions = new Map<string, StartedBuild>();
+  private readonly leases = new Map<string, BuildLease>();
+  private readonly shutdown = new AbortController();
   private get builds() {
     return new GenerationBuildStore(this.pool);
   }
@@ -439,7 +452,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   }
 
   /**
-   * Build again one variant of a build that failed, as a new run of the same build. It writes
+   * Build again one failed variant with its stable run id. It writes
    * from the request and the plan the build kept, so it tells the same story as the variants
    * that made it, without calling the planner again.
    */
@@ -492,12 +505,99 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         'Сборка не содержит совместимых checkpoints. Создайте новую генерацию.',
       );
     const spec = generationSpecSchema.parse(build.spec);
-    return this.start(spec.request, account, { buildId: build.id, build });
+    const plan = compositionPlanSchema.safeParse(
+      JSON.parse(
+        await readFile(join(this.directory(runId), 'composition-plan.json'), 'utf8').catch(
+          () => 'null',
+        ),
+      ),
+    );
+    return this.start(spec.request, account, {
+      buildId: build.id,
+      build,
+      ...(plan.success ? { plan: plan.data } : {}),
+    });
   }
 
   /** The run is still being built in this process. */
   isRunning(runId: string): boolean {
     return this.active.has(runId);
+  }
+
+  /** Continue waits safely for ownership before recovering expired work.
+   * A live sibling execution must finish before a queued variant retry may claim the build.
+   */
+  private followBuild(
+    input: GenerationRequest,
+    account: Account,
+    build: BuildRecord,
+    retry?: BuildRetry,
+    onActivity?: (activity: ChatToolActivity) => void,
+    previous?: StartedBuild,
+  ): StartedBuild {
+    const variants = build.variants.filter(
+      (entry) => !retry?.variant || entry.variant === retry.variant,
+    );
+    const primary = variants.find((entry) => entry.variant === 'balanced') ?? variants[0];
+    if (!primary) throw new ConflictException('Варианты сборки не найдены.');
+    const budget = openBuildBudget(
+      retry?.startedAt ?? this.now(),
+      this.shutdown.signal,
+      this.deadlineMs,
+      this.now(),
+    );
+    const gate = <T>(work: () => Promise<T>) => waitForBuild(work, budget);
+    const settled = (async (): Promise<readonly VariantEnd[]> => {
+      if (previous) await gate(() => previous.settled);
+      for (;;) {
+        const current = await gate(() => this.builds.get(build.id, account.id));
+        if (!current) throw new NotFoundException('Сборка не найдена.');
+        const ends = await gate(() =>
+          Promise.all(
+            variants.map(async (entry): Promise<VariantEnd> => ({
+              ...entry,
+              state: (await this.repository.get(entry.runId))?.state === 'done' ? 'done' : 'failed',
+            })),
+          ),
+        );
+        if (current.status === 'stopped' || ends.every((end) => end.state === 'done')) return ends;
+        if (!(await gate(() => this.builds.hasLiveLease(build.id)))) {
+          if (
+            retry &&
+            (!retry.observeExisting ||
+              current.status === 'running' ||
+              current.status === 'interrupted')
+          ) {
+            const recovered = await gate(() =>
+              this.start(
+                input,
+                account,
+                {
+                  ...retry,
+                  build: current,
+                  observeExisting: true,
+                  startedAt: budget.startedAt,
+                },
+                onActivity,
+              ),
+            );
+            return await gate(() => recovered.settled);
+          }
+          return ends;
+        }
+        await gate(() => new Promise<void>((resolve) => setTimeout(resolve, 500)));
+      }
+    })()
+      .catch((error: unknown) => {
+        this.logger.warn(`Build ${build.id} recovery wait failed: ${String(error)}`);
+        return variants.map((entry): VariantEnd => ({ ...entry, state: 'failed' }));
+      })
+      .finally(() => budget.dispose());
+    const each = variants.map(
+      async (entry): Promise<VariantEnd> =>
+        (await settled).find((end) => end.runId === entry.runId) ?? { ...entry, state: 'failed' },
+    );
+    return { runId: primary.runId, variants, each, settled: Promise.all(each) };
   }
 
   /**
@@ -508,27 +608,24 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   async start(
     input: GenerationRequest,
     account: Account,
-    retry?: {
-      variant?: LayoutVariant;
-      buildId: string;
-      plan?: CompositionPlan;
-      build?: BuildRecord;
-    },
+    retry?: BuildRetry,
     onActivity?: (activity: ChatToolActivity) => void,
   ): Promise<StartedBuild> {
-    const startedAt = this.now();
+    const startedAt = retry?.startedAt ?? this.now();
     const schedulingGroup = input.requestId ?? randomUUID();
     const controller = new AbortController();
-    const budget = openBuildBudget(startedAt, controller.signal, this.deadlineMs, startedAt);
+    const budget = openBuildBudget(
+      startedAt,
+      AbortSignal.any([controller.signal, this.shutdown.signal]),
+      this.deadlineMs,
+      this.now(),
+    );
     let handedOff = false;
     let lease: BuildLease | null = null;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
       const signal = budget.signal;
       const gate = <T>(pending: () => Promise<T>): Promise<T> => waitForBuild(pending, budget);
-      // Every generation runs three variants, each counted as one active run.
-      if (this.active.size >= 2 * VARIANTS.length)
-        throw new BadRequestException('Two generations are already running.');
       const projectId = input.projectId;
       if (projectId !== null) await gate(() => this.requireProject(projectId, account));
       const template = await gate(() => this.template(input.templateId, account));
@@ -655,6 +752,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const previous =
         retry?.build ??
         (input.requestId ? await this.builds.byRequest(account.id, requestKey) : null);
+      // Observing an existing build consumes no execution slot. Reject genuinely new work
+      // before creating its durable records when both local build slots are occupied.
+      if (!previous && this.active.size >= 2 * VARIANTS.length)
+        throw new BadRequestException('Two generations are already running.');
       const registryFiles = (await readdir(registryDir, { recursive: true, withFileTypes: true }))
         .filter((entry) => entry.isFile())
         .map((entry) => join(entry.parentPath, entry.name))
@@ -702,26 +803,50 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const buildRecord =
         previous ?? (await this.builds.create(account.id, requestKey, specHash, spec));
       const already = this.executions.get(buildRecord.id);
-      if (already) return already;
-      lease = await this.builds.claim(buildRecord.id, account.id, retry !== undefined);
-      if (!lease) {
-        const variants = buildRecord.variants.filter(
-          (entry) => !retry?.variant || entry.variant === retry.variant,
+      if (already) {
+        if (!retry) return already;
+        const requested = buildRecord.variants.filter(
+          (entry) => !retry.variant || entry.variant === retry.variant,
         );
-        const each = variants.map(async (entry): Promise<VariantEnd> => {
-          for (;;) {
-            const run = await this.repository.get(entry.runId);
-            if (run?.state === 'done') return { ...entry, state: run.state };
-            if (!(await this.builds.hasLiveLease(buildRecord.id)))
-              return { ...entry, state: 'failed' };
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
-        });
+        if (
+          !retry.observeExisting ||
+          requested.some(
+            (entry) => !already.variants.some((active) => active.runId === entry.runId),
+          )
+        )
+          return this.followBuild(
+            input,
+            account,
+            buildRecord,
+            { ...retry, observeExisting: false },
+            onActivity,
+            already,
+          );
+        const variants = already.variants.filter(
+          (entry) => !retry.variant || entry.variant === retry.variant,
+        );
+        const each = already.each.filter((_, index) =>
+          variants.some((entry) => entry.runId === already.variants[index]?.runId),
+        );
         const primary = variants.find((entry) => entry.variant === 'balanced') ?? variants[0];
         if (!primary) throw new ConflictException('Варианты сборки не найдены.');
         return { runId: primary.runId, variants, each, settled: Promise.all(each) };
       }
+      if (
+        this.active.size >= 2 * VARIANTS.length &&
+        !(await this.builds.hasLiveLease(buildRecord.id))
+      )
+        throw new BadRequestException('Two generations are already running.');
+      lease = await this.builds.claim(
+        buildRecord.id,
+        account.id,
+        retry !== undefined && buildRecord.status === 'stopped',
+      );
+      if (!lease) {
+        return this.followBuild(input, account, buildRecord, retry, onActivity);
+      }
       const executionLease = lease;
+      this.leases.set(buildRecord.id, executionLease);
       const ledger = new PostgresProviderLedger(this.pool, account.id, executionLease, {
         requests: input.budget?.maxHttpRequests ?? 240,
         tokens: input.budget?.maxReservedTokens ?? 2_000_000,
@@ -749,7 +874,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       // them as it is, and they share one cancellation.
       // One plan for the three variants: the story is decided once, the layouts per variant. Each
       // run keeps it, so a variant that fails can be built again on the same story.
-      const sharedPlan = new SharedPlan(undefined, async (plan) => {
+      const sharedPlan = new SharedPlan(retry?.plan, async (plan) => {
         await assertOwner();
         for (const { run } of runs) {
           await atomicJson(join(this.directory(run.runId), 'composition-plan.json'), plan);
@@ -940,10 +1065,11 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           return 'done' as const;
         } catch (error) {
           this.logger.warn(`Variant ${run.runId} failed: ${String(error)}`);
-          await this.builds
-            .assert(executionLease)
-            .then(() => this.repository.transition(run.runId, 'failed'))
-            .catch(() => undefined);
+          if (!this.shutdown.signal.aborted)
+            await this.builds
+              .assert(executionLease)
+              .then(() => this.repository.transition(run.runId, 'failed'))
+              .catch(() => undefined);
           return 'failed' as const;
         } finally {
           this.active.delete(run.runId);
@@ -956,17 +1082,20 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       }));
       const settled = Promise.all(each)
         .then(async (ends) => {
-          const all = await Promise.all(
-            buildRecord.variants.map((entry) => this.repository.get(entry.runId)),
-          );
-          await this.builds
-            .finish(executionLease, all.every((run) => run?.state === 'done') ? 'done' : 'failed')
-            .catch((error: unknown) => this.logger.warn(String(error)));
+          if (!this.shutdown.signal.aborted) {
+            const all = await Promise.all(
+              buildRecord.variants.map((entry) => this.repository.get(entry.runId)),
+            );
+            await this.builds
+              .finish(executionLease, all.every((run) => run?.state === 'done') ? 'done' : 'failed')
+              .catch((error: unknown) => this.logger.warn(String(error)));
+          }
           return ends;
         })
         .finally(() => {
           if (heartbeat) clearInterval(heartbeat);
           this.executions.delete(buildRecord.id);
+          this.leases.delete(buildRecord.id);
           controller.abort();
           budget.dispose();
         });
@@ -988,6 +1117,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       if (!handedOff) {
         if (heartbeat) clearInterval(heartbeat);
         if (lease) await this.builds.finish(lease, 'interrupted').catch(() => undefined);
+        if (lease) this.leases.delete(lease.build.id);
         controller.abort();
         budget.dispose();
       }
@@ -995,9 +1125,9 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   }
 
   /**
-   * A generation lives in this process, so one still queued or running at start was cut short by
-   * a restart and will not go on. It is failed with a reason, and the chat that follows it offers
-   * to build again instead of waiting for it. The API runs as a single instance.
+   * Close interrupted runs without an owner, retaining their durable checkpoints.
+   * A live lease may belong to another process and must be respected. An explicit Continue
+   * follows that lease and recovers the build if ownership subsequently expires.
    */
   async onApplicationBootstrap(): Promise<void> {
     await mkdir(this.root, { recursive: true });
@@ -1031,7 +1161,13 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   }
 
   async onApplicationShutdown(): Promise<void> {
-    for (const controller of this.active.values()) controller.abort();
+    if (this.shutdown.signal.aborted) return;
+    const reason = new Error('Generation worker is shutting down.');
+    this.shutdown.abort(reason);
+    for (const controller of this.active.values()) controller.abort(reason);
+    await Promise.allSettled(
+      [...this.leases.values()].map((lease) => this.builds.finish(lease, 'interrupted')),
+    );
     await this.pool.end();
   }
 }
