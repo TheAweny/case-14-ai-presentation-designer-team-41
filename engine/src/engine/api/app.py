@@ -14,9 +14,9 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from engine import __version__, checks, export, layout, parser, render, visuals
+from engine import __version__, checks, dataset, export, layout, parser, render, visuals
 from engine.api._composition_audit import composition_slides
 from engine.api._profiles import UnknownProfileError, deterministic_profile
 from engine.api._visuals import build_payload, capability_payload, compare_payload
@@ -164,6 +164,30 @@ def template_profile(request: TemplateProfileRequest) -> dict:
         "templateIr": template_ir,
         "previewDataUrl": preview_data_url,
     }
+
+
+class DatasetExtractRequest(BaseModel):
+    """A provisional request: the shared contracts will name it once they have a form of it."""
+
+    model_config = ConfigDict(extra="forbid")
+    path: str
+
+
+@app.post(
+    "/v1/dataset-extract",
+    response_model=dataset.Dataset,
+    summary="Read the tables of a data file with their cell references and diagnostics",
+)
+def dataset_extract(request: DatasetExtractRequest) -> dataset.Dataset:
+    """Return every table of a CSV, TSV, XLSX, JSON or text-table file, typed and unabridged.
+
+    Values keep the text the file held; a value is derived only where the text allows one reading,
+    and what is ambiguous, unreadable or too large is said in `diagnostics`. No model is called.
+    """
+    path = Path(request.path).resolve()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found.")
+    return dataset.extract_dataset(path)
 
 
 @app.post(
