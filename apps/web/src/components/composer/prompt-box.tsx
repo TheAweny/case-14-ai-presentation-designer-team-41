@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
+import { WarningIcon } from '@/components/ui/icons';
 import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -380,6 +381,20 @@ export function PromptNote({ id, children }: { id?: string; children: ReactNode 
   return (
     <p id={id} role="alert" className="mt-1.5 px-1 text-xs text-destructive">
       {children}
+    </p>
+  );
+}
+
+/** Заметное сообщение об ошибке ввода: его нельзя пропустить, в отличие от короткой строки. */
+export function PromptAlert({ id, children }: { id?: string; children: ReactNode }) {
+  return (
+    <p
+      id={id}
+      role="alert"
+      className="mt-2 flex items-start gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive ring-1 ring-destructive/20"
+    >
+      <WarningIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <span>{children}</span>
     </p>
   );
 }

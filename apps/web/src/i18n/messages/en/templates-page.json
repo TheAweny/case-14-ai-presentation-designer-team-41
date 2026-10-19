@@ -9,7 +9,7 @@
   "uploadFailed": "Could not read the template. Try again.",
   "uploaded": "Template “{name}” is in the library",
   "wrongType": "A template is a .pptx or .potx file.",
-  "emptyFile": "The file is empty.",
+  "emptyFile": "The file is empty. Upload a presentation that contains slides.",
   "emptyTitle": "No templates yet",
   "emptyBody": "Upload a .pptx or .potx: its profile and layouts are extracted automatically, and presentations can be built with it.",
   "layouts": "{count, plural, one {# layout} other {# layouts}}",

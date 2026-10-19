@@ -1,0 +1,15 @@
+{
+  "title": "Документация",
+  "pages": [
+    "getting-started",
+    "guide",
+    "operations",
+    "cli",
+    "internals",
+    "developers",
+    "api",
+    "troubleshooting",
+    "---Авторам---",
+    "authors"
+  ]
+}

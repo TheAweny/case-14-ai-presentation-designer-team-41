@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">Схема колонки текста</title>
+  <desc id="desc">Нейтральная схема страницы документации, не скриншот продукта.</desc>
+  <rect width="960" height="540" fill="#2c2d31"/>
+  <rect x="48" y="40" width="864" height="460" rx="16" fill="#34353a" stroke="#ffffff" stroke-opacity="0.1"/>
+  <rect x="80" y="72" width="220" height="16" rx="4" fill="#c9a6e8"/>
+  <rect x="80" y="112" width="520" height="12" rx="4" fill="#f2f2f3" fill-opacity="0.85"/>
+  <rect x="80" y="136" width="480" height="12" rx="4" fill="#f2f2f3" fill-opacity="0.55"/>
+  <rect x="80" y="160" width="440" height="12" rx="4" fill="#f2f2f3" fill-opacity="0.4"/>
+  <rect x="80" y="210" width="800" height="220" rx="12" fill="#1f2023" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text x="100" y="248" fill="#b7b8be" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">Колонка для чтения, не интерфейс продукта</text>
+  <text x="100" y="286" fill="#8d8e96" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">Скриншоты меняющегося экрана сюда не кладутся.</text>
+</svg>

@@ -32,8 +32,9 @@ import {
   type ManagedUser,
 } from '@/lib/users';
 import { cn } from '@/lib/utils';
+import { filterAdminUsers } from '@/lib/admin-metrics';
+import { useUnsavedAdmin } from '@/components/admin/use-unsaved-admin';
 import { SectionHeader } from './settings-rows';
-import { AccountPolicyPanel } from './account-policy-panel';
 
 const inputClass = cn(
   'h-9 w-full rounded-md bg-background px-2.5 text-sm text-foreground outline-none',
@@ -55,8 +56,12 @@ interface IssuedPassword {
  * шаблонами (кроме общих). Себя разжаловать, отключить и удалить нельзя, последний
  * администратор остаётся всегда — это проверяет API.
  */
-export function UsersSettingsPanel() {
+export function UsersSettingsPanel({
+  onLimits,
+  onDirtyChange,
+}: { onLimits?: (id: string) => void; onDirtyChange?: (dirty: boolean) => void } = {}) {
   const t = useTranslations('settings.users');
+  const admin = useTranslations('admin.people');
   const me = useAccount();
   const [users, setUsers] = useState<readonly ManagedUser[] | null>(null);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -64,7 +69,12 @@ export function UsersSettingsPanel() {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<ManagedUser | null>(null);
   const [busy, startBusy] = useTransition();
-  const [policyAccount, setPolicyAccount] = useState('default');
+  const [query, setQuery] = useState('');
+  const [role, setRole] = useState<'all' | 'admin' | 'user'>('all');
+  const [access, setAccess] = useState<'all' | 'active' | 'disabled'>('all');
+  const [editing, setEditing] = useState<ManagedUser | null>(null);
+  const [revision, setRevision] = useState(0);
+  const visible = filterAdminUsers(users ?? [], query, role, access);
 
   const failureText = (failure: UsersFailure) =>
     failure.reason === 'exists'
@@ -85,6 +95,7 @@ export function UsersSettingsPanel() {
 
   useEffect(() => {
     let live = true;
+    setStatus(null);
     listUsersAction().then(
       (result) => live && apply(result),
       () => live && setStatus({ kind: 'error', text: t('errors.failed') }),
@@ -93,7 +104,7 @@ export function UsersSettingsPanel() {
       live = false;
     };
     // Список грузится один раз при открытии раздела.
-  }, []);
+  }, [revision]);
 
   const change = (
     user: ManagedUser,
@@ -121,36 +132,82 @@ export function UsersSettingsPanel() {
     });
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-5 md:px-7 md:pt-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <SectionHeader title={t('title')} description={t('description')} />
-        {adding ? null : (
-          <Button variant="outline" onClick={() => setAdding(true)}>
-            <PlusIcon data-icon="inline-start" />
-            {t('add')}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            {admin('refresh')}
           </Button>
-        )}
+          {adding || editing ? null : (
+            <Button variant="outline" onClick={() => setAdding(true)}>
+              <PlusIcon data-icon="inline-start" />
+              {t('add')}
+            </Button>
+          )}
+        </div>
       </div>
 
-      <label className="grid gap-2 text-sm">
-        {t('policyAccount')}
-        <select
-          className={inputClass}
-          value={policyAccount}
-          onChange={(event) => setPolicyAccount(event.target.value)}
-        >
-          <option value="default">{t('policyDefault')}</option>
-          {users?.map((user) => (
-            <option key={user.userId} value={user.userId}>
-              {user.email}
-            </option>
-          ))}
-        </select>
-      </label>
-      <AccountPolicyPanel key={policyAccount} accountId={policyAccount} editable />
+      {editing ? (
+        <ProfileEditor
+          key={editing.userId}
+          user={editing}
+          onDirtyChange={onDirtyChange}
+          onCancel={() => setEditing(null)}
+          onSaved={(result) => {
+            if (apply(result, admin('profileSaved'))) setEditing(null);
+          }}
+        />
+      ) : null}
+
+      <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <label className="grid min-w-0 gap-1 text-sm">
+          <span>{admin('search')}</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span>{admin('role')}</span>
+          <select
+            value={role}
+            onChange={(event) => setRole(event.target.value as typeof role)}
+            className={inputClass}
+          >
+            <option value="all">{admin('allRoles')}</option>
+            <option value="admin">{t('roles.admin')}</option>
+            <option value="user">{t('roles.user')}</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span>{admin('access')}</span>
+          <select
+            value={access}
+            onChange={(event) => setAccess(event.target.value as typeof access)}
+            className={inputClass}
+          >
+            <option value="all">{admin('allStatuses')}</option>
+            <option value="active">{admin('active')}</option>
+            <option value="disabled">{t('disabled')}</option>
+          </select>
+        </label>
+      </div>
+      {users ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {admin('results', { shown: visible.length, total: users.length })}
+        </p>
+      ) : null}
 
       {adding ? (
         <NewUserForm
+          onDirtyChange={onDirtyChange}
           onCancel={() => setAdding(false)}
           onCreated={(result, created) => {
             if (apply(result, t('created', { email: created.email }))) {
@@ -176,19 +233,27 @@ export function UsersSettingsPanel() {
       ) : null}
       {issued ? <IssuedPasswordNote issued={issued} onDismiss={() => setIssued(null)} /> : null}
 
-      {users === null ? (
+      {users === null && status?.kind === 'error' ? null : users === null ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <SpinnerIcon size={16} className="animate-spin" />
           {t('loading')}
         </div>
       ) : (
         <ul aria-label={t('listLabel')} className="flex flex-col">
-          {users.map((user) => (
+          {visible.length === 0 ? (
+            <li className="py-6 text-sm text-muted-foreground">{admin('noResults')}</li>
+          ) : null}
+          {visible.map((user) => (
             <UserRow
               key={user.userId}
               user={user}
               self={user.userId === me?.userId}
-              busy={busy}
+              busy={busy || editing !== null || adding}
+              onEdit={() => {
+                setIssued(null);
+                setEditing(user);
+              }}
+              onLimits={onLimits ? () => onLimits(user.userId) : undefined}
               onRole={(role) =>
                 change(
                   user,
@@ -234,6 +299,8 @@ function UserRow({
   onDisabled,
   onResetPassword,
   onDelete,
+  onEdit,
+  onLimits,
 }: {
   user: ManagedUser;
   /** Это аккаунт, под которым вошли: себя не разжаловать, не отключить и не удалить. */
@@ -243,8 +310,11 @@ function UserRow({
   onDisabled: (disabled: boolean) => void;
   onResetPassword: () => void;
   onDelete: () => void;
+  onEdit: () => void;
+  onLimits?: () => void;
 }) {
   const t = useTranslations('settings.users');
+  const admin = useTranslations('admin.people');
   const format = useFormatter();
   return (
     <li
@@ -266,6 +336,9 @@ function UserRow({
           {t('since', { date: format.dateTime(user.createdAt, { dateStyle: 'medium' }) })}
         </span>
       </div>
+      <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}>
+        {admin('edit')}
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -278,6 +351,9 @@ function UserRow({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
+          {onLimits ? (
+            <DropdownMenuItem onSelect={onLimits}>{admin('limits')}</DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem onSelect={onResetPassword}>{t('resetPassword')}</DropdownMenuItem>
           {self ? null : (
             <>
@@ -296,6 +372,81 @@ function UserRow({
         </DropdownMenuContent>
       </DropdownMenu>
     </li>
+  );
+}
+
+function ProfileEditor({
+  user,
+  onSaved,
+  onCancel,
+  onDirtyChange,
+}: {
+  user: ManagedUser;
+  onSaved: (result: UsersResult) => void;
+  onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
+  const t = useTranslations('admin.people');
+  const fields = useTranslations('settings.users.fields');
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [saving, startSaving] = useTransition();
+  const dirty = name.trim() !== user.name || email.trim() !== user.email;
+  const valid = !nameProblem(name) && !emailProblem(email);
+  useUnsavedAdmin(dirty, onDirtyChange);
+  return (
+    <form
+      aria-label={t('editProfile', { email: user.email })}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!dirty || !valid || saving) return;
+        startSaving(async () => {
+          const result = await updateUserAction(user.userId, {
+            name: name.trim(),
+            email: email.trim(),
+          }).catch((): UsersResult => ({ ok: false, reason: 'failed' }));
+          onSaved(result);
+        });
+      }}
+      className="grid gap-4 rounded-lg border border-border p-4 sm:grid-cols-2"
+    >
+      <h3 className="min-w-0 truncate text-sm font-medium sm:col-span-2">
+        {t('editProfile', { email: user.email })}
+      </h3>
+      <label className="grid gap-1 text-sm">
+        {fields('name')}
+        <input
+          autoFocus
+          required
+          maxLength={MAX_NAME_LENGTH}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          aria-invalid={Boolean(nameProblem(name))}
+          disabled={saving}
+          className={inputClass}
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        {fields('email')}
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          aria-invalid={Boolean(emailProblem(email))}
+          disabled={saving}
+          className={inputClass}
+        />
+      </label>
+      <div className="flex justify-end gap-2 sm:col-span-2">
+        <Button type="button" variant="ghost" disabled={saving} onClick={onCancel}>
+          {t('cancel')}
+        </Button>
+        <Button type="submit" disabled={saving || !valid || !dirty}>
+          {saving ? t('saving') : t('save')}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -348,9 +499,11 @@ function IssuedPasswordNote({
 function NewUserForm({
   onCancel,
   onCreated,
+  onDirtyChange,
 }: {
   onCancel: () => void;
   onCreated: (result: UsersResult, issued: IssuedPassword) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useTranslations('settings.users');
   const ids = { email: useId(), name: useId(), password: useId() };
@@ -360,6 +513,7 @@ function NewUserForm({
   const [role, setRole] = useState<'admin' | 'user'>('user');
   const [tried, setTried] = useState(false);
   const [saving, startSaving] = useTransition();
+  useUnsavedAdmin(Boolean(email || name || role !== 'user'), onDirtyChange);
   const problems = {
     email: emailProblem(email),
     name: nameProblem(name),

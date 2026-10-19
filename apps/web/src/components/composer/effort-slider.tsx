@@ -1,6 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { cn } from '@/lib/utils';
 import { animate, useReducedMotion, type AnimationPlaybackControls } from 'motion/react';
 import { REASONING_EFFORTS, type ReasoningEffort } from '@lct/contracts';
 
@@ -13,11 +14,13 @@ export function EffortSlider({
   onChange,
   label,
   valueText,
+  disabled = false,
 }: {
   value: ReasoningEffort;
   onChange: (value: ReasoningEffort) => void;
   label: string;
   valueText: (value: ReasoningEffort) => string;
+  disabled?: boolean;
 }) {
   const reduce = useReducedMotion();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -72,6 +75,7 @@ export function EffortSlider({
     if (level && level !== value) onChange(level);
   };
   const fromPointer = (event: PointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = (event.clientX - rect.left - EDGE) / Math.max(1, rect.width - 2 * EDGE);
     setIndex(Math.round(ratio * (REASONING_EFFORTS.length - 1)));
@@ -83,6 +87,7 @@ export function EffortSlider({
         : event.key === 'ArrowLeft' || event.key === 'ArrowDown'
           ? -1
           : 0;
+    if (disabled) return;
     if (step) {
       event.preventDefault();
       setIndex(index + step);
@@ -100,16 +105,20 @@ export function EffortSlider({
   return (
     <div
       ref={trackRef}
-      className="relative mx-2 mt-1 mb-2 h-6 cursor-pointer touch-none outline-none select-none"
+      className={cn(
+        'relative mx-2 mt-1 mb-2 h-6 touch-none outline-none select-none',
+        disabled ? 'cursor-default opacity-40' : 'cursor-pointer',
+      )}
       role="slider"
-      tabIndex={0}
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled || undefined}
       aria-label={label}
       aria-valuemin={0}
       aria-valuemax={REASONING_EFFORTS.length - 1}
       aria-valuenow={index}
       aria-valuetext={valueText(value)}
       onPointerDown={(event) => {
-        if (event.button !== 0) return;
+        if (disabled || event.button !== 0) return;
         try {
           event.currentTarget.setPointerCapture(event.pointerId);
         } catch {
