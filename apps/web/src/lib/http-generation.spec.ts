@@ -256,7 +256,13 @@ describe('generated artifact download', () => {
         if (path.includes('/revisions/4/export')) {
           posted.url = path;
           posted.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return Response.json({ exportId: 'rev-export', previews: [] });
+          return Response.json({
+            schemaVersion: 1,
+            exportId: '6d1c0c3e-5b1a-4c2d-9e3f-1a2b3c4d5e6f',
+            revision: 4,
+            contentSha256: 'ab'.repeat(32),
+            previews: [],
+          });
         }
         return new Response('pptx', { headers: { 'content-type': 'application/octet-stream' } });
       }),
@@ -275,7 +281,11 @@ describe('generated artifact download', () => {
       variant: 'balanced',
       slideIds: ['s1'],
     });
-    expect(result.url).toBe('blob:rev');
+    expect(result).toMatchObject({
+      url: 'blob:rev',
+      revision: 4,
+      contentSha256: 'ab'.repeat(32),
+    });
   });
   it('downloads the native PPTX through a local blob URL', async () => {
     source();

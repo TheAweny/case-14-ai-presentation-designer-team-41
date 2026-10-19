@@ -13,7 +13,6 @@ import {
   sameSlides,
   shouldRestoreDraft,
 } from '@/lib/deck-draft';
-import type { ExportRequest, DeckExporter } from '@/lib/deck-export';
 import { createAutosave, type SaveStatus } from '@/lib/draft-autosave';
 import { browserDraftStore, createDraftStorage } from '@/lib/draft-storage';
 import {
@@ -21,7 +20,6 @@ import {
   SnapshotConflictError,
   decideOpen,
 } from '@/lib/editor-sync';
-import { createHttpExporter } from '@/lib/http-generation';
 import { slideImageUrls } from '@/lib/asset-readiness';
 import { uploadedMedia } from '@/lib/media-registry';
 import { cn } from '@/lib/utils';
@@ -109,18 +107,30 @@ export function DeckEditor({
     () =>
       createAutosave<readonly SlideIr[]>({
         write: async (slides) => {
-          const remembered = session.state.ackedSlides;
           const untouched =
             sameSlides(slides, origin) && session.state.ackedRevision === null && !session.state.conflict;
+          // IndexedDB — страховка до ответа сервера. Исходную колоду стираем только когда
+          // серверной редакции нет: иначе откат должен пережить обрыв и доехать повторной записью.
           if (storage) {
-            if (untouched || sameSlides(slides, origin)) await storage.clear(deck.deckId);
+            if (untouched) await storage.clear(deck.deckId);
             else await storage.save(createDraft(deck.deckId, base, slides, Date.now()), uploadedMedia);
           }
           persisted.current = slides;
           setHasDraft(!sameSlides(slides, origin));
           if (untouched) return;
-          if (remembered && sameSlides(slides, remembered) && !session.state.conflict) return;
+          if (
+            session.state.ackedSlides &&
+            sameSlides(slides, session.state.ackedSlides) &&
+            !session.state.conflict
+          ) {
+            return;
+          }
           await session.publish(deck.deckId, base, slides, uploadedMedia);
+          if (storage && sameSlides(slides, origin)) {
+            await storage.clear(deck.deckId);
+            persisted.current = origin;
+            setHasDraft(false);
+          }
         },
         classifyError: (error) => (error instanceof SnapshotConflictError ? 'conflict' : 'error'),
         onStatus: setStatus,
@@ -237,12 +247,18 @@ export function DeckEditor({
     void autosave.flush();
   }, [autosave, origin]);
 
-  const applyLocal = useCallback((localSlides: readonly SlideIr[]) => {
-    setChoice(null);
-    persisted.current = null;
-    latest.current = localSlides;
-    setOpened((current) => ({ slides: localSlides, generation: current.generation + 1 }));
-  }, []);
+  const applyLocal = useCallback(
+    (localSlides: readonly SlideIr[]) => {
+      setChoice(null);
+      persisted.current = null;
+      latest.current = localSlides;
+      setOpened((current) => ({ slides: localSlides, generation: current.generation + 1 }));
+      // expectedRevision уже равен серверной редакции: её прочитали при открытии.
+      autosave.schedule(localSlides);
+      void autosave.flush();
+    },
+    [autosave],
+  );
 
   const keepServer = useCallback(() => {
     setChoice(null);
@@ -261,10 +277,15 @@ export function DeckEditor({
     setHasDraft(!sameSlides(server.slides, origin));
     setStatus('saved');
     setOpened((current) => ({ slides: server.slides, generation: current.generation + 1 }));
-    if (!storage) return;
-    if (sameSlides(server.slides, origin)) void storage.clear(deck.deckId);
-    else void storage.save(createDraft(deck.deckId, base, server.slides, Date.now()), uploadedMedia);
-  }, [deck.deckId, origin, session, storage]);
+    if (storage) {
+      if (sameSlides(server.slides, origin)) void storage.clear(deck.deckId);
+      else void storage.save(createDraft(deck.deckId, base, server.slides, Date.now()), uploadedMedia);
+    }
+    // Очередь конфликта держит отвергнутую копию. Подменяем её серверными слайдами,
+    // которые уже подтверждены, чтобы повтор не записал её поверх.
+    autosave.schedule(server.slides);
+    void autosave.flush();
+  }, [autosave, base, deck.deckId, origin, session, storage]);
 
   const keepConflict = useCallback(() => {
     session.keepMine();
@@ -302,35 +323,31 @@ export function DeckEditor({
    */
   const tSplash = useTranslations('splash');
   const tDraft = useTranslations('draft');
-  const freezeRef = useRef<(request: ExportRequest) => Promise<ExportRequest>>(async (request) => request);
-  freezeRef.current = async (request) => {
+  /**
+   * Дождаться записи и вернуть номер, который уйдёт в файл. Правки после этого вызова
+   * номер не меняют: оболочка кладёт его в запрос один раз. Несохранённое и конфликт
+   * экспорт не начинают.
+   */
+  const prepareExport = useCallback(async () => {
+    const acknowledged = (slidesNow: readonly SlideIr[]) => {
+      const { ackedRevision, ackedSlides } = session.state;
+      if (ackedRevision !== null && ackedSlides && sameSlides(slidesNow, ackedSlides)) return ackedRevision;
+      if (ackedRevision === null && sameSlides(slidesNow, origin)) return null;
+      return undefined;
+    };
     await autosave.flush();
     if (session.state.conflict) throw new Error(tDraft('exportConflict'));
-    const slidesNow = latest.current ?? origin;
-    const ids = new Set(request.slides.map((slide) => slide.slideId));
-    const chosen = slidesNow.filter((slide) => ids.has(slide.slideId));
-    if (chosen.length === 0) throw new Error(tDraft('exportUnsaved'));
-    const { ackedRevision, ackedSlides } = session.state;
-    if (ackedRevision !== null && ackedSlides && sameSlides(slidesNow, ackedSlides)) {
-      return {
-        ...request,
-        slides: chosen,
-        revision: ackedRevision,
-        slideIds: chosen.map((slide) => slide.slideId),
-      };
-    }
-    if (sameSlides(slidesNow, origin)) {
-      return { ...request, slides: chosen, revision: undefined, slideIds: undefined };
-    }
+    let slidesNow = latest.current ?? origin;
+    const ready = acknowledged(slidesNow);
+    if (ready !== undefined) return ready;
+    autosave.schedule(slidesNow);
+    await autosave.flush();
+    if (session.state.conflict) throw new Error(tDraft('exportConflict'));
+    slidesNow = latest.current ?? origin;
+    const again = acknowledged(slidesNow);
+    if (again !== undefined) return again;
     throw new Error(tDraft('exportUnsaved'));
-  };
-  const exporter = useMemo<DeckExporter>(() => {
-    const inner = createHttpExporter();
-    return {
-      export: (request, onEvent, signal) =>
-        freezeRef.current(request).then((frozen) => inner.export(frozen, onEvent, signal)),
-    };
-  }, []);
+  }, [autosave, origin, session, tDraft]);
   const searchParams = useSearchParams();
   const [firstSlide] = useState(() =>
     slideIndexFromParam(deck.slides, searchParams.get(SLIDE_PARAM)),
@@ -359,7 +376,7 @@ export function DeckEditor({
               // Показ — только при первом открытии: подмена черновиком не должна начать его снова.
               presentOnOpen={present && opened.generation === 0}
               onSlidesChange={onSlidesChange}
-              exporter={exporter}
+              prepareExport={prepareExport}
               saveStatus={
                 <SaveIndicator status={status} hasDraft={hasDraft} onRetry={() => void autosave.flush()} />
               }

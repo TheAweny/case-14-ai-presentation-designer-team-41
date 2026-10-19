@@ -503,12 +503,13 @@ function VariantViews({
         const ids = new Set(request.slides.map((slide) => slide.slideId));
         const chosen = published.slides.filter((slide) => ids.has(slide.slideId));
         const frozen = chosen.length > 0 ? chosen : published.slides;
+        const subset = frozen.length < published.slides.length;
         return inner.export(
           {
             ...request,
             slides: frozen,
             revision: published.revision,
-            slideIds: frozen.map((slide) => slide.slideId),
+            ...(subset ? { slideIds: frozen.map((slide) => slide.slideId) } : {}),
           },
           onEvent,
           signal,
