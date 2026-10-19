@@ -76,7 +76,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
   await request.post('http://127.0.0.1:3121/__reset-models');
   await request.post('http://127.0.0.1:3121/__set-generation-deck', { data: deck });
   const value = await signSessionToken(
-    'chat-e2e-user',
+    'chat-e2e-user:session:e2e',
     Date.now() + 3600000,
     'chat-e2e-session-secret',
   );

@@ -56,7 +56,11 @@ const sse = (events: ChatEvent[]) =>
   events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
 
 test.beforeEach(async ({ context }) => {
-  const value = await signSessionToken(USER, Date.now() + 3600000, 'chat-e2e-session-secret');
+  const value = await signSessionToken(
+    `${USER}:session:e2e`,
+    Date.now() + 3600000,
+    'chat-e2e-session-secret',
+  );
   await context.addCookies([
     { name: 'lct_session', value, domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Lax' },
   ]);

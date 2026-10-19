@@ -20,7 +20,7 @@ for (const width of [1280, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     const value = await signSessionToken(
-      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000001:session:e2e',
       Date.now() + 3600000,
       'chat-e2e-session-secret',
     );

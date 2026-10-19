@@ -7,7 +7,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
   if (!baseURL) throw new Error('Settings tests require the authenticated fixture.');
   await request.post('http://127.0.0.1:3121/__reset-models');
   const value = await signSessionToken(
-    'chat-e2e-user',
+    'chat-e2e-user:session:e2e',
     Date.now() + 3600000,
     'chat-e2e-session-secret',
   );
@@ -81,28 +81,33 @@ for (const viewport of [
     await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
     const dialog = page.getByRole('dialog', { name: 'Настройки', exact: true });
     const mobile = viewport.width < 768;
-    const navigation = dialog.getByRole('combobox', { name: 'Разделы настроек' });
+    const navigation = dialog.getByRole('button', { name: 'Разделы настроек' });
     if (mobile) {
       await expect(navigation).toBeVisible();
-      await expect(navigation.locator('option')).toHaveCount(sections.length);
+      await navigation.click();
+      await expect(page.getByRole('menuitemradio')).toHaveCount(sections.length);
       expect(
         await navigation.evaluate((node) => parseFloat(getComputedStyle(node).fontSize)),
       ).toBeGreaterThanOrEqual(16);
       await expect(navigation).toHaveCSS('height', '44px');
+      await page.keyboard.press('Escape');
     } else {
       await expect(navigation).toBeHidden();
       await expect(dialog.getByRole('tablist')).toBeVisible();
     }
     for (const [id, title] of sections) {
-      if (mobile) await navigation.selectOption(id);
-      else await dialog.getByRole('tab', { name: title, exact: true }).click();
+      if (mobile) {
+        await navigation.click();
+        await page.getByRole('menuitemradio', { name: title, exact: true }).click();
+      } else await dialog.getByRole('tab', { name: title, exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`settings=${id}`));
       await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await panelFits(dialog);
       if (id === 'decks') {
-        const count = dialog.getByRole('combobox', { name: 'Число слайдов', exact: true });
-        await count.selectOption('15');
-        await expect(count).toHaveValue('15');
+        const count = dialog.getByRole('button', { name: 'Число слайдов', exact: true });
+        await count.click();
+        await page.getByRole('menuitemradio', { name: '15', exact: true }).click();
+        await expect(count).toHaveText('15');
         await panelFits(dialog);
       }
       if (id === 'models') {
@@ -156,9 +161,10 @@ test('mobile connection form and nested model picker fit and preserve navigation
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/?settings=models');
   const dialog = page.getByRole('dialog', { name: 'Настройки', exact: true });
-  await expect(
-    dialog.getByRole('combobox', { name: 'Разделы настроек' }).locator('option'),
-  ).toHaveCount(6);
+  const navigation = dialog.getByRole('button', { name: 'Разделы настроек' });
+  await navigation.click();
+  await expect(page.getByRole('menuitemradio')).toHaveCount(6);
+  await page.keyboard.press('Escape');
   await dialog.getByRole('button', { name: 'Добавить подключение', exact: true }).click();
   await panelFits(dialog);
   const inputs = dialog.locator('input:not([type="radio"]):not([type="checkbox"]), textarea');

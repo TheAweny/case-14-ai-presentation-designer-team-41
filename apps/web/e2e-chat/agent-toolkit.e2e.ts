@@ -9,7 +9,11 @@ test('saved toolkit actions have readable labels and retain their cited answer a
   page,
   context,
 }) => {
-  const value = await signSessionToken(USER, Date.now() + 3600000, 'chat-e2e-session-secret');
+  const value = await signSessionToken(
+    `${USER}:session:e2e`,
+    Date.now() + 3600000,
+    'chat-e2e-session-secret',
+  );
   await context.addCookies([
     { name: 'lct_session', value, domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Lax' },
   ]);

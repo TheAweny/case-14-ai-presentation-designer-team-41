@@ -27,7 +27,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
     ],
   });
   const value = await signSessionToken(
-    'chat-e2e-user',
+    'chat-e2e-user:session:e2e',
     Date.now() + 3600000,
     'chat-e2e-session-secret',
   );

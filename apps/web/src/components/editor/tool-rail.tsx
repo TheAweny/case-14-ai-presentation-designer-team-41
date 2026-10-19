@@ -14,18 +14,14 @@ import { Toolbar as ToolbarPrimitive } from 'radix-ui';
 import {
   AgentIcon,
   ArrowShapeIcon,
-  BackIcon,
   ChartIcon,
   CircleIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   DiagramIcon,
   GripHorizontalIcon,
   GripVerticalIcon,
   ImageIcon,
   KeyboardIcon,
   LineIcon,
-  NextIcon,
   PanIcon,
   PlayIcon,
   RedoIcon,
@@ -126,7 +122,7 @@ type Shortcut = { key: string; code: string };
 type Variant = { id: VariantId; icon: Icon; shortcut: Shortcut };
 
 /**
- * Кнопка панели. Если вариантов несколько, рядом с ней шеврон: он открывает список, а сама
+ * Кнопка панели. Если вариантов несколько, в углу треугольник: он открывает список, а сама
  * кнопка показывает последний выбранный вариант и включает его — как в Figma.
  */
 type Tool = { id: ToolId; variants: readonly [Variant, ...Variant[]] };
@@ -263,11 +259,20 @@ const OPEN_TOWARD: Record<DockSide, DockSide> = {
   bottom: 'top',
 };
 
-const CHEVRON: Record<DockSide, Icon> = {
-  left: NextIcon,
-  right: BackIcon,
-  top: ChevronDownIcon,
-  bottom: ChevronUpIcon,
+/** Куда смотрит маленький треугольник: в сторону, куда откроется меню. */
+const MARK_POINT: Record<DockSide, string> = {
+  left: 'border-y-[3px] border-y-transparent border-l-[5px] border-l-current',
+  right: 'border-y-[3px] border-y-transparent border-r-[5px] border-r-current',
+  top: 'border-x-[3px] border-x-transparent border-b-[5px] border-b-current',
+  bottom: 'border-x-[3px] border-x-transparent border-t-[5px] border-t-current',
+};
+
+/** Угол кнопки, в котором стоит треугольник. */
+const MARK_CORNER: Record<DockSide, string> = {
+  left: 'right-0 bottom-0',
+  right: 'left-0 bottom-0',
+  top: 'right-0 bottom-0',
+  bottom: 'right-0 top-0',
 };
 
 const BUTTON = cn(
@@ -324,29 +329,26 @@ function RailSeparator({ axis }: { axis: DockAxis }) {
 }
 
 /**
- * Шеврон инструмента: по клику — список вариантов, по наведению — только подсказка. Стоит
- * внутри одной «пилюли» с кнопкой инструмента, как в Figma: фон выбора и наведения у них общий.
+ * Треугольник в углу кнопки: клик по иконке включает инструмент, клик по треугольнику
+ * открывает варианты. Отдельной полоски со стрелкой нет — высота всех кнопок одна.
  */
 function VariantMenu({
   tool,
   current,
-  axis,
   side,
   active,
   onPick,
 }: {
   tool: Tool;
   current: Variant;
-  axis: DockAxis;
   side: DockSide;
-  /** Инструмент выбран: шеврон стоит на цветной пилюле. */
+  /** Инструмент выбран: треугольник стоит на цветной кнопке. */
   active: boolean;
   onPick: (tool: Tool, variant: Variant) => void;
 }) {
   const t = useTranslations('toolRail');
   const focus = useMenuFocus();
   const toward = OPEN_TOWARD[side];
-  const ChevronIcon = CHEVRON[side];
 
   return (
     <DropdownMenu>
@@ -356,16 +358,13 @@ function VariantMenu({
             aria-label={t('variantsOf', { tool: t(`tools.${tool.id}`) })}
             {...focus.trigger}
             className={cn(
-              'grid shrink-0 place-items-center rounded-full outline-none',
-              'transition-colors duration-100 motion-reduce:transition-none',
+              'absolute z-10 grid size-4 place-items-center rounded-sm outline-none',
               'focus-visible:ring-2 focus-visible:ring-ring/50',
-              active
-                ? 'text-primary-foreground/75 hover:bg-primary-foreground/15 hover:text-primary-foreground data-[state=open]:bg-primary-foreground/15'
-                : 'text-muted-foreground/70 hover:bg-foreground/10 hover:text-foreground data-[state=open]:bg-foreground/10 data-[state=open]:text-foreground',
-              axis === 'vertical' ? 'h-4 w-9' : 'h-9 w-4',
+              MARK_CORNER[side],
+              active ? 'text-primary-foreground/80' : 'text-muted-foreground/80',
             )}
           >
-            <ChevronIcon size={10} className="[--icon-stroke:2.5]" />
+            <span aria-hidden className={cn('block size-0 border-solid', MARK_POINT[side])} />
           </ToolbarPrimitive.Button>
         </DropdownMenuTrigger>
       </RailTooltip>
@@ -531,7 +530,7 @@ export const ToolRail = memo(function ToolRail({
         orientation={axis}
         aria-label={t('label')}
         className={cn(
-          'flex items-center rounded-full p-1',
+          'flex items-center rounded-full p-1 [--icon-stroke:1.5]',
           axis === 'vertical' ? 'w-13 flex-col' : 'h-13 flex-row',
           'bg-card shadow-lg shadow-black/20 ring-1 ring-border',
           className,
@@ -560,22 +559,7 @@ export const ToolRail = memo(function ToolRail({
             const active = activeTool?.id === tool.id;
             const grouped = tool.variants.length > 1;
             return (
-              <div
-                key={tool.id}
-                data-tool-group={grouped ? '' : undefined}
-                className={cn(
-                  'flex items-center',
-                  along,
-                  // Кнопка с вариантами и её шеврон — одна пилюля с общим фоном.
-                  grouped && [
-                    'm-0.5 rounded-full transition-colors duration-100 motion-reduce:transition-none',
-                    active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted has-data-[state=open]:bg-muted',
-                  ],
-                  !grouped && 'p-0.5',
-                )}
-              >
+              <div key={tool.id} className="relative p-0.5">
                 <RailTooltip
                   label={t(`variants.${variant.id}`)}
                   keys={[variant.shortcut.key]}
@@ -589,23 +573,20 @@ export const ToolRail = memo(function ToolRail({
                     className={cn(
                       BUTTON,
                       'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
-                      // Фон наведения даёт пилюля целиком, а не одна кнопка.
-                      grouped && 'hover:bg-transparent data-[state=on]:hover:bg-transparent',
                     )}
                   >
                     <variant.icon size={18} />
                   </ToolbarPrimitive.ToggleItem>
                 </RailTooltip>
-                {grouped && (
+                {grouped ? (
                   <VariantMenu
                     tool={tool}
                     current={variant}
-                    axis={axis}
                     side={side}
                     active={active}
                     onPick={pick}
                   />
-                )}
+                ) : null}
               </div>
             );
           })}

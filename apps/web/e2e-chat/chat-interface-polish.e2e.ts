@@ -41,7 +41,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
   if (!baseURL) throw new Error('Browser tests need the fixture base URL.');
   await request.post('http://127.0.0.1:3121/__reset-models');
   const value = await signSessionToken(
-    'chat-e2e-user',
+    'chat-e2e-user:session:e2e',
     Date.now() + 3600000,
     'chat-e2e-session-secret',
   );

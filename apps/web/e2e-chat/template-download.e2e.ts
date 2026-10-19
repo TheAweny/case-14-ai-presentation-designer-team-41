@@ -93,7 +93,7 @@ test.beforeEach(async ({ page, baseURL, request }) => {
   await request.post(FIXTURE + '/__reset-models');
   if (!baseURL) throw new Error('Template download browser test requires a base URL.');
   const value = await signSessionToken(
-    'chat-e2e-user',
+    'chat-e2e-user:session:e2e',
     Date.now() + 3600000,
     'chat-e2e-session-secret',
   );

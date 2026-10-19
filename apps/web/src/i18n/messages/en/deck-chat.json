@@ -54,7 +54,8 @@
     "attachFiles": "Attach files",
     "files": "Attachments",
     "dropHere": "Drop files to add them to the request",
-    "rejected": "Could not add: {names}. Choose a nonempty document, spreadsheet or PPTX / POTX template."
+    "rejected": "Could not add: {names}. Choose a nonempty document, spreadsheet or PPTX / POTX template.",
+    "emptyTemplate": "The file is empty. Upload a presentation that contains slides."
   },
   "toBottom": "Jump to latest",
   "modes": {
