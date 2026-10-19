@@ -57,7 +57,6 @@ const sections = [
   ['shortcuts', 'Клавиши'],
   ['decks', 'Презентации'],
   ['models', 'Модели'],
-  ['users', 'Пользователи'],
 ] as const;
 
 for (const viewport of [

@@ -1,8 +1,15 @@
 'use client';
 
 import { useTransition } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { LogoutIcon, SelectorIcon, SettingsIcon, UserIcon } from '@/components/ui/icons';
+import {
+  LogoutIcon,
+  SelectorIcon,
+  SettingsIcon,
+  ShieldIcon,
+  UserIcon,
+} from '@/components/ui/icons';
 import { signOutAction } from '@/app/auth-actions';
 import { openSettings, useIsMac } from '@/components/settings/open-settings';
 import {
@@ -15,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { Account } from '@/lib/auth';
+import { ADMIN_HREF } from '@/lib/library-menu';
 import { avatarView } from '@/lib/avatars';
 import { AvatarMark } from './avatar-mark';
 import { cn } from '@/lib/utils';
@@ -104,6 +112,14 @@ export function AccountMenu({
           <UserIcon />
           {t('account')}
         </DropdownMenuItem>
+        {account.role === 'admin' ? (
+          <DropdownMenuItem asChild>
+            <Link href={ADMIN_HREF}>
+              <ShieldIcon />
+              {t('admin')}
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={() => openSettings()}>
           <SettingsIcon />
           {t('settings')}

@@ -14,7 +14,6 @@ export const SETTINGS_SECTIONS = [
   'shortcuts',
   'decks',
   'models',
-  'users',
 ] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 

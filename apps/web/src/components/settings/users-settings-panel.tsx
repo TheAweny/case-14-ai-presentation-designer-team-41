@@ -33,7 +33,6 @@ import {
 } from '@/lib/users';
 import { cn } from '@/lib/utils';
 import { SectionHeader } from './settings-rows';
-import { AccountPolicyPanel } from './account-policy-panel';
 
 const inputClass = cn(
   'h-9 w-full rounded-md bg-background px-2.5 text-sm text-foreground outline-none',
@@ -64,7 +63,6 @@ export function UsersSettingsPanel() {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<ManagedUser | null>(null);
   const [busy, startBusy] = useTransition();
-  const [policyAccount, setPolicyAccount] = useState('default');
 
   const failureText = (failure: UsersFailure) =>
     failure.reason === 'exists'
@@ -121,7 +119,7 @@ export function UsersSettingsPanel() {
     });
 
   return (
-    <div className="flex flex-col gap-6 px-5 py-5 md:px-7 md:pt-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <SectionHeader title={t('title')} description={t('description')} />
         {adding ? null : (
@@ -131,23 +129,6 @@ export function UsersSettingsPanel() {
           </Button>
         )}
       </div>
-
-      <label className="grid gap-2 text-sm">
-        {t('policyAccount')}
-        <select
-          className={inputClass}
-          value={policyAccount}
-          onChange={(event) => setPolicyAccount(event.target.value)}
-        >
-          <option value="default">{t('policyDefault')}</option>
-          {users?.map((user) => (
-            <option key={user.userId} value={user.userId}>
-              {user.email}
-            </option>
-          ))}
-        </select>
-      </label>
-      <AccountPolicyPanel key={policyAccount} accountId={policyAccount} editable />
 
       {adding ? (
         <NewUserForm
