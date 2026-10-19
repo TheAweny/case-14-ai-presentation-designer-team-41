@@ -7,7 +7,11 @@ import { proxiedApiPath } from './api-proxy';
  * is the one server the page offers. Routes the proxy does not forward are marked, so «Try it
  * out» on them is not a surprise 404.
  *
- * Module without Next or React: `browserDocument` is checked by tests.
+ * Module without Next or React: `browserDocument`, `documentForTag` and `documentForSchemas`
+ * are checked by tests.
+ *
+ * A reference page asks for one tag. Schemas stay on that document so an opened operation can
+ * resolve `$ref`; the models list itself is hidden there and drawn by `documentForSchemas`.
  */
 
 export const SERVER_ONLY_EXTENSION = 'x-lct-server-only';
@@ -26,13 +30,16 @@ interface Parameter {
 
 interface Operation {
   description?: string;
+  tags?: readonly string[];
   parameters?: readonly Parameter[];
   [SERVER_ONLY_EXTENSION]?: boolean;
 }
 
 export interface OpenApiDocument {
+  tags?: { name: string; description?: string }[];
   servers?: { url: string; description?: string }[];
   paths?: Record<string, Partial<Record<(typeof METHODS)[number], Operation>>>;
+  components?: { schemas?: Record<string, unknown>; [key: string]: unknown };
   [key: string]: unknown;
 }
 
@@ -71,6 +78,35 @@ export function browserDocument(document: OpenApiDocument): OpenApiDocument {
     servers: [{ url: API_PROXY_PATH, description: 'Через веб-сервер, с сессией этого браузера' }],
     paths,
   };
+}
+
+/** Routes of one OpenAPI tag, plus the components an operation's `$ref` points at. */
+export function documentForTag(document: OpenApiDocument, tag: string): OpenApiDocument {
+  const paths: NonNullable<OpenApiDocument['paths']> = {};
+  for (const [path, item] of Object.entries(document.paths ?? {})) {
+    const next: (typeof paths)[string] = {};
+    for (const method of METHODS) {
+      const operation = item[method];
+      if (!operation?.tags?.includes(tag)) continue;
+      next[method] = operation;
+    }
+    if (Object.keys(next).length > 0) paths[path] = next;
+  }
+  return {
+    ...document,
+    tags: document.tags?.filter((item) => item.name === tag),
+    paths,
+  };
+}
+
+/** The models catalogue, with no routes. */
+export function documentForSchemas(document: OpenApiDocument): OpenApiDocument {
+  return { ...document, tags: [], paths: {} };
+}
+
+/** The one-line description the document gives a tag, if it has one. */
+export function tagDescription(document: OpenApiDocument, tag: string): string | undefined {
+  return document.tags?.find((item) => item.name === tag)?.description;
 }
 
 /** The document from the API, ready for the browser; null while the API is not answering. */

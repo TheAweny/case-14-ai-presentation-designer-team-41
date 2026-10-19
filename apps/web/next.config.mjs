@@ -13,6 +13,10 @@ const nextConfig = {
   output: 'standalone',
   // The workspace root, so tracing picks up files from packages/ as well.
   outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
+  // Статьи справочника читаются с диска; без этого standalone-образ их не увезёт.
+  outputFileTracingIncludes: {
+    '/api/docs/guide/[slug]': ['./content/docs/**/*.md'],
+  },
   // Левый нижний угол занят подвалом колонки слайдов, индикатор dev-сборки его закрывал.
   devIndicators: { position: 'bottom-right' },
   // Dictation goes through a server action; the default 1 MB is about a minute of speech. The API

@@ -54,14 +54,10 @@ html.dark-mode .api-docs .swagger-ui {
   font-family: var(--docs-mono);
 }
 
+/* Ширину и поля задаёт колонка страницы: справочник уже стоит в ней рядом с оглавлением. */
 .api-docs .swagger-ui .wrapper {
-  max-width: 72rem;
-  padding: 0 1rem;
-}
-@media (min-width: 40rem) {
-  .api-docs .swagger-ui .wrapper {
-    padding: 0 1.5rem;
-  }
+  max-width: none;
+  padding: 0;
 }
 
 /* --- Описание сверху: заголовок и версию уже показывает шапка страницы. --- */
@@ -120,7 +116,7 @@ html.dark-mode .api-docs .swagger-ui .info a {
 
 /*
  * «Authorize» и замки у маршрутов браузеру не нужны: заголовки доступа ставит веб-сервер, а
- * запросы со страницы идут с сессией. Схемы доступа описаны в тексте сверху и в openapi.json.
+ * запросы со страницы идут с сессией. Как устроен доступ, написано на странице «Доступ».
  */
 .api-docs .swagger-ui :is(.auth-wrapper, .authorization__btn) {
   display: none;
@@ -657,6 +653,25 @@ html.dark-mode .api-docs .swagger-ui .loading-container .loading::after {
   .api-docs .swagger-ui .opblock-tag small {
     display: none;
   }
+}
+
+/* Страница тега: заголовок уже над Swagger, список схем — на своей странице. */
+.api-docs-operations .swagger-ui .information-container,
+.api-docs-operations .swagger-ui .opblock-tag,
+.api-docs-operations .swagger-ui section.models {
+  display: none;
+}
+
+/* Страница схем: только список моделей. Пустой список операций Swagger оставляет заголовком. */
+.api-docs-schemas .swagger-ui .information-container,
+.api-docs-schemas .swagger-ui .scheme-container,
+.api-docs-schemas .swagger-ui .filter-container,
+.api-docs-schemas .swagger-ui .wrapper > div,
+.api-docs-schemas .swagger-ui h3 {
+  display: none;
+}
+.api-docs-schemas .swagger-ui section.models {
+  margin-top: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

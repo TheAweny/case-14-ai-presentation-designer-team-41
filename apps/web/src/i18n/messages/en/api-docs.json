@@ -17,5 +17,51 @@
   "unavailable": {
     "title": "The API is not answering",
     "description": "The API builds this description when it starts. The page shows it as soon as the API is up."
-  }
+  },
+  "navLabel": "Sections",
+  "overview": "Overview",
+  "capabilities": "Capabilities",
+  "guide": "Structure",
+  "reference": "Reference",
+  "capabilityPages": {
+    "variants": "Three variants",
+    "assistant": "Assistant",
+    "editing": "Editing and export",
+    "library": "Projects and templates"
+  },
+  "capabilityLead": {
+    "variants": "The same words, laid out at three densities.",
+    "assistant": "Chat, plan and auto — and which of them builds the deck.",
+    "editing": "Live audit, export of what is on screen, one picture for every variant.",
+    "library": "A project folder, an unknown template, previews without parsing the file again."
+  },
+  "guidePages": {
+    "pipeline": "Pipeline",
+    "layers": "Layers",
+    "contracts": "Contracts",
+    "decisions": "Decisions",
+    "access": "Access"
+  },
+  "guideLead": {
+    "pipeline": "The deck plan is written once and laid out at three densities.",
+    "layers": "Models live in TypeScript, the presentation file in Python.",
+    "contracts": "One set of Zod schemas for the API and the engine.",
+    "decisions": "The invariants you need in order to read the routes.",
+    "access": "The browser session, the web server headers, and the error codes."
+  },
+  "referencePages": {
+    "generation": "Generation",
+    "editor": "Editor",
+    "files": "Files and templates",
+    "chats": "Chats",
+    "runs": "Runs",
+    "library": "Library",
+    "models": "Models",
+    "users": "Users",
+    "auth": "Sign-in",
+    "health": "Health",
+    "schemas": "Schemas"
+  },
+  "schemasLead": "Request and response models. On a route page they open inside the operation.",
+  "tagMissing": "This section is not in the API description."
 }

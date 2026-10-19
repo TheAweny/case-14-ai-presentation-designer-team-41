@@ -128,6 +128,13 @@ describe('OpenAPI document', () => {
     expect(document.components?.schemas?.GenerationRequest).toEqual(JSON.parse(expected));
   });
 
+  it('keeps the description to one sentence', async () => {
+    const document = await documentOf();
+    expect(document.info.description).toBe(
+      'Схемы запросов и ответов собраны из тех же Zod-контрактов, что проверяют данные в коде.',
+    );
+  });
+
   it('opens only /health without the service token', async () => {
     const document = await documentOf();
     expect(document.security).toEqual([{ serviceToken: [], account: [] }]);
