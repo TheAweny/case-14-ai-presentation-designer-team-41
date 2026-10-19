@@ -33,7 +33,7 @@ name = "API sits above independent layers, which sit above contracts"
 type = "layers"
 layers = [
     "api",
-    "parser | layout | visuals | export | render | checks",
+    "parser | layout | visuals | export | render | checks | dataset",
     "contracts",
 ]
 containers = ["engine"]
@@ -48,6 +48,7 @@ modules = [
     "engine.export",
     "engine.render",
     "engine.checks",
+    "engine.dataset",
 ]
 
 [[tool.importlinter.contracts]]
@@ -61,6 +62,7 @@ forbidden_modules = [
     "engine.export",
     "engine.render",
     "engine.checks",
+    "engine.dataset",
     "engine.api",
 ]
 
