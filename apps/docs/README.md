@@ -23,7 +23,9 @@ yarn nx run docs:test
 
 ## Отдельный хост
 
-Портал рассчитан на поддомен, например `docs.lct.aweny.link`. Этот репозиторий не меняет DNS и compose продукта.
+В production портал работает на `docs.lct.aweny.link`. `Production CD` собирает отдельный
+образ `docs`, а Compose публикует его только на `127.0.0.1:3002`. DNS и TLS настраиваются
+на хосте. Порядок первого перехода и отката — в `docs/DEPLOYMENT.md` от корня репозитория.
 
 ```bash
 yarn nx run docs:build
@@ -45,11 +47,16 @@ server {
   server_name docs.lct.aweny.link;
   root /var/www/lct-docs;
   location / {
-    try_files $uri $uri/ $uri.html /404.html;
+    error_page 404 /404.html;
+    try_files $uri $uri/ =404;
   }
 }
 ```
 
 Не проксируйте `/api/backend` на этом хосте. Такой путь есть только у приложения. Справочник API — статические страницы и файл `/openapi.json`.
+
+Для контейнерной выкладки хостовый nginx проксирует на `127.0.0.1:3002` по примеру
+`infra/deploy/nginx-docs-location.conf`. Внутренний nginx отдаёт только статические файлы
+и возвращает неизвестным адресам статус 404 с русской страницей ошибки.
 
 Редирект с приложения на портал включается переменной `DOCS_PUBLIC_URL` на веб-сервере продукта и только для путей из `apps/web/src/lib/docs-portal.ts`. Страница `/api/docs` приложения остаётся на месте. Пока переменная не задана, поведение приложения не меняется.

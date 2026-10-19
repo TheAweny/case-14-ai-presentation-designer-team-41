@@ -1,0 +1,21 @@
+# Added only when the release contains a docs image; old releases remain deployable.
+services:
+  docs:
+    image: ${DOCS_IMAGE:?required}
+    init: true
+    restart: unless-stopped
+    user: '101:101'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    tmpfs: ['/tmp:rw,nosuid,nodev,size=64m,mode=1777']
+    mem_limit: 128m
+    cpus: 0.5
+    ports: ['127.0.0.1:3002:8080']
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: '3' }
+
+  web:
+    environment:
+      DOCS_PUBLIC_URL: https://docs.lct.aweny.link

@@ -128,3 +128,25 @@ jobs:
       # The product is open source: GPL and AGPL in the dependency tree fail the build.
       - name: Check dependency licenses
         run: yarn licenses
+
+  docs-runtime:
+    name: Static docs container
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build static docs image
+        run: docker build -f infra/docker/docs.Dockerfile -t lct-docs:test .
+      - name: Serve docs without product services
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name lct-docs --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --tmpfs /tmp:rw,nosuid,nodev,size=64m,mode=1777 \
+            --user 101:101 -p 127.0.0.1:3002:8080 lct-docs:test
+          trap 'docker logs lct-docs; docker rm -f lct-docs' EXIT
+          curl --fail --retry 10 --retry-connrefused --retry-delay 2 http://127.0.0.1:3002/ > /dev/null
+          curl --fail http://127.0.0.1:3002/docs/api/reference/ > /dev/null
+          curl --fail http://127.0.0.1:3002/openapi.json > /dev/null
+          test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:3002/missing-page/)" = 404
+          test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:3002/api/backend/health)" = 404

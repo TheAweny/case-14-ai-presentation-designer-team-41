@@ -33,6 +33,8 @@ jobs:
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       GH_TOKEN: ${{ github.token }}
       REGISTRY: ghcr.io/theaweny/case-14-ai-presentation-designer-team-41
+      # Enable only after the operator installs the docs-aware receiver and HTTPS route.
+      DOCS_DEPLOY_ENABLED: ${{ vars.LCT_DOCS_DEPLOY_ENABLED == 'true' && 'true' || 'false' }}
     steps:
       - name: Require successful CI for current main
         shell: bash
@@ -60,7 +62,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for service in engine api web; do
+          services=(engine api web)
+          if [ "$DOCS_DEPLOY_ENABLED" = true ]; then services+=(docs); fi
+          for service in "${services[@]}"; do
             docker buildx build --platform linux/amd64 \
               --file "infra/docker/$service.Dockerfile" \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
@@ -92,7 +96,10 @@ jobs:
           import os
           from pathlib import Path
           images = {}
-          for service in ('api', 'web', 'engine'):
+          services = ['api', 'web', 'engine']
+          if os.environ['DOCS_DEPLOY_ENABLED'] == 'true':
+              services.append('docs')
+          for service in services:
               metadata = json.loads((Path(os.environ['RUNNER_TEMP']) / f'{service}.json').read_text())
               images[service] = f"{os.environ['REGISTRY']}/{service}@{metadata['containerimage.digest']}"
           print(json.dumps({'sha': os.environ['RELEASE_SHA'], 'actor': os.environ['GITHUB_ACTOR'],
@@ -105,3 +112,11 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --retry 3 https://lct.aweny.link/login > /dev/null
           printf 'Deployed commit `%s` to https://lct.aweny.link\n' "$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DOCS_DEPLOY_ENABLED" = true ]; then
+            curl --fail --silent --show-error --retry 3 https://docs.lct.aweny.link/ > /dev/null
+            curl --fail --silent --show-error --retry 3 https://docs.lct.aweny.link/docs/api/reference/ > /dev/null
+            curl --fail --silent --show-error --retry 3 https://docs.lct.aweny.link/openapi.json > /dev/null
+            printf 'Documentation: https://docs.lct.aweny.link\n' >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'Docs deployment awaits host setup and LCT_DOCS_DEPLOY_ENABLED=true.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi

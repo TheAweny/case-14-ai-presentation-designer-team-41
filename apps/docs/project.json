@@ -13,6 +13,12 @@
     },
     "build": {
       "executor": "nx:run-commands",
+      "inputs": [
+        "production",
+        "^production",
+        { "env": "NEXT_PUBLIC_DOCS_URL" },
+        { "env": "NEXT_PUBLIC_APP_URL" }
+      ],
       "dependsOn": ["api:export-openapi"],
       "options": {
         "command": "next build",

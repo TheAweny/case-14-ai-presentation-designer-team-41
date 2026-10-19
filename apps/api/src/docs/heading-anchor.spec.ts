@@ -17,6 +17,7 @@ describe('schema heading anchors', () => {
   it('suffixes a later heading when two names share a slug', () => {
     const anchors = schemaAnchors(['Chat', 'chat']);
     const [first, second] = ['Chat', 'chat'].sort((left, right) => left.localeCompare(right));
+    if (first === undefined || second === undefined) throw new Error('Expected two schema names');
     expect(anchors.get(first)).toBe('chat');
     expect(anchors.get(second)).toBe('chat-1');
   });
