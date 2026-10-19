@@ -13,6 +13,7 @@ import { listUsersAction } from '@/app/users-actions';
 import { AccountAvatar } from '@/components/auth/account-menu';
 import { AnimatedCollapse } from '@/components/ui/animated-collapse';
 import { Button } from '@/components/ui/button';
+import { openSettings } from '@/components/settings/open-settings';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,8 +112,8 @@ export function LimitsDesk({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
         <p className="max-w-xl text-sm text-muted-foreground">{t('modelsHint')}</p>
-        <Button variant="outline" asChild>
-          <a href="?view=limits&settings=models">{t('models')}</a>
+        <Button variant="outline" onClick={() => openSettings('models')}>
+          {t('models')}
         </Button>
       </div>
       {pendingScope ? (

@@ -156,6 +156,44 @@ function metricView(start = '1970-01-01T00:00:00.000Z'): AccountUsageView {
   };
 }
 
+test('model settings preserve personal scope and unsaved limits', async ({ page }) => {
+  await page.goto(`/admin?view=limits&account=${person.id}`);
+  const generation = page.getByRole('group', { name: 'Успешные генерации', exact: true });
+  await generation.getByRole('radio', { name: 'Лимит', exact: true }).click();
+  await generation.getByRole('spinbutton').fill('17');
+  await page.getByRole('button', { name: 'Модели и подключения', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Настройки', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`account=${person.id}.*settings=models`));
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(generation.getByRole('spinbutton')).toHaveValue('17');
+  await expect(page.getByRole('heading', { name: person.email, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Отменить правки', exact: true }).click();
+});
+
+test('personal usage shows reset date in the policy timezone only for periodic limits', async ({
+  page,
+  request,
+}) => {
+  const view = metricView();
+  const generation = view.metrics.find((row) => row.metric === 'generation');
+  if (!generation) throw new Error('Missing generation counter');
+  generation.limit = { limit: 10, period: 'day', timezone: 'Europe/Moscow' };
+  generation.start = '2026-10-19T21:00:00.000Z';
+  generation.end = '2026-10-20T21:00:00.000Z';
+  await request.post(`${API}/__set-admin-usage`, { data: { me: view } });
+  await page.goto('/?settings=account');
+  const activity = page.getByRole('region', { name: 'Активность и ограничения', exact: true });
+  await expect(activity.getByText(/Сброс .*21 окт\. 2026.*00:00.*Europe\/Moscow/)).toBeVisible();
+  generation.limit = { limit: 10, period: 'lifetime', timezone: 'UTC' };
+  generation.end = null;
+  await request.post(`${API}/__set-admin-usage`, { data: { me: view } });
+  await page.reload();
+  await expect(activity.getByText('За всё время', { exact: false })).toHaveCount(0);
+  await expect(activity.getByText(/Сброс/)).toHaveCount(0);
+});
+
 test('metrics retain failed accounts, recover on refresh and avoid mixed-window totals', async ({
   page,
   request,

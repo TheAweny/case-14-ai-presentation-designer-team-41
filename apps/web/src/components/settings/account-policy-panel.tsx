@@ -76,6 +76,18 @@ export function AccountPolicyPanel() {
                     {describe(row.metric, used, row.active, row.limit, t, limits, format)}
                   </span>
                 </div>
+                {isPeriodic(row.metric) && row.limit?.period !== 'lifetime' && row.end ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t('resets', {
+                      when: format.dateTime(new Date(row.end), {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                        timeZone: row.limit?.timezone,
+                      }),
+                    })}{' '}
+                    ({row.limit?.timezone})
+                  </p>
+                ) : null}
                 {ratio === null ? null : (
                   <div className="h-1 overflow-hidden rounded-full bg-muted">
                     <div
