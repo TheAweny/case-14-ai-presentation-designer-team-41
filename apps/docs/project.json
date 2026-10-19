@@ -1,0 +1,54 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "docs",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "tags": ["scope:docs", "type:app"],
+  "targets": {
+    "export-openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn nx run api:export-openapi"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["api:export-openapi"],
+      "options": {
+        "command": "next build",
+        "cwd": "apps/docs"
+      },
+      "outputs": ["{projectRoot}/out"]
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["api:export-openapi"],
+      "options": {
+        "command": "next dev --port 3002",
+        "cwd": "apps/docs"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["api:export-openapi"],
+      "options": {
+        "command": "tsc -p tsconfig.json --noEmit",
+        "cwd": "apps/docs"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/docs --max-warnings 0"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["api:export-openapi"],
+      "options": {
+        "command": "vitest run",
+        "cwd": "apps/docs"
+      }
+    }
+  }
+}

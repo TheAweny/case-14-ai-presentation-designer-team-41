@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, authSecret, loginHref } from '@/lib/auth';
+import { docsPortalDestination } from '@/lib/docs-portal';
 import { verifySessionToken } from '@/lib/session-token';
 
 /**
@@ -11,6 +12,9 @@ import { verifySessionToken } from '@/lib/session-token';
  * петля «вход → главная → вход». Страница входа решает это сама, спросив источник аккаунтов.
  */
 export async function proxy(request: NextRequest) {
+  const docs = docsPortalDestination(request.nextUrl.pathname, process.env.DOCS_PUBLIC_URL);
+  if (docs) return NextResponse.redirect(docs);
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (await verifySessionToken(token, authSecret())) return NextResponse.next();
 

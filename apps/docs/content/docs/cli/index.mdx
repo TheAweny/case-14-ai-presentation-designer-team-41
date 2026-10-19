@@ -1,0 +1,87 @@
+---
+title: CLI
+description: Команды lct, флаги мастера и конфиг прогона. Сверено с apps/cli.
+---
+
+Команда называется `lct`. Справка печатается без аргументов, по `lct help`, `--help` и `-h`. Текст ниже совпадает с `apps/cli/src/main.ts` и разбором флагов в `apps/cli/src/setup/args.ts`.
+
+## Установка и запуск
+
+`./install.sh` из клона ставит зависимости, собирает CLI и вызывает `lct onboard`, пробрасывая свои флаги. Сборка вручную: `yarn nx run cli:build`, затем `node apps/cli/dist/main.js`. Симлинк `~/.local/bin/lct` создаёт установщик.
+
+Корень репозитория для Compose можно переопределить переменной `LCT_HOME`.
+
+## Команды
+
+| Команда                      | Что делает                                                            |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `lct onboard`                | Мастер: режим, модель, администратор, запуск                          |
+| `lct start`                  | `docker compose up -d`                                                |
+| `lct stop`                   | `docker compose down`                                                 |
+| `lct restart [сервис]`       | Перезапуск всего стека или одного сервиса, например `lct restart web` |
+| `lct status`                 | `docker compose ps`                                                   |
+| `lct logs [сервис]`          | `docker compose logs --tail 200 -f`                                   |
+| `lct user admin [почта]`     | Записывает администратора. Остальные аккаунты — в интерфейсе          |
+| `lct doctor`                 | Проверка окружения, секретов и модели                                 |
+| `lct generate <config.yaml>` | Сборка колод по конфигу прогона                                       |
+
+`lct user` без действия `admin` печатает справку. Неизвестное действие завершается с кодом 2.
+
+## Флаги `onboard`
+
+Имена взяты из вызова мастера в `main.ts`. Значение передаётся как `--flag value` или `--flag=value`.
+
+| Флаг               | Значения                               |
+| ------------------ | -------------------------------------- |
+| `--yes`            | без вопросов                           |
+| `--mode`           | `docker` или `local`                   |
+| `--provider`       | `vk`, `ai-studio`, `openai`, `offline` |
+| `--api-key`        | ключ провайдера                        |
+| `--project-id`     | проект для провайдера `vk`             |
+| `--folder-id`      | каталог для `ai-studio`                |
+| `--base-url`       | свой адрес API модели                  |
+| `--model`          | id модели                              |
+| `--admin-email`    | почта администратора                   |
+| `--admin-name`     | имя                                    |
+| `--admin-password` | пароль                                 |
+| `--no-start`       | не поднимать стек в конце              |
+
+Пример из справки CLI, без настоящего ключа:
+
+```bash title="onboard.sh"
+lct onboard --yes --provider vk --api-key KEY --project-id UUID \
+  --admin-email admin@example.com --admin-password '…'
+```
+
+<Tabs items={['VK', 'AI Studio']}>
+  <Tab>
+
+```bash title="vk.sh"
+lct onboard --yes --provider vk --api-key KEY --project-id UUID \
+  --admin-email admin@example.com --admin-password '…'
+```
+
+  </Tab>
+  <Tab>
+
+```bash title="ai-studio.sh"
+lct onboard --yes --provider ai-studio --api-key KEY --folder-id b1g… \
+  --admin-email you@example.com --admin-password '…'
+```
+
+  </Tab>
+</Tabs>
+
+`lct user admin` принимает те же `--name` и `--password`. Почта может быть позиционным аргументом.
+
+## Конфиг прогона
+
+`lct generate <config.yaml>` читает YAML схемой `runConfigSchema`. Обязательные поля: `templatePath`, `contentPath`, `slideCount` (целое от 5 до 15), `layoutVariants` (непустой список из `dense`, `balanced`, `airy`), `auditProfile`, `models`, `seed`, `outputDir`. Необязательные: `goal`, `audience`, `language`.
+
+У элемента `models` два поля: `role` (`planner`, `writer`, `critic`, `vision`, `image`) и `modelId`. У этого конфига нет `schemaVersion`. Пример полей — `configs/run.example.yaml`.
+
+<Limitation>
+`lct <config.yaml>` без слова `generate` только создаёт запись прогона в базе и печатает JSON. Колоду он не собирает. Для сборки нужна команда `lct generate`.
+</Limitation>
+
+Интерактивные вопросы мастера, которые не выражены флагами, в эту страницу не переписывались.

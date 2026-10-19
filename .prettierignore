@@ -13,3 +13,8 @@ engine/src/engine/contracts/_generated.py
 uv.lock
 yarn.lock
 apps/web/next-env.d.ts
+apps/docs/next-env.d.ts
+apps/docs/content/docs/api/reference
+apps/docs/generated
+apps/docs/public/openapi.json
+apps/docs/.source
