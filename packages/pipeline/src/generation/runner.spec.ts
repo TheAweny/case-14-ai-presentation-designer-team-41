@@ -93,6 +93,16 @@ async function exercise(
             patternId: pattern.patternId,
             purpose: `Pilot ${index + 1}`,
             imageQuery: '',
+            requiredClaims: [
+              {
+                id: `claim-${index}`,
+                text: `Slide ${String.fromCharCode(65 + index)}`,
+                source: {
+                  sourceId: 'brief',
+                  quote: `Slide ${String.fromCharCode(65 + index)}`,
+                },
+              },
+            ],
           })),
         });
       if (agent === 'rewriter') {
@@ -260,7 +270,10 @@ async function exercise(
     runId: 'test',
     templatePath: '/fixture.pptx',
     outputDir,
-    brief: 'Pilot',
+    brief: Array.from(
+      { length: 10 },
+      (_, index) => `Slide ${String.fromCharCode(65 + index)}`,
+    ).join('\n'),
     slideCount: 10,
     profile: runProfile,
     registryDir: resolve('../../registry/agents'),

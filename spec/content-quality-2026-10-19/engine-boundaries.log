@@ -1,0 +1,32 @@
+
+> nx run engine:boundaries
+
+> uv run lint-imports --config engine/pyproject.toml
+
+=============
+Import Linter
+=============
+
+
+---------
+Contracts
+---------
+
+Analyzed 47 files, 77 dependencies.
+-----------------------------------
+
+API sits above independent layers, which sit above contracts KEPT
+Engine layers are independent of each other KEPT
+Contracts import nothing from the engine KEPT
+
+Contracts: 3 kept, 0 broken.
+
+
+
+ NX   Successfully ran target boundaries for project engine
+
+
+  Run duration:      1.6s
+  Cache:             0/1 hit (0%)
+  Critical path:     1.5s (1 task)
+  Recoverable time:  <1ms

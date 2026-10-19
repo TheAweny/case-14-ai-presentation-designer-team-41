@@ -536,6 +536,12 @@ export {
 } from './claims.js';
 export { generationSpecSchema, type GenerationSpec } from './generation-state.js';
 export {
+  variantCopyModeSchema,
+  requiredSlideClaimSchema,
+  type VariantCopyMode,
+  type RequiredSlideClaim,
+} from './generation.js';
+export {
   accountPolicySchema,
   accountLimitSchema,
   operationMetricSchema,

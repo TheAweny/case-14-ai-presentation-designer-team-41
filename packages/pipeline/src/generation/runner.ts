@@ -16,6 +16,7 @@ import {
   type StageTiming,
   type RunArtifact,
   type GenerationUsage,
+  type VariantCopyMode,
 } from '@lct/contracts';
 import { createMastra, closeMastra } from '../mastra.js';
 import {
@@ -45,6 +46,9 @@ import { type Illustration, saveIllustration, type SharedIllustrations } from '.
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
 import { generationFailure } from './failure.js';
+import { compositionSemantics } from './semantics.js';
+import { loadWriterModules } from './writer-prompt.js';
+import type { AttemptBudget } from './attempt-budget.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 import {
   contextualCorrections,
@@ -97,6 +101,8 @@ export interface GenerateOptions {
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
   sharedContent?: SharedContent;
+  variantCopyMode?: VariantCopyMode;
+  attemptBudget?: AttemptBudget;
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
   /**
@@ -194,7 +200,7 @@ export async function generatePresentation(options: GenerateOptions) {
   await mkdir(options.outputDir, { recursive: true });
   // A card heading the template placed highest reads as a heading everywhere: in the plan, the
   // writer, the critic and the repair.
-  const profile = withCardHeadingProfile(options.profile);
+  const profile = withCardHeadingProfile(options.profile, options.notes);
   // One date for the whole run: the writer and the audit judge years by the same day.
   const today = options.today ?? new Date();
   const sourceBrief =
@@ -212,6 +218,12 @@ export async function generatePresentation(options: GenerateOptions) {
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
+    const writerModules = await loadWriterModules(writer.directory);
+    // Hash every module with its agent, while each request uses only its selected modules.
+    const writerRevision = {
+      ...writer,
+      instructions: writer.instructions + JSON.stringify(writerModules),
+    };
     if (options.provider.setAgentGeneration) {
       for (const [role, agent] of [
         ['planner', planner],
@@ -270,6 +282,9 @@ export async function generatePresentation(options: GenerateOptions) {
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      writerModules,
+      variantCopyMode: options.variantCopyMode ?? 'independent',
+      ...(options.attemptBudget ? { attemptBudget: options.attemptBudget } : {}),
       variant: options.variant ?? 'balanced',
       ...(options.layoutRemapPolicy ? { layoutRemapPolicy: options.layoutRemapPolicy } : {}),
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
@@ -310,6 +325,9 @@ export async function generatePresentation(options: GenerateOptions) {
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      variantCopyMode: options.variantCopyMode ?? 'independent',
+      ...(options.attemptBudget ? { attemptBudget: options.attemptBudget } : {}),
+      ...(options.notes ? { notes: options.notes } : {}),
       variant: options.variant ?? 'balanced',
       today,
       signal,
@@ -462,6 +480,12 @@ export async function generatePresentation(options: GenerateOptions) {
       slides: written.map((s) => {
         const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
         const headline = pattern ? headlineSlot(pattern) : undefined;
+        const semantics = pattern
+          ? compositionSemantics(
+              pattern,
+              options.notes?.find((note) => note.patternId === pattern.patternId),
+            )
+          : undefined;
         return {
           slideIndex: s.index,
           approvedSlide:
@@ -469,6 +493,8 @@ export async function generatePresentation(options: GenerateOptions) {
               ? null
               : (s.approvedSlide ?? options.outline?.slides[s.index] ?? null),
           patternId: s.slide.patternId,
+          requiredClaims: s.requiredClaims,
+          groups: semantics?.groups ?? [],
           speakerNotes: s.slide.speakerNotes,
           visual: s.slide.visual ?? null,
           texts: s.slide.texts
@@ -477,6 +503,7 @@ export async function generatePresentation(options: GenerateOptions) {
               const slot = pattern?.slots.find((item) => item.slotId === t.slotId);
               return {
                 ...t,
+                ...semantics?.slots.find((slot) => slot.slotId === t.slotId),
                 role: slot?.role === 'title' && slot.slotId !== headline ? 'heading' : slot?.role,
                 sample: slot?.sample,
                 maxChars: slot?.maxChars,
@@ -517,7 +544,14 @@ export async function generatePresentation(options: GenerateOptions) {
         ...slideTextRepeats(deck),
         ...deck.flatMap((s) =>
           s.composition.slots.flatMap((slot) => {
-            const least = minChars(slot, variant);
+            const semantics = compositionSemantics(
+              s.composition,
+              options.notes?.find((note) => note.patternId === s.composition.patternId),
+            );
+            const least = minChars(
+              { ...slot, ...semantics.slots.find((entry) => entry.slotId === slot.slotId) },
+              variant,
+            );
             const text = s.slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
             return least && text && text.length < least && slot.slotId !== s.slide.visual?.slotId
               ? [
@@ -608,6 +642,7 @@ export async function generatePresentation(options: GenerateOptions) {
           brief: sourceBrief,
           ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
           purpose: current.purpose,
+          requiredClaims: current.requiredClaims,
           composition,
           previous: current.slide,
           corrections,
@@ -839,6 +874,7 @@ export async function generatePresentation(options: GenerateOptions) {
             brief: sourceBrief,
             ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
             purpose: current.purpose,
+            requiredClaims: current.requiredClaims,
             composition: pattern,
             previous: current.slide,
             corrections,
@@ -911,7 +947,11 @@ export async function generatePresentation(options: GenerateOptions) {
     }
     // The final semantic check runs after every possible copy mutation and describes the export.
     const finalCritique = await critiqueCurrent();
-    const coverage = approvedCoverage(options.outline, written, finalCritique.coverage);
+    const coverage = approvedCoverage(
+      options.outlineSource === 'model' ? null : options.outline,
+      written,
+      finalCritique.coverage,
+    );
     const semanticErrors = finalCritique.issues.filter((i) => i.category !== 'style');
     const deterministicErrors = report.findings.filter(
       (f) => f.severity === 'blocker' || f.severity === 'major',
@@ -1073,9 +1113,10 @@ export async function generatePresentation(options: GenerateOptions) {
       contentRevision,
       contentHash: contentHash(),
       seed: options.seed ?? 42,
+      variantCopyMode: options.variantCopyMode ?? 'independent',
       revisions: [
         planner,
-        writer,
+        writerRevision,
         critic,
         rewriter,
         ...(illustrations ? [illustrations.agent] : []),

@@ -613,11 +613,16 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * A failed variant can be started again on the plan this build kept.
    */
   async start(
-    input: GenerationRequest,
+    request: Omit<GenerationRequest, 'variantCopyMode'> &
+      Pick<Partial<GenerationRequest>, 'variantCopyMode'>,
     account: Account,
     retry?: BuildRetry,
     onActivity?: (activity: ChatToolActivity) => void,
   ): Promise<StartedBuild> {
+    const input: GenerationRequest = {
+      ...request,
+      variantCopyMode: request.variantCopyMode ?? 'independent',
+    };
     const startedAt = retry?.startedAt ?? this.now();
     const schedulingGroup = input.requestId ?? randomUUID();
     const controller = new AbortController();
@@ -1032,6 +1037,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             variant,
             sharedPlan,
             sharedContent,
+            variantCopyMode: input.variantCopyMode,
+            attemptBudget,
             layoutRemapPolicy: 'conceptual',
             today: new Date(spec.today),
             illustrations,

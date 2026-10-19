@@ -100,16 +100,16 @@ describe('saved layout remap comparison', () => {
   };
   const saved = plan(['cover', ...Array<string>(11).fill('two')]);
 
-  it('changes eleven dense block counts and leaves strict and balanced plans intact', () => {
+  it('keeps ambiguous legacy groups in dense, strict and balanced plans', () => {
     const result = compareLayoutRemap({ plan: saved, profile, index, imagesAvailable: false });
     const dense = result.variants.filter((item) => item.variant === 'dense');
     const baseline = dense.find((item) => item.policy === 'density');
     const strict = dense.find((item) => item.policy === 'preserve-block-count');
     const planned = saved.slides.map((slide) => slide.patternId);
-    expect(baseline?.changedSlides).toBe(11);
-    expect(baseline?.blockCountChanges).toBe(11);
-    expect(baseline?.capacityChanges).toBe(11);
-    expect(baseline?.distinctPatternIds).toBe(3);
+    expect(baseline?.changedSlides).toBe(0);
+    expect(baseline?.blockCountChanges).toBe(0);
+    expect(baseline?.capacityChanges).toBe(0);
+    expect(baseline?.distinctPatternIds).toBe(2);
     expect(strict?.changedSlides).toBe(0);
     expect(strict?.blockCountChanges).toBe(0);
     expect(strict?.distinctPatternIds).toBe(2);
@@ -119,7 +119,7 @@ describe('saved layout remap comparison', () => {
     ).toEqual([planned, planned]);
   });
 
-  it('changes eleven airy block counts when the planned pair is too roomy for that catalog', () => {
+  it('does not reduce ambiguous groups for an airy catalog', () => {
     const airyCompositions = [
       pattern('cover', [], 44),
       pattern('wide', [800, 800]),
@@ -151,10 +151,10 @@ describe('saved layout remap comparison', () => {
     const baseline = airy.find((item) => item.policy === 'density');
     const strict = airy.find((item) => item.policy === 'preserve-block-count');
     const planned = airyPlan.slides.map((slide) => slide.patternId);
-    expect(baseline?.changedSlides).toBe(11);
-    expect(baseline?.blockCountChanges).toBe(11);
-    expect(baseline?.capacityChanges).toBe(11);
-    expect(baseline?.distinctPatternIds).toBe(3);
+    expect(baseline?.changedSlides).toBe(0);
+    expect(baseline?.blockCountChanges).toBe(0);
+    expect(baseline?.capacityChanges).toBe(0);
+    expect(baseline?.distinctPatternIds).toBe(2);
     expect(strict?.blockCountChanges).toBe(0);
     expect(strict?.changedSlides).toBe(0);
     expect(strict?.patternIds).toEqual(planned);

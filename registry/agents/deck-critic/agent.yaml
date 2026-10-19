@@ -1,5 +1,5 @@
 id: deck-critic
-version: 1.10.0
+version: 1.11.0
 description: Grounding and narrative audit of a single deck
 modelId: critic-default
 generation:

@@ -85,6 +85,16 @@ describe('automatic QR generation runner', () => {
                   slides: Array.from({ length: 10 }, (_, index) => ({
                     patternId: pattern.patternId,
                     purpose: `Point ${String.fromCharCode(65 + index)}`,
+                    requiredClaims: [
+                      {
+                        id: `claim-${index}`,
+                        text: `Use ${url}`,
+                        source: {
+                          sourceId: 'brief',
+                          quote: `Use ${url}`,
+                        },
+                      },
+                    ],
                     qrRequests: [{ slotId: '3', url }],
                     imageQuery: '',
                   })),
