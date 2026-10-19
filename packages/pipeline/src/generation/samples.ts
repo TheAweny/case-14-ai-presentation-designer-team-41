@@ -19,13 +19,12 @@ const PERIOD_WORD = new RegExp(
 );
 /** Units that are no figure on their own: «млн» says what a number counts, not which. */
 const UNIT_WORDS = new Set(['кв', 'г', 'гг', 'лет', 'мес', 'млн', 'млрд', 'тыс', 'руб', '₽', '%']);
-const EDGE = /^[.,;:()/\-–—]+|[.,;:()/\-–—]+$/gu;
 
 /** Whether a template sample is only a figure or a period label. */
 export function isFigureSample(sample: string): boolean {
   const tokens = sample
     .split(/\s+/)
-    .map((word) => word.replace(EDGE, ''))
+    .map((word) => word.replace(/^[.,;:()/\-–—]+/u, '').replace(/[.,;:()/\-–—]+$/u, ''))
     .filter(Boolean);
   let figure = false;
   for (const token of tokens) {

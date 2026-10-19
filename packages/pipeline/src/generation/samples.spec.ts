@@ -3,6 +3,14 @@ import { briefStates, isFigureSample, leakedSamples } from './samples.js';
 
 // The same examples as engine/tests/test_sample_figures.py: the two layers must agree.
 describe('isFigureSample', () => {
+  it('strips punctuation at both ends consistently across repeated calls', () => {
+    for (let pass = 0; pass < 3; pass++) {
+      expect(isFigureSample('(III) (кв.)')).toBe(true);
+      expect(isFigureSample('(млн.)')).toBe(false);
+      expect(isFigureSample('(Иван) (Петров.)')).toBe(false);
+    }
+  });
+
   it.each(['05', '2,4%', 'III кв.', 'Q3', '70 млн', '2025', 'Июл', '22 300', '01.', '$1.2B'])(
     'takes %s for a figure or a period label',
     (sample) => {
