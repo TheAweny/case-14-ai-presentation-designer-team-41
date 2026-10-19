@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { RetryIcon, SpinnerIcon, WarningIcon } from '@/components/ui/icons';
 import type { ChatView } from '@/lib/chat-store';
+import { scrubShownError } from '@/lib/upload-errors';
 import { chatStore } from './session';
 
 /** Transport errors have their own actions, independently of the assistant's answer. */
@@ -44,7 +45,9 @@ export function ChatFeedback({ chat }: { chat: ChatView }) {
                     : 'failed',
               )}
             </p>
-            <p className="mt-1 text-xs break-words text-muted-foreground">{chat.error}</p>
+            <p className="mt-1 text-xs break-words text-muted-foreground">
+              {scrubShownError(chat.error)}
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-1">

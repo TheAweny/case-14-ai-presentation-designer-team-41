@@ -45,3 +45,24 @@ function isAbort(error: unknown): boolean {
     (error as { name?: unknown }).name === 'AbortError'
   );
 }
+
+/**
+ * Сырой текст сервера или клиента: код ответа, английская обёртка загрузки, ответ движка.
+ * Такое в интерфейс не попадает — вместо него понятная фраза по статусу.
+ */
+const RAW_UPLOAD =
+  /template upload failed|content upload failed|engine responded|\bHTTP\s*\d{3}\b|\(\d{3}\)/i;
+
+/** Если строка похожа на сырой сбой загрузки, заменить её понятной фразой. Иначе оставить. */
+export function scrubUploadMessage(kind: UploadKind, message: string): string {
+  if (!RAW_UPLOAD.test(message)) return message;
+  const status = message.match(/\b(400|413|422|5\d\d)\b/);
+  return uploadErrorMessage(kind, status ? Number(status[1]) : 422);
+}
+
+/** То же, когда вид загрузки виден по самой строке. Чужие ошибки не трогает. */
+export function scrubShownError(message: string): string {
+  if (!RAW_UPLOAD.test(message)) return message;
+  const kind = /content upload/i.test(message) ? 'content' : 'template';
+  return scrubUploadMessage(kind, message);
+}

@@ -49,6 +49,7 @@ import {
 } from '@/lib/deck-generator';
 import { isImportStage } from '@/lib/template-importer';
 import type { TemplateImport } from '@/lib/template-imports';
+import { scrubShownError } from '@/lib/upload-errors';
 import { cn } from '@/lib/utils';
 import { replaceSearchParam, TEMPLATE_PARAM } from './project-tab';
 import { TemplateCover, type TemplateThumb } from './template-thumb';
@@ -94,6 +95,8 @@ export interface TemplateAttach {
   retry(): void;
   /** Убрать неудавшийся импорт с карточки. */
   dismiss(): void;
+  /** Файл не дошёл до импорта: пустой или чужого типа. */
+  readonly clientError: string | null;
 }
 
 /**
@@ -106,6 +109,7 @@ export function useTemplateAttach(projectId: string): TemplateAttach {
   const router = useRouter();
   const notice = useLibraryNotice();
   const [attaching, startAttach] = useTransition();
+  const [clientError, setClientError] = useState<string | null>(null);
   const importId = useSyncExternalStore(
     subscribeProjectImports,
     () => projectImports.get(projectId) ?? null,
@@ -146,9 +150,12 @@ export function useTemplateAttach(projectId: string): TemplateAttach {
     (file: File) => {
       const problem = templateFileProblem(file);
       if (problem) {
-        notice.alert(t(problem === 'type' ? 'wrongType' : 'emptyFile', { name: file.name }));
+        const message = t(problem === 'type' ? 'wrongType' : 'emptyFile', { name: file.name });
+        setClientError(message);
+        notice.alert(message);
         return;
       }
+      setClientError(null);
       setProjectImport(projectId, templateImports.start(file));
     },
     [projectId, notice, t],
@@ -162,7 +169,11 @@ export function useTemplateAttach(projectId: string): TemplateAttach {
     retry: () => {
       if (importId) templateImports.retry(importId);
     },
-    dismiss: () => setProjectImport(projectId, null),
+    dismiss: () => {
+      setClientError(null);
+      setProjectImport(projectId, null);
+    },
+    clientError,
   };
 }
 
@@ -225,7 +236,7 @@ export function ImportProgress({
         )}
       >
         {status}
-        {failed && item.failure?.message ? `: ${item.failure.message}` : null}
+        {failed && item.failure?.message ? `: ${scrubShownError(item.failure.message)}` : null}
       </p>
       <div
         role="progressbar"
@@ -464,6 +475,12 @@ export function AttachTemplateCard({
         <AttachMenuContent library={library} state={state} onUpload={file.open} />
       </DropdownMenu>
       {file.element}
+      {state.clientError ? (
+        <p role="alert" className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+          <WarningIcon size={14} className="mt-0.5 shrink-0" aria-hidden />
+          {state.clientError}
+        </p>
+      ) : null}
     </div>
   );
 }

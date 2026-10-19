@@ -1,3 +1,4 @@
+import admin from './admin.json';
 import apiDocs from './api-docs.json';
 import qrCode from './qr-code.json';
 import assistant from './assistant.json';
@@ -78,6 +79,7 @@ const messages = {
   assistant,
   splash,
   settings,
+  admin,
   auth,
   apiDocs,
 };

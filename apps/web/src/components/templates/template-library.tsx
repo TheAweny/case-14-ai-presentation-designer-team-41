@@ -18,6 +18,7 @@ import {
   type LibraryActionResult,
 } from '@/app/(library)/actions';
 import { templateImports, useTemplateImport } from '@/components/assistant/session';
+import { scrubShownError } from '@/lib/upload-errors';
 import { useLibraryNotice } from '@/components/library/library-notices';
 import { ConfirmDeleteDialog, RenameDialog } from '@/components/library/object-dialogs';
 import { PaletteStrip } from '@/components/library/template-swatch';
@@ -72,6 +73,7 @@ export function TemplateUpload({ className }: { className?: string }) {
   const notice = useLibraryNotice();
   const input = useRef<HTMLInputElement>(null);
   const [importId, setImportId] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const item = useTemplateImport(importId);
   const done = useRef<string | null>(null);
 
@@ -92,9 +94,12 @@ export function TemplateUpload({ className }: { className?: string }) {
     if (!file) return;
     const problem = templateFileProblem(file);
     if (problem) {
-      notice.alert(t(problem === 'type' ? 'wrongType' : 'emptyFile'));
+      const message = t(problem === 'type' ? 'wrongType' : 'emptyFile');
+      setLocalError(message);
+      notice.alert(message);
       return;
     }
+    setLocalError(null);
     setImportId(templateImports.start(file));
   };
 
@@ -119,10 +124,14 @@ export function TemplateUpload({ className }: { className?: string }) {
         )}
         {running ? t('uploading', { name: item.file.name }) : t('upload')}
       </Button>
-      {failed ? (
+      {failed || localError ? (
         <p role="alert" className="flex items-center gap-1.5 text-xs text-destructive">
           <WarningIcon size={14} />
-          {item.failure?.message || t('uploadFailed')}
+          {failed
+            ? item.failure?.message
+              ? scrubShownError(item.failure.message)
+              : t('uploadFailed')
+            : localError}
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">{t('uploadHint')}</p>

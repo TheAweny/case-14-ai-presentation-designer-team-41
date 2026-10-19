@@ -12,7 +12,7 @@ and licenses. Only its successful completion starts `Production CD`. No path fil
 teammate's application changes. PR runs cannot deploy. `workflow_dispatch` retries delivery of
 main only, and still requires successful CI for the exact SHA. Old superseded commits are refused.
 
-`Production CD` builds amd64 engine/API/web images on the GitHub runner, pushes private GHCR
+`Production CD` builds amd64 engine/API/web/docs images on the GitHub runner, pushes private GHCR
 packages, and passes immutable digests to the receiver. A single job-scoped GITHUB_TOKEN permits
 pulling images; the server erases its temporary registry configuration afterward. No long-lived
 GitHub token is installed on the server. Actions used by CD are pinned to commit SHA.
@@ -29,7 +29,7 @@ Treat write access to main and editing Actions/secrets as production authority.
 
 The reviewed host infrastructure is in `infra/deploy/`; it is installed under
 `/usr/local/lib/lct`. Local `compose.yaml` is unchanged. Production Compose pulls prebuilt images;
-only web port 3000 is bound, on **127.0.0.1**. Nginx terminates HTTPS, preserves the request host,
+web port 3000 and static docs port 3002 are bound on **127.0.0.1**. Nginx terminates HTTPS, preserves the request host,
 sets forwarding headers itself and streams SSE/uploads without proxy buffering. Database, engine,
 API and search have no published ports. App processes use UID 1000, read-only root filesystems,
 dropped capabilities and no-new-privileges. PostgreSQL and search also have no-new-privileges.
@@ -56,6 +56,41 @@ Docker readiness waits for engine/API/database/web, followed by
 protected `/health/database` and `/health/engine` checks and public HTTPS. Failure restores the
 previous images and checks readiness again; the successful-release manifest is updated only after
 all checks pass. A first-install failure stops application containers and fails the job.
+
+The docs image contains only the static `apps/docs/out` export and an unprivileged nginx.
+It has no database, API, engine, model or persistent-volume dependency. Public readiness also
+checks the docs home, API reference and `/openapi.json`; a failure rolls back the release.
+
+## First deployment of the documentation portal
+
+Before enabling docs delivery, use operator SSH to install the updated `deploy.py` and
+both `compose.yaml` and `compose.docs.yaml` under `/usr/local/lib/lct` (root-owned). The existing
+restricted CD key cannot install its own receiver. `install.sh` installs both Compose files
+when rotating/reinstalling the CD key; keeping that key does not require rewriting authorized_keys.
+
+Point `docs.lct.aweny.link` to the production host and configure its HTTPS virtual host and
+certificate. Use `infra/deploy/nginx-docs-location.conf` to proxy this host to `127.0.0.1:3002`,
+then run `nginx -t` before reloading. Preserve the product virtual host. The first docs deployment
+requires this TLS route to be ready; until the container starts it may return 502.
+
+The receiver accepts the original three-image manifests and four-image manifests containing
+`docs`. It selects `compose.docs.yaml` only when `release.env` includes `DOCS_IMAGE`. This overlay
+also enables the application's allowlisted documentation redirects with `DOCS_PUBLIC_URL`.
+Rolling back to a release without docs removes the docs container and disables those redirects;
+product readiness continues to work without the docs host. The docs build uses public URLs
+`https://docs.lct.aweny.link` and `https://lct.aweny.link` for canonical links and the app shortcut.
+
+After host setup, enable the repository Actions variable and retry the current main release:
+
+```sh
+gh variable set LCT_DOCS_DEPLOY_ENABLED --body true
+gh workflow run cd.yml --ref main
+```
+
+Until that variable is `true`, CD builds and deploys the original three application images.
+This allows merging the portal without breaking releases against the original receiver.
+When rolling back to a pre-docs release, disable the variable too if subsequent releases must
+continue using the original three-image protocol.
 
 Manual image rollback, over the operator's existing SSH access:
 

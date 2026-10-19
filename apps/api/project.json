@@ -41,6 +41,21 @@
         "command": "vitest run --passWithNoTests",
         "cwd": "apps/api"
       }
+    },
+    "export-openapi": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["default", "^production"],
+      "outputs": [
+        "{workspaceRoot}/apps/docs/generated/openapi.json",
+        "{workspaceRoot}/apps/docs/public/openapi.json",
+        "{workspaceRoot}/apps/docs/content/docs/api/reference"
+      ],
+      "options": {
+        "command": "tsx src/docs/export-openapi.ts",
+        "cwd": "apps/api"
+      }
     }
   }
 }

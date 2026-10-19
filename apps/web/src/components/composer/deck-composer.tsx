@@ -36,11 +36,11 @@ import { projectColorVar } from '@/lib/project-appearance';
 import { writerModelReady } from '@/lib/writer-models';
 import { AttachmentChip } from './attachment-chip';
 import { ModelMenu } from './model-menu';
-import { ThinkingToggle } from './thinking-toggle';
 import { useSpeechConfigured, VoicePill, type DictationPhase } from './voice-pill';
 import {
   PromptBox,
   PromptChips,
+  PromptAlert,
   PromptField,
   PromptNote,
   PromptSubmit,
@@ -95,6 +95,7 @@ export function DeckComposer({
   const [files, setFiles] = useState<readonly File[]>([]);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [rejected, setRejected] = useState<readonly string[]>([]);
+  const [emptyTemplates, setEmptyTemplates] = useState<readonly string[]>([]);
   const [mode, setMode] = useLastChatMode();
   // Число слайдов из настроек — пожелание агенту, а не жёсткое правило.
   const { slideCount } = useEditorPrefs();
@@ -147,8 +148,9 @@ export function DeckComposer({
     setFiles(update.files);
     setTemplateFile(update.templateFile);
     setRejected(update.rejected);
+    setEmptyTemplates(update.emptyTemplates);
     if (update.templateFile !== templateFile) box.aurora.flash();
-    else box.aurora.kick();
+    else if (update.files.length !== files.length) box.aurora.kick();
   };
 
   const submit = () => {
@@ -227,6 +229,7 @@ export function DeckComposer({
                 attachment={{ kind: 'template', name: templateFile.name, size: templateFile.size }}
                 onRemove={() => {
                   setRejected([]);
+                  setEmptyTemplates([]);
                   setTemplateFile(null);
                   box.aurora.flash();
                 }}
@@ -250,6 +253,7 @@ export function DeckComposer({
                 attachment={{ kind: 'file', name: file.name, size: file.size }}
                 onRemove={() => {
                   setRejected([]);
+                  setEmptyTemplates([]);
                   setFiles((current) => current.filter((_, at) => at !== index));
                 }}
               />
@@ -265,7 +269,7 @@ export function DeckComposer({
           placeholder={dictation === 'transcribing' ? t('voice.transcribing') : t('placeholder')}
           readOnly={dictation === 'transcribing'}
           fieldRef={field}
-          describedBy={rejected.length > 0 ? rejectedId : undefined}
+          describedBy={rejected.length > 0 || emptyTemplates.length > 0 ? rejectedId : undefined}
           onKeyDown={(event) => {
             suggestions.onKeyDown(event);
             if (event.defaultPrevented) return;
@@ -277,7 +281,6 @@ export function DeckComposer({
         <PromptToolbar
           end={
             <>
-              <ThinkingToggle model={model} />
               <ModelMenu value={model} onChange={setModel} />
               {speech ? (
                 <VoicePill
@@ -345,8 +348,15 @@ export function DeckComposer({
           <ModeMenu value={mode} onChange={setMode} />
         </PromptToolbar>
       </PromptBox>
-      {rejected.length > 0 ? (
-        <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
+      {emptyTemplates.length > 0 ? (
+        <PromptAlert id={rejectedId}>{t('emptyTemplate')}</PromptAlert>
+      ) : null}
+      {rejected.some((name) => !emptyTemplates.includes(name)) ? (
+        <PromptNote id={emptyTemplates.length > 0 ? undefined : rejectedId}>
+          {t('rejected', {
+            names: rejected.filter((name) => !emptyTemplates.includes(name)).join(', '),
+          })}
+        </PromptNote>
       ) : null}
       {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>

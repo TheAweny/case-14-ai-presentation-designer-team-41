@@ -11,6 +11,9 @@ export const deckHref = (deckId: string) => `/decks/${encodeURIComponent(deckId)
 export const PROJECTS_HREF = '/projects';
 /** Библиотека шаблонов аккаунта: свои и общие. */
 export const TEMPLATES_HREF = '/templates';
+/** Панель администратора: люди и ограничения. Обычному аккаунту страница недоступна. */
+export const ADMIN_HREF = '/admin';
+export const ADMIN_LIMITS_HREF = '/admin?view=limits';
 export const projectHref = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
 /**
  * Параметр адреса главной и страницы проекта: с ним страница открывается с полем генерации в

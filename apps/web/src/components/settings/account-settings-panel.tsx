@@ -14,8 +14,8 @@ import type { Account } from '@/lib/auth';
 import { AccountPolicyPanel } from './account-policy-panel';
 
 /**
- * «Аккаунт»: кто вошёл, своя картинка, смена своего пароля и выход. Имя и почту меняет администратор в разделе
- * «Пользователи».
+ * «Аккаунт»: кто вошёл, своя картинка, смена своего пароля и выход. Имя и почту меняет администратор
+ * на панели администрирования.
  */
 export function AccountSettingsPanel({ account }: { account: Account }) {
   const t = useTranslations('settings.account');

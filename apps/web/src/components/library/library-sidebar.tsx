@@ -15,6 +15,7 @@ import {
   ChevronRightIcon,
   CloseIcon,
   FolderIcon,
+  ShieldIcon,
   TemplateIcon,
   MenuIcon,
   PlusIcon,
@@ -27,6 +28,7 @@ import {
   chatHref,
   NEW_DECK_HREF,
   newDeckInProjectHref,
+  ADMIN_HREF,
   PROJECTS_HREF,
   projectHref,
   TEMPLATES_HREF,
@@ -269,6 +271,16 @@ function SidebarBody({
           >
             {t('templates')}
           </NavRow>
+          {account.role === 'admin' ? (
+            <NavRow
+              href={ADMIN_HREF}
+              active={pathname === ADMIN_HREF}
+              onNavigate={onNavigate}
+              icon={<ShieldIcon size={16} />}
+            >
+              {t('admin')}
+            </NavRow>
+          ) : null}
         </nav>
       </div>
 
