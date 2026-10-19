@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Locator } from '@playwright/test';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -26,11 +26,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
       },
     ],
   });
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },

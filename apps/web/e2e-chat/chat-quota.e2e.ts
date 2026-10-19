@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ChatTurnRequest } from '@lct/contracts';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const CHAT = '00000000-0000-4000-8000-0000000000ee';
 const USER = '00000000-0000-4000-8000-000000000001';
@@ -117,11 +117,7 @@ const stream = (text: string) =>
     .join('');
 
 test.beforeEach(async ({ context }) => {
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await context.addCookies([
     {
       name: 'lct_session',

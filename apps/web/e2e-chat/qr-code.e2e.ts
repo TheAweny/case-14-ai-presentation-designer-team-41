@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import type { QrCodePart, SlideIr } from '@lct/contracts';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const qr = createRequire(new URL('../../../packages/pipeline/package.json', import.meta.url))(
   'qrcode',
@@ -75,11 +75,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
   if (!baseURL) throw new Error('Expected fixture base URL');
   await request.post('http://127.0.0.1:3121/__reset-models');
   await request.post('http://127.0.0.1:3121/__set-generation-deck', { data: deck });
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },

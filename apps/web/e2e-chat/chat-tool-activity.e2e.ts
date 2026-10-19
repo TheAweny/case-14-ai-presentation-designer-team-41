@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const CHAT = '00000000-0000-4000-8000-0000000000f1';
 const USER = '00000000-0000-4000-8000-000000000001';
@@ -80,7 +80,7 @@ test.beforeEach(async ({ context, page }) => {
       errors.push(entry.text());
     }
   });
-  const value = await signSessionToken(USER, Date.now() + 3600000, 'chat-e2e-session-secret');
+  const value = await sessionCookie(USER);
   await context.addCookies([
     { name: 'lct_session', value, domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Lax' },
   ]);

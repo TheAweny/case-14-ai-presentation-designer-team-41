@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { ChatDocument, ChatPart } from '@lct/contracts';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const CHAT = '00000000-0000-4000-8000-0000000000c1';
 const failures = [
@@ -19,11 +19,7 @@ for (const width of [1280, 390]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    const value = await signSessionToken(
-      '00000000-0000-4000-8000-000000000001',
-      Date.now() + 3600000,
-      'chat-e2e-session-secret',
-    );
+    const value = await sessionCookie('00000000-0000-4000-8000-000000000001');
     await context.addCookies([
       {
         name: 'lct_session',
