@@ -5,6 +5,7 @@ import {
   compositionExportResponseSchema,
 } from './generation.js';
 import type { ZodType } from 'zod';
+import { datasetSchema, datasetExtractRequestSchema } from './dataset.js';
 import { healthCheckSchema } from './health.js';
 import { runConfigSchema } from './run-config.js';
 import { agentConfigSchema } from './agent-config.js';
@@ -50,6 +51,8 @@ import {
  * slides, findings and a manifest.
  */
 export const contractRegistry = {
+  Dataset: datasetSchema,
+  DatasetExtractRequest: datasetExtractRequestSchema,
   CompositionCheckResponse: compositionCheckResponseSchema,
   GenerationProfile: generationProfileSchema,
   CompositionExportRequest: compositionExportRequestSchema,

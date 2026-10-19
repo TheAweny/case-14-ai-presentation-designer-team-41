@@ -548,3 +548,9 @@ export {
   type OperationMetric,
 } from './account-policy.js';
 export { generationUsageSchema, type GenerationUsage } from './generation-usage.js';
+export {
+  datasetSchema,
+  datasetExtractRequestSchema,
+  type Dataset,
+  type DatasetExtractRequest,
+} from './dataset.js';

@@ -1,0 +1,23 @@
+{
+  "contract": "DatasetExtractRequest",
+  "invalid": [
+    {
+      "name": "unknown request field",
+      "payload": {
+        "extra": true,
+        "path": "/data/table.csv"
+      },
+      "why": "The input is a strict object.",
+      "path": []
+    }
+  ],
+  "valid": [
+    {
+      "payload": {
+        "path": "/data/table.csv",
+        "schemaVersion": 1
+      },
+      "name": "local source"
+    }
+  ]
+}

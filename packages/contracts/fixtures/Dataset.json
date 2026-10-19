@@ -1,0 +1,49 @@
+{
+  "contract": "Dataset",
+  "invalid": [
+    {
+      "name": "unknown extraction status",
+      "payload": {
+        "schemaVersion": 1,
+        "diagnostics": [],
+        "datasetId": "dataset-fixture",
+        "sheets": [],
+        "source": {
+          "mediaType": "application/json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bytes": 1,
+          "fileName": "bad.json"
+        },
+        "status": "guessed"
+      },
+      "why": "Only known statuses cross the engine boundary.",
+      "path": ["status"]
+    }
+  ],
+  "valid": [
+    {
+      "payload": {
+        "schemaVersion": 1,
+        "diagnostics": [
+          {
+            "severity": "error",
+            "sheet": null,
+            "message": "Invalid source",
+            "code": "unreadable",
+            "ref": null
+          }
+        ],
+        "datasetId": "dataset-fixture",
+        "sheets": [],
+        "source": {
+          "mediaType": "application/json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bytes": 1,
+          "fileName": "bad.json"
+        },
+        "status": "failed"
+      },
+      "name": "empty failed extraction"
+    }
+  ]
+}

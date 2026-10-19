@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "datasetId": {
+      "type": "string"
+    },
+    "diagnostics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "const": "error",
+                "type": "string"
+              },
+              {
+                "const": "warning",
+                "type": "string"
+              },
+              {
+                "const": "info",
+                "type": "string"
+              }
+            ],
+            "title": "DatasetSeverity"
+          },
+          "sheet": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "DatasetDiagnostic",
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "type": "number"
+    },
+    "sheets": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnId": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "default": "",
+                  "type": "string"
+                },
+                "header": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "index": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "number",
+                      "type": "string"
+                    },
+                    {
+                      "const": "text",
+                      "type": "string"
+                    },
+                    {
+                      "const": "date",
+                      "type": "string"
+                    },
+                    {
+                      "const": "boolean",
+                      "type": "string"
+                    },
+                    {
+                      "const": "empty",
+                      "type": "string"
+                    }
+                  ],
+                  "title": "DatasetCellKind"
+                },
+                "ref": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "columnId",
+                "index",
+                "ref",
+                "header",
+                "kind"
+              ],
+              "title": "DatasetColumn",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "headerRow": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "index": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "mergedRanges": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "range": {
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "cells": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "candidates": {
+                        "default": [],
+                        "items": {
+                          "type": [
+                            "number",
+                            "string"
+                          ]
+                        },
+                        "type": "array"
+                      },
+                      "kind": {
+                        "anyOf": [
+                          {
+                            "const": "number",
+                            "type": "string"
+                          },
+                          {
+                            "const": "text",
+                            "type": "string"
+                          },
+                          {
+                            "const": "date",
+                            "type": "string"
+                          },
+                          {
+                            "const": "boolean",
+                            "type": "string"
+                          },
+                          {
+                            "const": "empty",
+                            "type": "string"
+                          }
+                        ],
+                        "title": "DatasetCellKind"
+                      },
+                      "raw": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "ref": {
+                        "type": "string"
+                      },
+                      "unit": {
+                        "default": "",
+                        "type": "string"
+                      },
+                      "value": {
+                        "default": null,
+                        "type": [
+                          "number",
+                          "string",
+                          "boolean",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ref",
+                      "raw",
+                      "kind"
+                    ],
+                    "title": "DatasetCell",
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "row": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "row",
+                "cells"
+              ],
+              "title": "DatasetRow",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sheetId": {
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "const": "visible",
+                "type": "string"
+              },
+              {
+                "const": "hidden",
+                "type": "string"
+              }
+            ],
+            "default": "visible",
+            "title": "DatasetSheetState"
+          }
+        },
+        "required": [
+          "sheetId",
+          "name",
+          "index",
+          "range",
+          "headerRow",
+          "columns",
+          "rows"
+        ],
+        "title": "DatasetSheet",
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "fileName": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fileName",
+        "mediaType",
+        "bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "ok",
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        }
+      ],
+      "title": "DatasetStatus"
+    }
+  },
+  "required": [
+    "datasetId",
+    "status",
+    "source",
+    "sheets",
+    "diagnostics"
+  ],
+  "title": "Dataset",
+  "type": "object"
+}

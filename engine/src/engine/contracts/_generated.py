@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date as date_aliased
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -2294,7 +2294,7 @@ class AuditRequest(BaseModel):
         None,
         description="Text each element showed in the template sample it was built from, by slideId and elementId. Lets the audit tell template copy left in place.",
     )
-    today: date | None = Field(
+    today: date_aliased | None = Field(
         None,
         description="The day the deck is dated by; earlier years are past. Absent: today.",
     )
@@ -2650,7 +2650,7 @@ class CompositionExportRequest(BaseModel):
     schemaVersion: Literal[1]
     slides: list[Slide1] = Field(..., max_length=60, min_length=1)
     templatePath: constr(min_length=1)
-    today: date | None = None
+    today: date_aliased | None = None
 
 
 class Transform(RootModel[conint(ge=-9007199254740991, le=9007199254740991)]):
@@ -3662,6 +3662,119 @@ class CopyEdits(BaseModel):
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
     )
+
+
+class Severity3(StrEnum):
+    error = "error"
+    warning = "warning"
+    info = "info"
+
+
+class Diagnostic(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: str
+    message: str
+    ref: str | None = None
+    severity: Severity3 = Field(..., title="DatasetSeverity")
+    sheet: str | None = None
+
+
+class Kind10(StrEnum):
+    number = "number"
+    text = "text"
+    date = "date"
+    boolean = "boolean"
+    empty = "empty"
+
+
+class Column1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    columnId: str
+    decimal: str | None = ""
+    header: str | None
+    index: conint(ge=-9007199254740991, le=9007199254740991)
+    kind: Kind10 = Field(..., title="DatasetCellKind")
+    ref: str
+
+
+class Cell1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    candidates: list[float | str] | None = []
+    kind: Kind10 = Field(..., title="DatasetCellKind")
+    raw: str | None
+    ref: str
+    unit: str | None = ""
+    value: float | str | bool | None = None
+
+
+class Row1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cells: list[Cell1]
+    row: conint(ge=-9007199254740991, le=9007199254740991)
+
+
+class State3(StrEnum):
+    visible = "visible"
+    hidden = "hidden"
+
+
+class Sheet(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    columns: list[Column1]
+    headerRow: conint(ge=-9007199254740991, le=9007199254740991) | None
+    index: conint(ge=-9007199254740991, le=9007199254740991)
+    mergedRanges: list[str] | None = []
+    name: str
+    range: str
+    rows: list[Row1]
+    sheetId: str
+    state: State3 | None = Field("visible", title="DatasetSheetState")
+
+
+class Source14(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bytes: conint(ge=-9007199254740991, le=9007199254740991)
+    fileName: str
+    mediaType: str
+    sha256: str
+
+
+class Status3(StrEnum):
+    ok = "ok"
+    partial = "partial"
+    failed = "failed"
+
+
+class Dataset(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    datasetId: str
+    diagnostics: list[Diagnostic]
+    schemaVersion: Literal[1] = 1
+    sheets: list[Sheet]
+    source: Source14
+    status: Status3 = Field(..., title="DatasetStatus")
+
+
+class DatasetExtractRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    path: str
+    schemaVersion: Literal[1] = 1
 
 
 class Format(StrEnum):
@@ -5015,7 +5128,7 @@ class Blocks2(BaseModel):
     text: constr(min_length=1)
 
 
-class Source14(BaseModel):
+class Source15(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5037,7 +5150,7 @@ class Blocks3(BaseModel):
     rows: list[list[str]] = Field(
         ..., description="Every row as wide as the header.", min_length=1
     )
-    sources: list[Source14] = Field(
+    sources: list[Source15] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
 
@@ -5060,7 +5173,7 @@ class Blocks4(BaseModel):
     chartType: ChartType2
     kind: Literal["chart"]
     series: list[Series5] = Field(..., min_length=1)
-    sources: list[Source14] = Field(
+    sources: list[Source15] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
     xTitle: str = Field(
@@ -5075,7 +5188,7 @@ class Item3(BaseModel):
         extra="forbid",
     )
     caption: constr(min_length=1) = Field(..., description="What the figure measures.")
-    sources: list[Source14] = Field(
+    sources: list[Source15] = Field(
         ..., description="Where the figure comes from.", min_length=1
     )
     value: constr(min_length=1) = Field(
@@ -5139,7 +5252,7 @@ class Slide5(BaseModel):
         ...,
         description="Stable across layout variants, so three renderings of a slide can be compared.",
     )
-    sources: list[Source14] = Field(
+    sources: list[Source15] = Field(
         ...,
         description="What the slide as a whole rests on, beyond any block-level references.",
     )
@@ -5167,7 +5280,7 @@ class DeckPlan(BaseModel):
     title: constr(min_length=1)
 
 
-class Source18(StrEnum):
+class Source19(StrEnum):
     observed = "observed"
     theme = "theme"
     fallback = "fallback"
@@ -5191,7 +5304,7 @@ class Meta9(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Grid1(BaseModel):
@@ -5238,7 +5351,7 @@ class Meta10(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role21(StrEnum):
@@ -5305,7 +5418,7 @@ class Meta11(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role22(StrEnum):
@@ -5345,7 +5458,7 @@ class Meta12(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class RadiiItem1(BaseModel):
@@ -5375,7 +5488,7 @@ class Meta13(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Shadows1(BaseModel):
@@ -5423,7 +5536,7 @@ class Meta14(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Stroke7(BaseModel):
@@ -5458,7 +5571,7 @@ class Meta15(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Surface1(BaseModel):
@@ -5496,7 +5609,7 @@ class Meta16(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role23(StrEnum):
@@ -5553,7 +5666,7 @@ class Meta17(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role24(StrEnum):
@@ -5857,7 +5970,7 @@ class Box26(BaseModel):
     )
 
 
-class Kind10(StrEnum):
+class Kind12(StrEnum):
     placeholder = "placeholder"
     panel = "panel"
     photo = "photo"
@@ -5868,7 +5981,7 @@ class ImageSlot(BaseModel):
         extra="forbid",
     )
     box: Box26
-    kind: Kind10
+    kind: Kind12
     slotId: constr(min_length=1)
 
 
@@ -5877,7 +5990,7 @@ class QrCandidateSlot(BaseModel):
         extra="forbid",
     )
     box: Box26
-    kind: Kind10
+    kind: Kind12
     slotId: constr(min_length=1)
 
 
@@ -5937,7 +6050,7 @@ class Meta18(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Grid2(BaseModel):
@@ -5984,7 +6097,7 @@ class Meta19(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role26(StrEnum):
@@ -6051,7 +6164,7 @@ class Meta20(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role27(StrEnum):
@@ -6091,7 +6204,7 @@ class Meta21(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class RadiiItem2(BaseModel):
@@ -6121,7 +6234,7 @@ class Meta22(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Shadows2(BaseModel):
@@ -6169,7 +6282,7 @@ class Meta23(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Stroke8(BaseModel):
@@ -6204,7 +6317,7 @@ class Meta24(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Surface2(BaseModel):
@@ -6242,7 +6355,7 @@ class Meta25(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role28(StrEnum):
@@ -6299,7 +6412,7 @@ class Meta26(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source19
 
 
 class Role29(StrEnum):
@@ -6383,7 +6496,7 @@ class DesignSystem2(BaseModel):
     )
 
 
-class State3(StrEnum):
+class State4(StrEnum):
     ready = "ready"
     missing = "missing"
     unknown = "unknown"
@@ -6395,7 +6508,7 @@ class FontReadiness(BaseModel):
     )
     missing: list[str]
     requested: list[str]
-    state: State3
+    state: State4
 
 
 class GenerationProfile(BaseModel):
@@ -6409,7 +6522,7 @@ class GenerationProfile(BaseModel):
     templateHash: constr(min_length=64, max_length=64)
 
 
-class Status3(StrEnum):
+class Status4(StrEnum):
     """
     Current state of the component.
     """
@@ -6426,7 +6539,7 @@ class HealthCheck(BaseModel):
     service: constr(min_length=1) = Field(
         ..., description="Name of the component that answered."
     )
-    status: Status3 = Field(..., description="Current state of the component.")
+    status: Status4 = Field(..., description="Current state of the component.")
     uptimeSeconds: confloat(ge=0.0) = Field(
         ..., description="Seconds since the component started."
     )
@@ -6493,7 +6606,7 @@ class JobEvent3(BaseModel):
     type: Literal["stage-finished"]
 
 
-class Kind12(StrEnum):
+class Kind14(StrEnum):
     deck_plan = "deck-plan"
     slide_ir = "slide-ir"
     preview = "preview"
@@ -6519,7 +6632,7 @@ class JobEvent4(BaseModel):
         extra="forbid",
     )
     at: constr(min_length=1) = Field(..., description="ISO 8601 timestamp, UTC.")
-    kind: Kind12
+    kind: Kind14
     path: constr(min_length=1) = Field(
         ..., description="Relative to the run directory."
     )
@@ -6672,7 +6785,7 @@ class Blocks9(BaseModel):
     text: constr(min_length=1)
 
 
-class Source36(BaseModel):
+class Source37(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6694,7 +6807,7 @@ class Blocks10(BaseModel):
     rows: list[list[str]] = Field(
         ..., description="Every row as wide as the header.", min_length=1
     )
-    sources: list[Source36] = Field(
+    sources: list[Source37] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
 
@@ -6707,7 +6820,7 @@ class Blocks11(BaseModel):
     chartType: ChartType2
     kind: Literal["chart"]
     series: list[Series5] = Field(..., min_length=1)
-    sources: list[Source36] = Field(
+    sources: list[Source37] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
     xTitle: str = Field(
@@ -6722,7 +6835,7 @@ class Item5(BaseModel):
         extra="forbid",
     )
     caption: constr(min_length=1) = Field(..., description="What the figure measures.")
-    sources: list[Source36] = Field(
+    sources: list[Source37] = Field(
         ..., description="Where the figure comes from.", min_length=1
     )
     value: constr(min_length=1) = Field(
@@ -6771,7 +6884,7 @@ class Slide7(BaseModel):
         ...,
         description="Stable across layout variants, so three renderings of a slide can be compared.",
     )
-    sources: list[Source36] = Field(
+    sources: list[Source37] = Field(
         ...,
         description="What the slide as a whole rests on, beyond any block-level references.",
     )
@@ -6824,7 +6937,7 @@ class LayoutVariantsRequest(BaseModel):
     )
 
 
-class Source40(StrEnum):
+class Source41(StrEnum):
     observed = "observed"
     theme = "theme"
     fallback = "fallback"
@@ -6848,7 +6961,7 @@ class Meta27(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Grid3(BaseModel):
@@ -6895,7 +7008,7 @@ class Meta28(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Role31(StrEnum):
@@ -6940,7 +7053,7 @@ class Meta29(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Role32(StrEnum):
@@ -6980,7 +7093,7 @@ class Meta30(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class RadiiItem3(BaseModel):
@@ -7010,7 +7123,7 @@ class Meta31(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Shadows3(BaseModel):
@@ -7058,7 +7171,7 @@ class Meta32(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Stroke9(BaseModel):
@@ -7093,7 +7206,7 @@ class Meta33(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Surface3(BaseModel):
@@ -7131,7 +7244,7 @@ class Meta34(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Role33(StrEnum):
@@ -7188,7 +7301,7 @@ class Meta35(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source41
 
 
 class Role34(StrEnum):
@@ -8056,7 +8169,7 @@ class MaterialExtractRequest(BaseModel):
     sheet: constr(min_length=1, max_length=200) | None = None
 
 
-class Kind13(StrEnum):
+class Kind15(StrEnum):
     text = "text"
     table = "table"
 
@@ -8086,7 +8199,7 @@ class Segment(BaseModel):
     text: constr(max_length=12000)
 
 
-class Cell1(BaseModel):
+class Cell2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -8116,7 +8229,7 @@ class Table(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    cells: list[Cell1] = Field(..., max_length=200)
+    cells: list[Cell2] = Field(..., max_length=200)
     mergedRanges: list[MergedRange] = Field(..., max_length=200)
     range: constr(
         pattern=r"^[A-Z]{1,3}[1-9][0-9]{0,6}:[A-Z]{1,3}[1-9][0-9]{0,6}$",
@@ -8133,7 +8246,7 @@ class MaterialExtractResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    kind: Kind13
+    kind: Kind15
     needsOcr: bool
     nextOffset: conint(ge=0, le=9007199254740991) | None
     offset: conint(ge=0, le=9007199254740991)
@@ -9002,7 +9115,7 @@ class Color24(BaseModel):
     )
 
 
-class Kind14(StrEnum):
+class Kind16(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -9036,7 +9149,7 @@ class Background8(BaseModel):
         extra="forbid",
     )
     color: Color24 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind16
     stops: list[Stop6] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9111,7 +9224,7 @@ class Fill13(BaseModel):
         extra="forbid",
     )
     color: Color25 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind16
     stops: list[Stop7] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9316,7 +9429,7 @@ class Background9(BaseModel):
         extra="forbid",
     )
     color: Color27 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind16
     stops: list[Stop8] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9369,7 +9482,7 @@ class Fill14(BaseModel):
         extra="forbid",
     )
     color: Color28 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind16
     stops: list[Stop9] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9591,7 +9704,7 @@ class Background10(BaseModel):
         extra="forbid",
     )
     color: Color30 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind16
     stops: list[Stop10] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9644,7 +9757,7 @@ class Fill15(BaseModel):
         extra="forbid",
     )
     color: Color31 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind16
     stops: list[Stop11] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9883,7 +9996,7 @@ class TemplatePreviewsResponse(BaseModel):
     schemaVersion: Literal[1]
 
 
-class State4(StrEnum):
+class State5(StrEnum):
     present = "present"
     missing = "missing"
 
@@ -9893,7 +10006,7 @@ class Base1(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State4
+    state: State5
     value: float | None = None
 
 
@@ -9906,7 +10019,7 @@ class Comparison1(BaseModel):
     baseUnit: str
 
 
-class Status4(StrEnum):
+class Status5(StrEnum):
     """
     Copied onto the slide. Display does not change it.
     """
@@ -9915,13 +10028,13 @@ class Status4(StrEnum):
     unverified = "unverified"
 
 
-class Source49(BaseModel):
+class Source50(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status4 = Field(
+    status: Status5 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -9931,7 +10044,7 @@ class Value2(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State4
+    state: State5
     value: float | None = None
 
 
@@ -9944,7 +10057,7 @@ class Item6(BaseModel):
     comparison: Comparison1 | None = None
     period: str
     periodKnown: bool
-    sources: list[Source49] = Field(..., min_length=1)
+    sources: list[Source50] = Field(..., min_length=1)
     unit: str
     unitAmbiguous: bool
     value: Value2
@@ -9969,7 +10082,7 @@ class Value3(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State4
+    state: State5
     value: float | None = None
 
 
@@ -9982,13 +10095,13 @@ class Series9(BaseModel):
     values: list[Value3] = Field(..., min_length=1)
 
 
-class Source50(BaseModel):
+class Source51(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status4 = Field(
+    status: Status5 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -10003,26 +10116,26 @@ class Block4(BaseModel):
     kind: Literal["chart"]
     requestedType: RequestedType | None = None
     series: list[Series9] = Field(..., min_length=1)
-    sources: list[Source50] = Field(..., min_length=1)
+    sources: list[Source51] = Field(..., min_length=1)
     xTitle: str
     yTitle: str
 
 
-class Kind20(StrEnum):
+class Kind22(StrEnum):
     text = "text"
     number = "number"
     unit = "unit"
 
 
-class Column1(BaseModel):
+class Column2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     header: constr(min_length=1)
-    kind: Kind20
+    kind: Kind22
 
 
-class Cell2(BaseModel):
+class Cell3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10030,20 +10143,20 @@ class Cell2(BaseModel):
     text: str
 
 
-class Row1(BaseModel):
+class Row2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    cells: list[Cell2] = Field(..., min_length=1)
+    cells: list[Cell3] = Field(..., min_length=1)
 
 
-class Source51(BaseModel):
+class Source52(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status4 = Field(
+    status: Status5 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -10053,11 +10166,11 @@ class Block5(BaseModel):
         extra="forbid",
     )
     caveat: constr(min_length=1) | None = None
-    columns: list[Column1] = Field(..., min_length=1)
+    columns: list[Column2] = Field(..., min_length=1)
     kind: Literal["table"]
     notes: str
-    rows: list[Row1] = Field(..., min_length=1)
-    sources: list[Source51] = Field(..., min_length=1)
+    rows: list[Row2] = Field(..., min_length=1)
+    sources: list[Source52] = Field(..., min_length=1)
 
 
 class Box46(BaseModel):
@@ -10078,7 +10191,7 @@ class Box46(BaseModel):
     )
 
 
-class Source52(StrEnum):
+class Source53(StrEnum):
     observed = "observed"
     theme = "theme"
     fallback = "fallback"
@@ -10102,7 +10215,7 @@ class Meta36(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Grid4(BaseModel):
@@ -10149,7 +10262,7 @@ class Meta37(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Role48(StrEnum):
@@ -10216,7 +10329,7 @@ class Meta38(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Role49(StrEnum):
@@ -10256,7 +10369,7 @@ class Meta39(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class RadiiItem4(BaseModel):
@@ -10286,7 +10399,7 @@ class Meta40(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Shadows4(BaseModel):
@@ -10334,7 +10447,7 @@ class Meta41(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Stroke15(BaseModel):
@@ -10369,7 +10482,7 @@ class Meta42(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Surface4(BaseModel):
@@ -10407,7 +10520,7 @@ class Meta43(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Role50(StrEnum):
@@ -10464,7 +10577,7 @@ class Meta44(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source53
 
 
 class Role51(StrEnum):
@@ -11289,7 +11402,7 @@ class Issue(BaseModel):
     message: constr(min_length=1)
 
 
-class Kind21(StrEnum):
+class Kind23(StrEnum):
     value = "value"
     missing = "missing"
     delta = "delta"
@@ -11308,7 +11421,7 @@ class Fact(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    kind: Kind21
+    kind: Kind23
     period: str | None = None
     sourceStatus: SourceStatus | None = None
     text: str
@@ -11352,7 +11465,7 @@ class VisualBuildResponse(BaseModel):
     signature: Signature
 
 
-class Kind22(StrEnum):
+class Kind24(StrEnum):
     kpi = "kpi"
     chart = "chart"
     table = "table"
@@ -11388,7 +11501,7 @@ class VisualCapability(BaseModel):
     chartTypes: list[ChartType2] = Field(..., min_length=1)
     deferred: list[constr(min_length=1)]
     endpoint: constr(min_length=1)
-    kinds: list[Kind22] = Field(..., min_length=1)
+    kinds: list[Kind24] = Field(..., min_length=1)
     limitations: list[Limitation] = Field(..., min_length=1)
     native: Native
     preserves: list[Preserve] = Field(..., min_length=1)
@@ -12023,6 +12136,10 @@ class ContractsBundle(BaseModel):
     )
     ContentPack_1: ContentPack | None = Field(None, alias="ContentPack")
     CopyEdits_1: CopyEdits | None = Field(None, alias="CopyEdits")
+    Dataset_1: Dataset | None = Field(None, alias="Dataset")
+    DatasetExtractRequest_1: DatasetExtractRequest | None = Field(
+        None, alias="DatasetExtractRequest"
+    )
     DeckExportRequest_1: DeckExportRequest | None = Field(
         None, alias="DeckExportRequest"
     )

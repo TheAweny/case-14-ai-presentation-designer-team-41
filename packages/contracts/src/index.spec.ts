@@ -63,6 +63,8 @@ describe('contract registry', () => {
       'CompositionExportResponse',
       'ContentPack',
       'CopyEdits',
+      'Dataset',
+      'DatasetExtractRequest',
       'DeckExportRequest',
       'DeckExportResponse',
       'DeckImportRequest',
