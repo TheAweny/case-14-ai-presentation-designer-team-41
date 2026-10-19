@@ -1,4 +1,12 @@
 {
   "title": "CLI",
-  "pages": ["index"]
+  "pages": [
+    "index",
+    "installation",
+    "configuration",
+    "service",
+    "users",
+    "maintenance",
+    "generation"
+  ]
 }
