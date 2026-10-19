@@ -32,6 +32,9 @@ describe('proxiedApiPath', () => {
     expect(proxiedApiPath(['editor', 'decks', 'run-1', 'snapshot'], 'POST')).toBe(
       '/editor/decks/run-1/snapshot',
     );
+    expect(proxiedApiPath(['editor', 'decks', 'run-1', 'media'], 'POST')).toBe(
+      '/editor/decks/run-1/media',
+    );
     expect(proxiedApiPath(['editor', 'decks', 'run-1', 'media', 'upload/pic.png'], 'GET')).toBe(
       '/editor/decks/run-1/media/upload%2Fpic.png',
     );

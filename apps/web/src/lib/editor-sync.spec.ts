@@ -108,9 +108,37 @@ describe('decideOpen', () => {
       }),
     ).toEqual({ kind: 'server', slides: edited, revision: 2 });
   });
+
+  it('ignores a local draft whose base belongs to another deck', () => {
+    expect(
+      decideOpen({
+        originBase: 'base-1',
+        originSlides: origin,
+        server: { revision: 3, base: 'base-1', slides: edited },
+        local: { base: 'other-deck', slides: slides('local') },
+      }),
+    ).toEqual({ kind: 'server', slides: edited, revision: 3 });
+  });
+
+  it('opens the original deck when the local copy is that deck and the server has nothing', () => {
+    expect(
+      decideOpen({
+        originBase: 'base-1',
+        originSlides: origin,
+        server: null,
+        local: { base: 'base-1', slides: origin },
+      }),
+    ).toEqual({ kind: 'origin' });
+  });
 });
 
 describe('applyAck', () => {
+  it('is stale only when the response revision is lower than the one already acked', () => {
+    expect(applyAck(5, 4)).toBe('stale');
+    expect(applyAck(5, 5)).toBe('applied');
+    expect(applyAck(null, 1)).toBe('applied');
+  });
+
   it('ignores a saved revision older than the one already accepted', () => {
     const current = {
       ...initialSyncState(),
@@ -242,5 +270,74 @@ describe('EditorSession', () => {
     expect(session.state.expectedRevision).toBe(1);
     await session.publish(deckId, 'base-1', slides('mine'), { file: () => null });
     expect(session.state.ackedRevision).toBe(2);
+  });
+
+  it('does not post the snapshot when a picture write fails', async () => {
+    const calls: string[] = [];
+    const transport: EditorTransport = {
+      async json(path) {
+        calls.push(path);
+        return { status: 500, body: { message: 'Картинка не записалась.' } };
+      },
+      async bytes() {
+        return new Uint8Array();
+      },
+    };
+    const picture = slides('Hi');
+    picture[0]?.elements.push({
+      kind: 'image',
+      elementId: 'p',
+      role: 'image',
+      box: { x: 0, y: 0, cx: 10, cy: 10 },
+      sourceShapeId: null,
+      mediaPart: 'upload/a.png',
+      fit: 'contain',
+    });
+    const session = createEditorSession(transport, () => 'attempt-1');
+    await expect(
+      session.publish(deckId, 'base-1', picture, {
+        file: () => new Blob([Uint8Array.from([1])], { type: 'image/png' }),
+      }),
+    ).rejects.toThrow('Картинка не записалась.');
+    expect(calls.some((path) => path.endsWith('/snapshot'))).toBe(false);
+    expect(session.state.ackedRevision).toBeNull();
+  });
+
+  it('does not roll the tab onto a saved body that arrived with HTTP 500', async () => {
+    const session = createEditorSession(
+      {
+        async json() {
+          return { status: 500, body: saved('old', 1) };
+        },
+        async bytes() {
+          return new Uint8Array();
+        },
+      },
+      () => 'attempt-1',
+    );
+    await expect(session.publish(deckId, 'base-1', slides('mine'), { file: () => null })).rejects.toThrow(
+      /HTTP 500/,
+    );
+    expect(session.state.ackedRevision).toBeNull();
+    expect(session.state.conflict).toBeNull();
+  });
+
+  it('keeps a text 409 as a failed save instead of a revision conflict', async () => {
+    const session = createEditorSession(
+      {
+        async json() {
+          return { status: 409, body: { message: 'Нужные картинки ещё не записаны.' } };
+        },
+        async bytes() {
+          return new Uint8Array();
+        },
+      },
+      () => 'attempt-1',
+    );
+    await expect(session.publish(deckId, 'base-1', slides('mine'), { file: () => null })).rejects.toThrow(
+      'Нужные картинки ещё не записаны.',
+    );
+    expect(session.state.conflict).toBeNull();
+    expect(session.state.ackedRevision).toBeNull();
   });
 });

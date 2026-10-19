@@ -299,7 +299,18 @@ function mediaPath(deckId: string, mediaPart: string): string {
   return `/editor/decks/${encodeURIComponent(deckId)}/media/${encodeURIComponent(mediaPart)}`;
 }
 
+/**
+ * 200 и `kind: saved` — запись принята. 200 или 409 с телом конфликта — обе копии целы.
+ * Сеть и HTTP 500 сюда не попадают, даже если тело похоже на снимок: локальные слайды остаются.
+ */
 function readSaveResponse(status: number, body: unknown): EditorSnapshotSaveResponse | null {
+  const parsed = parseSaveBody(body);
+  if (!parsed) return null;
+  if (parsed.kind === 'saved') return status === 200 ? parsed : null;
+  return status === 200 || status === 409 ? parsed : null;
+}
+
+function parseSaveBody(body: unknown): EditorSnapshotSaveResponse | null {
   const direct = editorSnapshotSaveResponseSchema.safeParse(body);
   if (direct.success) return direct.data;
   if (body && typeof body === 'object' && 'message' in body) {
@@ -308,7 +319,6 @@ function readSaveResponse(status: number, body: unknown): EditorSnapshotSaveResp
     );
     if (nested.success) return nested.data;
   }
-  if (status === 200 || status === 409) return null;
   return null;
 }
 

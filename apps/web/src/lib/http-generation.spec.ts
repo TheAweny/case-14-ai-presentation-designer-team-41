@@ -248,17 +248,17 @@ describe('generated artifact download', () => {
     ).rejects.toThrow(/Вариант «airy» не был сгенерирован/);
   });
   it('exports a stored revision without sending the live slides', async () => {
-    const posted: { url: string; body: Record<string, unknown> } = { url: '', body: {} };
+    const calls: { url: string; body?: string }[] = [];
+    const exportId = '6d1c0c3e-5b1a-4c2d-9e3f-1a2b3c4d5e6f';
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url, init) => {
+      vi.fn(async (url: unknown, init?: { body?: BodyInit | null }) => {
         const path = String(url);
+        calls.push({ url: path, body: init?.body == null ? undefined : String(init.body) });
         if (path.includes('/revisions/4/export')) {
-          posted.url = path;
-          posted.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
           return Response.json({
             schemaVersion: 1,
-            exportId: '6d1c0c3e-5b1a-4c2d-9e3f-1a2b3c4d5e6f',
+            exportId,
             revision: 4,
             contentSha256: 'ab'.repeat(32),
             previews: [],
@@ -273,14 +273,19 @@ describe('generated artifact download', () => {
       vi.fn(),
       AbortSignal.timeout(1000),
     );
-    expect(posted.url).toContain('/editor/decks/');
-    expect(posted.url).toContain('/revisions/4/export');
-    expect(posted.body).toEqual({
+    const posted = calls.find((call) => call.url.includes('/revisions/4/export'));
+    expect(posted?.url).toContain('/editor/decks/run-test/revisions/4/export');
+    expect(posted?.url).not.toContain('/generation/');
+    expect(JSON.parse(posted?.body ?? '{}')).toEqual({
       schemaVersion: 1,
       format: 'pptx',
       variant: 'balanced',
       slideIds: ['s1'],
     });
+    expect(calls.some((call) => call.url.includes('/generation/'))).toBe(false);
+    expect(calls.map((call) => call.url)).toContain(
+      `/api/backend/editor/decks/run-test/exports/${exportId}/deck.pptx`,
+    );
     expect(result).toMatchObject({
       url: 'blob:rev',
       revision: 4,

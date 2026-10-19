@@ -337,17 +337,19 @@ export function DeckEditor({
     };
     await autosave.flush();
     if (session.state.conflict) throw new Error(tDraft('exportConflict'));
-    let slidesNow = latest.current ?? origin;
-    const ready = acknowledged(slidesNow);
-    if (ready !== undefined) return ready;
+    // Пока оболочка не сообщила жест, на экране открытая колода, а не исходная:
+    // иначе экспорт успел бы записать исходник поверх уже принятой редакции.
+    let slidesNow = latest.current ?? opened.slides;
+    const readyRevision = acknowledged(slidesNow);
+    if (readyRevision !== undefined) return readyRevision;
     autosave.schedule(slidesNow);
     await autosave.flush();
     if (session.state.conflict) throw new Error(tDraft('exportConflict'));
-    slidesNow = latest.current ?? origin;
+    slidesNow = latest.current ?? opened.slides;
     const again = acknowledged(slidesNow);
     if (again !== undefined) return again;
     throw new Error(tDraft('exportUnsaved'));
-  }, [autosave, origin, session, tDraft]);
+  }, [autosave, opened.slides, origin, session, tDraft]);
   const searchParams = useSearchParams();
   const [firstSlide] = useState(() =>
     slideIndexFromParam(deck.slides, searchParams.get(SLIDE_PARAM)),
