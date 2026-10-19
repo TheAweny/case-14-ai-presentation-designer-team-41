@@ -34,6 +34,12 @@ export interface ExportRequest {
   /** Уже отобранные слайды, в порядке показа. */
   readonly slides: readonly SlideIr[];
   readonly designSystem: DesignSystem;
+  /**
+   * Сохранённая редакция. Файл собирается из неё, а не из живых слайдов: правки после запуска
+   * в этот экспорт не входят. Нет номера — скачивается исходный результат сборки.
+   */
+  readonly revision?: number;
+  readonly slideIds?: readonly string[];
 }
 
 export interface ExportResult {
@@ -41,6 +47,10 @@ export interface ExportResult {
   readonly fileName: string;
   /** Откуда скачать файл. Null — файла нет: так отвечает демо-источник без сервера. */
   readonly url: string | null;
+  /** Редакция, из которой собран файл, если экспорт шёл по снимку. */
+  readonly revision?: number;
+  /** SHA-256 содержимого этой редакции. */
+  readonly contentSha256?: string;
 }
 
 export interface DeckExporter {

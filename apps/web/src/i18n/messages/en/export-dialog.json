@@ -7,6 +7,8 @@
     "airy": "airy"
   },
   "close": "Close",
+  "offline": "Couldn't read the saved revision. Try the download again.",
+  "revisionNote": "Downloading revision {revision}. Edits after this started are not in the file.",
   "format": "Format",
   "formats": {
     "pptx": {
@@ -54,7 +56,7 @@
   "hideHint": "You can minimise this window: export keeps going, and the Export button shows how far along it is.",
   "stop": "Stop",
   "hide": "Minimise",
-  "done": "Done: {file}",
+  "done": "{revision, select, none {Done: {file}} other {Done: {file}, revision {revision}}}",
   "downloadAgain": "Download again",
   "another": "Another format",
   "failed": "Export failed",

@@ -262,6 +262,29 @@ export {
   type DeckExportResponse,
   type ExportFormat,
 } from './deck-export.js';
+export {
+  EDITOR_SNAPSHOT_LIMITS,
+  editorConflictSchema,
+  editorMediaPutRequestSchema,
+  editorMediaPutResponseSchema,
+  editorMediaRefSchema,
+  editorRevisionExportRequestSchema,
+  editorRevisionExportResponseSchema,
+  editorSnapshotLoadSchema,
+  editorSnapshotSaveRequestSchema,
+  editorSnapshotSaveResponseSchema,
+  editorSnapshotSchema,
+  type EditorConflict,
+  type EditorMediaPutRequest,
+  type EditorMediaPutResponse,
+  type EditorMediaRef,
+  type EditorRevisionExportRequest,
+  type EditorRevisionExportResponse,
+  type EditorSnapshot,
+  type EditorSnapshotLoad,
+  type EditorSnapshotSaveRequest,
+  type EditorSnapshotSaveResponse,
+} from './editor-snapshot.js';
 export { copyEditSchema, copyEditsSchema, type CopyEdit, type CopyEdits } from './copy-edits.js';
 export {
   compositionSlotSchema,

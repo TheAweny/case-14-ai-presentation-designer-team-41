@@ -213,6 +213,7 @@ export function EditorShell({
   lockTemplateOnOpen,
   presentOnOpen = false,
   onSlidesChange,
+  prepareExport,
   saveStatus,
   exporter: givenExporter,
   assistant,
@@ -229,9 +230,15 @@ export function EditorShell({
   presentOnOpen?: boolean;
   /** Записанные слайды после каждой правки (без живого вида жеста): для черновика колоды. */
   onSlidesChange?: (slides: readonly SlideIr[]) => void;
+  /**
+   * Записать правки и вернуть номер редакции для файла. Null — серверной редакции нет,
+   * в файл уходит исходная колода. Отказ — экспорт не начинается. Номер фиксируется здесь:
+   * правки во время скачивания его не меняют.
+   */
+  prepareExport?: () => Promise<number | null>;
   /** Значок сохранения в подвале списка слайдов. */
   saveStatus?: ReactNode;
-  /** Кто собирает файл. Пока API нет — демо: проходит те же этапы, но файла не создаёт. */
+  /** Кто собирает файл. Не задан — HTTP-клиент API. */
   exporter?: DeckExporter;
   /** Панель «Ассистент»: разговор с агентом о колоде. */
   assistant: ReactNode;
@@ -959,15 +966,31 @@ export function EditorShell({
         ? committedSlides
         : committedSlides.filter((item) => item.slideId === slideId);
     if (chosen.length === 0) return;
-    setExportFormat(options.format);
-    exportJob.start({
-      deckId: deck.deckId,
-      fileName: safeFileName(options.fileName, safeFileName(title, t('untitled'))),
-      format: options.format,
-      variant: deck.variant,
-      slides: chosen,
-      designSystem,
-    });
+    const fileName = safeFileName(options.fileName, safeFileName(title, t('untitled')));
+    void (async () => {
+      let revision: number | null = null;
+      if (prepareExport) {
+        try {
+          revision = await prepareExport();
+        } catch (error) {
+          exportJob.fail(error instanceof Error ? error.message : '');
+          return;
+        }
+      }
+      setExportFormat(options.format);
+      exportJob.start({
+        deckId: deck.deckId,
+        fileName,
+        format: options.format,
+        variant: deck.variant,
+        slides: chosen,
+        designSystem,
+        ...(revision !== null ? { revision } : {}),
+        ...(revision !== null && options.range === 'current'
+          ? { slideIds: chosen.map((item) => item.slideId) }
+          : {}),
+      });
+    })();
   };
 
   useEffect(() => {

@@ -266,6 +266,18 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         defaults={"minCoverage": 0.9},
     ),
     CheckDefinition(
+        id="picture-covers-text",
+        category="integrity",
+        title="A full-slide picture does not cover the text",
+        description=(
+            "Reports a picture that covers most of the slide and is painted after text it "
+            "overlaps. A picture behind the text, and a smaller picture placed in front on "
+            "purpose, are left alone."
+        ),
+        severity="major",
+        defaults={"minCoverage": 0.85},
+    ),
+    CheckDefinition(
         id="duplicate-slide",
         category="integrity",
         title="Slides do not repeat each other",

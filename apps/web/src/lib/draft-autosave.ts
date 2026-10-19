@@ -7,8 +7,11 @@
  * можно на поддельных часах.
  */
 
-/** `idle` — писать нечего и не было; `saved` — последнее записано; `error` — запись упала. */
-export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
+/**
+ * `idle` — писать нечего и не было; `saved` — сервер принял; `error` — сеть или 500, копия
+ * локально; `conflict` — ту же редакцию уже записали, обе копии целы и ждут выбора.
+ */
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict';
 
 export interface Autosave<T> {
   /** Новое значение: запишется через `delay` мс, если за это время не придёт следующее. */
@@ -26,6 +29,11 @@ export interface AutosaveOptions<T> {
   write(value: T): Promise<void>;
   delay?: number;
   onStatus?(status: SaveStatus): void;
+  /**
+   * Как показать сорвавшуюся запись. По умолчанию `error`. И ошибка, и конфликт оставляют
+   * значение в очереди: повтор той же попытки его не теряет.
+   */
+  classifyError?(error: unknown): SaveStatus;
   setTimer?(run: () => void, delay: number): unknown;
   clearTimer?(timer: unknown): void;
 }
@@ -37,6 +45,7 @@ export function createAutosave<T>({
   write,
   delay = AUTOSAVE_DELAY,
   onStatus,
+  classifyError,
   setTimer = (run, ms) => setTimeout(run, ms),
   clearTimer = (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
 }: AutosaveOptions<T>): Autosave<T> {
@@ -67,10 +76,11 @@ export function createAutosave<T>({
         report('saving');
         try {
           await write(value);
-        } catch {
-          // Упавшее не теряем: если новее ничего нет, его запишет следующая правка или flush.
+        } catch (error) {
+          // Упавшее и спорное не теряем: если новее ничего нет, его запишет повтор или flush.
           queued ??= { value };
-          report('error');
+          const classified = classifyError?.(error);
+          report(classified === 'conflict' ? 'conflict' : 'error');
           return;
         }
       }

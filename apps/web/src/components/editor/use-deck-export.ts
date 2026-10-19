@@ -21,6 +21,8 @@ export interface DeckExportJob {
   readonly result: ExportResult | null;
   readonly failure: ExportFailure | null;
   start(request: ExportRequest): void;
+  /** Показать сбой, не начиная сборку файла. Так экспорт сообщает, что редакция не записана. */
+  fail(message: string): void;
   cancel(): void;
   /** Вернуться к выбору параметров. Идущий экспорт отменяется. */
   reset(): void;
@@ -81,11 +83,27 @@ export function useDeckExport(exporter: DeckExporter | undefined): DeckExportJob
             setPhase('idle');
             return;
           }
-          setError(UNKNOWN_FAILURE);
+          setError(
+            reason instanceof Error && reason.message
+              ? { code: 'internal', message: reason.message, retryable: true }
+              : UNKNOWN_FAILURE,
+          );
           setPhase('failed');
         });
     },
     [exporter, stop],
+  );
+
+  const fail = useCallback(
+    (message: string) => {
+      stop();
+      setRequest(null);
+      setEvents([]);
+      setResult(null);
+      setError({ code: 'internal', message, retryable: true });
+      setPhase('failed');
+    },
+    [stop],
   );
 
   const cancel = useCallback(() => {
@@ -116,6 +134,7 @@ export function useDeckExport(exporter: DeckExporter | undefined): DeckExportJob
     result,
     failure: phase === 'idle' ? null : failure,
     start,
+    fail,
     cancel,
     reset,
   };
