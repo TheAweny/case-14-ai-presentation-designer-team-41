@@ -19,6 +19,7 @@ import {
   SearchIcon,
   SettingsIcon,
 } from '@/components/ui/icons';
+import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { openSettings } from '@/components/settings/open-settings';
@@ -30,8 +31,11 @@ import type { ReasoningEffort } from '@lct/contracts';
 import type { ModelRef } from '@/lib/model-settings';
 import {
   readReasoningEffort,
+  readThinking,
   subscribeReasoningEffort,
+  subscribeThinking,
   writeReasoningEffort,
+  writeThinking,
 } from '@/lib/reasoning-effort';
 import { EffortSlider } from './effort-slider';
 import { useModelCapabilities } from './use-model-capabilities';
@@ -72,6 +76,7 @@ export function ModelMenu({
   const models = useWriterModels('assistant');
   const settings = useModelSettingsSnapshot();
   const effort = useSyncExternalStore(subscribeReasoningEffort, readReasoningEffort, () => null);
+  const thinkingOn = useSyncExternalStore(subscribeThinking, readThinking, () => false);
   const [open, setOpen] = useState(false);
   const capabilities = useModelCapabilities(models ? effectiveModel(models, value) : null);
   if (!models) return null;
@@ -137,7 +142,7 @@ export function ModelMenu({
   // A depth only where probing showed it changes how much the model thinks. The chat always
   // thinks where it can, so the depth matters even while deck builds do not think.
   const depth = reasoning !== undefined && reasoning.levels;
-  const levelLabel = (level: ReasoningEffort) => t(`levels.${level}`);
+  const canThink = Boolean(reasoning?.toggle);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -150,22 +155,15 @@ export function ModelMenu({
           aria-label={label ?? (selected ? t('change', { model: selected.modelId }) : t('menu'))}
           title={selected?.modelId}
         >
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate">
-              {label ??
-                (!available
-                  ? t('unavailable')
-                  : selected
-                    ? value === null
-                      ? t('defaultModel', { model: shortModelName(selected.modelId) })
-                      : shortModelName(selected.modelId)
-                    : t('chooseDefault'))}
-            </span>
-            {depth && effort ? (
-              <span key={effort} className="effort-label shrink-0 text-muted-foreground">
-                {levelLabel(effort)}
-              </span>
-            ) : null}
+          <span className="truncate">
+            {label ??
+              (!available
+                ? t('unavailable')
+                : selected
+                  ? value === null
+                    ? t('defaultModel', { model: shortModelName(selected.modelId) })
+                    : shortModelName(selected.modelId)
+                  : t('chooseDefault'))}
           </span>
           <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
         </Button>
@@ -187,6 +185,10 @@ export function ModelMenu({
           selected={value}
           followingDefault={value === null}
           depth={depth}
+          depthDisabled={canThink && !thinkingOn}
+          thinking={canThink}
+          thinkingOn={thinkingOn}
+          onThinking={writeThinking}
           effort={effort ?? 'high'}
           onEffort={writeReasoningEffort}
           onPick={(model) => {
@@ -293,6 +295,10 @@ export function ModelList({
   selected,
   followingDefault,
   depth,
+  depthDisabled = false,
+  thinking = false,
+  thinkingOn = false,
+  onThinking,
   effort,
   onEffort,
   onPick,
@@ -307,6 +313,12 @@ export function ModelList({
   followingDefault: boolean;
   /** Show the depth slider: the model takes a depth now. */
   depth: boolean;
+  /** Depth stays visible, but only while thinking is on for a model that can be switched. */
+  depthDisabled?: boolean;
+  /** The model answers both with and without thinking. */
+  thinking?: boolean;
+  thinkingOn?: boolean;
+  onThinking?: (on: boolean) => void;
   effort: ReasoningEffort;
   onEffort: (value: ReasoningEffort) => void;
   onPick: (ref: ModelRef) => void;
@@ -610,6 +622,16 @@ export function ModelList({
           )}
         </div>
       </div>
+      {thinking ? (
+        <div className="flex min-h-11 items-center justify-between gap-3 border-t border-border px-3 py-2">
+          <span className="text-[0.8125rem] text-muted-foreground">{t('thinking')}</span>
+          <Switch
+            aria-label={t('thinking')}
+            checked={thinkingOn}
+            onCheckedChange={(on) => onThinking?.(on)}
+          />
+        </div>
+      ) : null}
       {depth ? (
         <div className="border-t border-border px-1 pt-2.5">
           <div className="flex items-center justify-between px-2 text-[0.8125rem] text-muted-foreground">
@@ -621,6 +643,7 @@ export function ModelList({
           <EffortSlider
             value={effort}
             onChange={onEffort}
+            disabled={depthDisabled}
             label={t('effortLabel')}
             valueText={(level) => t(`levels.${level}`)}
           />

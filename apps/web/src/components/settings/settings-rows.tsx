@@ -2,6 +2,14 @@
 
 import { useId, type ReactNode } from 'react';
 import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ChevronDownIcon } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
@@ -78,7 +86,7 @@ export function SwitchRow({
   );
 }
 
-/** Короткий выбор — сегменты; длинный список значений — обычный select. */
+/** Короткий выбор — сегменты; длинный список — своё меню по ширине подписи. */
 export function ChoiceRow<T extends string | number>({
   label,
   hint,
@@ -93,26 +101,43 @@ export function ChoiceRow<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   const labelId = useId();
+  const current = options.find((option) => option.id === value) ?? options[0];
+  const long = options.length > 5;
   return (
     <Row label={label} hint={hint} labelId={labelId}>
-      {options.length > 5 ? (
-        <select
-          aria-labelledby={labelId}
-          value={String(value)}
-          onChange={(event) => {
-            const option = options.find(
-              (candidate) => String(candidate.id) === event.currentTarget.value,
-            );
-            if (option) onChange(option.id);
-          }}
-          className="h-11 max-w-full min-w-24 rounded-md border border-border bg-background px-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:h-8 md:text-sm"
-        >
-          {options.map((option) => (
-            <option key={String(option.id)} value={String(option.id)}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+      {long ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            type="button"
+            aria-labelledby={labelId}
+            className={cn(
+              'ml-auto inline-flex h-11 max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-3',
+              'text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:h-8 md:text-sm',
+            )}
+          >
+            <span className="truncate">{current?.label}</span>
+            <ChevronDownIcon size={14} className="shrink-0 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-28">
+            <DropdownMenuRadioGroup
+              value={String(value)}
+              onValueChange={(next) => {
+                const option = options.find((candidate) => String(candidate.id) === next);
+                if (option) onChange(option.id);
+              }}
+            >
+              {options.map((option) => (
+                <DropdownMenuRadioItem
+                  key={String(option.id)}
+                  value={String(option.id)}
+                  className="max-md:min-h-11"
+                >
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : (
         <ToggleGroupPrimitive.Root
           type="single"
@@ -123,14 +148,14 @@ export function ChoiceRow<T extends string | number>({
             const option = options.find((candidate) => String(candidate.id) === next);
             if (option) onChange(option.id);
           }}
-          className="flex max-w-full flex-wrap rounded-lg bg-muted p-0.5"
+          className="flex max-w-full flex-wrap rounded-lg bg-muted p-0.5 max-md:w-full max-md:basis-full"
         >
           {options.map((option) => (
             <ToggleGroupPrimitive.Item
               key={String(option.id)}
               value={String(option.id)}
               className={cn(
-                'min-h-11 min-w-11 rounded-md px-2.5 text-sm text-muted-foreground outline-none md:min-h-7 md:min-w-8 md:text-xs',
+                'min-h-11 min-w-11 flex-1 rounded-md px-2.5 text-sm text-muted-foreground outline-none md:min-h-7 md:min-w-8 md:flex-none md:text-xs',
                 'transition-colors duration-100 motion-reduce:transition-none',
                 'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
                 'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',

@@ -4,7 +4,6 @@ import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } fr
 import { useTranslations } from 'next-intl';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
 import { ModelMenu } from '@/components/composer/model-menu';
-import { ThinkingToggle } from '@/components/composer/thinking-toggle';
 import {
   useSpeechConfigured,
   VoicePill,
@@ -15,6 +14,7 @@ import { useComposerSuggestions } from '@/components/composer/composer-suggestio
 import {
   PromptBox,
   PromptChips,
+  PromptAlert,
   PromptField,
   PromptNote,
   PromptSubmit,
@@ -101,6 +101,7 @@ export function ChatComposer({
     patchDraft({ files: typeof value === 'function' ? value(files) : value });
   const setTemplateFile = (value: File | null) => patchDraft({ templateFile: value });
   const [rejected, setRejected] = useState<readonly string[]>([]);
+  const [emptyTemplates, setEmptyTemplates] = useState<readonly string[]>([]);
   const [, rememberMode] = useLastChatMode();
   const { slideCount } = useEditorPrefs();
   const deck = useAssistantDeck();
@@ -220,6 +221,7 @@ export function ChatComposer({
     });
     deck?.sent();
     setRejected([]);
+    setEmptyTemplates([]);
   };
 
   const addFiles = (added: readonly File[]) => {
@@ -232,7 +234,12 @@ export function ChatComposer({
       template: update.templateFile ? null : current.template,
     });
     setRejected(update.rejected);
-    box.aurora.kick();
+    setEmptyTemplates(update.emptyTemplates);
+    if (
+      update.templateFile !== current.templateFile ||
+      update.files.length !== current.files.length
+    )
+      box.aurora.kick();
   };
 
   return (
@@ -340,7 +347,7 @@ export function ChatComposer({
           onValueChange={suggestions.onValueChange}
           fieldRef={field}
           label={t('label')}
-          describedBy={rejected.length ? rejectedId : undefined}
+          describedBy={rejected.length || emptyTemplates.length ? rejectedId : undefined}
           placeholder={
             dictation === 'transcribing'
               ? voice('transcribing')
@@ -361,7 +368,6 @@ export function ChatComposer({
         <PromptToolbar
           end={
             <>
-              <ThinkingToggle model={chat.model} compact={compact} />
               <ModelMenu
                 value={chat.model}
                 onChange={(model) => chatStore.setModel(chat.chatId, model)}
@@ -449,8 +455,15 @@ export function ChatComposer({
           <ModeMenu value={chat.mode} onChange={setMode} compact={compact} />
         </PromptToolbar>
       </PromptBox>
-      {rejected.length > 0 ? (
-        <PromptNote id={rejectedId}>{t('rejected', { names: rejected.join(', ') })}</PromptNote>
+      {emptyTemplates.length > 0 ? (
+        <PromptAlert id={rejectedId}>{t('emptyTemplate')}</PromptAlert>
+      ) : null}
+      {rejected.some((name) => !emptyTemplates.includes(name)) ? (
+        <PromptNote id={emptyTemplates.length > 0 ? undefined : rejectedId}>
+          {t('rejected', {
+            names: rejected.filter((name) => !emptyTemplates.includes(name)).join(', '),
+          })}
+        </PromptNote>
       ) : null}
       {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>

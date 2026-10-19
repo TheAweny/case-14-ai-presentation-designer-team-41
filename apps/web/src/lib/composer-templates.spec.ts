@@ -109,6 +109,7 @@ describe('addComposerFiles', () => {
     ]);
     expect(update.templateFile).toBe(kept);
     expect(update.rejected).toEqual(['Пустой.pptx', 'photo.png']);
+    expect(update.emptyTemplates).toEqual(['Пустой.pptx']);
   });
 
   it('файлы без шаблона чип не трогают', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { uploadErrorMessage } from './upload-errors';
+import { scrubShownError, scrubUploadMessage, uploadErrorMessage } from './upload-errors';
 
 const LEAK =
   'Template upload failed (422): <script>Bearer sk-live-secret C:\\Users\\secret\\deck.pptx postgres://user:pass@db/app</script>';
@@ -55,5 +55,16 @@ describe('uploadErrorMessage', () => {
     expect(network).toContain('соединение');
     expect(cancel).toBe('Загрузка материала отменена.');
     expect(uploadErrorMessage('template', aborted)).toBe('Загрузка шаблона отменена.');
+  });
+
+  it('replaces a raw upload failure and leaves a sentence that is already readable', () => {
+    expect(scrubUploadMessage('template', LEAK)).toBe(uploadErrorMessage('template', 422));
+    expect(scrubUploadMessage('template', 'Template upload failed (500)')).toBe(
+      uploadErrorMessage('template', 500),
+    );
+    expect(scrubShownError('Content upload failed (413)')).toBe(uploadErrorMessage('content', 413));
+    const readable = uploadErrorMessage('template', 422);
+    expect(scrubShownError(readable)).toBe(readable);
+    expect(scrubShownError('Файл повреждён')).toBe('Файл повреждён');
   });
 });

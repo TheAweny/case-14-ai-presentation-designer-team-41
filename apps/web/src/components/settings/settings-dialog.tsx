@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
+  ChevronDownIcon,
   DeckIcon,
   EditorIcon,
   KeyboardIcon,
@@ -13,6 +14,13 @@ import {
   UserIcon,
   type Icon,
 } from '@/components/ui/icons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAccount } from '@/components/auth/account-context';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -79,6 +87,7 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
   const sections = SETTINGS_SECTIONS.filter(
     (id) => (id !== 'account' || account !== null) && (id !== 'users' || account?.role === 'admin'),
   );
+  const CurrentSectionIcon = SECTION_ICONS[section];
 
   return (
     <DialogContent
@@ -113,23 +122,37 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
             <DialogTitle className="text-base">{t('title')}</DialogTitle>
             <DialogDescription className="sr-only">{t('description')}</DialogDescription>
           </div>
-          <label htmlFor={sectionSelectId} className="sr-only md:hidden">
-            {t('sections.label')}
-          </label>
-          <select
-            id={sectionSelectId}
-            value={section}
-            onChange={(event) =>
-              openSettings(settingsSection(event.currentTarget.value) ?? 'general')
-            }
-            className="h-11 w-full min-w-0 rounded-md border border-border bg-background px-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:hidden"
-          >
-            {sections.map((id) => (
-              <option key={id} value={id}>
-                {t(`sections.${id}`)}
-              </option>
-            ))}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              id={sectionSelectId}
+              type="button"
+              aria-label={t('sections.label')}
+              className={cn(
+                'inline-flex h-11 max-w-full items-center gap-2 self-start rounded-md border border-border bg-background px-3',
+                'text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:hidden',
+              )}
+            >
+              <CurrentSectionIcon size={16} />
+              <span className="truncate">{t(`sections.${section}`)}</span>
+              <ChevronDownIcon size={16} className="shrink-0 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-auto min-w-44">
+              <DropdownMenuRadioGroup
+                value={section}
+                onValueChange={(next) => openSettings(settingsSection(next) ?? 'general')}
+              >
+                {sections.map((id) => {
+                  const SectionIcon = SECTION_ICONS[id];
+                  return (
+                    <DropdownMenuRadioItem key={id} value={id} className="min-h-11">
+                      <SectionIcon size={16} />
+                      {t(`sections.${id}`)}
+                    </DropdownMenuRadioItem>
+                  );
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <TabsList
             aria-label={t('sections.label')}
             className="hidden h-auto w-full justify-start bg-transparent p-0 md:flex md:flex-col md:items-stretch"

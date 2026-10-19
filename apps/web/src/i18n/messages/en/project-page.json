@@ -105,7 +105,7 @@
     "attached": "Template “{name}” attached to the project",
     "attachFailed": "Could not attach the template. Please try again.",
     "wrongType": "“{name}” is not a template: a .pptx or .potx file is needed.",
-    "emptyFile": "The file “{name}” is empty.",
+    "emptyFile": "The file “{name}” is empty. Upload a presentation that contains slides.",
     "demoProfile": "Demo mode: without the engine the profile isn’t extracted from the file — the template gets a demo profile.",
     "import": {
       "progress": "Template reading progress",
