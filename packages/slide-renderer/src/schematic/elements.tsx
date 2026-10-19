@@ -315,8 +315,15 @@ function ChartSchematic({
   const { box, categories, series, chartType } = element;
   const label = Math.min(context.type.sizeEmu('chart'), box.cy * 0.06);
   const labelBar = label * 0.5;
-  const value = (s: number, c: number) => Math.max(series[s]?.values[c] ?? 0, 0);
-  const peak = Math.max(...series.flatMap((entry) => entry.values), 0) || 1;
+  const value = (s: number, c: number): number | null => {
+    const raw = series[s]?.values[c];
+    return raw === null || raw === undefined ? null : raw;
+  };
+  const peak =
+    Math.max(
+      0,
+      ...series.flatMap((entry) => entry.values.filter((item): item is number => item !== null).map(Math.abs)),
+    ) || 1;
   const axis = hairline(cqw(0.08));
 
   if (chartType === 'pie') return <PieSchematic element={element} context={context} />;
@@ -354,17 +361,22 @@ function ChartSchematic({
                 'muted',
               )}
             />,
-            ...series.map((_, s) => (
+            ...series.map((_, s) => {
+              const amount = value(s, c);
+              if (amount === null) return <div key={`b${c}-${s}`} data-missing="true" />;
+              return (
               <div
                 key={`b${c}-${s}`}
+                data-value={String(amount)}
                 style={{
                   ...at(box, gutter, top + s * band),
-                  width: percent(((value(s, c) / peak) * span * 100) / box.cx),
+                  width: percent(((Math.abs(amount) / peak) * span * 100) / box.cx),
                   height: percent((band * 100) / box.cy),
                   background: ink(seriesLevel(s)),
                 }}
               />
-            )),
+              );
+            }),
           ];
         })}
       </Element>
@@ -411,7 +423,9 @@ function ChartSchematic({
       <Element element={element} context={context}>
         {categories.flatMap((_, c) =>
           series.map((__, s) => {
-            const height = (value(s, c) / peak) * plot;
+            const amount = value(s, c);
+            if (amount === null) return <div key={`b${c}-${s}`} data-missing="true" />;
+            const height = (Math.abs(amount) / peak) * plot;
             return (
               <div
                 key={`b${c}-${s}`}
@@ -437,8 +451,11 @@ function ChartSchematic({
 
   // Line and area share a viewBox in units of the box, a thousand across.
   const scale = 1000 / box.cx;
-  const point = (s: number, c: number) =>
-    `${round((c + 0.5) * groupW * scale)},${round((bottom - (value(s, c) / peak) * plot) * scale)}`;
+  const point = (s: number, c: number): string | null => {
+    const amount = value(s, c);
+    if (amount === null) return null;
+    return `${round((c + 0.5) * groupW * scale)},${round((bottom - (amount / peak) * plot) * scale)}`;
+  };
   // The stroke sits in screen space (`non-scaling-stroke`), so `cqw` and the pixel floor apply as
   // written. It grows with the chart but stays a line on a small one.
   const stroke = hairline(
@@ -464,27 +481,42 @@ function ChartSchematic({
       >
         {series.map((_, s) => {
           const points = categories.map((__, c) => point(s, c));
+          const segments: string[][] = [];
+          let current: string[] = [];
+          for (const item of points) {
+            if (item === null) {
+              if (current.length > 0) segments.push(current);
+              current = [];
+            } else {
+              current.push(item);
+            }
+          }
+          if (current.length > 0) segments.push(current);
           const first = `${round(0.5 * groupW * scale)},${round(bottom * scale)}`;
           const last = `${round((categories.length - 0.5) * groupW * scale)},${round(bottom * scale)}`;
+          const closed = points.every((item) => item !== null);
           return (
             <g key={`s${s}`}>
-              {chartType === 'area' ? (
+              {chartType === 'area' && closed ? (
                 <polygon
-                  points={[first, ...points, last].join(' ')}
+                  points={[first, ...points.filter((item): item is string => item !== null), last].join(' ')}
                   style={{ fill: ink(seriesLevel(s)), fillOpacity: 0.5 }}
                 />
               ) : null}
-              <polyline
-                points={points.join(' ')}
-                style={{
-                  fill: 'none',
-                  stroke: ink(seriesLevel(s)),
-                  strokeWidth: stroke,
-                  strokeLinejoin: 'round',
-                  strokeLinecap: 'round',
-                  vectorEffect: 'non-scaling-stroke',
-                }}
-              />
+              {segments.map((segment, index) => (
+                <polyline
+                  key={index}
+                  points={segment.join(' ')}
+                  style={{
+                    fill: 'none',
+                    stroke: ink(seriesLevel(s)),
+                    strokeWidth: stroke,
+                    strokeLinejoin: 'round',
+                    strokeLinecap: 'round',
+                    vectorEffect: 'non-scaling-stroke',
+                  }}
+                />
+              ))}
             </g>
           );
         })}
@@ -504,7 +536,9 @@ function PieSchematic({
 }): JSX.Element {
   const { box } = element;
   // A pie shows one series, the first, as PowerPoint does.
-  const values = (element.series[0]?.values ?? []).map((v) => Math.max(v, 0));
+  const values = (element.series[0]?.values ?? []).map((v) =>
+    v === null || v < 0 ? 0 : v,
+  );
   const total = values.reduce((sum, v) => sum + v, 0);
   const scale = 1000 / box.cx;
   const height = box.cy * scale;

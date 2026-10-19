@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { curveMonotoneX } from '@visx/curve';
+import { curveLinear, curveMonotoneX } from '@visx/curve';
 import { Group } from '@visx/group';
 import { scaleBand, scaleLinear } from '@visx/scale';
 import { AreaClosed, Bar, Circle, Line, LinePath, Pie } from '@visx/shape';
@@ -42,8 +42,15 @@ function metricsOf(profile: DesignSystem, box: Box, slideCy: number): Metrics {
   };
 }
 
+function presentNumbers(element: ChartElement): number[] {
+  return element.series.flatMap((entry) =>
+    entry.values.filter((value): value is number => value !== null),
+  );
+}
+
 function extent(element: ChartElement): { min: number; max: number } {
-  const values = element.series.flatMap((entry) => entry.values);
+  const values = presentNumbers(element);
+  if (values.length === 0) return { min: 0, max: 1 };
   const min = Math.min(0, ...values);
   const max = Math.max(0, ...values);
   if (min === max) return { min: 0, max: min === 0 ? 1 : Math.abs(min) || 1 };
@@ -61,8 +68,27 @@ function ids(element: ChartElement): string[] {
   return element.categories.map((_, index) => String(index));
 }
 
-function valueAt(element: ChartElement, series: number, category: number): number {
-  return element.series[series]?.values[category] ?? 0;
+function valueAt(element: ChartElement, series: number, category: number): number | null {
+  const value = element.series[series]?.values[category];
+  return value === undefined ? null : value;
+}
+
+function missingCount(element: ChartElement): number {
+  return element.series.reduce(
+    (total, series) => total + series.values.filter((value) => value === null).length,
+    0,
+  );
+}
+
+/** Unequal category positions use a numeric axis. Equal slots stay on a band scale. */
+function unequalPositions(element: ChartElement): boolean {
+  const positions = element.positions;
+  if (!positions || positions.length !== element.categories.length || positions.length < 3) {
+    return false;
+  }
+  const gaps = positions.slice(1).map((value, index) => value - (positions[index] ?? value));
+  if (gaps.some((gap) => gap <= 0)) return false;
+  return Math.max(...gaps) - Math.min(...gaps) > 1e-9;
 }
 
 function Label({
@@ -244,11 +270,12 @@ function Columns({
         keys.map((key) => {
           const series = Number(key);
           const amount = valueAt(element, series, Number(id));
+          if (amount === null) return <g key={`${id}-${key}`} data-missing="true" />;
           const y0 = y(0) ?? plot.bottom;
           const y1 = y(amount) ?? y0;
           const left = (x0(id) ?? 0) + (x1(key) ?? 0);
           return (
-            <g key={`${id}-${key}`}>
+            <g key={`${id}-${key}`} data-value={String(amount)}>
               <Bar
                 x={left}
                 y={Math.min(y0, y1)}
@@ -305,7 +332,7 @@ function Bars({
     ...element.categories.map((name) => textWidthEmu(name, metrics.size * EMU_PER_PT) / EMU_PER_PT),
   );
   const gutter = Math.min(widest + metrics.size * 0.6, box.cx * 0.46);
-  const values = element.series.flatMap((series) => series.values);
+  const values = presentNumbers(element);
   const valueWidth = Math.max(
     0,
     ...values.map(
@@ -337,11 +364,12 @@ function Bars({
         keys.map((key) => {
           const series = Number(key);
           const amount = valueAt(element, series, Number(id));
+          if (amount === null) return <g key={`${id}-${key}`} data-missing="true" />;
           const x0 = x(0) ?? plot.left;
           const x1 = x(amount) ?? x0;
           const top = (y0(id) ?? 0) + (y1(key) ?? 0);
           return (
-            <g key={`${id}-${key}`}>
+            <g key={`${id}-${key}`} data-value={String(amount)}>
               <Bar
                 x={Math.min(x0, x1)}
                 y={top}
@@ -391,9 +419,20 @@ function Trend({
 }): JSX.Element {
   const domain = ids(element);
   const { min, max } = extent(element);
-  const x = scaleBand({ domain, range: [plot.left, plot.right], padding: 0.2 });
+  const numeric = unequalPositions(element);
+  const positions = element.positions;
+  const band = scaleBand({ domain, range: [plot.left, plot.right], padding: 0.2 });
+  const xAt = (index: number): number => {
+    if (!numeric || !positions) return (band(String(index)) ?? 0) + band.bandwidth() / 2;
+    const low = Math.min(...positions);
+    const high = Math.max(...positions);
+    const span = high === low ? 1 : high - low;
+    return plot.left + (((positions[index] ?? low) - low) / span) * (plot.right - plot.left);
+  };
   const y = scaleLinear({ domain: [min, max], range: [plot.bottom, plot.top] });
   const baseline = y(0) ?? plot.bottom;
+  const curve = numeric ? curveLinear : curveMonotoneX;
+  const slot = numeric ? (plot.right - plot.left) / domain.length : band.step();
   return (
     <Group>
       <Line
@@ -403,44 +442,66 @@ function Trend({
         strokeWidth={metrics.stroke}
       />
       {element.series.map((series, index) => {
-        const points = domain.map((id) => ({
-          x: (x(id) ?? 0) + x.bandwidth() / 2,
-          y: y(series.values[Number(id)] ?? 0) ?? baseline,
-        }));
+        const segments: { x: number; y: number; value: number }[][] = [];
+        let current: { x: number; y: number; value: number }[] = [];
+        series.values.forEach((value, at) => {
+          if (value === null) {
+            if (current.length > 0) segments.push(current);
+            current = [];
+            return;
+          }
+          current.push({ x: xAt(at), y: y(value) ?? baseline, value });
+        });
+        if (current.length > 0) segments.push(current);
         const color = seriesPaint(profile.palette, index);
         return (
           <Group key={series.name}>
-            {area ? (
-              <AreaClosed
-                data={points}
-                x={(point) => point.x}
-                y={(point) => point.y}
-                yScale={y}
-                y0={baseline}
-                curve={curveMonotoneX}
-                fill={color}
-                fillOpacity={0.35}
-                stroke="none"
-              />
-            ) : null}
-            <LinePath
-              data={points}
-              x={(point) => point.x}
-              y={(point) => point.y}
-              curve={curveMonotoneX}
-              stroke={color}
-              strokeWidth={metrics.stroke * 1.6}
-              fill="none"
-            />
-            {points.map((point, at) => (
-              <Label
-                key={`value-${at}`}
-                x={point.x}
-                y={point.y - metrics.size * 0.4}
-                text={valueText(series.values[at] ?? 0)}
-                metrics={metrics}
-                anchor="middle"
-              />
+            {series.values.map((value, at) =>
+              value === null ? (
+                <g key={`hole-${at}`} data-missing="true" />
+              ) : (
+                <g key={`mark-${at}`} data-value={String(value)} />
+              ),
+            )}
+            {segments.map((points, segment) => (
+              <Group key={`segment-${segment}`}>
+                {area && points.length > 1 ? (
+                  <AreaClosed
+                    data={points}
+                    x={(point) => point.x}
+                    y={(point) => point.y}
+                    yScale={y}
+                    y0={baseline}
+                    curve={curve}
+                    fill={color}
+                    fillOpacity={0.35}
+                    stroke="none"
+                  />
+                ) : null}
+                {points.length > 1 ? (
+                  <LinePath
+                    data={points}
+                    x={(point) => point.x}
+                    y={(point) => point.y}
+                    curve={curve}
+                    stroke={color}
+                    strokeWidth={metrics.stroke * 1.6}
+                    fill="none"
+                  />
+                ) : (
+                  <Circle cx={points[0]?.x ?? 0} cy={points[0]?.y ?? baseline} r={metrics.stroke * 2} fill={color} />
+                )}
+                {points.map((point) => (
+                  <Label
+                    key={`value-${point.x}`}
+                    x={point.x}
+                    y={point.y - metrics.size * 0.4}
+                    text={valueText(point.value)}
+                    metrics={metrics}
+                    anchor="middle"
+                  />
+                ))}
+              </Group>
             ))}
           </Group>
         );
@@ -450,10 +511,10 @@ function Trend({
         return (
           <Label
             key={`label-${id}`}
-            x={(x(id) ?? 0) + x.bandwidth() / 2}
+            x={xAt(Number(id))}
             y={plot.bottom + metrics.size * 0.35}
             text={text}
-            lines={wrapLabel(text, x.step() * SLOT_FILL, metrics.size)}
+            lines={wrapLabel(text, slot * SLOT_FILL, metrics.size)}
             metrics={metrics}
             anchor="middle"
             baseline="hanging"
@@ -476,10 +537,12 @@ function PieChart({
   metrics: Metrics;
 }): JSX.Element {
   const series = element.series[0];
-  const slices = element.categories.map((label, index) => ({
-    label,
-    value: Math.max(series?.values[index] ?? 0, 0),
-  }));
+  const slices = element.categories.flatMap((label, index) => {
+    const value = series?.values[index];
+    if (value === null || value === undefined || value < 0) return [];
+    return [{ label, value }];
+  });
+  const omitted = element.categories.length - slices.length;
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
   // Room around the pie for each slice's name and value.
   const radius = Math.min(box.cx * 0.28, box.cy * 0.34);
@@ -494,7 +557,7 @@ function PieChart({
     );
   }
   return (
-    <Group left={box.cx / 2} top={box.cy / 2}>
+    <Group left={box.cx / 2} top={box.cy / 2} data-pie-omitted={omitted}>
       <Pie
         data={slices}
         pieValue={(slice) => slice.value}
@@ -556,7 +619,13 @@ export function ChartMark({
   return (
     <div
       {...markHooks(element, thumbnail)}
-      {...(thumbnail ? null : { 'data-chart-type': element.chartType })}
+      {...(thumbnail
+        ? null
+        : {
+            'data-chart-type': element.chartType,
+            'data-missing-count': missingCount(element),
+            'data-axis': unequalPositions(element) ? 'xy' : 'category',
+          })}
       style={{ ...markStyle(element, size), overflow: 'visible' }}
     >
       {frame.cx > 0 && frame.cy > 0 ? (

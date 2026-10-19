@@ -19,6 +19,7 @@ export {
   type TypeResolver,
 } from './schematic/text-layout.js';
 export { SlideView, type SlideViewProps } from './slide-view.js';
+export { ContactSheet, type ContactSheetProps } from './view/contact-sheet.js';
 export { TextMark } from './view/text.js';
 export {
   fontFamily,
