@@ -125,11 +125,56 @@ export class GenerationBuildStore {
   }
 
   async stop(id: string, ownerId: string): Promise<void> {
-    await this.pool.query(
-      `UPDATE generation_builds SET status='stopped',fence=fence+1,worker_id=NULL,lease_until=NULL,updated_at=now()
-       WHERE id=$1 AND owner_id=$2 AND status<>'done'`,
-      [id, ownerId],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const stopped = await client.query<{ variants: BuildVariant[] }>(
+        `UPDATE generation_builds SET status='stopped',fence=fence+1,worker_id=NULL,lease_until=NULL,updated_at=now()
+         WHERE id=$1 AND owner_id=$2 AND status NOT IN ('done','stopped') RETURNING variants`,
+        [id, ownerId],
+      );
+      for (const variant of stopped.rows[0]?.variants ?? []) {
+        const run = await client.query<{ state: string }>(
+          'SELECT state FROM runs WHERE id=$1 FOR UPDATE',
+          [variant.runId],
+        );
+        if (run.rows[0]?.state === 'done' || run.rows[0]?.state === 'failed') continue;
+        const last = await client.query<{ sequence: number }>(
+          'SELECT sequence FROM run_events WHERE run_id=$1 ORDER BY sequence DESC LIMIT 1',
+          [variant.runId],
+        );
+        const event = jobEventSchema.parse({
+          schemaVersion: 1,
+          runId: variant.runId,
+          seq: (last.rows[0]?.sequence ?? -1) + 1,
+          at: new Date().toISOString(),
+          type: 'failed',
+          stage: 'queued',
+          code: 'cancelled',
+          message: 'Сборка остановлена. Сохранённые результаты доступны для явного продолжения.',
+          retryable: true,
+        });
+        await client.query(
+          `INSERT INTO run_events(run_id,sequence,stage,status,message,payload) VALUES($1,$2,'queued','failed',$3,$4::jsonb)`,
+          [
+            variant.runId,
+            event.seq,
+            'message' in event ? event.message : '',
+            JSON.stringify(event),
+          ],
+        );
+        await client.query(
+          "UPDATE runs SET state='failed',completed_at=now(),updated_at=now() WHERE id=$1",
+          [variant.runId],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /** Fence check, filesystem publication, event and run state share the same ownership lock. */

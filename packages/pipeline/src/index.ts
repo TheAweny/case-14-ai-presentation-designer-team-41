@@ -124,3 +124,5 @@ export {
   type QrCodeImage,
 } from './assets/qr-code.js';
 export { ledgerFetch, type AttemptLedger, type TokenPrice } from './models/attempt-ledger.js';
+export { SemanticTextProvider } from './generation/semantic-provider.js';
+export { tokenPriceCatalogSchema, tokenPriceResolver } from './models/pricing.js';

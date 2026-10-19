@@ -840,6 +840,16 @@ describe('picture, table and chart', () => {
     if (plot?.kind !== 'chart') throw new Error('not a chart');
     expect(plot.categories).toEqual(['I', 'II', 'III']);
     expect(plot.series[1]).toEqual({ name: 'Факт', values: [3, 2, 1] });
+
+    const hole = commitChartData(slides, {
+      slideId: 'middle',
+      elementId: 'plot',
+      categories: ['I', 'II'],
+      series: [{ name: 'План', unit: 'шт', values: [0, null] }],
+    });
+    const holed = elementOf(hole.slides, 'middle', 'plot');
+    if (holed?.kind !== 'chart') throw new Error('not a chart');
+    expect(holed.series[0]).toEqual({ name: 'План', unit: 'шт', values: [0, null] });
     expect(data.change?.kind).toBe('chart');
 
     const axes = commitChartAxes(data.slides, {

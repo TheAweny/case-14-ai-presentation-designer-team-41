@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { AgentGeneration } from '@lct/contracts';
 import type { TextProvider } from './provider.js';
+import { withAttemptTask } from '../models/attempt-context.js';
 
 /** Sorted object keys make dependency ids independent of serialization order. */
 export function dependencyKey(value: unknown): string {
@@ -87,7 +88,7 @@ export class TaskCheckpoints {
       this.onReuse?.(taskId);
       return parsed.value;
     }
-    const result = schema.parse(await compute());
+    const result = schema.parse(await withAttemptTask(taskId, compute));
     // A cancelled/stale executor cannot publish a response received after lease loss.
     await this.assertOwner();
     await atomicJson(path, { version: 1, taskId, value: result });

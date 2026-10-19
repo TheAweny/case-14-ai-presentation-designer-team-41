@@ -2148,6 +2148,14 @@
                       "minimum": 0,
                       "type": "number"
                     },
+                    "positions": {
+                      "description": "Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
                     "role": {
                       "enum": [
                         "title",
@@ -2181,9 +2189,16 @@
                             "minLength": 1,
                             "type": "string"
                           },
+                          "unit": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
                           "values": {
                             "items": {
-                              "type": "number"
+                              "type": [
+                                "number",
+                                "null"
+                              ]
                             },
                             "minItems": 1,
                             "type": "array"

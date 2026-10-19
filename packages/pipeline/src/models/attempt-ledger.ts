@@ -1,4 +1,5 @@
 import { dependencyKey } from '../generation/checkpoints.js';
+import { attemptTask } from './attempt-context.js';
 
 export interface AttemptLedger {
   begin(intent: {
@@ -35,7 +36,7 @@ export function ledgerFetch(
   ledger: AttemptLedger,
   kind: string,
   transport: typeof fetch = fetch,
-  price?: TokenPrice,
+  prices?: TokenPrice | ((model: string) => TokenPrice | undefined),
 ): typeof fetch {
   return async (url, init) => {
     const body = typeof init?.body === 'string' ? init.body : '';
@@ -46,13 +47,17 @@ export function ledgerFetch(
       /* Non-JSON asset download. */
     }
     const maximum = count(request.max_completion_tokens ?? request.max_tokens) ?? 0;
+    const price =
+      typeof prices === 'function'
+        ? prices(typeof request.model === 'string' ? request.model : '')
+        : prices;
     // UTF-8 bytes are an explicit conservative input reservation, not reported usage.
     const inputReserve = Buffer.byteLength(body, 'utf8');
     const cost = price
       ? (inputReserve * price.inputPerMillion + maximum * price.outputPerMillion) / 1_000_000
       : null;
     const id = await ledger.begin({
-      taskKey: dependencyKey({ kind, body }),
+      taskKey: attemptTask() ?? dependencyKey({ kind, body }),
       modelId: typeof request.model === 'string' ? request.model : 'asset-download',
       kind,
       reservedTokens: inputReserve + maximum,

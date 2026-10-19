@@ -1,0 +1,14 @@
+{
+  "probes": [
+    {
+      "id": "decor-geometry-omitted",
+      "observed": true,
+      "summary": "SlideIR decor with freeform geometry is drawn by the editor renderer and skipped by export, which logs and leaves the shape out."
+    },
+    {
+      "id": "image-without-media-omitted",
+      "observed": true,
+      "summary": "An image element whose media part is not in the template or the export media map is absent from the PPTX. The editor still has the element, so a picture can fail to cover or to sit beside text only after export."
+    }
+  ]
+}

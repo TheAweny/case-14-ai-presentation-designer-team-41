@@ -10,7 +10,7 @@ import {
 import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, readdir, mkdir, writeFile, cp, rename } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, cp, rename, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import {
@@ -43,6 +43,8 @@ import {
   SharedPlan,
   SharedContent,
   CheckpointTextProvider,
+  SemanticTextProvider,
+  tokenPriceResolver,
   TaskCheckpoints,
   dependencyKey,
   atomicJson,
@@ -614,6 +616,12 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           ? index.data.notes
           : undefined;
       const requestKey = schedulingGroup;
+      const pricingBytes = process.env.MODEL_PRICING_FILE
+        ? await readFile(process.env.MODEL_PRICING_FILE, 'utf8')
+        : null;
+      const prices = pricingBytes ? tokenPriceResolver(JSON.parse(pricingBytes)) : undefined;
+      if (input.budget?.maxCost && !input.budget.currency)
+        throw new BadRequestException('Для бюджета стоимости укажите валюту.');
       const previous =
         retry?.build ??
         (input.requestId ? await this.builds.byRequest(account.id, requestKey) : null);
@@ -636,6 +644,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         profile: prepared.data,
         ...(notes ? { notes } : {}),
         registryHash,
+        ...(pricingBytes ? { pricingHash: dependencyKey(pricingBytes) } : {}),
         today: previous
           ? generationSpecSchema.parse(previous.spec).today
           : `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
@@ -672,8 +681,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         const each = variants.map(async (entry): Promise<VariantEnd> => {
           for (;;) {
             const run = await this.repository.get(entry.runId);
-            if (run?.state === 'done' || run?.state === 'failed')
-              return { ...entry, state: run.state };
+            if (run?.state === 'done') return { ...entry, state: run.state };
             if (!(await this.builds.hasLiveLease(buildRecord.id)))
               return { ...entry, state: 'failed' };
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -687,9 +695,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const ledger = new PostgresProviderLedger(this.pool, account.id, executionLease, {
         requests: input.budget?.maxHttpRequests ?? 240,
         tokens: input.budget?.maxReservedTokens ?? 2_000_000,
-        cost: null,
+        cost: input.budget?.maxCost ?? null,
+        ...(input.budget?.currency ? { currency: input.budget.currency } : {}),
       });
-      transport = ledgerFetch(ledger, 'generation');
+      transport = ledgerFetch(ledger, 'generation', fetch, prices);
       const assertOwner = async () => {
         signal.throwIfAborted();
         await this.builds.assert(executionLease);
@@ -702,7 +711,9 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         specHash,
         assertOwner,
       );
-      const checkpointProvider = new CheckpointTextProvider(provider, checkpoints);
+      const checkpointProvider = new SemanticTextProvider(
+        new CheckpointTextProvider(provider, checkpoints),
+      );
       const sharedContent = new SharedContent();
       // The three variants of one brief are separate runs, so every deck endpoint serves each of
       // them as it is, and they share one cancellation.
@@ -728,7 +739,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
               answerFormat,
               signal,
               attemptBudget,
-              fetchImpl: ledgerFetch(ledger, 'vision'),
+              fetchImpl: ledgerFetch(ledger, 'vision', fetch, prices),
               queueGroup: schedulingGroup,
             }),
           }
@@ -873,6 +884,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             // The manifest is the final publication marker. A stale worker writes only its
             // own execution directory and can never replace these files after lease loss.
             for (const name of [...names, 'manifest.json']) {
+              signal.throwIfAborted();
               const target = join(this.directory(run.runId), name);
               const temporary = `${target}.${executionLease.fence}.publish`;
               await cp(join(attemptDir, name), temporary, { recursive: true, force: true });
@@ -888,11 +900,14 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
                 )
                   throw error;
                 await cp(temporary, target, { recursive: true, force: true });
+                await rm(temporary, { recursive: true, force: true });
               }
             }
+            signal.throwIfAborted();
           });
           return 'done' as const;
-        } catch {
+        } catch (error) {
+          this.logger.warn(`Variant ${run.runId} failed: ${String(error)}`);
           await this.builds
             .assert(executionLease)
             .then(() => this.repository.transition(run.runId, 'failed'))

@@ -4,6 +4,8 @@ import { Module, type OnApplicationShutdown } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { loadCapabilityProbe, type CapabilityProbe } from '@lct/registry';
 import { Pool } from 'pg';
+import { ledgerFetch } from '@lct/pipeline';
+import { PostgresProviderLedger } from '@lct/run-store';
 import { privateHostsAllowed } from './connection-check.js';
 import { createKeyVault } from './key-vault.js';
 import { ModelSettingsController } from './model-settings.controller.js';
@@ -58,9 +60,18 @@ function probePrompts(): () => Promise<CapabilityProbe> {
     },
     {
       provide: ModelCapabilityService,
-      inject: [MODEL_SETTINGS_STORE, ModelSettingsService],
-      useFactory: (store: ModelSettingsStore, settings: ModelSettingsService) =>
-        new ModelCapabilityService(store, settings, probePrompts()),
+      inject: [MODEL_SETTINGS_STORE, ModelSettingsService, MODEL_SETTINGS_POOL],
+      useFactory: (store: ModelSettingsStore, settings: ModelSettingsService, pool: Pool) =>
+        new ModelCapabilityService(store, settings, probePrompts(), fetch, Date.now, (ownerId) =>
+          ledgerFetch(
+            new PostgresProviderLedger(pool, ownerId, null, {
+              requests: 10000,
+              tokens: 100_000_000,
+              cost: null,
+            }),
+            'capability-probe',
+          ),
+        ),
     },
   ],
   exports: [ModelSettingsService, ModelCapabilityService],

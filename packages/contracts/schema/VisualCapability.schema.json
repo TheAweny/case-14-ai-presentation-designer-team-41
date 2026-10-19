@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "callsModels": {
+      "const": false,
+      "type": "boolean"
+    },
+    "chartTypes": {
+      "items": {
+        "enum": [
+          "bar",
+          "column",
+          "line",
+          "pie",
+          "area"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "deferred": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "endpoint": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kinds": {
+      "items": {
+        "enum": [
+          "kpi",
+          "chart",
+          "table"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "native": {
+      "additionalProperties": false,
+      "properties": {
+        "chartCategory": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "chartXy": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kpi": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "table": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "chartCategory",
+        "chartXy",
+        "kpi"
+      ],
+      "type": "object"
+    },
+    "preserves": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "refuses": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "variants": {
+      "items": {
+        "enum": [
+          "dense",
+          "balanced",
+          "airy"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "endpoint",
+    "callsModels",
+    "kinds",
+    "chartTypes",
+    "variants",
+    "native",
+    "preserves",
+    "refuses",
+    "deferred",
+    "limitations"
+  ],
+  "title": "VisualCapability",
+  "type": "object"
+}

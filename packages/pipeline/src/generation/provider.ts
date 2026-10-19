@@ -343,8 +343,8 @@ export class OpenAICompatibleProvider implements TextProvider {
   readonly calls: {
     agent: string;
     ms: number;
-    inputTokens: number;
-    outputTokens: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
     provider: string;
   }[] = [];
   private readonly requests: CompatibleRequests;
@@ -575,8 +575,8 @@ export class OpenAICompatibleProvider implements TextProvider {
             this.calls.push({
               agent,
               ms: Date.now() - started,
-              inputTokens: data.usage?.prompt_tokens ?? 0,
-              outputTokens: data.usage?.completion_tokens ?? 0,
+              inputTokens: data.usage?.prompt_tokens ?? null,
+              outputTokens: data.usage?.completion_tokens ?? null,
               provider: this.provider,
             });
             return result;

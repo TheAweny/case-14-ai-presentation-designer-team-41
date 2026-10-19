@@ -697,12 +697,14 @@ export {
 
 export interface ChartSeries {
   readonly name: string;
-  readonly values: readonly number[];
+  readonly values: readonly (number | null)[];
+  readonly unit?: string;
 }
 
 /**
  * Categories and series of a chart, replaced together so they always agree: every series needs a
- * name and one finite value per category, or nothing changes.
+ * name and one finite value or a hole (`null`) per category, or nothing changes. A hole is not
+ * stored as zero. `unit` is kept when the series states one.
  */
 export function commitChartData(
   slides: readonly SlideIr[],
@@ -721,14 +723,18 @@ export function commitChartData(
       (entry) =>
         entry.name.length > 0 &&
         entry.values.length === categories.length &&
-        entry.values.every((value) => Number.isFinite(value)),
+        entry.values.every((value) => value === null || Number.isFinite(value)),
     );
   if (!valid) return unchanged(slides);
   return commitOne(slides, change, 'chart', 'chart', (chart) => {
     if (JSON.stringify(chart.categories) !== JSON.stringify(categories)) {
       chart.categories = [...categories];
     }
-    const next = series.map((entry) => ({ name: entry.name, values: [...entry.values] }));
+    const next = series.map((entry) => ({
+      name: entry.name,
+      values: [...entry.values],
+      ...(entry.unit ? { unit: entry.unit } : {}),
+    }));
     if (JSON.stringify(chart.series) !== JSON.stringify(next)) chart.series = next;
   });
 }

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from engine import __version__, checks, export, layout, parser, render, visuals
 from engine.api._composition_audit import composition_slides
 from engine.api._profiles import UnknownProfileError, deterministic_profile
+from engine.api._visuals import build_payload, capability_payload, compare_payload
 from engine.contracts import (
     AuditReport,
     AuditRequest,
@@ -38,6 +39,11 @@ from engine.contracts import (
     Status,
     TemplatePreviewsRequest,
     TemplatePreviewsResponse,
+    VisualBuildRequest,
+    VisualBuildResponse,
+    VisualCapability,
+    VisualCompareRequest,
+    VisualCompareResponse,
 )
 from engine.contracts._generated import (
     CompositionCheckResponse,
@@ -87,6 +93,41 @@ def health() -> HealthCheck:
         version=__version__,
         uptimeSeconds=time.monotonic() - _STARTED_AT,
     )
+
+
+@app.get(
+    "/v1/visuals/capabilities",
+    response_model=VisualCapability,
+    summary="What the deterministic visual layer can place",
+)
+def visual_capabilities() -> VisualCapability:
+    """Capability adapter for a future semantic planner. This process does not call a model."""
+    return VisualCapability.model_validate(capability_payload())
+
+
+@app.post(
+    "/v1/visuals",
+    response_model=VisualBuildResponse,
+    response_model_exclude_unset=True,
+    summary="Place a KPI block, chart or table as SlideIR",
+)
+def visual_build(request: VisualBuildRequest) -> VisualBuildResponse:
+    """Build native SlideIR for one visual from structured data and a template profile."""
+    try:
+        payload = build_payload(request)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return VisualBuildResponse.model_validate(payload)
+
+
+@app.post(
+    "/v1/visuals/compare",
+    response_model=VisualCompareResponse,
+    summary="Compare structural signatures of visual variants",
+)
+def visual_compare(request: VisualCompareRequest) -> VisualCompareResponse:
+    """Three variants must differ. A cosmetic control must not count as a new design."""
+    return VisualCompareResponse.model_validate(compare_payload(request))
 
 
 @app.post(
@@ -313,6 +354,23 @@ def composition_deck(request: CompositionExportRequest) -> dict:
         design_system = parser.design_system_of(source)
 
         def draw(shapes: Any, element: dict[str, Any]) -> None:
+            if element["kind"] == "native":
+                built = visuals.build_visual(
+                    {
+                        "schemaVersion": 1,
+                        "designSystem": design_system,
+                        "variant": element.get("variant") or "balanced",
+                        "elementId": f"visual-{element['slotId']}",
+                        "box": element["box"],
+                        "language": "ru",
+                        "block": element["block"],
+                    }
+                )
+                if not built["fit"]["fits"]:
+                    raise ValueError(f"Native visual overflow: {built['fit']['overflow']}")
+                for native in built["elements"]:
+                    export.draw_native_element(shapes, native, design_system, visuals.draw_visual)
+                return
             styled = visuals.style_visuals([{"elements": [element]}], design_system)
             visuals.draw_visual(shapes, styled[0]["elements"][0], design_system)
 
@@ -587,6 +645,28 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
     slides = composition_slides(
         parser.parse_template(output), [s.model_dump(mode="json") for s in request.slides], patterns
     )
+    # Native blocks can create several text/chart/table shapes. Read those from
+    # the final file rather than reconstructing them from the requested values.
+    if any(s.visual is not None and s.visual.kind == "native" for s in request.slides):
+        actual = parser.import_deck(output)
+        for index, composed in enumerate(request.slides):
+            if composed.visual is None or composed.visual.kind != "native":
+                continue
+            slots = patterns[composed.patternId]["slots"]
+            bounds = [slot["box"] for slot in slots if slot.get("box")]
+            read = actual[index]
+            read["slideId"] = slides[index]["slideId"]
+            read["patternId"] = composed.patternId
+            for element in read["elements"]:
+                box = element["box"]
+                centre = (box["x"] + box["cx"] / 2, box["y"] + box["cy"] / 2)
+                if not any(
+                    b["x"] <= centre[0] <= b["x"] + b["cx"]
+                    and b["y"] <= centre[1] <= b["y"] + b["cy"]
+                    for b in bounds
+                ):
+                    element["role"] = "decoration"
+            slides[index] = read
     payload: dict[str, Any] = {
         "schemaVersion": 1,
         "deckId": output.parent.name,

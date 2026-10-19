@@ -7,6 +7,7 @@ import {
   slotChartSchema,
   slotRewriteChoicesSchema,
   slotTableSchema,
+  slotNativeSchema,
   templateSlotCopySchema,
   type ComposedSlide,
   type CompositionNote,
@@ -813,6 +814,7 @@ function boundedSlideSchema(pattern: GenerationProfile['compositions'][number]) 
         .union([
           slotTableSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
           slotChartSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
+          slotNativeSchema.extend({ slotId: z.enum(slots as [string, ...string[]]) }),
         ])
         .nullable()
         .default(null)
@@ -843,6 +845,74 @@ function figuresOf(text: string): number[] {
   );
 }
 
+/** Reject unsupported literals, units and source quotations before deterministic placement. */
+function groundedNative(
+  visual: Extract<SlotVisual, { kind: 'native' }>,
+  brief: string,
+): SlotVisual | null {
+  const norm = (text: string) => text.normalize('NFKC').replace(/\s+/g, ' ').trim();
+  const contains = (text: string, value: string) => !value || norm(text).includes(norm(value));
+  const sources =
+    visual.block.kind === 'kpi'
+      ? visual.block.items.flatMap((item) => item.sources)
+      : visual.block.sources;
+  if (sources.some((source) => !contains(brief, source.quote))) return null;
+  const quotes = sources.map((source) => source.quote).join('\n');
+  const measured = (
+    value: { state: string; literal?: string; value?: number },
+    unit: string,
+    evidence: string,
+  ) => {
+    if (value.state === 'missing') return value.literal === undefined && value.value === undefined;
+    if (value.literal === undefined || value.value === undefined) return false;
+    const parsed = Number(value.literal.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'));
+    return (
+      Number.isFinite(parsed) &&
+      parsed === value.value &&
+      contains(evidence, value.literal) &&
+      contains(evidence, unit)
+    );
+  };
+  const block = visual.block;
+  if (block.kind === 'kpi') {
+    if (
+      block.items.some((item) => {
+        const evidence = item.sources.map((source) => source.quote).join('\n');
+        return (
+          !measured(item.value, item.unit, evidence) ||
+          (item.periodKnown && !contains(evidence, item.period)) ||
+          (!!item.caveat && !contains(brief, item.caveat)) ||
+          (!!item.comparison &&
+            (!measured(item.comparison.base, item.comparison.baseUnit, evidence) ||
+              !contains(evidence, item.comparison.basePeriod)))
+        );
+      })
+    )
+      return null;
+  } else if (block.kind === 'chart') {
+    if (
+      block.series.some(
+        (series) =>
+          series.values.length !== block.categories.length ||
+          series.values.some((value) => !measured(value, series.unit, quotes)),
+      ) ||
+      block.categories.some((category) => !contains(quotes, category.label)) ||
+      (!!block.caveat && !contains(brief, block.caveat))
+    )
+      return null;
+  } else if (
+    block.rows.some(
+      (row) =>
+        row.cells.length !== block.columns.length ||
+        row.cells.some((cell) => !cell.missing && !contains(quotes, cell.text)),
+    ) ||
+    !contains(brief, block.notes) ||
+    (!!block.caveat && !contains(brief, block.caveat))
+  )
+    return null;
+  return visual;
+}
+
 /**
  * A visual only when every figure in it is in the brief: a chart is where an invented number
  * would do most harm, so a visual that cannot be traced to the source is dropped and the slot
@@ -854,6 +924,7 @@ export function groundedVisual(
   brief: string,
 ): SlotVisual | null {
   if (!visual) return null;
+  if (visual.kind === 'native') return groundedNative(visual, brief);
   const known = new Set(figuresOf(brief));
   const figures =
     visual.kind === 'chart'
@@ -1148,8 +1219,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         let result: z.infer<typeof compositionPlanSchema>;
         try {
           result = await plan();
-        } catch {
+        } catch (error) {
           deps.signal.throwIfAborted();
+          if (!(error instanceof z.ZodError)) throw error;
           result = await plan({
             minimumSlideCount: 5,
             exactSlideCount: slideCount,
@@ -1333,7 +1405,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           visual: visual ? { ...visual, slotId: map.get(visual.slotId) ?? visual.slotId } : null,
         };
       }
-      const visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
+      let visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
+      if (visual?.kind === 'native') visual = { ...visual, variant: deps.variant ?? 'balanced' };
       const texts = raw.textsBySlot as Record<string, string | undefined>;
       const context: CopyContext = {
         brief: inputData.brief,
@@ -1873,7 +1946,9 @@ async function rewriteSlide(
         deps.signal,
       );
     } catch (error) {
-      // A broken answer is one more draw, not the end of the deck: keep the last error and retry.
+      // Transport retries belong to the provider. Never multiply auth/quota/budget
+      // failures by another semantic retry loop.
+      if (!(error instanceof SyntaxError) && !(error instanceof z.ZodError)) throw error;
       if (attempt + 1 >= MAX_REWRITE_ATTEMPTS) throw error;
       lastError = error;
       continue;

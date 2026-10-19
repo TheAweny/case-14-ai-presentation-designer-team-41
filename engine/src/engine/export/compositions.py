@@ -223,6 +223,9 @@ def _replace_with_visual(slide: Any, visual: dict[str, Any], draw: DrawVisual) -
         "cy": int(shape.height),
     }
     shape._element.getparent().remove(shape._element)
+    if visual["kind"] == "native":
+        draw(slide.shapes, {**visual, "box": box})
+        return
     element: dict[str, Any] = {
         "elementId": f"visual-{visual['slotId']}",
         "role": visual["kind"],

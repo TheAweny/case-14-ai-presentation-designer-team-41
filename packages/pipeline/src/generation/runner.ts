@@ -20,6 +20,7 @@ import { createMastra, closeMastra } from '../mastra.js';
 import {
   createGenerationWorkflow,
   createRepairWorkflow,
+  compositionStructure,
   critiqueSchema,
   type DeckVariant,
   fitChars,
@@ -336,6 +337,49 @@ export async function generatePresentation(options: GenerateOptions) {
       .array(writtenSchema)
       .parse(result.result)
       .sort((a, b) => a.index - b.index);
+    const designIntent = {
+      dense: 'analytical-comparison',
+      balanced: 'narrative-sequence',
+      airy: 'editorial-hierarchy',
+    }[options.variant ?? 'balanced'];
+    await writeFile(
+      join(options.outputDir, 'design-plan.json'),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          variant: options.variant ?? 'balanced',
+          intent: designIntent,
+          slides: written.map((item) => {
+            const composition = profile.compositions.find(
+              (p) => p.patternId === item.slide.patternId,
+            );
+            return {
+              index: item.index,
+              patternId: item.slide.patternId,
+              structure: composition ? compositionStructure(composition) : null,
+              visual:
+                item.slide.visual?.kind === 'native'
+                  ? item.slide.visual.block.kind
+                  : (item.slide.visual?.kind ?? null),
+            };
+          }),
+        },
+        null,
+        2,
+      ),
+    );
+    if (
+      new Set(profile.compositions.map(compositionStructure)).size < 3 &&
+      !written.some((item) => item.slide.visual?.kind === 'native')
+    ) {
+      await emit({
+        type: 'warning',
+        stage,
+        code: 'content-review-required',
+        message:
+          'В шаблоне недостаточно разных композиций для трёх самостоятельных дизайнов. Факты сохранены; различия вариантов требуют проверки.',
+      });
+    }
     for (const current of written) {
       const images = qrImages.get(current.index);
       if (images?.length) current.slide = { ...current.slide, images };
@@ -1080,7 +1124,9 @@ export async function generatePresentation(options: GenerateOptions) {
     await emit({ type: 'done', totalMs: Date.now() - started, manifestPath: 'manifest.json' });
     return { deck, output, manifest };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Generation failed.';
+    const diagnostic = error as { message?: unknown } | null;
+    const message =
+      typeof diagnostic?.message === 'string' ? diagnostic.message : 'Generation failed.';
     const failure = generationFailure(error, signal);
     await writeFile(
       join(options.outputDir, 'failure.json'),

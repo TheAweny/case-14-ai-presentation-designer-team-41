@@ -3,6 +3,7 @@ import { designSystemSchema } from './design-system.js';
 import { boxSchema, templateIrSchema } from './template-ir.js';
 import { modelRefSchema } from './model-settings.js';
 import { reasoningEffortSchema } from './reasoning.js';
+import { visualBlockSchema } from './visuals.js';
 
 export const compositionSlotSchema = z.object({
   slotId: z.string().min(1),
@@ -79,7 +80,17 @@ export const slotChartSchema = z.object({
   yTitle: z.string().describe('The value axis title with its unit.'),
 });
 
-export const slotVisualSchema = z.discriminatedUnion('kind', [slotTableSchema, slotChartSchema]);
+export const slotNativeSchema = z.object({
+  kind: z.literal('native'),
+  slotId: z.string().min(1),
+  block: visualBlockSchema,
+  variant: z.enum(['dense', 'balanced', 'airy']).optional(),
+});
+export const slotVisualSchema = z.discriminatedUnion('kind', [
+  slotTableSchema,
+  slotChartSchema,
+  slotNativeSchema,
+]);
 
 export const composedSlideSchema = z.object({
   patternId: z.string().min(1),
@@ -181,6 +192,11 @@ export const generationRequestSchema = z.object({
     .object({
       maxHttpRequests: z.number().int().min(1).max(240),
       maxReservedTokens: z.number().int().min(1).max(2_000_000),
+      maxCost: z.number().finite().positive().optional(),
+      currency: z
+        .string()
+        .regex(/^[A-Z]{3}$/)
+        .optional(),
     })
     .optional(),
   /** A model draft guides the story but cannot independently substantiate its facts. */

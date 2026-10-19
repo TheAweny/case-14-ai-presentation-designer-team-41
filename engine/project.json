@@ -6,6 +6,24 @@
   "tags": ["scope:engine", "type:lib"],
   "implicitDependencies": ["contracts"],
   "targets": {
+    "fix-imports": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run ruff check --select I --fix engine",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test-linux": {
+      "executor": "nx:run-commands",
+      "options": { "command": "node scripts/recovery/engine-linux.mjs", "cwd": "{workspaceRoot}" }
+    },
+    "recovery-fixture": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run python scripts/recovery/synthetic_template.py runs/recovery-runtime/synthetic.pptx",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "format": {
       "executor": "nx:run-commands",
       "options": { "command": "uv run ruff format engine", "cwd": "{workspaceRoot}" }

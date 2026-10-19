@@ -207,6 +207,446 @@
                       "yTitle"
                     ],
                     "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "block": {
+                        "oneOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "items": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "caption": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "caveat": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "comparison": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "base": {
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "literal": {
+                                              "minLength": 1,
+                                              "type": "string"
+                                            },
+                                            "state": {
+                                              "enum": [
+                                                "present",
+                                                "missing"
+                                              ],
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "state"
+                                          ],
+                                          "type": "object"
+                                        },
+                                        "basePeriod": {
+                                          "type": "string"
+                                        },
+                                        "baseUnit": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "base",
+                                        "baseUnit",
+                                        "basePeriod"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    "period": {
+                                      "type": "string"
+                                    },
+                                    "periodKnown": {
+                                      "type": "boolean"
+                                    },
+                                    "sources": {
+                                      "items": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "itemId": {
+                                            "minLength": 1,
+                                            "type": "string"
+                                          },
+                                          "quote": {
+                                            "minLength": 1,
+                                            "type": "string"
+                                          },
+                                          "status": {
+                                            "description": "Copied onto the slide. Display does not change it.",
+                                            "enum": [
+                                              "grounded",
+                                              "unverified"
+                                            ],
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "itemId",
+                                          "quote",
+                                          "status"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "minItems": 1,
+                                      "type": "array"
+                                    },
+                                    "unit": {
+                                      "type": "string"
+                                    },
+                                    "unitAmbiguous": {
+                                      "type": "boolean"
+                                    },
+                                    "value": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "literal": {
+                                          "minLength": 1,
+                                          "type": "string"
+                                        },
+                                        "state": {
+                                          "enum": [
+                                            "present",
+                                            "missing"
+                                          ],
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "state"
+                                      ],
+                                      "type": "object"
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "unit",
+                                    "unitAmbiguous",
+                                    "caption",
+                                    "period",
+                                    "periodKnown",
+                                    "sources"
+                                  ],
+                                  "type": "object"
+                                },
+                                "maxItems": 8,
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "kind": {
+                                "const": "kpi",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "items"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "categories": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "label": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "position": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "label"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "caveat": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "intent": {
+                                "enum": [
+                                  "category-comparison",
+                                  "time-series",
+                                  "part-of-whole"
+                                ],
+                                "type": "string"
+                              },
+                              "kind": {
+                                "const": "chart",
+                                "type": "string"
+                              },
+                              "requestedType": {
+                                "enum": [
+                                  "bar",
+                                  "column",
+                                  "line",
+                                  "pie",
+                                  "area"
+                                ],
+                                "type": "string"
+                              },
+                              "series": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "name": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "unit": {
+                                      "type": "string"
+                                    },
+                                    "values": {
+                                      "items": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "literal": {
+                                            "minLength": 1,
+                                            "type": "string"
+                                          },
+                                          "state": {
+                                            "enum": [
+                                              "present",
+                                              "missing"
+                                            ],
+                                            "type": "string"
+                                          },
+                                          "value": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "state"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "minItems": 1,
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "unit",
+                                    "values"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "sources": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "itemId": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "quote": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "description": "Copied onto the slide. Display does not change it.",
+                                      "enum": [
+                                        "grounded",
+                                        "unverified"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "itemId",
+                                    "quote",
+                                    "status"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "xTitle": {
+                                "type": "string"
+                              },
+                              "yTitle": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "intent",
+                              "categories",
+                              "series",
+                              "xTitle",
+                              "yTitle",
+                              "sources"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "caveat": {
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "columns": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "header": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "enum": [
+                                        "text",
+                                        "number",
+                                        "unit"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "kind"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "kind": {
+                                "const": "table",
+                                "type": "string"
+                              },
+                              "notes": {
+                                "type": "string"
+                              },
+                              "rows": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "cells": {
+                                      "items": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "missing": {
+                                            "type": "boolean"
+                                          },
+                                          "text": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "text",
+                                          "missing"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "minItems": 1,
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "cells"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "sources": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "itemId": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "quote": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "description": "Copied onto the slide. Display does not change it.",
+                                      "enum": [
+                                        "grounded",
+                                        "unverified"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "itemId",
+                                    "quote",
+                                    "status"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "columns",
+                              "rows",
+                              "sources",
+                              "notes"
+                            ],
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "kind": {
+                        "const": "native",
+                        "type": "string"
+                      },
+                      "slotId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "variant": {
+                        "enum": [
+                          "dense",
+                          "balanced",
+                          "airy"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slotId",
+                      "block"
+                    ],
+                    "type": "object"
                   }
                 ]
               },

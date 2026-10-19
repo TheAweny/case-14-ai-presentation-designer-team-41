@@ -3,6 +3,11 @@ import { generationFailure } from './failure.js';
 import { modelHttpFailure } from '../chat/model-failure.js';
 
 describe('generation failure classification', () => {
+  it('distinguishes a durable usage cap from elapsed time after workflow serialization', () => {
+    expect(
+      generationFailure({ code: 'usage-budget-exceeded' }, new AbortController().signal),
+    ).toMatchObject({ code: 'usage-budget-exceeded', retryable: false });
+  });
   it.each([
     [new DOMException('deadline', 'TimeoutError'), 'budget-exceeded'],
     [new DOMException('stop', 'AbortError'), 'cancelled'],

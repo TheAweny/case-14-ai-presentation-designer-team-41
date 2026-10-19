@@ -23,7 +23,7 @@ import {
 
 /** A probe that could not finish is not repeated for this long. */
 const RETRY_AFTER_MS = 60000;
-/** Free probes at once while a connection is checked: gateways limit parallel requests. */
+/** Explicit probes at once while a connection is checked. Their billing may be unknown. */
 const PROBES_AT_ONCE = 4;
 
 /**
@@ -44,6 +44,7 @@ export class ModelCapabilityService {
     private readonly prompts: () => Promise<CapabilityProbe>,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly now: () => number = Date.now,
+    private readonly probeTransport?: (ownerId: string) => typeof fetch,
   ) {}
 
   /**
@@ -88,7 +89,7 @@ export class ModelCapabilityService {
         const model = await this.settings
           .resolve({ connectionId, modelId }, actor)
           .catch(() => null);
-        if (model) await this.reasoning(model, true);
+        if (model) await this.reasoning(model, true, actor.userId);
       }
     };
     await Promise.all(Array.from({ length: Math.min(PROBES_AT_ONCE, unknown.length) }, worker));
@@ -155,6 +156,7 @@ export class ModelCapabilityService {
   private async reasoning(
     model: ResolvedModel,
     force: boolean,
+    ownerId: string,
   ): Promise<ReasoningCapability | null> {
     if (!force) {
       const stored = await this.store.getCapability(model, model.model);
@@ -165,7 +167,9 @@ export class ModelCapabilityService {
     if (!force && failed !== undefined && this.now() - failed < RETRY_AFTER_MS) return null;
     let pending = this.running.get(key) as Promise<Probed<ReasoningCapability | null>> | undefined;
     if (!pending) {
-      pending = this.prompts().then(({ prompt }) => probeReasoning(model, prompt, this.fetchImpl));
+      pending = this.prompts().then(({ prompt }) =>
+        probeReasoning(model, prompt, this.probeTransport?.(ownerId) ?? this.fetchImpl),
+      );
       this.running.set(key, pending);
       void pending.finally(() => this.running.delete(key)).catch(() => undefined);
     }

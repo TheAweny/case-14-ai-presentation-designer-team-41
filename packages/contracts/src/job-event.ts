@@ -35,6 +35,7 @@ export const jobErrorCodeSchema = z.enum([
   'model-unavailable',
   'model-refused',
   'budget-exceeded',
+  'usage-budget-exceeded',
   'engine-failed',
   'cancelled',
   'interrupted',

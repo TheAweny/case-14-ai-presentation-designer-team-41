@@ -425,6 +425,22 @@ def _draw_element(
         _draw_decor(slide.shapes, element, palette)
 
 
+def draw_native_element(
+    shapes: Any, element: dict[str, Any], design_system: dict[str, Any], draw_visual: DrawVisual
+) -> None:
+    """API bridge for native visual blocks; document layers stay independent."""
+    palette = {entry["role"]: entry["hex"] for entry in design_system["palette"]}
+    scale = {entry["role"]: entry for entry in design_system["typeScale"]}
+    if element["kind"] == "text":
+        _draw_text(shapes, element, palette, scale)
+    elif element["kind"] == "decor":
+        _draw_decor(shapes, element, palette)
+    elif element["kind"] in {"table", "chart"}:
+        draw_visual(shapes, element, design_system)
+    else:
+        raise ValueError("Unsupported native visual element.")
+
+
 def _draw_background(
     slide: Any,
     data: dict[str, Any],

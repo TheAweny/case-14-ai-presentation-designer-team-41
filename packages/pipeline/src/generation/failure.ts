@@ -61,9 +61,19 @@ export function generationFailure(
     );
   }
   const named = error as { name?: string; code?: string; requiresReview?: boolean } | null;
+  if (named?.code === 'usage-budget-exceeded')
+    return {
+      code: 'usage-budget-exceeded',
+      message:
+        'Исчерпан согласованный лимит запросов или токенов. Сохранённые результаты доступны; продолжение сохраняет накопленный расход.',
+      retryable: false,
+    };
   if (error instanceof EngineHttpError)
     return {
-      code: error.path.includes('export') ? 'export-failed' : 'engine-failed',
+      code:
+        error.path.includes('export') || error.path.includes('composition-decks')
+          ? 'export-failed'
+          : 'engine-failed',
       message:
         'Движок не завершил сборку файла. Продолжите с сохранённых задач после проверки движка.',
       retryable: true,

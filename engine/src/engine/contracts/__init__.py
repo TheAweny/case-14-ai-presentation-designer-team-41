@@ -41,10 +41,17 @@ from engine.contracts._generated import (
     RunConfig,
     SlideIR,
     SlideReview,
-    Status,
     TemplateIR,
     TemplatePreviewsRequest,
     TemplatePreviewsResponse,
+    VisualBuildRequest,
+    VisualBuildResponse,
+    VisualCapability,
+    VisualCompareRequest,
+    VisualCompareResponse,
+)
+from engine.contracts._generated import (
+    Status3 as Status,
 )
 from engine.contracts.provisional import (
     ChartSpec,
@@ -99,4 +106,9 @@ __all__ = [
     "TemplatePreviewsResponse",
     "TemplateProfile",
     "TemplateProfileDraft",
+    "VisualBuildRequest",
+    "VisualBuildResponse",
+    "VisualCapability",
+    "VisualCompareRequest",
+    "VisualCompareResponse",
 ]

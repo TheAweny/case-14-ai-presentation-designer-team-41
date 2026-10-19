@@ -42,6 +42,19 @@ variant, and no slot is empty in any variant.
 
 ## Visual
 
+Для измеримых фактов предпочитай `visual: {"kind":"native","slotId":"ID","block": ...}`
+по JSON Schema ответа: `block.kind` — `kpi`, `chart` или `table`. Это нативные редактируемые
+элементы. Верни один общий блок данных; расположение для трёх вариантов выбирает движок.
+В каждом sources укажи itemId `brief`, дословную quote из brief и status `grounded` только
+если цитата подтверждает данные. Каждый present содержит точные literal и числовое value;
+missing не содержит ни literal, ни value. Не превращай отсутствие данных в ноль.
+Для KPI сохрани unit, caption, period, periodKnown, unitAmbiguous и caveat источника.
+Для chart сохрани категории, series с unit и измерениями, intent, xTitle/yTitle, sources/caveat.
+Для table сохрани columns (header/kind), все cells (text/missing), sources, notes и caveat.
+Не добавляй вымышленные единицы, периоды, базу сравнения или числа ради другого дизайна.
+Если источники нельзя процитировать дословно либо данные не помещаются в смысл слайда,
+сохрани факты текстом и верни visual null. Другие слоты сохраняют обязательные тезисы.
+
 The input carries `visualSlots`, the body slots large enough for a table or a chart. Return
 `visual` as `null` unless the slide's purpose presents figures from the brief that are worth
 comparing: several values over categories, time or segments.

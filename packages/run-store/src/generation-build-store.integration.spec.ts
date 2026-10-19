@@ -79,6 +79,13 @@ describe.skipIf(!databaseUrl)('generation ownership and accounting on actual Pos
     await store.stop(lease.build.id, 'stranger');
     await store.assert(lease);
     await store.stop(lease.build.id, 'owner');
+    for (const variant of lease.build.variants) {
+      expect((await repository.get(variant.runId))?.state).toBe('failed');
+      expect((await repository.events(variant.runId)).at(-1)).toMatchObject({
+        type: 'failed',
+        code: 'cancelled',
+      });
+    }
     await expect(store.assert(lease)).rejects.toThrow();
     expect(await store.claim(lease.build.id, 'owner')).toBeNull();
     expect(await store.claim(lease.build.id, 'owner', true)).not.toBeNull();
@@ -183,6 +190,7 @@ describe.skipIf(!databaseUrl)('generation ownership and accounting on actual Pos
       requests: 10,
       tokens: 1000,
       cost: 1,
+      currency: 'USD',
     });
     await expect(ledger.begin(intent)).rejects.toThrow('неизвестна');
     await ledger.begin({

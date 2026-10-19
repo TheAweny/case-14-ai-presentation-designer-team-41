@@ -13,6 +13,7 @@ export const generationSpecSchema = z.object({
   profile: generationProfileSchema,
   notes: z.array(compositionNoteSchema).optional(),
   registryHash: z.string().length(64),
+  pricingHash: z.string().length(64).optional(),
   modelPolicy: z.array(
     z.object({
       role: z.string(),

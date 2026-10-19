@@ -22,6 +22,7 @@ export interface UsageLimits {
   requests: number;
   tokens: number;
   cost: number | null;
+  currency?: string;
 }
 export class UsageBudgetError extends Error {
   readonly code = 'usage-budget-exceeded';
@@ -71,7 +72,8 @@ export class PostgresProviderLedger {
         throw new UsageBudgetError('Исчерпан общий бюджет запросов или токенов сборки.');
       if (
         this.limits.cost !== null &&
-        (intent.estimatedCost === null ||
+        (intent.currency !== this.limits.currency ||
+          intent.estimatedCost === null ||
           used.unknown_cost ||
           Number(used.cost) + intent.estimatedCost > this.limits.cost)
       )

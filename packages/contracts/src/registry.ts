@@ -14,6 +14,13 @@ import { designSystemSchema } from './design-system.js';
 import { patternCatalogSchema } from './pattern-catalog.js';
 import { deckPlanSchema } from './deck-plan.js';
 import { slideIrSchema } from './slide-ir.js';
+import {
+  visualBuildRequestSchema,
+  visualBuildResponseSchema,
+  visualCapabilitySchema,
+  visualCompareRequestSchema,
+  visualCompareResponseSchema,
+} from './visuals.js';
 import { auditFindingSchema } from './audit-finding.js';
 import { auditReportSchema, auditRequestSchema } from './audit-report.js';
 import { layoutVariantsRequestSchema, layoutVariantsResponseSchema } from './layout-variants.js';
@@ -62,6 +69,11 @@ export const contractRegistry = {
   PatternCatalog: patternCatalogSchema,
   DeckPlan: deckPlanSchema,
   SlideIR: slideIrSchema,
+  VisualBuildRequest: visualBuildRequestSchema,
+  VisualBuildResponse: visualBuildResponseSchema,
+  VisualCapability: visualCapabilitySchema,
+  VisualCompareRequest: visualCompareRequestSchema,
+  VisualCompareResponse: visualCompareResponseSchema,
   DeckExportRequest: deckExportRequestSchema,
   DeckExportResponse: deckExportResponseSchema,
   DeckImportRequest: deckImportRequestSchema,
