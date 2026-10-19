@@ -293,6 +293,13 @@ def _picture_covers_text(s: dict[str, Any]) -> None:
     s["elements"].append(_image(whole, elementId="cover"))
 
 
+def _duplicate_point(s: dict[str, Any]) -> None:
+    twin = copy.deepcopy(_element(s, "list"))
+    twin["elementId"] = "list-twin"
+    twin["box"] = {**twin["box"], "y": 4_700_000, "cy": 900_000}
+    s["elements"].append(twin)
+
+
 def _duplicate_slide(s: dict[str, Any]) -> list[dict[str, Any]]:
     twin = copy.deepcopy(s)
     twin["slideId"], twin["index"] = "s2", 1
@@ -346,6 +353,7 @@ _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] 
     "raster-slide": _raster_slide,
     "picture-covers-text": _picture_covers_text,
     "duplicate-slide": _duplicate_slide,
+    "duplicate-point": _duplicate_point,
     "placeholder-text": _placeholder_text,
     "template-leftover": _template_leftover,
     "empty-image-slot": _empty_image_slot,
@@ -529,6 +537,25 @@ def test_word_break_ignores_short_words_and_text_that_wraps_between_words() -> N
     short = _torn_slide(40)
     _run(short, "list")["text"] = "Итоги"
     assert "word-break" not in _fired(short)
+
+
+def test_duplicate_point_finds_a_point_said_twice_inside_one_list() -> None:
+    slide = _clean_slide()
+    paragraphs = _element(slide, "list")["paragraphs"]
+    paragraphs.append(copy.deepcopy(paragraphs[0]))
+    report = audit_deck(_request(slide), "default", deterministic_profile("default"))
+    [found] = [f for f in report["findings"] if f["checkId"] == "duplicate-point"]
+    assert found["target"]["elementId"] == "list"
+    assert "Удержание клиентов" in found["evidence"]["quote"]
+
+
+def test_duplicate_point_leaves_titles_labels_and_different_points() -> None:
+    slide = _clean_slide()
+    # The headline may say what a point proves, and a one-word label may stand twice.
+    _run(slide, "title")["text"] = "Удержание клиентов 94%"
+    slide["elements"].append(_text("tag1", "body", _TITLE_BOX, "Клиенты", size=16))
+    slide["elements"].append(_text("tag2", "body", _TITLE_BOX, "Клиенты", size=16))
+    assert "duplicate-point" not in _fired(slide)
 
 
 def test_clean_deck_passes_with_a_full_score() -> None:

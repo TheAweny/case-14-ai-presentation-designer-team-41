@@ -1172,6 +1172,15 @@ describe('copyDefects', () => {
     expect(emptySlots(slide({ s: '', b: 'Озеленение' }), pattern)).toEqual([]);
   });
 
+  it('does not ask for a fact in a field whose sample is a figure or a period label', () => {
+    const badge = { ...slot('n', 8, 1), sample: '05' };
+    const quarter = { ...slot('q', 12, 1), sample: 'III кв.' };
+    const label = slot('l', 80, 2);
+    const pattern = { ...composition, slots: [badge, quarter, label] };
+    // The figure fields may stay empty without a fact; a field of words may not.
+    expect(emptySlots(slide({ n: '', q: '', l: '' }), pattern)).toEqual(['l']);
+  });
+
   it('flags a bare number in a field whose sample is words', () => {
     const pattern = { ...composition, slots: [{ ...slot('a', 40, 1), sample: 'Работа' }] };
     expect(copyDefects(slide({ a: '05' }), pattern).has('a')).toBe(true);

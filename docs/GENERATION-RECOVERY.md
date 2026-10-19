@@ -37,7 +37,7 @@ The implementation keeps that workflow and adds the following boundaries:
    errors, quota/budget, invalid response, export, persistence and quality failures. Usage cards
    expose cumulative known values and counts of unknown attempts.
 
-Registry versions: deck-planner **2.9.0**, slide-writer **2.8.0**, deck-critic **1.10.0**,
+Registry versions: deck-planner **2.9.0**, slide-writer **2.9.0**, deck-critic **1.10.0**,
 chat-assistant **1.21.0**. Other agent versions are recorded unchanged in each manifest.
 Manifest `planId` identifies the shared build. `modelCallsScope=build` prevents counting shared
 successful calls three times. `providerUsage` is a journal snapshot at publication;

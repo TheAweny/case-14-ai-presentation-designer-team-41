@@ -217,3 +217,38 @@ export function slideFigureDefects(
   }
   return findings;
 }
+
+/** Share of words two points of one slide must have in common to be the same point said twice. */
+const POINT_REPEATS = 0.8;
+
+/**
+ * Points of one slide that say the same: «Партнёрство с двумя банками» twice among the key
+ * products. Each slot is written on its own, so only the whole slide shows it. The later of two
+ * points is sent back to be written as a different one; a headline repeating a point is the
+ * claim and its proof, and a text of a single word is a label that may stand twice.
+ */
+export function slideTextRepeats(slides: readonly DeckSlide[]): RepeatFinding[] {
+  const findings: RepeatFinding[] = [];
+  for (const slide of slides) {
+    const headline = headlineSlot(slide.composition);
+    const points: { slotId: string; text: string }[] = [];
+    for (const text of slide.slide.texts) {
+      if (text.slotId === headline || text.slotId === slide.slide.visual?.slotId) continue;
+      if (!text.text.trim() || stems(text.text).size < 2) continue;
+      const twin = points.find((point) => likeness(point.text, text.text) >= POINT_REPEATS);
+      if (twin) {
+        findings.push({
+          slideIndex: slide.index,
+          slotId: text.slotId,
+          category: 'duplicate-text',
+          message:
+            `Says the same as slot ${twin.slotId} of this slide. ` +
+            'Write a different point here, or what follows from the first one.',
+        });
+        continue;
+      }
+      points.push({ slotId: text.slotId, text: text.text });
+    }
+  }
+  return findings;
+}

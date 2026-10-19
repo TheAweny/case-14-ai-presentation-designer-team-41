@@ -246,6 +246,18 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
         defaults={"minFill": 0.25, "maxFill": 0.75},
     ),
     CheckDefinition(
+        id="duplicate-point",
+        category="integrity",
+        title="No point is said twice on a slide",
+        description=(
+            "Compares the words of every two points of one slide, the bullets of a list and the "
+            "blocks of a layout alike, and reports a point that says almost the same as an "
+            "earlier one. Titles and one-word labels are not compared."
+        ),
+        severity="major",
+        defaults={"minSimilarity": 0.85, "minWords": 2},
+    ),
+    CheckDefinition(
         id="empty-slide",
         category="integrity",
         title="Slides carry content",

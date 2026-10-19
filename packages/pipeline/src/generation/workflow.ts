@@ -18,6 +18,7 @@ import {
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { tearsAWord } from './fit.js';
+import { isFigureSample } from './samples.js';
 import type { TextProvider } from './provider.js';
 import { declaredQrSlots, safeQrPlan, sourceQrUrls } from './qr-assets.js';
 import { dependencyKey } from './checkpoints.js';
@@ -960,10 +961,19 @@ export function emptySlots(
   pattern: GenerationProfile['compositions'][number],
 ): string[] {
   const facts = factSlots(pattern);
-  return writableSlots(pattern)
-    .filter((slot) => slot.slotId !== slide.visual?.slotId && !facts.has(slot.slotId))
-    .filter((slot) => !(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '').trim())
-    .map((slot) => slot.slotId);
+  return (
+    writableSlots(pattern)
+      // A figure the template drew as a sample may stay empty: without a fact it is not written, and
+      // the engine takes the empty shape off the slide.
+      .filter(
+        (slot) =>
+          slot.slotId !== slide.visual?.slotId &&
+          !facts.has(slot.slotId) &&
+          !isFigureSample(slot.sample),
+      )
+      .filter((slot) => !(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '').trim())
+      .map((slot) => slot.slotId)
+  );
 }
 
 const EMPTY_SLOT_MESSAGE =

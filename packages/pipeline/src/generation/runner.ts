@@ -37,7 +37,8 @@ import {
   withCardHeadingProfile,
   writtenSchema,
 } from './workflow.js';
-import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
+import { deckRepeats, headlineSlot, slideFigureDefects, slideTextRepeats } from './repeats.js';
+import { leakedSamples } from './samples.js';
 import { approvedCoverage } from './final-review.js';
 import type { TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
@@ -405,8 +406,39 @@ export async function generatePresentation(options: GenerateOptions) {
       ].join('-'),
       briefYears: briefYears(sourceBrief),
     });
+    // What the template's samples still say on a slide is not a fact of the deck: a figure or a
+    // period label (`05`, `III кв.`, a year) kept as the writer found it, with no fact in the
+    // brief behind it. It is emptied before anything measures or exports the deck, and the engine
+    // takes the empty shape off the slide.
+    const announced = new Set<string>();
+    const clearLeakedSamples = async () => {
+      const slides = written.flatMap((s) => {
+        const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
+        return composition ? [{ index: s.index, composition, slide: s.slide }] : [];
+      });
+      for (const leak of leakedSamples(slides, sourceBrief)) {
+        const current = written.find((s) => s.index === leak.index);
+        if (!current) continue;
+        current.slide = {
+          ...current.slide,
+          texts: current.slide.texts.map((t) =>
+            t.slotId === leak.slotId ? { ...t, text: '' } : t,
+          ),
+        };
+        const key = `${leak.index}:${leak.slotId}`;
+        if (announced.has(key)) continue;
+        announced.add(key);
+        await emit({
+          type: 'warning',
+          stage,
+          code: 'template-sample-removed',
+          message: `Слайд ${leak.index + 1}: образец шаблона «${leak.sample}» убран, в брифе для него нет факта.`,
+        });
+      }
+    };
     // Geometry cannot authorize deleting content or restoring an older, unaudited wording.
     const settleFit = async () => {
+      await clearLeakedSamples();
       const { findings } = await options.engine.checkCompositions(exportRequest(), signal);
       // A torn word goes to the rewriter and the audit, but never costs the variant: a deck with
       // one ugly line is worth more than none, and the three are all required.
@@ -464,6 +496,7 @@ export async function generatePresentation(options: GenerateOptions) {
       );
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
+      await clearLeakedSamples();
       const [fit, critique] = await Promise.all([
         options.engine.checkCompositions(exportRequest(), signal),
         critiqueCurrent(),
@@ -481,6 +514,7 @@ export async function generatePresentation(options: GenerateOptions) {
       const repeats = [
         ...deckRepeats(written[0]?.title ?? '', deck, sourceBrief),
         ...slideFigureDefects(deck, sourceBrief),
+        ...slideTextRepeats(deck),
         ...deck.flatMap((s) =>
           s.composition.slots.flatMap((slot) => {
             const least = minChars(slot, variant);
