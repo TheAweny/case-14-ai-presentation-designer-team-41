@@ -127,6 +127,109 @@ describe('template generation workflow', () => {
     expect(result.status).toBe('success');
     if (result.status === 'success') expect(result.result).toHaveLength(count);
   });
+  it('spreads a plan that keeps one layout over the compositions that hold the same points', async () => {
+    const title = composition.slots[0];
+    if (!title) throw new Error('Fixture has no title slot.');
+    const compose = (patternId: string, blocks: number, shift: number) => ({
+      ...composition,
+      patternId,
+      // The catalog keeps one of two compositions that name and fill their slots alike.
+      name: `Макет ${patternId}`,
+      slots: [
+        title,
+        ...Array.from({ length: blocks }, (_, index) => ({
+          ...title,
+          slotId: `${patternId}-${index}`,
+          role: 'body' as const,
+          sample: `Пример пункта ${index + 1}`,
+          // Each composition has its own geometry: the catalog keeps one of two that look the same.
+          box: {
+            x: 100 + shift * 40,
+            y: 400 + index * (250 + shift * 30),
+            cx: 800 - shift * 50,
+            cy: 200,
+          },
+          maxChars: 90,
+          maxLines: 2,
+        })),
+      ],
+    });
+    const many = {
+      ...profile,
+      compositions: ['A', 'B', 'C', 'D'].map((id, shift) => compose(id, 3, shift)),
+    };
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        if (agent === 'planner') {
+          // The model found one layout it likes and used it for the whole deck, twice asked.
+          return schema.parse({
+            title: 'Колода',
+            slides: Array.from({ length: 9 }, (_, index) => ({
+              patternId: 'A',
+              purpose: `Тезис ${index + 1}`,
+              imageQuery: '',
+            })),
+          });
+        }
+        if (agent === 'rewriter') {
+          const asked = (input as { slots: { slotId: string }[] }).slots;
+          return schema.parse({
+            rewrites: Object.fromEntries(
+              asked.map((slot) => [
+                slot.slotId,
+                [
+                  `Вариант ${slot.slotId} один`,
+                  `Вариант ${slot.slotId} два`,
+                  `Вариант ${slot.slotId} три`,
+                ],
+              ]),
+            ),
+          });
+        }
+        // The writer is handed the slots of its composition; their ids say which one it is.
+        const given = (input as { composition: { slots: { slotId: string }[] } }).composition.slots;
+        const chosen = many.compositions.find((p) =>
+          p.slots.every((slot) => given.some((g) => g.slotId === slot.slotId)),
+        );
+        return schema.parse({
+          patternId: chosen?.patternId,
+          textsBySlot: Object.fromEntries(
+            (chosen?.slots ?? []).map((slot) => [
+              slot.slotId,
+              `Пункт ${slot.slotId}: содержательное утверждение слайда с пояснением`,
+            ]),
+          ),
+          speakerNotes: '',
+        });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({ inputData: { brief: 'Бриф', slideCount: 9, profile: many } });
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    const used = (result.result as { slide: { patternId: string } }[]).map(
+      (item) => item.slide.patternId,
+    );
+    const counts = new Map<string, number>();
+    for (const id of used) counts.set(id, (counts.get(id) ?? 0) + 1);
+    // Four compositions carry nine slides: none more than three times, and none three in a row.
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(patternUseLimit(4, 9));
+    expect(counts.size).toBe(4);
+    expect(used.some((id, i) => i >= 2 && used[i - 1] === id && used[i - 2] === id)).toBe(false);
+  });
   it('lays out an approved outline slide for slide, in its words', async () => {
     const outline = {
       title: 'Зелёный офис',
@@ -1172,6 +1275,15 @@ describe('copyDefects', () => {
     expect(emptySlots(slide({ s: '', b: 'Озеленение' }), pattern)).toEqual([]);
   });
 
+  it('does not ask for a fact in a field whose sample is a figure or a period label', () => {
+    const badge = { ...slot('n', 8, 1), sample: '05' };
+    const quarter = { ...slot('q', 12, 1), sample: 'III кв.' };
+    const label = slot('l', 80, 2);
+    const pattern = { ...composition, slots: [badge, quarter, label] };
+    // The figure fields may stay empty without a fact; a field of words may not.
+    expect(emptySlots(slide({ n: '', q: '', l: '' }), pattern)).toEqual(['l']);
+  });
+
   it('flags a bare number in a field whose sample is words', () => {
     const pattern = { ...composition, slots: [{ ...slot('a', 40, 1), sample: 'Работа' }] };
     expect(copyDefects(slide({ a: '05' }), pattern).has('a')).toBe(true);
@@ -1343,6 +1455,64 @@ describe('one plan, three layouts', () => {
     expect(denser).toBeGreaterThan(lighter);
     expect(dense[4]?.startsWith('two-')).toBe(true);
     expect(airy[4]?.startsWith('two-')).toBe(true);
+  });
+
+  describe('when the planner already chose the lightest layout that holds the points', () => {
+    // Three layouts of three blocks, each of its own type sizes, and each holding more than the
+    // last: the template offers three different layouts, not one drawn in three colours.
+    const sized = (patternId: string, chars: number, bodySize: number) => {
+      const base = composition(patternId, [chars, chars, chars]);
+      return {
+        ...base,
+        slots: base.slots.map((slot) =>
+          slot.role === 'body' ? { ...slot, fontSize: bodySize } : slot,
+        ),
+      };
+    };
+    const light = sized('light', 100, 16);
+    const mid = sized('mid', 150, 18);
+    const heavy = sized('heavy', 260, 20);
+    const set = [cover, light, mid, heavy];
+    const plan = ['cover', 'light', 'light', 'light'];
+
+    it('lets airy take the nearest roomier layout, so it differs from balanced', () => {
+      const airy = remapPlan(plan, set, set, 'airy', [cover]);
+      expect(airy[0]).toBe('cover');
+      // Mid holds 1.5 times what light does: airy, which writes less, fits it; heavy holds 2.6.
+      expect(airy.slice(1).every((id) => id === 'mid')).toBe(true);
+    });
+
+    it('does not send dense to a lighter layout, nor airy to one far roomier than planned', () => {
+      const lighter = sized('lighter', 60, 14);
+      const all = [cover, lighter, light, mid, heavy];
+      expect(remapPlan(plan, all, all, 'dense', [cover]).slice(1)).not.toContain('lighter');
+      const far = [cover, light, heavy];
+      expect(remapPlan(plan, far, far, 'airy', [cover]).slice(1)).toEqual([
+        'light',
+        'light',
+        'light',
+      ]);
+    });
+
+    it('does not borrow a roomier layout that has another number of blocks', () => {
+      const other = sized('other', 150, 18);
+      const odd = [cover, light, { ...other, slots: other.slots.slice(0, 3) }];
+      expect(remapPlan(plan, odd, odd, 'airy', [cover]).slice(1)).toEqual([
+        'light',
+        'light',
+        'light',
+      ]);
+    });
+
+    it('keeps the layout when the roomier one only differs in colour, not in structure', () => {
+      const cousin = { ...composition('cousin', [150, 150, 150]) };
+      const same = [cover, composition('light', [100, 100, 100]), cousin];
+      expect(remapPlan(plan, same, same, 'airy', [cover]).slice(1)).toEqual([
+        'light',
+        'light',
+        'light',
+      ]);
+    });
   });
 
   it('keeps an airy slide on a layout that still holds most of the planned text', () => {

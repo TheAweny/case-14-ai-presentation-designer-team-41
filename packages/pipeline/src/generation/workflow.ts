@@ -18,6 +18,8 @@ import {
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { tearsAWord } from './fit.js';
+import { isFigureSample } from './samples.js';
+import { diversifyPlan } from './variety.js';
 import type { TextProvider } from './provider.js';
 import { declaredQrSlots, safeQrPlan, sourceQrUrls } from './qr-assets.js';
 import { dependencyKey } from './checkpoints.js';
@@ -960,10 +962,19 @@ export function emptySlots(
   pattern: GenerationProfile['compositions'][number],
 ): string[] {
   const facts = factSlots(pattern);
-  return writableSlots(pattern)
-    .filter((slot) => slot.slotId !== slide.visual?.slotId && !facts.has(slot.slotId))
-    .filter((slot) => !(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '').trim())
-    .map((slot) => slot.slotId);
+  return (
+    writableSlots(pattern)
+      // A figure the template drew as a sample may stay empty: without a fact it is not written, and
+      // the engine takes the empty shape off the slide.
+      .filter(
+        (slot) =>
+          slot.slotId !== slide.visual?.slotId &&
+          !facts.has(slot.slotId) &&
+          !isFigureSample(slot.sample),
+      )
+      .filter((slot) => !(slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '').trim())
+      .map((slot) => slot.slotId)
+  );
 }
 
 const EMPTY_SLOT_MESSAGE =
@@ -1257,6 +1268,26 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           throw new Error('Planner returned the wrong slide count.');
         if (coverCorrections(result))
           throw new Error('Planner did not select a cover composition.');
+        // The planner was asked once to vary the layouts; what it kept repeating, code spreads over
+        // the compositions that hold the same points. Where the template has none, the slide keeps
+        // its layout and the report says so.
+        const varied = diversifyPlan(result.slides, full, notes, {
+          limit: patternUseLimit(full.length, result.slides.length),
+          blocks: (p) => writerSlots(p).filter((s) => s.role !== 'title').length,
+          capacity: (p) =>
+            writerSlots(p)
+              .filter((s) => s.role !== 'title')
+              .reduce((sum, s) => sum + s.maxChars, 0),
+          structure: compositionStructure,
+        });
+        result = { ...result, slides: varied.slides };
+        if (varied.repeated.length) {
+          await deps.onWarning?.(
+            `Слайды ${varied.repeated.map((r) => r.index + 1).join(', ')} остались на макете, ` +
+              'который в колоде уже повторяется: в шаблоне нет другого макета с тем же числом ' +
+              'пунктов. Разнообразие ограничено шаблоном.',
+          );
+        }
         // Still a layout for a speaker, a contact or a screenshot the source does not have: the
         // slide moves to one that needs none, instead of the deck failing.
         result = withoutMissingContent(
@@ -1280,7 +1311,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         deps.signal,
         full,
       );
-      const layouts = remapPlan(
+      const remapped = remapPlan(
         result.slides.map((slide) => slide.patternId),
         full,
         catalog,
@@ -1289,6 +1320,24 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         notes,
         deps.layoutRemapPolicy ?? 'density',
       );
+      // The variant's own layouts repeat as the plan's did, and the same share applies: what the
+      // remap sent to one layout over and over goes to the others of this variant's set.
+      const layouts = diversifyPlan(
+        remapped.map((patternId) => ({ patternId })),
+        full,
+        notes,
+        {
+          limit: patternUseLimit(full.length, remapped.length),
+          pool: catalog,
+          bias: variant === 'dense' ? 'heavy' : variant === 'airy' ? 'light' : 'near',
+          blocks: (p) => writerSlots(p).filter((s) => s.role !== 'title').length,
+          capacity: (p) =>
+            writerSlots(p)
+              .filter((s) => s.role !== 'title')
+              .reduce((sum, s) => sum + s.maxChars, 0),
+          structure: compositionStructure,
+        },
+      ).slides.map((slide) => slide.patternId);
       // A validated QR binding remains on its original composition in all three variants.
       result.slides.forEach((slide, index) => {
         if (slide.qrRequests?.length) layouts[index] = slide.patternId;
@@ -1566,6 +1615,8 @@ export class SharedContent {
 
 /** The least room a variant's layout keeps of the planned one's, so the points still fit. */
 const MIN_CAPACITY_SHARE = 0.6;
+/** The most room more than the planned layout's that airy takes, so a slide is not left bare. */
+const MAX_AIRY_GROWTH = 1.6;
 
 /** Kinds that frame a deck rather than carry its points. */
 const FRAMING_KINDS: ReadonlySet<string> = new Set(['cover', 'section', 'closing']);
@@ -1635,11 +1686,27 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
         ? capacity(p) >= capacity(planned)
         : capacity(p) <= capacity(planned) && capacity(p) >= capacity(planned) * MIN_CAPACITY_SHARE,
     );
-    if (!near.length) return id;
+    // The planned layout is already the lightest that holds the points: airy then takes the
+    // nearest roomier one rather than the same layout as balanced. It writes less text than the
+    // layout holds, which is airy, and the variants differ by layout, not only by wording. Dense
+    // never goes to a lighter layout: it has more to say than that one holds.
+    const alone = near.every((p) => p.patternId === id);
+    const roomier =
+      variant === 'airy' && alone
+        ? sameCount.filter(
+            (p) =>
+              p.patternId !== id &&
+              capacity(p) > capacity(planned) &&
+              capacity(p) <= capacity(planned) * MAX_AIRY_GROWTH &&
+              compositionStructure(p) !== compositionStructure(planned),
+          )
+        : [];
+    if (alone && !roomier.length) return id;
     // The indexer's kind keeps a process a process and cards cards when the template has both.
     const kind = notes.get(planned.patternId)?.kind;
-    const sameKind = near.filter((p) => kind && notes.get(p.patternId)?.kind === kind);
-    const same = sameKind.length ? sameKind : near;
+    const pick = alone && roomier.length ? roomier : near;
+    const sameKind = pick.filter((p) => kind && notes.get(p.patternId)?.kind === kind);
+    const same = sameKind.length ? sameKind : pick;
     const ranked = [...same].sort((a, b) =>
       variant === 'dense' ? capacity(b) - capacity(a) : capacity(a) - capacity(b),
     );

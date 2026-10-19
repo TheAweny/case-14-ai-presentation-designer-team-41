@@ -17,6 +17,14 @@ const fixture = (name: string) =>
     readFileSync(new URL(`../../../contracts/fixtures/${name}.json`, import.meta.url), 'utf8'),
   ).valid[0].payload;
 const profile = generationProfileSchema.parse(fixture('GenerationProfile'));
+/** The same template with a badge the template drew with a sample figure, as a step marker is. */
+const badgeProfile = (() => {
+  const [first, ...others] = profile.compositions;
+  const title = first?.slots[0];
+  if (!first || !title) throw new Error('Missing fixture pattern');
+  const badge = { ...title, slotId: 'badge', role: 'body' as const, sample: '05', maxChars: 6 };
+  return { ...profile, compositions: [{ ...first, slots: [title, badge] }, ...others] };
+})();
 const directories: string[] = [];
 afterEach(async () => {
   await Promise.all(directories.splice(0).map((p) => rm(p, { recursive: true, force: true })));
@@ -27,6 +35,7 @@ async function exercise(
     | 'clean'
     | 'repair'
     | 'unfixable'
+    | 'leaked-sample'
     | 'torn-word'
     | 'cancel'
     | 'missing-font'
@@ -43,7 +52,8 @@ async function exercise(
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
-  const pattern = profile.compositions[0];
+  const runProfile = mode === 'leaked-sample' ? badgeProfile : profile;
+  const pattern = runProfile.compositions[0];
   if (!pattern || !pattern.slots[0]) throw new Error('Missing fixture pattern');
   const firstSlot = pattern.slots[0];
   let checks = 0;
@@ -117,6 +127,8 @@ async function exercise(
         // A text block is written to the fill its variant asks for, as a real writer does.
         textsBySlot: Object.fromEntries(
           pattern.slots.map((s) => {
+            // A writer that keeps the sample of a figure it has no fact for.
+            if (mode === 'leaked-sample' && s.slotId === 'badge') return [s.slotId, s.sample];
             // A letter, not a number: a figure the brief lacks is a defect the runner repairs.
             const text = `Slide ${String.fromCharCode(65 + (input as { index: number }).index)}`;
             return [s.slotId, text.padEnd(minChars(s), ' point').trim()];
@@ -250,7 +262,7 @@ async function exercise(
     outputDir,
     brief: 'Pilot',
     slideCount: 10,
-    profile,
+    profile: runProfile,
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
@@ -348,6 +360,17 @@ describe('real generation orchestration with offline dependencies', () => {
     expect(JSON.parse(await readFile(join(run.outputDir, 'failure.json'), 'utf8'))).toMatchObject({
       requiresReview: true,
     });
+  });
+  it('empties a figure the template drew as a sample and no fact stands behind, and says so', async () => {
+    const run = await exercise('leaked-sample');
+    await run.result;
+    expect(
+      run.warnings.some((w) => w.code === 'template-sample-removed' && w.message.includes('«05»')),
+    ).toBe(true);
+    // The engine gets the slot empty, so it takes the badge off the slide; the title is the writer's.
+    const slide = run.exportedSlides[0] as { texts: { slotId: string; text: string }[] };
+    expect(slide.texts.find((t) => t.slotId === 'badge')?.text).toBe('');
+    expect(slide.texts.find((t) => t.slotId !== 'badge')?.text).not.toBe('');
   });
   it('sends a torn word to the rewriter but never refuses the export for it', async () => {
     const run = await exercise('torn-word');

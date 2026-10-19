@@ -1,5 +1,6 @@
 """I preserve template objects and replace only the content assigned to their text slots."""
 
+import re
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
@@ -201,6 +202,41 @@ def _place_picture(slide: Any, slot_id: str, file: Path, fit: str, *, qr: bool =
     parent.remove(element)
 
 
+#: Words of a period or a unit that a figure label is made of: «III кв.», «Q3», «70 млн», «Июл».
+_PERIOD_WORD = re.compile(
+    r"^(?:[ivx]{1,4}|q[1-4]|h[12]|кв|квартал\w*|г|гг|год\w*|лет|мес|месяц\w*|млн|млрд|тыс|руб|₽|"
+    r"янв\w*|фев\w*|мар\w*|апр\w*|ма[йя]|июн\w*|июл\w*|авг\w*|сен\w*|окт\w*|ноя\w*|дек\w*|"
+    r"jan\w*|feb\w*|mar\w*|apr\w*|may|jun\w*|jul\w*|aug\w*|sep\w*|oct\w*|nov\w*|dec\w*|"
+    r"usd|eur|rub|%)$",
+    re.IGNORECASE,
+)
+_EDGE_PUNCTUATION = ".,;:()/-–—"
+
+
+#: Units that are no figure on their own: «млн» says what a number counts, not which.
+_UNIT_WORDS = frozenset({"кв", "г", "гг", "лет", "мес", "млн", "млрд", "тыс", "руб", "₽", "%"})
+
+
+def figure_sample(sample: str) -> bool:
+    """Whether a template sample is only a figure or a period label: «05», «2,4%», «III кв.».
+
+    Such a sample means nothing without the facts it stood for. Left as it is, it reads on the
+    new slide as a fact of the deck, so a slot the writer left empty for lack of one is removed
+    with its shape rather than kept as a blank badge.
+    """
+    tokens = [word.strip(_EDGE_PUNCTUATION) for word in sample.split()]
+    tokens = [token for token in tokens if token]
+    figure = False
+    for token in tokens:
+        if any(char.isdigit() for char in token):
+            figure = True
+        elif _PERIOD_WORD.match(token):
+            figure = figure or token.lower() not in _UNIT_WORDS
+        else:
+            return False
+    return figure
+
+
 def _remove_shape(slide: Any, slot_id: str) -> None:
     found = _find(slide.shapes, slot_id)
     if found is not None:
@@ -307,6 +343,13 @@ def export_compositions(
                 _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:
             _replace_with_visual(slide, item["visual"], draw_visual)
+        # A figure or period label the template drew as a sample and no fact filled: the writer
+        # left it empty, and a blank badge or label reads worse than none.
+        samples = {str(slot["slotId"]): slot.get("sample", "") for slot in pattern["slots"]}
+        carried = str((item.get("visual") or {}).get("slotId", ""))
+        for slot_id, text in texts.items():
+            if slot_id != carried and not text.strip() and figure_sample(samples.get(slot_id, "")):
+                _remove_shape(slide, slot_id)
         # Every image slot gets its picture or leaves the slide: an empty frame or a blank card
         # reads as a slide nobody finished.
         pictures = {p["slotId"]: p for p in item.get("images") or []}
