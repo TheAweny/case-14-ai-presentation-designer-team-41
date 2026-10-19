@@ -84,12 +84,12 @@ for (const viewport of [
     const navigation = dialog.getByRole('button', { name: 'Разделы настроек' });
     if (mobile) {
       await expect(navigation).toBeVisible();
-      await navigation.click();
-      await expect(page.getByRole('menuitemradio')).toHaveCount(sections.length);
       expect(
         await navigation.evaluate((node) => parseFloat(getComputedStyle(node).fontSize)),
       ).toBeGreaterThanOrEqual(16);
       await expect(navigation).toHaveCSS('height', '44px');
+      await navigation.click();
+      await expect(page.getByRole('menuitemradio')).toHaveCount(sections.length);
       await page.keyboard.press('Escape');
     } else {
       await expect(navigation).toBeHidden();

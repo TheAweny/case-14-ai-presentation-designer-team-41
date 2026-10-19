@@ -118,7 +118,7 @@ export function ChoiceRow<T extends string | number>({
             <span className="truncate">{current?.label}</span>
             <ChevronDownIcon size={14} className="shrink-0 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-h-72 w-auto min-w-28">
+          <DropdownMenuContent align="end" className="w-auto min-w-28">
             <DropdownMenuRadioGroup
               value={String(value)}
               onValueChange={(next) => {
