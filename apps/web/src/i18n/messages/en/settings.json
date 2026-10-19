@@ -10,12 +10,11 @@
     "editor": "Editor",
     "shortcuts": "Shortcuts",
     "decks": "Decks",
-    "models": "Models",
-    "users": "Users"
+    "models": "Models"
   },
   "account": {
     "title": "Account",
-    "managed": "The administrator changes your name and email under Users.",
+    "managed": "An administrator changes your name and email on the admin dashboard.",
     "signOutHint": "Sign out on this device",
     "signOut": "Sign out",
     "password": {

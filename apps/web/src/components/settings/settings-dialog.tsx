@@ -1,7 +1,7 @@
 'use client';
 
-import { useId, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useId, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   ChevronDownIcon,
@@ -9,7 +9,6 @@ import {
   EditorIcon,
   KeyboardIcon,
   ModelsIcon,
-  PeopleIcon,
   SettingsIcon,
   UserIcon,
   type Icon,
@@ -23,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAccount } from '@/components/auth/account-context';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { ADMIN_HREF } from '@/lib/library-menu';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -37,7 +37,6 @@ import { DeckSettingsPanel } from './deck-settings-panel';
 import { EditorSettingsPanel } from './editor-settings-panel';
 import { ModelSettingsPanel } from './model-settings-panel';
 import { ShortcutSettingsPanel } from './shortcut-settings-panel';
-import { UsersSettingsPanel } from './users-settings-panel';
 import { closeSettings, openSettings } from './open-settings';
 import { OWN_ESCAPE_ATTRIBUTE } from './role-row';
 
@@ -48,7 +47,6 @@ const SECTION_ICONS: Readonly<Record<SettingsSection, Icon>> = {
   shortcuts: KeyboardIcon,
   decks: DeckIcon,
   models: ModelsIcon,
-  users: PeopleIcon,
 };
 
 /**
@@ -58,7 +56,15 @@ const SECTION_ICONS: Readonly<Record<SettingsSection, Icon>> = {
  */
 export function SettingsHost() {
   const params = useSearchParams();
-  const section = settingsSection(params.get(SETTINGS_PARAM));
+  const router = useRouter();
+  const account = useAccount();
+  const raw = params.get(SETTINGS_PARAM);
+  // Раньше люди жили в настройках. Старая ссылка открывает панель администратора.
+  const legacyAdmin = raw === 'users' && account?.role === 'admin';
+  useEffect(() => {
+    if (legacyAdmin) router.replace(ADMIN_HREF);
+  }, [legacyAdmin, router]);
+  const section = legacyAdmin ? null : settingsSection(raw);
   // Пока окно закрывается, в нём остаётся последний раздел, а не пустота.
   const [shown, setShown] = useState<SettingsSection>(section ?? 'general');
   if (section !== null && section !== shown) setShown(section);
@@ -82,11 +88,9 @@ export function SettingsHost() {
 function SettingsDialogContent({ section }: { section: SettingsSection }) {
   const t = useTranslations('settings');
   const sectionSelectId = useId();
-  // Без аккаунта (страница входа) раздела «Аккаунт» нет, «Пользователи» — только у администратора.
+  // Без аккаунта (страница входа) раздела «Аккаунт» нет.
   const account = useAccount();
-  const sections = SETTINGS_SECTIONS.filter(
-    (id) => (id !== 'account' || account !== null) && (id !== 'users' || account?.role === 'admin'),
-  );
+  const sections = SETTINGS_SECTIONS.filter((id) => id !== 'account' || account !== null);
   const CurrentSectionIcon = SECTION_ICONS[section];
 
   return (
@@ -202,11 +206,6 @@ function SettingsDialogContent({ section }: { section: SettingsSection }) {
         <TabsContent value="models" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
           <ModelSettingsPanel />
         </TabsContent>
-        {account?.role === 'admin' ? (
-          <TabsContent value="users" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
-            <UsersSettingsPanel />
-          </TabsContent>
-        ) : null}
       </Tabs>
     </DialogContent>
   );

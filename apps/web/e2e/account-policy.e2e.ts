@@ -39,18 +39,18 @@ test('isolated access: optional policy UI and logout revoke a copied cookie', as
   const personal = await browser.newContext();
   let copied: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   try {
-    await signIn(page, 'recovery@example.test', 'recovery-local-only', '/?settings=users');
-    await page
-      .getByLabel(/Ограничения аккаунта|Account limits/, { exact: true })
-      .selectOption(user.id);
+    await signIn(page, 'recovery@example.test', 'recovery-local-only', '/');
+    await page.goto('/admin?view=limits');
+    await page.getByRole('radio', { name: email }).click();
     const section = page.getByRole('region', {
       name: /Активность и ограничения|Activity and limits/,
     });
     await expect(section.getByText(/Без ограничения|Unlimited/).first()).toBeVisible();
-    await section
-      .getByLabel(/Успешные генерации|Successful generations/, { exact: true })
-      .selectOption('limited');
-    await section.getByRole('spinbutton').fill('1');
+    const generation = section.getByRole('group', {
+      name: /Успешные генерации|Successful generations/,
+    });
+    await generation.getByRole('radio', { name: /^(Лимит|Limit)$/ }).click();
+    await generation.getByRole('spinbutton').fill('1');
     await section.getByRole('button', { name: /Сохранить ограничения|Save limits/ }).click();
     await expect(section.getByRole('status')).toHaveText(/Сохранено|Saved/);
     const persisted = await (

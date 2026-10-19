@@ -1,11 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import {
+  accountPolicySchema,
+  accountUsageViewSchema,
   editorMediaPutRequestSchema,
   editorRevisionExportRequestSchema,
   editorSnapshotSaveRequestSchema,
   modelSettingsSchema,
+  policyMetricSchema,
   roleAssignmentSchema,
+  type AccountPolicy,
+  type AccountUsageView,
   type EditorMediaRef,
   type EditorSnapshot,
   type EditorSnapshotSaveResponse,
@@ -44,6 +49,11 @@ let details: Record<string, { kinds: string[] }> | null = null;
 let manualKinds: Record<string, string[]> = {};
 let templates: unknown[] = [];
 let projects: unknown[] = [];
+/** Accounts `GET /users` returns. Tests replace the list with `POST /__set-users`. */
+let users: unknown[] = [];
+/** Optional limits keyed by scope id. `default` is the shared policy. */
+const policies = new Map<string, AccountPolicy>();
+const adminUsage = new Map<string, AccountUsageView | null>();
 let generationDeck: { runId: string } | null = null;
 /** Editor revisions of the generation deck for the one signed-in account, as `apps/api` keeps them. */
 let editorRevisions: EditorSnapshot[] = [];
@@ -73,6 +83,9 @@ const server = createServer(async (request, response) => {
     manualKinds = {};
     templates = [];
     projects = [];
+    users = [];
+    policies.clear();
+    adminUsage.clear();
     generationDeck = null;
     templateDownloads.clear();
     editorRevisions = [];
@@ -86,8 +99,32 @@ const server = createServer(async (request, response) => {
   } else if (request.url === '/__set-admin' && request.method === 'POST') {
     accountRole = 'admin';
     response.end('{}');
+  } else if (request.url === '/__set-users' && request.method === 'POST') {
+    await setUsers(request, response);
   } else if (request.url === '/users' && request.method === 'GET') {
-    response.end('[]');
+    response.end(JSON.stringify(users));
+  } else if (request.url === '/__set-admin-usage' && request.method === 'POST') {
+    const values = JSON.parse(await bodyOf(request)) as Record<string, unknown>;
+    for (const [id, value] of Object.entries(values))
+      adminUsage.set(id, value === null ? null : accountUsageViewSchema.parse(value));
+    answer(response, 200, {});
+  } else if (request.url?.startsWith('/users/') && request.method === 'PATCH') {
+    const id = decodeURIComponent(request.url.slice('/users/'.length));
+    const patch = JSON.parse(await bodyOf(request)) as Record<string, unknown>;
+    const entries = users as { id: string; email: string }[];
+    const user = entries.find((item) => item.id === id);
+    if (!user) answer(response, 404, { message: 'Account not found.' });
+    else if (entries.some((item) => item.id !== id && item.email === patch.email))
+      answer(response, 409, { message: 'Email already exists.' });
+    else {
+      Object.assign(user, patch);
+      answer(response, 200, user);
+    }
+  } else if (
+    (request.method === 'GET' || request.method === 'PUT') &&
+    accountUsageId(request.url)
+  ) {
+    await accountUsage(request, response);
   } else if (request.url === '/__set-generation-deck' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);
@@ -270,6 +307,95 @@ const server = createServer(async (request, response) => {
     );
   else response.end('[]');
 });
+
+/** Stable window so a view always satisfies `accountUsageViewSchema`. */
+const USAGE_START = '1970-01-01T00:00:00.000Z';
+const DEMO_STORAGE_BYTES = 48 * 1024 * 1024;
+
+/**
+ * `/account-usage/me` and `/account-usage/:id`. `me` is its own scope, the same shape as a user:
+ * it inherits `default`. Scope `default` reports that policy as defaults, override and effective.
+ */
+function accountUsageId(url: string | undefined): string | null {
+  if (!url) return null;
+  const path = new URL(url, 'http://fixture').pathname;
+  const match = /^\/account-usage\/([^/]+)$/.exec(path);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function usageView(scope: string): AccountUsageView {
+  const own = policies.get(scope) ?? {};
+  const shared = scope === 'default';
+  const defaults = shared ? own : (policies.get('default') ?? {});
+  const override = own;
+  const effective: AccountPolicy = shared ? own : { ...defaults, ...override };
+  return accountUsageViewSchema.parse({
+    defaults,
+    override,
+    effective,
+    storageBytes: DEMO_STORAGE_BYTES,
+    metrics: policyMetricSchema.options.map((metric) => ({
+      metric,
+      limit: effective[metric] ?? null,
+      start: USAGE_START,
+      end: null,
+      completed: metric === 'generation' ? 3 : 0,
+      active: metric === 'concurrency' ? 1 : 0,
+    })),
+  });
+}
+
+async function setUsers(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  let body: unknown;
+  try {
+    body = JSON.parse(await bodyOf(request));
+  } catch {
+    answer(response, 400, { message: 'Invalid JSON.' });
+    return;
+  }
+  if (!Array.isArray(body)) {
+    answer(response, 400, { message: 'Expected a user array.' });
+    return;
+  }
+  users = body;
+  answer(response, 200, {});
+}
+
+async function accountUsage(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const id = accountUsageId(request.url);
+  if (!id) {
+    answer(response, 404, { message: 'Not found.' });
+    return;
+  }
+  if (request.method === 'GET') {
+    if (adminUsage.has(id)) {
+      const view = adminUsage.get(id);
+      answer(response, view ? 200 : 503, view ?? { message: 'Usage unavailable.' });
+      return;
+    }
+    answer(response, 200, usageView(id));
+    return;
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(await bodyOf(request));
+  } catch {
+    answer(response, 400, { message: 'Invalid JSON.' });
+    return;
+  }
+  const parsed = accountPolicySchema.safeParse(body);
+  if (!parsed.success) {
+    answer(response, 400, { message: parsed.error.message });
+    return;
+  }
+  policies.set(id, parsed.data);
+  answer(response, 200, usageView(id));
+}
 
 async function bodyOf(request: IncomingMessage): Promise<string> {
   let body = '';
