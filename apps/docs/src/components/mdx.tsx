@@ -64,15 +64,27 @@ export function ReviewNote() {
   );
 }
 
-export function Figure({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+export function Figure({
+  src,
+  alt,
+  caption,
+  width = 960,
+  height = 540,
+}: {
+  src: string;
+  alt: string;
+  caption: string;
+  width?: number;
+  height?: number;
+}) {
   return (
     <figure className="my-6">
       <ImageZoom
         src={src}
         alt={alt}
-        width={960}
-        height={540}
-        className="rounded-lg border border-fd-border bg-fd-card"
+        width={width}
+        height={height}
+        className="h-auto rounded-lg border border-fd-border bg-fd-card"
       />
       <figcaption className="mt-2 text-center text-sm text-fd-muted-foreground">
         {caption}
