@@ -2,7 +2,8 @@
 # Binaries are called straight out of node_modules and the uv environment, so the hooks do not
 # depend on which yarn happens to be first in PATH.
 pre-commit:
-  parallel: true
+  # Each formatter stages its output. Concurrent git add processes race on index.lock.
+  parallel: false
   commands:
     prettier:
       glob: '*.{ts,tsx,js,mjs,cjs,json,md,yaml,yml,css}'
