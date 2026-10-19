@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from engine import __version__, checks, export, layout, parser, render, visuals
 from engine.api._composition_audit import composition_slides
 from engine.api._profiles import UnknownProfileError, deterministic_profile
+from engine.api._visuals import build_payload, capability_payload, compare_payload
 from engine.contracts import (
     AuditReport,
     AuditRequest,
@@ -38,6 +39,11 @@ from engine.contracts import (
     Status,
     TemplatePreviewsRequest,
     TemplatePreviewsResponse,
+    VisualBuildRequest,
+    VisualBuildResponse,
+    VisualCapability,
+    VisualCompareRequest,
+    VisualCompareResponse,
 )
 from engine.contracts._generated import (
     CompositionCheckResponse,
@@ -87,6 +93,41 @@ def health() -> HealthCheck:
         version=__version__,
         uptimeSeconds=time.monotonic() - _STARTED_AT,
     )
+
+
+@app.get(
+    "/v1/visuals/capabilities",
+    response_model=VisualCapability,
+    summary="What the deterministic visual layer can place",
+)
+def visual_capabilities() -> VisualCapability:
+    """Capability adapter for a future semantic planner. This process does not call a model."""
+    return VisualCapability.model_validate(capability_payload())
+
+
+@app.post(
+    "/v1/visuals",
+    response_model=VisualBuildResponse,
+    response_model_exclude_unset=True,
+    summary="Place a KPI block, chart or table as SlideIR",
+)
+def visual_build(request: VisualBuildRequest) -> VisualBuildResponse:
+    """Build native SlideIR for one visual from structured data and a template profile."""
+    try:
+        payload = build_payload(request)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return VisualBuildResponse.model_validate(payload)
+
+
+@app.post(
+    "/v1/visuals/compare",
+    response_model=VisualCompareResponse,
+    summary="Compare structural signatures of visual variants",
+)
+def visual_compare(request: VisualCompareRequest) -> VisualCompareResponse:
+    """Three variants must differ. A cosmetic control must not count as a new design."""
+    return VisualCompareResponse.model_validate(compare_payload(request))
 
 
 @app.post(

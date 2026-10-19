@@ -219,7 +219,11 @@ export function pasteRows(
     const existing = data.series[s];
     return {
       name: existing?.name ?? names.series(s + 1),
-      values: Array.from({ length: categoryCount }, (_, c) => existing?.values[c] ?? 0),
+      values: Array.from({ length: categoryCount }, (_, c) => {
+        const current = existing?.values[c];
+        return current === undefined ? 0 : current;
+      }),
+      ...(existing?.unit ? { unit: existing.unit } : null),
     };
   });
   for (const [r, row] of rows.entries()) {

@@ -24,6 +24,8 @@ describe('chart data edits', () => {
     expect(setCategory(data, 1, '2026').categories).toEqual(['2024', '2026']);
     expect(setSeriesName(data, 0, 'Доход').series.map((s) => s.name)).toEqual(['Доход', 'Расходы']);
     expect(setValue(data, 1, 0, 9).series[1]?.values).toEqual([9, 8]);
+    expect(setValue(data, 1, 0, null).series[1]?.values).toEqual([null, 8]);
+    expect(setValue(data, 0, 0, 0).series[0]?.values).toEqual([0, 12]);
     expect(data.series[1]?.values).toEqual([7, 8]);
   });
 

@@ -1,7 +1,11 @@
 /** Данные графика так, как их правит панель: подписи категорий и ряды значений по ним. */
 export interface ChartData {
   readonly categories: readonly string[];
-  readonly series: readonly { readonly name: string; readonly values: readonly number[] }[];
+  readonly series: readonly {
+    readonly name: string;
+    readonly values: readonly (number | null)[];
+    readonly unit?: string;
+  }[];
 }
 
 export function setCategory(data: ChartData, index: number, name: string): ChartData {
@@ -19,13 +23,16 @@ export function setValue(
   data: ChartData,
   seriesIndex: number,
   categoryIndex: number,
-  value: number,
+  value: number | null,
 ): ChartData {
   return {
     ...data,
     series: data.series.map((item, i) =>
       i === seriesIndex
-        ? { ...item, values: item.values.map((v, j) => (j === categoryIndex ? value : v)) }
+        ? {
+            ...item,
+            values: item.values.map((v, j) => (j === categoryIndex ? value : v)),
+          }
         : item,
     ),
   };
