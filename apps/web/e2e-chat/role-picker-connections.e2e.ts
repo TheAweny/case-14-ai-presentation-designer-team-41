@@ -59,11 +59,12 @@ for (const [who, admin] of [
       .getByRole('button', { name: /Модель для роли «/ })
       .first()
       .click();
-    const menu = page.getByRole('menu');
+    // The picker is the composer's model list: one section header per connection.
+    const picker = page.locator('[data-slot="popover-content"]');
     for (const group of ['Server models', 'Team models', 'My models']) {
-      await expect(menu.getByRole('group', { name: group })).toBeVisible();
+      await expect(picker.getByText(group, { exact: true })).toBeVisible();
     }
-    await menu.getByRole('menuitemradio', { name: 'my-model' }).click();
+    await picker.getByRole('option', { name: 'my-model', exact: true }).click();
     await expect
       .poll(async () => {
         const saved = (await (await request.get(`${API}/model-settings`)).json()) as {
