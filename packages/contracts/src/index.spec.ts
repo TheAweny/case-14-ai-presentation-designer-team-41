@@ -86,6 +86,11 @@ describe('contract registry', () => {
       'TemplateIR',
       'TemplatePreviewsRequest',
       'TemplatePreviewsResponse',
+      'VisualBuildRequest',
+      'VisualBuildResponse',
+      'VisualCapability',
+      'VisualCompareRequest',
+      'VisualCompareResponse',
     ]);
   });
 

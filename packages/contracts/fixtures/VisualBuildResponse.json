@@ -1,0 +1,134 @@
+{
+  "contract": "VisualBuildResponse",
+  "valid": [
+    {
+      "name": "a zero KPI kept as text",
+      "payload": {
+        "schemaVersion": 1,
+        "elements": [
+          {
+            "kind": "text",
+            "elementId": "kpi-value",
+            "role": "kpi-value",
+            "box": { "x": 0, "y": 0, "cx": 2000000, "cy": 500000 },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "0 шт",
+                    "font": "Fixture Face",
+                    "sizePt": 28,
+                    "bold": true,
+                    "italic": false,
+                    "color": ""
+                  }
+                ],
+                "lineSpacing": 1.15
+              }
+            ],
+            "overflow": null
+          }
+        ],
+        "reading": {
+          "facts": [
+            { "kind": "value", "text": "0 шт", "unit": "шт" },
+            { "kind": "source", "text": "источник pack-1, unverified", "sourceStatus": "unverified" }
+          ]
+        },
+        "fit": {
+          "fits": true,
+          "overflow": null,
+          "adaptations": [
+            {
+              "id": "as-placed",
+              "keepsFacts": true,
+              "fits": true,
+              "detail": "Placed at the template kpi-value step."
+            }
+          ]
+        },
+        "signature": {
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "tokens": ["text:kpi-value@0,0,6x6"]
+        },
+        "chart": null,
+        "fontWarnings": [],
+        "issues": [],
+        "limitations": [],
+        "deferred": ["semantic-planner-binding"]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "adaptation that drops facts",
+      "why": "An adaptation must keep every fact. Silent truncation is not an option.",
+      "path": ["fit", "adaptations", 0, "keepsFacts"],
+      "payload": {
+        "schemaVersion": 1,
+        "elements": [
+          {
+            "kind": "text",
+            "elementId": "kpi-value",
+            "role": "kpi-value",
+            "box": { "x": 0, "y": 0, "cx": 2000000, "cy": 500000 },
+            "sourceShapeId": null,
+            "paragraphs": [
+              {
+                "level": 0,
+                "runs": [
+                  {
+                    "text": "0",
+                    "font": "",
+                    "sizePt": 28,
+                    "bold": true,
+                    "italic": false,
+                    "color": ""
+                  }
+                ],
+                "lineSpacing": 1
+              }
+            ],
+            "overflow": null
+          }
+        ],
+        "reading": { "facts": [{ "kind": "value", "text": "0" }] },
+        "fit": {
+          "fits": true,
+          "overflow": null,
+          "adaptations": [
+            { "id": "as-placed", "keepsFacts": false, "fits": true, "detail": "Dropped a row." }
+          ]
+        },
+        "signature": {
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "tokens": ["text:kpi-value@0,0,6x6"]
+        },
+        "chart": null,
+        "fontWarnings": [],
+        "issues": [],
+        "limitations": [],
+        "deferred": ["semantic-planner-binding"]
+      }
+    },
+    {
+      "name": "unknown schema version",
+      "why": "A version the engine does not know must be refused.",
+      "path": ["schemaVersion"],
+      "payload": {
+        "schemaVersion": 2,
+        "elements": [],
+        "reading": { "facts": [] },
+        "fit": { "fits": true, "overflow": null, "adaptations": [] },
+        "signature": { "digest": "ab", "tokens": [] },
+        "chart": null,
+        "fontWarnings": [],
+        "issues": [],
+        "limitations": [],
+        "deferred": []
+      }
+    }
+  ]
+}

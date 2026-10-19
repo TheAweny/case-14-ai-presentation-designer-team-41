@@ -45,6 +45,11 @@ from engine.contracts._generated import (
     TemplateIR,
     TemplatePreviewsRequest,
     TemplatePreviewsResponse,
+    VisualBuildRequest,
+    VisualBuildResponse,
+    VisualCapability,
+    VisualCompareRequest,
+    VisualCompareResponse,
 )
 from engine.contracts.provisional import (
     ChartSpec,
@@ -99,4 +104,9 @@ __all__ = [
     "TemplatePreviewsResponse",
     "TemplateProfile",
     "TemplateProfileDraft",
+    "VisualBuildRequest",
+    "VisualBuildResponse",
+    "VisualCapability",
+    "VisualCompareRequest",
+    "VisualCompareResponse",
 ]

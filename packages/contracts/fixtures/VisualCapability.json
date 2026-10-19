@@ -1,0 +1,76 @@
+{
+  "contract": "VisualCapability",
+  "valid": [
+    {
+      "name": "deterministic visual capability",
+      "payload": {
+        "schemaVersion": 1,
+        "endpoint": "/v1/visuals",
+        "callsModels": false,
+        "kinds": ["kpi", "chart", "table"],
+        "chartTypes": ["bar", "column", "line", "pie", "area"],
+        "variants": ["dense", "balanced", "airy"],
+        "native": {
+          "table": "pptx-table",
+          "chartCategory": "pptx-category-chart",
+          "chartXy": "pptx-xy-scatter-lines",
+          "kpi": "pptx-text"
+        },
+        "preserves": ["literal", "sign", "zero", "missing", "unit", "period", "source", "status"],
+        "refuses": ["pie-for-negatives", "shared-axis-mixed-units", "delta-divide-by-zero"],
+        "deferred": ["semantic-planner-binding"],
+        "limitations": [
+          "Unequal time intervals use an XY line. A category chart would space them evenly."
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "claims a model call",
+      "why": "The visuals layer is deterministic and must not call a model.",
+      "path": ["callsModels"],
+      "payload": {
+        "schemaVersion": 1,
+        "endpoint": "/v1/visuals",
+        "callsModels": true,
+        "kinds": ["kpi"],
+        "chartTypes": ["column"],
+        "variants": ["balanced"],
+        "native": {
+          "table": "pptx-table",
+          "chartCategory": "pptx-category-chart",
+          "chartXy": "pptx-xy-scatter-lines",
+          "kpi": "pptx-text"
+        },
+        "preserves": ["literal"],
+        "refuses": ["delta-divide-by-zero"],
+        "deferred": ["semantic-planner-binding"],
+        "limitations": ["KPI is native text."]
+      }
+    },
+    {
+      "name": "unknown schema version",
+      "why": "A version the engine does not know must be refused.",
+      "path": ["schemaVersion"],
+      "payload": {
+        "schemaVersion": 2,
+        "endpoint": "/v1/visuals",
+        "callsModels": false,
+        "kinds": ["kpi"],
+        "chartTypes": ["column"],
+        "variants": ["balanced"],
+        "native": {
+          "table": "pptx-table",
+          "chartCategory": "pptx-category-chart",
+          "chartXy": "pptx-xy-scatter-lines",
+          "kpi": "pptx-text"
+        },
+        "preserves": ["literal"],
+        "refuses": ["delta-divide-by-zero"],
+        "deferred": ["semantic-planner-binding"],
+        "limitations": ["KPI is native text."]
+      }
+    }
+  ]
+}
