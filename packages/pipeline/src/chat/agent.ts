@@ -270,6 +270,56 @@ export interface ChatTurnOptions {
    * maxSteps. Omit it and every step, including the last, may still call tools.
    */
   readonly finalizeNudge?: string;
+  /** Tokens the turn has spent so far, called as they grow. */
+  readonly onUsage?: (usage: ChatUsage) => void;
+}
+
+export interface ChatUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+}
+
+/** Rough on purpose: Russian text and JSON both run near three characters a token. */
+const CHARS_PER_TOKEN = 3;
+
+/**
+ * Tokens of a turn as the person watches them grow. While a step streams it counts an estimate
+ * from characters; once the server reports the step's usage, that replaces the estimate.
+ */
+class TurnUsage {
+  private input = 0;
+  private output = 0;
+  private stepInput = 0;
+  private stepChars = 0;
+
+  constructor(private readonly report?: (usage: ChatUsage) => void) {}
+
+  begin(contextChars: number): void {
+    this.stepInput = Math.round(contextChars / CHARS_PER_TOKEN);
+    this.stepChars = 0;
+    this.emit();
+  }
+
+  generated(characters: number): void {
+    this.stepChars += characters;
+    this.emit();
+  }
+
+  /** The step is over. A server that reported nothing leaves its estimate in the total. */
+  settle(step?: ChatUsage): void {
+    this.input += step?.inputTokens || this.stepInput;
+    this.output += step?.outputTokens || Math.round(this.stepChars / CHARS_PER_TOKEN);
+    this.stepInput = 0;
+    this.stepChars = 0;
+    this.emit();
+  }
+
+  private emit(): void {
+    this.report?.({
+      inputTokens: this.input + this.stepInput,
+      outputTokens: this.output + Math.round(this.stepChars / CHARS_PER_TOKEN),
+    });
+  }
 }
 
 export interface ChatTurnResult {
@@ -307,6 +357,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     throw new Error('A positive bounded step limit is required.');
   let inputTokens = 0;
   let outputTokens = 0;
+  const usage = new TurnUsage(options.onUsage);
   let nudged = false;
   const finalizeNudge = options.finalizeNudge?.trim() ?? '';
   for (let step = 1; step <= maxSteps; step++) {
@@ -333,6 +384,10 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
         reason: 'context_budget',
       };
     }
+    usage.begin(
+      JSON.stringify({ messages: context, tools: offered }).length +
+        (options.model.contextOverheadChars ?? 0),
+    );
     // Calls shown while the model was still writing them, in the order they began.
     const begun: { name: string; index: number }[] = [];
     const childStatus = (): 'cancelled' | 'failed' => (signal.aborted ? 'cancelled' : 'failed');
@@ -395,6 +450,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
           }),
         });
       },
+      onGenerated: (characters) => usage.generated(characters),
     });
     let answer: Awaited<typeof step$>;
     try {
@@ -406,6 +462,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
         sealBegun();
         throw error;
       }
+      usage.settle();
       // The person never sees the loop: the text part goes back to what it said before it.
       const open = writer.openText;
       if (open) writer.retract(open.index, before?.index === open.index ? before.text : '');
@@ -420,6 +477,7 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
     }
     inputTokens += answer.inputTokens;
     outputTokens += answer.outputTokens;
+    usage.settle(answer);
     try {
       signal.throwIfAborted();
     } catch (error) {

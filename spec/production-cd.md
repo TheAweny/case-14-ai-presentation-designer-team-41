@@ -46,3 +46,13 @@ Production deployment is serialized, scoped to the repository main branch and us
 SSH host key. New infrastructure receiver/Compose versions need an explicit operator install;
 normal application changes need only a push to main. The server does not execute repository
 scripts or arbitrary SSH commands sent by a job.
+
+## Session-aware readiness (2026-10-19)
+
+Readiness uses an active administrator and a random, five-minute session whose SHA-256 hash
+is stored in `account_sessions`. The raw session reaches the in-container probe only through
+stdin, never command arguments or logs. The receiver deletes the session in a finally block;
+expiry bounds its lifetime if the process is killed. Legacy databases without the sessions table
+retain the previous account-header probe for pre-deployment backup recovery. Protected health
+routes retain all API guards. HTTP errors report only the route and status, never response bodies
+or credentials. Receiver changes require an operator installation before retrying CD.

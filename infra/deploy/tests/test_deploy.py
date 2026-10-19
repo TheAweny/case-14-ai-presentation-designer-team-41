@@ -215,6 +215,7 @@ def test_failed_docs_release_restores_legacy_release(tmp_path):
 
 
 def test_readiness_checks_docs_routes_only_when_enabled(tmp_path):
+    from contextlib import nullcontext
     from types import SimpleNamespace
 
     instance = deploy.Deployment(tmp_path)
@@ -222,6 +223,7 @@ def test_readiness_checks_docs_routes_only_when_enabled(tmp_path):
     instance.compose = lambda *_args, **_kwargs: SimpleNamespace(
         stdout="12345678-1234-1234-1234-123456789012"
     )
+    instance.readiness_session = lambda _account: nullcontext(None)
     calls = []
     instance.run = lambda args, **_kwargs: calls.append(args)
     instance.ready()
@@ -250,3 +252,131 @@ def test_docs_runtime_is_static_private_and_has_no_product_dependencies():
     assert "try_files $uri $uri/ =404" in nginx
     assert "error_page 404 /404.html" in nginx
     assert "proxy_pass" not in nginx
+
+
+@pytest.mark.parametrize("failure", [None, "api", "https"])
+def test_readiness_session_is_short_lived_and_always_removed(tmp_path, failure):
+    import subprocess
+    from types import SimpleNamespace
+
+    instance = deploy.Deployment(tmp_path)
+    calls = []
+
+    def compose(*args, **kwargs):
+        calls.append((args, kwargs))
+        if "postgres" in args:
+            sql = kwargs.get("input", "")
+            if "to_regclass" in sql:
+                return SimpleNamespace(stdout="account_sessions\n")
+            if "SELECT id" in args[-1]:
+                return SimpleNamespace(stdout="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\n")
+        if "api" in args and failure == "api":
+            raise subprocess.CalledProcessError(1, "node")
+        return SimpleNamespace(stdout="")
+
+    def run(_args, **_kwargs):
+        if failure == "https":
+            raise subprocess.CalledProcessError(22, "curl")
+
+    instance.compose = compose
+    instance.run = run
+    if failure:
+        with pytest.raises(subprocess.CalledProcessError):
+            instance.ready()
+    else:
+        instance.ready()
+    statements = [kwargs.get("input", "") for _, kwargs in calls]
+    insert = next(sql for sql in statements if "INSERT INTO account_sessions" in sql)
+    assert "interval '5 minutes'" in insert
+    assert any("DELETE FROM account_sessions" in sql for sql in statements)
+    api_call = next((args, kwargs) for args, kwargs in calls if "api" in args)
+    payload = json.loads(api_call[1]["input"])
+    assert len(payload["session"]) == 43
+    assert payload["session"] not in insert
+    assert payload["session"] not in str(api_call[0])
+
+
+def test_readiness_supports_legacy_database_without_sessions(tmp_path):
+    from types import SimpleNamespace
+
+    instance = deploy.Deployment(tmp_path)
+    calls = []
+
+    def compose(*args, **kwargs):
+        calls.append((args, kwargs))
+        if "postgres" in args and "SELECT id" in args[-1]:
+            return SimpleNamespace(stdout="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\n")
+        return SimpleNamespace(stdout="")
+
+    instance.compose = compose
+    instance.run = lambda *_args, **_kwargs: None
+    instance.ready()
+    assert not any("INSERT" in kwargs.get("input", "") for _, kwargs in calls)
+    api_call = next((args, kwargs) for args, kwargs in calls if "api" in args)
+    assert json.loads(api_call[1]["input"])["session"] is None
+
+
+@pytest.mark.parametrize("status", [401, 503])
+def test_readiness_reports_http_failure_without_credentials(status):
+    import subprocess
+
+    script = deploy.READINESS_SCRIPT
+    prelude = (
+        "global.fetch=async()=>({ok:false,status:"
+        + str(status)
+        + ",json:async()=>({status:'error'})});"
+    )
+    result = subprocess.run(
+        ["node", "-e", prelude + script],
+        input=json.dumps({"account": "admin", "session": "secret-session"}),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"/health: HTTP {status}" in result.stderr
+    assert "secret-session" not in result.stderr
+
+
+def test_readiness_rejects_unhealthy_payload():
+    import subprocess
+
+    prelude = "global.fetch=async()=>({ok:true,status:200,json:async()=>({status:'error'})});"
+    result = subprocess.run(
+        ["node", "-e", prelude + deploy.READINESS_SCRIPT],
+        input=json.dumps({"account": "admin", "session": "secret-session"}),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "unhealthy payload" in result.stderr
+
+
+def test_readiness_passes_session_to_all_dependency_checks():
+    import subprocess
+
+    prelude = """
+let calls = 0;
+global.fetch = async (url, options) => {
+  if (options.headers['x-lct-session'] !== 'probe-session' ||
+      options.headers['x-lct-user'] !== 'admin' ||
+      options.headers['x-lct-service-token'] !== 'service-token')
+    throw new Error('Missing authentication');
+  calls++;
+  return {ok: true, json: async () => ({status: 'ok'})};
+};
+process.on('beforeExit', () => { if (calls !== 3) process.exitCode = 1; });
+"""
+    import os
+
+    result = subprocess.run(
+        ["node", "-e", prelude + deploy.READINESS_SCRIPT],
+        input=json.dumps({"account": "admin", "session": "probe-session"}),
+        env={**os.environ, "API_SERVICE_TOKEN": "service-token"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == result.stderr == ""

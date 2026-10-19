@@ -224,6 +224,54 @@ describe('runChatTurn', () => {
     expect(events.filter((event) => event.type === 'text-delta')).toHaveLength(2);
   });
 
+  it('reports tokens as they stream and settles on the usage the server reports', async () => {
+    const answers: Partial<ModelStep>[] = [
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"да"}' }], inputTokens: 40 },
+      { text: 'Готово.', inputTokens: 0, outputTokens: 0 },
+    ];
+    const model: ChatModel = {
+      model: 'streaming',
+      async step(request) {
+        const step = answers.shift();
+        if (!step) throw new Error('The script ran out.');
+        request.onGenerated?.(30);
+        request.onGenerated?.(30);
+        if (step.text) request.onText?.(step.text);
+        return {
+          text: '',
+          toolCalls: [],
+          truncated: false,
+          inputTokens: 1,
+          outputTokens: 1,
+          ...step,
+        };
+      },
+    };
+    const usage: { inputTokens: number; outputTokens: number }[] = [];
+    const { writer: answer } = writer();
+    await runChatTurn({
+      model,
+      instructions: 'system',
+      history: [{ role: 'user', content: 'Скажи да' }],
+      tools: [echo],
+      specs: [{ name: 'echo', description: 'Echo.', parameters: {} }],
+      mode: 'auto',
+      writer: answer,
+      signal: AbortSignal.timeout(5000),
+      onUsage: (update) => usage.push(update),
+    });
+    const [estimate, firstChunk, secondChunk, firstStep] = usage;
+    expect(estimate?.inputTokens).toBeGreaterThan(0);
+    expect(firstChunk?.outputTokens).toBe(10);
+    expect(secondChunk?.outputTokens).toBe(20);
+    // The first step's own numbers replace its estimate.
+    expect(firstStep).toEqual({ inputTokens: 40, outputTokens: 1 });
+    // The second step reported nothing, so its estimate stays in the total.
+    const last = usage.at(-1);
+    expect(last?.outputTokens).toBe(21);
+    expect(last?.inputTokens).toBeGreaterThan(40);
+  });
+
   it('lets the model read a bad call as an error instead of ending the turn', async () => {
     const model = scripted([
       { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":1}' }] },

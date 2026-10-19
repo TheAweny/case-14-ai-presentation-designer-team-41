@@ -163,6 +163,8 @@ export function ModelSettingsPanel() {
     );
   }
 
+  // Администратору видны и его личные подключения: модель на таком API запишет как его собственный
+  // выбор, а не как умолчание для всех.
   const connections = settings.connections;
   const changeRole = (next: RoleAssignment) => {
     void apply(() => setRoleAction(next));

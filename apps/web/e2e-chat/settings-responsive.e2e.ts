@@ -1,16 +1,12 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 test.use({ hasTouch: true });
 
 test.beforeEach(async ({ page, request, baseURL }) => {
   if (!baseURL) throw new Error('Settings tests require the authenticated fixture.');
   await request.post('http://127.0.0.1:3121/__reset-models');
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },

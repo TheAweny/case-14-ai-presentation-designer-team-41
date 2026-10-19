@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -38,11 +38,7 @@ const field = (page: Page) => page.getByRole('textbox', { name: 'Сообщен�
 test.beforeEach(async ({ page, baseURL, request }) => {
   await request.post('http://127.0.0.1:3121/__reset-models');
   if (!baseURL) throw new Error('Chat browser tests require a base URL.');
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },
@@ -790,7 +786,8 @@ test('restores finished build stages after reload without launching generation',
   );
   let generated = 0;
   await page.route('**/api/backend/generation/**', (route) => {
-    generated++;
+    // The build card reads its usage with GET; only a POST starts or resumes a build.
+    if (route.request().method() !== 'GET') generated++;
     return route.abort();
   });
   for (let reload = 0; reload < 2; reload++) {
@@ -889,24 +886,23 @@ test('offers the thinking switch only where probing found one, whatever the name
 
   await probed(page, 'Qwen/Qwen3-8B', { toggle: 'enable-thinking', levels: false });
   await page.reload();
+  // Deck builds do not think until the person switches it on.
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
   await field(page).fill('Короткий ответ');
   await page.getByRole('button', { name: 'Отправить', exact: true }).click();
   await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
-  expect(thinking).toBe(false);
+  expect(thinking).toBe(true);
 
   await page.reload();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('lets a hybrid model think on request while retaining the chat reasoning depth', async ({
+test('lets a hybrid model think while building on request, with a depth either way', async ({
   page,
 }) => {
   let sent: { thinking?: unknown; reasoningEffort?: unknown } = {};
@@ -956,6 +952,7 @@ test('lets a hybrid model think on request while retaining the chat reasoning de
   await expect(page.getByText('Готовый ответ', { exact: true })).toBeVisible();
   expect(sent).toMatchObject({ thinking: true, reasoningEffort: 'high' });
 
+  // The chat itself always thinks where it can, so the depth stays while builds do not think.
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await menu.click();

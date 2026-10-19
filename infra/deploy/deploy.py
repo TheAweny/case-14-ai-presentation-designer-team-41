@@ -3,9 +3,11 @@
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import subprocess
@@ -20,6 +22,26 @@ PREFIX = f"ghcr.io/{REPOSITORY.lower()}"
 SERVICES = ("api", "web", "engine")
 DOCS_URL = "https://docs.lct.aweny.link"
 INSTALL = Path("/usr/local/lib/lct")
+READINESS_SCRIPT = """
+(async () => {
+  let input = '';
+  for await (const chunk of process.stdin) input += chunk;
+  const {account, session} = JSON.parse(input);
+  for (const path of ['/health', '/health/database', '/health/engine']) {
+    const headers = {'x-lct-service-token': process.env.API_SERVICE_TOKEN,
+                     'x-lct-user': account};
+    if (session) headers['x-lct-session'] = session;
+    const response = await fetch('http://127.0.0.1:3001' + path,
+      {headers, signal: AbortSignal.timeout(15000)});
+    if (!response.ok) throw new Error(path + ': HTTP ' + response.status);
+    if ((await response.json()).status !== 'ok')
+      throw new Error(path + ': unhealthy payload');
+  }
+})().catch(error => {
+  console.error('Readiness failed: ' + error.message);
+  process.exitCode = 1;
+});
+"""
 
 
 def validate(payload):
@@ -212,19 +234,18 @@ class Deployment:
         if not re.fullmatch(r"[a-f0-9-]{36}", account):
             raise RuntimeError("Readiness requires an active administrator")
         # I test protected dependencies from inside API so the service token never leaves it.
-        self.compose(
-            "exec",
-            "-T",
-            "api",
-            "node",
-            "-e",
-            "(async()=>{for(const p of ['/health','/health/database','/health/engine']){"
-            "const r=await fetch('http://127.0.0.1:3001'+p,{headers:{"
-            "'x-lct-service-token':process.env.API_SERVICE_TOKEN,'x-lct-user':process.argv[1]}});"
-            "if(!r.ok||(await r.json()).status!=='ok')process.exit(1)}})()"
-            ".catch(()=>process.exit(1))",
-            account,
-        )
+        # I keep the probe session out of command arguments and remove it even on failure.
+        with self.readiness_session(account) as session:
+            self.compose(
+                "exec",
+                "-T",
+                "api",
+                "node",
+                "-e",
+                READINESS_SCRIPT,
+                input=json.dumps({"account": account, "session": session}),
+                text=True,
+            )
         self.run(
             [
                 "curl",
@@ -251,6 +272,41 @@ class Deployment:
                     ],
                     stdout=subprocess.DEVNULL,
                 )
+
+    def readiness_sql(self, statement):
+        return self.compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "lct26",
+            "-d",
+            "lct26",
+            "-Atq",
+            "-v",
+            "ON_ERROR_STOP=1",
+            input=statement,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    @contextlib.contextmanager
+    def readiness_session(self, account):
+        if not self.readiness_sql("SELECT to_regclass('public.account_sessions');"):
+            # I support backup recovery of releases predating session migrations.
+            yield None
+            return
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        try:
+            self.readiness_sql(
+                "INSERT INTO account_sessions(token_hash, account_id, expires_at) "
+                f"VALUES ('{token_hash}', '{account}', now() + interval '5 minutes');"
+            )
+            yield token
+        finally:
+            self.readiness_sql(f"DELETE FROM account_sessions WHERE token_hash = '{token_hash}';")
 
     def stop_apps(self):
         self.compose("stop", "web", "api", "engine")

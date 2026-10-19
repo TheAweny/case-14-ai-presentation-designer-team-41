@@ -240,8 +240,9 @@ describe('chat store', () => {
     const request = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(async () =>
       sse([
         { type: 'message', seq: 0, message: user },
-        { type: 'message', seq: 1, message: { ...answer, status: 'done' } },
-        { type: 'turn-end', seq: 2 },
+        { type: 'usage', seq: 1, messageId: ANSWER, inputTokens: 900, outputTokens: 40 },
+        { type: 'message', seq: 2, message: { ...answer, status: 'done' } },
+        { type: 'turn-end', seq: 3 },
       ]),
     );
     const uploadContent = vi.fn(async (file: File) => ({
@@ -274,7 +275,11 @@ describe('chat store', () => {
     expect(body.input.attachments).toEqual([
       expect.objectContaining({ kind: 'file', name: 'notes.md' }),
     ]);
-    expect(store.get(chatId)).toMatchObject({ pending: null, running: false });
+    expect(store.get(chatId)).toMatchObject({
+      pending: null,
+      running: false,
+      usage: { messageId: ANSWER, inputTokens: 900, outputTokens: 40 },
+    });
     expect(store.get(chatId)?.messages.map((message) => message.role)).toEqual([
       'user',
       'assistant',

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { designSystemSchema, templateIrSchema } from '@lct/contracts';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const FIXTURE = 'http://127.0.0.1:3121';
 const OWN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -92,11 +92,7 @@ function storedTemplate(input: {
 test.beforeEach(async ({ page, baseURL, request }) => {
   await request.post(FIXTURE + '/__reset-models');
   if (!baseURL) throw new Error('Template download browser test requires a base URL.');
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },
