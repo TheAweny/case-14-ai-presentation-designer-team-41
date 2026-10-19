@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Composition } from '@lct/contracts';
-import { type DeckSlide, deckRepeats, figuresOf, slideFigureDefects } from './repeats.js';
+import {
+  type DeckSlide,
+  deckRepeats,
+  figuresOf,
+  slideFigureDefects,
+  slideTextRepeats,
+} from './repeats.js';
 
 const slot = (slotId: string, role: 'title' | 'body', fontSize: number) => ({
   slotId,
@@ -157,5 +163,37 @@ describe('slideFigureDefects', () => {
       BRIEF,
     );
     expect(findings).toEqual([]);
+  });
+});
+
+describe('slideTextRepeats', () => {
+  it('sends the later of two points that say the same back to be written differently', () => {
+    const [slide] = deck([
+      ['', 'Ключевые продукты', 'Партнёрство с двумя банками', 'Партнёрство с двумя банками.'],
+    ]);
+    expect(slideTextRepeats(slide ? [slide] : [])).toEqual([
+      expect.objectContaining({ slideIndex: 0, slotId: 'b', category: 'duplicate-text' }),
+    ]);
+  });
+
+  it('finds a point said again in other words of the same stems', () => {
+    const [slide] = deck([
+      [
+        '',
+        'Фокус',
+        'Оптимизация затрат на привлечение клиента',
+        'Затраты на привлечение: оптимизация клиента',
+      ],
+    ]);
+    expect(slideTextRepeats(slide ? [slide] : []).map((f) => f.slotId)).toEqual(['b']);
+  });
+
+  it('leaves different points, a headline that proves itself and one-word labels', () => {
+    const slides = deck([
+      ['', 'Фокус на удержание клиентов', 'Фокус на удержание клиентов', 'Рост базы на 12%'],
+      ['', 'Итоги', 'Клиенты', 'Клиенты'],
+      ['', 'Тариф', 'Базовый тариф для малого бизнеса', 'Расширенный тариф для сети филиалов'],
+    ]);
+    expect(slideTextRepeats(slides)).toEqual([]);
   });
 });
