@@ -13,7 +13,7 @@ from typing import Any
 from xml.etree import ElementTree
 
 from engine.dataset._build import Raw
-from engine.dataset.models import Diagnostic
+from engine.dataset.models import CellKind, Diagnostic, Severity
 
 _NS = {
     "m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
@@ -36,7 +36,10 @@ class WorkbookError(Exception):
 
 
 def _xml(archive: zipfile.ZipFile, name: str) -> ElementTree.Element:
-    data = archive.read(name)
+    try:
+        data = archive.read(name)
+    except (KeyError, zipfile.BadZipFile, RuntimeError) as error:
+        raise WorkbookError(f"The workbook part {name} cannot be read.") from error
     if b"<!DOCTYPE" in data[:2048] or b"<!ENTITY" in data[:4096]:
         raise WorkbookError(f"{name} declares entities, which a workbook never does.")
     try:
@@ -49,7 +52,12 @@ def _text(element: ElementTree.Element | None) -> str:
     """The text of a string item: its plain text or the runs of a rich one."""
     if element is None:
         return ""
-    return "".join(node.text or "" for node in element.iter(_M + "t"))
+    return "".join(
+        node.text or ""
+        for child in element
+        for node in ([child] if child.tag == _M + "t" else child.findall("m:t", _NS))
+        if child.tag in (_M + "t", _M + "r")
+    )
 
 
 def _is_date_code(code: str) -> bool:
@@ -142,7 +150,7 @@ def read_workbook(
             diagnostics.append(
                 Diagnostic(
                     code="sheet-missing",
-                    severity="error",
+                    severity=Severity.error,
                     message=f"The sheet «{name}» is listed, but {path} is not in the file.",
                     sheet=name,
                 )
@@ -205,7 +213,7 @@ def _read_sheet(
         diagnostics.append(
             Diagnostic(
                 code="formula-without-value",
-                severity="warning",
+                severity=Severity.warning,
                 message=f"{unstored} formula cell(s) have no stored result; they are empty here. "
                 "Open and save the workbook in a spreadsheet program to store the results.",
                 sheet=sheet,
@@ -215,7 +223,7 @@ def _read_sheet(
         diagnostics.append(
             Diagnostic(
                 code="cell-error",
-                severity="warning",
+                severity=Severity.warning,
                 message=f"{errors} cell(s) hold a spreadsheet error (#DIV/0!, #N/A): no value.",
                 sheet=sheet,
             )
@@ -225,7 +233,7 @@ def _read_sheet(
         diagnostics.append(
             Diagnostic(
                 code="merged-cells",
-                severity="info",
+                severity=Severity.info,
                 message=f"{len(merged)} merged range(s); the value sits in the first cell of each.",
                 sheet=sheet,
             )
@@ -252,18 +260,18 @@ def _cell(
     if kind == "str":
         return Raw(text)
     if kind == "b":
-        return Raw("TRUE" if text == "1" else "FALSE", text == "1", "boolean")
+        return Raw("TRUE" if text == "1" else "FALSE", text == "1", CellKind.boolean)
     if kind == "e":
-        return Raw(text, None, "text")
+        return Raw(text, None, CellKind.text)
     try:
         number: Any = float(text)
     except ValueError:
         return Raw(text)
     if style == "date":
-        return Raw(text, _serial_date(number, base_1904), "date")
+        return Raw(text, _serial_date(number, base_1904), CellKind.date)
     if style == "percent":
-        return Raw(text, number * 100, "number", "%")
-    return Raw(text, number, "number")
+        return Raw(text, number * 100, CellKind.number, "%")
+    return Raw(text, number, CellKind.number)
 
 
 __all__ = ["MAX_CELLS", "WorkbookError", "read_workbook"]

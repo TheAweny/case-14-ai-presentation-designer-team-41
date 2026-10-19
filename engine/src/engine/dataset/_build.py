@@ -4,7 +4,16 @@ from collections import Counter
 from dataclasses import dataclass
 
 from engine.dataset._numbers import parse_date, parse_number
-from engine.dataset.models import Cell, CellKind, Column, Diagnostic, Row, Sheet
+from engine.dataset.models import (
+    Cell,
+    CellKind,
+    Column,
+    Diagnostic,
+    Row,
+    Severity,
+    Sheet,
+    SheetState,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,15 +57,15 @@ def _typed(raw: Raw, ref: str, sheet: str, hint: str, diagnostics: list[Diagnost
         return Cell(ref=ref, raw=raw.text, kind=raw.kind, value=raw.value, unit=raw.unit)
     text = raw.text
     if text is None or not text.strip():
-        return Cell(ref=ref, raw=text, kind="empty")
+        return Cell(ref=ref, raw=text, kind=CellKind.empty)
     number = parse_number(text, hint)
     if number.value is not None:
-        return Cell(ref=ref, raw=text, kind="number", value=number.value, unit=number.unit)
+        return Cell(ref=ref, raw=text, kind=CellKind.number, value=number.value, unit=number.unit)
     if number.ambiguous:
         diagnostics.append(
             Diagnostic(
                 code="ambiguous-number",
-                severity="warning",
+                severity=Severity.warning,
                 message=f"«{text.strip()}» reads as {number.candidates[0]:g} or "
                 f"{number.candidates[1]:g}; no value was chosen.",
                 sheet=sheet,
@@ -64,16 +73,20 @@ def _typed(raw: Raw, ref: str, sheet: str, hint: str, diagnostics: list[Diagnost
             )
         )
         return Cell(
-            ref=ref, raw=text, kind="text", value=text.strip(), candidates=list(number.candidates)
+            ref=ref,
+            raw=text,
+            kind=CellKind.text,
+            value=text.strip(),
+            candidates=list(number.candidates),
         )
     date = parse_date(text)
     if date is not None and date.iso:
-        return Cell(ref=ref, raw=text, kind="date", value=date.iso)
+        return Cell(ref=ref, raw=text, kind=CellKind.date, value=date.iso)
     if date is not None and date.ambiguous:
         diagnostics.append(
             Diagnostic(
                 code="ambiguous-date",
-                severity="warning",
+                severity=Severity.warning,
                 message=f"«{text.strip()}» is {date.candidates[0]} or {date.candidates[1]}; "
                 "no date was chosen.",
                 sheet=sheet,
@@ -81,9 +94,13 @@ def _typed(raw: Raw, ref: str, sheet: str, hint: str, diagnostics: list[Diagnost
             )
         )
         return Cell(
-            ref=ref, raw=text, kind="text", value=text.strip(), candidates=list(date.candidates)
+            ref=ref,
+            raw=text,
+            kind=CellKind.text,
+            value=text.strip(),
+            candidates=list(date.candidates),
         )
-    return Cell(ref=ref, raw=text, kind="text", value=text.strip())
+    return Cell(ref=ref, raw=text, kind=CellKind.text, value=text.strip())
 
 
 def build_sheet(
@@ -107,7 +124,7 @@ def build_sheet(
         diagnostics.append(
             Diagnostic(
                 code="empty-sheet",
-                severity="warning",
+                severity=Severity.warning,
                 message="The sheet holds no data.",
                 sheet=name,
             )
@@ -116,7 +133,7 @@ def build_sheet(
             sheetId=sheet_id,
             name=name,
             index=index,
-            state="hidden" if state == "hidden" else "visible",
+            state=SheetState.hidden if state in ("hidden", "veryHidden") else SheetState.visible,
             range="",
             headerRow=None,
             columns=[],
@@ -152,7 +169,7 @@ def build_sheet(
             diagnostics.append(
                 Diagnostic(
                     code="mixed-decimal-separators",
-                    severity="warning",
+                    severity=Severity.warning,
                     message="The column writes decimals with both a point and a comma.",
                     sheet=name,
                     ref=column_letters(column),
@@ -185,7 +202,7 @@ def build_sheet(
         diagnostics.append(
             Diagnostic(
                 code="no-header",
-                severity="info",
+                severity=Severity.info,
                 message="No header row was found; the columns are named by their letters.",
                 sheet=name,
             )
@@ -196,7 +213,7 @@ def build_sheet(
             diagnostics.append(
                 Diagnostic(
                     code="duplicate-header",
-                    severity="warning",
+                    severity=Severity.warning,
                     message=f"The header «{header}» names {count} columns.",
                     sheet=name,
                 )
@@ -207,13 +224,13 @@ def build_sheet(
         kinds: Counter[CellKind] = Counter(
             typed[row][offset].kind for row in data_rows if typed[row][offset].kind != "empty"
         )
-        kind: CellKind = kinds.most_common(1)[0][0] if kinds else "empty"
+        kind: CellKind = kinds.most_common(1)[0][0] if kinds else CellKind.empty
         if len(kinds) > 1 and kind in ("number", "date"):
             stray = sum(count for found, count in kinds.items() if found != kind)
             diagnostics.append(
                 Diagnostic(
                     code="mixed-column",
-                    severity="warning",
+                    severity=Severity.warning,
                     message=f"{stray} cell(s) of the column are not {kind}s: they keep their text "
                     "and no value.",
                     sheet=name,
@@ -235,7 +252,7 @@ def build_sheet(
         sheetId=sheet_id,
         name=name,
         index=index,
-        state="hidden" if state == "hidden" else "visible",
+        state=SheetState.hidden if state in ("hidden", "veryHidden") else SheetState.visible,
         range=f"{cell_ref(first_row, first_column)}:{cell_ref(last_row, last_column)}",
         headerRow=header_row,
         columns=column_models,

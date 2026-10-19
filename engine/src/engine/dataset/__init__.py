@@ -13,7 +13,7 @@ from typing import Any
 
 from engine.dataset import _delimited, _json, _markdown, _xlsx
 from engine.dataset._build import Raw, build_sheet
-from engine.dataset.models import Dataset, Diagnostic, Sheet, Source
+from engine.dataset.models import Dataset, DatasetStatus, Diagnostic, Severity, Sheet, Source
 
 #: The biggest file read at all. Above it the file is refused, never cut.
 MAX_BYTES = 50 * 1024 * 1024
@@ -32,7 +32,7 @@ _MEDIA_TYPES = {
 def _failed(source: Source, diagnostics: list[Diagnostic]) -> Dataset:
     return Dataset(
         datasetId=f"dataset-{source.sha256[:16]}",
-        status="failed",
+        status=DatasetStatus.failed,
         source=source,
         sheets=[],
         diagnostics=diagnostics,
@@ -74,7 +74,7 @@ def extract_dataset(path: Path) -> Dataset:
         diagnostics.append(
             Diagnostic(
                 code="too-large",
-                severity="error",
+                severity=Severity.error,
                 message=f"The file is {size} bytes; more than {MAX_BYTES} is not read, "
                 "and a part of it is never taken for the whole.",
             )
@@ -82,7 +82,7 @@ def extract_dataset(path: Path) -> Dataset:
         return _failed(source, diagnostics)
     if not data:
         diagnostics.append(
-            Diagnostic(code="empty-file", severity="error", message="The file is empty.")
+            Diagnostic(code="empty-file", severity=Severity.error, message="The file is empty.")
         )
         return _failed(source, diagnostics)
 
@@ -94,7 +94,7 @@ def extract_dataset(path: Path) -> Dataset:
             diagnostics.append(
                 Diagnostic(
                     code="unsupported-format",
-                    severity="error",
+                    severity=Severity.error,
                     message="The old .xls format is not read; save the workbook as .xlsx.",
                 )
             )
@@ -115,7 +115,7 @@ def extract_dataset(path: Path) -> Dataset:
                     diagnostics.append(
                         Diagnostic(
                             code="no-table",
-                            severity="error",
+                            severity=Severity.error,
                             message="The text holds no table with a header and a separator row.",
                         )
                     )
@@ -128,22 +128,31 @@ def extract_dataset(path: Path) -> Dataset:
                             [],
                         )
                     ]
-    except _xlsx.WorkbookError as error:
-        diagnostics.append(Diagnostic(code="unreadable", severity="error", message=str(error)))
-        grids = []
-    for index, (name, state, grid, merged) in enumerate(grids):
-        sheets.append(build_sheet(index, name, grid, diagnostics, state=state, merged=merged))
+        for index, (name, state, grid, merged) in enumerate(grids):
+            sheets.append(build_sheet(index, name, grid, diagnostics, state=state, merged=merged))
+        # Numeric overflow and non-finite source values must not escape as an invalid JSON response.
+        for sheet in sheets:
+            sheet.model_dump_json()
+    except (_xlsx.WorkbookError, ValueError, OverflowError) as error:
+        diagnostics.append(
+            Diagnostic(code="unreadable", severity=Severity.error, message=str(error))
+        )
+        sheets = []
     if not any(sheet.rows or sheet.columns for sheet in sheets) and not any(
         d.severity == "error" for d in diagnostics
     ):
         diagnostics.append(
-            Diagnostic(code="no-data", severity="error", message="The file holds no data.")
+            Diagnostic(code="no-data", severity=Severity.error, message="The file holds no data.")
         )
     errors = any(d.severity == "error" for d in diagnostics)
     warnings = any(d.severity == "warning" for d in diagnostics)
     return Dataset(
         datasetId=f"dataset-{source.sha256[:16]}",
-        status="failed" if errors else "partial" if warnings else "ok",
+        status=DatasetStatus.failed
+        if errors
+        else DatasetStatus.partial
+        if warnings
+        else DatasetStatus.ok,
         source=source,
         sheets=[] if errors and not sheets else sheets,
         diagnostics=diagnostics,
@@ -161,7 +170,9 @@ def _json_grids(
     except (UnicodeDecodeError, ValueError) as error:
         diagnostics.append(
             Diagnostic(
-                code="unreadable", severity="error", message=f"The JSON is not valid: {error}"
+                code="unreadable",
+                severity=Severity.error,
+                message=f"The JSON is not valid: {error}",
             )
         )
         return []

@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from engine import __version__, checks, dataset, export, layout, parser, render, visuals
 from engine.api._composition_audit import composition_slides
@@ -49,6 +49,7 @@ from engine.contracts._generated import (
     CompositionCheckResponse,
     CompositionExportRequest,
     CompositionExportResponse,
+    DatasetExtractRequest,
     GenerationProfile,
 )
 from engine.export.compositions import export_compositions
@@ -164,13 +165,6 @@ def template_profile(request: TemplateProfileRequest) -> dict:
         "templateIr": template_ir,
         "previewDataUrl": preview_data_url,
     }
-
-
-class DatasetExtractRequest(BaseModel):
-    """A provisional request: the shared contracts will name it once they have a form of it."""
-
-    model_config = ConfigDict(extra="forbid")
-    path: str
 
 
 @app.post(

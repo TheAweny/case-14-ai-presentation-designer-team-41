@@ -1,24 +1,27 @@
 """Tabular JSON: a list of records, a list of lists, columns with rows, or columns of values."""
 
 import json
+import math
 from typing import Any
 
 from engine.dataset._build import Raw
-from engine.dataset.models import Diagnostic
+from engine.dataset.models import CellKind, Diagnostic, Severity
 
 
 def _cell(value: Any, nested: list[int]) -> Raw:
     if value is None:
-        return Raw("null", None, "empty")
+        return Raw("null", None, CellKind.empty)
     if isinstance(value, bool):
-        return Raw(json.dumps(value), value, "boolean")
+        return Raw(json.dumps(value), value, CellKind.boolean)
     if isinstance(value, (int, float)):
-        return Raw(json.dumps(value), float(value), "number")
+        if not math.isfinite(float(value)):
+            raise ValueError("JSON numbers must be finite")
+        return Raw(json.dumps(value), float(value), CellKind.number)
     if isinstance(value, str):
         return Raw(value)
     nested[0] += 1
-    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    return Raw(text, text, "text")
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    return Raw(text, text, CellKind.text)
 
 
 def _grid(
@@ -34,7 +37,7 @@ def _grid(
         diagnostics.append(
             Diagnostic(
                 code="nested-value",
-                severity="warning",
+                severity=Severity.warning,
                 message=f"{nested[0]} value(s) are objects or lists; they are kept as JSON text.",
                 sheet=sheet,
             )
@@ -68,6 +71,10 @@ def read_json(
     if isinstance(data, dict):
         columns, rows = data.get("columns"), data.get("rows")
         if isinstance(columns, list) and isinstance(rows, list):
+            if not all(isinstance(column, (str, dict)) for column in columns):
+                raise ValueError("JSON columns must be names or column objects")
+            if not all(isinstance(row, (list, dict)) for row in rows):
+                raise ValueError("JSON rows must be arrays or records")
             names = [c if isinstance(c, str) else str(c.get("name", "")) for c in columns]
             body = [r if isinstance(r, list) else [r.get(n) for n in names] for r in rows]
             return [(sheet, _grid(names, body, sheet, diagnostics))]
@@ -98,7 +105,7 @@ def read_json(
             diagnostics.append(
                 Diagnostic(
                     code="key-value-table",
-                    severity="info",
+                    severity=Severity.info,
                     message="The object is one record; it is read as a table of keys and values.",
                     sheet=sheet,
                 )
@@ -112,7 +119,7 @@ def read_json(
     diagnostics.append(
         Diagnostic(
             code="no-table",
-            severity="error",
+            severity=Severity.error,
             message="The JSON holds no table: expected a list of records, a list of rows, "
             "columns with rows, or named lists of values.",
         )

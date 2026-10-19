@@ -92,6 +92,21 @@ def test_the_column_settles_a_number_that_alone_is_ambiguous(tmp_path: Path) -> 
     assert "ambiguous-number" not in _codes(dataset)
 
 
+@pytest.mark.parametrize("space", [" ", "\u00a0", "\u202f"])
+def test_grouped_integers_do_not_vote_for_decimal_separator(tmp_path: Path, space: str) -> None:
+    text = f"Name;Value\na;22{space}300\nb;1,5\nc;1,234\n"
+    dataset = extract_dataset(_write(tmp_path / "groups.csv", text))
+    assert _values(dataset.sheets[0], 1) == [22300.0, 1.5, 1.234]
+    assert dataset.sheets[0].columns[1].decimal == ","
+    assert "mixed-decimal-separators" not in _codes(dataset)
+
+
+def test_grouped_integers_leave_an_ambiguous_neighbour_unresolved(tmp_path: Path) -> None:
+    dataset = extract_dataset(_write(tmp_path / "groups.csv", "Name;Value\na;22 300\nb;1,234\n"))
+    assert dataset.sheets[0].rows[1].cells[1].candidates == [1.234, 1234.0]
+    assert dataset.sheets[0].columns[1].decimal == ""
+
+
 def test_dates_are_iso_where_one_reading_exists_and_left_alone_where_two_do(tmp_path: Path) -> None:
     text = "Когда;Что\n2025-03-04;a\n04.03.2025;b\n04/03/2025;c\n25/03/2025;d\n"
     dataset = extract_dataset(_write(tmp_path / "d.csv", text))
@@ -251,6 +266,42 @@ def test_a_formula_with_no_stored_result_and_an_error_cell_are_said_so(tmp_path:
     assert {"formula-without-value", "cell-error"} <= _codes(dataset)
 
 
+@pytest.mark.parametrize("filled", [False, True])
+def test_very_hidden_sheets_remain_hidden(tmp_path: Path, filled: bool) -> None:
+    from engine.dataset._build import Raw, build_sheet
+
+    grid = {1: {1: Raw("value")}} if filled else {}
+    assert build_sheet(0, "Hidden", grid, [], state="veryHidden").state == "hidden"
+
+
+def test_shared_and_inline_phonetic_annotations_are_not_display_text(tmp_path: Path) -> None:
+    main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    rich = '<r><t>東</t></r><rPh sb="0" eb="1"><t>とう</t></rPh><r><t>京</t></r>'
+    rows = (
+        f'<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is>{rich}</is></c></row>'
+    )
+    path = tmp_path / "phonetic.xlsx"
+    path.write_bytes(
+        _bare_workbook(rows, {"xl/sharedStrings.xml": f'<sst xmlns="{main}"><si>{rich}</si></sst>'})
+    )
+    cells = extract_dataset(path).sheets[0].rows[0].cells
+    assert [(cell.raw, cell.value) for cell in cells] == [("東京", "東京"), ("東京", "東京")]
+
+
+def test_a_missing_workbook_relationship_part_returns_diagnostics(tmp_path: Path) -> None:
+    path = tmp_path / "missing-rels.xlsx"
+    with (
+        zipfile.ZipFile(io.BytesIO(_bare_workbook(""))) as source,
+        zipfile.ZipFile(path, "w") as target,
+    ):
+        for name in source.namelist():
+            if name != "xl/_rels/workbook.xml.rels":
+                target.writestr(name, source.read(name))
+    dataset = extract_dataset(path)
+    assert dataset.status == "failed"
+    assert "unreadable" in _codes(dataset)
+
+
 def test_xml_that_declares_entities_is_refused(tmp_path: Path) -> None:
     bomb = '<!DOCTYPE x [<!ENTITY a "aaaa">]><sst xmlns="http://schemas.openxmlformats.org/x"/>'
     path = tmp_path / "e.xlsx"
@@ -324,6 +375,26 @@ def test_broken_json_and_non_finite_numbers_are_refused(tmp_path: Path) -> None:
         dataset = extract_dataset(_write(tmp_path / name, text))
         assert dataset.status == "failed", name
         assert "unreadable" in _codes(dataset), name
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"columns":[1],"rows":[[2]]}',
+        '{"columns":["x"],"rows":[42]}',
+        '[{"x":1e400}]',
+        '[{"x":{"nested":1e400}}]',
+    ],
+)
+def test_malformed_tabular_json_is_a_diagnostic_in_api(tmp_path: Path, text: str) -> None:
+    from engine.api.app import app
+    from fastapi.testclient import TestClient
+
+    path = _write(tmp_path / "bad.json", text)
+    response = TestClient(app).post("/v1/dataset-extract", json={"path": str(path)})
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert "unreadable" in {item["code"] for item in response.json()["diagnostics"]}
 
 
 def test_a_markdown_table_is_read_from_a_text(tmp_path: Path) -> None:

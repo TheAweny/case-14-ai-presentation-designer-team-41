@@ -23,8 +23,9 @@ _COMMA_GROUPS = re.compile(r"^\d{1,3}(?:,\d{3})+$")
 _DOT_GROUPS = re.compile(r"^\d{1,3}(?:\.\d{3}){2,}$")
 _BOTH_DOT_LAST = re.compile(r"^\d{1,3}(?:,\d{3})+\.\d+$")
 _BOTH_COMMA_LAST = re.compile(r"^\d{1,3}(?:\.\d{3})+,\d+$")
-_SPACE_GROUPS_DOT = re.compile(r"^\d{1,3}(?: \d{3})+(?:\.\d+)?$")
-_SPACE_GROUPS_COMMA = re.compile(r"^\d{1,3}(?: \d{3})+(?:,\d+)?$")
+_SPACE_GROUPS = re.compile(r"^\d{1,3}(?: \d{3})+$")
+_SPACE_GROUPS_DOT = re.compile(r"^\d{1,3}(?: \d{3})+\.\d+$")
+_SPACE_GROUPS_COMMA = re.compile(r"^\d{1,3}(?: \d{3})+,\d+$")
 
 _ISO_DATE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _DOTTED_DATE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
@@ -83,6 +84,8 @@ def parse_number(raw: str, decimal_hint: str = "") -> Number:
 
     if _PLAIN.match(text):
         return done(float(text))
+    if _SPACE_GROUPS.match(text):
+        return done(float(text.replace(" ", "")))
     if _DOT_DECIMAL.match(text) or _BOTH_DOT_LAST.match(text):
         return done(float(text.replace(",", "")), ".")
     if _BOTH_COMMA_LAST.match(text):

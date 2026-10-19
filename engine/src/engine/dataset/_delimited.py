@@ -5,7 +5,7 @@ import io
 from collections import Counter
 
 from engine.dataset._build import Raw
-from engine.dataset.models import Diagnostic
+from engine.dataset.models import Diagnostic, Severity
 
 _DELIMITERS = (",", ";", "\t", "|")
 #: Lines looked at to tell the delimiter: enough to agree, few enough to be quick.
@@ -24,7 +24,7 @@ def decode(data: bytes, diagnostics: list[Diagnostic]) -> str | None:
             diagnostics.append(
                 Diagnostic(
                     code="encoding-guessed",
-                    severity="warning",
+                    severity=Severity.warning,
                     message="The file is not UTF-8; it was read as Windows-1251.",
                 )
             )
@@ -33,7 +33,7 @@ def decode(data: bytes, diagnostics: list[Diagnostic]) -> str | None:
         diagnostics.append(
             Diagnostic(
                 code="unreadable",
-                severity="error",
+                severity=Severity.error,
                 message="The file is not a text table: it holds binary data.",
             )
         )
@@ -83,7 +83,7 @@ def read_delimited(
         diagnostics.append(
             Diagnostic(
                 code="ragged-rows",
-                severity="warning",
+                severity=Severity.warning,
                 message=f"{odd} row(s) have a different number of fields than the usual {usual}; "
                 "missing fields are empty and none was dropped.",
                 sheet=sheet,

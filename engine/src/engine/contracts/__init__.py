@@ -17,6 +17,8 @@ from engine.contracts._generated import (
     ContentPack,
     ContractsBundle,
     CopyEdits,
+    Dataset,
+    DatasetExtractRequest,
     DeckExportRequest,
     DeckExportResponse,
     DeckImportRequest,
@@ -51,7 +53,7 @@ from engine.contracts._generated import (
     VisualCompareResponse,
 )
 from engine.contracts._generated import (
-    Status3 as Status,
+    Status4 as Status,
 )
 from engine.contracts.provisional import (
     ChartSpec,
@@ -74,6 +76,8 @@ __all__ = [
     "ContentPack",
     "ContractsBundle",
     "CopyEdits",
+    "Dataset",
+    "DatasetExtractRequest",
     "DeckExportRequest",
     "DeckExportResponse",
     "DeckImportRequest",
