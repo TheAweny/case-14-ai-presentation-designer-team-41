@@ -22,6 +22,7 @@ from engine.parser import design_system_of, import_deck
 from PIL import Image
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.parts.slide import SlideMasterPart
 from pptx.util import Emu, Inches, Pt
 
 
@@ -48,7 +49,13 @@ def _deck(path: Path, *, front_picture: bool) -> Path:
     presentation = Presentation()
     master = presentation.slide_masters[0]
     # Slide masters can hold pictures; python-pptx only exposes add_picture on slide shape trees.
-    image_part, relationship_id = master.part.get_or_add_image_part(str(pixel))
+    master_part = master.part
+    assert isinstance(master_part, SlideMasterPart)
+    image_part, relationship_id = master_part.get_or_add_image_part(str(pixel))
+    width = presentation.slide_width
+    height = presentation.slide_height
+    assert isinstance(width, int)
+    assert isinstance(height, int)
     shape_id = master.shapes._next_shape_id
     master.shapes._spTree.add_pic(
         shape_id,
@@ -57,8 +64,8 @@ def _deck(path: Path, *, front_picture: bool) -> Path:
         relationship_id,
         0,
         0,
-        int(presentation.slide_width),
-        int(presentation.slide_height),
+        width,
+        height,
     )
     slide = presentation.slides.add_slide(presentation.slide_layouts[6])
     box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1))
@@ -95,7 +102,10 @@ def _text_ink(image: Image.Image, box: dict[str, int], dpi: int) -> bool:
     bottom = min(image.height, int((box["y"] + box["cy"]) * scale))
     for y in range(top, bottom):
         for x in range(left, right):
-            red, green, blue = image.getpixel((x, y))
+            pixel = image.getpixel((x, y))
+            if not isinstance(pixel, tuple) or len(pixel) < 3:
+                continue
+            red, green, blue = (int(channel) for channel in pixel[:3])
             if red < 80 and green < 80 and blue < 80:
                 return True
     return False
