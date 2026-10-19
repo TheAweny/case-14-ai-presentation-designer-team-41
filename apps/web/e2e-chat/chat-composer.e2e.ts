@@ -895,6 +895,8 @@ test('offers the thinking switch only where probing found one, whatever the name
   await expect(toggle()).toHaveAttribute('aria-checked', 'true');
   await toggle().click();
   await expect(toggle()).toHaveAttribute('aria-checked', 'false');
+  await toggle().click();
+  await expect(toggle()).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('Escape');
 
   await field(page).fill('Короткий ответ');
@@ -904,9 +906,9 @@ test('offers the thinking switch only where probing found one, whatever the name
 
   await page.reload();
   await menu.click();
-  await expect(toggle()).toHaveAttribute('aria-checked', 'false');
-  await toggle().click();
   await expect(toggle()).toHaveAttribute('aria-checked', 'true');
+  await toggle().click();
+  await expect(toggle()).toHaveAttribute('aria-checked', 'false');
 });
 
 test('lets a hybrid model think while building on request, with a depth either way', async ({
