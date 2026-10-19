@@ -1,5 +1,3 @@
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { expect, test } from '@playwright/test';
 import type { ChatEvent, ChatMessage } from '@lct/contracts';
 import { sessionCookie } from './session';
@@ -33,65 +31,56 @@ type EventBody = {
   [T in ChatEvent['type']]: Omit<Extract<ChatEvent, { type: T }>, 'seq'>;
 }[ChatEvent['type']];
 
-let server: Server;
-let origin = '';
-let release!: () => void;
+const API = 'http://127.0.0.1:3121';
+const usage = (outputTokens: number): EventBody => ({
+  type: 'usage',
+  messageId: ANSWER,
+  inputTokens: 14213,
+  outputTokens,
+});
 
-/** The answer streams for real: Playwright's fulfill would hand the browser everything at once. */
-test.beforeAll(async () => {
-  server = createServer((_, response) => {
-    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
-    let seq = 0;
-    const send = (event: EventBody) =>
-      response.write(`data: ${JSON.stringify({ ...event, seq: seq++ })}\n\n`);
-    send({ type: 'message', message: user });
-    send({
-      type: 'message',
-      message: {
-        role: 'assistant',
-        id: ANSWER,
-        status: 'streaming',
-        createdAt: Date.now(),
-        parts: [],
-      },
-    });
-    let output = 0;
-    const timer = setInterval(() => {
-      output += 37;
-      send({ type: 'usage', messageId: ANSWER, inputTokens: 14213, outputTokens: output });
-      // Text arrives after a while, so both states of the meter are seen.
-      if (output === 37 * 8)
-        send({ type: 'text-delta', messageId: ANSWER, index: 0, delta: 'Считаю токены. ' });
-    }, 250);
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    void gate.then(() => {
-      clearInterval(timer);
-      send({ type: 'text-delta', messageId: ANSWER, index: 0, delta: 'Готово.' });
-      send({
-        type: 'message',
-        message: {
-          role: 'assistant',
-          id: ANSWER,
-          status: 'done',
-          createdAt: Date.now(),
-          parts: [{ type: 'text', text: 'Считаю токены. Готово.' }],
-        },
-      });
-      send({ type: 'turn-end' });
-      response.end();
-    });
+/**
+ * The answer streams for real from the fixture API through the web proxy: Playwright's fulfill
+ * would hand the browser everything at once, and a request rewritten to another origin is
+ * blocked by Chromium before it leaves the browser.
+ */
+const head = (): EventBody[] => [
+  { type: 'message', message: user },
+  {
+    type: 'message',
+    message: {
+      role: 'assistant',
+      id: ANSWER,
+      status: 'streaming',
+      createdAt: Date.now(),
+      parts: [],
+    },
+  },
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((step) => usage(step * 37)),
+  // Text arrives after a while, so both states of the meter are seen.
+  { type: 'text-delta', messageId: ANSWER, index: 0, delta: 'Считаю токены. ' },
+  ...[9, 10, 11, 12].map((step) => usage(step * 37)),
+];
+const tail = (): EventBody[] => [
+  { type: 'text-delta', messageId: ANSWER, index: 0, delta: 'Готово.' },
+  {
+    type: 'message',
+    message: {
+      role: 'assistant',
+      id: ANSWER,
+      status: 'done',
+      createdAt: Date.now(),
+      parts: [{ type: 'text', text: 'Считаю токены. Готово.' }],
+    },
+  },
+  { type: 'turn-end' },
+];
+
+test.beforeEach(async ({ context, request }) => {
+  await request.post(`${API}/__reset-models`);
+  await request.post(`${API}/__set-turn`, {
+    data: { head: head(), tail: tail(), everyMs: 250 },
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-});
-
-test.afterAll(() => {
-  server.close();
-});
-
-test.beforeEach(async ({ context }) => {
   const value = await sessionCookie(USER);
   await context.addCookies([
     { name: 'lct_session', value, domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Lax' },
@@ -100,9 +89,10 @@ test.beforeEach(async ({ context }) => {
 
 test('the answer shows its tokens growing while it streams, then the meter goes away', async ({
   page,
+  request,
 }) => {
   await page.route('**/api/backend/chats/**', async (route) => {
-    if (route.request().method() === 'POST') await route.continue({ url: `${origin}/turn` });
+    if (route.request().method() === 'POST') await route.fallback();
     else await route.fulfill({ json: document });
   });
   await page.goto(`/chats/${CHAT}`);
@@ -124,7 +114,7 @@ test('the answer shows its tokens growing while it streams, then the meter goes 
   await expect(meter).toBeVisible();
   await page.screenshot({ path: 'test-results/chat/usage-meter-writing.png' });
 
-  release();
+  await request.post(`${API}/__release-turn`);
   await expect(page.getByText('Считаю токены. Готово.')).toBeVisible();
   await expect(meter).toBeHidden();
 });

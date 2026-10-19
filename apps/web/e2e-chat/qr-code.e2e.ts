@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import type { QrCodePart, SlideIr } from '@lct/contracts';
+import type { EditorSnapshot, QrCodePart, SlideIr } from '@lct/contracts';
 import { sessionCookie } from './session';
 
 const qr = createRequire(new URL('../../../packages/pipeline/package.json', import.meta.url))(
@@ -105,18 +105,8 @@ test('QR preview preserves the exact clickable URL and downloadable PNG on a nar
 
 test('QR inserts only on click, undoes in one step, survives reload and sends exact bytes to export', async ({
   page,
+  request,
 }) => {
-  let exported: { slides: SlideIr[]; media: { mediaPart: string; dataUrl: string }[] } | undefined;
-  await page.route(`**/api/backend/generation/${DECK}/export`, async (route) => {
-    exported = route.request().postDataJSON();
-    await route.fulfill({ json: { exportId: 'qr-export', previews: [] } });
-  });
-  await page.route(`**/api/backend/generation/${DECK}/exports/qr-export/deck.pptx`, (route) =>
-    route.fulfill({
-      body: 'exported-qr-pptx',
-      contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    }),
-  );
   await page.goto(`/decks/${DECK}`);
   const card = page.locator('[data-qr-code]');
   const image = page.locator('[data-canvas-slide] [data-kind="image"]');
@@ -133,10 +123,11 @@ test('QR inserts only on click, undoes in one step, survives reload and sends ex
   await expect(image).toHaveCount(1);
   await expect(page.locator('[data-save-status="saved"]')).toBeVisible();
   await page.reload();
-  await expect(page.locator('[data-draft-restored]')).toBeVisible();
   await expect(image).toHaveCount(1);
   await expect(image).toHaveAttribute('data-element-id', id);
   await expect(image.locator('img')).toHaveAttribute('src', /^blob:/);
+  // The saved server revision opens as it is: there is no other copy to choose from.
+  await expect(page.locator('[data-draft-restored]')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('qr-desktop-inserted.png') });
   await page.getByRole('button', { name: 'Экспорт', exact: true }).click();
   const [download] = await Promise.all([
@@ -144,19 +135,30 @@ test('QR inserts only on click, undoes in one step, survives reload and sends ex
     page.getByRole('button', { name: 'Скачать .pptx', exact: true }).click(),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.pptx$/);
-  expect(exported?.media).toHaveLength(1);
-  expect(exported?.media[0]?.dataUrl).toBe(part.pngDataUrl);
-  const inserted = exported?.slides[0]?.elements.find((element) => element.elementId === id);
+  // The server exports a stored revision: the QR is in its slides, its bytes in the saved media.
+  const editor = (await (await request.get('http://127.0.0.1:3121/__editor')).json()) as {
+    revisions: EditorSnapshot[];
+    media: { mediaPart: string; dataUrl: string }[];
+    exports: { revision: number; format: string }[];
+  };
+  const head = editor.revisions.at(-1);
+  expect(editor.exports).toEqual([
+    { exportId: expect.any(String), revision: head?.revision, format: 'pptx' },
+  ]);
+  expect(head?.media).toHaveLength(1);
+  expect(editor.media).toHaveLength(1);
+  expect(editor.media[0]?.dataUrl).toBe(part.pngDataUrl);
+  const inserted = head?.slides[0]?.elements.find((element) => element.elementId === id);
   expect(inserted).toMatchObject({
     kind: 'image',
     role: 'image',
     sourceShapeId: null,
     fit: 'contain',
-    mediaPart: exported?.media[0]?.mediaPart,
+    mediaPart: head?.media[0]?.mediaPart,
   });
   expect(inserted?.box.cx).toBeGreaterThanOrEqual(part.minSizeEmu);
   expect(inserted?.box.cx).toBe(inserted?.box.cy);
   const path = await download.path();
   if (!path) throw new Error('Expected downloaded file');
-  expect(readFileSync(path, 'utf8')).toBe('exported-qr-pptx');
+  expect(readFileSync(path, 'utf8')).toBe(`fixture export of revision ${head?.revision}`);
 });
