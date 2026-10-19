@@ -97,9 +97,9 @@ class ModelCall(BaseModel):
     )
     agentId: constr(min_length=1)
     calls: conint(ge=0, le=9007199254740991)
-    inputTokens: conint(ge=0, le=9007199254740991)
+    inputTokens: conint(ge=0, le=9007199254740991) | None
     modelId: constr(min_length=1)
-    outputTokens: conint(ge=0, le=9007199254740991)
+    outputTokens: conint(ge=0, le=9007199254740991) | None
 
 
 class Kind1(StrEnum):
@@ -6215,6 +6215,16 @@ class Code4(StrEnum):
     budget_exceeded = "budget-exceeded"
     engine_failed = "engine-failed"
     cancelled = "cancelled"
+    interrupted = "interrupted"
+    provider_rate_limit = "provider-rate-limit"
+    provider_auth = "provider-auth"
+    provider_quota = "provider-quota"
+    provider_timeout = "provider-timeout"
+    invalid_response = "invalid-response"
+    quality_blocked = "quality-blocked"
+    export_failed = "export-failed"
+    persistence_failed = "persistence-failed"
+    unknown_outcome = "unknown-outcome"
     internal = "internal"
 
 
@@ -7915,7 +7925,7 @@ class RunConfig(BaseModel):
     seed: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Seed that makes a run reproducible."
     )
-    slideCount: conint(ge=10, le=15) = Field(
+    slideCount: conint(ge=5, le=15) = Field(
         ..., description="Number of slides to produce."
     )
     templatePath: constr(min_length=1) = Field(

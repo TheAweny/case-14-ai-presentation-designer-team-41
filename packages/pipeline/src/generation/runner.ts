@@ -27,6 +27,7 @@ import {
   minChars,
   thinMessage,
   type SharedPlan,
+  type SharedContent,
   repairedSlideSchema,
   type repairTaskSchema,
   briefYears,
@@ -36,10 +37,11 @@ import {
 } from './workflow.js';
 import { deckRepeats, headlineSlot, slideFigureDefects } from './repeats.js';
 import { approvedCoverage } from './final-review.js';
-import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
+import type { TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
+import { generationFailure } from './failure.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 import {
   contextualCorrections,
@@ -89,6 +91,7 @@ export interface GenerateOptions {
   layoutRemapPolicy?: LayoutRemapPolicy;
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
+  sharedContent?: SharedContent;
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
   /**
@@ -108,6 +111,8 @@ export interface GenerateOptions {
   deadlineAt?: number;
   signal?: AbortSignal;
   onEvent?: (event: JobEvent) => Promise<void>;
+  /** Dense event sequence continues across execution attempts of the same product run. */
+  eventSequence?: number;
 }
 
 /** Time kept for export, audit and render after the pictures are awaited, in ms. */
@@ -163,7 +168,7 @@ export async function generatePresentation(options: GenerateOptions) {
     AbortSignal.timeout(Math.max(0, remaining)),
     ...(options.signal ? [options.signal] : []),
   ]);
-  let seq = 0;
+  let seq = options.eventSequence ?? 0;
   let events = Promise.resolve();
   let terminal = false;
   const timings: StageTiming[] = [];
@@ -202,10 +207,7 @@ export async function generatePresentation(options: GenerateOptions) {
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
-    if (
-      options.provider instanceof OpenAICompatibleProvider ||
-      options.provider instanceof RoutedTextProvider
-    ) {
+    if (options.provider.setAgentGeneration) {
       for (const [role, agent] of [
         ['planner', planner],
         ['writer', writer],
@@ -266,6 +268,7 @@ export async function generatePresentation(options: GenerateOptions) {
       variant: options.variant ?? 'balanced',
       ...(options.layoutRemapPolicy ? { layoutRemapPolicy: options.layoutRemapPolicy } : {}),
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
+      ...(options.sharedContent ? { sharedContent: options.sharedContent } : {}),
       today,
       imagesAvailable: illustrations !== null,
       outlineIsSource: options.outlineSource !== 'model',
@@ -327,9 +330,7 @@ export async function generatePresentation(options: GenerateOptions) {
       },
     });
     if (result.status !== 'success')
-      throw new Error(
-        result.status === 'failed' ? result.error.message : `Workflow ${result.status}`,
-      );
+      throw result.status === 'failed' ? result.error : new Error(`Workflow ${result.status}`);
     signal.throwIfAborted();
     const written = z
       .array(writtenSchema)
@@ -1060,16 +1061,13 @@ export async function generatePresentation(options: GenerateOptions) {
               ]
             : []),
         ]),
-      modelCalls:
-        options.provider instanceof OpenAICompatibleProvider
-          ? options.provider.calls.map((call) => ({
-              agentId: call.agent,
-              modelId: options.provider.model,
-              calls: 1,
-              inputTokens: call.inputTokens,
-              outputTokens: call.outputTokens,
-            }))
-          : [],
+      modelCalls: (options.provider.calls ?? []).map((call) => ({
+        agentId: call.agent,
+        modelId: call.modelId ?? options.provider.model,
+        calls: 1,
+        inputTokens: call.inputTokens,
+        outputTokens: call.outputTokens,
+      })),
       artifacts,
       timings,
       totalMs: Date.now() - started,
@@ -1083,10 +1081,12 @@ export async function generatePresentation(options: GenerateOptions) {
     return { deck, output, manifest };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Generation failed.';
+    const failure = generationFailure(error, signal);
     await writeFile(
       join(options.outputDir, 'failure.json'),
       JSON.stringify({
-        message,
+        diagnostic: message,
+        ...failure,
         elapsedMs: Date.now() - started,
         ...(error instanceof ContentFitError
           ? { requiresReview: true, code: error.code, findings: error.findings }
@@ -1096,13 +1096,7 @@ export async function generatePresentation(options: GenerateOptions) {
     await emit({
       type: 'failed',
       stage,
-      code: signal.aborted
-        ? 'budget-exceeded'
-        : message.includes('Model API')
-          ? 'model-unavailable'
-          : 'internal',
-      message,
-      retryable: true,
+      ...failure,
     });
     throw error;
   } finally {

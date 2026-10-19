@@ -62,6 +62,7 @@ export interface ChatToolScope {
   readonly thinking?: boolean | null;
   /** The depth of thinking of the turn, for the deck as well. */
   readonly reasoningEffort?: ReasoningEffort | null;
+  readonly preferredSlideCount?: number | null;
   readonly currentMessageId?: string;
   /** The chat as it is now, the answer of this turn included. */
   messages(): readonly ChatMessage[];
@@ -337,6 +338,55 @@ export function chatTools(
     const row = result.rows[0];
     if (!row) throw new Error('There is no such template in the library.');
     return row;
+  };
+
+  const chooseTemplate = async (requested: string | null): Promise<string | null> => {
+    const explicit = [...scope.messages()]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === 'user' && message.attachments.some((item) => item.kind === 'template'),
+      );
+    const selected =
+      explicit?.role === 'user'
+        ? explicit.attachments.flatMap((item) =>
+            item.kind === 'template' ? [item.templateId] : [],
+          )
+        : [];
+    if (selected.length > 1)
+      throw new Error('Выбрано несколько шаблонов. Укажите один шаблон для сборки.');
+    if (selected[0]) {
+      if (requested && requested !== selected[0])
+        throw new Error(
+          'Выбранный пользователем шаблон имеет приоритет. Используйте его идентификатор.',
+        );
+      return selected[0];
+    }
+    const project = scope.projectId
+      ? await generation.projectTemplates(scope.projectId, account)
+      : [];
+    if (project.length > 1) {
+      const approved = plansOf(scope.messages()).some(
+        (item) =>
+          item.part.status === 'approved' &&
+          item.part.approvalSource === 'user' &&
+          item.part.templateId === requested,
+      );
+      const latest = [...scope.messages()].reverse().find((message) => message.role === 'user');
+      const text = latest?.role === 'user' ? latest.text.toLocaleLowerCase() : '';
+      const named = project.filter(
+        (template) =>
+          text.includes(template.templateId.toLocaleLowerCase()) ||
+          text.trim() === template.name.toLocaleLowerCase(),
+      );
+      if (approved) return requested;
+      if (named.length === 1) {
+        const choice = named[0];
+        if (choice && (!requested || requested === choice.templateId)) return choice.templateId;
+      }
+      throw new Error('В проекте несколько шаблонов. Предложите пользователю выбрать один.');
+    }
+    return requested ?? project[0]?.templateId ?? null;
   };
 
   const layoutKinds = (index: unknown) => {
@@ -832,8 +882,13 @@ export function chatTools(
     }),
     modes: ['plan', 'auto'],
     async run(input, context) {
-      const { outline, templateId } = input as { outline: DeckOutline; templateId: string | null };
+      const { outline } = input as { outline: DeckOutline };
+      const templateId = await chooseTemplate((input as { templateId: string | null }).templateId);
       if (templateId !== null) await templateRow(templateId);
+      if (scope.preferredSlideCount != null && outline.slides.length !== scope.preferredSlideCount)
+        throw new Error(
+          `Пользователь запросил ровно ${scope.preferredSlideCount} слайдов. Исправьте план.`,
+        );
       for (const plan of plansOf(scope.messages())) {
         if (plan.part.status === 'proposed')
           scope.updatePart(plan.messageId, plan.index, { ...plan.part, status: 'superseded' });
@@ -868,6 +923,7 @@ export function chatTools(
       brief: z.string().trim().max(8000).default(''),
       fileIds: z.array(z.string().uuid()).max(10).default([]),
       retry: z.boolean().default(false),
+      operation: z.enum(['start', 'resume', 'regenerate']).default('start'),
     }),
     modes: ['plan', 'auto'],
     async run(input, context) {
@@ -877,7 +933,9 @@ export function chatTools(
         brief: string;
         fileIds: string[];
         retry: boolean;
+        operation: 'start' | 'resume' | 'regenerate';
       };
+      await chooseTemplate(request.templateId);
       const plan = plansOf(scope.messages()).find((item) => item.part.planId === request.planId);
       if (scope.mode === 'plan') {
         if (!plan)
@@ -920,7 +978,8 @@ export function chatTools(
         outlineSource: plan?.part.approvalSource === 'user' ? 'user' : 'model',
         brief: request.brief,
         fileIds: request.fileIds.filter((id) => !templates.has(id)),
-        retry: request.retry,
+        retry: request.retry || request.operation === 'resume',
+        regenerate: request.operation === 'regenerate',
       });
     },
   };
@@ -1074,9 +1133,12 @@ export async function runBuild(
     planId?: string | null;
     planRevision?: number | null;
     retry?: boolean;
+    regenerate?: boolean;
   },
 ): Promise<ToolOutcome> {
-  if (request.planId) {
+  let resumeRunId: string | null = null;
+  let previousBuildId: string | null = null;
+  if (!request.regenerate) {
     const messages = scope.messages();
     const parts = messages.flatMap((message) =>
       message.role === 'assistant' ? message.parts : [],
@@ -1086,8 +1148,9 @@ export async function runBuild(
       .find(
         (part): part is BuildPart =>
           part.type === 'build' &&
-          part.planId === request.planId &&
-          part.planRevision === request.planRevision,
+          (request.planId
+            ? part.planId === request.planId && part.planRevision === request.planRevision
+            : part.planId === null && part.templateId === request.templateId),
       );
     if (existing) {
       if (existing.templateId !== request.templateId)
@@ -1148,6 +1211,8 @@ export async function runBuild(
           stop: true,
         };
       }
+      resumeRunId = existing.runId;
+      previousBuildId = existing.buildId;
     }
   }
   const template = await generation.template(request.templateId, scope.account);
@@ -1155,7 +1220,7 @@ export async function runBuild(
   let part: BuildPart = {
     type: 'build',
     callId: context.callId,
-    buildId: crypto.randomUUID(),
+    buildId: previousBuildId ?? crypto.randomUUID(),
     planId: request.planId ?? null,
     planRevision: request.planRevision ?? null,
     templateId: request.templateId,
@@ -1197,7 +1262,8 @@ export async function runBuild(
     const generationInput = {
       templateId: request.templateId,
       brief,
-      slideCount: null as null,
+      slideCount: request.outline ? null : (scope.preferredSlideCount ?? null),
+      requestId: part.buildId,
       outline: request.outline,
       outlineSource,
       projectId: scope.projectId,
@@ -1208,9 +1274,11 @@ export async function runBuild(
       reasoningEffort: scope.reasoningEffort ?? null,
     };
     const onActivity = activityOf(context);
-    const build = onActivity
-      ? await generation.start(generationInput, scope.account, undefined, onActivity)
-      : await generation.start(generationInput, scope.account);
+    const build = resumeRunId
+      ? await generation.resume(resumeRunId, scope.account)
+      : onActivity
+        ? await generation.start(generationInput, scope.account, undefined, onActivity)
+        : await generation.start(generationInput, scope.account);
     startedRunId = build.runId;
     const stop = () => generation.cancel(build.runId);
     context.signal.addEventListener('abort', stop, { once: true });

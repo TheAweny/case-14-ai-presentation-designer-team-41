@@ -28,6 +28,7 @@ import {
   type DeckOutline,
 } from '@lct/contracts';
 import { loadAgent } from '@lct/registry';
+import { PostgresProviderLedger } from '@lct/run-store';
 import {
   AnswerWriter,
   ModelRequestError,
@@ -45,6 +46,7 @@ import {
   type ChatAgent,
   type ChatEventBody,
   type ChatModel,
+  ledgerFetch,
 } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
@@ -1019,6 +1021,14 @@ export class ChatsService implements OnApplicationShutdown {
       // The chat thinks as its config says; the person's switch is for the decks it builds.
       thinking: agent.agent.config.generation.thinking ?? null,
       reasoning: await this.capabilities.reasoningOf(resolved),
+      fetchImpl: ledgerFetch(
+        new PostgresProviderLedger(this.pool, account.id, null, {
+          requests: 10000,
+          tokens: 100_000_000,
+          cost: null,
+        }),
+        'chat',
+      ),
     });
     return withConnection(model, resolved.connectionId);
   }
@@ -1062,6 +1072,7 @@ export class ChatsService implements OnApplicationShutdown {
       thinking: request.thinking,
       reasoningEffort: request.reasoningEffort,
       currentMessageId: message.id,
+      preferredSlideCount: request.slideCount,
       messages: () => {
         sync();
         return state.messages;
@@ -1159,6 +1170,9 @@ export class ChatsService implements OnApplicationShutdown {
       // The agent tells the person whether the deck gets pictures, and does not promise them
       // when no image model is assigned.
       const imagesAvailable = await this.generation.imagesAvailable(account).catch(() => false);
+      const projectTemplates = state.projectId
+        ? await this.generation.projectTemplates(state.projectId, account)
+        : [];
       const result = await runChatTurn({
         mode: request.mode,
         model,
@@ -1166,6 +1180,7 @@ export class ChatsService implements OnApplicationShutdown {
           ...this.facts(state),
           imagesAvailable,
           preferredSlideCount: request.slideCount,
+          projectTemplates,
         }),
         history: modelHistory(
           state.messages

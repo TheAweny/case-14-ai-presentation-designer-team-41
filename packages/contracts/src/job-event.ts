@@ -37,6 +37,16 @@ export const jobErrorCodeSchema = z.enum([
   'budget-exceeded',
   'engine-failed',
   'cancelled',
+  'interrupted',
+  'provider-rate-limit',
+  'provider-auth',
+  'provider-quota',
+  'provider-timeout',
+  'invalid-response',
+  'quality-blocked',
+  'export-failed',
+  'persistence-failed',
+  'unknown-outcome',
   'internal',
 ]);
 

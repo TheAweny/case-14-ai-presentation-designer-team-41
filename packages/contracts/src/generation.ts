@@ -149,8 +149,8 @@ export const slideKindSchema = z.enum([
 ]);
 export type SlideKind = z.infer<typeof slideKindSchema>;
 
-/** Slides of a deck the pipeline builds: an automatic deck is 10 to 60 slides long. */
-export const OUTLINE_SLIDES = { min: 10, max: 60 } as const;
+/** Automatic and approved decks may contain 5 to 60 slides; manual sizing is 5 to 15. */
+export const OUTLINE_SLIDES = { min: 5, max: 60 } as const;
 
 export const outlineSlideSchema = z.object({
   /** The claim of the slide, as its title would say it. */
@@ -175,11 +175,19 @@ export const deckOutlineSchema = z.object({
 export type DeckOutline = z.infer<typeof deckOutlineSchema>;
 
 export const generationRequestSchema = z.object({
+  /** Reuse this id on transport retries; a new id explicitly regenerates the deck. */
+  requestId: z.string().uuid().optional(),
+  budget: z
+    .object({
+      maxHttpRequests: z.number().int().min(1).max(240),
+      maxReservedTokens: z.number().int().min(1).max(2_000_000),
+    })
+    .optional(),
   /** A model draft guides the story but cannot independently substantiate its facts. */
   outlineSource: z.enum(['user', 'model']).optional(),
   templateId: z.string().uuid(),
   brief: z.string().trim().min(10).max(60000),
-  slideCount: z.number().int().min(10).max(15).nullable().default(null),
+  slideCount: z.number().int().min(5).max(15).nullable().default(null),
   /**
    * The approved story of the deck. With it the planner keeps these slides, in this order, and
    * only chooses a composition for each; `slideCount` is then the length of the outline.
@@ -248,7 +256,7 @@ export const compositionPlanSchema = z.object({
         sourceEvidence: z.record(z.string(), z.string()).default({}),
       }),
     )
-    .min(10)
+    .min(OUTLINE_SLIDES.min)
     .max(60),
 });
 
@@ -354,6 +362,7 @@ export const compositionNoteSchema = z.object({
 });
 export const templateIndexSchema = z.object({ notes: z.array(compositionNoteSchema) });
 export const storedTemplateIndexSchema = templateIndexSchema.extend({
+  profileHash: z.string().length(64).optional(),
   templateHash: z.string().length(64),
   /** Indexer version and instruction hash: a new prompt re-indexes the template. */
   revision: z.string().min(1),

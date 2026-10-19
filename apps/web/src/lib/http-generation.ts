@@ -142,10 +142,6 @@ async function followRun(
   signal: AbortSignal,
   onSlide?: (slide: StreamedSlide) => void,
 ): Promise<GenerationResult> {
-  const cancel = () => {
-    void request(`/generation/${run.runId}/cancel`, { method: 'POST' }).catch(() => undefined);
-  };
-  signal.addEventListener('abort', cancel, { once: true });
   let sequence = -1;
   try {
     for (;;) {
@@ -219,7 +215,7 @@ async function followRun(
     if (!variants.length) throw new Error('The generated deck has no slides.');
     return { templateSubstituted: false, variants };
   } finally {
-    signal.removeEventListener('abort', cancel);
+    /* Detaching an observer does not stop the server build. */
   }
 }
 
@@ -258,6 +254,7 @@ export function createHttpGenerator(): DeckGenerator {
           projectId: input.projectId,
           contentIds,
           model: input.model,
+          requestId: input.requestId ?? crypto.randomUUID(),
         }),
         signal,
       })) as { runId: string; variants?: { variant: string; runId: string }[] };
@@ -270,6 +267,16 @@ export function createHttpGenerator(): DeckGenerator {
       return followRun(run, onEvent, signal, onSlide);
     },
     follow: followRun,
+    async resume(run, onEvent, signal, onSlide) {
+      const result = (await request(`/generation/${encodeURIComponent(run.runId)}/resume`, {
+        method: 'POST',
+        signal,
+      })) as ServerRun;
+      return followRun({ ...run, ...result }, onEvent, signal, onSlide);
+    },
+    async cancel(run) {
+      await request(`/generation/${encodeURIComponent(run.runId)}/cancel`, { method: 'POST' });
+    },
   };
 }
 

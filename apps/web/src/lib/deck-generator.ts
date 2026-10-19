@@ -37,6 +37,7 @@ export const SLIDE_COUNT_RANGE = {
 } as const;
 
 export interface GenerationRequest {
+  readonly requestId?: string;
   /** Шаблон библиотеки, которым оформить колоду. Его профиль уже извлечён при импорте. */
   readonly templateId: string;
   /** Проект, в который попадёт колода; null — вне проектов. */
@@ -134,6 +135,14 @@ export interface DeckGenerator {
     signal: AbortSignal,
     onSlide?: (slide: StreamedSlide) => void,
   ): Promise<GenerationResult>;
+  /** Explicit resume reuses accepted work; disconnecting only stops observation. */
+  resume?(
+    run: ServerRun,
+    onEvent: (event: JobEvent) => void,
+    signal: AbortSignal,
+    onSlide?: (slide: StreamedSlide) => void,
+  ): Promise<GenerationResult>;
+  cancel?(run: ServerRun): Promise<void>;
 }
 
 /**

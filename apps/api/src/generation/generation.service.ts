@@ -10,13 +10,14 @@ import {
 import type { OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, cp, rename } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import {
   compositionPlanSchema,
   generationProfileSchema,
   generationRequestSchema,
+  generationSpecSchema,
   layoutVariantSchema,
   modelRefSchema,
   storedTemplateIndexSchema,
@@ -28,16 +29,24 @@ import {
   type StoredTemplateIndex,
   type ChatToolActivity,
   type ReasoningCapability,
+  type JobEvent,
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
   currentTemplateIndexRevision,
+  templateIndexState,
   generatePresentation,
   VisionProvider,
   GenerationProvider,
   indexTemplateWithAgent,
   RoutedTextProvider,
   SharedPlan,
+  SharedContent,
+  CheckpointTextProvider,
+  TaskCheckpoints,
+  dependencyKey,
+  atomicJson,
+  ledgerFetch,
   SharedIllustrations,
   OpenAICompatibleImageProvider,
   FakeImageProvider,
@@ -53,7 +62,14 @@ import {
 } from './build-budget.js';
 import { effectiveModelPlan } from './model-plan.js';
 import { loadAnswerFormat } from '@lct/registry';
-import type { RunRepository } from '@lct/run-store';
+import {
+  GenerationBuildStore,
+  BuildConflictError,
+  PostgresProviderLedger,
+  type BuildRecord,
+  type BuildLease,
+  type RunRepository,
+} from '@lct/run-store';
 import {
   ModelNotConfiguredError,
   ModelSettingsService,
@@ -131,14 +147,17 @@ export interface StoredTemplate {
 export function imageProviderOf(
   assigned: { apiKey: string; baseUrl: string; model: string } | null,
   env: NodeJS.ProcessEnv = process.env,
+  fetchImpl?: typeof fetch,
 ): ImageProvider | null {
   if (env.IMAGE_PROVIDER === 'fake') return new FakeImageProvider();
-  if (assigned) return new OpenAICompatibleImageProvider(assigned);
+  if (assigned)
+    return new OpenAICompatibleImageProvider({ ...assigned, ...(fetchImpl ? { fetchImpl } : {}) });
   if (env.IMAGE_BASE_URL && env.IMAGE_MODEL)
     return new OpenAICompatibleImageProvider({
       baseUrl: env.IMAGE_BASE_URL,
       apiKey: env.MODEL_API_KEY ?? '',
       model: env.IMAGE_MODEL,
+      ...(fetchImpl ? { fetchImpl } : {}),
     });
   return null;
 }
@@ -157,6 +176,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     timeoutMs: 900000,
   });
   private readonly active = new Map<string, AbortController>();
+  private readonly executions = new Map<string, StartedBuild>();
+  private get builds() {
+    return new GenerationBuildStore(this.pool);
+  }
   readonly library = new LibraryMetadata(this.root);
   private readonly logger = new Logger(GenerationService.name);
   /** Templates being prepared right now, and how far each has got. */
@@ -270,22 +293,39 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const registryDir = this.registryDir();
       const revision = await currentTemplateIndexRevision(registryDir);
       const previous = storedTemplateIndexSchema.safeParse(stored);
-      if (
-        previous.success &&
-        previous.data.templateHash === profile.templateHash &&
-        previous.data.revision === revision
-      )
+      if (previous.success && templateIndexState(profile, previous.data, revision) === 'ready')
         return;
       const resolved =
         (await this.models.resolveRole('planner', actorOf(account))) ??
         (await this.models.resolve(model, actorOf(account)));
-      const provider = new GenerationProvider({
+      const rawProvider = new GenerationProvider({
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
         model: resolved.model,
         headers: resolved.headers,
         answerFormat: await loadAnswerFormat(registryDir),
+        fetchImpl: ledgerFetch(
+          new PostgresProviderLedger(this.pool, account.id, null, {
+            requests: 10000,
+            tokens: 100_000_000,
+            cost: null,
+          }),
+          'template-index',
+        ),
       });
+      const provider = new CheckpointTextProvider(
+        rawProvider,
+        new TaskCheckpoints(
+          join(this.root, `template-index-${templateId}`),
+          dependencyKey({
+            profile,
+            revision,
+            model: resolved.model,
+            connection: resolved.connectionId,
+            endpoint: resolved.baseUrl,
+          }),
+        ),
+      );
       const index: StoredTemplateIndex = await indexTemplateWithAgent({
         provider,
         registryDir,
@@ -334,10 +374,31 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     );
     if (!found.rowCount) throw new NotFoundException('Project not found.');
   }
+  async projectTemplates(
+    projectId: string | null,
+    account: Account,
+  ): Promise<{ templateId: string; name: string }[]> {
+    if (projectId === null) return [];
+    await this.requireProject(projectId, account);
+    const result = await this.pool.query<{ templateId: string; name: string }>(
+      `SELECT f.id AS "templateId",COALESCE(f.display_name,f.file_name) AS name FROM library_project_templates t
+       JOIN stored_files f ON f.id=t.template_id WHERE t.project_id=$1 AND f.kind='template' AND ${visibleFile(2, 'f')}
+       ORDER BY f.id`,
+      [projectId, account.id],
+    );
+    return result.rows;
+  }
 
   /** Stop a build: its variants share one cancellation, so any of their runs stops all three. */
   cancel(runId: string): void {
-    this.active.get(runId)?.abort();
+    this.active.get(runId)?.abort(new DOMException('Сборка остановлена.', 'AbortError'));
+    void readFile(join(this.directory(runId), 'metadata.json'), 'utf8')
+      .then(async (raw) => {
+        const metadata = JSON.parse(raw) as { buildId?: string; ownerId?: string };
+        if (metadata.buildId && metadata.ownerId)
+          await this.builds.stop(metadata.buildId, metadata.ownerId);
+      })
+      .catch((error: unknown) => this.logger.warn(`Stop persistence failed: ${String(error)}`));
   }
 
   /** Whether a build of this person gets pictures: an image model is assigned or configured. */
@@ -364,7 +425,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     const variant = layoutVariantSchema.safeParse(owned.variant);
     if (!variant.success || typeof owned.buildId !== 'string')
       throw new ConflictException('This run is not a variant of a build.');
-    if ((await this.repository.get(runId))?.state !== 'failed')
+    if ((await this.repository.get(runId))?.state === 'done')
       throw new ConflictException('Only a failed variant can be built again.');
     const request = generationRequestSchema.safeParse(await read('request.json').catch(() => null));
     if (!request.success)
@@ -373,11 +434,33 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     const plan = compositionPlanSchema.safeParse(
       await read('composition-plan.json').catch(() => null),
     );
+    const build = await this.builds.get(owned.buildId, account.id);
+    if (!build)
+      throw new ConflictException(
+        'Для старой сборки недостаточно данных восстановления. Создайте новую генерацию.',
+      );
     return this.start(request.data, account, {
       variant: variant.data,
       buildId: owned.buildId,
       ...(plan.success ? { plan: plan.data } : {}),
+      build,
     });
+  }
+
+  /** Explicit resume keeps the build and run ids and leaves successful variants untouched. */
+  async resume(runId: string, account: Account): Promise<StartedBuild> {
+    const metadata = JSON.parse(
+      await readFile(join(this.directory(runId), 'metadata.json'), 'utf8').catch(() => '{}'),
+    ) as { ownerId?: string; buildId?: string };
+    if (metadata.ownerId !== account.id || !metadata.buildId)
+      throw new NotFoundException('Run not found.');
+    const build = await this.builds.get(metadata.buildId, account.id);
+    if (!build)
+      throw new ConflictException(
+        'Сборка не содержит совместимых checkpoints. Создайте новую генерацию.',
+      );
+    const spec = generationSpecSchema.parse(build.spec);
+    return this.start(spec.request, account, { buildId: build.id, build });
   }
 
   /** The run is still being built in this process. */
@@ -393,13 +476,21 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   async start(
     input: GenerationRequest,
     account: Account,
-    retry?: { variant: LayoutVariant; buildId: string; plan?: CompositionPlan },
+    retry?: {
+      variant?: LayoutVariant;
+      buildId: string;
+      plan?: CompositionPlan;
+      build?: BuildRecord;
+    },
     onActivity?: (activity: ChatToolActivity) => void,
   ): Promise<StartedBuild> {
     const startedAt = this.now();
+    const schedulingGroup = input.requestId ?? randomUUID();
     const controller = new AbortController();
     const budget = openBuildBudget(startedAt, controller.signal, this.deadlineMs, startedAt);
     let handedOff = false;
+    let lease: BuildLease | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
       const signal = budget.signal;
       const gate = <T>(pending: () => Promise<T>): Promise<T> => waitForBuild(pending, budget);
@@ -461,6 +552,15 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         ),
       );
       // The schema of each answer goes into the instructions too: a model that ignores structured
+      const [vision, imageModel] = await gate(() =>
+        settle(
+          Promise.all([
+            this.models.resolveRole('vision', actor),
+            this.models.resolveRole('image', actor),
+          ]),
+        ),
+      );
+      // The schema of each answer goes into the instructions too: a model that ignores structured
       // output still answers in shape.
       const answerFormat = await gate(() => loadAnswerFormat(this.registryDir()));
       // How each model thinks is what probing it showed, settled before the run starts.
@@ -472,6 +572,9 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         ),
       );
       const attemptBudget = new AttemptBudget();
+      let transport: typeof fetch = async () => {
+        throw new Error('Журнал запросов ещё не открыт.');
+      };
       const providerOf = (model: ResolvedModel, reasoning: ReasoningCapability | undefined) =>
         new GenerationProvider({
           apiKey: model.apiKey,
@@ -484,6 +587,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           ...(reasoning ? { reasoning } : {}),
           answerFormat,
           attemptBudget,
+          queueGroup: schedulingGroup,
+          fetchImpl: (...args) => transport(...args),
           onActivity: (event) => onActivity?.({ ...event, kind: 'agent' }),
         });
       const fallback = providerOf(writer, writerReasoning);
@@ -500,24 +605,117 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
       // Notes describe the profile they were made from; a re-parsed template drops stale ones.
       const notes =
-        index.success && index.data.templateHash === prepared.data.templateHash
+        index.success &&
+        templateIndexState(
+          prepared.data,
+          index.data,
+          await currentTemplateIndexRevision(registryDir),
+        ) === 'ready'
           ? index.data.notes
           : undefined;
+      const requestKey = schedulingGroup;
+      const previous =
+        retry?.build ??
+        (input.requestId ? await this.builds.byRequest(account.id, requestKey) : null);
+      const registryFiles = (await readdir(registryDir, { recursive: true, withFileTypes: true }))
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name))
+        .sort();
+      const registryHash = dependencyKey(
+        await Promise.all(
+          registryFiles.map(async (path) => [
+            path.slice(registryDir.length),
+            await readFile(path, 'utf8'),
+          ]),
+        ),
+      );
+      const spec = generationSpecSchema.parse({
+        schemaVersion: 1,
+        request: input,
+        brief,
+        profile: prepared.data,
+        ...(notes ? { notes } : {}),
+        registryHash,
+        today: previous
+          ? generationSpecSchema.parse(previous.spec).today
+          : `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+        modelPolicy: [
+          ['writer', writer, writerReasoning],
+          ['planner', planner, plannerReasoning],
+          ['critic', critic, criticReasoning],
+          ['vision', vision, null],
+          ['image', imageModel, null],
+        ]
+          .filter(([, model]) => model !== null)
+          .map(([role, model, reasoning]) => ({
+            role,
+            modelId: (model as ResolvedModel).model,
+            connectionId: (model as ResolvedModel).connectionId,
+            endpointHash: dependencyKey((model as ResolvedModel).baseUrl),
+            reasoning,
+          })),
+      });
+      const specHash = dependencyKey(spec);
+      if (previous && previous.spec_hash !== specHash)
+        throw new ConflictException(
+          'Входы, шаблон или модельная политика изменились. Создайте новую генерацию.',
+        );
+      const buildRecord =
+        previous ?? (await this.builds.create(account.id, requestKey, specHash, spec));
+      const already = this.executions.get(buildRecord.id);
+      if (already) return already;
+      lease = await this.builds.claim(buildRecord.id, account.id, retry !== undefined);
+      if (!lease) {
+        const variants = buildRecord.variants.filter(
+          (entry) => !retry?.variant || entry.variant === retry.variant,
+        );
+        const each = variants.map(async (entry): Promise<VariantEnd> => {
+          for (;;) {
+            const run = await this.repository.get(entry.runId);
+            if (run?.state === 'done' || run?.state === 'failed')
+              return { ...entry, state: run.state };
+            if (!(await this.builds.hasLiveLease(buildRecord.id)))
+              return { ...entry, state: 'failed' };
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        });
+        const primary = variants.find((entry) => entry.variant === 'balanced') ?? variants[0];
+        if (!primary) throw new ConflictException('Варианты сборки не найдены.');
+        return { runId: primary.runId, variants, each, settled: Promise.all(each) };
+      }
+      const executionLease = lease;
+      const ledger = new PostgresProviderLedger(this.pool, account.id, executionLease, {
+        requests: input.budget?.maxHttpRequests ?? 240,
+        tokens: input.budget?.maxReservedTokens ?? 2_000_000,
+        cost: null,
+      });
+      transport = ledgerFetch(ledger, 'generation');
+      const assertOwner = async () => {
+        signal.throwIfAborted();
+        await this.builds.assert(executionLease);
+      };
+      heartbeat = setInterval(() => {
+        void this.builds.renew(executionLease).catch((error: unknown) => controller.abort(error));
+      }, 10_000);
+      const checkpoints = new TaskCheckpoints(
+        join(this.root, `build-${buildRecord.id}`, 'tasks'),
+        specHash,
+        assertOwner,
+      );
+      const checkpointProvider = new CheckpointTextProvider(provider, checkpoints);
+      const sharedContent = new SharedContent();
       // The three variants of one brief are separate runs, so every deck endpoint serves each of
       // them as it is, and they share one cancellation.
       // One plan for the three variants: the story is decided once, the layouts per variant. Each
       // run keeps it, so a variant that fails can be built again on the same story.
-      const sharedPlan = new SharedPlan(retry?.plan, async (plan) => {
+      const sharedPlan = new SharedPlan(undefined, async (plan) => {
+        await assertOwner();
         for (const { run } of runs) {
-          await writeFile(
-            join(this.directory(run.runId), 'composition-plan.json'),
-            JSON.stringify(plan),
-          );
+          await atomicJson(join(this.directory(run.runId), 'composition-plan.json'), plan);
         }
       });
       // The model of the "vision" role reads the drawn slides for the contextual audit. Without one
       // the build has the deterministic audit and the critic's read of the text, and says so.
-      const vision = await gate(() => settle(this.models.resolveRole('vision', actor)));
       const reviewer = vision
         ? {
             model: vision.model,
@@ -530,19 +728,21 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
               answerFormat,
               signal,
               attemptBudget,
+              fetchImpl: ledgerFetch(ledger, 'vision'),
+              queueGroup: schedulingGroup,
             }),
           }
         : null;
       // Pictures too are drawn once per brief. Without an image model the planner is not offered
       // a place for a picture, so no slide is left with an empty frame.
-      const imageModel = await gate(() => settle(this.models.resolveRole('image', actor)));
-      const images = imageProviderOf(imageModel);
+      const images = imageProviderOf(imageModel, process.env, ledgerFetch(ledger, 'images'));
       const illustrations = images
         ? await gate(() =>
             SharedIllustrations.load(
               {
                 images,
-                text: provider,
+                text: checkpointProvider,
+                checkpoints,
                 designSystem: prepared.data.designSystem,
                 seed: input.seed ?? 42,
                 signal,
@@ -568,11 +768,15 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         variant: LayoutVariant;
       }[] = [];
       // The variants are one build: the library shows it once. A variant built again joins it.
-      const buildId = retry?.buildId ?? randomUUID();
+      const buildId = buildRecord.id;
       try {
-        for (const variant of retry ? [retry.variant] : VARIANTS) {
+        for (const entry of buildRecord.variants.filter(
+          (entry) => !retry?.variant || entry.variant === retry.variant,
+        )) {
+          const variant = entry.variant;
           if (signal.aborted) throw buildStopReason(signal);
-          const run = await this.repository.create();
+          const run = await this.repository.get(entry.runId);
+          if (!run) throw new ConflictException('Прогон сборки не найден.');
           runs.push({ run, variant });
           this.active.set(run.runId, controller);
           if (signal.aborted) throw buildStopReason(signal);
@@ -614,13 +818,21 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         throw error;
       }
       const work = async ({ run, variant }: (typeof runs)[number]) => {
+        const attemptDir = join(
+          this.directory(run.runId),
+          'executions',
+          String(executionLease.fence),
+        );
+        let done: Extract<JobEvent, { type: 'done' }> | undefined;
         try {
+          if (run.state === 'done') return 'done' as const;
+          await assertOwner();
           if (signal.aborted) throw buildStopReason(signal);
           await this.repository.transition(run.runId, 'running');
           await generatePresentation({
             runId: run.runId,
             templatePath: template.storage_path,
-            outputDir: this.directory(run.runId),
+            outputDir: attemptDir,
             brief,
             slideCount: input.outline ? null : input.slideCount,
             outline: input.outline,
@@ -629,15 +841,22 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             ...(notes ? { notes } : {}),
             registryDir,
             engine: this.engine,
-            provider,
+            provider: checkpointProvider,
             seed: input.seed,
             variant,
             sharedPlan,
+            sharedContent,
+            layoutRemapPolicy: 'conceptual',
+            today: new Date(spec.today),
             illustrations,
             reviewer,
             signal,
             deadlineAt: budget.deadlineAt,
-            onEvent: (event) => this.repository.appendEvent(run.runId, event),
+            eventSequence: ((await this.repository.events(run.runId)).at(-1)?.seq ?? -1) + 1,
+            onEvent: async (event) => {
+              if (event.type === 'done') done = event;
+              else await this.builds.publish(executionLease, event);
+            },
           });
           if (input.projectId !== null) {
             const project = await this.pool.query(
@@ -646,10 +865,38 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             );
             if (!project.rowCount) await this.library.remove(run.runId);
           }
-          await this.repository.transition(run.runId, 'done');
+          await assertOwner();
+          if (!done) throw new Error('Сборка не подтвердила завершение.');
+          await atomicJson(join(attemptDir, 'provider-usage.json'), await ledger.summary());
+          await this.builds.publish(executionLease, done, async () => {
+            const names = (await readdir(attemptDir)).filter((name) => name !== 'manifest.json');
+            // The manifest is the final publication marker. A stale worker writes only its
+            // own execution directory and can never replace these files after lease loss.
+            for (const name of [...names, 'manifest.json']) {
+              const target = join(this.directory(run.runId), name);
+              const temporary = `${target}.${executionLease.fence}.publish`;
+              await cp(join(attemptDir, name), temporary, { recursive: true, force: true });
+              // Directory publication (previews/media) uses a fence-specific name in the
+              // original deck paths; existing root directories can be merged safely here.
+              try {
+                await rename(temporary, target);
+              } catch (error) {
+                if (
+                  !['EEXIST', 'ENOTEMPTY', 'EPERM'].includes(
+                    (error as NodeJS.ErrnoException).code ?? '',
+                  )
+                )
+                  throw error;
+                await cp(temporary, target, { recursive: true, force: true });
+              }
+            }
+          });
           return 'done' as const;
         } catch {
-          await this.repository.transition(run.runId, 'failed').catch(() => undefined);
+          await this.builds
+            .assert(executionLease)
+            .then(() => this.repository.transition(run.runId, 'failed'))
+            .catch(() => undefined);
           return 'failed' as const;
         } finally {
           this.active.delete(run.runId);
@@ -660,10 +907,22 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         runId: entry.run.runId,
         state: await work(entry),
       }));
-      const settled = Promise.all(each).finally(() => {
-        controller.abort();
-        budget.dispose();
-      });
+      const settled = Promise.all(each)
+        .then(async (ends) => {
+          const all = await Promise.all(
+            buildRecord.variants.map((entry) => this.repository.get(entry.runId)),
+          );
+          await this.builds
+            .finish(executionLease, all.every((run) => run?.state === 'done') ? 'done' : 'failed')
+            .catch((error: unknown) => this.logger.warn(String(error)));
+          return ends;
+        })
+        .finally(() => {
+          if (heartbeat) clearInterval(heartbeat);
+          this.executions.delete(buildRecord.id);
+          controller.abort();
+          budget.dispose();
+        });
       const primary = runs.find((entry) => entry.variant === 'balanced') ?? runs[0];
       if (!primary) throw new BadRequestException('No variant could be started.');
       const result = {
@@ -673,9 +932,15 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         settled,
       };
       handedOff = true;
+      this.executions.set(buildRecord.id, result);
       return result;
+    } catch (error) {
+      if (error instanceof BuildConflictError) throw new ConflictException(error.message);
+      throw error;
     } finally {
       if (!handedOff) {
+        if (heartbeat) clearInterval(heartbeat);
+        if (lease) await this.builds.finish(lease, 'interrupted').catch(() => undefined);
         controller.abort();
         budget.dispose();
       }
@@ -694,6 +959,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       try {
         const run = await this.repository.get(id);
         if (run?.state !== 'queued' && run?.state !== 'running') continue;
+        const metadata = JSON.parse(
+          await readFile(join(this.directory(id), 'metadata.json'), 'utf8').catch(() => '{}'),
+        ) as { buildId?: string };
+        if (metadata.buildId && (await this.builds.hasLiveLease(metadata.buildId))) continue;
         const last = (await this.repository.events(id)).at(-1);
         await this.repository.appendEvent(id, {
           schemaVersion: 1,
@@ -704,7 +973,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           stage: last && 'stage' in last ? last.stage : 'queued',
           code: 'internal',
           // The chat shows the message as it is, and its interface speaks Russian.
-          message: 'Сервер перезапустился во время сборки. Запустите её ещё раз.',
+          message: 'Выполнение сборки прервано. Продолжите её с сохранённых результатов.',
           retryable: true,
         });
         await this.repository.transition(id, 'failed');

@@ -4,13 +4,15 @@ import { z } from 'zod';
 import { loadAgent } from '@lct/registry';
 import {
   compositionNoteSchema,
+  storedTemplateIndexSchema,
   type CompositionNote,
   type GenerationProfile,
   type StoredTemplateIndex,
 } from '@lct/contracts';
-import { OpenAICompatibleProvider, RoutedTextProvider, type TextProvider } from './provider.js';
+import type { TextProvider } from './provider.js';
 import { distinctCompositions, plannerComposition, slotBriefs, writerSlots } from './workflow.js';
 import { declaredQrSlots } from './qr-assets.js';
+import { dependencyKey } from './checkpoints.js';
 
 /** Compositions per model call: small enough that one answer never runs out of tokens. */
 const BATCH = 12;
@@ -253,11 +255,7 @@ export async function indexTemplateWithAgent(options: {
   onProgress?: (progress: IndexProgress) => void;
 }): Promise<StoredTemplateIndex> {
   const agent = await loadAgent(join(options.registryDir, 'template-indexer'));
-  if (
-    options.provider instanceof OpenAICompatibleProvider ||
-    options.provider instanceof RoutedTextProvider
-  )
-    options.provider.setAgentGeneration('indexer', agent.config.generation);
+  options.provider.setAgentGeneration?.('indexer', agent.config.generation);
   const notes = await indexTemplate({
     provider: options.provider,
     instructions: agent.instructions,
@@ -267,9 +265,31 @@ export async function indexTemplateWithAgent(options: {
   });
   return {
     templateHash: options.profile.templateHash,
+    profileHash: dependencyKey(options.profile),
     revision: templateIndexRevision(agent.config.version, agent.instructions),
     notes,
   };
+}
+
+/** A parseable empty or partial index is not ready; measured profile changes invalidate notes. */
+export function templateIndexState(
+  profile: GenerationProfile,
+  index: unknown,
+  revision: string,
+): 'missing' | 'partial' | 'stale' | 'ready' {
+  const stored = storedTemplateIndexSchema.safeParse(index);
+  if (!stored.success || stored.data.notes.length === 0) return 'missing';
+  if (
+    stored.data.templateHash !== profile.templateHash ||
+    stored.data.revision !== revision ||
+    stored.data.profileHash !== dependencyKey(profile)
+  )
+    return 'stale';
+  const expected = distinctCompositions(profile.compositions).map(
+    (composition) => composition.patternId,
+  );
+  const ids = new Set(stored.data.notes.map((note) => note.patternId));
+  return ids.size === expected.length && expected.every((id) => ids.has(id)) ? 'ready' : 'partial';
 }
 
 /** The revision an index made now would carry: compare it with a stored one before re-indexing. */

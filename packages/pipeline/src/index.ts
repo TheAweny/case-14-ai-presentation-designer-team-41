@@ -79,6 +79,7 @@ export {
   variantCatalog,
   remapPlan,
   SharedPlan,
+  SharedContent,
   type DeckVariant,
   type LayoutRemapPolicy,
   prepareVariantCatalog,
@@ -89,6 +90,12 @@ export {
   type LayoutRemapComparison,
 } from './generation/remap-evaluation.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
+export {
+  TaskCheckpoints,
+  CheckpointTextProvider,
+  dependencyKey,
+  atomicJson,
+} from './generation/checkpoints.js';
 export {
   AttemptBudget,
   DEFAULT_ATTEMPT_BUDGET,
@@ -103,6 +110,7 @@ export {
 export { SharedIllustrations, styleOf, type Illustration } from './generation/illustrations.js';
 export {
   currentTemplateIndexRevision,
+  templateIndexState,
   indexTemplate,
   indexTemplateWithAgent,
   templateIndexRevision,
@@ -115,3 +123,4 @@ export {
   qrUrlsInText,
   type QrCodeImage,
 } from './assets/qr-code.js';
+export { ledgerFetch, type AttemptLedger, type TokenPrice } from './models/attempt-ledger.js';

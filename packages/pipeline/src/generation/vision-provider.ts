@@ -26,6 +26,7 @@ export interface VisionProviderOptions {
   signal?: AbortSignal;
   /** Slots shared with the text roles. The process-wide pool when omitted. */
   limiter?: RequestLimiter;
+  queueGroup?: string;
   /**
    * Attempts shared by this build. The first request of a slide is free. Later transport
    * tries, and the schema-repair call, each take one.
@@ -100,7 +101,7 @@ export class VisionProvider implements ModelProvider {
           );
         }
       }
-      const release = await this.limiter.acquire(signal);
+      const release = await this.limiter.acquire(signal, this.options.queueGroup ?? 'vision');
       let wait = 500;
       try {
         const response = await this.fetchImpl(this.endpoint, {

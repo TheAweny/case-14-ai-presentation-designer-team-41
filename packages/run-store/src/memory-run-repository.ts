@@ -12,7 +12,7 @@ const transitions: Record<RunState, readonly RunState[]> = {
   queued: ['running', 'failed'],
   running: ['done', 'failed'],
   done: [],
-  failed: [],
+  failed: ['running'],
 };
 
 export class MemoryRunRepository implements RunRepository {

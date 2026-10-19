@@ -104,12 +104,12 @@ describe('generation request limits', () => {
     brief: 'A sufficiently detailed generation brief.',
   };
 
-  it.each([10, 12, 15])('accepts a manual request for %i slides', (slideCount) => {
+  it.each([5, 10, 12, 15])('accepts a manual request for %i slides', (slideCount) => {
     expect(generationRequestSchema.safeParse({ ...base, slideCount }).success).toBe(true);
   });
 
-  it('rejects a manual request outside the 10-15 UI range', () => {
-    expect(generationRequestSchema.safeParse({ ...base, slideCount: 9 }).success).toBe(false);
+  it('rejects a manual request outside the 5-15 UI range', () => {
+    expect(generationRequestSchema.safeParse({ ...base, slideCount: 4 }).success).toBe(false);
     expect(generationRequestSchema.safeParse({ ...base, slideCount: 16 }).success).toBe(false);
   });
 });

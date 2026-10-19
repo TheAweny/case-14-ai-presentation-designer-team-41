@@ -124,6 +124,7 @@ export class PostgresRunRepository implements RunRepository {
                ELSE started_at
              END,
              completed_at = CASE
+               WHEN $2::run_state = 'running' THEN NULL
                WHEN $2::run_state IN ('done', 'failed') THEN now()
                ELSE completed_at
              END

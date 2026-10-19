@@ -46,8 +46,8 @@ export const modelCallSummarySchema = z.object({
   agentId: z.string().min(1),
   modelId: z.string().min(1),
   calls: z.number().int().nonnegative(),
-  inputTokens: z.number().int().nonnegative(),
-  outputTokens: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative().nullable(),
+  outputTokens: z.number().int().nonnegative().nullable(),
 });
 
 export const artifactManifestSchema = z.object({

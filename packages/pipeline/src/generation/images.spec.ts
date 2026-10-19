@@ -139,7 +139,7 @@ describe('SharedIllustrations', () => {
     );
     expect(await shared.request(slide)).toBeNull();
     expect(shared.failures).toEqual([
-      { key: '2:0:1536x1024', message: 'Image API responded 500.' },
+      { key: expect.stringMatching(/^[a-f0-9]{64}$/), message: 'Image API responded 500.' },
     ]);
   });
 });

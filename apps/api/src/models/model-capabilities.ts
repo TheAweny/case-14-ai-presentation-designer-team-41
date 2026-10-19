@@ -107,19 +107,14 @@ export class ModelCapabilityService {
   }
 
   /** The settings with the kinds the person set by hand on each connection. */
-  async withManualKinds(settings: ModelSettings, actor: SettingsActor): Promise<ModelSettings> {
+  async withManualKinds(settings: ModelSettings, _actor: SettingsActor): Promise<ModelSettings> {
     const connections = await Promise.all(
       settings.connections.map(async (connection): Promise<ModelConnection> => {
         const stored = await this.store.listCapabilities(connection);
         const manualKinds: Record<string, ModelKind[]> = {};
-        let reasoningKnown = false;
         for (const [modelId, found] of stored) {
           if (found.manualKinds) manualKinds[modelId] = [...found.manualKinds];
-          if (found.reasoning) reasoningKnown = true;
         }
-        // A connection checked before thinking was settled at check time: settle it once now.
-        if (connection.lastCheck?.ok && !reasoningKnown)
-          void this.check(connection.connectionId, actor, false);
         return { ...connection, manualKinds };
       }),
     );
@@ -153,7 +148,7 @@ export class ModelCapabilityService {
 
   /** How thinking can be chosen for a resolved model; no choice while that is unknown. */
   async reasoningOf(model: ResolvedModel): Promise<ReasoningCapability> {
-    return (await this.reasoning(model, false)) ?? NO_REASONING_CHOICE;
+    return (await this.store.getCapability(model, model.model))?.reasoning ?? NO_REASONING_CHOICE;
   }
 
   /** The stored finding, or the free probe for a model nothing is stored about. */
@@ -190,7 +185,7 @@ export class ModelCapabilityService {
   /** What the composer shows for a model the person may use. */
   async capabilitiesOf(ref: ModelRef, actor: SettingsActor): Promise<ModelCapabilities> {
     const model = await this.settings.resolve(ref, actor);
-    const reasoning = await this.reasoning(model, false);
+    const reasoning = (await this.store.getCapability(model, model.model))?.reasoning ?? null;
     return { reasoning: reasoning ?? NO_REASONING_CHOICE, probed: reasoning !== null };
   }
 

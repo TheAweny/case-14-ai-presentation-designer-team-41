@@ -30,10 +30,10 @@ import {
   designSystemSchema,
   deckImportResponseSchema,
   generationRequestSchema,
-  storedTemplateIndexSchema,
   templateIrSchema,
 } from '@lct/contracts';
 import type { SlideIr } from '@lct/contracts';
+import { currentTemplateIndexRevision, templateIndexState } from '@lct/pipeline';
 import { validateExportMedia, writeExportMedia } from './export-media.js';
 import { buildOf, oneDeckPerBuild, type Metadata } from './library-metadata.js';
 import { CurrentAccount } from '../accounts/account.guard.js';
@@ -73,6 +73,14 @@ export interface TemplatePreparation {
   /** Its slides are being drawn right now; `drawn` — the pictures are there. */
   drawing: boolean;
   drawn: boolean;
+  readiness?: {
+    index: 'missing' | 'partial' | 'stale' | 'ready';
+    geometry: boolean;
+    fonts: 'unknown';
+    compositions: number;
+    textSlots: number;
+    imageSlots: number;
+  };
 }
 
 @Controller('generation')
@@ -150,13 +158,41 @@ export class GenerationController {
   ): Promise<TemplatePreparation> {
     const row = await this.generation.template(templateId, account);
     const { progress, drawing } = this.generation.preparationOf(templateId);
+    const profile = row.profile.generation;
+    const index = profile
+      ? templateIndexState(
+          profile,
+          row.profile.index,
+          await currentTemplateIndexRevision(this.generation.registryDir()),
+        )
+      : 'missing';
     return {
       stage: progress?.stage ?? null,
       described: progress?.described ?? 0,
       total: progress?.total ?? 0,
-      indexed: storedTemplateIndexSchema.safeParse(row.profile?.index).success,
+      indexed: index === 'ready',
       drawing,
       drawn: Array.isArray(row.profile?.previews),
+      ...(profile
+        ? {
+            readiness: {
+              index,
+              geometry: profile.compositions.every((composition) =>
+                composition.slots.every((slot) => slot.box !== undefined),
+              ),
+              fonts: 'unknown' as const,
+              compositions: profile.compositions.length,
+              textSlots: profile.compositions.reduce(
+                (sum, composition) => sum + composition.slots.length,
+                0,
+              ),
+              imageSlots: profile.compositions.reduce(
+                (sum, composition) => sum + (composition.imageSlots?.length ?? 0),
+                0,
+              ),
+            },
+          }
+        : {}),
     };
   }
 
@@ -213,6 +249,13 @@ export class GenerationController {
       throw new NotFoundException('Run not found.');
     this.generation.cancel(id);
     return { ok: true };
+  }
+
+  @Post(':id/resume')
+  @ApiOperation({ summary: 'Продолжить сборку с сохранённых задач' })
+  async resume(@Param('id') id: string, @CurrentAccount() account: Account) {
+    const build = await this.generation.resume(id, account);
+    return { runId: build.runId, variants: build.variants };
   }
 
   @Get()

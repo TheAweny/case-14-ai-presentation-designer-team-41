@@ -184,18 +184,32 @@
                 "type": "integer"
               },
               "inputTokens": {
-                "maximum": 9007199254740991,
-                "minimum": 0,
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "modelId": {
                 "minLength": 1,
                 "type": "string"
               },
               "outputTokens": {
-                "maximum": 9007199254740991,
-                "minimum": 0,
-                "type": "integer"
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -14071,6 +14085,16 @@
                 "budget-exceeded",
                 "engine-failed",
                 "cancelled",
+                "interrupted",
+                "provider-rate-limit",
+                "provider-auth",
+                "provider-quota",
+                "provider-timeout",
+                "invalid-response",
+                "quality-blocked",
+                "export-failed",
+                "persistence-failed",
+                "unknown-outcome",
                 "internal"
               ],
               "type": "string"
@@ -17964,7 +17988,7 @@
         "slideCount": {
           "description": "Number of slides to produce.",
           "maximum": 15,
-          "minimum": 10,
+          "minimum": 5,
           "type": "integer"
         },
         "templatePath": {

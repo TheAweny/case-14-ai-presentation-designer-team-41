@@ -372,7 +372,7 @@ export const chatTurnRequestSchema = z.object({
   /** The project a new chat belongs to; ignored for a chat that exists. */
   projectId: z.string().nullable().default(null),
   /** How many slides the person usually wants (their setting); null — as the material needs. */
-  slideCount: z.number().int().min(10).max(60).nullable().default(null),
+  slideCount: z.number().int().min(5).max(60).nullable().default(null),
   /** The deck a new chat starts from, in the editor: the chat leads to it. */
   deckId: z.string().max(100).nullable().default(null),
   input: chatTurnInputSchema,

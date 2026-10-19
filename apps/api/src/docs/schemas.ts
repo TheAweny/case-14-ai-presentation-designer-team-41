@@ -72,6 +72,16 @@ const validatedInputsMatches: Same<
 > = true;
 
 export const templatePreparationSchema = z.object({
+  readiness: z
+    .object({
+      index: z.enum(['missing', 'partial', 'stale', 'ready']),
+      geometry: z.boolean(),
+      fonts: z.literal('unknown'),
+      compositions: z.number(),
+      textSlots: z.number(),
+      imageSlots: z.number(),
+    })
+    .optional(),
   stage: z.enum(['profile', 'index']).nullable().describe('Идущий этап; null — подготовки нет.'),
   described: z.number().int(),
   total: z.number().int(),

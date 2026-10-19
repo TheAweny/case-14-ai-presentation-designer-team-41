@@ -3,9 +3,19 @@ import type { AgentGeneration, ReasoningCapability, ReasoningEffort } from '@lct
 import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js';
 import { CompatibleRequests, refusedParameter } from '../models/compatibility.js';
 import type { AttemptBudget } from './attempt-budget.js';
+import { modelHttpFailure } from '../chat/model-failure.js';
 
 export interface TextProvider {
   readonly model: string;
+  readonly calls?: readonly {
+    agent: string;
+    modelId?: string;
+    ms: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    provider: string;
+  }[];
+  setAgentGeneration?(agent: string, generation: AgentGeneration): void;
   generate<T>(
     agent: string,
     instructions: string,
@@ -34,6 +44,7 @@ interface Options {
   seed?: number;
   /** Slots to take requests from; the process-wide pool by default. */
   limiter?: RequestLimiter;
+  queueGroup?: string;
   /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
   headers?: Readonly<Record<string, string>>;
   /** Thinking is on only when the person switched it on; null leaves it off, as false does. */
@@ -119,9 +130,16 @@ export class RequestLimiter {
   private successes = 0;
   private pausedUntil = 0;
   private wake: ReturnType<typeof setTimeout> | undefined;
-  private readonly waiting: (() => void)[] = [];
+  private readonly waiting: { grant: () => void; group: string; tokens: number }[] = [];
+  private turn = 0;
+  private readonly turns = new Map<string, number>();
+  private readonly activeGroups = new Map<string, number>();
+  private readonly sent: { at: number; tokens: number }[] = [];
 
-  constructor(private readonly ceiling = MAX_CONCURRENT) {
+  constructor(
+    private readonly ceiling = MAX_CONCURRENT,
+    private readonly quota: { rpm?: number; tpm?: number } = {},
+  ) {
     this.limit = ceiling;
   }
 
@@ -130,22 +148,27 @@ export class RequestLimiter {
     return this.limit;
   }
 
-  async acquire(signal: AbortSignal): Promise<() => void> {
+  async acquire(signal: AbortSignal, group = 'default', tokens = 0): Promise<() => void> {
     signal.throwIfAborted();
+    if (this.quota.tpm !== undefined && tokens > this.quota.tpm)
+      throw new Error('Запрос превышает настроенный TPM.');
     await new Promise<void>((resolve, reject) => {
       const grant = () => {
         signal.removeEventListener('abort', abort);
         this.active++;
+        this.turns.set(group, ++this.turn);
+        this.activeGroups.set(group, (this.activeGroups.get(group) ?? 0) + 1);
+        this.sent.push({ at: Date.now(), tokens });
         resolve();
       };
       const abort = () => {
-        const index = this.waiting.indexOf(grant);
+        const index = this.waiting.findIndex((item) => item.grant === grant);
         if (index >= 0) this.waiting.splice(index, 1);
         reject(signal.reason);
       };
-      if (this.waiting.length === 0 && this.open()) grant();
+      if (this.waiting.length === 0 && this.open(tokens)) grant();
       else {
-        this.waiting.push(grant);
+        this.waiting.push({ grant, group, tokens });
         signal.addEventListener('abort', abort, { once: true });
         this.pump();
       }
@@ -155,6 +178,12 @@ export class RequestLimiter {
       if (released) return;
       released = true;
       this.active--;
+      const left = (this.activeGroups.get(group) ?? 1) - 1;
+      if (left > 0) this.activeGroups.set(group, left);
+      else {
+        this.activeGroups.delete(group);
+        if (!this.waiting.some((item) => item.group === group)) this.turns.delete(group);
+      }
       this.pump();
     };
   }
@@ -179,13 +208,44 @@ export class RequestLimiter {
     this.pump();
   }
 
-  private open(): boolean {
-    return this.active < this.limit && Date.now() >= this.pausedUntil;
+  private open(tokens = 0): boolean {
+    while (this.sent[0] && this.sent[0].at <= Date.now() - 60_000) this.sent.shift();
+    return (
+      this.active < this.limit &&
+      Date.now() >= this.pausedUntil &&
+      (this.quota.rpm === undefined || this.sent.length < this.quota.rpm) &&
+      (this.quota.tpm === undefined ||
+        this.sent.reduce((sum, item) => sum + item.tokens, 0) + tokens <= this.quota.tpm)
+    );
   }
 
   private pump(): void {
-    while (this.waiting.length > 0 && this.open()) this.waiting.shift()?.();
-    const pause = this.pausedUntil - Date.now();
+    while (this.waiting.length > 0) {
+      let index = -1;
+      for (let at = 0; at < this.waiting.length; at++) {
+        const candidate = this.waiting[at];
+        const current = this.waiting[index];
+        if (
+          candidate &&
+          this.open(candidate.tokens) &&
+          (!current ||
+            (this.turns.get(candidate.group) ?? 0) < (this.turns.get(current.group) ?? 0))
+        )
+          index = at;
+      }
+      if (index < 0) break;
+      this.waiting.splice(index, 1)[0]?.grant();
+    }
+    const pause = Math.max(
+      this.pausedUntil - Date.now(),
+      (this.quota.rpm !== undefined || this.quota.tpm !== undefined) && this.sent[0]
+        ? this.sent[0].at + 60_000 - Date.now()
+        : 0,
+    );
+    if (this.waiting.length === 0 && this.wake) {
+      clearTimeout(this.wake);
+      this.wake = undefined;
+    }
     if (this.waiting.length > 0 && pause > 0 && !this.wake) {
       this.wake = setTimeout(() => {
         this.wake = undefined;
@@ -196,14 +256,21 @@ export class RequestLimiter {
 }
 
 // I share the HTTP slots across all runs and variants in this process, not per deck.
-const requests = new RequestLimiter();
+const configuredQuota = (name: string): number | undefined => {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+};
+const requests = new RequestLimiter(MAX_CONCURRENT, {
+  rpm: configuredQuota('MODEL_RPM'),
+  tpm: configuredQuota('MODEL_TPM'),
+});
 
 /**
  * Take one of the process-wide model request slots; the answer releases it. The chat shares them
  * with the generation, so a chat turn waits behind a deck rather than overloading the provider.
  */
-export function acquireModelSlot(signal: AbortSignal): Promise<() => void> {
-  return requests.acquire(signal);
+export function acquireModelSlot(signal: AbortSignal, group = 'chat'): Promise<() => void> {
+  return requests.acquire(signal, group);
 }
 
 /** The provider refused a chat turn for load: the whole process slows down, not only the chat. */
@@ -225,8 +292,6 @@ export const BUSY_STATUSES: ReadonlySet<number> = new Set([429, 502, 503]);
  */
 export const BUSY_RETRIES = 5;
 const MAX_BACKOFF_MS = 16_000;
-/** The longest wait a Retry-After header may impose; a longer one is the run's deadline's call. */
-const MAX_RETRY_AFTER_MS = 30_000;
 /** How long an answer may take, and how long once the model thinks before it. */
 const ANSWER_TIMEOUT_MS = 65_000;
 const THINKING_TIMEOUT_MS = 180_000;
@@ -250,7 +315,7 @@ function retryAfterMs(header: string | null): number {
 export function retryDelay(retry: number, retryAfter: string | null, random = Math.random): number {
   const step = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** retry);
   const jittered = step / 2 + (random() * step) / 2;
-  return Math.min(MAX_RETRY_AFTER_MS, Math.max(retryAfterMs(retryAfter), jittered));
+  return Math.max(retryAfterMs(retryAfter), jittered);
 }
 
 export function backoff(ms: number, signal: AbortSignal): Promise<void> {
@@ -361,7 +426,15 @@ export class OpenAICompatibleProvider implements TextProvider {
         used < cap && (budget === undefined || budget.tryTake());
       for (;;) {
         signal.throwIfAborted();
-        const release = await this.limiter.acquire(signal);
+        const reserve =
+          Buffer.byteLength(system + JSON.stringify(input) + JSON.stringify(outputSchema), 'utf8') +
+          (generation?.maxOutputTokens ?? 3600) * (attempt + 1) +
+          thinkingTokens;
+        const release = await this.limiter.acquire(
+          signal,
+          this.options.queueGroup ?? 'generation',
+          reserve,
+        );
         const started = Date.now();
         let wait = 500;
         try {
@@ -417,16 +490,23 @@ export class OpenAICompatibleProvider implements TextProvider {
           );
           if (!response.ok) {
             const detail = await response.text().catch(() => '');
+            const failure = modelHttpFailure(
+              response.status,
+              this.model,
+              response.headers.get('retry-after'),
+              detail,
+            );
+            if (failure.failure.kind === 'quota-exhausted') throw failure;
             const allowed = BUSY_STATUSES.has(response.status) && allowRetry(busy, BUSY_RETRIES);
             if (!allowed) {
               const retrying = BUSY_STATUSES.has(response.status) && busy < BUSY_RETRIES;
-              throw new Error(
+              failure.message =
                 `Model API HTTP ${response.status} for ${this.model}` +
-                  (busy ? ` after ${busy} retries` : '') +
-                  (retrying ? '; the shared attempt budget is exhausted' : '') +
-                  '; no alternate model was used.' +
-                  refusedParameter(detail),
-              );
+                (busy ? ` after ${busy} retries` : '') +
+                (retrying ? '; the shared attempt budget is exhausted' : '') +
+                '; no alternate model was used.' +
+                refusedParameter(detail);
+              throw failure;
             }
             wait = retryDelay(busy++, response.headers.get('retry-after'));
             // 502 is a gateway hiccup; 429 and 503 say the provider is overloaded, so every
@@ -540,6 +620,11 @@ export class RoutedTextProvider implements TextProvider {
   }
   setAgentGeneration(agent: string, generation: AgentGeneration): void {
     (this.providers.get(agent) ?? this.fallback).setAgentGeneration(agent, generation);
+  }
+  get calls() {
+    return [...new Set([this.fallback, ...this.providers.values()])].flatMap((provider) =>
+      provider.calls.map((call) => ({ ...call, modelId: provider.model })),
+    );
   }
   generate<T>(
     agent: string,

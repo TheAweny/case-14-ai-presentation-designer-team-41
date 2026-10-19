@@ -15,7 +15,7 @@ export const modelBindingSchema = z.object({
 export const runConfigSchema = z.object({
   templatePath: z.string().min(1).describe('Path to the .pptx used as the style source.'),
   contentPath: z.string().min(1).describe('Path to the content pack for the deck.'),
-  slideCount: z.number().int().min(10).max(15).describe('Number of slides to produce.'),
+  slideCount: z.number().int().min(5).max(15).describe('Number of slides to produce.'),
   layoutVariants: z
     .array(layoutVariantSchema)
     .min(1)

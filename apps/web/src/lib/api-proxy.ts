@@ -12,7 +12,7 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   // How far the preparation of a template has got.
   { method: 'GET', pattern: /^generation\/prepare\/[\w-]+$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/export$/ },
-  { method: 'POST', pattern: /^generation\/[\w-]+\/cancel$/ },
+  { method: 'POST', pattern: /^generation\/[\w-]+\/(cancel|resume)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|summary|previews)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/exports\/[\w-]+\/[\w.-]+$/ },
