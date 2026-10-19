@@ -106,8 +106,14 @@ Logout отзывает текущий token на сервере, затем у�
 
 Каждый API boundary требует service token и проверенную сессию с совпадающим владельцем;
 один `x-lct-user` недостаточен. Каждый server action обращается к `requireAccount`.
-`/api/service-status` также использует серверную проверку сессии и передаёт только ID аккаунта,
-а не весь payload cookie; отзыв сессии закрывает и этот маршрут.
+`/api/service-status` проверяет подпись и срок cookie локально и передаёт только ID аккаунта,
+а не весь payload cookie. Публичная liveness-проверка API и проверка отзыва сессии идут
+параллельно с отдельными таймаутами. Подтверждённый отзыв даёт 401; ошибка сети, 5xx,
+таймаут или повреждённый ответ auth означают недоступность проверки, а не выход пользователя.
+В этом случае возвращается только ограниченный статус API (`down` или `degraded`),
+engine/database остаются `unknown`, защищённые проверки не выполняются. Продуктовые данные
+и полномочия по одной подписи cookie не выдаются. При восстановлении сервисов проверки
+возвращают `ok`; подтверждённый отзыв закрывает и этот маршрут.
 Мутации browser backend proxy требуют доверенный Origin. Next server actions дополнительно
 проверяют Origin средствами Next. Service token и session bearer не передаются клиентскому UI.
 Login throttling — 20 попыток на нормализованную почту и 200 на установку за 15 минут,
@@ -153,6 +159,12 @@ PostgreSQL tests используют отдельные схемы: cross-repli
 периоды/DST, безлимитный default, lifecycle счётчиков, copied sessions, reset/disable,
 forged headers, login throttle, storage concurrency, dedup и отказ snapshot до commit.
 Browser fixture `account-policy.e2e.ts` проверяет сохранение лимита и logout скопированной cookie;
+при `RECOVERY_HEALTH_FAULTS=1` и web `API_INTERNAL_URL=http://127.0.0.1:13319`
+он также проверяет auth 503, повреждённый JSON, полный API outage, видимость индикатора
+на уже открытой странице и восстановление. Прокси запускается отдельно:
+`RECOVERY_ACCESS=1 node scripts/recovery/health-proxy.mjs` (PowerShell: задайте переменную
+окружения перед запуском). Прокси слушает только loopback и перенаправляет на изолированный
+API :13019; режимы отказа предназначены только для fixture.
 `recovery.e2e.ts` — новую сессию, восстановление редакции и export без модели, при
 `RECOVERY_ACCESS=1` — с включёнными storage/edit и исчерпанной generation квотой.
 `pipeline:access-runtime` при `RECOVERY_ACCESS=1` проверяет два одновременных HTTP start

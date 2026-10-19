@@ -79,6 +79,53 @@ test('isolated access: optional policy UI and logout revoke a copied cookie', as
     const health = await stolen.request.get('/api/service-status');
     expect(health.status()).toBe(200);
     expect((await health.json()).services).toEqual({ api: 'ok', engine: 'ok', database: 'ok' });
+    if (process.env.RECOVERY_HEALTH_FAULTS === '1') {
+      const setMode = async (mode: string) => {
+        expect(
+          (
+            await request.post('http://127.0.0.1:13319/__fixture/health', {
+              headers: { 'x-recovery-control': 'health-fixture-only' },
+              data: mode,
+            })
+          ).status(),
+        ).toBe(204);
+      };
+      try {
+        for (const mode of ['auth-error', 'auth-invalid-json', 'api-down']) {
+          await setMode(mode);
+          const outage = await stolen.request.get('/api/service-status');
+          expect(outage.status(), mode).toBe(200);
+          expect((await outage.json()).services).toEqual({
+            api: mode === 'api-down' ? 'down' : 'degraded',
+            engine: 'unknown',
+            database: 'unknown',
+          });
+          // Trigger the widget without navigating away from the already open application.
+          await stolen.evaluate(() => window.dispatchEvent(new Event('online')));
+          await expect(
+            stolen
+              .getByRole('alert')
+              .filter({ has: stolen.getByRole('button', { name: /Проверить|Check|Retry/i }) }),
+          ).toBeVisible();
+        }
+      } finally {
+        await setMode('healthy');
+      }
+      const recovered = await stolen.request.get('/api/service-status');
+      expect((await recovered.json()).services).toEqual({
+        api: 'ok',
+        engine: 'ok',
+        database: 'ok',
+      });
+      await stolen.evaluate(() => window.dispatchEvent(new Event('online')));
+      await expect(
+        stolen
+          .getByRole('alert')
+          .filter({ has: stolen.getByRole('button', { name: /Проверить|Check|Retry/i }) }),
+      ).toHaveCount(0);
+      // Other account-dependent actions can navigate this background tab during the outage.
+      await target.goto('/?settings=account');
+    }
     await target.getByRole('button', { name: /^(Выйти|Sign out)$/ }).click();
     await target.waitForURL('**/login');
     expect((await stolen.request.get('/api/backend/chats')).status()).toBe(401);
