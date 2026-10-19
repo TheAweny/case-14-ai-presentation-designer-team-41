@@ -247,6 +247,36 @@ describe('generated artifact download', () => {
       ),
     ).rejects.toThrow(/Вариант «airy» не был сгенерирован/);
   });
+  it('exports a stored revision without sending the live slides', async () => {
+    const posted: { url: string; body: Record<string, unknown> } = { url: '', body: {} };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, init) => {
+        const path = String(url);
+        if (path.includes('/revisions/4/export')) {
+          posted.url = path;
+          posted.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return Response.json({ exportId: 'rev-export', previews: [] });
+        }
+        return new Response('pptx', { headers: { 'content-type': 'application/octet-stream' } });
+      }),
+    );
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:rev' });
+    const result = await createHttpExporter().export(
+      { ...input(), revision: 4, slideIds: ['s1'] },
+      vi.fn(),
+      AbortSignal.timeout(1000),
+    );
+    expect(posted.url).toContain('/editor/decks/');
+    expect(posted.url).toContain('/revisions/4/export');
+    expect(posted.body).toEqual({
+      schemaVersion: 1,
+      format: 'pptx',
+      variant: 'balanced',
+      slideIds: ['s1'],
+    });
+    expect(result.url).toBe('blob:rev');
+  });
   it('downloads the native PPTX through a local blob URL', async () => {
     source();
     const objectUrl = vi.fn(() => 'blob:pptx');

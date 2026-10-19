@@ -81,7 +81,11 @@ export function useDeckExport(exporter: DeckExporter | undefined): DeckExportJob
             setPhase('idle');
             return;
           }
-          setError(UNKNOWN_FAILURE);
+          setError(
+            reason instanceof Error && reason.message
+              ? { code: 'internal', message: reason.message, retryable: true }
+              : UNKNOWN_FAILURE,
+          );
           setPhase('failed');
         });
     },

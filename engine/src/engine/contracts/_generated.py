@@ -1542,6 +1542,16 @@ class Role5(StrEnum):
     decoration = "decoration"
 
 
+class SourcePart1(StrEnum):
+    """
+    Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.
+    """
+
+    slide = "slide"
+    layout = "layout"
+    master = "master"
+
+
 class TextInsets(BaseModel):
     """
     Space between the box and its text (`a:bodyPr` insets). Absent: none.
@@ -1593,6 +1603,10 @@ class Elements(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ..., description="Template shape this was placed from, when it came from one."
@@ -1669,6 +1683,10 @@ class Elements1(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
@@ -1868,6 +1886,10 @@ class Elements2(BaseModel):
         min_length=1,
     )
     rows: list[list[str]] = Field(..., min_length=1)
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
@@ -1914,6 +1936,10 @@ class Elements3(BaseModel):
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
     series: list[Series] = Field(..., min_length=1)
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -2142,6 +2168,10 @@ class Elements4(BaseModel):
     shape: Shape | None = Field(
         None,
         description="Absent for template decoration of a geometry the parser did not name.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ...,
@@ -3536,6 +3566,10 @@ class Elements5(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ..., description="Template shape this was placed from, when it came from one."
     )
@@ -3589,6 +3623,10 @@ class Elements6(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
@@ -3763,6 +3801,10 @@ class Elements7(BaseModel):
         min_length=1,
     )
     rows: list[list[str]] = Field(..., min_length=1)
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
@@ -3809,6 +3851,10 @@ class Elements8(BaseModel):
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
     series: list[Series2] = Field(..., min_length=1)
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -4000,6 +4046,10 @@ class Elements9(BaseModel):
     shape: Shape4 | None = Field(
         None,
         description="Absent for template decoration of a geometry the parser did not name.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ...,
@@ -4205,6 +4255,10 @@ class Elements10(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ..., description="Template shape this was placed from, when it came from one."
     )
@@ -4249,6 +4303,10 @@ class Elements11(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
@@ -4389,6 +4447,10 @@ class Elements12(BaseModel):
         min_length=1,
     )
     rows: list[list[str]] = Field(..., min_length=1)
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
@@ -4419,6 +4481,10 @@ class Elements13(BaseModel):
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
     series: list[Series2] = Field(..., min_length=1)
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -4597,6 +4663,10 @@ class Elements14(BaseModel):
     shape: Shape4 | None = Field(
         None,
         description="Absent for template decoration of a geometry the parser did not name.",
+    )
+    sourcePart: SourcePart1 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ...,
@@ -6985,6 +7055,10 @@ class Slot2(BaseModel):
     )
 
 
+class SourcePart16(RootModel[constr(min_length=1)]):
+    root: constr(min_length=1)
+
+
 class Pattern1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -7005,7 +7079,7 @@ class Pattern1(BaseModel):
         ..., description="Referred to by every SlideIR built on this pattern."
     )
     slots: list[Slot2] = Field(..., description="In reading order.", min_length=1)
-    sourceParts: list[SourcePart] = Field(
+    sourceParts: list[SourcePart16] = Field(
         ...,
         description="Layout or slide parts this arrangement was observed on.",
         min_length=1,
@@ -7100,6 +7174,16 @@ class Role36(StrEnum):
     decoration = "decoration"
 
 
+class SourcePart17(StrEnum):
+    """
+    Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.
+    """
+
+    slide = "slide"
+    layout = "layout"
+    master = "master"
+
+
 class TextInsets6(BaseModel):
     """
     Space between the box and its text (`a:bodyPr` insets). Absent: none.
@@ -7152,6 +7236,10 @@ class Elements15(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
+    sourcePart: SourcePart17 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ..., description="Template shape this was placed from, when it came from one."
     )
@@ -7196,6 +7284,10 @@ class Elements16(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    sourcePart: SourcePart17 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
@@ -7336,6 +7428,10 @@ class Elements17(BaseModel):
         min_length=1,
     )
     rows: list[list[str]] = Field(..., min_length=1)
+    sourcePart: SourcePart17 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
@@ -7374,6 +7470,10 @@ class Elements18(BaseModel):
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
     series: list[Series6] = Field(..., min_length=1)
+    sourcePart: SourcePart17 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -7552,6 +7652,10 @@ class Elements19(BaseModel):
     shape: Shape4 | None = Field(
         None,
         description="Absent for template decoration of a geometry the parser did not name.",
+    )
+    sourcePart: SourcePart17 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ...,
@@ -7809,6 +7913,10 @@ class Slot3(BaseModel):
     )
 
 
+class SourcePart22(RootModel[constr(min_length=1)]):
+    root: constr(min_length=1)
+
+
 class Pattern2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -7829,7 +7937,7 @@ class Pattern2(BaseModel):
         ..., description="Referred to by every SlideIR built on this pattern."
     )
     slots: list[Slot3] = Field(..., description="In reading order.", min_length=1)
-    sourceParts: list[SourcePart] = Field(
+    sourceParts: list[SourcePart22] = Field(
         ...,
         description="Layout or slide parts this arrangement was observed on.",
         min_length=1,
@@ -7994,6 +8102,16 @@ class Role43(StrEnum):
     decoration = "decoration"
 
 
+class SourcePart23(StrEnum):
+    """
+    Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.
+    """
+
+    slide = "slide"
+    layout = "layout"
+    master = "master"
+
+
 class TextInsets8(BaseModel):
     """
     Space between the box and its text (`a:bodyPr` insets). Absent: none.
@@ -8046,6 +8164,10 @@ class Elements20(BaseModel):
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
+    sourcePart: SourcePart23 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ..., description="Template shape this was placed from, when it came from one."
     )
@@ -8090,6 +8212,10 @@ class Elements21(BaseModel):
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
+    )
+    sourcePart: SourcePart23 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
@@ -8230,6 +8356,10 @@ class Elements22(BaseModel):
         min_length=1,
     )
     rows: list[list[str]] = Field(..., min_length=1)
+    sourcePart: SourcePart23 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
 
 
@@ -8260,6 +8390,10 @@ class Elements23(BaseModel):
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
     )
     series: list[Series6] = Field(..., min_length=1)
+    sourcePart: SourcePart23 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
+    )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None
     xTitle: str
     yTitle: str
@@ -8438,6 +8572,10 @@ class Elements24(BaseModel):
     shape: Shape4 | None = Field(
         None,
         description="Absent for template decoration of a geometry the parser did not name.",
+    )
+    sourcePart: SourcePart23 | None = Field(
+        None,
+        description="Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself.",
     )
     sourceShapeId: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         ...,

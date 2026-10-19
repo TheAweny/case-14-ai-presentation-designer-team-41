@@ -71,6 +71,14 @@ const elementLook = {
         'run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a ' +
         'group are consecutive in paint order. Absent: the element is in no group.',
     ),
+  sourcePart: z
+    .enum(['slide', 'layout', 'master'])
+    .optional()
+    .describe(
+      'Which part the shape was read from. Master and layout graphics are already painted when ' +
+        'a slide of that layout is cloned, so an export that keeps the source slide must not ' +
+        'draw them again. Absent means the slide itself.',
+    ),
 };
 
 /**

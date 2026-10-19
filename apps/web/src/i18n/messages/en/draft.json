@@ -2,7 +2,16 @@
   "restored": "Unsaved changes restored",
   "discard": "Undo",
   "dismiss": "Dismiss",
-  "saving": "Saving changes in this browser…",
-  "saved": "Changes saved in this browser",
-  "error": "Couldn't save changes in this browser. Keep this tab open."
+  "saving": "Saving changes…",
+  "saved": "Changes saved",
+  "error": "Couldn't save to the server. A copy is still in this browser.",
+  "retry": "Try saving again",
+  "conflict": "This revision was already saved in another window",
+  "conflictReload": "Load the server version",
+  "conflictKeep": "Save my version",
+  "choose": "This browser has a different version of your edits.",
+  "chooseApply": "Save my version",
+  "chooseServer": "Load the server version",
+  "exportUnsaved": "Changes are not on the server yet. Save again, then download.",
+  "exportConflict": "Choose which revision to keep, then download it."
 }

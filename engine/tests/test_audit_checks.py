@@ -288,6 +288,11 @@ def _raster_slide(s: dict[str, Any]) -> None:
     s["elements"] = [_image(whole)]
 
 
+def _picture_covers_text(s: dict[str, Any]) -> None:
+    whole = {"x": 0, "y": 0, "cx": _GRID["slideCx"], "cy": _GRID["slideCy"]}
+    s["elements"].append(_image(whole, elementId="cover"))
+
+
 def _duplicate_slide(s: dict[str, Any]) -> list[dict[str, Any]]:
     twin = copy.deepcopy(s)
     twin["slideId"], twin["index"] = "s2", 1
@@ -339,6 +344,7 @@ _VIOLATIONS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]] | None]] 
     "slide-fill": _slide_fill,
     "empty-slide": _empty_slide,
     "raster-slide": _raster_slide,
+    "picture-covers-text": _picture_covers_text,
     "duplicate-slide": _duplicate_slide,
     "placeholder-text": _placeholder_text,
     "template-leftover": _template_leftover,
@@ -363,6 +369,21 @@ def test_check_fires_on_a_slide_that_breaks_it(check_id: str) -> None:
     slide = _clean_slide()
     more = _VIOLATIONS[check_id](slide) or []
     assert check_id in _fired(slide, _MEDIA, *more)
+
+
+def test_a_full_slide_picture_behind_text_does_not_cover_it() -> None:
+    slide = _clean_slide()
+    whole = {"x": 0, "y": 0, "cx": _GRID["slideCx"], "cy": _GRID["slideCy"]}
+    slide["elements"].insert(0, _image(whole, elementId="backdrop"))
+    assert "picture-covers-text" not in _fired(slide, _MEDIA)
+
+
+def test_a_small_picture_in_front_of_text_is_left_in_front() -> None:
+    slide = _clean_slide()
+    slide["elements"].append(
+        _image({"x": _LEFT, "y": 1_828_800, "cx": 400_000, "cy": 400_000}, elementId="badge")
+    )
+    assert "picture-covers-text" not in _fired(slide, _MEDIA)
 
 
 def _sparse_slide() -> dict[str, Any]:

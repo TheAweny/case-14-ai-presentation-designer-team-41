@@ -246,6 +246,11 @@ function Running({ job, onHide }: { job: DeckExportJob; onHide: () => void }) {
             })}
           </p>
         ) : null}
+        {request?.revision != null ? (
+          <p className="text-xs text-muted-foreground">
+            {t('revisionNote', { revision: request.revision })}
+          </p>
+        ) : null}
         <div
           role="progressbar"
           aria-label={t('progress')}
@@ -317,6 +322,11 @@ function Done({ job, onClose }: { job: DeckExportJob; onClose: () => void }) {
           <SuccessIcon size={18} />
           {t('done', { file: result?.fileName ?? '' })}
         </p>
+        {job.request?.revision != null ? (
+          <p className="text-xs text-muted-foreground">
+            {t('revisionNote', { revision: job.request.revision })}
+          </p>
+        ) : null}
         <ol className="flex flex-col gap-1.5">
           {progress?.stages.map((stage) => (
             <StageRow key={stage.stage} stage={stage} />

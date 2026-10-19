@@ -1030,6 +1030,49 @@ def raster_slide(check: CheckDefinition, slide: dict[str, Any], ctx: AuditContex
     return out.findings
 
 
+def picture_covers_text(
+    check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext
+) -> list[Finding]:
+    """A near full-slide picture painted above text hides that text in the file."""
+    out = _Emitter(check, slide)
+    area = _slide_rect(slide)
+    coverage = float(ctx.params[check.id]["minCoverage"])
+    elements = slide["elements"]
+    for index, element in enumerate(elements):
+        if element.get("kind") != "image":
+            continue
+        picture = Rect.of(element["box"])
+        common = picture.intersection(area)
+        if common is None or common.area < area.area * coverage:
+            continue
+        covered = [
+            earlier
+            for earlier in elements[:index]
+            if earlier.get("kind") == "text"
+            and any(text.strip() for text in element_texts(earlier))
+            and _text_centre_inside(earlier, picture)
+        ]
+        if not covered:
+            continue
+        out.add(
+            title="Картинка закрывает текст",
+            detail=(
+                "Изображение занимает почти весь слайд и нарисовано поверх текста. "
+                "В файле текста не видно."
+            ),
+            element=element,
+            measured=_pct(common.area / area.area),
+            expected="полноэкранная картинка лежит под текстом, если текст должен читаться",
+            quote=" ".join(element_texts(covered[0]))[:280],
+        )
+    return out.findings
+
+
+def _text_centre_inside(element: dict[str, Any], picture: Rect) -> bool:
+    box = Rect.of(element["box"])
+    return picture.contains_point(box.x + box.cx / 2, box.y + box.cy / 2)
+
+
 def _word_set(slide: dict[str, Any]) -> set[str]:
     text = " ".join(t for e in slide["elements"] if is_content(e) for t in element_texts(e))
     return {w for w in re.findall(r"\w+", text.casefold()) if len(w) > 2}
@@ -1179,6 +1222,7 @@ RULES: dict[str, Rule] = {
     "slide-fill": slide_fill,
     "empty-slide": empty_slide,
     "raster-slide": raster_slide,
+    "picture-covers-text": picture_covers_text,
     "duplicate-slide": duplicate_slide,
     "placeholder-text": placeholder_text,
     "template-leftover": template_leftover,

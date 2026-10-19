@@ -26,6 +26,16 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   { method: 'GET', pattern: /^chats(\/[\w-]+(\/stream)?)?$/ },
   { method: 'POST', pattern: /^chats\/[\w-]+\/(turns|cancel|variants\/retry)$/ },
   { method: 'PATCH', pattern: /^chats\/[\w-]+$/ },
+  // Editor snapshots: one account's deck, its pictures, and an export of one stored revision.
+  { method: 'GET', pattern: /^editor\/decks\/[\w-]+\/snapshot$/ },
+  { method: 'POST', pattern: /^editor\/decks\/[\w-]+\/snapshot$/ },
+  { method: 'POST', pattern: /^editor\/decks\/[\w-]+\/media$/ },
+  { method: 'GET', pattern: /^editor\/decks\/[\w-]+\/media\/[\w.%~-]+$/ },
+  { method: 'POST', pattern: /^editor\/decks\/[\w-]+\/revisions\/\d+\/export$/ },
+  {
+    method: 'GET',
+    pattern: /^editor\/decks\/[\w-]+\/exports\/[\w-]+\/(deck\.pptx|deck\.pdf|slide-\d+\.png)$/,
+  },
 ];
 
 /**

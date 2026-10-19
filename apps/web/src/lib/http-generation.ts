@@ -300,25 +300,36 @@ export function createHttpExporter(
         throw new Error(message);
       };
       if (!input.slides.length) fail('Нельзя экспортировать колоду без слайдов.');
-      const media = await collectExportMedia(input.slides, registry, signal);
-      const body = JSON.stringify({
-        slides: input.slides,
-        variant: input.variant,
-        format: input.format,
-        media,
-      });
+      const revisionExport = input.revision != null;
+      const body = revisionExport
+        ? JSON.stringify({
+            schemaVersion: 1,
+            format: input.format,
+            variant: input.variant,
+            slideIds: input.slideIds,
+          })
+        : JSON.stringify({
+            slides: input.slides,
+            variant: input.variant,
+            format: input.format,
+            media: await collectExportMedia(input.slides, registry, signal),
+          });
       if (new TextEncoder().encode(body).length > 5 * 1024 * 1024)
         fail('Колода превышает допустимый размер запроса экспорта 5 МиБ.');
       push({ type: 'stage-started', stage: 'rendering' });
+      const exportPath = revisionExport
+        ? `/editor/decks/${encodeURIComponent(input.deckId)}/revisions/${input.revision}/export`
+        : `/generation/${encodeURIComponent(input.deckId)}/export`;
       const exported = z
         // A PPTX or PDF download needs no previews: the server skips rendering them.
         .object({ exportId: z.string(), previews: z.array(z.string()) })
         .parse(
-          await request(`/generation/${encodeURIComponent(input.deckId)}/export`, {
+          await request(exportPath, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             // The format lets the server build exactly what the download needs: a PPTX export
             // does not pay for a PDF conversion or slide previews it will never return.
+            // A revision export sends no slides: the server reads the stored revision.
             body,
             signal,
           }),
@@ -332,10 +343,10 @@ export function createHttpExporter(
       });
       push({ type: 'stage-finished', stage: 'rendering', durationMs: Date.now() - startedAt });
       push({ type: 'stage-started', stage: 'exporting' });
-      const artifact = (name: string) =>
-        publicApiUrl(
-          `/generation/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exported.exportId)}/${name}`,
-        );
+      const artifactRoot = revisionExport
+        ? `/editor/decks/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exported.exportId)}`
+        : `/generation/${encodeURIComponent(input.deckId)}/exports/${encodeURIComponent(exported.exportId)}`;
+      const artifact = (name: string) => publicApiUrl(`${artifactRoot}/${name}`);
       const previewFiles = async () => {
         const files: { name: string; blob: Blob }[] = [];
         const total = Math.max(1, exported.previews.length);
