@@ -22,9 +22,9 @@ description: "Разговор с ассистентом: ход отвечае�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | array&lt;[ChatSummary](/docs/api/reference/schemas/#ChatSummary)&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | array&lt;[ChatSummary](/docs/api/reference/schemas/#chatsummary)&gt; |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `DELETE /chats/{id}`
 **Удалить чат**
@@ -40,9 +40,9 @@ description: "Разговор с ассистентом: ход отвечае�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Чат удалён, вместе с его колодами. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /chats/{id}`
 **Чат целиком**
@@ -58,10 +58,10 @@ description: "Разговор с ассистентом: ход отвечае�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ChatDocument](/docs/api/reference/schemas/#ChatDocument) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [ChatDocument](/docs/api/reference/schemas/#chatdocument) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PATCH /chats/{id}`
 **Переименовать, перенести или выбрать вариант**
@@ -75,17 +75,17 @@ description: "Разговор с ассистентом: ход отвечае�
 
 ### Тело запроса
 
-- `application/json` — [ChatPatch](/docs/api/reference/schemas/#ChatPatch)
+- `application/json` — [ChatPatch](/docs/api/reference/schemas/#chatpatch)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ChatSummary](/docs/api/reference/schemas/#ChatSummary) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [ChatSummary](/docs/api/reference/schemas/#chatsummary) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /chats/{id}/cancel`
 **Остановить ход**
@@ -101,9 +101,9 @@ description: "Разговор с ассистентом: ход отвечае�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Ход остановлен или уже закончился. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /chats/{id}/stream`
 **Подключиться к идущему ходу**
@@ -120,9 +120,9 @@ description: "Разговор с ассистентом: ход отвечае�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | События идущего хода. Каждое событие — строка `data: &lt;ChatEvent JSON&gt;`; поток закрывает `turn-end`. | string |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /chats/{id}/turns`
 **Отправить ход и получить ответ потоком**
@@ -136,18 +136,18 @@ description: "Разговор с ассистентом: ход отвечае�
 
 ### Тело запроса
 
-- `application/json` — [ChatTurnRequest](/docs/api/reference/schemas/#ChatTurnRequest)
+- `application/json` — [ChatTurnRequest](/docs/api/reference/schemas/#chatturnrequest)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | События хода. Каждое событие — строка `data: &lt;ChatEvent JSON&gt;`; поток закрывает `turn-end`. | string |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /chats/{id}/variants/retry`
 **Пересобрать упавший вариант**
@@ -161,15 +161,15 @@ description: "Разговор с ассистентом: ход отвечае�
 
 ### Тело запроса
 
-- `application/json` — [RetryVariant](/docs/api/reference/schemas/#RetryVariant)
+- `application/json` — [RetryVariant](/docs/api/reference/schemas/#retryvariant)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [ChatPart](/docs/api/reference/schemas/#ChatPart) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [ChatPart](/docs/api/reference/schemas/#chatpart) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#apierror) |

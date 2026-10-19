@@ -2,6 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { API_VERSION } from '../health/health.controller.js';
+import { schemaAnchors } from './heading-anchor.js';
 import { DOCS_TAGS } from './openapi.js';
 import { openApiDocument } from './openapi-document.js';
 
@@ -65,6 +66,7 @@ const workspace = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const referenceDir = join(workspace, 'apps/docs/content/docs/api/reference');
 const generatedJson = join(workspace, 'apps/docs/generated/openapi.json');
 const publicJson = join(workspace, 'apps/docs/public/openapi.json');
+let anchors = new Map<string, string>();
 
 function sortValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortValue);
@@ -93,10 +95,15 @@ function refName(schema: unknown): string | undefined {
   return decodeURIComponent(ref.slice('#/components/schemas/'.length));
 }
 
+function schemaHref(name: string): string {
+  const id = anchors.get(name) ?? name.toLowerCase();
+  return `[${name}](/docs/api/reference/schemas/#${id})`;
+}
+
 function typeOf(schema: unknown): string {
   if (!schema || typeof schema !== 'object') return '';
   const named = refName(schema);
-  if (named) return `[${named}](/docs/api/reference/schemas/#${named})`;
+  if (named) return schemaHref(named);
   const record = schema as SchemaObject & { anyOf?: unknown[]; oneOf?: unknown[] };
   if (Array.isArray(record.enum))
     return record.enum.map((item) => `\`${String(item)}\``).join(', ');
@@ -108,7 +115,7 @@ function typeOf(schema: unknown): string {
 
 function schemaLink(schema: unknown): string {
   const named = refName(schema);
-  if (named) return `[${named}](/docs/api/reference/schemas/#${named})`;
+  if (named) return schemaHref(named);
   const kind = typeOf(schema);
   return kind || '—';
 }
@@ -212,6 +219,7 @@ const GENERATED =
   '> Файл сгенерирован командой `yarn nx run api:export-openapi` из декораторов API и Zod-схем. Вручную не редактируется.\n';
 
 function writeReference(document: OpenAPIObject): void {
+  anchors = schemaAnchors(Object.keys(document.components?.schemas ?? {}));
   rmSync(referenceDir, { recursive: true, force: true });
   mkdirSync(referenceDir, { recursive: true });
   const operations = operationsOf(document);

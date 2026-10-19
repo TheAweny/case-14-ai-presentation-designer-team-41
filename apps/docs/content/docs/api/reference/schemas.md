@@ -72,9 +72,9 @@ description: "Имена моделей из OpenAPI-документа API."
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `defaults` | [AccountPolicy](/docs/api/reference/schemas/#AccountPolicy) | да |  |
-| `override` | [AccountPolicy](/docs/api/reference/schemas/#AccountPolicy) | да |  |
-| `effective` | [AccountPolicy](/docs/api/reference/schemas/#AccountPolicy) | да |  |
+| `defaults` | [AccountPolicy](/docs/api/reference/schemas/#accountpolicy) | да |  |
+| `override` | [AccountPolicy](/docs/api/reference/schemas/#accountpolicy) | да |  |
+| `effective` | [AccountPolicy](/docs/api/reference/schemas/#accountpolicy) | да |  |
 | `storageBytes` | number | да |  |
 | `metrics` | array&lt;object&gt; | да |  |
 
@@ -111,17 +111,17 @@ description: "Имена моделей из OpenAPI-документа API."
 | --- | --- | --- | --- |
 | `kind` | `chart` | да |  |
 | `elementId` | string | да |  |
-| `role` | [ElementRole](/docs/api/reference/schemas/#ElementRole) | да |  |
-| `box` | [Box](/docs/api/reference/schemas/#Box) | да |  |
+| `role` | [ElementRole](/docs/api/reference/schemas/#elementrole) | да |  |
+| `box` | [Box](/docs/api/reference/schemas/#box) | да |  |
 | `rotation` | number | нет | Clockwise, in degrees, about the centre of the box. Absent means 0. |
 | `opacity` | number | нет | From 0 to 1. Absent means opaque. |
 | `locked` | boolean | нет | True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false. |
 | `groupIds` | array&lt;string&gt; | нет | Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group. |
 | `sourcePart` | `slide`, `layout`, `master` | нет | Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself. |
 | `sourceShapeId` | integer | да |  |
-| `chartType` | [ChartType](/docs/api/reference/schemas/#ChartType) | да |  |
+| `chartType` | [ChartType](/docs/api/reference/schemas/#charttype) | да |  |
 | `categories` | array&lt;string&gt; | да |  |
-| `series` | array&lt;[ChartSeries](/docs/api/reference/schemas/#ChartSeries)&gt; | да |  |
+| `series` | array&lt;[ChartSeries](/docs/api/reference/schemas/#chartseries)&gt; | да |  |
 | `xTitle` | string | да |  |
 | `yTitle` | string | да |  |
 | `positions` | array&lt;number&gt; | нет | Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots. |
@@ -164,11 +164,11 @@ description: "Имена моделей из OpenAPI-документа API."
 | `projectId` | string | да |  |
 | `deckIds` | array&lt;string&gt; | да |  |
 | `deckId` | string | да |  |
-| `mode` | [ChatMode](/docs/api/reference/schemas/#ChatMode) | да |  |
+| `mode` | [ChatMode](/docs/api/reference/schemas/#chatmode) | да |  |
 | `createdAt` | string | да |  |
 | `updatedAt` | string | да |  |
 | `model` | — | нет |  |
-| `messages` | array&lt;[ChatMessage](/docs/api/reference/schemas/#ChatMessage)&gt; | да |  |
+| `messages` | array&lt;[ChatMessage](/docs/api/reference/schemas/#chatmessage)&gt; | да |  |
 | `running` | boolean | да |  |
 
 ## ChatMessage
@@ -211,7 +211,7 @@ description: "Имена моделей из OpenAPI-документа API."
 | `projectId` | string | да |  |
 | `deckIds` | array&lt;string&gt; | да |  |
 | `deckId` | string | да |  |
-| `mode` | [ChatMode](/docs/api/reference/schemas/#ChatMode) | да |  |
+| `mode` | [ChatMode](/docs/api/reference/schemas/#chatmode) | да |  |
 | `createdAt` | string | да |  |
 | `updatedAt` | string | да |  |
 
@@ -242,14 +242,14 @@ description: "Имена моделей из OpenAPI-документа API."
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `requestId` | string | нет |  |
-| `mode` | [ChatMode](/docs/api/reference/schemas/#ChatMode) | да |  |
+| `mode` | [ChatMode](/docs/api/reference/schemas/#chatmode) | да |  |
 | `model` | — | нет |  |
 | `reasoningEffort` | — | нет |  |
 | `thinking` | boolean | нет |  |
 | `projectId` | string | нет |  |
 | `slideCount` | integer | нет |  |
 | `deckId` | string | нет |  |
-| `input` | [ChatTurnInput](/docs/api/reference/schemas/#ChatTurnInput) | да |  |
+| `input` | [ChatTurnInput](/docs/api/reference/schemas/#chatturninput) | да |  |
 
 ## CheckError
 
@@ -294,12 +294,12 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | --- | --- | --- | --- |
 | `connectionId` | string | нет |  |
 | `name` | string | да |  |
-| `preset` | [ConnectionPreset](/docs/api/reference/schemas/#ConnectionPreset) | да |  |
+| `preset` | [ConnectionPreset](/docs/api/reference/schemas/#connectionpreset) | да |  |
 | `baseUrl` | string | да |  |
 | `apiKey` | string | нет |  |
 | `lastCheck` | — | нет |  |
 | `shared` | boolean | нет |  |
-| `headers` | array&lt;[ConnectionHeader](/docs/api/reference/schemas/#ConnectionHeader)&gt; | нет |  |
+| `headers` | array&lt;[ConnectionHeader](/docs/api/reference/schemas/#connectionheader)&gt; | нет |  |
 
 ## ConnectionModelsInput
 
@@ -308,7 +308,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `connectionId` | string | да |  |
-| `enabledModels` | array&lt;[ModelId](/docs/api/reference/schemas/#ModelId)&gt; | да |  |
+| `enabledModels` | array&lt;[ModelId](/docs/api/reference/schemas/#modelid)&gt; | да |  |
 
 ## ConnectionPreset
 
@@ -332,7 +332,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `title` | string | да |  |
 | `audience` | string | да |  |
 | `goal` | string | да |  |
-| `slides` | array&lt;[OutlineSlide](/docs/api/reference/schemas/#OutlineSlide)&gt; | да |  |
+| `slides` | array&lt;[OutlineSlide](/docs/api/reference/schemas/#outlineslide)&gt; | да |  |
 
 ## DeckPatch
 
@@ -350,10 +350,10 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `runId` | string | да |  |
-| `variant` | [LayoutVariant](/docs/api/reference/schemas/#LayoutVariant) | да |  |
+| `variant` | [LayoutVariant](/docs/api/reference/schemas/#layoutvariant) | да |  |
 | `title` | string | да |  |
-| `designSystem` | [DesignSystem](/docs/api/reference/schemas/#DesignSystem) | да |  |
-| `templateIr` | [TemplateIR](/docs/api/reference/schemas/#TemplateIR) | да |  |
+| `designSystem` | [DesignSystem](/docs/api/reference/schemas/#designsystem) | да |  |
+| `templateIr` | [TemplateIR](/docs/api/reference/schemas/#templateir) | да |  |
 | `warnings` | array&lt;value&gt; | да |  |
 | `imagesMocked` | boolean | да |  |
 
@@ -365,8 +365,8 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | --- | --- | --- | --- |
 | `kind` | `decor` | да |  |
 | `elementId` | string | да |  |
-| `role` | [ElementRole](/docs/api/reference/schemas/#ElementRole) | да |  |
-| `box` | [Box](/docs/api/reference/schemas/#Box) | да |  |
+| `role` | [ElementRole](/docs/api/reference/schemas/#elementrole) | да |  |
+| `box` | [Box](/docs/api/reference/schemas/#box) | да |  |
 | `rotation` | number | нет | Clockwise, in degrees, about the centre of the box. Absent means 0. |
 | `opacity` | number | нет | From 0 to 1. Absent means opaque. |
 | `locked` | boolean | нет | True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false. |
@@ -380,7 +380,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `cornerRadius` | number | нет | Corner radius of a round-rect as a share of the shorter side. Absent means 1/6. |
 | `flipH` | boolean | нет | Mirrored horizontally. A line runs from the top left of its box unless flipped. |
 | `flipV` | boolean | нет | Mirrored vertically. |
-| `paragraphs` | array&lt;[Paragraph](/docs/api/reference/schemas/#Paragraph)&gt; | нет | Text inside the shape. Absent when it has none. |
+| `paragraphs` | array&lt;[Paragraph](/docs/api/reference/schemas/#paragraph)&gt; | нет | Text inside the shape. Absent when it has none. |
 | `verticalAlign` | — | нет | Where the text sits in the shape (the bodyPr anchor). Absent means middle. |
 | `textInsets` | — | нет | Absent: the OOXML defaults, 0.1 inch left and right and 0.05 inch top and bottom. |
 
@@ -407,16 +407,16 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `schemaVersion` | `1` | да | Incremented by any incompatible change. |
 | `templateHash` | string | да | Hash of the TemplateIR this was derived from, so the pair can be checked. |
 | `aspect` | string | да | Aspect ratio in lowest terms, such as 16:9. |
-| `palette` | array&lt;[PaletteEntry](/docs/api/reference/schemas/#PaletteEntry)&gt; | да | One entry per role the template supports. Roles it lacks are simply absent. |
-| `surfaces` | array&lt;[Surface](/docs/api/reference/schemas/#Surface)&gt; | да | One per tone the template uses. |
-| `typeFamilies` | array&lt;[TypeFamily](/docs/api/reference/schemas/#TypeFamily)&gt; | да |  |
-| `typeScale` | array&lt;[TypeStyle](/docs/api/reference/schemas/#TypeStyle)&gt; | да | One entry per role in use. |
-| `grid` | [Grid](/docs/api/reference/schemas/#Grid) | да |  |
-| `strokes` | array&lt;[StrokeToken](/docs/api/reference/schemas/#StrokeToken)&gt; | да | Outline styles in use, most common first. |
-| `radii` | array&lt;[RadiusToken](/docs/api/reference/schemas/#RadiusToken)&gt; | да | Corner radii in use, smallest first. |
-| `shadows` | [ShadowToken](/docs/api/reference/schemas/#ShadowToken) | да |  |
-| `protectedZones` | array&lt;[ProtectedZone](/docs/api/reference/schemas/#ProtectedZone)&gt; | да |  |
-| `warnings` | array&lt;[DesignWarning](/docs/api/reference/schemas/#DesignWarning)&gt; | да | Empty only when every token was measured with confidence. |
+| `palette` | array&lt;[PaletteEntry](/docs/api/reference/schemas/#paletteentry)&gt; | да | One entry per role the template supports. Roles it lacks are simply absent. |
+| `surfaces` | array&lt;[Surface](/docs/api/reference/schemas/#surface)&gt; | да | One per tone the template uses. |
+| `typeFamilies` | array&lt;[TypeFamily](/docs/api/reference/schemas/#typefamily)&gt; | да |  |
+| `typeScale` | array&lt;[TypeStyle](/docs/api/reference/schemas/#typestyle)&gt; | да | One entry per role in use. |
+| `grid` | [Grid](/docs/api/reference/schemas/#grid) | да |  |
+| `strokes` | array&lt;[StrokeToken](/docs/api/reference/schemas/#stroketoken)&gt; | да | Outline styles in use, most common first. |
+| `radii` | array&lt;[RadiusToken](/docs/api/reference/schemas/#radiustoken)&gt; | да | Corner radii in use, smallest first. |
+| `shadows` | [ShadowToken](/docs/api/reference/schemas/#shadowtoken) | да |  |
+| `protectedZones` | array&lt;[ProtectedZone](/docs/api/reference/schemas/#protectedzone)&gt; | да |  |
+| `warnings` | array&lt;[DesignWarning](/docs/api/reference/schemas/#designwarning)&gt; | да | Empty only when every token was measured with confidence. |
 
 ## DesignWarning
 
@@ -437,7 +437,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `schemaVersion` | `1` | да |  |
 | `conflictId` | string | да |  |
 | `expectedRevision` | integer | да |  |
-| `server` | [EditorSnapshot](/docs/api/reference/schemas/#EditorSnapshot) | да |  |
+| `server` | [EditorSnapshot](/docs/api/reference/schemas/#editorsnapshot) | да |  |
 | `rejected` | object | да |  |
 
 ## EditorMediaPutResponse
@@ -447,7 +447,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `schemaVersion` | `1` | да |  |
-| `media` | [EditorMediaRef](/docs/api/reference/schemas/#EditorMediaRef) | да |  |
+| `media` | [EditorMediaRef](/docs/api/reference/schemas/#editormediaref) | да |  |
 
 ## EditorMediaRef
 
@@ -495,8 +495,8 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `base` | string | да | Fingerprint of the deck the edits started from. |
 | `savedAt` | string | да |  |
 | `contentSha256` | string | да |  |
-| `slides` | array&lt;[SlideIR](/docs/api/reference/schemas/#SlideIR)&gt; | да |  |
-| `media` | array&lt;[EditorMediaRef](/docs/api/reference/schemas/#EditorMediaRef)&gt; | да |  |
+| `slides` | array&lt;[SlideIR](/docs/api/reference/schemas/#slideir)&gt; | да |  |
+| `media` | array&lt;[EditorMediaRef](/docs/api/reference/schemas/#editormediaref)&gt; | да |  |
 
 ## EditorSnapshotLoad
 
@@ -517,8 +517,8 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `expectedRevision` | integer | да | 0 when the deck has no snapshot yet. Otherwise the revision last read or saved. |
 | `idempotencyKey` | string | да |  |
 | `base` | string | да |  |
-| `slides` | array&lt;[SlideIR](/docs/api/reference/schemas/#SlideIR)&gt; | да |  |
-| `media` | array&lt;[EditorMediaRef](/docs/api/reference/schemas/#EditorMediaRef)&gt; | да |  |
+| `slides` | array&lt;[SlideIR](/docs/api/reference/schemas/#slideir)&gt; | да |  |
+| `media` | array&lt;[EditorMediaRef](/docs/api/reference/schemas/#editormediaref)&gt; | да |  |
 
 ## EditorSnapshotSaveResponse
 
@@ -536,7 +536,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | --- | --- | --- | --- |
 | `color` | — | да | A palette role, or a hex value a user chose. |
 | `widthEmu` | integer | да | Line width in EMU. |
-| `dash` | [StrokeDash](/docs/api/reference/schemas/#StrokeDash) | да |  |
+| `dash` | [StrokeDash](/docs/api/reference/schemas/#strokedash) | да |  |
 | `head` | — | да | Mark at the start of a line. |
 | `tail` | — | да | Mark at the end of a line. |
 
@@ -555,7 +555,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `slides` | array&lt;[SlideIR](/docs/api/reference/schemas/#SlideIR)&gt; | да | Слайды, как они сейчас в редакторе. |
+| `slides` | array&lt;[SlideIR](/docs/api/reference/schemas/#slideir)&gt; | да | Слайды, как они сейчас в редакторе. |
 | `variant` | — | нет |  |
 | `format` | `pptx`, `pdf`, `png`, `html` | нет |  |
 | `media` | array&lt;object&gt; | нет | PNG/JPEG загруженных изображений, на которые ссылаются слайды; до 1 МиБ каждое и 3 МиБ всего. |
@@ -568,7 +568,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | --- | --- | --- | --- |
 | `kind` | `solid`, `gradient`, `image`, `pattern`, `none` | да |  |
 | `color` | — | да | Set for a solid fill. |
-| `stops` | array&lt;[ColorRef](/docs/api/reference/schemas/#ColorRef)&gt; | да | Gradient stops in order, for a gradient fill. |
+| `stops` | array&lt;[ColorRef](/docs/api/reference/schemas/#colorref)&gt; | да | Gradient stops in order, for a gradient fill. |
 
 ## GenerationRequest
 
@@ -605,7 +605,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `columns` | integer | да | Columns the content area divides into. |
 | `gutter` | integer | да | Space between columns in EMU. |
 | `baseline` | integer | да | Vertical step layout snaps to, in EMU. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## HealthCheck
 
@@ -643,8 +643,8 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `kind` | `image` | да |  |
 | `elementId` | string | да |  |
-| `role` | [ElementRole](/docs/api/reference/schemas/#ElementRole) | да |  |
-| `box` | [Box](/docs/api/reference/schemas/#Box) | да |  |
+| `role` | [ElementRole](/docs/api/reference/schemas/#elementrole) | да |  |
+| `box` | [Box](/docs/api/reference/schemas/#box) | да |  |
 | `rotation` | number | нет | Clockwise, in degrees, about the centre of the box. Absent means 0. |
 | `opacity` | number | нет | From 0 to 1. Absent means opaque. |
 | `locked` | boolean | нет | True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false. |
@@ -685,7 +685,7 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `deck` | [DeckSummary](/docs/api/reference/schemas/#DeckSummary) | да |  |
+| `deck` | [DeckSummary](/docs/api/reference/schemas/#decksummary) | да |  |
 | `metadata` | object | да |  |
 
 ## LineEnd
@@ -713,8 +713,8 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `modelId` | [ModelId](/docs/api/reference/schemas/#ModelId) | да |  |
-| `kinds` | array&lt;[ModelKind](/docs/api/reference/schemas/#ModelKind)&gt; | да |  |
+| `modelId` | [ModelId](/docs/api/reference/schemas/#modelid) | да |  |
+| `kinds` | array&lt;[ModelKind](/docs/api/reference/schemas/#modelkind)&gt; | да |  |
 
 ## MediaItem
 
@@ -743,7 +743,7 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `reasoning` | [ReasoningCapability](/docs/api/reference/schemas/#ReasoningCapability) | да |  |
+| `reasoning` | [ReasoningCapability](/docs/api/reference/schemas/#reasoningcapability) | да |  |
 | `probed` | boolean | да |  |
 
 ## ModelConnection
@@ -754,13 +754,13 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `connectionId` | string | да |  |
 | `name` | string | да |  |
-| `preset` | [ConnectionPreset](/docs/api/reference/schemas/#ConnectionPreset) | да |  |
+| `preset` | [ConnectionPreset](/docs/api/reference/schemas/#connectionpreset) | да |  |
 | `baseUrl` | string | да |  |
 | `hasKey` | boolean | да |  |
 | `keyHint` | string | да |  |
-| `headers` | array&lt;[ConnectionHeader](/docs/api/reference/schemas/#ConnectionHeader)&gt; | нет |  |
+| `headers` | array&lt;[ConnectionHeader](/docs/api/reference/schemas/#connectionheader)&gt; | нет |  |
 | `lastCheck` | — | да |  |
-| `enabledModels` | array&lt;[ModelId](/docs/api/reference/schemas/#ModelId)&gt; | нет |  |
+| `enabledModels` | array&lt;[ModelId](/docs/api/reference/schemas/#modelid)&gt; | нет |  |
 | `manualKinds` | object | нет |  |
 | `managed` | boolean | да |  |
 | `shared` | boolean | нет |  |
@@ -772,7 +772,7 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `kinds` | array&lt;[ModelKind](/docs/api/reference/schemas/#ModelKind)&gt; | нет |  |
+| `kinds` | array&lt;[ModelKind](/docs/api/reference/schemas/#modelkind)&gt; | нет |  |
 | `reasoning` | — | нет |  |
 
 ## ModelFailure
@@ -801,7 +801,7 @@ Six hex digits, no leading hash.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `connectionId` | string | да |  |
-| `modelId` | [ModelId](/docs/api/reference/schemas/#ModelId) | да |  |
+| `modelId` | [ModelId](/docs/api/reference/schemas/#modelid) | да |  |
 
 ## ModelSettings
 
@@ -809,9 +809,9 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `connections` | array&lt;[ModelConnection](/docs/api/reference/schemas/#ModelConnection)&gt; | да |  |
-| `roles` | array&lt;[RoleAssignment](/docs/api/reference/schemas/#RoleAssignment)&gt; | да |  |
-| `inheritedRoles` | array&lt;[PipelineRole](/docs/api/reference/schemas/#PipelineRole)&gt; | нет |  |
+| `connections` | array&lt;[ModelConnection](/docs/api/reference/schemas/#modelconnection)&gt; | да |  |
+| `roles` | array&lt;[RoleAssignment](/docs/api/reference/schemas/#roleassignment)&gt; | да |  |
+| `inheritedRoles` | array&lt;[PipelineRole](/docs/api/reference/schemas/#pipelinerole)&gt; | нет |  |
 | `managesShared` | boolean | нет |  |
 
 ## ModelSettingsError
@@ -847,9 +847,9 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `role` | [ColorRole](/docs/api/reference/schemas/#ColorRole) | да |  |
-| `hex` | [HexColor](/docs/api/reference/schemas/#HexColor) | да |  |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `role` | [ColorRole](/docs/api/reference/schemas/#colorrole) | да |  |
+| `hex` | [HexColor](/docs/api/reference/schemas/#hexcolor) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## Paragraph
 
@@ -859,7 +859,7 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `level` | integer | да | Indent level, zero at the top. |
 | `align` | — | нет | Null or absent when the paragraph inherits its alignment. |
-| `runs` | array&lt;[TextRun](/docs/api/reference/schemas/#TextRun)&gt; | да | Runs in reading order. |
+| `runs` | array&lt;[TextRun](/docs/api/reference/schemas/#textrun)&gt; | да | Runs in reading order. |
 | `lineSpacing` | number | да | Multiple of single spacing, when stated as a percentage. |
 | `bullet` | string | нет | Character the paragraph is bulleted with (`a:buChar`). Absent: no bullet. |
 | `marginEmu` | integer | нет | Left margin of the paragraph (`marL`). Absent: inherited, which reads as 0. |
@@ -877,7 +877,7 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `code` | [ParseWarningCode](/docs/api/reference/schemas/#ParseWarningCode) | да |  |
+| `code` | [ParseWarningCode](/docs/api/reference/schemas/#parsewarningcode) | да |  |
 | `message` | string | да | What happened, in a sentence. |
 | `location` | string | да | Part name, or a part and shape id. |
 
@@ -920,7 +920,7 @@ Six hex digits, no leading hash.
 | `connectionId` | string | нет |  |
 | `baseUrl` | string | да |  |
 | `apiKey` | string | нет |  |
-| `headers` | array&lt;[ConnectionHeader](/docs/api/reference/schemas/#ConnectionHeader)&gt; | нет |  |
+| `headers` | array&lt;[ConnectionHeader](/docs/api/reference/schemas/#connectionheader)&gt; | нет |  |
 
 ## ProfilePatch
 
@@ -965,7 +965,7 @@ Six hex digits, no leading hash.
 | `role` | `logo`, `footer`, `page-number`, `decoration` | да |  |
 | `box` | — | да | Where it sits, in EMU. |
 | `mediaPart` | string | да | Image it draws, for a logo. Empty otherwise. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## QrCodePart
 
@@ -976,7 +976,7 @@ Six hex digits, no leading hash.
 | `type` | `qr-code` | да |  |
 | `callId` | string | да |  |
 | `qrId` | string | да |  |
-| `url` | [QrUrl](/docs/api/reference/schemas/#QrUrl) | да |  |
+| `url` | [QrUrl](/docs/api/reference/schemas/#qrurl) | да |  |
 | `pngDataUrl` | string | да |  |
 | `sha256` | string | да |  |
 | `width` | integer | да |  |
@@ -998,7 +998,7 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `name` | `sm`, `md`, `lg` | да |  |
 | `radiusPt` | number | да |  |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## ReasoningCapability
 
@@ -1020,7 +1020,7 @@ Six hex digits, no leading hash.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `buildId` | string | да |  |
-| `variant` | [LayoutVariant](/docs/api/reference/schemas/#LayoutVariant) | да |  |
+| `variant` | [LayoutVariant](/docs/api/reference/schemas/#layoutvariant) | да |  |
 
 ## RoleAssignment
 
@@ -1035,9 +1035,9 @@ Six hex digits, no leading hash.
 | `templatePath` | string | да | Path to the .pptx used as the style source. |
 | `contentPath` | string | да | Path to the content pack for the deck. |
 | `slideCount` | integer | да | Number of slides to produce. |
-| `layoutVariants` | array&lt;[LayoutVariant](/docs/api/reference/schemas/#LayoutVariant)&gt; | да | Layout variants built from the single deck plan. |
+| `layoutVariants` | array&lt;[LayoutVariant](/docs/api/reference/schemas/#layoutvariant)&gt; | да | Layout variants built from the single deck plan. |
 | `auditProfile` | string | да | Name of the audit profile from configs/audit.yaml. |
-| `models` | array&lt;[ModelBinding](/docs/api/reference/schemas/#ModelBinding)&gt; | да | Models bound to pipeline roles. |
+| `models` | array&lt;[ModelBinding](/docs/api/reference/schemas/#modelbinding)&gt; | да | Models bound to pipeline roles. |
 | `seed` | integer | да | Seed that makes a run reproducible. |
 | `outputDir` | string | да | Directory that receives run artifacts. |
 | `goal` | string | нет | What the deck has to achieve. Absent: the first paragraph of the content file. |
@@ -1064,7 +1064,7 @@ Six hex digits, no leading hash.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `present` | boolean | да | False when the template draws no shadows. Do not add any. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## Shape
 
@@ -1082,7 +1082,7 @@ Six hex digits, no leading hash.
 | `z` | integer | да | Paint order within the parent, lowest first. |
 | `path` | array&lt;integer&gt; | да | Ids of the groups this shape sits in, outermost first. Empty at the top level. |
 | `placeholder` | — | да |  |
-| `paragraphs` | array&lt;[Paragraph](/docs/api/reference/schemas/#Paragraph)&gt; | да | Text of the shape, empty when it carries none. |
+| `paragraphs` | array&lt;[Paragraph](/docs/api/reference/schemas/#paragraph)&gt; | да | Text of the shape, empty when it carries none. |
 | `mediaPart` | string | да | Part name of the image this shape draws, for pictures. |
 | `tableSize` | array&lt;integer или integer&gt; | да | Rows and columns, for tables. |
 | `chartPart` | string | да | Part name of the chart, for charts. |
@@ -1103,12 +1103,12 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `schemaVersion` | `1` | да | Incremented by any incompatible change. |
 | `slideId` | string | да | Matches the planned slide, across all three variants. |
-| `variant` | [LayoutVariantName](/docs/api/reference/schemas/#LayoutVariantName) | да |  |
+| `variant` | [LayoutVariantName](/docs/api/reference/schemas/#layoutvariantname) | да |  |
 | `index` | integer | да | Position in the deck, from zero. |
 | `patternId` | string | да | Pattern from the template profile this slide was built on. |
 | `slideCx` | integer | да | Slide width in EMU, from the template. |
 | `slideCy` | integer | да | Slide height in EMU, from the template. |
-| `elements` | array&lt;[SlideElement](/docs/api/reference/schemas/#SlideElement)&gt; | да | In paint order, lowest first. |
+| `elements` | array&lt;[SlideElement](/docs/api/reference/schemas/#slideelement)&gt; | да | In paint order, lowest first. |
 | `background` | — | нет | Colour the slide is filled with. Null or absent: the template background. |
 | `backgroundImage` | string | нет | Picture the slide is painted with, stretched over it and drawn above `background`: a part name inside the template or a path under the run directory, as an image `mediaPart`. |
 | `notes` | string | нет | Speaker notes as plain text, one paragraph of the notes page (`p:notes`) per line. Absent or empty: the slide has none. |
@@ -1126,7 +1126,7 @@ Six hex digits, no leading hash.
 | `part` | string | да | Package part name, which identifies it. |
 | `name` | string | да | Name from the file, or a generated one for slides. |
 | `follows` | string | да | Part this one inherits from: a layout for a slide, a master for a layout. |
-| `shapes` | array&lt;[Shape](/docs/api/reference/schemas/#Shape)&gt; | да | Shapes in paint order, groups flattened. |
+| `shapes` | array&lt;[Shape](/docs/api/reference/schemas/#shape)&gt; | да | Shapes in paint order, groups flattened. |
 | `background` | — | да | Null when the part inherits its background. |
 | `theme` | string | да | For a master, the theme part it uses. Empty below the master. |
 | `colorMap` | array&lt;array&lt;string или string&gt;&gt; | да | Alias to slot map (bg1 to lt1 ...). In full on a master, overrides below it. |
@@ -1183,9 +1183,9 @@ Six hex digits, no leading hash.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `widthPt` | number | да |  |
-| `hex` | [HexColor](/docs/api/reference/schemas/#HexColor) | да |  |
+| `hex` | [HexColor](/docs/api/reference/schemas/#hexcolor) | да |  |
 | `colorRole` | — | да | Palette role this colour matches, if any. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## StyleSource
 
@@ -1198,10 +1198,10 @@ Six hex digits, no leading hash.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `tone` | `light`, `dark` | да |  |
-| `background` | [HexColor](/docs/api/reference/schemas/#HexColor) | да |  |
+| `background` | [HexColor](/docs/api/reference/schemas/#hexcolor) | да |  |
 | `text` | — | да | Text colour observed on this surface, or the best contrast. |
 | `accent` | — | да | Accent observed on this surface, if any. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## TableBorders
 
@@ -1237,8 +1237,8 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `kind` | `table` | да |  |
 | `elementId` | string | да |  |
-| `role` | [ElementRole](/docs/api/reference/schemas/#ElementRole) | да |  |
-| `box` | [Box](/docs/api/reference/schemas/#Box) | да |  |
+| `role` | [ElementRole](/docs/api/reference/schemas/#elementrole) | да |  |
+| `box` | [Box](/docs/api/reference/schemas/#box) | да |  |
 | `rotation` | number | нет | Clockwise, in degrees, about the centre of the box. Absent means 0. |
 | `opacity` | number | нет | From 0 to 1. Absent means opaque. |
 | `locked` | boolean | нет | True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false. |
@@ -1267,13 +1267,13 @@ Six hex digits, no leading hash.
 | `slideCy` | integer | да | Slide height in EMU. |
 | `aspect` | string | да | Aspect ratio in lowest terms, such as 16:9. |
 | `hash` | string | да | Digest over the canonical IR. Two runs over one file agree; the name is excluded. |
-| `themeColors` | array&lt;[ThemeColors](/docs/api/reference/schemas/#ThemeColors)&gt; | да | One entry per theme part. |
-| `themeFonts` | [ThemeFonts](/docs/api/reference/schemas/#ThemeFonts) | да |  |
-| `masters` | array&lt;[SlideLike](/docs/api/reference/schemas/#SlideLike)&gt; | да |  |
-| `layouts` | array&lt;[SlideLike](/docs/api/reference/schemas/#SlideLike)&gt; | да |  |
-| `slides` | array&lt;[SlideLike](/docs/api/reference/schemas/#SlideLike)&gt; | да |  |
-| `media` | array&lt;[MediaItem](/docs/api/reference/schemas/#MediaItem)&gt; | да | Inventory of ppt/media, ordered by part name. |
-| `warnings` | array&lt;[ParseWarning](/docs/api/reference/schemas/#ParseWarning)&gt; | да | Empty when nothing was lost. |
+| `themeColors` | array&lt;[ThemeColors](/docs/api/reference/schemas/#themecolors)&gt; | да | One entry per theme part. |
+| `themeFonts` | [ThemeFonts](/docs/api/reference/schemas/#themefonts) | да |  |
+| `masters` | array&lt;[SlideLike](/docs/api/reference/schemas/#slidelike)&gt; | да |  |
+| `layouts` | array&lt;[SlideLike](/docs/api/reference/schemas/#slidelike)&gt; | да |  |
+| `slides` | array&lt;[SlideLike](/docs/api/reference/schemas/#slidelike)&gt; | да |  |
+| `media` | array&lt;[MediaItem](/docs/api/reference/schemas/#mediaitem)&gt; | да | Inventory of ppt/media, ordered by part name. |
+| `warnings` | array&lt;[ParseWarning](/docs/api/reference/schemas/#parsewarning)&gt; | да | Empty when nothing was lost. |
 
 ## TemplatePatch
 
@@ -1306,15 +1306,15 @@ Six hex digits, no leading hash.
 | --- | --- | --- | --- |
 | `kind` | `text` | да |  |
 | `elementId` | string | да |  |
-| `role` | [ElementRole](/docs/api/reference/schemas/#ElementRole) | да |  |
-| `box` | [Box](/docs/api/reference/schemas/#Box) | да |  |
+| `role` | [ElementRole](/docs/api/reference/schemas/#elementrole) | да |  |
+| `box` | [Box](/docs/api/reference/schemas/#box) | да |  |
 | `rotation` | number | нет | Clockwise, in degrees, about the centre of the box. Absent means 0. |
 | `opacity` | number | нет | From 0 to 1. Absent means opaque. |
 | `locked` | boolean | нет | True keeps the editor from selecting or moving the element by accident, as template backgrounds usually are. Absent means false. |
 | `groupIds` | array&lt;string&gt; | нет | Groups the element belongs to, outermost first. Elements whose ids start with the same run form one group, and nested runs nest groups, as p:grpSp does in OOXML. Members of a group are consecutive in paint order. Absent: the element is in no group. |
 | `sourcePart` | `slide`, `layout`, `master` | нет | Which part the shape was read from. Master and layout graphics are already painted when a slide of that layout is cloned, so an export that keeps the source slide must not draw them again. Absent means the slide itself. |
 | `sourceShapeId` | integer | да | Template shape this was placed from, when it came from one. |
-| `paragraphs` | array&lt;[Paragraph](/docs/api/reference/schemas/#Paragraph)&gt; | да |  |
+| `paragraphs` | array&lt;[Paragraph](/docs/api/reference/schemas/#paragraph)&gt; | да |  |
 | `overflow` | object | да | Null when the text fits. Set instead of truncating it. |
 | `verticalAlign` | — | нет | Absent when the element inherits it, which reads as top. |
 | `textInsets` | — | нет | Space between the box and its text (`a:bodyPr` insets). Absent: none. |
@@ -1370,7 +1370,7 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `source` | [StyleSource](/docs/api/reference/schemas/#StyleSource) | да |  |
+| `source` | [StyleSource](/docs/api/reference/schemas/#stylesource) | да |  |
 | `count` | integer | да | Occurrences that support this value. |
 | `share` | number | да | Share of the relevant population that agrees. |
 | `confidence` | number | да | How far to trust the value. 1 for a measurement nobody contradicts. |
@@ -1389,7 +1389,7 @@ Six hex digits, no leading hash.
 | `role` | `primary`, `secondary`, `mono` | да |  |
 | `font` | string | да |  |
 | `declared` | string | да | What the theme names for this role. Differs from font when the slides disagree. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## TypeRole
 
@@ -1401,14 +1401,14 @@ Six hex digits, no leading hash.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
-| `role` | [TypeRole](/docs/api/reference/schemas/#TypeRole) | да |  |
+| `role` | [TypeRole](/docs/api/reference/schemas/#typerole) | да |  |
 | `font` | string | да | Typeface to set this role in. |
 | `sizePt` | number | да | Size in points. |
 | `bold` | boolean | да |  |
 | `italic` | boolean | да |  |
 | `lineSpacing` | number | да | Multiple of the line height, 1 for single. |
 | `colorRole` | — | да | Which palette role this text takes its colour from. |
-| `meta` | [TokenMeta](/docs/api/reference/schemas/#TokenMeta) | да |  |
+| `meta` | [TokenMeta](/docs/api/reference/schemas/#tokenmeta) | да |  |
 
 ## ValidatedInputs
 

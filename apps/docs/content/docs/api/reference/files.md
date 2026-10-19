@@ -20,9 +20,9 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | array&lt;[StoredFile](/docs/api/reference/schemas/#StoredFile)&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | array&lt;[StoredFile](/docs/api/reference/schemas/#storedfile)&gt; |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /files/content`
 **Загрузить материалы**
@@ -41,10 +41,10 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 202 | Принято. | [StoredFile](/docs/api/reference/schemas/#StoredFile) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 202 | Принято. | [StoredFile](/docs/api/reference/schemas/#storedfile) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /files/template`
 **Загрузить шаблон**
@@ -63,13 +63,13 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 202 | Принято. | [StoredFile](/docs/api/reference/schemas/#StoredFile) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 422 | Движок не смог прочитать файл. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 504 | Движок не ответил вовремя. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 202 | Принято. | [StoredFile](/docs/api/reference/schemas/#storedfile) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 422 | Движок не смог прочитать файл. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 504 | Движок не ответил вовремя. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /files/templates`
 **Шаблоны**
@@ -84,9 +84,9 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | array&lt;[StoredFile](/docs/api/reference/schemas/#StoredFile)&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | array&lt;[StoredFile](/docs/api/reference/schemas/#storedfile)&gt; |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `DELETE /files/templates/{id}`
 **Убрать шаблон из библиотеки**
@@ -103,9 +103,9 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Шаблон убран. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PATCH /files/templates/{id}`
 **Переименовать или открыть шаблон всем**
@@ -119,17 +119,17 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 
 ### Тело запроса
 
-- `application/json` — [TemplatePatch](/docs/api/reference/schemas/#TemplatePatch)
+- `application/json` — [TemplatePatch](/docs/api/reference/schemas/#templatepatch)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [StoredFile](/docs/api/reference/schemas/#StoredFile) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [StoredFile](/docs/api/reference/schemas/#storedfile) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /files/templates/{id}/download`
 **Скачать исходный шаблон**
@@ -146,9 +146,9 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Исходный файл шаблона. | string |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /files/templates/{id}/previews/{name}`
 **Превью слайда шаблона**
@@ -166,6 +166,6 @@ description: "Загрузка шаблона `.pptx`/`.potx` и материа�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | PNG слайда. | string |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |

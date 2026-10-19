@@ -20,9 +20,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | array&lt;[LibraryDeck](/docs/api/reference/schemas/#LibraryDeck)&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | array&lt;[LibraryDeck](/docs/api/reference/schemas/#librarydeck)&gt; |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /generation`
 **Собрать колоду**
@@ -35,18 +35,18 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 ### Тело запроса
 
-- `application/json` — [GenerationRequest](/docs/api/reference/schemas/#GenerationRequest)
+- `application/json` — [GenerationRequest](/docs/api/reference/schemas/#generationrequest)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [StartedBuild](/docs/api/reference/schemas/#StartedBuild) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [StartedBuild](/docs/api/reference/schemas/#startedbuild) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `DELETE /generation/{id}`
 **Удалить колоду**
@@ -63,9 +63,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Колода удалена. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PATCH /generation/{id}`
 **Переименовать или перенести колоду**
@@ -79,17 +79,17 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 ### Тело запроса
 
-- `application/json` — [DeckPatch](/docs/api/reference/schemas/#DeckPatch)
+- `application/json` — [DeckPatch](/docs/api/reference/schemas/#deckpatch)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [Ok](/docs/api/reference/schemas/#Ok) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [Ok](/docs/api/reference/schemas/#ok) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/artifacts/{name}`
 **Скачать артефакт сборки**
@@ -107,9 +107,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Артефакт. | string |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /generation/{id}/cancel`
 **Остановить сборку**
@@ -125,10 +125,10 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [Ok](/docs/api/reference/schemas/#Ok) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [Ok](/docs/api/reference/schemas/#ok) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/deck`
 **Колода для редактора**
@@ -145,9 +145,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | object |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /generation/{id}/export`
 **Экспорт отредактированной колоды**
@@ -161,18 +161,18 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 ### Тело запроса
 
-- `application/json` — [ExportRequest](/docs/api/reference/schemas/#ExportRequest)
+- `application/json` — [ExportRequest](/docs/api/reference/schemas/#exportrequest)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [ExportedDeck](/docs/api/reference/schemas/#ExportedDeck) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [ExportedDeck](/docs/api/reference/schemas/#exporteddeck) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/exports/{exportId}/{name}`
 **Скачать экспорт**
@@ -191,9 +191,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Файл экспорта. | string |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/media/{name}`
 **Картинка колоды**
@@ -211,9 +211,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Изображение. | string |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/previews`
 **Превью слайдов**
@@ -230,9 +230,9 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | array&lt;string&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /generation/{id}/resume`
 **Продолжить сборку с сохранённых задач**
@@ -247,8 +247,8 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 201 | Создано или запущено. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/summary`
 **Сводка колоды для карточки чата**
@@ -264,10 +264,10 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [DeckSummary](/docs/api/reference/schemas/#DeckSummary) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [DeckSummary](/docs/api/reference/schemas/#decksummary) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/{id}/usage`
 **Накопленный расход сборки, включая неудачные попытки и продолжения**
@@ -282,8 +282,8 @@ description: "Подготовка шаблона, сборка трёх вар�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /generation/prepare`
 **Подготовить шаблон**
@@ -296,18 +296,18 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 ### Тело запроса
 
-- `application/json` — [PrepareRequest](/docs/api/reference/schemas/#PrepareRequest)
+- `application/json` — [PrepareRequest](/docs/api/reference/schemas/#preparerequest)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 201 | Создано или запущено. | object |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /generation/prepare/{templateId}`
 **Ход подготовки шаблона**
@@ -323,8 +323,8 @@ description: "Подготовка шаблона, сборка трёх вар�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [TemplatePreparation](/docs/api/reference/schemas/#TemplatePreparation) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [TemplatePreparation](/docs/api/reference/schemas/#templatepreparation) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |

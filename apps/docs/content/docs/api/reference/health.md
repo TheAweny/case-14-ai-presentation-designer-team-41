@@ -14,7 +14,7 @@ description: "Живы ли API, движок и база данных."
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [HealthCheck](/docs/api/reference/schemas/#HealthCheck) |
+| 200 | Успешно. | [HealthCheck](/docs/api/reference/schemas/#healthcheck) |
 
 ## `GET /health/database`
 **PostgreSQL отвечает**
@@ -22,9 +22,9 @@ description: "Живы ли API, движок и база данных."
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [HealthCheck](/docs/api/reference/schemas/#HealthCheck) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [HealthCheck](/docs/api/reference/schemas/#healthcheck) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /health/engine`
 **Python-движок жив**
@@ -32,6 +32,6 @@ description: "Живы ли API, движок и база данных."
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [HealthCheck](/docs/api/reference/schemas/#HealthCheck) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [HealthCheck](/docs/api/reference/schemas/#healthcheck) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 503 | Недоступен движок, база данных или хранилище ключей. | [ApiError](/docs/api/reference/schemas/#apierror) |

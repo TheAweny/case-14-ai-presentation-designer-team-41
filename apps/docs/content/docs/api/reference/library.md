@@ -20,9 +20,9 @@ description: "Проекты: папки для колод, чатов и шаб
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | array&lt;[ListedProject](/docs/api/reference/schemas/#ListedProject)&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | array&lt;[ListedProject](/docs/api/reference/schemas/#listedproject)&gt; |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /library/projects`
 **Создать проект**
@@ -34,16 +34,16 @@ description: "Проекты: папки для колод, чатов и шаб
 
 ### Тело запроса
 
-- `application/json` — [ProjectInput](/docs/api/reference/schemas/#ProjectInput)
+- `application/json` — [ProjectInput](/docs/api/reference/schemas/#projectinput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [Project](/docs/api/reference/schemas/#Project) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [Project](/docs/api/reference/schemas/#project) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `DELETE /library/projects/{id}`
 **Удалить проект**
@@ -60,9 +60,9 @@ description: "Проекты: папки для колод, чатов и шаб
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | object |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PATCH /library/projects/{id}`
 **Изменить проект**
@@ -76,17 +76,17 @@ description: "Проекты: папки для колод, чатов и шаб
 
 ### Тело запроса
 
-- `application/json` — [ProjectInput](/docs/api/reference/schemas/#ProjectInput)
+- `application/json` — [ProjectInput](/docs/api/reference/schemas/#projectinput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [Project](/docs/api/reference/schemas/#Project) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [Project](/docs/api/reference/schemas/#project) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `DELETE /library/projects/{projectId}/templates/{templateId}`
 **Убрать шаблон из проекта**
@@ -103,10 +103,10 @@ description: "Проекты: папки для колод, чатов и шаб
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [Ok](/docs/api/reference/schemas/#Ok) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [Ok](/docs/api/reference/schemas/#ok) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /library/projects/{projectId}/templates/{templateId}`
 **Добавить шаблон в проект**
@@ -122,7 +122,7 @@ description: "Проекты: папки для колод, чатов и шаб
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [Ok](/docs/api/reference/schemas/#Ok) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [Ok](/docs/api/reference/schemas/#ok) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |

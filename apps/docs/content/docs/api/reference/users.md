@@ -19,9 +19,9 @@ description: "Свой профиль и управление аккаунтам
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [AccountUsageView](/docs/api/reference/schemas/#AccountUsageView) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [AccountUsageView](/docs/api/reference/schemas/#accountusageview) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PUT /account-usage/{id}`
 **Изменить опциональные ограничения аккаунта**
@@ -33,15 +33,15 @@ description: "Свой профиль и управление аккаунтам
 
 ### Тело запроса
 
-- `application/json` — [AccountPolicy](/docs/api/reference/schemas/#AccountPolicy)
+- `application/json` — [AccountPolicy](/docs/api/reference/schemas/#accountpolicy)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [AccountUsageView](/docs/api/reference/schemas/#AccountUsageView) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [AccountUsageView](/docs/api/reference/schemas/#accountusageview) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /account-usage/me`
 **Своя активность и включённые ограничения**
@@ -55,9 +55,9 @@ description: "Свой профиль и управление аккаунтам
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [AccountUsageView](/docs/api/reference/schemas/#AccountUsageView) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [AccountUsageView](/docs/api/reference/schemas/#accountusageview) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /users`
 **Все аккаунты**
@@ -72,9 +72,9 @@ description: "Свой профиль и управление аккаунтам
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | array&lt;[Account](/docs/api/reference/schemas/#Account)&gt; |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | array&lt;[Account](/docs/api/reference/schemas/#account)&gt; |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /users`
 **Создать аккаунт**
@@ -87,17 +87,17 @@ description: "Свой профиль и управление аккаунтам
 
 ### Тело запроса
 
-- `application/json` — [AccountInput](/docs/api/reference/schemas/#AccountInput)
+- `application/json` — [AccountInput](/docs/api/reference/schemas/#accountinput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [Account](/docs/api/reference/schemas/#Account) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 201 | Создано или запущено. | [Account](/docs/api/reference/schemas/#account) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `DELETE /users/{id}`
 **Удалить аккаунт**
@@ -114,10 +114,10 @@ description: "Свой профиль и управление аккаунтам
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Аккаунт и его данные удалены. | — |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PATCH /users/{id}`
 **Изменить аккаунт**
@@ -131,18 +131,18 @@ description: "Свой профиль и управление аккаунтам
 
 ### Тело запроса
 
-- `application/json` — [AccountPatch](/docs/api/reference/schemas/#AccountPatch)
+- `application/json` — [AccountPatch](/docs/api/reference/schemas/#accountpatch)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [Account](/docs/api/reference/schemas/#Account) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [Account](/docs/api/reference/schemas/#account) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Объекта нет или он принадлежит другому аккаунту. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 409 | Конфликт состояния: действие сейчас невозможно. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /users/{id}/revoke-sessions`
 **Отозвать все сессии аккаунта**
@@ -157,8 +157,8 @@ description: "Свой профиль и управление аккаунтам
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Готово, тела нет. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /users/me`
 **Свой аккаунт**
@@ -172,9 +172,9 @@ description: "Свой профиль и управление аккаунтам
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [Account](/docs/api/reference/schemas/#Account) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [Account](/docs/api/reference/schemas/#account) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `PATCH /users/me`
 **Изменить свой профиль**
@@ -187,13 +187,13 @@ description: "Свой профиль и управление аккаунтам
 
 ### Тело запроса
 
-- `application/json` — [ProfilePatch](/docs/api/reference/schemas/#ProfilePatch)
+- `application/json` — [ProfilePatch](/docs/api/reference/schemas/#profilepatch)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [Account](/docs/api/reference/schemas/#Account) |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [Account](/docs/api/reference/schemas/#account) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |

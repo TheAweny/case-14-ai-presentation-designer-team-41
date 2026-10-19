@@ -20,9 +20,9 @@ description: "Подключения к моделям и выбор модел�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ModelSettings](/docs/api/reference/schemas/#ModelSettings) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [ModelSettings](/docs/api/reference/schemas/#modelsettings) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /model-settings/capabilities`
 **Возможности модели**
@@ -37,9 +37,9 @@ description: "Подключения к моделям и выбор модел�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ModelCapabilities](/docs/api/reference/schemas/#ModelCapabilities) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 200 | Успешно. | [ModelCapabilities](/docs/api/reference/schemas/#modelcapabilities) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /model-settings/connections`
 **Сохранить подключение**
@@ -52,19 +52,19 @@ description: "Подключения к моделям и выбор модел�
 
 ### Тело запроса
 
-- `application/json` — [ConnectionInput](/docs/api/reference/schemas/#ConnectionInput)
+- `application/json` — [ConnectionInput](/docs/api/reference/schemas/#connectioninput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 201 | Создано или запущено. | [ModelConnection](/docs/api/reference/schemas/#ModelConnection) |
-| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 503 | Хранилище ключей недоступно: не задан `MODEL_KEYS_SECRET`. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 201 | Создано или запущено. | [ModelConnection](/docs/api/reference/schemas/#modelconnection) |
+| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 503 | Хранилище ключей недоступно: не задан `MODEL_KEYS_SECRET`. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
 
 ## `DELETE /model-settings/connections/{id}`
 **Удалить подключение**
@@ -80,10 +80,10 @@ description: "Подключения к моделям и выбор модел�
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Подключение удалено. | — |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
 
 ## `POST /model-settings/connections/{id}/check`
 **Проверить подключение**
@@ -99,11 +99,11 @@ description: "Подключения к моделям и выбор модел�
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ModelConnection](/docs/api/reference/schemas/#ModelConnection) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 503 | Хранилище ключей недоступно: не задан `MODEL_KEYS_SECRET`. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 200 | Успешно. | [ModelConnection](/docs/api/reference/schemas/#modelconnection) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 503 | Хранилище ключей недоступно: не задан `MODEL_KEYS_SECRET`. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
 
 ## `PUT /model-settings/connections/{id}/kinds`
 **Тип модели вручную**
@@ -117,18 +117,18 @@ description: "Подключения к моделям и выбор модел�
 
 ### Тело запроса
 
-- `application/json` — [ManualKindsInput](/docs/api/reference/schemas/#ManualKindsInput)
+- `application/json` — [ManualKindsInput](/docs/api/reference/schemas/#manualkindsinput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Тип модели сохранён. | — |
-| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
 
 ## `PUT /model-settings/connections/{id}/models`
 **Какие модели подключения доступны**
@@ -142,18 +142,18 @@ description: "Подключения к моделям и выбор модел�
 
 ### Тело запроса
 
-- `application/json` — [ConnectionModelsInput](/docs/api/reference/schemas/#ConnectionModelsInput)
+- `application/json` — [ConnectionModelsInput](/docs/api/reference/schemas/#connectionmodelsinput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ModelConnection](/docs/api/reference/schemas/#ModelConnection) |
-| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 200 | Успешно. | [ModelConnection](/docs/api/reference/schemas/#modelconnection) |
+| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 409 | Подключение задано окружением сервера и не редактируется. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
 
 ## `POST /model-settings/probe`
 **Проверить адрес и ключ до сохранения**
@@ -166,18 +166,18 @@ description: "Подключения к моделям и выбор модел�
 
 ### Тело запроса
 
-- `application/json` — [ProbeInput](/docs/api/reference/schemas/#ProbeInput)
+- `application/json` — [ProbeInput](/docs/api/reference/schemas/#probeinput)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
-| 200 | Успешно. | [ConnectionCheck](/docs/api/reference/schemas/#ConnectionCheck) |
-| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 503 | Хранилище ключей недоступно: не задан `MODEL_KEYS_SECRET`. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 200 | Успешно. | [ConnectionCheck](/docs/api/reference/schemas/#connectioncheck) |
+| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 503 | Хранилище ключей недоступно: не задан `MODEL_KEYS_SECRET`. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
 
 ## `PUT /model-settings/roles`
 **Назначить модель роли**
@@ -190,14 +190,14 @@ description: "Подключения к моделям и выбор модел�
 
 ### Тело запроса
 
-- `application/json` — [RoleAssignment](/docs/api/reference/schemas/#RoleAssignment)
+- `application/json` — [RoleAssignment](/docs/api/reference/schemas/#roleassignment)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Роль назначена. | — |
-| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
-| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#ModelSettingsError) |
+| 400 | Неверный ввод; в `problems` — что не так по полям. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |
+| 401 | Нет входа: аккаунт не назван, удалён или отключён. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 404 | Подключения нет. | [ModelSettingsError](/docs/api/reference/schemas/#modelsettingserror) |

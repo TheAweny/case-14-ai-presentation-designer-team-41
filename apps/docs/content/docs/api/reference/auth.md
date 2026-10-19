@@ -15,7 +15,7 @@ description: "Проверка пароля для веб-сервера, кот
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | object |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `GET /auth/accounts/{id}`
 **Аккаунт по id**
@@ -32,7 +32,7 @@ description: "Проверка пароля для веб-сервера, кот
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | object |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /auth/logout`
 **Отозвать текущую сессию**
@@ -47,20 +47,20 @@ description: "Проверка пароля для веб-сервера, кот
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 204 | Готово, тела нет. | — |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
 
 ## `POST /auth/verify`
 **Проверить почту и пароль**
 Неверный пароль, неизвестная почта и отключённый аккаунт отвечают `{ "account": null }`.
 ### Тело запроса
 
-- `application/json` — [Credentials](/docs/api/reference/schemas/#Credentials)
+- `application/json` — [Credentials](/docs/api/reference/schemas/#credentials)
 
 ### Ответы
 
 | Код | Описание | Схема |
 | --- | --- | --- |
 | 200 | Успешно. | object |
-| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#ApiError) |
-| 429 | Слишком много попыток. Повторите запрос позже. | [ApiError](/docs/api/reference/schemas/#ApiError) |
+| 400 | Неверный запрос: тело или параметры не прошли проверку. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 403 | Нет прав: запрос не от веб-сервера или действие только для администратора. | [ApiError](/docs/api/reference/schemas/#apierror) |
+| 429 | Слишком много попыток. Повторите запрос позже. | [ApiError](/docs/api/reference/schemas/#apierror) |
