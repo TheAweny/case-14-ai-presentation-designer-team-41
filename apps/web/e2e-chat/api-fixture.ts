@@ -1,5 +1,16 @@
-import { createServer } from 'node:http';
-import { modelSettingsSchema, roleAssignmentSchema, type ModelSettings } from '@lct/contracts';
+import { createHash, randomUUID } from 'node:crypto';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import {
+  editorMediaPutRequestSchema,
+  editorRevisionExportRequestSchema,
+  editorSnapshotSaveRequestSchema,
+  modelSettingsSchema,
+  roleAssignmentSchema,
+  type EditorMediaRef,
+  type EditorSnapshot,
+  type EditorSnapshotSaveResponse,
+  type ModelSettings,
+} from '@lct/contracts';
 
 const initialModels = (): ModelSettings => ({
   connections: [
@@ -34,6 +45,17 @@ let manualKinds: Record<string, string[]> = {};
 let templates: unknown[] = [];
 let projects: unknown[] = [];
 let generationDeck: { runId: string } | null = null;
+/** Editor revisions of the generation deck for the one signed-in account, as `apps/api` keeps them. */
+let editorRevisions: EditorSnapshot[] = [];
+const editorMedia = new Map<string, { ref: EditorMediaRef; bytes: Buffer }>();
+const editorSaves = new Map<string, { status: number; body: EditorSnapshotSaveResponse }>();
+const editorExports = new Map<string, { revision: number; format: string }>();
+/**
+ * The next chat turn a test scripted: `head` streams one event every `everyMs`, the turn then
+ * waits for `/__release-turn` and sends `tail`. Events get their `seq` here.
+ */
+let scriptedTurn: { head: object[]; tail: object[]; everyMs: number } | null = null;
+let releaseTurn: (() => void) | null = null;
 /** Original template bytes for GET /files/templates/:id/download. An unknown id is 404. */
 const templateDownloads = new Map<
   string,
@@ -53,6 +75,13 @@ const server = createServer(async (request, response) => {
     projects = [];
     generationDeck = null;
     templateDownloads.clear();
+    editorRevisions = [];
+    editorMedia.clear();
+    editorSaves.clear();
+    editorExports.clear();
+    scriptedTurn = null;
+    releaseTurn?.();
+    releaseTurn = null;
     response.end('{}');
   } else if (request.url === '/__set-admin' && request.method === 'POST') {
     accountRole = 'admin';
@@ -70,6 +99,31 @@ const server = createServer(async (request, response) => {
       request.url === `/generation/${generationDeck.runId}/summary`)
   ) {
     response.end(JSON.stringify(generationDeck));
+  } else if (request.url?.startsWith('/editor/decks/')) {
+    await editor(request, response);
+  } else if (request.url === '/__editor') {
+    response.end(
+      JSON.stringify({
+        revisions: editorRevisions,
+        media: [...editorMedia.values()].map(({ ref, bytes }) => ({
+          ...ref,
+          dataUrl: `data:${ref.contentType};base64,${bytes.toString('base64')}`,
+        })),
+        exports: [...editorExports].map(([exportId, item]) => ({ exportId, ...item })),
+      }),
+    );
+  } else if (request.url === '/__set-turn' && request.method === 'POST') {
+    scriptedTurn = JSON.parse(await bodyOf(request)) as typeof scriptedTurn;
+    response.end('{}');
+  } else if (request.url === '/__release-turn' && request.method === 'POST') {
+    releaseTurn?.();
+    response.end('{}');
+  } else if (
+    scriptedTurn &&
+    request.method === 'POST' &&
+    /^\/chats\/[\w-]+\/turns$/.test(request.url ?? '')
+  ) {
+    await streamTurn(request, response, scriptedTurn);
   } else if (request.url === '/__set-templates' && request.method === 'POST') {
     let body = '';
     for await (const chunk of request) body += String(chunk);
@@ -216,6 +270,166 @@ const server = createServer(async (request, response) => {
     );
   else response.end('[]');
 });
+
+async function bodyOf(request: IncomingMessage): Promise<string> {
+  let body = '';
+  for await (const chunk of request) body += String(chunk);
+  return body;
+}
+
+function answer(response: ServerResponse, status: number, body: unknown): void {
+  response.statusCode = status;
+  response.end(JSON.stringify(body));
+}
+
+/** Streams a turn the way `ChatsController` does: headers first, then one SSE frame per event. */
+async function streamTurn(
+  request: IncomingMessage,
+  response: ServerResponse,
+  turn: NonNullable<typeof scriptedTurn>,
+): Promise<void> {
+  await bodyOf(request);
+  scriptedTurn = null;
+  response.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+  });
+  let seq = 0;
+  const send = (event: object) =>
+    response.write(`data: ${JSON.stringify({ ...event, seq: seq++ })}\n\n`);
+  // A release that comes while `head` still streams is kept: `tail` follows right after it.
+  const released = new Promise<void>((resolve) => {
+    releaseTurn = resolve;
+  });
+  for (const event of turn.head) {
+    send(event);
+    await new Promise((resolve) => setTimeout(resolve, turn.everyMs));
+  }
+  await released;
+  releaseTurn = null;
+  for (const event of turn.tail) send(event);
+  response.end();
+}
+
+const sha256 = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * `/editor/decks/:deckId/...` of `apps/api/src/editor`: revisioned snapshots of the generation
+ * deck, their pictures and exports of one stored revision. Another deck is not this account's.
+ */
+async function editor(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const path = new URL(request.url ?? '', 'http://fixture').pathname;
+  const match = /^\/editor\/decks\/([\w-]+)\/(.+)$/.exec(path);
+  if (!match || !generationDeck || match[1] !== generationDeck.runId) {
+    answer(response, 404, { message: 'Completed deck not found.' });
+    return;
+  }
+  const [, deckId, rest] = match as unknown as [string, string, string];
+  const head = editorRevisions.at(-1) ?? null;
+  if (rest === 'snapshot' && request.method === 'GET') {
+    answer(response, 200, { schemaVersion: 1, snapshot: head });
+  } else if (rest === 'snapshot' && request.method === 'POST') {
+    const parsed = editorSnapshotSaveRequestSchema.safeParse(JSON.parse(await bodyOf(request)));
+    if (!parsed.success) return answer(response, 400, { message: parsed.error.message });
+    const save = parsed.data;
+    const prior = editorSaves.get(save.idempotencyKey);
+    if (prior) return answer(response, prior.status, prior.body);
+    const missing = save.media.some((item) => {
+      const stored = editorMedia.get(item.mediaPart);
+      return !stored || stored.ref.sha256 !== item.sha256 || stored.bytes.length !== item.byteSize;
+    });
+    if (missing) {
+      return answer(response, 409, {
+        message: 'Нужные картинки ещё не записаны. Снимок не опубликован.',
+      });
+    }
+    const current = head?.revision ?? 0;
+    if (current !== save.expectedRevision) {
+      if (!head) return answer(response, 409, { message: 'Нет редакции, которую ожидал клиент.' });
+      const body: EditorSnapshotSaveResponse = {
+        schemaVersion: 1,
+        kind: 'conflict',
+        conflict: {
+          schemaVersion: 1,
+          conflictId: randomUUID(),
+          expectedRevision: save.expectedRevision,
+          server: head,
+          rejected: { base: save.base, slides: save.slides, media: save.media },
+        },
+      };
+      editorSaves.set(save.idempotencyKey, { status: 409, body });
+      return answer(response, 409, body);
+    }
+    const snapshot: EditorSnapshot = {
+      schemaVersion: 1,
+      deckId,
+      revision: current + 1,
+      base: save.base,
+      savedAt: new Date().toISOString(),
+      contentSha256: sha256(JSON.stringify(save.slides)),
+      slides: save.slides,
+      media: save.media,
+    };
+    editorRevisions.push(snapshot);
+    const body: EditorSnapshotSaveResponse = { schemaVersion: 1, kind: 'saved', snapshot };
+    editorSaves.set(save.idempotencyKey, { status: 200, body });
+    answer(response, 200, body);
+  } else if (rest === 'media' && request.method === 'POST') {
+    const parsed = editorMediaPutRequestSchema.safeParse(JSON.parse(await bodyOf(request)));
+    const data = parsed.success
+      ? /^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/]+={0,2})$/.exec(parsed.data.dataUrl)
+      : null;
+    if (!parsed.success || !data) {
+      return answer(response, 400, { message: 'Invalid editor media.' });
+    }
+    const { mediaPart } = parsed.data;
+    const bytes = Buffer.from(data[2] ?? '', 'base64');
+    const stored = editorMedia.get(mediaPart);
+    if (stored && stored.ref.sha256 !== sha256(bytes)) {
+      return answer(response, 409, { message: 'Эта картинка уже сохранена с другими байтами.' });
+    }
+    const ref: EditorMediaRef = stored?.ref ?? {
+      mediaPart,
+      sha256: sha256(bytes),
+      byteSize: bytes.length,
+      contentType: data[1] as EditorMediaRef['contentType'],
+    };
+    editorMedia.set(mediaPart, { ref, bytes });
+    answer(response, 201, { schemaVersion: 1, media: ref });
+  } else if (rest.startsWith('media/') && request.method === 'GET') {
+    const stored = editorMedia.get(decodeURIComponent(rest.slice('media/'.length)));
+    if (!stored) return answer(response, 404, { message: 'Picture not found.' });
+    response.setHeader('content-type', stored.ref.contentType);
+    response.end(stored.bytes);
+  } else if (/^revisions\/\d+\/export$/.test(rest) && request.method === 'POST') {
+    const parsed = editorRevisionExportRequestSchema.safeParse(JSON.parse(await bodyOf(request)));
+    if (!parsed.success) return answer(response, 400, { message: parsed.error.message });
+    const revision = Number(rest.split('/')[1]);
+    const snapshot = editorRevisions.find((item) => item.revision === revision);
+    if (!snapshot) return answer(response, 404, { message: 'Revision not found.' });
+    const exportId = randomUUID();
+    editorExports.set(exportId, { revision, format: parsed.data.format });
+    answer(response, 201, {
+      schemaVersion: 1,
+      exportId,
+      revision,
+      contentSha256: snapshot.contentSha256,
+      previews: [],
+    });
+  } else if (/^exports\/[\w-]+\/deck\.pptx$/.test(rest) && request.method === 'GET') {
+    const exported = editorExports.get(rest.split('/')[1] ?? '');
+    if (!exported) return answer(response, 404, { message: 'Artifact not found.' });
+    response.setHeader(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
+    response.setHeader('content-disposition', 'attachment; filename="deck.pptx"');
+    response.end(`fixture export of revision ${exported.revision}`);
+  } else {
+    answer(response, 404, { message: 'Not found.' });
+  }
+}
+
 server.listen(3121, '127.0.0.1');
 process.on('SIGTERM', () => server.close());
 process.on('SIGINT', () => server.close());
