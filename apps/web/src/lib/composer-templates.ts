@@ -95,6 +95,8 @@ export interface ComposerAttachments {
 export interface ComposerAttachmentsUpdate extends ComposerAttachments {
   /** Имена файлов, которые не подошли ни в материалы, ни в шаблоны. */
   readonly rejected: readonly string[];
+  /** Пустые .pptx и .potx среди отказов: для них нужна отдельная фраза, не общий список. */
+  readonly emptyTemplates: readonly string[];
 }
 
 /**
@@ -108,6 +110,7 @@ export function addComposerFiles(
 ): ComposerAttachmentsUpdate {
   const templates = added.filter((file) => isTemplateFile(file.name));
   const good = templates.filter((file) => templateFileProblem(file) === null);
+  const emptyTemplates = templates.filter((file) => templateFileProblem(file) === 'empty');
   const content = addContentFiles(
     current.files,
     added.filter((file) => !isTemplateFile(file.name)),
@@ -115,6 +118,7 @@ export function addComposerFiles(
   return {
     files: content.files,
     templateFile: good.at(-1) ?? current.templateFile,
+    emptyTemplates: emptyTemplates.map((file) => file.name),
     rejected: [
       ...templates.filter((file) => !good.includes(file)).map((file) => file.name),
       ...content.rejected,

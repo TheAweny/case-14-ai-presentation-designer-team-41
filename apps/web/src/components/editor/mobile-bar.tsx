@@ -83,7 +83,7 @@ export function MobileBar({
               onClick={() => onToolChange('select')}
               className={cn(TOUCH, 'size-9 rounded-full')}
             >
-              <CloseIcon size={14} />
+              <CloseIcon size={14} className="[--icon-stroke:1.5]" />
             </button>
           </div>
         </div>
@@ -119,7 +119,7 @@ export function MobileBar({
                 armed && 'bg-primary text-primary-foreground hover:bg-primary/90',
               )}
             >
-              <PlusIcon size={20} />
+              <PlusIcon size={20} className="[--icon-stroke:1.5]" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -137,7 +137,7 @@ export function MobileBar({
                     onSelect={() => onToolChange(variant.id)}
                     className="min-h-11"
                   >
-                    <variant.icon size={16} />
+                    <variant.icon size={16} className="[--icon-stroke:1.5]" />
                     {rail(`variants.${variant.id}`)}
                   </DropdownMenuItem>
                 ))}
@@ -173,7 +173,7 @@ function BarButton({
       onClick={onClick}
       className={TOUCH}
     >
-      <ButtonIcon size={20} />
+      <ButtonIcon size={20} className="[--icon-stroke:1.5]" />
     </button>
   );
 }

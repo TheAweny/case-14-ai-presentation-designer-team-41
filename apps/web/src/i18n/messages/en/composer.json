@@ -8,6 +8,7 @@
   "dropHere": "Drop to attach",
   "removeFile": "Remove “{name}”",
   "rejected": "Not supported: {names}.",
+  "emptyTemplate": "The file is empty. Upload a presentation that contains slides.",
   "kinds": {
     "brief": "brief",
     "text": "text",

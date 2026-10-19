@@ -8,6 +8,7 @@ describe('settingsSection', () => {
     expect(settingsSection('models')).toBe('models');
     expect(settingsSection('general')).toBe('general');
     expect(settingsSection('billing')).toBe('general');
+    expect(settingsSection('users')).toBe('general');
   });
 });
 
