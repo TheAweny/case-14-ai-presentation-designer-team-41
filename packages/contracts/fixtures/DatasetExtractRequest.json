@@ -14,7 +14,8 @@
   "valid": [
     {
       "payload": {
-        "path": "/data/table.csv"
+        "path": "/data/table.csv",
+        "schemaVersion": 1
       },
       "name": "local source"
     }

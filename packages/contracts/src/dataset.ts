@@ -89,6 +89,9 @@ export const datasetSchema = z.strictObject({
   diagnostics: z.array(datasetDiagnosticSchema),
 });
 
-export const datasetExtractRequestSchema = z.strictObject({ path: z.string() });
+export const datasetExtractRequestSchema = z.strictObject({
+  schemaVersion: z.literal(1).default(1).optional(),
+  path: z.string(),
+});
 export type Dataset = z.infer<typeof datasetSchema>;
 export type DatasetExtractRequest = z.infer<typeof datasetExtractRequestSchema>;

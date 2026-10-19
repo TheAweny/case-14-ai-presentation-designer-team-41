@@ -3774,6 +3774,7 @@ class DatasetExtractRequest(BaseModel):
         extra="forbid",
     )
     path: str
+    schemaVersion: Literal[1] = 1
 
 
 class Format(StrEnum):
