@@ -18,6 +18,7 @@ import { MessageActions, ThinkingLine, UserMessage, useMessageText } from './thr
 import { ChatFeedback } from './chat-feedback';
 import { ModelErrorCard } from './model-error-card';
 import { useNow } from './elapsed';
+import { TurnMeter } from './turn-meter';
 import { ToolCallChip, toolChipLabel } from './tool-call-chip';
 import {
   activeAgentCount,
@@ -66,6 +67,16 @@ export function ChatThread({
     chat.activity === 'answering' &&
     running &&
     (!lastPart || (lastPart.type === 'tool' && lastPart.status === 'done'));
+  // Пока агент отвечает, внизу ленты идут время и токены хода, как в чатах с моделями.
+  const answering = !chat.error && chat.activity === 'answering' && running;
+  const answer = last?.role === 'assistant' && last.status === 'streaming' ? last : undefined;
+  const meter =
+    answering && last ? (
+      <TurnMeter
+        startedAt={answer?.createdAt ?? last.createdAt}
+        usage={answer && chat.usage?.messageId === answer.id ? chat.usage : null}
+      />
+    ) : null;
 
   return (
     <>
@@ -122,7 +133,12 @@ export function ChatThread({
           />
         </div>
       ) : null}
-      {thinking ? <ThinkingLine /> : null}
+      {thinking ? (
+        <ThinkingLine meta={meter} />
+      ) : meter ? (
+        // Та же высота, что у строки «Думаю…»: лента не прыгает, когда они сменяют друг друга.
+        <p className="flex min-h-9 items-center px-1">{meter}</p>
+      ) : null}
       <ChatFeedback chat={chat} />
     </>
   );

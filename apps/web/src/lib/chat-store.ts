@@ -67,6 +67,14 @@ export interface ChatView {
   readonly draft: ChatDraft;
   /** Колода, которую ведёт чат. */
   readonly deckId: string | null;
+  /** Сколько токенов потратил ответ, который идёт сейчас; приходит, пока вкладка читает ход. */
+  readonly usage?: TurnUsage;
+}
+
+export interface TurnUsage {
+  readonly messageId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
 }
 
 /** Что человек отправляет из поля: текст и файлы, шаблон файлом или из библиотеки. */
@@ -326,6 +334,15 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
           update(chatId, (chat) => ({
             messages: applyChatEvent(chat.messages, event),
             ...(event.type === 'message' && event.message.role === 'user' ? { pending: null } : {}),
+            ...(event.type === 'usage'
+              ? {
+                  usage: {
+                    messageId: event.messageId,
+                    inputTokens: event.inputTokens,
+                    outputTokens: event.outputTokens,
+                  },
+                }
+              : {}),
           }));
         });
         finish(chatId);

@@ -24,6 +24,7 @@ export {
   type ChatTool,
   type ChatTurnOptions,
   type ChatTurnResult,
+  type ChatUsage,
   type ToolContext,
   type ToolOutcome,
 } from './agent.js';
