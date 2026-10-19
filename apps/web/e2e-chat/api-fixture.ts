@@ -53,6 +53,7 @@ let projects: unknown[] = [];
 let users: unknown[] = [];
 /** Optional limits keyed by scope id. `default` is the shared policy. */
 const policies = new Map<string, AccountPolicy>();
+const adminUsage = new Map<string, AccountUsageView | null>();
 let generationDeck: { runId: string } | null = null;
 /** Editor revisions of the generation deck for the one signed-in account, as `apps/api` keeps them. */
 let editorRevisions: EditorSnapshot[] = [];
@@ -84,6 +85,7 @@ const server = createServer(async (request, response) => {
     projects = [];
     users = [];
     policies.clear();
+    adminUsage.clear();
     generationDeck = null;
     templateDownloads.clear();
     editorRevisions = [];
@@ -101,6 +103,23 @@ const server = createServer(async (request, response) => {
     await setUsers(request, response);
   } else if (request.url === '/users' && request.method === 'GET') {
     response.end(JSON.stringify(users));
+  } else if (request.url === '/__set-admin-usage' && request.method === 'POST') {
+    const values = JSON.parse(await bodyOf(request)) as Record<string, unknown>;
+    for (const [id, value] of Object.entries(values))
+      adminUsage.set(id, value === null ? null : accountUsageViewSchema.parse(value));
+    answer(response, 200, {});
+  } else if (request.url?.startsWith('/users/') && request.method === 'PATCH') {
+    const id = decodeURIComponent(request.url.slice('/users/'.length));
+    const patch = JSON.parse(await bodyOf(request)) as Record<string, unknown>;
+    const entries = users as { id: string; email: string }[];
+    const user = entries.find((item) => item.id === id);
+    if (!user) answer(response, 404, { message: 'Account not found.' });
+    else if (entries.some((item) => item.id !== id && item.email === patch.email))
+      answer(response, 409, { message: 'Email already exists.' });
+    else {
+      Object.assign(user, patch);
+      answer(response, 200, user);
+    }
   } else if (
     (request.method === 'GET' || request.method === 'PUT') &&
     accountUsageId(request.url)
@@ -354,6 +373,11 @@ async function accountUsage(request: IncomingMessage, response: ServerResponse):
     return;
   }
   if (request.method === 'GET') {
+    if (adminUsage.has(id)) {
+      const view = adminUsage.get(id);
+      answer(response, view ? 200 : 503, view ?? { message: 'Usage unavailable.' });
+      return;
+    }
     answer(response, 200, usageView(id));
     return;
   }

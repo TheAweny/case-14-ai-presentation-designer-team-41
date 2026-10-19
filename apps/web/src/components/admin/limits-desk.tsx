@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { motion, useReducedMotion } from 'motion/react';
 import type { AccountLimit, AccountPolicy, AccountUsageView, PolicyMetric } from '@lct/contracts';
@@ -44,6 +44,7 @@ import {
 } from '@/lib/policy-draft';
 import { cn } from '@/lib/utils';
 import { Segmented } from './segmented';
+import { useUnsavedAdmin } from './use-unsaved-admin';
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -51,25 +52,48 @@ const ease = [0.16, 1, 0.3, 1] as const;
  * Ограничения установки: общая политика и личная подмена для человека. Значение крутят
  * ползунком, хранение — в КБ, МБ или ГБ, период — сегментами, пояс — из списка.
  */
-export function LimitsDesk() {
+export function LimitsDesk({
+  initialScope,
+  onDirtyChange,
+}: {
+  initialScope: string | null;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const t = useTranslations('admin.limits');
   const [users, setUsers] = useState<readonly ManagedUser[] | null>(null);
-  const [scope, setScope] = useState(SHARED_POLICY_SCOPE);
+  const [scope, setScope] = useState(initialScope ?? SHARED_POLICY_SCOPE);
   const [query, setQuery] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const [pendingScope, setPendingScope] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const selectScope = (next: string) => {
+    if (scope === next) return;
+    if (dirty) setPendingScope(next);
+    else setScope(next);
+  };
+  const reportDirty = useCallback(
+    (value: boolean) => {
+      setDirty(value);
+      onDirtyChange(value);
+    },
+    [onDirtyChange],
+  );
 
   useEffect(() => {
     let live = true;
+    setFailed(false);
     listUsersAction().then(
       (result) => {
         if (live && result.ok) setUsers(result.users);
-        else if (live) setUsers([]);
+        else if (live) setFailed(true);
       },
-      () => live && setUsers([]),
+      () => live && setFailed(true),
     );
     return () => {
       live = false;
     };
-  }, []);
+  }, [revision]);
 
   const needle = query.trim().toLocaleLowerCase();
   const visible = (users ?? []).filter((user) => {
@@ -85,9 +109,34 @@ export function LimitsDesk() {
           {scope === SHARED_POLICY_SCOPE ? t('everyoneHint') : t('personalHint')}
         </p>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
+        <p className="max-w-xl text-sm text-muted-foreground">{t('modelsHint')}</p>
+        <Button variant="outline" asChild>
+          <a href="?view=limits&settings=models">{t('models')}</a>
+        </Button>
+      </div>
+      {pendingScope ? (
+        <div role="alert" className="grid gap-3 rounded-lg border border-border p-4">
+          <p className="text-sm">{t('unsavedScope')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setPendingScope(null)}>
+              {t('keepEditing')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setScope(pendingScope);
+                setPendingScope(null);
+              }}
+            >
+              {t('discard')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <div className="grid items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
         <div className="grid gap-2">
-          {users && users.length > 6 ? (
+          {users ? (
             <label className="relative block">
               <SearchIcon
                 size={14}
@@ -114,9 +163,16 @@ export function LimitsDesk() {
             <ScopeChip
               checked={scope === SHARED_POLICY_SCOPE}
               label={t('everyone')}
-              onSelect={() => setScope(SHARED_POLICY_SCOPE)}
+              onSelect={() => selectScope(SHARED_POLICY_SCOPE)}
             />
-            {users === null ? (
+            {failed ? (
+              <div role="alert" className="grid gap-2 text-sm text-destructive">
+                <p>{t('loadFailed')}</p>
+                <Button variant="outline" onClick={() => setRevision((value) => value + 1)}>
+                  {t('retry')}
+                </Button>
+              </div>
+            ) : users === null ? (
               <p className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
                 <SpinnerIcon size={14} className="animate-spin motion-reduce:animate-none" />
                 {t('loading')}
@@ -127,7 +183,7 @@ export function LimitsDesk() {
                   key={user.userId}
                   checked={scope === user.userId}
                   label={`${user.name} ${user.email}`}
-                  onSelect={() => setScope(user.userId)}
+                  onSelect={() => selectScope(user.userId)}
                 >
                   <AccountAvatar account={user} className="size-6" />
                   <span className="grid min-w-0 text-left">
@@ -139,7 +195,16 @@ export function LimitsDesk() {
             )}
           </div>
         </div>
-        <LimitEditor key={scope} scope={scope} />
+        <LimitEditor
+          key={scope}
+          scope={scope}
+          onDirtyChange={reportDirty}
+          label={
+            scope === SHARED_POLICY_SCOPE
+              ? t('everyone')
+              : (users?.find((user) => user.userId === scope)?.email ?? scope)
+          }
+        />
       </div>
     </section>
   );
@@ -177,7 +242,15 @@ function ScopeChip({
   );
 }
 
-function LimitEditor({ scope }: { scope: string }) {
+function LimitEditor({
+  scope,
+  label,
+  onDirtyChange,
+}: {
+  scope: string;
+  label: string;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const t = useTranslations('admin.limits');
   const shared = scope === SHARED_POLICY_SCOPE;
   const [view, setView] = useState<AccountUsageView | null>(null);
@@ -187,6 +260,9 @@ function LimitEditor({ scope }: { scope: string }) {
   const [status, setStatus] = useState('');
   const [tone, setTone] = useState<'ok' | 'error'>('ok');
   const [busy, start] = useTransition();
+  const [revision, setRevision] = useState(0);
+  const dirty = !samePolicy(draft, saved);
+  useUnsavedAdmin(dirty, onDirtyChange);
 
   useEffect(() => {
     let live = true;
@@ -206,9 +282,7 @@ function LimitEditor({ scope }: { scope: string }) {
     return () => {
       live = false;
     };
-  }, [scope, shared]);
-
-  const dirty = !samePolicy(draft, saved);
+  }, [scope, shared, revision]);
 
   const report = (kind: 'ok' | 'error', text: string) => {
     setTone(kind);
@@ -217,9 +291,12 @@ function LimitEditor({ scope }: { scope: string }) {
 
   if (failed) {
     return (
-      <p role="alert" className="text-sm text-destructive">
-        {t('loadFailed')}
-      </p>
+      <div role="alert" className="grid gap-3 text-sm text-destructive">
+        <p>{t('loadFailed')}</p>
+        <Button variant="outline" onClick={() => setRevision((value) => value + 1)}>
+          {t('retry')}
+        </Button>
+      </div>
     );
   }
   if (!view) {
@@ -233,6 +310,23 @@ function LimitEditor({ scope }: { scope: string }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="min-w-0 truncate text-sm font-semibold">{label}</h3>
+        {!shared ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy || Object.keys(draft).length === 0}
+            onClick={() => {
+              setDraft({});
+              setStatus('');
+            }}
+          >
+            {t('inheritAll')}
+          </Button>
+        ) : null}
+      </div>
+      {dirty ? <p className="text-sm text-muted-foreground">{t('previewHint')}</p> : null}
       <ul className="grid gap-3 md:grid-cols-2">
         {POLICY_METRICS.map((metric, index) => (
           <MetricCard
@@ -243,11 +337,14 @@ function LimitEditor({ scope }: { scope: string }) {
             draft={draft}
             shared={shared}
             busy={busy}
-            onDraft={setDraft}
+            onDraft={(policy) => {
+              setDraft(policy);
+              setStatus('');
+            }}
           />
         ))}
       </ul>
-      <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background/95 px-3 py-2 shadow-lg ring-1 ring-border backdrop-blur-md">
+      <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3">
         <p
           role="status"
           className={cn(
@@ -255,7 +352,16 @@ function LimitEditor({ scope }: { scope: string }) {
             tone === 'error' ? 'text-destructive' : 'text-muted-foreground',
           )}
         >
-          {status}
+          {status ||
+            (dirty
+              ? t('unsavedCount', {
+                  count: POLICY_METRICS.filter(
+                    (metric) =>
+                      (draft[metric] === undefined) !== (saved[metric] === undefined) ||
+                      !samePolicy({ [metric]: draft[metric] }, { [metric]: saved[metric] }),
+                  ).length,
+                })
+              : t('upToDate'))}
         </p>
         <div className="flex flex-wrap gap-2">
           {shared ? null : (
@@ -264,14 +370,31 @@ function LimitEditor({ scope }: { scope: string }) {
               disabled={busy}
               onClick={() =>
                 start(async () => {
-                  const result = await revokeAccountSessionsAction(scope);
-                  report(result.ok ? 'ok' : 'error', result.ok ? t('revoked') : t('revokeFailed'));
+                  try {
+                    const result = await revokeAccountSessionsAction(scope);
+                    report(
+                      result.ok ? 'ok' : 'error',
+                      result.ok ? t('revoked') : t('revokeFailed'),
+                    );
+                  } catch {
+                    report('error', t('revokeFailed'));
+                  }
                 })
               }
             >
               {t('revoke')}
             </Button>
           )}
+          <Button
+            variant="ghost"
+            disabled={!dirty || busy}
+            onClick={() => {
+              setDraft(saved);
+              setStatus('');
+            }}
+          >
+            {t('cancel')}
+          </Button>
           <Button
             disabled={!dirty || busy}
             onClick={() =>

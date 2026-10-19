@@ -1,12 +1,12 @@
 {
   "documentTitle": "Admin — {app}",
   "title": "Admin",
-  "subtitle": "Accounts on this installation and the limits that apply to them.",
+  "subtitle": "Users, access, activity and service settings.",
   "views": {
     "label": "Admin sections",
     "overview": "Overview",
     "people": "People",
-    "limits": "Limits",
+    "limits": "Settings",
     "metrics": "Metrics"
   },
   "sections": {
@@ -15,7 +15,7 @@
       "body": "Who can sign in, who is an administrator, and who is disabled."
     },
     "limits": {
-      "title": "Limits",
+      "title": "Settings",
       "body": "The shared policy and each account's own limit."
     },
     "metrics": {
@@ -33,7 +33,7 @@
   "metrics": {
     "title": "Metrics",
     "loading": "Loading metrics…",
-    "loadFailed": "Could not load metrics. Open this section again.",
+    "loadFailed": "Could not refresh metrics. Select Refresh to retry. Any data below is the previous result.",
     "empty": "There are no accounts yet.",
     "generations": "Successful generations",
     "replies": "Assistant responses",
@@ -45,7 +45,23 @@
     "image": "Standalone images",
     "edit": "Saved revisions",
     "concurrency": "Concurrent builds",
-    "storage": "Storage"
+    "storage": "Storage",
+    "methodology": "Operation counters from the API for each account’s current reporting window. Three deck variants count as one generation. In-progress operations are counted separately.",
+    "refresh": "Refresh",
+    "coverage": "Data for {loaded} of {total} accounts",
+    "updated": "Updated at {time}",
+    "partial": "Some accounts could not be loaded. They remain in the list; totals requiring their data are hidden. Select Refresh to retry.",
+    "search": "Search by name or email",
+    "sort": "Sort",
+    "sortStorage": "Storage used",
+    "sortName": "Name",
+    "totalsHint": "Totals cover matching accounts. “—” means data is unavailable, incomplete, or reporting windows differ. These values are not added together. Storage is current usage, not usage during a period.",
+    "noResults": "No matching accounts.",
+    "disabled": "disabled",
+    "manage": "Limits and sessions",
+    "active": "Builds in progress",
+    "lifetime": "All time",
+    "accountFailed": "Could not load this account’s data. Select Refresh to retry."
   },
   "metricHints": {
     "generation": "Three finished variants count as one generation.",
@@ -91,10 +107,21 @@
     "saved": "Saved",
     "invalid": "Check the values and the time zone.",
     "loading": "Loading activity…",
-    "loadFailed": "Could not load. Open this section again.",
+    "loadFailed": "Could not load the data. Select Retry.",
     "revoke": "Revoke all sessions",
     "revoked": "Sessions revoked",
-    "revokeFailed": "Could not revoke sessions"
+    "revokeFailed": "Could not revoke sessions",
+    "modelsHint": "Configure model connections, shared models and role assignments in model settings.",
+    "models": "Models and connections",
+    "unsavedScope": "The current account has unsaved changes.",
+    "keepEditing": "Keep editing",
+    "discard": "Discard and continue",
+    "retry": "Retry",
+    "inheritAll": "Inherit all shared limits",
+    "previewHint": "Settings have not been applied. Counters follow the saved policy; their reporting windows will be recalculated after saving.",
+    "unsavedCount": "Changed limits: {count}",
+    "upToDate": "All changes saved",
+    "cancel": "Discard changes"
   },
   "usage": {
     "title": "Activity and limits",
@@ -106,5 +133,26 @@
     "resets": "Resets {when}",
     "loading": "Loading activity…",
     "loadFailed": "Could not load. Reopen settings to retry."
+  },
+  "unsaved": "You have unsaved changes. Opening another section will discard them.",
+  "keepEditing": "Keep editing",
+  "discardAndOpen": "Discard and continue",
+  "people": {
+    "noResults": "No matching users. Change your search or filters.",
+    "active": "Active",
+    "refresh": "Refresh",
+    "access": "Access",
+    "search": "Search by name or email",
+    "editProfile": "Profile: {email}",
+    "edit": "Edit",
+    "role": "Role",
+    "cancel": "Cancel",
+    "save": "Save profile",
+    "limits": "Limits and sessions",
+    "results": "Showing {shown} of {total}",
+    "allStatuses": "All statuses",
+    "saving": "Saving…",
+    "profileSaved": "Profile saved",
+    "allRoles": "All roles"
   }
 }
