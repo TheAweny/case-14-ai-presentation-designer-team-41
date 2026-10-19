@@ -170,10 +170,11 @@ const server = createServer(async (request, response) => {
     response.statusCode = 204;
     response.end();
   } else if (request.url?.startsWith('/auth/accounts/'))
+    // The account asked for, as the API answers a live session: `/api/service-status` checks the id.
     response.end(
       JSON.stringify({
         account: {
-          id: '00000000-0000-4000-8000-000000000001',
+          id: decodeURIComponent(request.url.slice('/auth/accounts/'.length)),
           email: 'chat-e2e@example.test',
           name: 'Chat E2E',
           role: accountRole,

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const CHAT = '00000000-0000-4000-8000-0000000000e3';
 const PERSONAL = '00000000-0000-4000-8000-0000000000e4';
@@ -43,11 +43,7 @@ test.beforeEach(async ({ page, request, baseURL }) => {
       managesShared: true,
     },
   });
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },

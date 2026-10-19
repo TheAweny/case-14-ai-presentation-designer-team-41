@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -38,11 +38,7 @@ const field = (page: Page) => page.getByRole('textbox', { name: 'Сообщен�
 test.beforeEach(async ({ page, baseURL, request }) => {
   await request.post('http://127.0.0.1:3121/__reset-models');
   if (!baseURL) throw new Error('Chat browser tests require a base URL.');
-  const value = await signSessionToken(
-    'chat-e2e-user',
-    Date.now() + 3600000,
-    'chat-e2e-session-secret',
-  );
+  const value = await sessionCookie('chat-e2e-user');
   await page.context().addCookies([
     { name: 'lct_session', value, url: baseURL },
     { name: 'NEXT_LOCALE', value: 'ru', url: baseURL },
@@ -790,7 +786,8 @@ test('restores finished build stages after reload without launching generation',
   );
   let generated = 0;
   await page.route('**/api/backend/generation/**', (route) => {
-    generated++;
+    // The build card reads its usage with GET; only a POST starts or resumes a build.
+    if (route.request().method() !== 'GET') generated++;
     return route.abort();
   });
   for (let reload = 0; reload < 2; reload++) {

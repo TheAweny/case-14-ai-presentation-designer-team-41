@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { AssistantChatMessage } from '@lct/contracts';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const CHAT = '00000000-0000-4000-8000-0000000000df';
 const USER = '00000000-0000-4000-8000-000000000001';
@@ -9,7 +9,7 @@ test('saved toolkit actions have readable labels and retain their cited answer a
   page,
   context,
 }) => {
-  const value = await signSessionToken(USER, Date.now() + 3600000, 'chat-e2e-session-secret');
+  const value = await sessionCookie(USER);
   await context.addCookies([
     { name: 'lct_session', value, domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Lax' },
   ]);

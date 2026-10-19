@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { ChatPart, JobEvent } from '@lct/contracts';
-import { signSessionToken } from '../src/lib/session-token';
+import { sessionCookie } from './session';
 
 const CHAT = '00000000-0000-4000-8000-0000000000de';
 const USER = '00000000-0000-4000-8000-000000000001';
@@ -10,7 +10,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 type Draft = DistributiveOmit<JobEvent, 'schemaVersion' | 'runId' | 'seq' | 'at'>;
 
 test.beforeEach(async ({ context }) => {
-  const value = await signSessionToken(USER, Date.now() + 3600000, 'chat-e2e-session-secret');
+  const value = await sessionCookie(USER);
   await context.addCookies([
     { name: 'lct_session', value, domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Lax' },
   ]);
