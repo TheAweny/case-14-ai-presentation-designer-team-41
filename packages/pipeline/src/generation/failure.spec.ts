@@ -3,6 +3,18 @@ import { generationFailure } from './failure.js';
 import { modelHttpFailure } from '../chat/model-failure.js';
 
 describe('generation failure classification', () => {
+  it('retains provider categories after Mastra serializes an Error to plain data', () => {
+    expect(
+      generationFailure(
+        {
+          name: 'Error',
+          message: 'private diagnostic',
+          failure: { kind: 'unsupported', modelId: 'private' },
+        },
+        new AbortController().signal,
+      ),
+    ).toMatchObject({ code: 'invalid-response', retryable: false });
+  });
   it('distinguishes a durable usage cap from elapsed time after workflow serialization', () => {
     expect(
       generationFailure({ code: 'usage-budget-exceeded' }, new AbortController().signal),

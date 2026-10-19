@@ -76,7 +76,7 @@ export const templatePreparationSchema = z.object({
     .object({
       index: z.enum(['missing', 'partial', 'stale', 'ready']),
       geometry: z.boolean(),
-      fonts: z.literal('unknown'),
+      fonts: z.enum(['ready', 'missing', 'unknown']),
       compositions: z.number(),
       textSlots: z.number(),
       imageSlots: z.number(),

@@ -535,8 +535,8 @@ export class OpenAICompatibleProvider implements TextProvider {
               )
                 ? choice?.finish_reason
                 : 'unknown';
-              const count = (value: unknown): number =>
-                typeof value === 'number' && Number.isFinite(value) ? value : 0;
+              const count = (value: unknown): number | null =>
+                typeof value === 'number' && Number.isFinite(value) ? value : null;
               const usage = {
                 prompt_tokens: count(data.usage?.prompt_tokens),
                 completion_tokens: count(data.usage?.completion_tokens),

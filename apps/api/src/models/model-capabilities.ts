@@ -30,7 +30,7 @@ const PROBES_AT_ONCE = 4;
  * What models can do. Their kind (text, pictures in, pictures out, speech) comes from what the
  * provider says in `/models`, kept with the connection check, or from what the person set by
  * hand. Nothing is learnt by making a model work: with a hundred models that is slow and costs
- * money. How a model thinks comes from the same description; where it says nothing, one free
+ * money. How a model thinks comes from the same description; where it says nothing, one bounded
  * request tells whether the server reads `reasoning_effort` (see `capability-probe.ts`). That is
  * asked when the connection is added or checked, and kept until the next check.
  */
@@ -49,7 +49,7 @@ export class ModelCapabilityService {
 
   /**
    * Settles how each chat model of a connection thinks, in the background: the provider's word
-   * where it gave one, the free probe elsewhere. `force` asks again (the person checked the
+   * where it gave one, an explicit probe elsewhere. `force` asks again (the person checked the
    * connection); without it only models with nothing stored are asked.
    */
   check(connectionId: string, actor: SettingsActor, force: boolean): Promise<void> {
@@ -152,7 +152,7 @@ export class ModelCapabilityService {
     return (await this.store.getCapability(model, model.model))?.reasoning ?? NO_REASONING_CHOICE;
   }
 
-  /** The stored finding, or the free probe for a model nothing is stored about. */
+  /** The stored finding, or an explicit probe whose usage and charge may be unknown. */
   private async reasoning(
     model: ResolvedModel,
     force: boolean,

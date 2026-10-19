@@ -21,16 +21,19 @@ for (const folder of [
   'infra',
   'public',
   'docs',
+  'runs',
 ])
   args.push('--mount', `type=bind,source=${resolve(folder)},target=/app/${folder}`);
+const evidence = process.argv[2] === '--evidence';
 args.push(
   '--entrypoint',
   'uv',
   'lct26-engine:latest',
   'run',
   '--locked',
-  'pytest',
-  ...process.argv.slice(2),
+  ...(evidence
+    ? ['python', 'scripts/recovery/evidence.py', 'runs/recovery-runtime']
+    : ['pytest', ...process.argv.slice(2)]),
 );
 const result = spawnSync('docker', args, { stdio: 'inherit' });
 process.exit(result.status ?? 1);

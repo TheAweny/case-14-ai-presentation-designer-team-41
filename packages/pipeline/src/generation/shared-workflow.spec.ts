@@ -26,9 +26,14 @@ afterEach(async () => {
 });
 
 describe('shared content through actual generation workflows', () => {
-  it.each([5, 10, 15])(
-    'writes %i slides once for all three variants and retains every number and unit',
-    async (count) => {
+  it.each(
+    [5, 10, 15].flatMap((count) => [
+      { count, approved: false },
+      { count, approved: true },
+    ]),
+  )(
+    'writes $count slides once (approved=$approved) and retains every number and unit',
+    async ({ count, approved }) => {
       const calls: string[] = [];
       const provider: TextProvider = {
         model: 'fake',
@@ -76,7 +81,25 @@ describe('shared content through actual generation workflows', () => {
             signal: new AbortController().signal,
           });
           return (await workflow.createRun()).start({
-            inputData: { brief: 'Рост 18 % за 2026 год', slideCount: count, profile },
+            inputData: {
+              brief: 'Рост 18 % за 2026 год',
+              slideCount: approved ? null : count,
+              profile,
+              ...(approved
+                ? {
+                    outline: {
+                      title: 'Пилот',
+                      audience: '',
+                      goal: '',
+                      slides: Array.from({ length: count }, () => ({
+                        title: 'Рост 18 % за 2026 год',
+                        points: ['Пилот, без экстраполяции.'],
+                        kind: 'statement' as const,
+                      })),
+                    },
+                  }
+                : {}),
+            },
           });
         }),
       );

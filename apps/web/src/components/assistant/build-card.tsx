@@ -17,6 +17,7 @@ import { generationRuns, useRun } from './session';
 import { runStatus } from './run-status';
 import { SlidesDialog } from './slides-dialog';
 import { useRunStatusText } from './thread-messages';
+import { BuildUsage } from './build-usage';
 
 /**
  * Ход сборки на странице разговора — лентой шагов, как работа агента в Codex: сверху строка-сводка
@@ -49,7 +50,14 @@ export function BuildCard({
       <p className="text-xs text-pretty text-muted-foreground">{t('lostAfterReload')}</p>
     ) : null;
   }
-  return <BuildCardView run={run} latest={latest} retry={retry} />;
+  return (
+    <>
+      <BuildCardView run={run} latest={latest} retry={retry} />
+      {run.server ? (
+        <BuildUsage runId={run.server.runId} running={run.phase === 'running'} />
+      ) : null}
+    </>
+  );
 }
 
 export type BuildRun = Pick<

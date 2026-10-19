@@ -44,6 +44,8 @@
     "lostAfterReload": "A build was running when the page reloaded and can no longer be followed here. The finished deck will appear in the library; to build again here, write a wish."
   },
   "build": {
+    "usage": "HTTP: {requests} · tasks: {tasks} · known tokens: {tokens} · unknown usage: {unknown} · known cost: {cost} · unpriced/unknown: {unknownCost}",
+    "costUnknown": "unknown",
     "elapsed": "{time} of {budget}",
     "stages": "Build stages",
     "slides": "Slides as they are laid out",

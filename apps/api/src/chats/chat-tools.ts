@@ -1280,7 +1280,9 @@ export async function runBuild(
         ? await generation.start(generationInput, scope.account, undefined, onActivity)
         : await generation.start(generationInput, scope.account);
     startedRunId = build.runId;
-    const stop = () => generation.cancel(build.runId);
+    const stop = () => {
+      void Promise.resolve(generation.cancel(build.runId)).catch(() => undefined);
+    };
     context.signal.addEventListener('abort', stop, { once: true });
     detachAbort = () => context.signal.removeEventListener('abort', stop);
     if (context.signal.aborted) stop();
@@ -1382,14 +1384,16 @@ export async function runBuild(
       },
     };
   } catch (error) {
-    if (startedRunId !== null) generation.cancel(startedRunId);
     if (context.signal.aborted) {
       set({ status: 'cancelled', finishedAt: Date.now() });
       throw error;
     }
     const message = error instanceof Error ? error.message : 'The build failed.';
     set({ status: 'failed', finishedAt: Date.now(), error: buildFailureMessage(message) });
-    if (persistenceFailed) throw error;
+    if (persistenceFailed) {
+      if (startedRunId) generation.interrupt(startedRunId);
+      throw error;
+    }
     context.show({ type: 'error', message: buildFailureMessage(message) });
     return {
       output: {

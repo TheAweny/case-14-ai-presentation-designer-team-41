@@ -54,6 +54,13 @@ export const generationProfileSchema = z.object({
   templateHash: z.string().length(64),
   designSystem: designSystemSchema,
   compositions: z.array(compositionSchema).min(1),
+  fontReadiness: z
+    .object({
+      state: z.enum(['ready', 'missing', 'unknown']),
+      requested: z.array(z.string()),
+      missing: z.array(z.string()),
+    })
+    .optional(),
 });
 /**
  * A native table or chart drawn in place of one text slot of a composition. The slot's box is

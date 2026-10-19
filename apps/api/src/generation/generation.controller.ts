@@ -76,7 +76,7 @@ export interface TemplatePreparation {
   readiness?: {
     index: 'missing' | 'partial' | 'stale' | 'ready';
     geometry: boolean;
-    fonts: 'unknown';
+    fonts: 'ready' | 'missing' | 'unknown';
     compositions: number;
     textSlots: number;
     imageSlots: number;
@@ -180,7 +180,7 @@ export class GenerationController {
               geometry: profile.compositions.every((composition) =>
                 composition.slots.every((slot) => slot.box !== undefined),
               ),
-              fonts: 'unknown' as const,
+              fonts: profile.fontReadiness?.state ?? 'unknown',
               compositions: profile.compositions.length,
               textSlots: profile.compositions.reduce(
                 (sum, composition) => sum + composition.slots.length,
@@ -247,8 +247,14 @@ export class GenerationController {
   async cancel(@Param('id') id: string, @CurrentAccount() account: Account) {
     if (!(await this.library.visible(id, account.id)))
       throw new NotFoundException('Run not found.');
-    this.generation.cancel(id);
+    await this.generation.cancel(id);
     return { ok: true };
+  }
+
+  @Get(':id/usage')
+  @ApiOperation({ summary: 'Накопленный расход сборки, включая неудачные попытки и продолжения' })
+  async usage(@Param('id') id: string, @CurrentAccount() account: Account) {
+    return this.generation.usage(id, account);
   }
 
   @Post(':id/resume')

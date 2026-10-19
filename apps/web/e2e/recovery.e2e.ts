@@ -17,6 +17,12 @@ test('isolated API: editor revision survives a fresh browser context and exports
     await target.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
   }
   await login(page);
+  const usageResponse = await page.request.get(`/api/backend/generation/${runId}/usage`);
+  expect(usageResponse.ok()).toBe(true);
+  const usage = await usageResponse.json();
+  expect(usage.httpAttempts).toBeGreaterThan(0);
+  expect(usage.unknownCostAttempts).toBeGreaterThan(0);
+  expect(usage.knownCost).toBeNull();
   const target = freeObject(page);
   const id = (await target.getAttribute('data-element-id')) ?? '';
   await target.click();

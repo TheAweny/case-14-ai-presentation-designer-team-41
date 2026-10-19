@@ -15,6 +15,7 @@ import { formatElapsed } from './elapsed';
 import { ResultCard } from './result-card';
 import { chatStore, followBuild, useRun } from './session';
 import { loadVariantPreview } from './use-variant-deck';
+import { BuildUsage } from './build-usage';
 
 type BuildPart = Extract<ChatPart, { type: 'build' }>;
 type ResultPart = Extract<ChatPart, { type: 'result' }>;
@@ -83,7 +84,12 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
     );
   }
   if (history?.runId === runId)
-    return <BuildCardView run={history} latest={latest} retry={false} />;
+    return (
+      <>
+        <BuildCardView run={history} latest={latest} retry={false} />
+        {runId ? <BuildUsage runId={runId} running={status === 'running'} /> : null}
+      </>
+    );
   const elapsed = part.finishedAt === null ? null : part.finishedAt - part.startedAt;
   const line =
     status === 'done'
@@ -99,10 +105,13 @@ export function ChatBuild({ part, latest }: { part: BuildPart; latest: boolean }
           : null;
   if (!line) return null;
   return (
-    <p className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
-      <TaskGlyph state={status} />
-      {line}
-    </p>
+    <div>
+      <p className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
+        <TaskGlyph state={status} />
+        {line}
+      </p>
+      {runId ? <BuildUsage runId={runId} running={status === 'running'} /> : null}
+    </div>
   );
 }
 

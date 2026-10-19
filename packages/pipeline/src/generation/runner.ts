@@ -15,6 +15,7 @@ import {
   type JobStage,
   type StageTiming,
   type RunArtifact,
+  type GenerationUsage,
 } from '@lct/contracts';
 import { createMastra, closeMastra } from '../mastra.js';
 import {
@@ -68,6 +69,8 @@ const REWRITABLE = new Set([
 ]);
 
 export interface GenerateOptions {
+  planId?: string;
+  providerUsage?: () => Promise<GenerationUsage>;
   runId: string;
   templatePath: string;
   outputDir: string;
@@ -1032,7 +1035,7 @@ export async function generatePresentation(options: GenerateOptions) {
       finishedAt: new Date().toISOString(),
       templateHash: options.profile.templateHash,
       contentPackId: createHash('sha256').update(sourceBrief).digest('hex'),
-      planId: options.runId,
+      planId: options.planId ?? options.runId,
       contentRevision,
       contentHash: contentHash(),
       seed: options.seed ?? 42,
@@ -1112,6 +1115,8 @@ export async function generatePresentation(options: GenerateOptions) {
         inputTokens: call.inputTokens,
         outputTokens: call.outputTokens,
       })),
+      modelCallsScope: options.planId ? 'build' : 'run',
+      ...(options.providerUsage ? { providerUsage: await options.providerUsage() } : {}),
       artifacts,
       timings,
       totalMs: Date.now() - started,

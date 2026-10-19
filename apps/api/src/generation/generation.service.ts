@@ -18,6 +18,7 @@ import {
   generationProfileSchema,
   generationRequestSchema,
   generationSpecSchema,
+  generationUsageSchema,
   layoutVariantSchema,
   modelRefSchema,
   storedTemplateIndexSchema,
@@ -122,7 +123,7 @@ export interface VariantEnd {
  * from a template, so templates prepared before are read again: 2 added places for pictures,
  * 3 the sample photos of a slide among them, 4 all picture candidates for explicit QR slots.
  */
-export const PROFILE_REVISION = 4;
+export const PROFILE_REVISION = 5;
 
 export interface StoredTemplate {
   readonly storage_path: string;
@@ -391,21 +392,50 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     return result.rows;
   }
 
+  /** Interrupt local execution after an infrastructure failure, without persisting user Stop. */
+  interrupt(runId: string): void {
+    this.active.get(runId)?.abort(new Error('Build interrupted by a persistence failure.'));
+  }
+
   /** Stop a build: its variants share one cancellation, so any of their runs stops all three. */
-  cancel(runId: string): void {
+  async cancel(runId: string): Promise<void> {
     this.active.get(runId)?.abort(new DOMException('Сборка остановлена.', 'AbortError'));
-    void readFile(join(this.directory(runId), 'metadata.json'), 'utf8')
-      .then(async (raw) => {
-        const metadata = JSON.parse(raw) as { buildId?: string; ownerId?: string };
-        if (metadata.buildId && metadata.ownerId)
-          await this.builds.stop(metadata.buildId, metadata.ownerId);
-      })
-      .catch((error: unknown) => this.logger.warn(`Stop persistence failed: ${String(error)}`));
+    const raw = await readFile(join(this.directory(runId), 'metadata.json'), 'utf8');
+    const metadata = JSON.parse(raw) as { buildId?: string; ownerId?: string };
+    if (metadata.buildId && metadata.ownerId)
+      await this.builds.stop(metadata.buildId, metadata.ownerId);
   }
 
   /** Whether a build of this person gets pictures: an image model is assigned or configured. */
   async imagesAvailable(account: Account): Promise<boolean> {
     return imageProviderOf(await this.models.resolveRole('image', actorOf(account))) !== null;
+  }
+
+  async usage(runId: string, account: Account) {
+    if (!(await this.library.visible(runId, account.id)))
+      throw new NotFoundException('Run not found.');
+    const metadata = await this.library.read(runId);
+    if (!metadata.buildId) throw new NotFoundException('Usage journal unavailable for legacy run.');
+    const result = await this.pool.query(
+      `SELECT count(*)::int AS attempts,count(DISTINCT task_key)::int AS tasks,
+       COALESCE(sum(input_tokens),0) AS input,COALESCE(sum(output_tokens),0) AS output,
+       count(*) FILTER(WHERE input_tokens IS NULL OR output_tokens IS NULL)::int AS unknown_usage,
+       sum(actual_cost) AS cost,count(*) FILTER(WHERE actual_cost IS NULL)::int AS unknown_cost,
+       CASE WHEN count(DISTINCT currency)=1 THEN min(currency) ELSE NULL END AS currency
+       FROM provider_attempts WHERE build_id=$1 AND owner_id=$2`,
+      [metadata.buildId, account.id],
+    );
+    const row = result.rows[0];
+    return generationUsageSchema.parse({
+      httpAttempts: row.attempts,
+      logicalTasks: row.tasks,
+      knownInputTokens: Number(row.input),
+      knownOutputTokens: Number(row.output),
+      unknownUsageAttempts: row.unknown_usage,
+      knownCost: row.cost === null || row.currency === null ? null : Number(row.cost),
+      unknownCostAttempts: row.unknown_cost,
+      currency: row.currency,
+    });
   }
 
   /**
@@ -841,6 +871,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           if (signal.aborted) throw buildStopReason(signal);
           await this.repository.transition(run.runId, 'running');
           await generatePresentation({
+            planId: buildRecord.id,
+            providerUsage: () => this.usage(run.runId, account),
             runId: run.runId,
             templatePath: template.storage_path,
             outputDir: attemptDir,

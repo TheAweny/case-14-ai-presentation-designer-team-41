@@ -6,6 +6,13 @@
   "tags": ["scope:engine", "type:lib"],
   "implicitDependencies": ["contracts"],
   "targets": {
+    "recovery-evidence": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node scripts/recovery/engine-linux.mjs --evidence",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "fix-imports": {
       "executor": "nx:run-commands",
       "options": {

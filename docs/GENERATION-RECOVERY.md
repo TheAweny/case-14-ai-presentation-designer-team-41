@@ -1,143 +1,266 @@
 # Generation recovery: implementation and acceptance
 
 Base: `cbb2e3ad39cf50a26f6f984cb76e07a8f388dc86` (security removal included).
-Branch: `theaweny/generation-recovery-core`.
+Branch: `theaweny/generation-recovery-core`. Evidence recorded on 2026-10-19.
+Production was not changed. This is a draft integration with remaining acceptance gaps below.
 
-## Existing path
+## Execution path and specification
 
-Chat tools / direct generation API → GenerationService → three generatePresentation calls →
-Mastra plan + foreach writer → bounded repairs → engine checks/export/render → final review →
-filesystem artifacts + PostgreSQL run events. SharedPlan currently shares only planning;
-SharedIllustrations shares in-memory images. Mastra starts a fresh run on every invocation;
-retryVariant creates a new product run. This does not resume accepted writer results.
+At the base revision: chat tools / direct API → GenerationService → three Mastra workflows →
+shared planner, separate writers → repairs → engine export/render/checks → final review →
+filesystem artifacts + PostgreSQL events. SharedPlan reused planning; retry created another run
+and did not restore accepted writer results. Mastra's fresh invocation did not supply the durable
+task reuse required here.
 
-## Scope and sequence
+The implementation keeps that workflow and adds the following boundaries:
 
-1. RED regressions and input consistency (5/10/15), project template context and ACL.
-2. Validated durable task checkpoints, shared canonical content and dependency fingerprints.
-3. Immutable build spec, idempotent starts/resumes, ownership and fencing.
-4. Provider attempts, cumulative budgets, unknown usage and quota scheduling.
-5. Template readiness, distinct design plans and actionable Russian status.
-6. Offline, local runtime and browser acceptance; integrate available Cursor PRs sequentially.
+1. Direct API, approved outline and chat enforce consistent slide counts: manual 5–15,
+   automatic/outline 5–60. Explicit template selection wins; an accessible, unambiguous project
+   template supplies the default. Ambiguity requires selection and account ACL remains enforced.
+2. Immutable GenerationSpec fixes brief, template/profile, registry/schema, model policy, seed,
+   date and pricing fingerprint. Stable build/variant identifiers survive retries. Validated
+   TaskCheckpoints use dependency hashes and atomic fsync/rename; persistence failure fails the
+   task rather than silently discarding its checkpoint.
+3. One canonical writer result per slide feeds all three design plans. Composition remapping
+   uses compatible slot roles, geometry and measured capacity. Deterministic adaptation precedes
+   targeted rewrites. Semantic review of unchanged text is shared; each final file still receives
+   its own deterministic/render checks. A poor template reports limited diversity.
+4. PostgreSQL claims a build with a 30-second lease, 10-second heartbeat and monotonic fence.
+   Publication, final event and run state require current ownership. Concurrent start/resume
+   observes the same identifiers; successful variants are retained. Stop persists a fence and
+   terminal events for unfinished variants. Infrastructure interruption remains resumable.
+5. A provider-independent journal reserves each physical HTTP attempt before dispatch and
+   records outcome/usage before parsing. Compatibility sends, explicit probes, routed text,
+   vision and images use the transport. Missing usage and missing price remain unknown.
+6. Preparation reports index, geometry, fonts and capabilities separately. Ordinary model/UI
+   reads do not probe models. Status distinguishes deadline, cancellation, interruption, provider
+   errors, quota/budget, invalid response, export, persistence and quality failures. Usage cards
+   expose cumulative known values and counts of unknown attempts.
 
-Cursor A owns editor persistence/revision/media and general export overlap fixes.
-Cursor B owns native infographic modules and visual diversity evidence. This branch does not
-rewrite either implementation before its review. One bounded Qwen live build was subsequently
-authorized by the user. Production modifications are not authorized.
+Registry versions: deck-planner **2.9.0**, slide-writer **2.8.0**, deck-critic **1.10.0**,
+chat-assistant **1.21.0**. Other agent versions are recorded unchanged in each manifest.
+Manifest `planId` identifies the shared build. `modelCallsScope=build` prevents counting shared
+successful calls three times. `providerUsage` is a journal snapshot at publication;
+`GET /generation/:id/usage` reads the current cumulative journal, including failed attempts.
 
 ## Acceptance matrix
 
-Evidence statuses below are intentionally pending until checks execute.
+“Passed” identifies the evidence layer, not live-model or production acceptance.
 
-| Requirement                                                | Evidence                            | Status          |
-| ---------------------------------------------------------- | ----------------------------------- | --------------- |
-| 5/10/15 through direct API, outline, chat                  | contracts/workflow/API regressions  | pending         |
-| Explicit/project template precedence and ACL               | tool context regressions            | pending         |
-| Resume after slide 7, no accepted task repeats             | real workflow + fake provider       | pending         |
-| Failed export, two successful variants preserved           | runner/service regression           | pending         |
-| Duplicate start/concurrent resume, stale worker, ownership | PostgreSQL + offline checks         | pending         |
-| Dependency drift and legacy safety                         | checkpoint regressions              | pending         |
-| Every HTTP send counted before dispatch                    | compatibility/transport regressions | pending         |
-| Invalid/truncated/unknown outcomes counted                 | ledger regressions                  | pending         |
-| Cumulative budgets and atomic reservations                 | concurrent budget regressions       | pending         |
-| Stop distinct from disconnect/restart/deadline             | API/chat/browser checks             | pending         |
-| Quota/backoff/fairness across builds/chat                  | fake clock transport tests          | pending         |
-| Shared facts and three composition plans                   | workflow/source coverage tests      | pending         |
-| Template readiness, partial/stale index                    | preparation tests                   | pending         |
-| Local API + PostgreSQL + engine/render/export              | isolated local run                  | pending         |
-| Live SLA, latency/tokens/cost/quality/diversity            | approved paid benchmark             | budget required |
+| Requirement                                                                       | Evidence                                                                                                 | Status                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Exact 5/10/15 through direct API and approved workflow; chat count propagation    | contracts, actual offline Mastra workflow, controller/tool regressions; local HTTP 5 and restart HTTP 10 | Passed offline/runtime; chat browser conversation not replayed    |
+| Explicit/project template precedence, ambiguity and ACL                           | chat context/tool and account-query counterexamples                                                      | Passed offline                                                    |
+| Tool-only success, incomplete calls and interrupted stream                        | chat/compatibility regressions                                                                           | Passed offline                                                    |
+| Resume after saved slide 7 without repeating accepted tasks                       | actual API container killed, lease expiry, two concurrent resumes, all three 10-slide variants done      | Passed runtime                                                    |
+| Failed export with two successful variants retained                               | one injected engine 503, two concurrent resumes, zero new HTTP sends, unchanged completed timestamps     | Passed runtime                                                    |
+| Duplicate start/concurrent claim, ownership, stale fence and publication rollback | PostgreSQL 17 and checkpoint/service regressions                                                         | Passed offline/DB/runtime                                         |
+| Crash windows around accepted result, checkpoint and publication                  | atomic checkpoint failure, late response and DB rollback counterexamples; real process kill              | Specific windows passed; exhaustive fault matrix open             |
+| Dependency drift and legacy fail-closed reuse                                     | immutable spec/checkpoint regressions                                                                    | Passed offline                                                    |
+| Every HTTP send counted before dispatch, including invalid/truncated replies      | transport, compatibility and PostgreSQL ledger regressions                                               | Passed offline/DB                                                 |
+| Cumulative request/token/cost budgets, unknown usage and atomic reserves          | concurrent PostgreSQL tests; tariff fingerprint tests                                                    | Passed offline/DB                                                 |
+| Stop distinct from disconnect, restart and persistence interruption               | chat lifecycle, service, stream and PostgreSQL regressions                                               | Passed offline/DB; no complete browser Stop/disconnect matrix     |
+| 429, Retry-After, fairness and bounded waiting                                    | fake clock/transport tests across build/chat owners                                                      | Passed offline for one process; distributed quota scope open      |
+| Shared facts, native KPI/chart/table and three structural designs                 | workflow grounding tests, final PPTX import, cosmetic controls and contact sheet                         | Passed offline/runtime on synthetic fixture; live quality unknown |
+| Readiness, partial/stale index, fonts and asset reuse                             | preparation/cache/font regressions; actual prepare endpoint                                              | Passed offline/runtime                                            |
+| API + DB + engine + render/export                                                 | isolated containers; actual LibreOffice and PPTX round trips                                             | Passed runtime                                                    |
+| Durable editor and exact exported revision                                        | Chromium edit → fresh browser context without IndexedDB → revision/hash export                           | Passed browser/runtime                                            |
+| Bounded semantic batches versus one large response                                | no live comparison available                                                                             | Open; no batching performance claim                               |
+| Live latency/tokens/cost/quality/SLA and measured stage/load budgets              | two Qwen HTTP 400 attempts; user then stopped all AI work                                                | Blocked by provider failures and explicit user instruction        |
+| Production acceptance                                                             | no deployment authorized                                                                                 | Not performed                                                     |
 
-Offline evidence so far: actual Mastra workflows verify 5/10/15, one canonical writer per
-slide across three variants, and replay after failure at slide 8. PostgreSQL 17 in an isolated
-local container verifies duplicate creation, concurrent claims, ownership, fencing, explicit
-Stop, publication rollback and atomic cumulative usage reservations (19 tests including existing
-run repository checks). This is runtime database evidence, not a live model SLA measurement.
+## Independent integration review
 
-The user authorized a limited Qwen 3.6 35B live check. The configured endpoint is Yandex Cloud;
-the live check is limited to one five-slide build and a hard HTTP-attempt ceiling, with image
-generation disabled. No monetary rate is inferred from a model name.
-
-## Measurement rules
-
-Preparation and generation are separate. Generation keeps the existing 290 second deadline
-and export/render/persistence reserve. No unmeasured p95, cost, quota scope or success rate is
-claimed. Missing usage or price is unknown. A lost provider response may incur an unknown
-charge; provider-independent exactly-once billing is not promised.
-
-## Integrated PR review: reproducible findings
-
-PR 11 (`1ae239e1f3bb8d78d2bf95fa6b74cb35afdd652d`) was integrated first. Independent
+PR 11 (`1ae239e1f3bb8d78d2bf95fa6b74cb35afdd652d`) was integrated first. Independent RED
 counterexamples in `snapshot-store.integration.spec.ts` and `test_export_paint_order.py`
-initially failed, then passed after these repairs:
+identified and verified repairs for:
 
-1. Two media names with identical bytes shared one file. Removing an orphan name deleted
-   the published revision's bytes. Cleanup now checks every surviving reference under the
-   same deck lock used by uploads and keeps recent incomplete files.
-2. A rejected conflict's media were treated as orphan uploads. Conflict media remain referenced.
-3. Reordering text inside a group did not reorder the group's ancestor above a slide picture.
-   Export now reorders ancestors while preserving group membership.
-4. Snapshot contracts now reject missing upload references and duplicate media names.
-5. An invisible full-slide image no longer triggers the text occlusion check.
+1. Media aliases with identical bytes: deleting an orphan alias deleted another revision's file.
+   Cleanup now checks every surviving reference under the upload/deck lock and keeps recent
+   incomplete files.
+2. Rejected conflicts losing their media: conflict media remain referenced.
+3. Grouped text staying under an image: ancestor paint order is updated without ungrouping.
+4. Missing upload references and duplicate media names: snapshot contracts reject both.
+5. Invisible full-slide images incorrectly triggering the text occlusion check.
 
-PR 12 (`e5a6f60710390b324c72540ec2bd9749b03e27e3`) was integrated second. Independent
-`test_visual_integrator.py` counterexamples failed before repair:
+PR 12 (`e5a6f60710390b324c72540ec2bd9749b03e27e3`) was integrated second. Independent RED
+counterexamples in `test_visual_integrator.py` and the composition endpoint verified repairs for:
 
-1. Permuting independent elements changed the structural digest without changing the design.
-   Signature tokens are canonicalized.
-2. An XY chart omitted a missing measurement and connected its neighbours. Its x position and
-   empty y value now remain in the native chart and worksheet.
-3. Dense tables were measured with caption typography but exported with body typography.
-   Measurement now uses the same body step as export.
-4. Untried smaller-type adaptations were reported as fitting. Only the measured arrangement
-   is reported. Overflow fails explicitly, preserving the supplied data.
-5. The endpoint was disconnected from generation. A `native` slot adapter now carries grounded
-   KPI/chart/table inputs through the writer, composition export and final-file audit. The
-   independent KPI test exercises all three variants through that composition API.
+1. Independent element permutations changing the structural digest. Tokens are canonicalized;
+   overlapping content retains paint relationships, checked by a separate counterexample.
+2. Missing XY values being skipped and joined over. Native charts retain x positions and gaps.
+3. Dense tables measured with caption type but exported with body type. Measurement now uses
+   the exported body size; untried smaller-type adaptations are not reported as fitting.
+4. Native blocks disconnected from generation. A grounded `native` slot carries values through
+   writer, composition export and final-file audit; overflowing content fails explicitly.
+5. Final PPTX import rejecting XY charts or replacing missing category values with zero.
+   Round-trip tests preserve positions, axis titles, gaps and measured zero separately.
 
-Generated Pydantic enum names changed when the visual schemas were added. The health adapter
-was updated to import the generated health status enum rather than the source-evidence status.
+Contact-sheet inspection found a further defect: text fit assumed word wrapping while composed
+export retained the template's no-wrap flag, clipping a narrow title. An independent RED test
+reproduced it. Replacement copy now wraps as measured, preserving box geometry and font size;
+the already-wrapped positive case and actual rendered fixture were also checked.
 
-## Evidence recorded during integration
+The health adapter imports the generated health enum after schema generation changed enum names.
+No generated Pydantic source was edited by hand. Engine layer boundaries remain enforced.
 
-- PostgreSQL 17: 19 run-store tests, including atomic budget reservations, fencing, concurrent
-  claim, Stop, unknown outcomes and publication rollback. Editor tests use the same real DB.
-- Engine in Linux with LibreOffice: 539 tests passed, including actual rendering, native
-  PowerPoint data, fonts and layer boundaries. Windows skips do not stand in for this result.
-- API at the editor integration point: 511 tests passed. Pipeline after semantic sharing:
-  537 tests passed. Final counts are recorded after the final validation run.
-- Isolated API :13019, DB :55419, engine :18019: one fake build completed all three five-slide
-  files and previews in 13.5 seconds observed by the harness. It used 13 synthetic HTTP sends
-  (1,300/650 fixture tokens); these are synthetic usage, not a model latency or billing result.
-- Chromium against web :13119: a real edit survived a fresh browser context with no IndexedDB;
-  export returned the exact acknowledged revision and content hash. Screenshot and trace are
-  under `runs/recovery-runtime`, excluded from Git.
+## Evidence and baseline comparison
 
-The fake template is synthetic and unfamiliar; its first version deliberately had small text
-capacities. Its sparse appearance is not a quality benchmark. The current fixture also exposes
-room for native blocks. Template indexing and preview preparation are measured separately.
+Static: typecheck and lint passed for contracts, pipeline, API, web, engine and run-store.
+Engine import boundaries: three contracts kept, zero broken. No dependency versions changed.
 
-## Operator notes
+| Suite           | Passed | Environment                                     |
+| --------------- | -----: | ----------------------------------------------- |
+| Contracts       |    331 | offline                                         |
+| Pipeline        |    542 | offline, actual Mastra workflow + fake provider |
+| API             |    517 | offline, editor PostgreSQL integration enabled  |
+| Web             |   1068 | offline                                         |
+| Run store       |     19 | actual PostgreSQL 17                            |
+| Engine/tools    |    546 | Linux, Python 3.12, actual LibreOffice          |
+| Editor recovery |      1 | Chromium, actual isolated web/API/DB/engine     |
+
+Windows-only shell/font limitations were superseded by the full Linux run. An Nx plugin loader
+failed before one Linux invocation started; the standalone rerun passed. An API regression in
+chat persistence handling was corrected: interruption aborts execution without persisting user
+Stop, and explicit Stop retains its separate test. Totals above are after those repairs.
+
+| Measurement                                          | Baseline                                        | New                                                                       | Interpretation                                                            |
+| ---------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 10-slide, three-variant writer tasks                 | 30 writers + 1 planner                          | 10 writers + 1 planner                                                    | Same actual workflow, in-process fake provider                            |
+| Same offline workflow duration                       | 62 ms                                           | 21 ms                                                                     | One sample; excludes inference/network/export/render; tokens/cost unknown |
+| Local five-slide build before shared semantic review | 13 HTTP sends; 1,300/650 fixture tokens; 13.5 s | —                                                                         | Earlier implementation point, not the base revision                       |
+| Local five-slide build with shared semantic review   | —                                               | 7 HTTP sends; 700/350 fixture tokens; 15.878 s                            | 1 planner + 5 writers + 1 critic; all three files/previews done           |
+| Preparation for that last build                      | —                                               | 329 ms                                                                    | Separate from generation; fonts ready, 3 compositions/9 slots             |
+| Export-only resume                                   | 2 variants done, 1 export failed                | 0 added HTTP sends, all 3 done                                            | Completed variants not republished                                        |
+| Kill after 7 accepted writers                        | 7 accepted, remaining in flight                 | 0 accepted-task repeats; all 3 × 10 slides done                           | In-flight unknown outcomes may be sent again                              |
+| Final fixture quality                                | No comparable base measurement                  | 0 deterministic errors, 3 warnings per variant; contextual status unknown | Sparse synthetic content; no visual quality acceptance                    |
+| Final fixture diversity                              | No comparable base measurement                  | 3 structural signatures; cosmetic controls collapse                       | Actual final PPTX files, not just requested plans                         |
+| Real Qwen inference/billing                          | No successful baseline                          | 2 HTTP 400, 0 accepted tasks; tokens/cost unknown                         | No latency, quality or SLA conclusion                                     |
+
+The 7-send fake build is not faster than the earlier 13-send sample. These single local timings
+measure different implementation points and cannot establish speedup or a five-minute SLA.
+No p95, provider quota scope or success-rate estimate is inferred. The 290-second deadline and
+export/render/persistence reserve remain; real stage budgets and supported maximum load need
+measurements after AI work is explicitly reauthorized.
+
+The two earlier Qwen trials used the saved Yandex configuration and then the documented
+endpoint/model form. Both failed at planning with HTTP 400. The exact cause is unknown; the
+provider's response body was not retained. The user subsequently instructed that no AI work
+be done while Yandex may be unavailable. All live calls are stopped. The runtime harness now
+rejects `RECOVERY_LIVE=1`; it does not switch models or keys. Unknown charge is not zero charge.
+
+## Local evidence bundle
+
+Artifacts stay under ignored `runs/recovery-runtime/`; they are not committed:
+
+| File / identifier                                | Purpose                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------- |
+| `content-benchmark.json`                         | 30-to-10 workflow comparison with explicit measurement limits   |
+| `runtime-result.json`                            | Last ordinary fake build: all three variants done               |
+| `resume-trace.json`                              | Export failure/resume, global fake-send counter unchanged at 81 |
+| `restart-trace.json`                             | Actual kill after 7 accepted writers; zero accepted repeats     |
+| `artifact-evidence.json`, `contact-sheet.png`    | Final-file import, facts, signatures and actual previews        |
+| `browser-editor.png`                             | Editor after server recovery in a fresh browser context         |
+| `live-result.json`, `live-corrected-result.json` | Historical failed cloud trials; do not replay                   |
+
+Last ordinary build: `406d6d09-d409-4cee-8e02-818a0c60ab32`; balanced run:
+`run-dceca653-a9fb-462b-a53f-aa1664687d0c`.
+Restart build: `ae7b18c7-cf8b-4cdd-b8ec-268b6e202038`; balanced run:
+`run-188891c5-cbe6-40b7-8e90-b8a59d470ae6`.
+Contact sheet uses the last ordinary build. Export-failure/resume balanced run:
+`run-802d2932-e021-49c3-9154-28de2b56dd8f`.
+
+Restart trace has new writer indices `[7,7,8,9]` (zero-based). Index 7 belonged to an in-flight
+request when the process died and appears again after recovery. Indices 0–6 and the planner
+were accepted and did not repeat. Pending/unknown reservations remain counted; this is not
+provider-independent exactly-once billing.
+
+Synthetic fixtures contain three compositions and known sample text. Their sparse appearance
+is not a premium design benchmark. Contact-sheet inspection found layout differences but does
+not replace visual quality acceptance. The last ordinary build verifies shared `planId`,
+`modelCallsScope=build`, and `providerUsage` in its actual published manifests. Earlier historical
+artifacts are not claimed to contain fields added afterward.
+
+## Operator runbook
+
+### Migration and immutable state
 
 Apply migrations 022 and 023 through the existing run repository before serving the new API.
 Back up PostgreSQL and the run directory together. Durable tasks live under `build-<uuid>/tasks`,
-with stable variant ids and fence-specific execution directories. Do not delete those tasks to
-retry an export. `POST /generation/:id/resume` retains the spec, accepted tasks and usage; a new
-request id explicitly regenerates. A changed registry, profile, endpoint/model policy or tariff
-file blocks reuse and requires a new build. Legacy runs without a compatible spec fail closed.
+with stable variant ids and fence-specific execution directories. Never delete tasks to retry
+an export. A publication manifest is installed last under ownership/fence protection.
+
+`POST /generation/:id/resume` keeps the spec, accepted tasks and cumulative usage. Concurrent
+calls return the same build. A new `requestId` explicitly regenerates. Stop persists its intent
+and prevents automatic recovery; a later explicit resume can proceed. SSE disconnection only
+detaches observation. Missing/expired leases permit recovery; do not force a second live owner.
+
+A changed registry, profile, schema, model/endpoint policy or tariff blocks reuse and requires a
+new build. Legacy runs without a compatible spec fail closed. Keep their finished artifacts;
+do not synthesize checkpoints from incomplete old records. Profile revision 5 adds measured font
+readiness and invalidates older prepared profiles.
+
+### Provider journal, tariffs and limits
+
+Inspect `provider_attempts` and `GET /generation/:id/usage` for failed as well as successful work.
+Compare logical task keys with physical attempt ids before diagnosing retries. Pending attempts
+after process loss have unknown outcome; retain their reservations. Never treat missing usage
+or absent tariffs as zero, and do not log credentials or full prompts.
 
 `MODEL_PRICING_FILE` optionally names a JSON catalog with `version`, `source`, `effectiveAt` and
-`models` keyed by exact model revision. Each row supplies currency, inputPerMillion and
-outputPerMillion. No rates ship guessed. Without a matching row, price is unknown. An explicit
-request `budget.maxCost` also requires `currency`; unknown prices cannot pass that cap. Request
-and token caps still work without a tariff. Resume retains pending and unknown reservations.
+`models` keyed by exact model revision. Rows supply currency, inputPerMillion and outputPerMillion.
+No guessed rates ship. Without a matching row, price is unknown. Request `budget.maxCost` requires
+`currency`; unknown prices cannot pass that cap. Request/token caps work without tariffs.
 
-`MODEL_MAX_CONCURRENCY`, `MODEL_RPM`, and `MODEL_TPM` are operator inputs for one process and
-endpoint. They are not evidence of a provider's actual quota scope. Distributed quota coordination
-is not yet established; do not deploy multiple dispatchers and assume the process limiter is global.
-Interactive non-build usage currently shares an account-level cumulative allowance; build budgets
-are separate and durable. This operational limitation remains explicit.
+Default build caps are 240 HTTP attempts and 2,000,000 reserved tokens. Interactive non-build
+traffic uses an account-level cumulative allowance of 10,000 attempts / 100,000,000 tokens.
+These are operational ceilings, not measured provider limits or an authorized spending budget.
+Pending/unknown outcomes remain reserved on resume.
 
-Rollback: stop accepting new work, stop active workers, keep the new tables and filesystem tasks,
-and run the previous application version. Do not reverse the migration while new builds or editor
-revisions exist. The previous version cannot resume these new builds; restoring the new version
-requires the same immutable dependencies. No main merge or deployment is part of this work.
+`MODEL_MAX_CONCURRENCY`, `MODEL_RPM` and `MODEL_TPM` govern one process and endpoint. Retry-After
+and bounded queue waiting do not bypass quota with another key/model. The provider's actual
+scope remains unverified; multiple dispatchers must not assume this limiter is global.
+
+### Reproducing offline evidence
+
+Use Node 22.13+, yarn, uv and Docker with the repository's engine image containing LibreOffice.
+All commands below are offline with respect to model providers. Set `NX_DAEMON=false`; if the
+Windows plugin worker fails before execution, rerun with `NX_ISOLATE_PLUGINS=false`.
+
+```powershell
+$env:RUN_STORE_TEST_DATABASE_URL='postgresql://recovery:recovery-local@127.0.0.1:55419/recovery'
+yarn nx run-many --targets=typecheck,lint --projects=contracts,pipeline,api,web,engine,run-store --parallel=3
+yarn nx run-many --target=test --projects=contracts,pipeline,api,web,run-store --parallel=2
+yarn nx run engine:test-linux
+yarn nx run engine:boundaries
+yarn nx run pipeline:recovery-benchmark
+```
+
+The checked stack used API :13019, PostgreSQL :55419, engine :18019 and fake gateway :19019;
+fault API :13020 used engine proxy :18020. The user's original :3000/:3001 stack was untouched.
+Configure the isolated API explicitly for the fake gateway before any runtime check.
+`pipeline:recovery-runtime` uploads, prepares and builds through real HTTP. Fault mode uses
+`RECOVERY_FAULTS=1` and `RECOVERY_API=http://127.0.0.1:13020`. The proxy injects one export failure.
+
+`pipeline:recovery-restart` intentionally kills **only** `lct-recovery-api-faults` after seven
+accepted writers, waits for lease expiry and resumes. Run it only against that disposable stack,
+after producing `faults-build.json`. `engine:recovery-evidence` inspects the resulting PPTX files
+and previews. `web:e2e --grep="isolated API"` needs web :13119, `E2E_PORT=13119`, and
+`RECOVERY_RUN_ID` pointing to a disposable completed balanced run; it edits that deck and checks
+exact revision export. These scripts are fixture tools, not deployment setup.
+
+### Rollback
+
+Stop accepting new work and stop active workers. Keep the new tables, editor revisions and
+filesystem tasks, then run the previous application version. Do not reverse migrations while
+new builds/revisions exist. The previous version cannot resume the new builds; restoring this
+version requires the same immutable dependencies. No main merge or deployment is included.
+
+## Remaining work
+
+Live five-minute acceptance, repeated latency/quality measurements, tariff-backed actual cost,
+bounded-batch versus single-response comparison, measured stage/load budgets, provider quota
+scope and distributed scheduling remain open. The recorded local results do not satisfy those
+requirements. Exhaustive crash-window and browser Stop/disconnect coverage also remain partial.
+AI-dependent measurements must wait for a new user instruction; no background model retry or
+fallback is scheduled. These gaps keep the PR in draft.

@@ -294,11 +294,25 @@ def generation_profile(request: TemplateProfileRequest) -> dict:
     path = Path(request.template_path).resolve()
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Template not found.")
+    compositions = extract_compositions(path)
+    requested = sorted(
+        {slot["font"] for pattern in compositions for slot in pattern["slots"] if slot["font"]}
+    )
+    try:
+        missing = render.missing_fonts(set(requested))
+        fonts = {
+            "state": "missing" if missing else "ready",
+            "requested": requested,
+            "missing": missing,
+        }
+    except (OSError, subprocess.SubprocessError):
+        fonts = {"state": "unknown", "requested": requested, "missing": []}
     return {
         "schemaVersion": 1,
         "templateHash": hashlib.sha256(path.read_bytes()).hexdigest(),
         "designSystem": parser.design_system_of(path),
-        "compositions": extract_compositions(path),
+        "compositions": compositions,
+        "fontReadiness": fonts,
     }
 
 

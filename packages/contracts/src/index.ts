@@ -535,3 +535,4 @@ export {
   type ClaimStatus,
 } from './claims.js';
 export { generationSpecSchema, type GenerationSpec } from './generation-state.js';
+export { generationUsageSchema, type GenerationUsage } from './generation-usage.js';

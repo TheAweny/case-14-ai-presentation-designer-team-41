@@ -13,7 +13,7 @@ const ALLOWED: readonly { readonly method: string; readonly pattern: RegExp }[] 
   { method: 'GET', pattern: /^generation\/prepare\/[\w-]+$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/export$/ },
   { method: 'POST', pattern: /^generation\/[\w-]+\/(cancel|resume)$/ },
-  { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|summary|previews)$/ },
+  { method: 'GET', pattern: /^generation\/[\w-]+\/(deck|summary|previews|usage)$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/(media|artifacts)\/[\w.-]+$/ },
   { method: 'GET', pattern: /^generation\/[\w-]+\/exports\/[\w-]+\/[\w.-]+$/ },
   { method: 'GET', pattern: /^runs\/[\w-]+(\/events)?$/ },

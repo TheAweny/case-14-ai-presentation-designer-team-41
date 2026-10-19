@@ -2,9 +2,9 @@ import type { ReasoningCapability } from '@lct/contracts';
 import type { ResolvedModel } from './model-settings.service.js';
 
 /**
- * Whether a server reads `reasoning_effort`, learnt for free. It is sent a value no server
- * accepts: a server that reads the field refuses it with a 400 before any model runs, so nothing
- * is billed; one that drops unknown fields answers, and that answer costs one token at most.
+ * Whether a server reads `reasoning_effort`. An invalid value may be rejected before generation;
+ * a server that ignores it can generate an answer. Neither HTTP 400 nor a short answer proves
+ * a zero bill. The explicit probe transport journals unknown usage and charge accordingly.
  *
  * Used only when the provider's own description (`model-details.ts`) says nothing about how the
  * model thinks. A probe that could not be completed (rate limit, no money, server down) is

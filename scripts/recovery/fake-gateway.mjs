@@ -16,6 +16,8 @@ const points = [
   ['Наблюдения получены в тестовой среде.', 'Промышленная нагрузка не проверена.'],
   ['Повторим измерения под нагрузкой.', 'Запуск решим после проверки.'],
 ];
+let holdFrom = null;
+const held = [];
 function answer(name, input) {
   if (name === 'indexer')
     return {
@@ -83,9 +85,17 @@ http
       let raw = '';
       for await (const part of req) raw += part;
       const body = JSON.parse(raw);
+      if (req.url === '/control') {
+        holdFrom = Number.isInteger(body.holdFrom) ? body.holdFrom : null;
+        if (holdFrom === null) for (const release of held.splice(0)) release();
+        res.end(JSON.stringify({ holdFrom }));
+        return;
+      }
       const name = body.response_format?.json_schema?.name;
       const input = JSON.parse(body.messages.find((m) => m.role === 'user').content);
       console.log(JSON.stringify({ name, keys: Object.keys(input) }));
+      if (name === 'writer' && holdFrom !== null && input.index >= holdFrom)
+        await new Promise((resolve) => held.push(resolve));
       const result = answer(name, input);
       appendFileSync(
         new URL('fake-sends.jsonl', root),

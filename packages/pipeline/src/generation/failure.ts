@@ -1,4 +1,4 @@
-import type { JobErrorCode } from '@lct/contracts';
+import { modelFailureSchema, type JobErrorCode } from '@lct/contracts';
 import { ModelRequestError } from '../chat/model-failure.js';
 import { EngineHttpError } from '@lct/engine-client';
 
@@ -27,9 +27,18 @@ export function generationFailure(
       retryable: true,
     };
   }
-  if (error instanceof ModelRequestError) {
+  const serialized = error as { failure?: unknown; cause?: { failure?: unknown } } | null;
+  const modelFailure = modelFailureSchema.safeParse(
+    error instanceof ModelRequestError
+      ? error.failure
+      : (serialized?.failure ?? serialized?.cause?.failure),
+  );
+  if (modelFailure.success) {
     const failures: Partial<
-      Record<typeof error.failure.kind, { code: JobErrorCode; message: string; retryable: boolean }>
+      Record<
+        typeof modelFailure.data.kind,
+        { code: JobErrorCode; message: string; retryable: boolean }
+      >
     > = {
       'rate-limit': {
         code: 'provider-rate-limit',
@@ -51,9 +60,14 @@ export function generationFailure(
         message: 'Провайдер не ответил вовремя. Исход и стоимость попытки могут быть неизвестны.',
         retryable: true,
       },
+      unsupported: {
+        code: 'invalid-response',
+        message: 'Провайдер отклонил параметры запроса. Проверьте совместимость подключения.',
+        retryable: false,
+      },
     };
     return (
-      failures[error.failure.kind] ?? {
+      failures[modelFailure.data.kind] ?? {
         code: 'model-unavailable',
         message: 'Модель временно недоступна. Сохранённые задачи не потеряны.',
         retryable: true,

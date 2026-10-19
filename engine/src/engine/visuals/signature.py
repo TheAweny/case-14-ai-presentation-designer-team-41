@@ -76,6 +76,18 @@ def structural_signature(elements: list[dict[str, Any]]) -> dict[str, Any]:
             f"{element['kind']}:{element['role']}@{column},{row},{column_span}x{row_span}"
             f"{_extra(element)}"
         )
+    # Array order is irrelevant for disjoint objects, but overlapping content
+    # retains its paint relationship: an image above text is a different result.
+    layering: list[str] = []
+    for first, behind in enumerate(content):
+        a = behind["box"]
+        for second in range(first + 1, len(content)):
+            b = content[second]["box"]
+            if min(a["x"] + a["cx"], b["x"] + b["cx"]) > max(a["x"], b["x"]) and min(
+                a["y"] + a["cy"], b["y"] + b["cy"]
+            ) > max(a["y"], b["y"]):
+                layering.append(f"paint:{tokens[first]}<{tokens[second]}")
+    tokens.extend(layering)
     tokens.sort()
     digest = hashlib.sha256("\n".join(tokens).encode()).hexdigest()
     return {"digest": digest, "tokens": tokens}

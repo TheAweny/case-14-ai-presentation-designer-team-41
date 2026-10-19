@@ -102,6 +102,25 @@ class ModelCall(BaseModel):
     outputTokens: conint(ge=0, le=9007199254740991) | None
 
 
+class ModelCallsScope(StrEnum):
+    run = "run"
+    build = "build"
+
+
+class ProviderUsage(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    currency: str | None
+    httpAttempts: conint(ge=0, le=9007199254740991)
+    knownCost: confloat(ge=0.0) | None
+    knownInputTokens: confloat(ge=0.0)
+    knownOutputTokens: confloat(ge=0.0)
+    logicalTasks: conint(ge=0, le=9007199254740991)
+    unknownCostAttempts: conint(ge=0, le=9007199254740991)
+    unknownUsageAttempts: conint(ge=0, le=9007199254740991)
+
+
 class Kind1(StrEnum):
     agent = "agent"
     prompt = "prompt"
@@ -167,9 +186,11 @@ class ArtifactManifest(BaseModel):
     modelCalls: list[ModelCall] = Field(
         ..., description="Empty for a run on the fake provider."
     )
+    modelCallsScope: ModelCallsScope | None = None
     planId: constr(min_length=1) = Field(
         ..., description="The plan all three variants were laid out from."
     )
+    providerUsage: ProviderUsage | None = None
     revisions: list[Revision] = Field(
         ..., description="Every component that could change the output.", min_length=1
     )
@@ -6362,12 +6383,28 @@ class DesignSystem2(BaseModel):
     )
 
 
+class State3(StrEnum):
+    ready = "ready"
+    missing = "missing"
+    unknown = "unknown"
+
+
+class FontReadiness(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    missing: list[str]
+    requested: list[str]
+    state: State3
+
+
 class GenerationProfile(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     compositions: list[Composition] = Field(..., min_length=1)
     designSystem: DesignSystem2
+    fontReadiness: FontReadiness | None = None
     schemaVersion: Literal[1]
     templateHash: constr(min_length=64, max_length=64)
 
@@ -9844,12 +9881,17 @@ class TemplatePreviewsResponse(BaseModel):
     schemaVersion: Literal[1]
 
 
+class State4(StrEnum):
+    present = "present"
+    missing = "missing"
+
+
 class Base1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State
+    state: State4
     value: float | None = None
 
 
@@ -9887,7 +9929,7 @@ class Value2(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State
+    state: State4
     value: float | None = None
 
 
@@ -9925,7 +9967,7 @@ class Value3(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State
+    state: State4
     value: float | None = None
 
 

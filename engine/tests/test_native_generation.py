@@ -13,6 +13,29 @@ from pptx.util import Inches, Pt
 api = importlib.import_module("engine.api.app")
 
 
+@pytest.mark.parametrize("availability", ["ready", "missing", "unknown"])
+def test_preparation_reports_measured_font_readiness(
+    tmp_path: Path, monkeypatch: Any, availability: str
+) -> None:
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    shape = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(1))
+    run = shape.text_frame.paragraphs[0].add_run()
+    run.text, run.font.name, run.font.size = "Research", "Synthetic Face", Pt(30)
+    template = tmp_path / "fonts.pptx"
+    deck.save(str(template))
+
+    def missing(fonts: set[str]) -> list[str]:
+        assert "Synthetic Face" in fonts
+        if availability == "unknown":
+            raise OSError("fontconfig unavailable")
+        return ["Synthetic Face"] if availability == "missing" else []
+
+    monkeypatch.setattr(api.render, "missing_fonts", missing)
+    profile = api.generation_profile(api.TemplateProfileRequest(template_path=str(template)))
+    assert profile["fontReadiness"]["state"] == availability
+
+
 @pytest.mark.parametrize("variant", ["dense", "balanced", "airy"])
 def test_generation_exports_and_audits_native_kpi(
     tmp_path: Path, monkeypatch: Any, variant: str

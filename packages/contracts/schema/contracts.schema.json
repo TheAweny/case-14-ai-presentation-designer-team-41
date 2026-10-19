@@ -223,10 +223,78 @@
           },
           "type": "array"
         },
+        "modelCallsScope": {
+          "enum": [
+            "run",
+            "build"
+          ],
+          "type": "string"
+        },
         "planId": {
           "description": "The plan all three variants were laid out from.",
           "minLength": 1,
           "type": "string"
+        },
+        "providerUsage": {
+          "additionalProperties": false,
+          "properties": {
+            "currency": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "httpAttempts": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "knownCost": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "knownInputTokens": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "knownOutputTokens": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "logicalTasks": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unknownCostAttempts": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unknownUsageAttempts": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "httpAttempts",
+            "logicalTasks",
+            "knownInputTokens",
+            "knownOutputTokens",
+            "unknownUsageAttempts",
+            "knownCost",
+            "unknownCostAttempts",
+            "currency"
+          ],
+          "type": "object"
         },
         "revisions": {
           "description": "Every component that could change the output.",
@@ -14306,6 +14374,37 @@
             "shadows",
             "protectedZones",
             "warnings"
+          ],
+          "type": "object"
+        },
+        "fontReadiness": {
+          "additionalProperties": false,
+          "properties": {
+            "missing": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "requested": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "state": {
+              "enum": [
+                "ready",
+                "missing",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "requested",
+            "missing"
           ],
           "type": "object"
         },
