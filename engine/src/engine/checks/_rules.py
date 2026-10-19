@@ -1106,6 +1106,44 @@ def duplicate_slide(
     return out.findings
 
 
+def duplicate_point(
+    check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext
+) -> list[Finding]:
+    out = _Emitter(check, slide)
+    p = ctx.params[check.id]
+    seen: list[tuple[dict[str, Any], set[str]]] = []
+    for element in slide["elements"]:
+        if not paragraphs_of(element) or not is_content(element):
+            continue
+        if element["role"] in {"title", "subtitle"}:
+            continue
+        for paragraph in paragraphs_of(element):
+            text = paragraph_text(paragraph)
+            words = {w for w in re.findall(r"\w+", text.casefold()) if len(w) > 2}
+            if len(words) < p["minWords"]:
+                continue
+            twin = next(
+                (
+                    owner
+                    for owner, theirs in seen
+                    if len(words & theirs) / max(len(words | theirs), 1) >= p["minSimilarity"]
+                ),
+                None,
+            )
+            if twin is None:
+                seen.append((element, words))
+                continue
+            out.add(
+                title="Пункт повторяется на слайде",
+                detail=f"Пункт почти повторяет пункт блока «{twin['elementId']}».",
+                element=element,
+                quote=text,
+                expected="каждый пункт слайда говорит своё",
+                assisted=True,
+            )
+    return out.findings
+
+
 def placeholder_text(
     check: CheckDefinition, slide: dict[str, Any], ctx: AuditContext
 ) -> list[Finding]:
@@ -1226,6 +1264,7 @@ RULES: dict[str, Rule] = {
     "raster-slide": raster_slide,
     "picture-covers-text": picture_covers_text,
     "duplicate-slide": duplicate_slide,
+    "duplicate-point": duplicate_point,
     "placeholder-text": placeholder_text,
     "template-leftover": template_leftover,
     "empty-image-slot": empty_image_slot,
