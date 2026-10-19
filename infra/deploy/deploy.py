@@ -20,6 +20,7 @@ from pathlib import Path
 REPOSITORY = "TheAweny/case-14-ai-presentation-designer-team-41"
 PREFIX = f"ghcr.io/{REPOSITORY.lower()}"
 SERVICES = ("api", "web", "engine")
+DOCS_URL = "https://docs.lct.aweny.link"
 INSTALL = Path("/usr/local/lib/lct")
 READINESS_SCRIPT = """
 (async () => {
@@ -54,10 +55,12 @@ def validate(payload):
         raise ValueError("Invalid registry actor")
     if not isinstance(payload["token"], str) or not 1 <= len(payload["token"]) <= 4096:
         raise ValueError("A temporary registry token is required")
-    if not isinstance(payload["images"], dict) or set(payload["images"]) != set(SERVICES):
-        raise ValueError("Exactly three application images are required")
-    for service in SERVICES:
-        image = payload["images"][service]
+    if not isinstance(payload["images"], dict) or set(payload["images"]) not in (
+        set(SERVICES),
+        {*SERVICES, "docs"},
+    ):
+        raise ValueError("Application images and an optional docs image are required")
+    for service, image in payload["images"].items():
         if not isinstance(image, str) or not re.fullmatch(
             re.escape(f"{PREFIX}/{service}@sha256:") + r"[a-f0-9]{64}", image
         ):
@@ -96,6 +99,7 @@ class Deployment:
         temporary.replace(path)
 
     def compose(self, *args, **kwargs):
+        overlays = ["-f", str(INSTALL / "compose.docs.yaml")] if self.docs_enabled() else []
         return self.run(
             [
                 "docker",
@@ -108,9 +112,16 @@ class Deployment:
                 str(self.state / "release.env"),
                 "-f",
                 str(INSTALL / "compose.yaml"),
+                *overlays,
                 *args,
             ],
             **kwargs,
+        )
+
+    def docs_enabled(self):
+        environment = self.state / "release.env"
+        return environment.exists() and any(
+            line.startswith("DOCS_IMAGE=") for line in environment.read_text().splitlines()
         )
 
     @staticmethod
@@ -198,7 +209,7 @@ class Deployment:
     def start(self, manifest):
         temporary = self.state / "release.env.tmp"
         temporary.write_text(
-            "".join(f"{name.upper()}_IMAGE={manifest['images'][name]}\n" for name in SERVICES)
+            "".join(f"{name.upper()}_IMAGE={image}\n" for name, image in manifest["images"].items())
         )
         temporary.chmod(0o600)
         temporary.replace(self.state / "release.env")
@@ -247,6 +258,20 @@ class Deployment:
             ],
             stdout=subprocess.DEVNULL,
         )
+        if self.docs_enabled():
+            for path in ("/", "/docs/api/reference/", "/openapi.json"):
+                self.run(
+                    [
+                        "curl",
+                        "--fail",
+                        "--silent",
+                        "--show-error",
+                        "--max-time",
+                        "30",
+                        DOCS_URL + path,
+                    ],
+                    stdout=subprocess.DEVNULL,
+                )
 
     def readiness_sql(self, statement):
         return self.compose(

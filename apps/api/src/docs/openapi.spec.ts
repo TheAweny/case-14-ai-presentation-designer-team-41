@@ -1,64 +1,15 @@
-import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
-import { RequestMethod, type INestApplication, type Type } from '@nestjs/common';
+import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import { generationRequestSchema } from '@lct/contracts';
-import { UsersController } from '../accounts/users.controller.js';
-import { AccountsService } from '../accounts/accounts.service.js';
-import { AccountDataService } from '../accounts/account-data.service.js';
-import { AuthController } from '../auth/auth.controller.js';
-import { SessionsService } from '../auth/sessions.service.js';
-import { AccountUsageService } from '../accounts/account-usage.service.js';
-import { AccountPolicyController } from '../accounts/account-policy.controller.js';
-import { ChatsController } from '../chats/chats.controller.js';
-import { ChatsService } from '../chats/chats.service.js';
-import { FilesController } from '../files/files.controller.js';
-import { GenerationController } from '../generation/generation.controller.js';
-import { GenerationService } from '../generation/generation.service.js';
-import { HealthController } from '../health/health.controller.js';
-import { LibraryController } from '../library/library.controller.js';
-import { ModelSettingsController } from '../models/model-settings.controller.js';
-import { ModelSettingsService } from '../models/model-settings.service.js';
-import { ModelCapabilityService } from '../models/model-capabilities.js';
-import { RunsController } from '../runs/runs.controller.js';
-import { RunsService } from '../runs/runs.service.js';
-import { DOCS_TAGS, buildOpenApiDocument, convertSchema } from './openapi.js';
+import { DOCS_TAGS, convertSchema } from './openapi.js';
+import { OPENAPI_CONTROLLERS, openApiDocument } from './openapi-document.js';
 
-const CONTROLLERS = [
-  UsersController,
-  AccountPolicyController,
-  AuthController,
-  ChatsController,
-  FilesController,
-  GenerationController,
-  HealthController,
-  LibraryController,
-  ModelSettingsController,
-  RunsController,
-];
-
-const SERVICES: Type<unknown>[] = [
-  AccountsService,
-  SessionsService,
-  AccountUsageService,
-  AccountDataService,
-  ChatsService,
-  GenerationService,
-  ModelSettingsService,
-  ModelCapabilityService,
-  RunsService,
-];
+const CONTROLLERS = OPENAPI_CONTROLLERS;
 
 /** The controllers with their services stubbed: the document reads decorators, not services. */
-async function documentOf() {
-  const module = await Test.createTestingModule({
-    controllers: CONTROLLERS,
-    providers: SERVICES.map((provide) => ({ provide, useValue: {} })),
-  }).compile();
-  const app: INestApplication = module.createNestApplication();
-  const document = buildOpenApiDocument(app, '0.0.0');
-  await app.close();
-  return document;
+function documentOf() {
+  return openApiDocument('0.0.0');
 }
 
 /** Every route the controllers declare, as `METHOD /path` with `{param}` placeholders. */

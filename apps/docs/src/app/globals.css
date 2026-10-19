@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+ * Shell tokens copied from the product (`apps/web/src/app/globals.css`, dark theme).
+ * The docs app does not import the web app: the two deploy separately.
+ */
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-fd-background: var(--docs-background);
+  --color-fd-foreground: var(--docs-foreground);
+  --color-fd-muted: var(--docs-muted);
+  --color-fd-muted-foreground: var(--docs-muted-foreground);
+  --color-fd-popover: var(--docs-card);
+  --color-fd-popover-foreground: var(--docs-foreground);
+  --color-fd-card: var(--docs-card);
+  --color-fd-card-foreground: var(--docs-foreground);
+  --color-fd-border: var(--docs-border);
+  --color-fd-primary: var(--docs-purple);
+  --color-fd-primary-foreground: var(--docs-primary-foreground);
+  --color-fd-secondary: var(--docs-muted);
+  --color-fd-secondary-foreground: var(--docs-foreground);
+  --color-fd-accent: var(--docs-accent);
+  --color-fd-accent-foreground: var(--docs-foreground);
+  --color-fd-ring: var(--docs-purple);
+}
+
+:root {
+  color-scheme: dark;
+  --docs-background: oklch(0.21 0.004 260);
+  --docs-foreground: oklch(0.96 0.004 260);
+  --docs-card: oklch(0.25 0.005 260);
+  --docs-muted: oklch(0.3 0.006 260);
+  --docs-muted-foreground: oklch(0.72 0.01 260);
+  --docs-border: oklch(1 0 0 / 10%);
+  --docs-purple: oklch(0.75 0.15 300);
+  --docs-primary-foreground: oklch(0.22 0.004 260);
+  --docs-accent: oklch(0.75 0.15 300 / 16%);
+  --docs-sidebar: oklch(0.18 0.004 260);
+  --radius: 0.75rem;
+}
+
+.dark {
+  --color-fd-background: var(--docs-background);
+  --color-fd-foreground: var(--docs-foreground);
+  --color-fd-muted: var(--docs-muted);
+  --color-fd-muted-foreground: var(--docs-muted-foreground);
+  --color-fd-popover: var(--docs-card);
+  --color-fd-popover-foreground: var(--docs-foreground);
+  --color-fd-card: var(--docs-card);
+  --color-fd-card-foreground: var(--docs-foreground);
+  --color-fd-border: var(--docs-border);
+  --color-fd-primary: var(--docs-purple);
+  --color-fd-primary-foreground: var(--docs-primary-foreground);
+  --color-fd-secondary: var(--docs-muted);
+  --color-fd-secondary-foreground: var(--docs-foreground);
+  --color-fd-accent: var(--docs-accent);
+  --color-fd-accent-foreground: var(--docs-foreground);
+  --color-fd-ring: var(--docs-purple);
+}
+
+.dark #nd-sidebar {
+  --color-fd-background: var(--docs-sidebar);
+  --color-fd-muted: oklch(0.24 0.005 260);
+  --color-fd-secondary: oklch(0.24 0.005 260);
+  --color-fd-border: var(--docs-border);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--docs-background);
+  color: var(--docs-foreground);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+/* Reading column: long articles stay narrower than the editor shell. */
+#nd-page article {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+
+#nd-page .prose {
+  max-width: 68ch;
+}
+
+#nd-page .prose :where(h1, h2, h3) {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.docs-title {
+  background-image: linear-gradient(to bottom, var(--docs-foreground) 30%, oklch(0.8 0.08 290));
+  background-clip: text;
+  color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--docs-purple);
+  outline-offset: 2px;
+}

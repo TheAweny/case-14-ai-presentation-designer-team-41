@@ -17,12 +17,13 @@ OLD_SHA = "b" * 40
 PREFIX = "ghcr.io/theaweny/case-14-ai-presentation-designer-team-41"
 
 
-def request(sha=SHA):
+def request(sha=SHA, *, docs=False):
+    services = (*deploy.SERVICES, "docs") if docs else deploy.SERVICES
     return {
         "sha": sha,
         "actor": "teammate",
         "token": "short-lived-token",
-        "images": {name: f"{PREFIX}/{name}@sha256:{'c' * 64}" for name in deploy.SERVICES},
+        "images": {name: f"{PREFIX}/{name}@sha256:{'c' * 64}" for name in services},
     }
 
 
@@ -177,6 +178,80 @@ def test_readiness_requires_a_real_active_account(tmp_path):
     instance.compose = lambda *_args, **_kwargs: SimpleNamespace(stdout="")
     with pytest.raises(RuntimeError, match="active administrator"):
         instance.ready()
+
+
+def test_accepts_docs_but_rejects_unknown_or_mutable_docs_images():
+    assert deploy.validate(request(docs=True))
+    payload = request(docs=True)
+    payload["images"]["docs"] = f"{PREFIX}/docs:latest"
+    with pytest.raises(ValueError):
+        deploy.validate(payload)
+    payload = request(docs=True)
+    payload["images"]["other"] = payload["images"]["docs"]
+    with pytest.raises(ValueError):
+        deploy.validate(payload)
+
+
+def test_start_selects_docs_overlay_and_can_return_to_legacy_release(tmp_path):
+    instance = deploy.Deployment(tmp_path)
+    instance.state.mkdir()
+    calls = []
+    instance.run = lambda args, **_kwargs: calls.append(args)
+    instance.start(deploy.release(request(docs=True)))
+    assert "DOCS_IMAGE=" in (instance.state / "release.env").read_text()
+    assert str(deploy.INSTALL / "compose.docs.yaml") in calls[-1]
+    instance.start(deploy.release(request(OLD_SHA)))
+    assert "DOCS_IMAGE=" not in (instance.state / "release.env").read_text()
+    assert str(deploy.INSTALL / "compose.docs.yaml") not in calls[-1]
+    assert "--remove-orphans" in calls[-1]
+
+
+def test_failed_docs_release_restores_legacy_release(tmp_path):
+    instance = prepare(tmp_path, "ready")
+    with pytest.raises(RuntimeError, match="Readiness"):
+        instance.deploy(request(docs=True))
+    assert ("start", OLD_SHA) in instance.calls
+    assert "docs" not in json.loads((instance.state / "current.json").read_text())["images"]
+
+
+def test_readiness_checks_docs_routes_only_when_enabled(tmp_path):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    instance = deploy.Deployment(tmp_path)
+    instance.state.mkdir()
+    instance.compose = lambda *_args, **_kwargs: SimpleNamespace(
+        stdout="12345678-1234-1234-1234-123456789012"
+    )
+    instance.readiness_session = lambda _account: nullcontext(None)
+    calls = []
+    instance.run = lambda args, **_kwargs: calls.append(args)
+    instance.ready()
+    assert len(calls) == 1
+    (instance.state / "release.env").write_text("DOCS_IMAGE=immutable-image\n")
+    calls.clear()
+    instance.ready()
+    assert [args[-1] for args in calls] == [
+        "https://lct.aweny.link/login",
+        deploy.DOCS_URL + "/",
+        deploy.DOCS_URL + "/docs/api/reference/",
+        deploy.DOCS_URL + "/openapi.json",
+    ]
+
+
+def test_docs_runtime_is_static_private_and_has_no_product_dependencies():
+    import yaml
+
+    config = yaml.safe_load((MODULE_PATH.parent / "compose.docs.yaml").read_text())
+    docs = config["services"]["docs"]
+    assert docs["ports"] == ["127.0.0.1:3002:8080"]
+    assert docs["read_only"]
+    assert "depends_on" not in docs
+    assert "volumes" not in docs
+    nginx = (MODULE_PATH.parents[1] / "docker/docs-nginx.conf").read_text()
+    assert "try_files $uri $uri/ =404" in nginx
+    assert "error_page 404 /404.html" in nginx
+    assert "proxy_pass" not in nginx
 
 
 @pytest.mark.parametrize("failure", [None, "api", "https"])

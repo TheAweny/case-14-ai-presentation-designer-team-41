@@ -11,6 +11,8 @@ export default [
       '**/.next-chat-e2e/**',
       '**/coverage/**',
       '**/.nx/**',
+      '**/.source/**',
+      '**/out/**',
       'packages/contracts/schema/**',
       'engine/**',
       'tools/**',
@@ -41,6 +43,10 @@ export default [
             {
               sourceTag: 'scope:shared',
               onlyDependOnLibsWithTags: ['scope:shared'],
+            },
+            {
+              sourceTag: 'scope:docs',
+              onlyDependOnLibsWithTags: ['scope:docs', 'scope:shared'],
             },
             {
               sourceTag: 'type:lib',

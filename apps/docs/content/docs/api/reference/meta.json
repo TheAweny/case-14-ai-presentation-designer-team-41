@@ -1,0 +1,17 @@
+{
+  "title": "Справочник",
+  "pages": [
+    "index",
+    "generation",
+    "editor",
+    "files",
+    "chats",
+    "runs",
+    "library",
+    "models",
+    "users",
+    "auth",
+    "health",
+    "schemas"
+  ]
+}

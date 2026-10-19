@@ -9,6 +9,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 install -d -m 755 /usr/local/lib/lct
 install -m 755 "$script_dir/deploy.py" /usr/local/lib/lct/deploy.py
 install -m 644 "$script_dir/compose.yaml" /usr/local/lib/lct/compose.yaml
+install -m 644 "$script_dir/compose.docs.yaml" /usr/local/lib/lct/compose.docs.yaml
 install -m 644 "$script_dir/../searxng/settings.yml" /usr/local/lib/lct/search.yml
 install -m 644 "$script_dir/lct-backup.service" /etc/systemd/system/lct-backup.service
 install -m 644 "$script_dir/lct-backup.timer" /etc/systemd/system/lct-backup.timer
