@@ -132,19 +132,25 @@ export async function checkModel(
     if (!response.ok) {
       return {
         ok: false,
-        detail: `HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`,
+        detail: `HTTP ${response.status}. Проверьте ключ, адрес API и доступность модели.`,
         ms,
       };
     }
     const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
     const content = payload.choices?.[0]?.message?.content ?? '';
-    return content.includes('ok')
+    let ok = false;
+    try {
+      ok = (JSON.parse(content) as { ok?: unknown }).ok === true;
+    } catch {
+      /* Expected one JSON object. */
+    }
+    return ok
       ? { ok: true, detail: `ответ за ${(ms / 1000).toFixed(1)} с`, ms }
-      : { ok: false, detail: `неожиданный ответ: ${content.slice(0, 120)}`, ms };
-  } catch (error) {
+      : { ok: false, detail: 'Модель не вернула ожидаемое подтверждение JSON.', ms };
+  } catch {
     return {
       ok: false,
-      detail: error instanceof Error ? error.message : String(error),
+      detail: 'Не удалось подключиться к API или прочитать его ответ.',
       ms: Date.now() - started,
     };
   }

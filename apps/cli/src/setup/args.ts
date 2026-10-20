@@ -8,7 +8,9 @@ export function parseArgs(argv: readonly string[]): {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? '';
     if (arg.startsWith('--')) {
-      const [key, inline] = arg.slice(2).split('=', 2) as [string, string | undefined];
+      const separator = arg.indexOf('=');
+      const key = arg.slice(2, separator === -1 ? undefined : separator);
+      const inline = separator === -1 ? undefined : arg.slice(separator + 1);
       const next = argv[i + 1];
       if (inline !== undefined) flags[key] = inline;
       else if (next !== undefined && !next.startsWith('--')) {
