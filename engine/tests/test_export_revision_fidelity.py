@@ -6,7 +6,7 @@ import shutil
 import struct
 import zlib
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from engine.export import export_pdf, export_pptx
@@ -37,7 +37,7 @@ def _png(colour: tuple[int, int, int]) -> bytes:
     )
 
 
-def _paragraph_def_font(paragraph: object, font: str, size_pt: float) -> None:
+def _paragraph_def_font(paragraph: Any, font: str, size_pt: float) -> None:
     properties = paragraph._p.get_or_add_pPr()
     default = OxmlElement("a:defRPr")
     default.set("sz", str(int(size_pt * 100)))
@@ -91,7 +91,7 @@ def _text_ink(image: Image.Image, box: dict[str, int], dpi: int) -> bool:
     return False
 
 
-def _nested_text_shape(presentation: Presentation) -> Shape:
+def _nested_text_shape(presentation: Any) -> Shape:
     slide = presentation.slides[0]
     outer = next(shape for shape in slide.shapes if shape.shape_type == MSO_SHAPE_TYPE.GROUP)
     inner = next(shape for shape in outer.shapes if shape.shape_type == MSO_SHAPE_TYPE.GROUP)

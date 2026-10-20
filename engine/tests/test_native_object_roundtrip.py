@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from engine.export import export_pptx
 from engine.visuals import build_visual, draw_visual, style_visuals
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
-from pptx.shapes.graphfrm import GraphicFrame
 from pptx.util import Emu, Inches
 from visual_samples import (
     category_chart,
@@ -64,7 +63,7 @@ def _unequal_step_chart() -> dict:
     return block
 
 
-def _xy_points(chart: object) -> list[tuple[float, float]]:
+def _xy_points(chart: Any) -> list[tuple[float, float]]:
     element = chart.series[0]._element
     count = min(element.xVal.ptCount_val, element.yVal.ptCount_val)
     return [
@@ -98,16 +97,12 @@ def test_native_kpi_chart_and_table_round_trip(tmp_path: Path) -> None:
     deck = Presentation(str(destination))
     shapes = list(deck.slides[0].shapes)
     pictures = [shape for shape in shapes if shape.shape_type == MSO_SHAPE_TYPE.PICTURE]
-    charts = [
-        cast(GraphicFrame, shape).chart for shape in shapes if getattr(shape, "has_chart", False)
-    ]
-    tables = [
-        cast(GraphicFrame, shape).table for shape in shapes if getattr(shape, "has_table", False)
-    ]
+    charts = [cast(Any, shape).chart for shape in shapes if getattr(shape, "has_chart", False)]
+    tables = [cast(Any, shape).table for shape in shapes if getattr(shape, "has_table", False)]
     kpi_text = [
-        shape.text_frame.text
+        cast(Any, shape).text_frame.text
         for shape in shapes
-        if shape.has_text_frame and shape.text_frame.text.strip()
+        if getattr(shape, "has_text_frame", False) and cast(Any, shape).text_frame.text.strip()
     ]
 
     assert not pictures, "charts and KPI must stay native, not pictures"
@@ -123,7 +118,7 @@ def test_native_kpi_chart_and_table_round_trip(tmp_path: Path) -> None:
     assert values[1][2] == 9.0
     assert category_chart_native.value_axis.has_title
     assert "млн ₽" in category_chart_native.value_axis.axis_title.text_frame.text
-    assert list(category_chart_native.plots[0].categories) == ["Север", "Юг", "Восток"]
+    assert list(cast(Any, category_chart_native.plots[0]).categories) == ["Север", "Юг", "Восток"]
 
     xy_chart = charts[1]
     points = _xy_points(xy_chart)
