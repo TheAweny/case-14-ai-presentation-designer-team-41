@@ -40,7 +40,7 @@ export default function HomePage() {
           Документация
         </h1>
         <p className="mt-4 max-w-2xl text-base text-fd-muted-foreground sm:text-lg">
-          Выберите, что нужно сделать сейчас. В статьях оставлены рамки под короткие записи экранов.
+          Выберите, что нужно сделать сейчас.
         </p>
         <ul className="mt-8 grid gap-3 sm:grid-cols-3">
           {entries.map((entry) => (
