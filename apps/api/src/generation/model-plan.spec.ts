@@ -28,6 +28,22 @@ function planFor(input: {
 }
 
 describe('effective model plan', () => {
+  it('records an explicitly disabled deadline as null', () => {
+    const plan = effectiveModelPlan({
+      startedAt: 1000,
+      deadlineAt: Number.POSITIVE_INFINITY,
+      attemptBudgetMax: 110,
+      thinking: null,
+      reasoningEffort: null,
+      writerExplicit: false,
+      writer,
+      planner: null,
+      critic: null,
+      vision: null,
+    });
+    expect(plan.deadlineAt).toBeNull();
+    expect(JSON.parse(JSON.stringify(plan)).deadlineAt).toBeNull();
+  });
   it('records an explicit writer and falls back when planner and critic are unset', () => {
     const plan = planFor({
       writerExplicit: true,

@@ -165,7 +165,7 @@ export function openGenerationStage(parent: AbortSignal, deadlineAt: number) {
   const remaining = deadlineAt - Date.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   if (remaining <= 0) timeout();
-  else if (!parent.aborted) {
+  else if (!parent.aborted && Number.isFinite(remaining)) {
     timer = setTimeout(timeout, remaining);
     timer.unref?.();
   }
@@ -277,10 +277,11 @@ export async function generatePresentation(options: GenerateOptions) {
   const limits = readRuntimeLimits();
   const runtimeAgent = await loadRuntimeAgent(options.registryDir);
   const started = Date.now();
-  const deadlineAt = Math.min(
-    options.deadlineAt ?? started + limits.generationDeadlineMs,
-    started + limits.generationDeadlineMs,
-  );
+  const configuredDeadlineAt =
+    limits.generationDeadlineMs === 0
+      ? Number.POSITIVE_INFINITY
+      : started + limits.generationDeadlineMs;
+  const deadlineAt = Math.min(options.deadlineAt ?? configuredDeadlineAt, configuredDeadlineAt);
   const runBudget = openGenerationStage(options.signal ?? new AbortController().signal, deadlineAt);
   const signal = runBudget.signal;
   const exportReserveMs = Math.min(EXPORT_RESERVE_MS, Math.floor(limits.generationDeadlineMs / 3));
@@ -438,8 +439,12 @@ export async function generatePresentation(options: GenerateOptions) {
         qrImages = assets.images;
       },
       signal: contentSignal,
-      writerDeadlineAt: contentDeadlineAt - WRITER_RESERVE_MS,
-      plannerDeadlineAt: contentDeadlineAt - WRITER_RESERVE_MS - WRITERS_MIN_MS,
+      ...(Number.isFinite(contentDeadlineAt)
+        ? {
+            writerDeadlineAt: contentDeadlineAt - WRITER_RESERVE_MS,
+            plannerDeadlineAt: contentDeadlineAt - WRITER_RESERVE_MS - WRITERS_MIN_MS,
+          }
+        : {}),
       concurrency: limits.generationConcurrency,
       ...(options.notes ? { notes: options.notes } : {}),
       onProgress: async (done, total) =>
@@ -897,7 +902,9 @@ export async function generatePresentation(options: GenerateOptions) {
     // leaves its slot, and the export removes the empty frame.
     const images: Record<string, unknown>[] = [];
     if (pending.length) {
-      const waitMs = Math.max(0, deadlineAt - Date.now() - exportReserveMs);
+      const waitMs = Number.isFinite(deadlineAt)
+        ? Math.max(0, deadlineAt - Date.now() - exportReserveMs)
+        : 180_000;
       const deadline = new Promise<'late'>((resolve) => {
         const timer = setTimeout(() => resolve('late'), waitMs);
         timer.unref?.();
@@ -1001,7 +1008,7 @@ export async function generatePresentation(options: GenerateOptions) {
       reserveMs = exportReserveMs,
     ): Promise<VisualReview | null> => {
       if (!options.reviewer) return null;
-      const left = deadlineAt - Date.now() - reserveMs;
+      const left = Number.isFinite(deadlineAt) ? deadlineAt - Date.now() - reserveMs : 180_000;
       if (left < REVIEW_MIN_MS) {
         await emit({
           type: 'warning',

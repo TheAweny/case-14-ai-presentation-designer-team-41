@@ -19,7 +19,7 @@ export interface EffectiveModelRole extends ModelPlanIdentity {
 export interface EffectiveModelPlan {
   readonly schemaVersion: 1;
   readonly startedAt: number;
-  readonly deadlineAt: number;
+  readonly deadlineAt: number | null;
   readonly attemptBudgetMax: number;
   readonly requestedThinking?: boolean;
   readonly requestedReasoningEffort?: ReasoningEffort;
@@ -66,7 +66,7 @@ export function effectiveModelPlan(input: {
   return {
     schemaVersion: 1,
     startedAt: input.startedAt,
-    deadlineAt: input.deadlineAt,
+    deadlineAt: Number.isFinite(input.deadlineAt) ? input.deadlineAt : null,
     attemptBudgetMax: input.attemptBudgetMax,
     ...(typeof input.thinking === 'boolean' ? { requestedThinking: input.thinking } : {}),
     ...(input.reasoningEffort !== null ? { requestedReasoningEffort: input.reasoningEffort } : {}),

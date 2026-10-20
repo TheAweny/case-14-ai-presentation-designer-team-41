@@ -66,6 +66,8 @@ services:
       RECORDINGS_DIR: /app/registry/recordings
       MODEL_ALLOW_PRIVATE_HOSTS: 'false'
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      # Zero disables the overall build deadline; per-request timeouts and Stop remain active.
+      GENERATION_DEADLINE_MS: ${GENERATION_DEADLINE_MS:-270000}
       NODE_OPTIONS: --max-old-space-size=896
     volumes: ['/srv/lct/data:/app/data', '/srv/lct/runs:/app/runs']
 

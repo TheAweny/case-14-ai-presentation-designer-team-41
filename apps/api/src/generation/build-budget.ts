@@ -55,6 +55,7 @@ export function remainingBuildMs(
 ): number {
   assertEpochMs(startedAt, 'Build start time');
   assertEpochMs(now, 'Clock time');
+  if (deadlineMs === 0) return Number.POSITIVE_INFINITY;
   if (!Number.isInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > TIMEOUT_MAX_MS) {
     throw new Error('Build deadline must be an integer of milliseconds from 1 through 4294967295.');
   }
@@ -78,6 +79,7 @@ export function openBuildBudget(
   now = startedAt,
 ): BuildBudget {
   const left = remainingBuildMs(startedAt, now, deadlineMs);
+  if (deadlineMs === 0) return openPreparation(cancel, startedAt);
   const deadlineAt = startedAt + deadlineMs;
   const deadline = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;

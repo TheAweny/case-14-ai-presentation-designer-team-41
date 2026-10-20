@@ -949,7 +949,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         ...preparationActivity,
         status: 'done',
         finishedAt: this.now(),
-        detail: 'Источники подготовлены. Запускаем бюджет генерации 290 секунд.',
+        detail:
+          this.deadlineMs === 0
+            ? 'Источники подготовлены. Генерация без общего ограничения времени.'
+            : `Источники подготовлены. Бюджет генерации ${Math.round(this.deadlineMs / 1000)} секунд.`,
       });
       preparationFinished = true;
       signal.throwIfAborted();

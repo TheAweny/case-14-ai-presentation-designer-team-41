@@ -7,6 +7,19 @@ import {
 } from './build-budget.js';
 
 describe('build budget', () => {
+  it('disables the clock with zero while retaining Stop cancellation', async () => {
+    vi.useFakeTimers();
+    const cancel = new AbortController();
+    const budget = openBuildBudget(1000, cancel.signal, 0, 1000);
+    expect(budget.deadlineAt).toBe(Number.POSITIVE_INFINITY);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    expect(budget.signal.aborted).toBe(false);
+    const pending = waitForBuild(() => new Promise<never>(() => undefined), budget);
+    cancel.abort(new Error('user stop'));
+    await expect(pending).rejects.toThrow('user stop');
+    budget.dispose();
+  });
   const leaks: unknown[] = [];
   const onLeak = (error: unknown) => {
     leaks.push(error);

@@ -1444,6 +1444,7 @@ function slotCorrections(
 /** A timeout on the process clock (setTimeout), so a stage deadline and its tests share one. */
 function timeoutSignal(ms: number): AbortSignal {
   const stop = new AbortController();
+  if (!Number.isFinite(ms)) return stop.signal;
   if (ms <= 0) {
     stop.abort(new DOMException('Planning or writing deadline exceeded.', 'TimeoutError'));
     return stop.signal;
