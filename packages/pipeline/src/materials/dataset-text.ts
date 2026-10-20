@@ -16,6 +16,8 @@ const OUTLIER_SAMPLE = 8;
 /** How many interquartile ranges beyond a quartile make a value stand apart. */
 const OUTLIER_FENCE = 3;
 const OUTLIERS_SHOWN = 5;
+/** A number column with this few distinct values is a code (0 and 1, a score): count each. */
+const FEW_NUMBERS = 6;
 const NEWLINE = String.fromCharCode(10);
 
 /** What each engine diagnostic means to the person who reads the brief. */
@@ -162,6 +164,13 @@ function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => stri
   if (apart) lines.push(apart);
   const full = table(header, body);
   if (full.length <= FULL_TABLE_CHARS) {
+    // Even a short table gets its counts: a model that tallies thirty rows by eye miscounts,
+    // and a figure on a slide should be one the brief states, not one the model worked out.
+    lines.push(
+      `Точные подсчёты по ${counted.length} ` +
+        `${plural(counted.length, 'строке', 'строкам', 'строкам')} — берите числа отсюда, не считайте заново:`,
+    );
+    lines.push(summary(sheet, counted, spreadsheet));
     lines.push(full);
     return lines.join(NEWLINE);
   }
@@ -196,12 +205,22 @@ function summary(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): strin
         const most = values[values.length - 1] ?? 0;
         const shown = (value: number) => figure(value) + (unit === '%' ? '%' : '');
         const sum = values.reduce((total, value) => total + value, 0);
+        const distinct = new Map<number, number>();
+        for (const value of values) distinct.set(value, (distinct.get(value) ?? 0) + 1);
+        const tally =
+          distinct.size <= FEW_NUMBERS
+            ? ` Значения: ${[...distinct]
+                .sort((a, b) => a[0] - b[0])
+                .map(([value, count]) => `${shown(value)} — ${count}`)
+                .join(', ')}.`
+            : '';
         return (
           `- ${name} (число): значений ${values.length}, пропусков ${gaps}; ` +
           `минимум ${shown(least)}, первый квартиль ${shown(quantile(values, 0.25))}, ` +
           `медиана ${shown(quantile(values, 0.5))}, третий квартиль ${shown(quantile(values, 0.75))}, ` +
           `максимум ${shown(most)}; среднее ${shown(sum / values.length)}` +
-          (unit === '%' ? '.' : `, сумма ${figure(sum)}.`)
+          (unit === '%' ? '.' : `, сумма ${figure(sum)}.`) +
+          tally
         );
       }
       if (column.kind === 'date') {

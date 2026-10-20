@@ -194,7 +194,7 @@ describe('datasetText summaries', () => {
     );
   });
 
-  it('writes a short table whole, with no summary', () => {
+  it('writes a short table whole, with its exact counts first', () => {
     const text = datasetText(
       dataset([
         long([
@@ -204,7 +204,31 @@ describe('datasetText summaries', () => {
       ]),
     );
     expect(text).toContain('| Москва | 10 |\n| Казань | нет данных |');
-    expect(text).not.toContain('сводка');
+    expect(text).toContain('Точные подсчёты по 2 строкам — берите числа отсюда');
+    expect(text).toContain('- Сумма (число): значений 1, пропусков 1;');
+    expect(text.indexOf('Точные подсчёты')).toBeLessThan(text.indexOf('| Регион | Сумма |'));
+    expect(text).not.toContain('Таблица длинная');
+  });
+
+  it('counts each value of a coded number column and each category of a short one', () => {
+    const rows = [
+      ['REST_FORCED', '1'],
+      ['B3', '0'],
+      ['REST_FORCED', '1'],
+      ['REST', '1'],
+      ['B3', '1'],
+      ['REST_FORCED', '0'],
+    ];
+    const text = datasetText(
+      dataset([sheet('Наблюдения', ['action', 'result'], rows, ['text', 'number'])]),
+    );
+    expect(text).toContain('- action (текст): 3 значения: REST_FORCED — 3, B3 — 2, REST — 1;');
+    expect(text).toContain('сумма 4. Значения: 0 — 2, 1 — 4.');
+  });
+
+  it('does not count values of a measured column that has many of them', () => {
+    const rows = Array.from({ length: 12 }, (_, index) => [`r${index}`, String(index * 1.5)]);
+    expect(datasetText(dataset([long(rows)]))).not.toContain('Значения:');
   });
 
   it('keeps a pipe or a line break inside a cell from breaking the table', () => {
