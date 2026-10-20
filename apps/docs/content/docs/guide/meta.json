@@ -1,4 +1,15 @@
 {
   "title": "Руководство пользователя",
-  "pages": ["index", "projects", "assistant", "variants", "editing"]
+  "pages": [
+    "index",
+    "projects",
+    "assistant",
+    "generation",
+    "variants",
+    "tools",
+    "agents",
+    "editing",
+    "settings",
+    "admin"
+  ]
 }

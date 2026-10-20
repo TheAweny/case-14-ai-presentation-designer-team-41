@@ -8650,6 +8650,7 @@ __metadata:
     postcss: "npm:^8.5.0"
     react: "npm:^19.3.0"
     react-dom: "npm:^19.3.0"
+    swagger-ui-dist: "npm:5.33.0"
     tailwindcss: "npm:4.3.3"
     typescript: "npm:6.0.3"
   languageName: unknown

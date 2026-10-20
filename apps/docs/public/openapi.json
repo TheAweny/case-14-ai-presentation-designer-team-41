@@ -3000,6 +3000,14 @@
             "default": null,
             "nullable": true,
             "type": "boolean"
+          },
+          "variantCopyMode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VariantCopyMode"
+              }
+            ],
+            "default": "independent"
           }
         },
         "required": [
@@ -4059,6 +4067,11 @@
           "connectionId": {
             "type": "string"
           },
+          "httpStatus": {
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          },
           "kind": {
             "enum": [
               "rate-limit",
@@ -4080,6 +4093,18 @@
             "maximum": 9007199254740991,
             "minimum": -9007199254740991,
             "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "planner"
+            ],
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "template-index"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -6517,6 +6542,13 @@
           "outputDir"
         ],
         "type": "object"
+      },
+      "VariantCopyMode": {
+        "enum": [
+          "independent",
+          "shared"
+        ],
+        "type": "string"
       },
       "VariantReview": {
         "additionalProperties": false,
@@ -11019,6 +11051,83 @@
           }
         },
         "summary": "Накопленный расход сборки, включая неудачные попытки и продолжения",
+        "tags": [
+          "Генерация"
+        ]
+      }
+    },
+    "/generation/preparation/{requestId}/cancel": {
+      "post": {
+        "operationId": "generation.cancelPreparation",
+        "parameters": [
+          {
+            "description": "Серверный session token из /auth/verify. Отзывается при logout и изменении доступа.",
+            "in": "header",
+            "name": "x-lct-session",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            },
+            "description": "Успешно."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Unauthorized",
+                  "message": "Нет входа: аккаунт не назван, удалён или отключён.",
+                  "statusCode": 401
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Нет входа: аккаунт не назван, удалён или отключён."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Forbidden",
+                  "message": "Нет прав: запрос не от веб-сервера или действие только для администратора.",
+                  "statusCode": 403
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Нет прав: запрос не от веб-сервера или действие только для администратора."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Not Found",
+                  "message": "Объекта нет или он принадлежит другому аккаунту.",
+                  "statusCode": 404
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Объекта нет или он принадлежит другому аккаунту."
+          }
+        },
+        "summary": "Остановить подготовку материалов до создания прогонов",
         "tags": [
           "Генерация"
         ]

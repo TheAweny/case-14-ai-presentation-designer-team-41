@@ -7,7 +7,7 @@
 
 - Статьи: `content/docs/`. Русский без префикса локали. Английский появится как `content/docs/en` вместе с i18n Fumadocs; переключатель до этого не включается.
 - Порядок боковой панели: `meta.json` в том же каталоге. Имя в `pages` — имя файла без расширения.
-- Картинки: `public/images/<раздел>/`. В статье обязательны alt и подпись. Пока интерфейс меняется, скриншоты продукта не добавлять. Демонстрация — `public/images/sample-column.svg`, и подпись говорит, что это не скриншот.
+- Картинки: `public/images/<раздел>/`. В статье обязательны alt и подпись. Пока кадра нет, ставьте `<MediaSlot kind="image|video" title="что показать" />`, а не пустой файл. Готовый снимок заменяет рамку на `<Figure>`. Демонстрация без продукта — `public/images/sample-column.svg`.
 - Сгенерированное, руками не править:
   - `content/docs/api/reference/`
   - `generated/openapi.json`
@@ -28,6 +28,8 @@
 - шаги: `<Steps>` и `<Step>`;
 - вкладки: `<Tabs items={[...]}>` и `<Tab>`;
 - картинка с alt, подписью и увеличением: `<Figure src alt caption />`;
+- рамка под будущую запись: `<MediaSlot kind="video" title="..." />`;
+- консоль API: `<ApiConsole />` на странице `/docs/api/console/`;
 - подробности: `<Accordions>` и `<Accordion title="...">`;
 - код с именем файла: fenced-блок и `title="file.ts"`.
 

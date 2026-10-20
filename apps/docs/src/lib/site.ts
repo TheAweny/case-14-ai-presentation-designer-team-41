@@ -1,4 +1,4 @@
-/** Public address of the product. Set at build time; the portal does not call it. */
+/** Public address of the product. The header link and the API console call it from the browser. */
 export function appUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 }
