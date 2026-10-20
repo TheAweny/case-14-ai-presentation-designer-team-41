@@ -4,10 +4,53 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compositionCritiqueSchema } from '@lct/contracts';
 import { CheckpointTextProvider, TaskCheckpoints } from './checkpoints.js';
-import { SemanticTextProvider } from './semantic-provider.js';
+import { SemanticAuditBindingError, SemanticTextProvider } from './semantic-provider.js';
 import type { TextProvider } from './provider.js';
 
 describe('shared semantic audit', () => {
+  it('retains valid and joined findings when another binding is unknown', async () => {
+    const provider = new SemanticTextProvider({
+      model: 'fake',
+      async generate(_agent, _instructions, _input, schema) {
+        return schema.parse({
+          issues: [
+            {
+              slideIndex: 0,
+              slotId: 'semantic-0,semantic-99',
+              category: 'factual-error',
+              message: 'Check condition',
+            },
+          ],
+        });
+      },
+    });
+    const caught = await provider
+      .generate(
+        'critic',
+        '',
+        {
+          brief: 'Fact',
+          approvedOutline: null,
+          proposedOutline: null,
+          slides: [
+            {
+              slideIndex: 0,
+              approvedSlide: null,
+              speakerNotes: '',
+              visual: null,
+              texts: [{ slotId: 'real', text: 'Fact' }],
+            },
+          ],
+        },
+        compositionCritiqueSchema,
+        new AbortController().signal,
+      )
+      .catch((error: unknown) => error);
+    expect(caught).toBeInstanceOf(SemanticAuditBindingError);
+    expect((caught as SemanticAuditBindingError).partial.issues).toEqual([
+      { slideIndex: 0, slotId: 'real', category: 'factual-error', message: 'Check condition' },
+    ]);
+  });
   it('audits identical facts once, remaps findings and reuses the accepted audit after restart', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'semantic-audit-'));
     let sends = 0;

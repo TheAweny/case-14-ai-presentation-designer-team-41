@@ -51,6 +51,7 @@ import { assessLayoutDiversity } from './layout-diversity.js';
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
 import { degradable, generationFailure } from './failure.js';
+import { SemanticAuditBindingError } from './semantic-provider.js';
 import { compositionSemantics } from './semantics.js';
 import { loadWriterModules } from './writer-prompt.js';
 import { readRuntimeLimits, loadRuntimeAgent, withRuntimeLimits } from '../runtime-limits.js';
@@ -710,7 +711,9 @@ export async function generatePresentation(options: GenerateOptions) {
             : `Смысловой критик недоступен (${errorText(error)}). Проверка геометрии и исправления продолжаются; смысловая проверка остаётся неизвестной.`;
         reviewWarnings.push(message);
         await warn(message);
-        return critiqueSchema.parse({ issues: [] });
+        return critiqueSchema.parse(
+          error instanceof SemanticAuditBindingError ? error.partial : { issues: [] },
+        );
       }
     };
     const auditHistory = [];
