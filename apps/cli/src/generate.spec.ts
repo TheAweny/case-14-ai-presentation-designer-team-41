@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readRunConfig } from './config.js';
-import { failureText, generateFromConfig } from './generate.js';
+import { connectionOf, failureText, generateFromConfig } from './generate.js';
 import { runEnv } from './generate-command.js';
 
 let dir: string | null = null;
@@ -36,6 +36,30 @@ describe('runEnv', () => {
 
   it('is the shell alone without a .env', () => {
     expect(runEnv('/nowhere/.env', { A: '1' })).toEqual({ A: '1' });
+  });
+});
+
+describe('connectionOf', () => {
+  const base = { LLM_BASE_URL: 'https://openrouter.ai/api/v1', LLM_MODEL: 'qwen/qwen3.8-27b' };
+
+  it('tells the provider how the model turns its thinking off', () => {
+    expect(connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'reasoning-effort' }).reasoning).toEqual(
+      { toggle: 'reasoning-effort', levels: false },
+    );
+    expect(connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'enable-thinking' }).reasoning).toEqual({
+      toggle: 'enable-thinking',
+      levels: false,
+    });
+  });
+
+  it('sends nothing about thinking when the switch is not known', () => {
+    expect(connectionOf(base).reasoning).toEqual({ toggle: null, levels: false });
+  });
+
+  it('refuses a switch it does not know', () => {
+    expect(() => connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'off' })).toThrow(
+      /MODEL_REASONING_TOGGLE/,
+    );
   });
 });
 

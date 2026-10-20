@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import {
+  NO_REASONING_CHOICE,
   brandbookBindingSchema,
   headerRecord,
   headersProblem,
@@ -115,7 +116,7 @@ export function failureText(error: unknown): string {
 }
 
 /** The model connection of the server, read the way the API reads it. */
-function connectionOf(env: Env) {
+export function connectionOf(env: Env) {
   if (env.MODEL_PROVIDER === 'fake') {
     throw new Error(
       'lct generate собирает колоды живой моделью, а MODEL_PROVIDER=fake отвечает только ' +
@@ -131,11 +132,20 @@ function connectionOf(env: Env) {
   if (headersProblem(headers)) {
     throw new Error('MODEL_HEADERS — пары Имя=значение через запятую.');
   }
+  const toggle = env.MODEL_REASONING_TOGGLE?.trim() ?? '';
+  if (toggle && toggle !== 'reasoning-effort' && toggle !== 'enable-thinking') {
+    throw new Error('MODEL_REASONING_TOGGLE — reasoning-effort, enable-thinking или пусто.');
+  }
   return {
     baseUrl,
     model,
     apiKey: env.MODEL_API_KEY?.trim() ?? '',
     headers: headerRecord(headers),
+    // A deck build does not think. Told how this model's thinking switches, the request says so;
+    // left unknown, a model that thinks by default thinks through every slide and may time out.
+    reasoning: toggle
+      ? { toggle: toggle as 'reasoning-effort' | 'enable-thinking', levels: false }
+      : NO_REASONING_CHOICE,
   };
 }
 
