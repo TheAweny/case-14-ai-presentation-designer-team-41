@@ -17,6 +17,8 @@ import { TemplatePanel } from '@/components/project/template-panel';
 import { templateThumbOf } from '@/components/project/template-thumb';
 import { isComposeRequested, newDeckInProjectHref, COMPOSE_PARAM } from '@/lib/library-menu';
 import { ProjectNotFoundError, type ProjectSummary } from '@/lib/library-source';
+import { listBrandbooks } from '@/lib/brandbook-library';
+import { composerBrandbookOf } from '@/lib/brandbooks';
 import { librarySource } from '@/mocks/sources';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -57,13 +59,14 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
 export default async function ProjectPage({ params, searchParams }: ProjectPageProps) {
   const [{ projectId }, query] = await Promise.all([params, searchParams]);
   const project = await loadProject(projectId);
-  const [t, format, now, decks, projects, templates] = await Promise.all([
+  const [t, format, now, decks, projects, templates, brandbooks] = await Promise.all([
     getTranslations('projectPage'),
     getFormatter(),
     getNow(),
     librarySource.listDecks({ projectId: project.projectId }),
     librarySource.listProjects(),
     librarySource.listTemplates(),
+    listBrandbooks(),
   ]);
   const newDeckHref = newDeckInProjectHref(project.projectId);
   // Обложку каждой колоды рисует её профиль, а без него — её шаблон: в проекте их может быть
@@ -116,6 +119,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
           // Другой проект — другое поле: текст и вложения начинаются заново.
           key={`composer-${project.projectId}`}
           templates={templates}
+          brandbooks={brandbooks.map(composerBrandbookOf)}
           projects={projects}
           projectId={project.projectId}
           focusRequested={isComposeRequested(query[COMPOSE_PARAM])}

@@ -33,6 +33,7 @@ import {
 import { hasContent } from '@/lib/deck-generator';
 import { chatHref } from '@/lib/library-menu';
 import type { ProjectSummary, TemplateSummary } from '@/lib/library-source';
+import type { ComposerBrandbook } from '@/lib/brandbooks';
 import type { ModelRef } from '@/lib/model-settings';
 import { projectColorVar } from '@/lib/project-appearance';
 import { writerModelReady } from '@/lib/writer-models';
@@ -72,12 +73,15 @@ import { useComposerSuggestions } from './composer-suggestions';
  */
 export function DeckComposer({
   templates,
+  brandbooks = [],
   projects,
   projectId,
   focusRequested = false,
 }: {
   /** Все шаблоны библиотеки. */
   templates: readonly TemplateSummary[];
+  /** Брендбуки библиотеки: выбранный ложится поверх шаблона при сборке. */
+  brandbooks?: readonly ComposerBrandbook[];
   /** Проекты библиотеки: среди них — проект страницы с его шаблонами и цветом. */
   projects: readonly ProjectSummary[];
   /** Проект страницы, на которой стоит поле; null — главная, и презентация будет вне проектов. */
@@ -178,6 +182,8 @@ export function DeckComposer({
           });
           setBrandbookFile(null);
           setBrandbookStatus('ready');
+          // Новый брендбук уже в библиотеке: меню «+» должно его показать.
+          nextRouter.refresh();
         })
         .catch(() => setBrandbookStatus('error'));
     }
@@ -405,6 +411,18 @@ export function DeckComposer({
               brandbookMode.current = true;
               brandbookPicker.current?.click();
             }}
+            brandbooks={brandbooks}
+            selectedBrandbookId={brandbookAttachment?.brandbookId ?? null}
+            onSelectBrandbook={(brandbookId) => {
+              const chosen = brandbooks.find((item) => item.brandbookId === brandbookId);
+              setBrandbookAttachment(
+                chosen
+                  ? { kind: 'brandbook', brandbookId: chosen.brandbookId, name: chosen.name }
+                  : null,
+              );
+              setBrandbookStatus('idle');
+              box.aurora.flash();
+            }}
           />
           <ModeMenu value={mode} onChange={setMode} />
         </PromptToolbar>
@@ -419,8 +437,8 @@ export function DeckComposer({
           })}
         </PromptNote>
       ) : null}
-      {brandbookStatus === 'uploading' ? <PromptNote>Разбираю брендбук…</PromptNote> : null}
-      {brandbookStatus === 'error' ? <PromptNote>Не удалось разобрать брендбук.</PromptNote> : null}
+      {brandbookStatus === 'uploading' ? <PromptNote>{t('brandbook.parsing')}</PromptNote> : null}
+      {brandbookStatus === 'error' ? <PromptNote>{t('brandbook.failed')}</PromptNote> : null}
       {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>
   );

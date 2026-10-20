@@ -108,5 +108,16 @@
     "close": "Close model message",
     "loading": "Checking connected models",
     "hint": "Connect a model first"
+  },
+  "brandbook": {
+    "menu": "Brandbook",
+    "none": "No brandbook",
+    "noneHint": "Template style only",
+    "empty": "No brandbooks yet — upload the first one.",
+    "upload": "Upload brandbook…",
+    "uploadHint": "Archive, PDF, JSON, Figma — parsed and saved to the library",
+    "parsing": "Parsing the brandbook…",
+    "failed": "Couldn't parse the brandbook. Try another file.",
+    "summary": "{colors, plural, one {# colour} other {# colours}} · {fonts, plural, one {# font} other {# fonts}}"
   }
 }

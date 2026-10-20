@@ -4,6 +4,8 @@ import { DeckComposer } from '@/components/composer/deck-composer';
 import { DeckCard } from '@/components/library/deck-card';
 import { CardGrid, EmptyState, LibraryPage, LibrarySection } from '@/components/library/page-parts';
 import { COMPOSE_PARAM, isComposeRequested } from '@/lib/library-menu';
+import { listBrandbooks } from '@/lib/brandbook-library';
+import { composerBrandbookOf } from '@/lib/brandbooks';
 import { librarySource } from '@/mocks/sources';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -15,12 +17,13 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
  * шаблон для неё — любой из библиотеки или новый файл прямо в поле.
  */
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
-  const [query, t, projects, decks, templates] = await Promise.all([
+  const [query, t, projects, decks, templates, brandbooks] = await Promise.all([
     searchParams,
     getTranslations('home'),
     librarySource.listProjects(),
     librarySource.listDecks(),
     librarySource.listTemplates(),
+    listBrandbooks(),
   ]);
   const projectById = new Map(projects.map((project) => [project.projectId, project]));
   const templateById = new Map(templates.map((template) => [template.templateId, template]));
@@ -42,6 +45,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         {/* Шаблон загружают прямо в поле: скрепкой, перетаскиванием или из меню шаблона. */}
         <DeckComposer
           templates={templates}
+          brandbooks={brandbooks.map(composerBrandbookOf)}
           projects={projects}
           projectId={null}
           focusRequested={isComposeRequested(query[COMPOSE_PARAM])}

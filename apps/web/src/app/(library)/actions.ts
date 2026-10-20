@@ -15,6 +15,7 @@ import {
   type ProjectSummary,
   type TemplateSummary,
 } from '@/lib/library-source';
+import { BrandbookNotFoundError, deleteBrandbook, updateBrandbook } from '@/lib/brandbook-library';
 import { parseProjectAppearance, type ProjectAppearance } from '@/lib/project-appearance';
 import { librarySource } from '@/mocks/sources';
 import { requireAccount } from '../auth-session';
@@ -381,6 +382,52 @@ export async function deleteTemplateAction(templateId: string): Promise<LibraryA
     await librarySource.deleteTemplate(templateId);
   } catch (error) {
     if (error instanceof TemplateNotFoundError) return { ok: false, reason: 'notFound' };
+    return { ok: false, reason: 'invalid' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/** Переименовать брендбук или (администратору) открыть его всем — как у шаблона. */
+export async function updateBrandbookAction(
+  brandbookId: string,
+  patch: { name?: string; shared?: boolean },
+): Promise<LibraryActionResult> {
+  const account = await requireAccount();
+  if (typeof brandbookId !== 'string' || typeof patch !== 'object' || patch === null) {
+    return { ok: false, reason: 'invalid' };
+  }
+  const next: { name?: string; shared?: boolean } = {};
+  if (patch.name !== undefined) {
+    if (typeof patch.name !== 'string' || patch.name.trim() === '') {
+      return { ok: false, reason: 'invalid' };
+    }
+    next.name = patch.name.trim();
+  }
+  if (patch.shared !== undefined) {
+    if (typeof patch.shared !== 'boolean' || account.role !== 'admin') {
+      return { ok: false, reason: 'invalid' };
+    }
+    next.shared = patch.shared;
+  }
+  try {
+    await updateBrandbook(brandbookId, next);
+  } catch (error) {
+    if (error instanceof BrandbookNotFoundError) return { ok: false, reason: 'notFound' };
+    return { ok: false, reason: 'invalid' };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/** Убрать брендбук из библиотеки. Уже собранные по нему презентации не меняются. */
+export async function deleteBrandbookAction(brandbookId: string): Promise<LibraryActionResult> {
+  await requireAccount();
+  if (typeof brandbookId !== 'string') return { ok: false, reason: 'invalid' };
+  try {
+    await deleteBrandbook(brandbookId);
+  } catch (error) {
+    if (error instanceof BrandbookNotFoundError) return { ok: false, reason: 'notFound' };
     return { ok: false, reason: 'invalid' };
   }
   revalidatePath('/', 'layout');
