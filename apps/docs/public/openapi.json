@@ -8761,7 +8761,7 @@
     },
     "/files/content": {
       "post": {
-        "description": "Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.pdf`, `.csv`, `.tsv`, `.xlsx`.",
+        "description": "Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.pdf`, `.csv`, `.tsv`, `.xlsx`, `.json`.",
         "operationId": "files.uploadContent",
         "parameters": [
           {

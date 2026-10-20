@@ -1,5 +1,11 @@
 import { compositionCheckResponseSchema, type CompositionCheckResponse } from '@lct/contracts';
 import {
+  datasetExtractRequestSchema,
+  datasetSchema,
+  type Dataset,
+  type DatasetExtractRequest,
+} from '@lct/contracts';
+import {
   generationProfileSchema,
   compositionExportResponseSchema,
   type GenerationProfile,
@@ -175,6 +181,12 @@ export class EngineClient {
     return materialExtractResponseSchema.parse(
       await this.post('/v1/material-extract', body, signal),
     );
+  }
+
+  /** Every table of a data file, typed and unabridged; a file that holds none says why. */
+  async extractDataset(request: DatasetExtractRequest, signal?: AbortSignal): Promise<Dataset> {
+    const body = datasetExtractRequestSchema.parse(request);
+    return datasetSchema.parse(await this.post('/v1/dataset-extract', body, signal));
   }
 
   private async get(path: string): Promise<unknown> {

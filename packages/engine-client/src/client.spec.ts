@@ -183,6 +183,66 @@ describe('EngineClient', () => {
     ).rejects.toThrowError();
   });
 
+  it('posts a dataset extract and returns the typed tables', async () => {
+    let posted: { url: string; body: unknown } | undefined;
+    const answer = {
+      schemaVersion: 1,
+      datasetId: 'dataset-0123456789abcdef',
+      status: 'ok',
+      source: { fileName: 'shares.json', mediaType: 'application/json', bytes: 40, sha256: 'ab' },
+      sheets: [
+        {
+          sheetId: 'sheet-1',
+          name: 'shares',
+          index: 0,
+          state: 'visible',
+          range: 'A1:B2',
+          headerRow: 1,
+          columns: [
+            { columnId: 'sheet-1:A', index: 1, ref: 'A', header: 'channel', kind: 'text' },
+            { columnId: 'sheet-1:B', index: 2, ref: 'B', header: 'share', kind: 'number' },
+          ],
+          rows: [
+            {
+              row: 2,
+              cells: [
+                { ref: 'A2', raw: 'Онлайн', kind: 'text', value: 'Онлайн' },
+                { ref: 'B2', raw: '0.46', kind: 'number', value: 0.46 },
+              ],
+            },
+          ],
+        },
+      ],
+      diagnostics: [],
+    };
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      posted = { url: String(url), body: JSON.parse(String(init?.body)) };
+      return new Response(JSON.stringify(answer), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    const client = new EngineClient({ baseUrl: 'http://engine:8000', fetchImpl });
+
+    const dataset = await client.extractDataset({ schemaVersion: 1, path: 'uploads/shares.json' });
+
+    expect(posted).toEqual({
+      url: 'http://engine:8000/v1/dataset-extract',
+      body: { schemaVersion: 1, path: 'uploads/shares.json' },
+    });
+    expect(dataset.sheets[0]?.rows[0]?.cells[1]?.value).toBe(0.46);
+  });
+
+  it('rejects a dataset answer that breaks the contract', async () => {
+    const client = new EngineClient({
+      baseUrl: 'http://engine:8000',
+      fetchImpl: fakeFetch(200, { datasetId: 'x', status: 'fine', sheets: [] }),
+    });
+    await expect(
+      client.extractDataset({ schemaVersion: 1, path: 'uploads/shares.json' }),
+    ).rejects.toThrowError();
+  });
+
   it('aborts material extract when the caller signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();

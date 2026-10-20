@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -54,8 +54,26 @@ async function textFile(name: string, text: string) {
   return path;
 }
 
+/** The engine's answer for a text with no table in it: the text is then kept as written. */
+async function noTable(request: { path: string }) {
+  const sha256 = createHash('sha256')
+    .update(await readFile(request.path))
+    .digest('hex');
+  return {
+    schemaVersion: 1,
+    datasetId: 'dataset-none',
+    status: 'failed',
+    source: { fileName: 'text', mediaType: 'text/plain', bytes: 0, sha256 },
+    sheets: [],
+    diagnostics: [{ code: 'no-table', severity: 'error', message: 'No table.' }],
+  };
+}
+
 function generation(query: ReturnType<typeof vi.fn>, extractMaterial: ReturnType<typeof vi.fn>) {
-  return { pool: { query }, engine: { extractMaterial } } as unknown as GenerationService;
+  return {
+    pool: { query },
+    engine: { extractMaterial, extractDataset: vi.fn(noTable) },
+  } as unknown as GenerationService;
 }
 
 describe('material tools', () => {
