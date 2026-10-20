@@ -533,6 +533,28 @@ async function approvedRequest(directory: string) {
 }
 
 describe('saved editor revision inspection', () => {
+  it('selects a snapshot slide by its stored index after an editor reorder', async () => {
+    const saved = await savedDeck();
+    await approvedRequest(saved.directory);
+    const first = snapshot('Fact one').slides[0];
+    const second = { ...snapshot('Different slide').slides[0], slideId: 'imported-2', index: 1 };
+    if (!first || !second) throw new Error('Missing snapshot fixture slides.');
+    const head = {
+      ...snapshot('Fact one'),
+      slides: [second, first],
+      contentSha256: canonicalPlanHash([second, first]),
+    };
+    const coverage = tools(generation(), messages(), {
+      loadSnapshot: async () => ({ schemaVersion: 1 as const, snapshot: head }),
+    }).find((tool) => tool.name === 'check_content_coverage');
+    expect((await coverage?.run({ deckId: DECK, slideIndex: 1 }, context()))?.output).toMatchObject(
+      {
+        status: 'covered',
+        source: 'server-snapshot',
+      },
+    );
+  });
+
   it('reads saved text changes for coverage and audits the current IR without stale overflow', async () => {
     const saved = await savedDeck();
     await approvedRequest(saved.directory);
