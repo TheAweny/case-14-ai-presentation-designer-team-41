@@ -333,9 +333,11 @@ export {
   type TemplateSlotCopy,
   type SlotRewriteChoices,
   imageSlotSchema,
+  imageFrameConstraintSchema,
   illustrationPromptSchema,
   type IllustrationPrompt,
   type ImageSlot,
+  type ImageFrameConstraint,
 } from './generation.js';
 export {
   PIPELINE_ROLES,

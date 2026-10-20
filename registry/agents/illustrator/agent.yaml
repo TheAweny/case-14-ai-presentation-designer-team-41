@@ -1,7 +1,7 @@
 # Writes the prompt of one picture for a text-to-image model. The picture itself is drawn by the
 # image role; this agent runs on a text model, as the writer does.
 id: illustrator
-version: 1.0.1
+version: 1.1.0
 description: Prompt for one slide illustration in the palette of the template
 modelId: writer-default
 generation:

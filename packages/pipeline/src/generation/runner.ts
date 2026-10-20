@@ -44,6 +44,7 @@ import { leakedSamples } from './samples.js';
 import { approvedCoverage } from './final-review.js';
 import type { TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
+import { assessLayoutDiversity } from './layout-diversity.js';
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
 import { generationFailure } from './failure.js';
@@ -283,6 +284,17 @@ export async function generatePresentation(options: GenerateOptions) {
   // A card heading the template placed highest reads as a heading everywhere: in the plan, the
   // writer, the critic and the repair.
   const profile = withCardHeadingProfile(options.profile, options.notes);
+  // Before the planner, the writer and any picture: a template with one composition cannot
+  // become three designs, and dropping facts would not make it so.
+  const layoutDiversity = assessLayoutDiversity(profile);
+  if (layoutDiversity.limitation) {
+    await emit({
+      type: 'warning',
+      stage,
+      code: 'layout-diversity-limited',
+      message: layoutDiversity.limitation,
+    });
+  }
   // One date for the whole run: the writer and the audit judge years by the same day.
   const today = options.today ?? new Date();
   const sourceBrief =
@@ -339,6 +351,7 @@ export async function generatePresentation(options: GenerateOptions) {
               purpose: slide.purpose,
               deck: { title: slide.title, audience: slide.audience, goal: slide.goal },
               box: frame.box,
+              frame: frame.frame ?? null,
             }),
           });
         });
@@ -1199,8 +1212,13 @@ export async function generatePresentation(options: GenerateOptions) {
       title: written[0]?.title ?? 'Презентация',
       designSystem: options.profile.designSystem,
       templateIr: output.templateIr,
-      warnings: [...output.warnings, ...reviewWarnings],
+      warnings: [
+        ...output.warnings,
+        ...reviewWarnings,
+        ...(layoutDiversity.limitation ? [layoutDiversity.limitation] : []),
+      ],
       imagesMocked: illustrations === null,
+      layoutDiversity,
     };
     await writeFile(join(options.outputDir, 'deck.json'), JSON.stringify(deck));
     const artifacts: RunArtifact[] = [];

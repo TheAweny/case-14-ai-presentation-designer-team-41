@@ -110,6 +110,11 @@ export {
 } from './generation/images.js';
 export { SharedIllustrations, styleOf, type Illustration } from './generation/illustrations.js';
 export {
+  acceptVariantLayouts,
+  assessLayoutDiversity,
+  type LayoutDiversity,
+} from './generation/layout-diversity.js';
+export {
   currentTemplateIndexRevision,
   templateIndexState,
   indexTemplate,

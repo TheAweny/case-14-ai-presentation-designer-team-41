@@ -85,6 +85,60 @@ def test_margins_and_paragraph_spacing_reduce_capacity(tmp_path: Path) -> None:
     assert after["spaceBeforePt"] == 25 and after["spaceAfterPt"] == 35
 
 
+def test_inherited_size_bullet_indent_and_group_obstacle_are_not_the_sample(
+    tmp_path: Path,
+) -> None:
+    def build(path: Path, *, indent: bool, grouped: bool) -> tuple[Path, str, str]:
+        deck = Presentation()
+        slide = deck.slides.add_slide(deck.slide_layouts[6])
+        host = slide.shapes.add_group_shape().shapes if grouped else slide.shapes
+        shape = _text(host, "Кратко", 0.4, 0.8, 8, 4.2, 18)
+        run = shape.text_frame.paragraphs[0].runs[0]._r
+        props = run.find("{http://schemas.openxmlformats.org/drawingml/2006/main}rPr")
+        if props is not None and "sz" in props.attrib:
+            del props.attrib["sz"]
+        paragraph = shape.text_frame.paragraphs[0]
+        ppr = paragraph._p.get_or_add_pPr()
+        default = OxmlElement("a:defRPr")
+        default.set("sz", "1800")
+        latin = OxmlElement("a:latin")
+        latin.set("typeface", "DejaVu Sans")
+        default.append(latin)
+        ppr.append(default)
+        if indent:
+            ppr.set("marL", str(int(Inches(1.6))))
+            bullet = OxmlElement("a:buChar")
+            bullet.set("char", "•")
+            ppr.append(bullet)
+        if grouped:
+            art = host.add_shape(
+                MSO_SHAPE.RECTANGLE, Inches(5), Inches(0.8), Inches(3.2), Inches(4.2)
+            )
+            art.fill.solid()
+            art.fill.fore_color.rgb = RGBColor.from_string("5A326E")
+        deck.save(str(path))
+        return path, str(shape.shape_id), shape.text
+
+    plain, plain_id, sample = build(tmp_path / "plain.pptx", indent=False, grouped=False)
+    indented, indented_id, _ = build(tmp_path / "indented.pptx", indent=True, grouped=False)
+    blocked, blocked_id, _ = build(tmp_path / "grouped.pptx", indent=False, grouped=True)
+    plain_slot = next(s for s in extract_compositions(plain)[0]["slots"] if s["slotId"] == plain_id)
+    indented_slot = next(
+        s for s in extract_compositions(indented)[0]["slots"] if s["slotId"] == indented_id
+    )
+    blocked_slot = next(
+        s for s in extract_compositions(blocked)[0]["slots"] if s["slotId"] == blocked_id
+    )
+    assert plain_slot["fontSize"] == 18
+    assert plain_slot["capacity"]["basis"] == "geometry"
+    assert plain_slot["capacity"]["safeChars"] > len(sample) * 5
+    assert indented_slot["capacity"]["safeChars"] < plain_slot["capacity"]["safeChars"]
+    assert indented_slot["textWidthPt"] < plain_slot["textWidthPt"]
+    assert blocked_slot["capacity"]["basis"] == "obstacle-aware"
+    blocked_chars = blocked_slot["capacity"]["safeChars"]
+    assert plain_slot["capacity"]["safeChars"] > blocked_chars > len(sample) * 5
+
+
 def test_narrow_caption_stays_short(tmp_path: Path) -> None:
     deck = Presentation()
     slide = deck.slides.add_slide(deck.slide_layouts[6])
@@ -227,5 +281,13 @@ def test_image_constraints_preserve_z_order_and_template_protection(
     assert constraint["readability"] == "unknown"
     assert constraint["regionInImage"]["width"] == pytest.approx(0.6)
     assert constraint["crop"]["l"] == 0.2
+    frame = next(slot["frame"] for slot in pattern["imageSlots"] if slot["kind"] == "photo")
+    assert frame["crop"]["l"] == 0.2
+    assert frame["textRegions"]
     if not foreground:
         assert constraint["protection"][0]["fill"] == "314E5C"
+        assert frame["state"] == "known"
+        assert any(region["protection"] == "solid" for region in frame["textRegions"])
+    else:
+        assert frame["state"] == "unknown"
+        assert any(region["protection"] == "unknown" for region in frame["textRegions"])

@@ -32,6 +32,32 @@ export const compositionSlotSchema = z.object({
     })
     .optional(),
 });
+/** A text area inside a picture frame, as shares of that frame from its top-left. */
+export const imageTextRegionSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  width: z.number().min(0).max(1),
+  height: z.number().min(0).max(1),
+  /** `solid` — the template already plates this share; `none` — the picture is the text background. */
+  protection: z.enum(['solid', 'none', 'unknown']),
+});
+/** Shares of the source picture cut off each side. The same convention as a SlideIR image crop. */
+export const imageFrameCropSchema = z.object({
+  l: z.number().min(0).lt(1),
+  t: z.number().min(0).lt(1),
+  r: z.number().min(0).lt(1),
+  b: z.number().min(0).lt(1),
+});
+/**
+ * What one picture must respect. Regions are relative to the frame, so two variants with the same
+ * overlap, crop and protection can share a drawing. Absent on profiles built before this field.
+ */
+export const imageFrameConstraintSchema = z.object({
+  textRegions: z.array(imageTextRegionSchema),
+  textColors: z.array(z.string().regex(/^[0-9A-Fa-f]{6}$/)),
+  crop: imageFrameCropSchema.nullable(),
+  state: z.enum(['known', 'unknown']),
+});
 /**
  * A place of a composition a picture fills: a picture placeholder, or a large empty card the
  * template left for one (`panel`). The template's own photos and brand art are design, not slots.
@@ -44,6 +70,7 @@ export const imageSlotSchema = z.object({
    */
   kind: z.enum(['placeholder', 'panel', 'photo']),
   box: boxSchema,
+  frame: imageFrameConstraintSchema.optional(),
 });
 export const compositionSchema = z.object({
   patternId: z.string().min(1),
@@ -425,4 +452,5 @@ export const illustrationPromptSchema = z.object({
 });
 export type IllustrationPrompt = z.infer<typeof illustrationPromptSchema>;
 export type ImageSlot = z.infer<typeof imageSlotSchema>;
+export type ImageFrameConstraint = z.infer<typeof imageFrameConstraintSchema>;
 export type SlotRewriteChoices = z.infer<typeof slotRewriteChoicesSchema>;
