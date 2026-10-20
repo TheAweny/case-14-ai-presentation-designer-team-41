@@ -244,3 +244,105 @@ def composition_evidence(slide: dict[str, Any], pattern: dict[str, Any]) -> dict
                 }
             )
     return {"structures": structures, "capacities": capacities, "imageConstraints": constraints}
+
+
+def _clamp_share(value: float) -> float:
+    return min(1.0, max(0.0, float(value)))
+
+
+def _hex_color(color: object) -> str | None:
+    text = str(color or "").removeprefix("#").upper()
+    if len(text) == 6 and all(char in "0123456789ABCDEF" for char in text):
+        return text
+    return None
+
+
+def _frame_crop(crop: object) -> dict[str, float] | None:
+    if not isinstance(crop, dict):
+        return None
+    try:
+        parsed = {key: float(crop[key]) for key in ("l", "t", "r", "b")}
+    except (KeyError, TypeError, ValueError):
+        return None
+    if any(parsed[key] < 0 or parsed[key] >= 1 for key in parsed):
+        return None
+    if parsed["l"] + parsed["r"] >= 1 or parsed["t"] + parsed["b"] >= 1:
+        return None
+    if not any(parsed.values()):
+        return None
+    return {key: round(parsed[key], 3) for key in ("l", "t", "r", "b")}
+
+
+def frame_for_image(constraints: list[dict[str, Any]], crop: object) -> dict[str, Any]:
+    """One picture's text overlaps, crop and protection, normalised to the frame."""
+    regions = []
+    colors: set[str] = set()
+    unknown = _frame_crop(crop) is None and isinstance(crop, dict) and any(crop.values())
+    for constraint in constraints:
+        # Text definitively behind the picture is covered by it; an unknown order stays in frame.
+        if constraint.get("state") == "known" and not constraint.get("textAboveImage"):
+            continue
+        raw = constraint.get("regionInImage") or {}
+        try:
+            x, y = _clamp_share(raw["x"]), _clamp_share(raw["y"])
+            width = min(_clamp_share(raw["width"]), 1 - x)
+            height = min(_clamp_share(raw["height"]), 1 - y)
+        except (KeyError, TypeError, ValueError):
+            unknown = True
+            continue
+        if width <= 0.001 or height <= 0.001:
+            continue
+        if constraint.get("state") != "known":
+            protection = "unknown"
+            unknown = True
+        elif constraint.get("protection"):
+            protection = "solid"
+        else:
+            protection = "none"
+        for color in constraint.get("textColors") or []:
+            parsed = _hex_color(color)
+            if parsed:
+                colors.add(parsed)
+            else:
+                unknown = True
+        regions.append(
+            {
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "width": round(width, 3),
+                "height": round(height, 3),
+                "protection": protection,
+            }
+        )
+    regions.sort(
+        key=lambda region: (region["y"], region["x"], region["width"], region["protection"])
+    )
+    return {
+        "textRegions": regions,
+        "textColors": sorted(colors),
+        "crop": _frame_crop(crop),
+        "state": "unknown" if unknown else "known",
+    }
+
+
+def attach_image_frames(pattern: dict[str, Any], slide: dict[str, Any]) -> None:
+    """Stamp each image slot with the frame the illustrator and the checkpoint key must share."""
+    evidence = composition_evidence(slide, pattern)
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for constraint in evidence["imageConstraints"]:
+        grouped.setdefault(constraint["imageSlotId"], []).append(constraint)
+    elements = slide.get("elements") or []
+    for image in pattern.get("imageSlots") or []:
+        placed = next(
+            (
+                element
+                for element in elements
+                if not element.get("sourcePart")
+                and str(element.get("sourceShapeId")) == image["slotId"]
+            ),
+            None,
+        )
+        crop = placed.get("crop") if placed else None
+        if crop is None and grouped.get(image["slotId"]):
+            crop = grouped[image["slotId"]][0].get("crop")
+        image["frame"] = frame_for_image(grouped.get(image["slotId"], []), crop)

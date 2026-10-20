@@ -196,6 +196,19 @@ def test_unsupported_protection_is_explicit_unknown(tmp_path: Path, feature: str
     assert "status=unknown; reason=" in _measured(audit_image_readability(_save(deck, tmp_path)))
 
 
+def test_gradient_protection_is_unknown_not_a_pass(tmp_path: Path) -> None:
+    deck, slide, _, text = _deck()
+    panel = _panel(slide.shapes)
+    text._element.addprevious(panel._element)
+    solid = panel._element.find("{*}spPr/{*}solidFill")
+    gradient = OxmlElement("a:gradFill")
+    solid.getparent().replace(solid, gradient)
+    measured = _measured(audit_image_readability(_save(deck, tmp_path)))
+    assert "status=unknown" in measured
+    assert "status=fail" not in measured
+    assert "status=measured" not in measured
+
+
 def test_image_crop_changes_the_pixels_behind_text(tmp_path: Path) -> None:
     image = _image("black")
     ImageDraw.Draw(image).rectangle((160, 0, 319, 159), fill="white")

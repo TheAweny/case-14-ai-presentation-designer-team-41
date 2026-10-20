@@ -1,6 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { illustrationPromptSchema, type DesignSystem, type ImageSlot } from '@lct/contracts';
+import {
+  illustrationPromptSchema,
+  type DesignSystem,
+  type ImageFrameConstraint,
+  type ImageSlot,
+} from '@lct/contracts';
 import { loadAgent, type LoadedAgent } from '@lct/registry';
 import { z } from 'zod';
 import type { ImageProvider, ImageSize } from './images.js';
@@ -29,6 +34,73 @@ export interface IllustrationRequest {
   purpose: string;
   deck: { title: string; audience: string; goal: string };
   box: ImageSlot['box'];
+  /**
+   * Text sitting on the frame, the template crop and any plate already there.
+   * Absent on a profile built before frames were measured.
+   */
+  frame?: ImageFrameConstraint | null;
+}
+
+/** Thousandths keep equal frames on one task when the parser rounds the same overlap twice. */
+function share(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * The part of a frame that changes the drawing. Slide position does not: two variants with the
+ * same overlap, crop and protection share one picture.
+ */
+export function significantFrame(
+  frame: ImageFrameConstraint | null | undefined,
+): ImageFrameConstraint | null {
+  if (!frame) return null;
+  const textRegions = frame.textRegions
+    .map((region) => ({
+      x: share(region.x),
+      y: share(region.y),
+      width: share(region.width),
+      height: share(region.height),
+      protection: region.protection,
+    }))
+    .sort(
+      (a, b) =>
+        a.y - b.y ||
+        a.x - b.x ||
+        a.width - b.width ||
+        a.height - b.height ||
+        a.protection.localeCompare(b.protection),
+    );
+  return {
+    textRegions,
+    textColors: [...new Set(frame.textColors.map((color) => color.toUpperCase()))].sort(),
+    crop: frame.crop
+      ? {
+          l: share(frame.crop.l),
+          t: share(frame.crop.t),
+          r: share(frame.crop.r),
+          b: share(frame.crop.b),
+        }
+      : null,
+    state: frame.state,
+  };
+}
+
+/** English lines the image model sees even when the illustrator paraphrases the brief. */
+export function frameDirective(frame: ImageFrameConstraint | null): string {
+  if (!frame) return '';
+  const regions = frame.textRegions
+    .map(
+      (region) =>
+        `x=${region.x.toFixed(3)} y=${region.y.toFixed(3)} w=${region.width.toFixed(3)} h=${region.height.toFixed(3)} protection=${region.protection}`,
+    )
+    .join('; ');
+  const crop = frame.crop
+    ? `crop left=${frame.crop.l.toFixed(3)} top=${frame.crop.t.toFixed(3)} right=${frame.crop.r.toFixed(3)} bottom=${frame.crop.b.toFixed(3)}`
+    : 'crop none';
+  const colors = frame.textColors.length
+    ? frame.textColors.map((color) => `#${color}`).join(', ')
+    : 'none';
+  return `Frame constraints: state=${frame.state}. Text regions: ${regions || 'none'}. Text colours: ${colors}. ${crop}.`;
 }
 
 /** Relative luminance of a hex colour, 0 for black and 1 for white. */
@@ -101,10 +173,12 @@ export class SharedIllustrations {
 
   request(request: IllustrationRequest): Promise<Illustration | null> {
     const size = sizeFor(request.box);
-    const { box: _box, ...content } = request;
+    const { box: _box, frame: _frame, ...content } = request;
+    const frame = significantFrame(request.frame);
     const identity = {
       kind: 'illustration',
       content,
+      frame,
       size,
       model: this.model,
       seed: this.deps.seed,
@@ -115,7 +189,7 @@ export class SharedIllustrations {
     let pending = this.pending.get(key);
     if (!pending) {
       const draw = async () => {
-        const picture = await this.draw(request, size);
+        const picture = await this.draw(request, size, frame);
         return { ...picture, bytes: picture.bytes.toString('base64') };
       };
       const saved = this.deps.checkpoints
@@ -146,7 +220,12 @@ export class SharedIllustrations {
     return pending;
   }
 
-  private async draw(request: IllustrationRequest, size: ImageSize): Promise<Illustration> {
+  private async draw(
+    request: IllustrationRequest,
+    size: ImageSize,
+    frame: ImageFrameConstraint | null,
+  ): Promise<Illustration> {
+    const directive = frameDirective(frame);
     const { prompt } = await this.deps.text.generate(
       'illustrator',
       this.deps.instructions,
@@ -154,7 +233,12 @@ export class SharedIllustrations {
         imageQuery: request.imageQuery,
         slideClaim: request.purpose,
         deck: request.deck,
-        picture: { ordinal: request.ordinal + 1, of: request.count, shape: shapeOf(size) },
+        picture: {
+          ordinal: request.ordinal + 1,
+          of: request.count,
+          shape: shapeOf(size),
+          frame,
+        },
         style: styleOf(this.deps.designSystem),
       },
       illustrationPromptSchema,
@@ -162,8 +246,12 @@ export class SharedIllustrations {
     );
     // One seed per slot, from the run's seed, so a rerun of the brief draws the same pictures.
     const seed = (this.deps.seed * 1000 + request.index * 10 + request.ordinal) % 2 ** 31;
-    const image = await this.deps.images.generate({ prompt, size, seed }, this.deps.signal);
-    return { ...image, prompt, seed, size, model: this.deps.images.model };
+    const imagePrompt = directive ? `${prompt}\n${directive}` : prompt;
+    const image = await this.deps.images.generate(
+      { prompt: imagePrompt, size, seed },
+      this.deps.signal,
+    );
+    return { ...image, prompt: imagePrompt, seed, size, model: this.deps.images.model };
   }
 }
 

@@ -7,7 +7,12 @@ from typing import Any
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
 
-from engine.parser._composition_geometry import estimate_room, resolved_metrics, safe_room
+from engine.parser._composition_geometry import (
+    attach_image_frames,
+    estimate_room,
+    resolved_metrics,
+    safe_room,
+)
 from engine.parser._text_style import inherited_shapes, text_metrics
 from engine.parser.slides import read_deck
 
@@ -403,17 +408,17 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
             continue
         if slots and len(slots) <= 14:
             slots.sort(key=lambda s: (s["role"] != "title", s["box"]["y"], s["box"]["x"]))
-            patterns.append(
-                {
-                    "patternId": f"source-slide-{index}",
-                    "sourceIndex": index,
-                    "name": slide.slide_layout.name,
-                    "slots": slots,
-                    "imageCount": image_count,
-                    "imageSlots": image_slots,
-                    "qrCandidateSlots": _qr_candidates(placed),
-                }
-            )
+            pattern = {
+                "patternId": f"source-slide-{index}",
+                "sourceIndex": index,
+                "name": slide.slide_layout.name,
+                "slots": slots,
+                "imageCount": image_count,
+                "imageSlots": image_slots,
+                "qrCandidateSlots": _qr_candidates(placed),
+            }
+            attach_image_frames(pattern, resolved_slides[index])
+            patterns.append(pattern)
     if not patterns:
         raise ValueError("Template contains no usable editable text compositions.")
     return patterns
