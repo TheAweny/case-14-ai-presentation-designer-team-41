@@ -522,6 +522,13 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     return imageProviderOf(await this.models.resolveRole('image', actorOf(account))) !== null;
   }
 
+  /** Whether this request still owns an in-process preparation before run ids exist. */
+  isPreparing(requestId: string, account: Account): boolean {
+    return [...this.preparingBuilds.values()].some(
+      (preparation) => preparation.requestId === requestId && preparation.ownerId === account.id,
+    );
+  }
+
   async usage(runId: string, account: Account) {
     if (!(await this.library.visible(runId, account.id)))
       throw new NotFoundException('Run not found.');

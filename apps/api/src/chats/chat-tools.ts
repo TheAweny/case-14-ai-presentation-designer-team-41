@@ -93,6 +93,28 @@ export interface ChatToolScope {
 
 type BuildPart = Extract<ChatPart, { type: 'build' }>;
 
+/** A persisted preparing card is live only while this process still owns its preparation. */
+function preparingBuildIsLive(
+  generation: GenerationService,
+  scope: ChatToolScope,
+  build: BuildPart,
+  messages: readonly ChatMessage[],
+): boolean {
+  const owned =
+    typeof generation.isPreparing === 'function' &&
+    generation.isPreparing(build.buildId, scope.account);
+  const currentTurn = scope.currentMessageId
+    ? messages.some(
+        (message) =>
+          message.role === 'assistant' &&
+          message.id === scope.currentMessageId &&
+          message.status === 'streaming' &&
+          message.parts.includes(build),
+      )
+    : false;
+  return owned || currentTurn;
+}
+
 /** Recheck material permissions when a saved preparation is reused, not just when it is read. */
 async function checkPreparationAccess(
   generation: GenerationService,
@@ -1257,9 +1279,10 @@ export async function runBuild(
       .find(
         (part): part is BuildPart =>
           part.type === 'build' &&
-          (part.status === 'preparing' ||
-            part.status === 'running' ||
-            preparationRevisionForBuild(messages, part) === preparation.revision) &&
+          (part.status === 'preparing'
+            ? preparingBuildIsLive(generation, scope, part, messages)
+            : part.status === 'running' ||
+              preparationRevisionForBuild(messages, part) === preparation.revision) &&
           (request.planId
             ? part.planId === request.planId && part.planRevision === request.planRevision
             : part.planId === null && part.templateId === request.templateId),
