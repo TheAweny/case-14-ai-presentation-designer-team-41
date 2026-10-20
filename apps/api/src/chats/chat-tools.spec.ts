@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ChatMessage, ChatMode, ChatPart, DeckOutline } from '@lct/contracts';
 import type { ChatTool, ToolContext } from '@lct/pipeline';
 import type { GenerationService } from '../generation/generation.service.js';
@@ -87,6 +90,78 @@ function planMessage(status: 'proposed' | 'approved'): ChatMessage {
 }
 
 describe('chat tools by mode', () => {
+  it('returns validated native and legacy chart data when chart slots have no visible text', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'read-deck-visual-'));
+    const charts = [
+      {
+        kind: 'chart',
+        slotId: 'body',
+        chartType: 'line',
+        categories: ['A', 'B'],
+        series: [{ name: 'Rate', values: [70, 86] }],
+        xTitle: 'Week',
+        yTitle: '%',
+      },
+      {
+        kind: 'native',
+        slotId: 'body',
+        block: {
+          kind: 'chart',
+          intent: 'time-series',
+          requestedType: 'line',
+          categories: [{ label: 'A' }, { label: 'B' }],
+          series: [
+            {
+              name: 'Rate',
+              unit: '%',
+              values: [
+                { state: 'present', value: 70, literal: '70' },
+                { state: 'present', value: 86, literal: '86' },
+              ],
+            },
+          ],
+          xTitle: 'Week',
+          yTitle: '%',
+          sources: [{ itemId: 'brief', quote: 'Rate: A 70%, B 86%', status: 'grounded' }],
+        },
+      },
+    ];
+    try {
+      await writeFile(
+        join(directory, 'plan.json'),
+        JSON.stringify(
+          charts.map((visual, index) => ({
+            index,
+            title: 'Pilot',
+            slide: { texts: [{ text: '' }], visual },
+          })),
+        ),
+      );
+      const generation = {
+        library: { visible: async () => true },
+        directory: () => directory,
+      } as unknown as GenerationService;
+      const messages = [
+        {
+          role: 'assistant',
+          id: 'message',
+          status: 'done',
+          createdAt: 1,
+          parts: [{ type: 'result', variants: [{ deckId: 'deck' }] }],
+        },
+      ] as ChatMessage[];
+      const { tool, context } = chat('auto', messages, generation);
+      const output = await tool('read_deck').run({ deckId: 'deck' }, context);
+      expect(output.output).toMatchObject({
+        slides: [
+          { texts: [], visual: charts[0] },
+          { texts: [], visual: charts[1] },
+        ],
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   it('passes the selected five-slide count through the actual build tool', async () => {
     const started: unknown[] = [];
     const templateId = '00000000-0000-4000-8000-0000000000aa';
