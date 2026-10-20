@@ -223,7 +223,7 @@ describe('datasetText summaries', () => {
       dataset([sheet('Наблюдения', ['action', 'result'], rows, ['text', 'number'])]),
     );
     expect(text).toContain('- action (текст): 3 значения: REST_FORCED — 3, B3 — 2, REST — 1;');
-    expect(text).toContain('сумма 4. Значения: 0 — 2, 1 — 4.');
+    expect(text).toContain('сумма 4. Значения: 0 — 2 (33,33%), 1 — 4 (66,67%).');
   });
 
   it('does not count values of a measured column that has many of them', () => {
@@ -236,5 +236,63 @@ describe('datasetText summaries', () => {
       dataset([sheet('Заметки', ['Тема', 'Текст'], [['a|b', 'первая\nвторая']], ['text', 'text'])]),
     );
     expect(text).toContain('| a\\|b | первая вторая |');
+  });
+});
+
+describe('datasetText chart series', () => {
+  const nights = (rows: (string | null)[][]) =>
+    sheet('Наблюдения', ['night', 'cloud', 'result'], rows, ['text', 'number', 'number']);
+  const rows: (string | null)[][] = [
+    ['test1', '100', '0'],
+    ['test1', '20', '1'],
+    ['test2', '50', '1'],
+    ['test2', '70', '0'],
+    ['test2', '0', '1'],
+    ['test3', '10', '1'],
+  ];
+
+  it('averages measures over the groups of a short text column', () => {
+    const text = datasetText(dataset([nights(rows)]));
+    expect(text).toContain('Готовые ряды для графиков, точные значения по «night»:');
+    expect(text).toContain('- строк: test1 — 2, test2 — 3, test3 — 1.');
+    expect(text).toContain('- cloud, среднее: test1 — 60, test2 — 40, test3 — 10.');
+    expect(text).toContain('- result, сумма: test1 — 1, test2 — 2, test3 — 1.');
+  });
+
+  it('compares the measures of the two sides of a yes/no outcome', () => {
+    const text = datasetText(dataset([nights(rows)]));
+    expect(text).toContain('Готовые ряды для графиков, точные значения по «result»:');
+    expect(text).toContain('- строк: 0 — 2, 1 — 4.');
+    expect(text).toContain('- cloud, среднее: 0 — 85, 1 — 20.');
+  });
+
+  it('does not take a measure with few values for a code to sum', () => {
+    const humid = sheet(
+      'Влажность',
+      ['night', 'humidity'],
+      [
+        ['a', '60'],
+        ['a', '80'],
+        ['b', '100'],
+        ['b', '80'],
+      ],
+      ['text', 'number'],
+    );
+    const text = datasetText(dataset([humid]));
+    expect(text).toContain('- humidity, среднее: a — 70, b — 90.');
+    expect(text).not.toContain('humidity, сумма');
+  });
+
+  it('writes no series for a table without a column to group by', () => {
+    const plain = sheet(
+      'Ряд',
+      ['month', 'value'],
+      [
+        ['янв', '1'],
+        ['фев', '2'],
+      ],
+      ['text', 'number'],
+    );
+    expect(datasetText(dataset([plain]))).not.toContain('Готовые ряды');
   });
 });

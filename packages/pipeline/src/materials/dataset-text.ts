@@ -18,6 +18,10 @@ const OUTLIER_FENCE = 3;
 const OUTLIERS_SHOWN = 5;
 /** A number column with this few distinct values is a code (0 and 1, a score): count each. */
 const FEW_NUMBERS = 6;
+/** A text column with this many distinct values, or fewer, groups the rows for chart series. */
+const GROUPS = 8;
+/** Series written for one grouping at most, so a wide table does not flood the brief. */
+const SERIES_LINES = 24;
 const NEWLINE = String.fromCharCode(10);
 
 /** What each engine diagnostic means to the person who reads the brief. */
@@ -171,6 +175,8 @@ function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => stri
         `${plural(counted.length, 'строке', 'строкам', 'строкам')} — берите числа отсюда, не считайте заново:`,
     );
     lines.push(summary(sheet, counted, spreadsheet));
+    const ready = chartSeries(sheet, counted, spreadsheet);
+    if (ready) lines.push(ready);
     lines.push(full);
     return lines.join(NEWLINE);
   }
@@ -180,6 +186,8 @@ function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => stri
       'Остальные строки в этот текст не вошли, но в сводке посчитаны.',
   );
   lines.push(summary(sheet, counted, spreadsheet));
+  const ready = chartSeries(sheet, counted, spreadsheet);
+  if (ready) lines.push(ready);
   lines.push(`Первые ${SAMPLE_ROWS} строк:`);
   lines.push(table(header, body.slice(0, SAMPLE_ROWS)));
   return lines.join(NEWLINE);
@@ -211,7 +219,10 @@ function summary(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): strin
           distinct.size <= FEW_NUMBERS
             ? ` Значения: ${[...distinct]
                 .sort((a, b) => a[0] - b[0])
-                .map(([value, count]) => `${shown(value)} — ${count}`)
+                .map(
+                  ([value, count]) =>
+                    `${shown(value)} — ${count} (${figure((count / values.length) * 100)}%)`,
+                )
                 .join(', ')}.`
             : '';
         return (
@@ -263,6 +274,118 @@ function summary(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): strin
       );
     })
     .join(NEWLINE);
+}
+
+/**
+ * Exact series a chart can show as they are: each number column averaged (a code column summed)
+ * over the groups of a short text column, and over the values of a code column such as a 0/1
+ * result. The model then cites a series instead of computing one, and a chart is grounded.
+ */
+function chartSeries(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): string | null {
+  const blocks: string[] = [];
+  const valuesOf = (index: number) =>
+    rows.map((row) => row.cells[index]).filter((cell): cell is Cell => cell !== undefined);
+  const name = (index: number) => sheet.columns[index]?.header ?? sheet.columns[index]?.ref ?? '';
+  // A code is a few whole numbers close together: 0/1, 1–3. A measure with few values is not one.
+  const isCode = (index: number) => {
+    if (sheet.columns[index]?.kind !== 'number') return false;
+    const values = numbers(valuesOf(index));
+    const least = values[0] ?? 0;
+    const most = values[values.length - 1] ?? 0;
+    return (
+      new Set(values).size <= FEW_NUMBERS &&
+      values.every((value) => Number.isInteger(value)) &&
+      most - least <= 10
+    );
+  };
+
+  const groupings: { index: number; label: (cell: Cell) => string | null }[] = [];
+  sheet.columns.forEach((column, index) => {
+    const cells = valuesOf(index).filter((cell) => cell.kind !== 'empty');
+    const distinct = new Set(cells.map((cell) => cellText(cell, spreadsheet)));
+    if (
+      column.kind === 'text' &&
+      distinct.size >= 2 &&
+      distinct.size <= GROUPS &&
+      distinct.size < cells.length
+    )
+      groupings.push({
+        index,
+        label: (cell) => (cell.kind === 'empty' ? null : cellText(cell, spreadsheet)),
+      });
+    // A yes/no outcome splits the rows in two: the conditions of each side can be compared.
+    if (column.kind === 'number' && distinct.size === 2 && isCode(index))
+      groupings.push({
+        index,
+        label: (cell) => (typeof cell.value === 'number' ? figure(cell.value) : null),
+      });
+  });
+
+  for (const grouping of groupings.slice(0, 2)) {
+    const keys: string[] = [];
+    const members = new Map<string, Sheet['rows']>();
+    for (const row of rows) {
+      const cell = row.cells[grouping.index];
+      const key = cell ? grouping.label(cell) : null;
+      if (key === null) continue;
+      if (!members.has(key)) {
+        keys.push(key);
+        members.set(key, []);
+      }
+      members.get(key)?.push(row);
+    }
+    const lines: string[] = [
+      `- строк: ${keys.map((key) => `${key} — ${members.get(key)?.length ?? 0}`).join(', ')}.`,
+    ];
+    sheet.columns.forEach((column, index) => {
+      if (index === grouping.index || column.kind !== 'number' || lines.length >= SERIES_LINES)
+        return;
+      const code = isCode(index);
+      const per = keys.map((key) => {
+        const values = numbers(
+          (members.get(key) ?? [])
+            .map((row) => row.cells[index])
+            .filter((c): c is Cell => c !== undefined),
+        );
+        if (values.length === 0) return null;
+        const total = values.reduce((sum, value) => sum + value, 0);
+        return code ? total : total / values.length;
+      });
+      const known = per.filter((value): value is number => value !== null);
+      // A series equal in every group is kept: «the same in each night» is a finding too, and
+      // without it the model guesses a difference.
+      if (known.length < 2) return;
+      // A code that is one value in every group only renames the group (a test id per test).
+      const constant = keys.every(
+        (key) =>
+          new Set(
+            numbers(
+              (members.get(key) ?? [])
+                .map((row) => row.cells[index])
+                .filter((c): c is Cell => c !== undefined),
+            ),
+          ).size <= 1,
+      );
+      if (code && constant) return;
+      const unit = valuesOf(index).find((cell) => cell.kind === 'number')?.unit === '%' ? '%' : '';
+      lines.push(
+        `- ${name(index)}, ${code ? 'сумма' : 'среднее'}: ` +
+          keys
+            .map((key, at) =>
+              per[at] === null
+                ? `${key} — нет данных`
+                : `${key} — ${figure(per[at] as number)}${unit}`,
+            )
+            .join(', ') +
+          '.',
+      );
+    });
+    if (lines.length > 1)
+      blocks.push(
+        `Готовые ряды для графиков, точные значения по «${name(grouping.index)}»:${NEWLINE}${lines.join(NEWLINE)}`,
+      );
+  }
+  return blocks.length > 0 ? blocks.join(NEWLINE) : null;
 }
 
 function numbers(cells: readonly Cell[]): number[] {
