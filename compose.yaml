@@ -57,7 +57,6 @@ services:
       # Encrypts model keys stored from the interface. Only the API holds it.
       MODEL_KEYS_SECRET: ${MODEL_KEYS_SECRET:-}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
-      GENERATION_DEADLINE_MS: ${GENERATION_DEADLINE_MS:-270000}
       MODEL_ALLOW_PRIVATE_HOSTS: ${MODEL_ALLOW_PRIVATE_HOSTS:-false}
       API_PORT: '3001'
       DATABASE_URL: postgresql://${POSTGRES_USER:-lct26}:${POSTGRES_PASSWORD:-lct26-local}@postgres:5432/${POSTGRES_DB:-lct26}
