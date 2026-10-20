@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 
 /** Файл, приложенный к сообщению: материал или шаблон. Размер шаблона из библиотеки неизвестен. */
 export interface FileAttachment {
-  readonly kind: 'file' | 'template' | 'context';
+  readonly kind: 'file' | 'template' | 'brandbook' | 'context';
   readonly name: string;
   readonly size?: number;
   /** Миниатюра выбранного шаблона библиотеки. У нового файла её ещё нет. */
@@ -76,7 +76,13 @@ function FileChip({
   const { kind, name, size } = attachment;
   const contentKind = kind === 'file' ? contentFileKind(name) : null;
   const label =
-    kind === 'template' ? t('kinds.template') : contentKind ? t(`kinds.${contentKind}`) : null;
+    kind === 'template'
+      ? t('kinds.template')
+      : kind === 'brandbook'
+        ? t('kinds.brandbook')
+        : contentKind
+          ? t(`kinds.${contentKind}`)
+          : null;
   return (
     <li
       className={cn(
@@ -85,14 +91,14 @@ function FileChip({
         className,
       )}
     >
-      {kind === 'template' && attachment.previewUrl ? (
+      {(kind === 'template' || kind === 'brandbook') && attachment.previewUrl ? (
         <img
           src={attachment.previewUrl}
           alt=""
           aria-hidden
           className="h-6 w-9 shrink-0 rounded-sm object-cover ring-1 ring-border"
         />
-      ) : kind === 'template' ? (
+      ) : kind === 'template' || kind === 'brandbook' ? (
         <TemplateIcon size={14} className="shrink-0 text-foreground" aria-hidden />
       ) : kind === 'context' ? (
         <SlideIcon size={14} className="shrink-0 text-muted-foreground" aria-hidden />

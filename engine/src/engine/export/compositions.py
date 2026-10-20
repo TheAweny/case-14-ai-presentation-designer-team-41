@@ -147,6 +147,13 @@ def _apply_safe_text_area(shape: Any, slot: dict[str, Any]) -> None:
             setattr(frame, far, required)
 
 
+def _set_font_size(shape: Any, size_pt: float) -> None:
+    """Every run of the shape, and the size it gives typed text, at one explicit size."""
+    size = str(round(size_pt * 100))
+    for properties in shape.text_frame._txBody.iter(f"{_A}rPr", f"{_A}endParaRPr"):
+        properties.set("sz", size)
+
+
 def _replace_text(shape: Any, text: str) -> None:
     frame = shape.text_frame
     # Composition fit measures wrapped copy in the original box. A template's
@@ -440,16 +447,19 @@ def export_compositions(
     slides: list[dict[str, Any]],
     patterns: list[dict[str, Any]],
     draw_visual: DrawVisual | None = None,
+    allow_overflow: bool = False,
+    font_scales: dict[tuple[int, str], float] | None = None,
 ) -> Path:
     """I clone chosen slides inside their original package, preserving masters and relationships.
 
     A slide that carries a visual gets it drawn natively in place of the slot it names, when a
-    drawer is given.
+    drawer is given. A slot in `font_scales`, keyed by slide index and slot id, is set at that
+    share of its template size.
     """
     presentation = Presentation(str(source))
     originals = list(presentation.slides)
     catalog = {p["patternId"]: p for p in patterns}
-    for item in slides:
+    for index, item in enumerate(slides):
         pattern = catalog.get(item["patternId"])
         if pattern is None:
             raise ValueError("Unknown template pattern.")
@@ -458,7 +468,7 @@ def export_compositions(
         if set(texts) != expected or len(texts) != len(item["texts"]):
             raise ValueError("Content must bind every template slot exactly once.")
         for slot in pattern["slots"]:
-            if len(texts[slot["slotId"]]) > slot["maxChars"]:
+            if not allow_overflow and len(texts[slot["slotId"]]) > slot["maxChars"]:
                 raise ValueError(f"Text overflow in slot {slot['slotId']}.")
         original = originals[pattern["sourceIndex"]]
         slide = presentation.slides.add_slide(original.slide_layout)
@@ -491,6 +501,9 @@ def export_compositions(
             if str(shape.shape_id) in texts:
                 _apply_safe_text_area(shape, slots[str(shape.shape_id)])
                 _replace_text(shape, texts[str(shape.shape_id)])
+                scale = (font_scales or {}).get((index, str(shape.shape_id)))
+                if scale is not None and scale < 1:
+                    _set_font_size(shape, slots[str(shape.shape_id)]["fontSize"] * scale)
                 _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:
             _replace_with_visual(slide, item["visual"], draw_visual)

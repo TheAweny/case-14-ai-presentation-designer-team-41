@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { stringify as toYaml } from 'yaml';
@@ -67,20 +68,24 @@ export async function generateCommand(configPath: string): Promise<number> {
   }
 
   // Inputs go where the container sees them: data/ here is /app/data there.
-  const stamp = new Date()
-    .toISOString()
-    .replace(/[-:.TZ]/g, '')
-    .slice(0, 14);
+  const stamp = randomUUID();
   const stage = join(root, 'data', 'cli', stamp);
   mkdirSync(stage, { recursive: true });
   const inContainer = (name: string) => `/app/data/cli/${stamp}/${name}`;
-  for (const path of [config.templatePath, config.contentPath]) {
-    if (!existsSync(resolve(path))) throw new Error(`Файл не найден: ${resolve(path)}`);
+  for (const path of [config.templatePath, config.contentPath, config.brandbookPath]) {
+    if (path && !existsSync(resolve(path))) throw new Error(`Файл не найден: ${resolve(path)}`);
   }
-  const template = basename(config.templatePath);
-  const content = basename(config.contentPath);
-  copyFileSync(resolve(config.templatePath), join(stage, template));
+  // Without a template the container takes its own copy of the built-in layouts.
+  const template = config.templatePath ? `template-${basename(config.templatePath)}` : null;
+  const content = `content-${basename(config.contentPath)}`;
+  if (config.templatePath && template)
+    copyFileSync(resolve(config.templatePath), join(stage, template));
   copyFileSync(resolve(config.contentPath), join(stage, content));
+  // The brandbook goes under its own name: a template and a brandbook may share a file name.
+  const brandbook = config.brandbookPath ? `brandbook-${basename(config.brandbookPath)}` : null;
+  if (config.brandbookPath && brandbook) {
+    copyFileSync(resolve(config.brandbookPath), join(stage, brandbook));
+  }
   if (relative(join(root, 'runs'), resolve(config.outputDir)) !== '') {
     process.stdout.write(`outputDir в Docker — всегда runs/ проекта: ${join(root, 'runs')}\n`);
   }
@@ -88,8 +93,9 @@ export async function generateCommand(configPath: string): Promise<number> {
     join(stage, 'run.yaml'),
     toYaml({
       ...config,
-      templatePath: inContainer(template),
+      ...(template ? { templatePath: inContainer(template) } : {}),
       contentPath: inContainer(content),
+      ...(brandbook ? { brandbookPath: inContainer(brandbook) } : {}),
       outputDir: '/app/runs',
     }),
   );

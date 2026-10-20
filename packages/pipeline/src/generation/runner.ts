@@ -17,6 +17,7 @@ import {
   type StageTiming,
   type RunArtifact,
   type GenerationUsage,
+  type BrandbookBinding,
   type VariantCopyMode,
 } from '@lct/contracts';
 import { createMastra, closeMastra } from '../mastra.js';
@@ -40,8 +41,9 @@ import {
   writtenSchema,
 } from './workflow.js';
 import { deckRepeats, headlineSlot, slideFigureDefects, slideTextRepeats } from './repeats.js';
-import { leakedSamples } from './samples.js';
+import { leakedSamples, wordsInFigureSlots } from './samples.js';
 import { approvedCoverage } from './final-review.js';
+import { missingNativeRequirements } from './native-requirements.js';
 import { ModelAnswerValidationError, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import { assessLayoutDiversity } from './layout-diversity.js';
@@ -50,6 +52,8 @@ import { saveQrAssets } from './qr-assets.js';
 import { generationFailure } from './failure.js';
 import { compositionSemantics } from './semantics.js';
 import { loadWriterModules } from './writer-prompt.js';
+import { readRuntimeLimits, loadRuntimeAgent, withRuntimeLimits } from '../runtime-limits.js';
+import { sharedModelLimiter } from './provider.js';
 import type { AttemptBudget } from './attempt-budget.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 import {
@@ -76,6 +80,8 @@ const REWRITABLE = new Set([
 ]);
 
 export interface GenerateOptions {
+  /** Publish a reviewable deck with deterministic overflow findings when model repair is exhausted. */
+  allowPartialExport?: boolean;
   planId?: string;
   providerUsage?: () => Promise<GenerationUsage>;
   runId: string;
@@ -87,6 +93,8 @@ export interface GenerateOptions {
   outline?: DeckOutline | null;
   outlineSource?: 'user' | 'model';
   profile: GenerationProfile;
+  /** Effective brand rules captured for this immutable build, if selected. */
+  brandbook?: BrandbookBinding;
   preparedDatasets?: readonly Dataset[];
   /** The template indexer's notes for this profile, if the template was indexed. */
   notes?: readonly CompositionNote[];
@@ -132,7 +140,6 @@ export interface GenerateOptions {
 /** Time unavailable to writers and repairs: reserved for export, render and final audit. */
 const EXPORT_RESERVE_MS = 60_000;
 /** The run's own deadline, under the five minutes the three variants share. */
-const RUN_DEADLINE_MS = 290_000;
 /** Time left for the manifest and the end of the run once the pictures of the slides are read. */
 const REVIEW_RESERVE_MS = 12_000;
 /** Under this the slides are not asked about: a review that cannot finish would only be thrown away. */
@@ -251,17 +258,29 @@ function slideNumber(slideId: string): string {
 }
 
 export async function generatePresentation(options: GenerateOptions) {
+  const limits = readRuntimeLimits();
+  const runtimeAgent = await loadRuntimeAgent(options.registryDir);
   const started = Date.now();
   const deadlineAt = Math.min(
-    options.deadlineAt ?? started + RUN_DEADLINE_MS,
-    started + RUN_DEADLINE_MS,
+    options.deadlineAt ?? started + limits.generationDeadlineMs,
+    started + limits.generationDeadlineMs,
   );
   const runBudget = openGenerationStage(options.signal ?? new AbortController().signal, deadlineAt);
   const signal = runBudget.signal;
-  const contentDeadlineAt = deadlineAt - EXPORT_RESERVE_MS;
+  const exportReserveMs = Math.min(EXPORT_RESERVE_MS, Math.floor(limits.generationDeadlineMs / 3));
+  const contentDeadlineAt = deadlineAt - exportReserveMs;
   const contentBudget = openGenerationStage(signal, contentDeadlineAt);
   const contentSignal = contentBudget.signal;
-  const provider = boundedGenerationProvider(options.provider);
+  const provider = boundedGenerationProvider(
+    withRuntimeLimits(options.provider, runtimeAgent, () => ({
+      limits,
+      deadlineAt,
+      contentDeadlineAt,
+      modelConcurrencyNow: sharedModelLimiter().capacity,
+      imagesAvailable: options.illustrations != null,
+      searchAvailable: false,
+    })),
+  );
   let seq = options.eventSequence ?? 0;
   let events = Promise.resolve();
   let terminal = false;
@@ -403,7 +422,7 @@ export async function generatePresentation(options: GenerateOptions) {
         qrImages = assets.images;
       },
       signal: contentSignal,
-      concurrency: 3,
+      concurrency: limits.generationConcurrency,
       ...(options.notes ? { notes: options.notes } : {}),
       onProgress: async (done, total) =>
         emit({
@@ -431,7 +450,7 @@ export async function generatePresentation(options: GenerateOptions) {
       variant: options.variant ?? 'balanced',
       today,
       signal: contentSignal,
-      concurrency: 3,
+      concurrency: limits.generationConcurrency,
       onWarning: async (message) => {
         reviewWarnings.push(message);
         await warn(message);
@@ -518,6 +537,7 @@ export async function generatePresentation(options: GenerateOptions) {
       templatePath: options.templatePath,
       outputPath: join(options.outputDir, 'deck.pptx'),
       slides: written.map((s) => s.slide),
+      ...(options.allowPartialExport ? { allowOverflow: true } : {}),
       // The local day, as the writer dates the deck; toISOString would give the UTC one.
       today: [
         today.getFullYear(),
@@ -525,6 +545,7 @@ export async function generatePresentation(options: GenerateOptions) {
         String(today.getDate()).padStart(2, '0'),
       ].join('-'),
       briefYears: briefYears(sourceBrief),
+      ...(options.brandbook ? { brandbook: options.brandbook } : {}),
     });
     // What the template's samples still say on a slide is not a fact of the deck: a figure or a
     // period label (`05`, `III кв.`, a year) kept as the writer found it, with no fact in the
@@ -555,6 +576,25 @@ export async function generatePresentation(options: GenerateOptions) {
           message: `Слайд ${leak.index + 1}: образец шаблона «${leak.sample}» убран, в брифе для него нет факта.`,
         });
       }
+      for (const words of wordsInFigureSlots(slides)) {
+        const current = written.find((s) => s.index === words.index);
+        if (!current) continue;
+        current.slide = {
+          ...current.slide,
+          texts: current.slide.texts.map((t) =>
+            t.slotId === words.slotId ? { ...t, text: '' } : t,
+          ),
+        };
+        const key = `${words.index}:${words.slotId}`;
+        if (announced.has(key)) continue;
+        announced.add(key);
+        await emit({
+          type: 'warning',
+          stage,
+          code: 'template-sample-removed',
+          message: `Слайд ${words.index + 1}: «${words.text}» убрано из поля для числа.`,
+        });
+      }
     };
     // Geometry cannot authorize deleting content or restoring an older, unaudited wording.
     const settleFit = async () => {
@@ -563,7 +603,14 @@ export async function generatePresentation(options: GenerateOptions) {
       // A torn word goes to the rewriter and the audit, but never costs the variant: a deck with
       // one ugly line is worth more than none, and the three are all required.
       const errors = findings.filter((f) => f.severity === 'error' && f.code !== 'word-break');
-      if (errors.length) throw new ContentFitError(errors);
+      if (errors.length) {
+        if (!options.allowPartialExport) throw new ContentFitError(errors);
+        for (const finding of errors) {
+          const message = `Слайд ${finding.slideIndex + 1}, ${finding.slotId}: ${finding.message}`;
+          reviewWarnings.push(message);
+          await emit({ type: 'warning', stage, code: 'content-review-required', message });
+        }
+      }
     };
     let contentRevision = 1;
     let previousHash = '';
@@ -816,7 +863,7 @@ export async function generatePresentation(options: GenerateOptions) {
     // leaves its slot, and the export removes the empty frame.
     const images: Record<string, unknown>[] = [];
     if (pending.length) {
-      const waitMs = Math.max(0, deadlineAt - Date.now() - EXPORT_RESERVE_MS);
+      const waitMs = Math.max(0, deadlineAt - Date.now() - exportReserveMs);
       const deadline = new Promise<'late'>((resolve) => {
         const timer = setTimeout(() => resolve('late'), waitMs);
         timer.unref?.();
@@ -895,7 +942,7 @@ export async function generatePresentation(options: GenerateOptions) {
     const reviewPictures = async (
       only?: ReadonlySet<number>,
       previous?: VisualReview,
-      reserveMs = EXPORT_RESERVE_MS,
+      reserveMs = exportReserveMs,
     ): Promise<VisualReview | null> => {
       if (!options.reviewer) return null;
       const left = deadlineAt - Date.now() - reserveMs;
@@ -1091,6 +1138,16 @@ export async function generatePresentation(options: GenerateOptions) {
     let finalCritique: z.infer<typeof critiqueSchema>;
     try {
       finalCritique = await finalAudit.run(() => critiqueCurrent(finalAudit.signal));
+    } catch (error) {
+      // The deck is written and measured: a semantic check that runs out of time leaves it
+      // unreviewed, not lost. Only the run's own deadline or a cancel stops the variant.
+      signal.throwIfAborted();
+      if (!finalAudit.signal.aborted) throw error;
+      semanticStatus.available = false;
+      finalCritique = { coverage: [], issues: [] };
+      const message = 'Итоговая смысловая проверка не успела до конца сборки. Требуется проверка.';
+      reviewWarnings.push(message);
+      await warn(message);
     } finally {
       finalAudit.dispose();
     }
@@ -1099,6 +1156,16 @@ export async function generatePresentation(options: GenerateOptions) {
       written,
       finalCritique.coverage,
     );
+    const nativeIssues = missingNativeRequirements(
+      options.brief,
+      options.outlineSource === 'model' ? null : options.outline,
+      written,
+    );
+    finalCritique.issues.push(...nativeIssues);
+    for (const issue of nativeIssues) {
+      reviewWarnings.push(issue.message);
+      await warn(issue.message);
+    }
     const semanticErrors = finalCritique.issues.filter((i) => i.category !== 'style');
     const deterministicErrors = report.findings.filter(
       (f) => f.severity === 'blocker' || f.severity === 'major',
@@ -1114,15 +1181,20 @@ export async function generatePresentation(options: GenerateOptions) {
       schemaVersion: 1,
       contentRevision,
       contentHash: contentHash(),
-      status: !semanticStatus.available
-        ? 'unknown'
-        : reviewedDeck(contextual)
-          ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
-            ? 'requires-review'
-            : coverage.status === 'unknown'
-              ? 'unknown'
-              : 'complete'
-          : 'unknown',
+      status: nativeIssues.length
+        ? 'requires-review'
+        : !semanticStatus.available
+          ? 'unknown'
+          : reviewedDeck(contextual)
+            ? semanticErrors.length ||
+              deterministicErrors ||
+              pictureErrors ||
+              coverage.missing.length
+              ? 'requires-review'
+              : coverage.status === 'unknown'
+                ? 'unknown'
+                : 'complete'
+            : 'unknown',
       deterministic: {
         errors: deterministicErrors,
         warnings: report.findings.length - deterministicErrors,
@@ -1278,6 +1350,7 @@ export async function generatePresentation(options: GenerateOptions) {
       seed: options.seed ?? 42,
       variantCopyMode: options.variantCopyMode ?? 'independent',
       revisions: [
+        runtimeAgent,
         planner,
         writerRevision,
         critic,
@@ -1292,6 +1365,12 @@ export async function generatePresentation(options: GenerateOptions) {
           hash: toManifestEntry(agent).instructionsSha256,
         }))
         .concat([
+          {
+            kind: 'config',
+            id: 'runtime-limits',
+            version: '1.0.0',
+            hash: createHash('sha256').update(JSON.stringify(limits)).digest('hex'),
+          },
           {
             kind: 'config',
             id: 'layout-remap-policy',

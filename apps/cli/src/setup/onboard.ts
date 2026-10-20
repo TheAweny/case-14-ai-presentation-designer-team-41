@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import * as p from './ui.js';
 import { EnvFile } from './env-file.js';
+import { configureMedia, setMedia, type MediaKind } from './media.js';
 import {
   aiStudio,
   checkModel,
@@ -40,9 +41,10 @@ import {
 
 /** Answers that can come from flags, so the same setup runs without a terminal. */
 export interface OnboardOptions {
+  readonly media?: Partial<Record<MediaKind, Record<string, string>>>;
   readonly yes?: boolean;
   readonly mode?: 'docker' | 'local';
-  readonly provider?: 'vk' | 'ai-studio' | 'openai' | 'offline';
+  readonly provider?: 'vk' | 'ai-studio' | 'openai' | 'anthropic' | 'offline';
   readonly apiKey?: string;
   /** VK AI Space: the project the key belongs to. */
   readonly projectId?: string;
@@ -64,6 +66,7 @@ export interface OnboardOptions {
 
 export function modelSettings(env: EnvFile): ModelSettings {
   return {
+    MODEL_PROTOCOL: env.get('MODEL_PROTOCOL') ?? '',
     MODEL_PROVIDER: env.get('MODEL_PROVIDER') ?? '',
     LLM_BASE_URL: env.get('LLM_BASE_URL') ?? '',
     VLM_BASE_URL: env.get('VLM_BASE_URL') ?? '',
@@ -90,7 +93,10 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
     if (options.provider === 'vk' && !options.projectId) throw new Error('Нужен --project-id.');
     if (options.provider === 'ai-studio' && !options.folderId)
       throw new Error('Нужен --folder-id.');
-    if (options.provider === 'openai' && (!options.baseUrl || !options.model))
+    if (
+      (options.provider === 'openai' || options.provider === 'anthropic') &&
+      (!options.baseUrl || !options.model)
+    )
       throw new Error('Нужны --base-url и --model.');
   }
   const provider =
@@ -101,6 +107,11 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
           p.select({
             message: 'Откуда брать модель?',
             options: [
+              {
+                value: 'anthropic',
+                label: 'Anthropic Messages API',
+                hint: 'Claude: адрес API, ключ и модель',
+              },
               {
                 value: 'vk',
                 label: 'VK AI Space',
@@ -197,7 +208,10 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
         placeholder: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
       }),
     ));
-  return openAiCompatible(baseUrl, apiKey ?? '', model);
+  return {
+    ...openAiCompatible(baseUrl, apiKey ?? '', model),
+    MODEL_PROTOCOL: provider === 'anthropic' ? 'anthropic' : '',
+  };
 }
 
 /**
@@ -461,6 +475,24 @@ export async function onboard(input: OnboardOptions = {}): Promise<number> {
     settings = await chooseModel({}, env);
   }
   for (const [key, value] of Object.entries(settings)) env.set(key, value);
+  env.set('MODEL_PROTOCOL', settings.MODEL_PROTOCOL ?? '');
+  for (const kind of ['speech', 'image'] as const) {
+    const media = options.media?.[kind];
+    if (media) setMedia(env, kind, media);
+    else if (!options.yes && process.stdin.isTTY && options.section !== 'settings') {
+      const configure = await ask(() =>
+        p.confirm({
+          message:
+            kind === 'speech'
+              ? 'Настроить распознавание речи?'
+              : 'Настроить генерацию изображений?',
+          initialValue: false,
+        }),
+      );
+      if (configure) await configureMedia(env, kind);
+    }
+  }
+  p.log.info('Речь и изображения: lct speech / lct image. Параллелизм и время: lct limits.');
   if (settings.MODEL_PROVIDER === 'fake')
     p.log.warn('Тестовые ответы: для генерации новых презентаций подключите модель через lct.');
   p.log.step('2 / 4 · Администратор');

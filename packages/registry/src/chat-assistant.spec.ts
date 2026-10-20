@@ -19,7 +19,7 @@ describe('chat assistant preparation prompts', () => {
     const agent = await loadAgent(directory);
     expect(agent.config).toMatchObject({
       id: 'chat-assistant',
-      version: '1.23.1',
+      version: '1.24.0',
       modelId: 'assistant-default',
       instructionsFile: 'instructions.md',
       outputSchema: 'ChatTurn',
@@ -28,7 +28,7 @@ describe('chat assistant preparation prompts', () => {
     expect(agent.instructions).toBe(await read('instructions.md'));
     expect(agent.instructions).toContain('## Preparation before a plan');
     expect(toManifestEntry(agent)).toMatchObject({
-      agentVersion: '1.23.1',
+      agentVersion: '1.24.0',
       instructionsSha256: createHash('sha256').update(agent.instructions, 'utf8').digest('hex'),
     });
   });

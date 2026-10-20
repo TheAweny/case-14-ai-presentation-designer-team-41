@@ -8,6 +8,8 @@ import {
   modelsEndpoint,
   type CheckError,
   type ConnectionCheck,
+  type ModelDetails,
+  type ModelKind,
 } from '@lct/contracts';
 import { modelDetailsOf } from './model-details.js';
 
@@ -139,6 +141,7 @@ export async function checkModelConnection(
     readonly apiKey: string | null;
     /** Headers the server asks for besides the key, such as a gateway's `Project-ID`. */
     readonly headers?: Readonly<Record<string, string>>;
+    readonly protocol?: 'anthropic' | 'openai-compatible';
   },
   options: CheckOptions = {},
 ): Promise<ConnectionCheck> {
@@ -166,33 +169,75 @@ export async function checkModelConnection(
     }, timeoutMs);
   });
 
+  const anthropic = target.protocol === 'anthropic';
   const headers: Record<string, string> = { ...target.headers, accept: 'application/json' };
-  if (target.apiKey) headers.authorization = `Bearer ${target.apiKey}`;
+  if (anthropic) {
+    for (const name of Object.keys(headers)) {
+      if (['authorization', 'x-api-key', 'anthropic-version'].includes(name.toLowerCase())) {
+        delete headers[name];
+      }
+    }
+    headers['anthropic-version'] = '2023-06-01';
+    if (target.apiKey) headers['x-api-key'] = target.apiKey;
+  } else if (target.apiKey) headers.authorization = `Bearer ${target.apiKey}`;
 
   const request = async () => {
-    const response = await run(modelsEndpoint(target.baseUrl), {
-      method: 'GET',
-      headers,
-      signal: controller.signal,
-      cache: 'no-store',
-      redirect: 'error',
-    });
-    if (response.status === 401 || response.status === 403) {
-      return fail({ kind: 'unauthorized', status: response.status });
+    const allModels = new Map<string, ModelDetails | undefined>();
+    const seenCursors = new Set<string>();
+    let afterId: string | undefined;
+    let more = true;
+    let pageCount = 0;
+    while (more && allModels.size < MODEL_LIST_MAX_LENGTH && pageCount < MODEL_LIST_MAX_LENGTH) {
+      pageCount += 1;
+      const url = new URL(modelsEndpoint(target.baseUrl));
+      if (anthropic) {
+        url.searchParams.set('limit', String(MODEL_LIST_MAX_LENGTH));
+        if (afterId) url.searchParams.set('after_id', afterId);
+      }
+      const response = await run(url.toString(), {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+        cache: 'no-store',
+        redirect: 'error',
+      });
+      if (response.status === 401 || response.status === 403) {
+        return fail({ kind: 'unauthorized', status: response.status });
+      }
+      if (!response.ok) return fail({ kind: 'http', status: response.status });
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        return fail({ kind: 'invalid-response' });
+      }
+      const models = parseModelsResponse(body);
+      if (models === null) return fail({ kind: 'invalid-response' });
+      // What the provider says about its models, read from the same answer: no extra request.
+      const described = anthropic ? anthropicDetailsOf(body) : modelDetailsOf(body);
+      for (const id of models) {
+        if (allModels.size >= MODEL_LIST_MAX_LENGTH) break;
+        if (!allModels.has(id)) allModels.set(id, described[id]);
+      }
+      if (!anthropic) break;
+      const page = body as { has_more?: unknown; last_id?: unknown };
+      if (typeof page.has_more !== 'boolean') return fail({ kind: 'invalid-response' });
+      more = page.has_more;
+      if (more) {
+        if (
+          typeof page.last_id !== 'string' ||
+          page.last_id === '' ||
+          seenCursors.has(page.last_id) ||
+          models.length === 0
+        )
+          return fail({ kind: 'invalid-response' });
+        seenCursors.add(page.last_id);
+        afterId = page.last_id;
+      }
     }
-    if (!response.ok) return fail({ kind: 'http', status: response.status });
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      return fail({ kind: 'invalid-response' });
-    }
-    const models = parseModelsResponse(body);
-    if (models === null) return fail({ kind: 'invalid-response' });
-    // What the provider says about its models, read from the same answer: no extra request.
-    const described = modelDetailsOf(body);
+    const models = [...allModels.keys()];
     const details = Object.fromEntries(
-      models.flatMap((modelId) => (described[modelId] ? [[modelId, described[modelId]]] : [])),
+      [...allModels].flatMap(([id, detail]) => (detail ? [[id, detail]] : [])),
     );
     return {
       ok: true,
@@ -211,4 +256,40 @@ export async function checkModelConnection(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Only capabilities declared by Anthropic's Models API are used; no model-name inference. */
+function anthropicDetailsOf(body: unknown): Record<string, ModelDetails> {
+  const data = (body as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return {};
+  const result: Record<string, ModelDetails> = {};
+  for (const value of data) {
+    if (!value || typeof value !== 'object') continue;
+    const model = value as Record<string, unknown>;
+    if (typeof model.id !== 'string') continue;
+    const capabilities = model.capabilities as Record<string, unknown> | null;
+    const imageInput = (capabilities?.image_input as { supported?: unknown } | null)?.supported;
+    const kinds: ModelKind[] | undefined =
+      typeof imageInput === 'boolean' ? (imageInput ? ['text', 'vision'] : ['text']) : undefined;
+    const thinking = capabilities?.thinking as {
+      supported?: unknown;
+      types?: Record<string, { supported?: unknown }>;
+    } | null;
+    const effort = capabilities?.effort as Record<string, { supported?: unknown }> | null;
+    const disabled = thinking?.types?.disabled?.supported === true;
+    const effortLevels = ['low', 'medium', 'high'].every(
+      (level) => effort?.[level]?.supported === true,
+    );
+    const reasoning =
+      thinking?.supported === true
+        ? { toggle: disabled ? ('reasoning-effort' as const) : null, levels: effortLevels }
+        : undefined;
+    if (kinds || reasoning) {
+      result[model.id] = {
+        ...(kinds ? { kinds } : {}),
+        ...(reasoning ? { reasoning } : {}),
+      };
+    }
+  }
+  return result;
 }

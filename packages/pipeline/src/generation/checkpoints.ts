@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { AgentGeneration } from '@lct/contracts';
 import type { TextProvider } from './provider.js';
 import { withAttemptTask } from '../models/attempt-context.js';
+import { stableRuntimeInstructions } from '../runtime-state.js';
 
 /** Sorted object keys make dependency ids independent of serialization order. */
 export function dependencyKey(value: unknown): string {
@@ -122,7 +123,13 @@ export class CheckpointTextProvider implements TextProvider {
     signal.throwIfAborted();
     return this.checkpoints
       .once(
-        { agent, model: this.model, instructions, input, schema: z.toJSONSchema(schema) },
+        {
+          agent,
+          model: this.model,
+          instructions: stableRuntimeInstructions(instructions),
+          input,
+          schema: z.toJSONSchema(schema),
+        },
         schema,
         () => this.inner.generate(agent, instructions, input, schema, signal),
       )

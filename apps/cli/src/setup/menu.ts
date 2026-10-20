@@ -9,6 +9,8 @@ import { publicUrl } from './settings.js';
 import { ask, Cancelled } from './terminal.js';
 import { usersMenu } from './user-command.js';
 import { backupCommand, updateCommand } from './maintenance.js';
+import { mediaCommand } from './media.js';
+import { limitsCommand } from './limits.js';
 
 export async function menu(): Promise<number> {
   const root = repoRoot();
@@ -30,6 +32,9 @@ export async function menu(): Promise<number> {
           { value: 'stop', label: 'Остановить сервис' },
           { value: 'users', label: 'Пользователи', hint: 'создание, роли, доступ' },
           { value: 'model', label: 'Модель и подключение' },
+          { value: 'speech', label: 'Голосовой ввод', hint: 'провайдер и модель распознавания' },
+          { value: 'image', label: 'Генерация изображений', hint: 'провайдер и модель' },
+          { value: 'limits', label: 'Лимиты генерации', hint: 'параллелизм и время' },
           { value: 'settings', label: 'Настройки установки', hint: 'домен, порты, возможности' },
           { value: 'logs', label: 'Последние логи' },
           { value: 'doctor', label: 'Диагностика' },
@@ -62,6 +67,8 @@ export async function menu(): Promise<number> {
       )
         await stack.stop();
       if (action === 'users') await usersMenu();
+      if (action === 'speech' || action === 'image') await mediaCommand(action);
+      if (action === 'limits') await limitsCommand();
       if (action === 'admin') await user(['admin'], {});
       if (action === 'settings' || action === 'model') await onboard({ section: action });
       if (action === 'logs') await stack.logs(undefined, false);

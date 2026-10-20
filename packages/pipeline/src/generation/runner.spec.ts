@@ -51,6 +51,7 @@ async function exercise(
     | 'critic-invalid'
     | 'critic-storage-failure'
     | 'critic-many-issues'
+    | 'critic-late'
     | 'expired'
     | 'reserve-repair',
   layoutRemapPolicy?: LayoutRemapPolicy,
@@ -84,6 +85,9 @@ async function exercise(
     mode === 'clean-vision' ||
     mode === 'critic-invalid';
   const warnings: { stage: string; code: string; message: string }[] = [];
+  if (mode === 'critic-late')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], shouldAdvanceTime: true });
+  const lateDeadline = Date.now() + 290_000;
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
   const provider: TextProvider = {
@@ -139,6 +143,13 @@ async function exercise(
       }
       if (agent === 'critic') {
         criticInputs.push(structuredClone(input) as (typeof criticInputs)[number]);
+        if (mode === 'critic-late' && exports > 0) {
+          // The final check outlasts its stage: the clock jumps past it, short of the run's end.
+          setImmediate(() => vi.advanceTimersByTime(lateDeadline - 2_500 - Date.now()));
+          return new Promise<T>((_, reject) =>
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+          );
+        }
         if (mode === 'critic-invalid')
           throw new ModelAnswerValidationError(
             new SyntaxError('Invalid critic JSON after bounded retries'),
@@ -384,6 +395,7 @@ async function exercise(
         }
       : {}),
     ...(mode === 'expired' ? { deadlineAt: Date.now() - 1 } : {}),
+    ...(mode === 'critic-late' ? { deadlineAt: lateDeadline } : {}),
     signal: controller.signal,
     onEvent: async (e) => {
       events.push(e.type);
@@ -426,6 +438,14 @@ describe('real generation orchestration with offline dependencies', () => {
     const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
     expect(review.issues).toHaveLength(15);
     expect(review.contextual.errors).toBe(15);
+  });
+  it('keeps the written deck, unreviewed, when the final check runs out of time', async () => {
+    const run = await exercise('critic-late');
+    await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.warnings.some((warning) => warning.message.includes('не успела'))).toBe(true);
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review.status).toBe('unknown');
   });
   it('keeps checkpoint corruption fatal instead of treating it as an unavailable critic', async () => {
     const run = await exercise('critic-storage-failure');

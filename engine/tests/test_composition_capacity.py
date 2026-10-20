@@ -6,7 +6,8 @@ from typing import Any, cast
 
 import pytest
 from engine.api import app
-from engine.layout.text_fit import check_composition_text, measured_height
+from engine.export.compositions import export_compositions
+from engine.layout.text_fit import check_composition_text, fitting_scale, measured_height
 from engine.parser._composition_geometry import composition_evidence
 from engine.parser.compositions import extract_compositions
 from engine.parser.slides import read_deck
@@ -208,13 +209,41 @@ def test_native_list_and_three_grouped_heading_body_pairs_have_different_evidenc
 def test_paragraph_spacing_is_charged_for_hard_breaks_only(soft: bool) -> None:
     slot = {"fontSize": 20, "textWidthPt": 300, "lineSpacing": 1.2, "spaceAfterPt": 12}
     text = "Первый" + ("\v" if soft else "\n") + "Второй"
-    assert measured_height(text, slot) == 48 + (12 if soft else 24)
+    assert measured_height(text, slot) == 44 + (12 if soft else 24)
 
 
 @pytest.mark.parametrize("separator", ["\r\n", "\r", "\n"])
 def test_fit_normalizes_paragraph_breaks_like_export(separator: str) -> None:
     slot = {"fontSize": 20, "textWidthPt": 300, "lineSpacing": 1.2, "spaceAfterPt": 12}
-    assert measured_height(f"Первый{separator}Второй", slot) == 72
+    assert measured_height(f"Первый{separator}Второй", slot) == 68
+
+
+def test_baseline_spacing_does_not_add_padding_after_last_line() -> None:
+    slot = {
+        "slotId": "label",
+        "font": "DejaVu Sans",
+        "fontSize": 32,
+        "lineSpacing": 1.32,
+        "textWidthPt": 270,
+        "textHeightPt": 39,
+        "maxLines": 1,
+        "maxChars": 30,
+    }
+    assert not check_composition_text({"slots": [slot]}, [{"slotId": "label", "text": "2026"}])
+    assert check_composition_text({"slots": [slot]}, [{"slotId": "label", "text": "2026\n2027"}])
+
+
+def test_first_line_still_requires_room_for_template_font() -> None:
+    slot = {
+        "slotId": "label",
+        "fontSize": 32,
+        "lineSpacing": 1.32,
+        "textWidthPt": 270,
+        "textHeightPt": 20,
+        "maxLines": 1,
+        "maxChars": 30,
+    }
+    assert check_composition_text({"slots": [slot]}, [{"slotId": "label", "text": "2026"}])
 
 
 def test_long_unbreakable_cyrillic_word_is_rejected() -> None:
@@ -291,3 +320,51 @@ def test_image_constraints_preserve_z_order_and_template_protection(
     else:
         assert frame["state"] == "unknown"
         assert any(region["protection"] == "unknown" for region in frame["textRegions"])
+
+
+def _export_body(tmp_path: Path, text: str) -> tuple[float, set[float], float]:
+    """The scale a body's copy needs, the run sizes it is exported at, and its template size."""
+    path, body_id = _body(tmp_path / "in.pptx")
+    pattern = extract_compositions(path)[0]
+    slot = next(s for s in pattern["slots"] if s["slotId"] == body_id)
+    texts = [
+        {"slotId": s["slotId"], "text": text if s["slotId"] == body_id else "Итоги"}
+        for s in pattern["slots"]
+    ]
+    scale = fitting_scale(text, slot)
+    out = export_compositions(
+        path,
+        tmp_path / "out.pptx",
+        [{"patternId": pattern["patternId"], "texts": texts}],
+        [pattern],
+        allow_overflow=True,
+        font_scales={(0, body_id): scale},
+    )
+    shape = cast(
+        Shape,
+        next(s for s in Presentation(str(out)).slides[0].shapes if str(s.shape_id) == body_id),
+    )
+    sizes = {
+        run.font.size.pt
+        for paragraph in shape.text_frame.paragraphs
+        for run in paragraph.runs
+        if run.font.size is not None
+    }
+    return scale, sizes, slot["fontSize"]
+
+
+def test_copy_too_long_for_its_box_is_set_smaller_until_it_fits(tmp_path: Path) -> None:
+    text = " ".join(["Выручка выросла на четверть за год"] * 24)
+    scale, sizes, size = _export_body(tmp_path, text)
+    path, body_id = _body(tmp_path / "again.pptx")
+    slot = next(s for s in extract_compositions(path)[0]["slots"] if s["slotId"] == body_id)
+    assert check_composition_text({"slots": [slot]}, [{"slotId": body_id, "text": text}])
+    assert 0.6 <= scale < 1
+    assert measured_height(text, {**slot, "fontSize": size * scale}) <= slot["textHeightPt"]
+    assert sizes == {round(size * scale * 100) / 100}
+
+
+def test_copy_that_fits_keeps_its_template_size(tmp_path: Path) -> None:
+    scale, sizes, size = _export_body(tmp_path, "Выручка выросла на четверть за год")
+    assert scale == 1
+    assert sizes == {size}

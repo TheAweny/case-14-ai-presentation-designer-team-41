@@ -52,7 +52,13 @@ def measured_height(text: str, slot: dict[str, Any]) -> float:
     paragraphs = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     line_height = slot["fontSize"] * max(1.0, slot.get("lineSpacing", 1.15))
     spacing = slot.get("spaceBeforePt", 0) + slot.get("spaceAfterPt", 0)
-    return measured_lines(text, slot) * line_height + len(paragraphs) * spacing
+    # Line spacing is the distance between baselines, not padding below the final
+    # line. Charging it for a single line rejects the template's own short labels.
+    return (
+        slot["fontSize"]
+        + (measured_lines(text, slot) - 1) * line_height
+        + len(paragraphs) * spacing
+    )
 
 
 def broken_words(text: str, slot: dict[str, Any]) -> list[str]:
@@ -75,6 +81,28 @@ def broken_words(text: str, slot: dict[str, Any]) -> list[str]:
         if bare and length(bare) > width and bare not in seen:
             seen.append(bare)
     return seen
+
+
+#: The least share of its template size a slot's font may shrink to: below it copy stops reading
+#: as part of the same slide.
+_MIN_SCALE = 0.6
+
+
+def fitting_scale(text: str, slot: dict[str, Any]) -> float:
+    """The share of the template font at which copy fits its box, 1.0 when it already fits.
+
+    Only for copy the rewriter could not shorten: shrinking it keeps the slide's other shapes
+    clear, where overflowing copy would run over them. Tried in steps of 5% down to
+    `_MIN_SCALE`, which is also the answer when nothing fits.
+    """
+    height = slot.get("textHeightPt")
+    for step in range(20, round(_MIN_SCALE * 20) - 1, -1):
+        scaled = {**slot, "fontSize": slot["fontSize"] * step / 20}
+        if (height is None or measured_height(text, scaled) <= height) and not broken_words(
+            text, scaled
+        ):
+            return step / 20
+    return _MIN_SCALE
 
 
 def check_composition_text(

@@ -140,6 +140,7 @@ export async function doctor(): Promise<number> {
   }
 
   const settings = {
+    MODEL_PROTOCOL: file.get('MODEL_PROTOCOL') ?? '',
     MODEL_PROVIDER: file.get('MODEL_PROVIDER') ?? '',
     LLM_BASE_URL: file.get('LLM_BASE_URL') ?? '',
     VLM_BASE_URL: file.get('VLM_BASE_URL') ?? '',

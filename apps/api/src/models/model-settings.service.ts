@@ -78,6 +78,7 @@ export class ModelNotConfiguredError extends Error {
 
 /** Everything a provider needs to call a model. Lives only for the run that asked for it. */
 export interface ResolvedModel {
+  readonly protocol?: 'anthropic' | 'openai-compatible';
   readonly connectionScope?: 'personal' | 'shared' | 'server';
   readonly connectionId: string;
   readonly baseUrl: string;
@@ -166,7 +167,7 @@ export class ModelSettingsService {
     return {
       connectionId: SERVER_CONNECTION_ID,
       name: new URL(server.baseUrl).hostname,
-      preset: 'custom',
+      preset: this.env.MODEL_PROTOCOL === 'anthropic' ? 'anthropic' : 'custom',
       baseUrl: server.baseUrl,
       hasKey: server.apiKey !== '',
       keyHint: keyHint(server.apiKey || null),
@@ -321,7 +322,11 @@ export class ModelSettingsService {
     // The old check speaks of the old address, key and headers: after any changes it is no
     // longer true.
     const unchanged =
-      previous !== null && previous.baseUrl === baseUrl && !keyChanged && !headersChanged;
+      previous !== null &&
+      previous.baseUrl === baseUrl &&
+      previous.preset === input.preset &&
+      !keyChanged &&
+      !headersChanged;
     const lastCheck = input.lastCheck ?? (unchanged ? previous.lastCheck : null);
 
     const stored: StoredConnection = {
@@ -423,6 +428,7 @@ export class ModelSettingsService {
           baseUrl: server.baseUrl,
           apiKey: server.apiKey || null,
           headers: headerRecord(server.headers),
+          ...(this.env.MODEL_PROTOCOL === 'anthropic' ? { protocol: 'anthropic' as const } : {}),
         },
         { ...this.checkOptions, allowPrivateHosts: true },
       );
@@ -438,6 +444,7 @@ export class ModelSettingsService {
         baseUrl: stored.baseUrl,
         apiKey: this.keyOf(stored),
         headers: headerRecord(stored.headers),
+        ...(stored.preset === 'anthropic' ? { protocol: 'anthropic' as const } : {}),
       },
       this.checkOptions,
     );
@@ -446,6 +453,7 @@ export class ModelSettingsService {
     if (!current) throw new ModelConnectionNotFoundError(connectionId);
     if (
       current.baseUrl !== stored.baseUrl ||
+      current.preset !== stored.preset ||
       current.apiKeyEncrypted !== stored.apiKeyEncrypted ||
       JSON.stringify(current.headers) !== JSON.stringify(stored.headers)
     ) {
@@ -466,6 +474,7 @@ export class ModelSettingsService {
       input.connectionId === undefined ? null : await this.find(input.connectionId, actor, true);
     const apiKey = input.apiKey?.trim() || (saved ? this.keyOf(saved) : null);
     const headers = input.headers ?? saved?.headers ?? [];
+    const preset = input.preset ?? saved?.preset ?? 'custom';
     const headerIssue = headersProblem(headers);
     if (headerIssue) throw new InvalidModelSettingsInputError({ headers: headerIssue });
     return checkModelConnection(
@@ -473,6 +482,7 @@ export class ModelSettingsService {
         baseUrl: normalizeBaseUrl(input.baseUrl),
         apiKey,
         headers: headerRecord(normalizeHeaders(headers)),
+        ...(preset === 'anthropic' ? { protocol: 'anthropic' as const } : {}),
       },
       this.checkOptions,
     );
@@ -543,13 +553,31 @@ export class ModelSettingsService {
     return this.resolveRef(ref, actor);
   }
 
-  /**
-   * The model assigned to a role, or null when the role has none and the run falls back to the
-   * writer's model. Like `resolve`, the result holds the key.
-   */
+  /** Explicit server switch; a personal role assignment may still override it. */
+  mediaDisabled(role: 'speech' | 'image'): boolean {
+    return this.env[`${role.toUpperCase()}_PROVIDER`] === 'disabled';
+  }
+
+  /** Resolves a role assignment, then its dedicated server environment configuration. */
   async resolveRole(role: PipelineRole, actor: SettingsActor): Promise<ResolvedModel | null> {
     const assigned = (await this.get(actor)).roles.find((item) => item.role === role);
-    if (assigned?.kind !== 'model') return null;
+    if (assigned?.kind === 'disabled') return null;
+    if (assigned?.kind !== 'model') {
+      if (role !== 'speech' && role !== 'image') return null;
+      const prefix = role.toUpperCase();
+      if (this.env[`${prefix}_PROVIDER`] === 'disabled') return null;
+      const baseUrl = this.env[`${prefix}_BASE_URL`]?.trim();
+      const model = this.env[`${prefix}_MODEL`]?.trim();
+      if (!baseUrl || !model || baseUrlProblem(baseUrl)) return null;
+      return {
+        connectionId: `server-${role}`,
+        connectionScope: 'server',
+        baseUrl: normalizeBaseUrl(baseUrl),
+        model,
+        apiKey: this.env[`${prefix}_API_KEY`]?.trim() ?? this.env.MODEL_API_KEY?.trim() ?? '',
+        headers: headerRecord(parseHeaderEnv(this.env[`${prefix}_HEADERS`])),
+      };
+    }
     return this.resolveRef(
       { connectionId: assigned.connectionId, modelId: assigned.modelId },
       actor,
@@ -573,6 +601,7 @@ export class ModelSettingsService {
         connectionId: SERVER_CONNECTION_ID,
         connectionScope: 'server',
         baseUrl: server.baseUrl,
+        ...(this.env.MODEL_PROTOCOL === 'anthropic' ? { protocol: 'anthropic' as const } : {}),
         apiKey: server.apiKey,
         model: ref.modelId,
         headers: headerRecord(server.headers),
@@ -610,6 +639,7 @@ export class ModelSettingsService {
       apiKey: apiKey ?? '',
       model: ref.modelId,
       headers: headerRecord(stored.headers),
+      ...(stored.preset === 'anthropic' ? { protocol: 'anthropic' as const } : {}),
     };
   }
 }

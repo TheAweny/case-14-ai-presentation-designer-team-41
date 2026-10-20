@@ -83,3 +83,6 @@ apps/web/CLAUDE.md
 # scratch output of local sessions: slide renders, unpacked templates, working plans
 /tmp/
 /plans/
+
+# Playwright CLI session logs and page snapshots.
+.playwright-cli/

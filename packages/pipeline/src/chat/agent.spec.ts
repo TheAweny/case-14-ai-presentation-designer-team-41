@@ -80,6 +80,26 @@ const ask: ChatTool = {
 };
 
 describe('runChatTurn', () => {
+  it('refreshes remaining runtime steps in the system message before each dispatch', async () => {
+    const model = scripted([
+      { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"check"}' }] },
+      { text: 'Готово.' },
+    ]);
+    await runChatTurn({
+      model,
+      instructions: 'system',
+      runtimeInstructions: (left) => JSON.stringify({ stepsLeft: left }),
+      history: [],
+      tools: [echo],
+      specs: [{ name: 'echo', description: 'Echo', parameters: {} }],
+      writer: writer().writer,
+      signal: new AbortController().signal,
+      mode: 'chat',
+      maxSteps: 2,
+    });
+    expect(model.requests[0]?.messages[0]?.content).toContain('"stepsLeft":2');
+    expect(model.requests[1]?.messages[0]?.content).toContain('"stepsLeft":1');
+  });
   it('ends a terminal tool failure before the model can invent a running build or retry it', async () => {
     const model = scripted([
       { toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"word":"build"}' }] },
@@ -845,6 +865,9 @@ describe('the chat agent in the registry', () => {
     const root = await mkdtemp(join(tmpdir(), 'chat-prompts-'));
     try {
       await cp(join(REGISTRY, 'chat-assistant'), join(root, 'chat-assistant'), { recursive: true });
+      await cp(join(REGISTRY, 'runtime-context'), join(root, 'runtime-context'), {
+        recursive: true,
+      });
       const original = await loadChatAgent(root);
       expect(original.promptsSha256).toMatch(/^[a-f0-9]{64}$/);
       expect((await loadChatAgent(root)).promptsSha256).toBe(original.promptsSha256);
@@ -853,6 +876,12 @@ describe('the chat agent in the registry', () => {
       expect(changedMode.promptsSha256).not.toBe(original.promptsSha256);
       await appendFile(join(root, 'chat-assistant/tools/ask_user.md'), '\nAdditional tool rule.\n');
       expect((await loadChatAgent(root)).promptsSha256).not.toBe(changedMode.promptsSha256);
+      const changedTool = await loadChatAgent(root);
+      await appendFile(
+        join(root, 'runtime-context/instructions.md'),
+        '\nAdditional runtime rule.\n',
+      );
+      expect((await loadChatAgent(root)).promptsSha256).not.toBe(changedTool.promptsSha256);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

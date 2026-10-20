@@ -81,6 +81,8 @@ export class ModelCapabilityService {
         unknown.push(modelId);
       }
     }
+    // Native Messages capabilities come from its Models API, never paid chat-completion probes.
+    if (connection.preset === 'anthropic') return;
     let next = 0;
     const worker = async () => {
       while (next < unknown.length) {
@@ -149,6 +151,12 @@ export class ModelCapabilityService {
 
   /** How thinking can be chosen for a resolved model; no choice while that is unknown. */
   async reasoningOf(model: ResolvedModel): Promise<ReasoningCapability> {
+    if (model.protocol === 'anthropic') {
+      const connection = await this.store.getConnection(model.connectionId);
+      return connection?.baseUrl === model.baseUrl && connection.lastCheck?.ok
+        ? (connection.lastCheck.details?.[model.model]?.reasoning ?? NO_REASONING_CHOICE)
+        : NO_REASONING_CHOICE;
+    }
     return (await this.store.getCapability(model, model.model))?.reasoning ?? NO_REASONING_CHOICE;
   }
 
@@ -189,6 +197,13 @@ export class ModelCapabilityService {
   /** What the composer shows for a model the person may use. */
   async capabilitiesOf(ref: ModelRef, actor: SettingsActor): Promise<ModelCapabilities> {
     const model = await this.settings.resolve(ref, actor);
+    if (model.protocol === 'anthropic') {
+      const connection = await this.connection(model.connectionId, actor);
+      const described = connection?.lastCheck?.ok
+        ? connection.lastCheck.details?.[model.model]?.reasoning
+        : undefined;
+      return { reasoning: described ?? NO_REASONING_CHOICE, probed: described !== undefined };
+    }
     const reasoning = (await this.store.getCapability(model, model.model))?.reasoning ?? null;
     return { reasoning: reasoning ?? NO_REASONING_CHOICE, probed: reasoning !== null };
   }
@@ -208,6 +223,9 @@ export class ModelCapabilityService {
         actor,
       );
     }
+    if (this.settings.mediaDisabled('speech')) return null;
+    const server = await this.settings.resolveRole('speech', actor);
+    if (server) return server;
     for (const connection of settings.connections) {
       const modelId = this.offered(connection).find((id) =>
         modelKindsOf(connection, id).kinds.includes('speech'),

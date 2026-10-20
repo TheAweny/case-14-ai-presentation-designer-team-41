@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useModelSettingsSnapshot } from '@/components/settings/model-settings-store';
-import { DictateIcon } from '@/components/ui/icons';
+import { CloseIcon, DictateIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { transcribeSpeechAction } from '@/app/speech-actions';
 import { getSpeechAvailableAction } from '@/app/model-capability-actions';
@@ -63,6 +63,8 @@ export function VoicePill({
   const [, setTick] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const session = useRef(0);
+  const starting = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const phaseListener = useRef(onPhase);
@@ -82,6 +84,7 @@ export function VoicePill({
 
   useEffect(
     () => () => {
+      session.current += 1;
       recorder.current?.stream.getTracks().forEach((track) => track.stop());
       recorder.current = null;
       phaseListener.current?.('idle');
@@ -94,92 +97,166 @@ export function VoicePill({
   // The moment the person stops, the pill says the text is on its way: the upload and the model
   // take seconds, and a pill that went quiet looked like nothing happened.
   const stop = () => {
-    if (!recorder.current) return;
+    if (!recorder.current || recorder.current.state !== 'recording') return;
     setPhase('transcribing');
     recorder.current.stop();
   };
 
+  const cancel = () => {
+    session.current += 1;
+    const rec = recorder.current;
+    recorder.current = null;
+    if (rec) {
+      rec.onstop = null;
+      if (rec.state !== 'inactive') rec.stop();
+      rec.stream.getTracks().forEach((track) => track.stop());
+    }
+    setStartedAt(null);
+    setPhase('idle');
+  };
+
   const start = async () => {
+    if (starting.current) return;
+    onError('');
     if (!navigator.mediaDevices?.getUserMedia) {
       onError(t('blocked'));
       return;
     }
+    starting.current = true;
+    const current = ++session.current;
+    let stream: MediaStream | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (current !== session.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      const audioStream = stream;
+      const rec = new MediaRecorder(audioStream);
       chunks.current = [];
       rec.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.current.push(event.data);
+        if (current === session.current && event.data.size > 0) chunks.current.push(event.data);
       };
-      rec.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
+      rec.onerror = () => {
+        if (current !== session.current) return;
+        rec.onstop = null;
+        audioStream.getTracks().forEach((track) => track.stop());
         recorder.current = null;
         setStartedAt(null);
+        setPhase('idle');
+        onError(t('failed'));
+      };
+      rec.onstop = () => {
+        audioStream.getTracks().forEach((track) => track.stop());
+        if (current !== session.current) return;
+        recorder.current = null;
+        setStartedAt(null);
+        setPhase('transcribing');
         const blob = new Blob(chunks.current, { type: rec.mimeType || 'audio/webm' });
         const form = new FormData();
-        form.set('audio', blob, 'speech.webm');
+        if (blob.size === 0) {
+          onError(t('empty'));
+          setPhase('idle');
+          return;
+        }
+        const extension = blob.type.includes('mp4')
+          ? 'mp4'
+          : blob.type.includes('ogg')
+            ? 'ogg'
+            : 'webm';
+        form.set('audio', blob, `speech.${extension}`);
         void transcribeSpeechAction(form)
           .then((result) => {
+            if (current !== session.current) return;
             if (result.ok) onDraft(appendTranscript(draftRef.current, result.text));
             else
               onError(
-                result.detail
-                  ? t('failedWith', { detail: result.detail })
-                  : t(result.reason === 'empty' ? 'empty' : 'failed'),
+                result.reason === 'unavailable'
+                  ? t('unavailable')
+                  : result.detail
+                    ? t('failedWith', { detail: result.detail })
+                    : t(result.reason === 'empty' ? 'empty' : 'failed'),
               );
           })
           // The action itself failed: the recording did not reach the server.
-          .catch(() => onError(t('notSent')))
-          .finally(() => setPhase('idle'));
+          .catch(() => {
+            if (current === session.current) onError(t('notSent'));
+          })
+          .finally(() => {
+            if (current === session.current) setPhase('idle');
+          });
       };
       rec.start();
       recorder.current = rec;
       setStartedAt(Date.now());
       setPhase('listening');
     } catch {
-      onError(t('blocked'));
+      stream?.getTracks().forEach((track) => track.stop());
+      if (current === session.current) onError(t('blocked'));
+    } finally {
+      starting.current = false;
     }
   };
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size={compact ? 'icon' : 'icon-lg'}
-      disabled={disabled || transcribing}
-      aria-pressed={listening}
-      aria-busy={transcribing}
-      aria-label={transcribing ? t('transcribing') : listening ? t('stop') : t('start')}
-      onClick={() => (listening ? stop() : void start())}
-      data-phase={phase}
-      className={cn(
-        'voice-pill rounded-full text-muted-foreground',
-        phase !== 'idle' && 'w-auto gap-1.5 px-2.5 text-foreground',
-        // Disabled buttons fade out; this one is busy, not unavailable.
-        transcribing && 'disabled:opacity-100',
-      )}
-    >
-      {transcribing ? (
-        <>
-          <span className="voice-dots" aria-hidden>
-            <i />
-            <i />
-            <i />
-          </span>
-          {compact ? null : <span className="voice-shimmer text-xs">{t('transcribingShort')}</span>}
-        </>
-      ) : listening ? (
-        <>
-          <span className="voice-eq" aria-hidden>
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="text-xs tabular-nums">{elapsed}s</span>
-        </>
-      ) : (
-        <DictateIcon className="size-4" />
-      )}
-    </Button>
+    <span className="inline-flex items-center gap-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size={compact ? 'icon' : 'icon-lg'}
+        disabled={(disabled && phase === 'idle') || transcribing}
+        aria-pressed={listening}
+        aria-busy={transcribing}
+        aria-label={transcribing ? t('transcribing') : listening ? t('stop') : t('start')}
+        onClick={() => (listening ? stop() : void start())}
+        data-phase={phase}
+        className={cn(
+          'voice-pill rounded-full text-muted-foreground',
+          phase !== 'idle' && 'w-auto gap-1.5 px-2.5 text-foreground',
+          // Disabled buttons fade out; this one is busy, not unavailable.
+          transcribing && 'disabled:opacity-100',
+        )}
+      >
+        {transcribing ? (
+          <>
+            <span className="voice-dots" aria-hidden>
+              <i />
+              <i />
+              <i />
+            </span>
+            {compact ? null : (
+              <span className="voice-shimmer hidden text-xs sm:inline">
+                {t('transcribingShort')}
+              </span>
+            )}
+          </>
+        ) : listening ? (
+          <>
+            <span className="voice-eq" aria-hidden>
+              <i />
+              <i />
+              <i />
+            </span>
+            <span className="text-xs tabular-nums">
+              {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
+            </span>
+          </>
+        ) : (
+          <DictateIcon className="size-4" />
+        )}
+      </Button>
+      {phase !== 'idle' ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-muted-foreground"
+          aria-label={t('cancel')}
+          onClick={cancel}
+        >
+          <CloseIcon className="size-4" />
+        </Button>
+      ) : null}
+    </span>
   );
 }

@@ -22,6 +22,39 @@ function journal() {
 }
 
 describe('physical provider attempt journal', () => {
+  it('merges native streaming usage and records native truncation without inventing cache pricing', async () => {
+    const j = journal();
+    const send: typeof fetch = async () =>
+      new Response(
+        [
+          {
+            type: 'message_start',
+            message: { usage: { input_tokens: 10, cache_read_input_tokens: 20, output_tokens: 0 } },
+          },
+          {
+            type: 'message_delta',
+            delta: { stop_reason: 'max_tokens' },
+            usage: { output_tokens: 5 },
+          },
+        ]
+          .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+          .join(''),
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
+    const result = await ledgerFetch(j.ledger, 'text', send, {
+      version: 'v1',
+      currency: 'USD',
+      inputPerMillion: 1,
+      outputPerMillion: 2,
+    })('https://provider.invalid/v1/messages', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'native', max_tokens: 5 }),
+    });
+    await result.text();
+    expect(j.outcomes).toMatchObject([
+      { inputTokens: 30, outputTokens: 5, status: 'truncated-response', actualCost: null },
+    ]);
+  });
   it('records every compatibility send before HTTP and usage before schema validation', async () => {
     const j = journal();
     let count = 0;

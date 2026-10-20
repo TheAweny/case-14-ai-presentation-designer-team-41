@@ -65,12 +65,20 @@ def resolved_metrics(
     }
 
 
+#: Share of a wrapped line left empty by the word that moved to the next one.
+_WRAP_LOSS = 0.1
+
+
 def estimate_room(metrics: dict[str, Any], paragraph_count: int = 1) -> tuple[int, int]:
     size = metrics["fontSize"]
     line_height = max(size, size * metrics["lineSpacing"])
     spacing = (metrics.get("spaceBeforePt", 0) + metrics.get("spaceAfterPt", 0)) * paragraph_count
-    lines = max(1, math.floor(max(0, metrics["textHeightPt"] - spacing) / line_height))
-    chars = max(1, math.floor(metrics["textWidthPt"] / (size * 0.59))) * lines
+    available = max(0, metrics["textHeightPt"] - spacing - size)
+    lines = max(1, 1 + math.floor(available / line_height))
+    per_line = max(1, math.floor(metrics["textWidthPt"] / (size * 0.59)))
+    # A line breaks before the word that does not fit, so every line but the last ends short:
+    # about a tenth of it for Russian copy, whose words run long.
+    chars = per_line * lines - math.ceil(per_line * _WRAP_LOSS) * (lines - 1)
     return max(1, min(chars, 750)), lines
 
 

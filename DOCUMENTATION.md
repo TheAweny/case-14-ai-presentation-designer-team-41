@@ -193,7 +193,7 @@ docker compose up --build
 именованном volume; PPTX, превью и входные файлы остаются в `runs/`.
 
 Описание API открыто без входа: страница Swagger — `/api/docs` (локально
-http://localhost:3000/api/docs, на демостенде https://lct-demo.awenylab.com/api/docs), сам
+http://localhost:3000/api/docs, на стенде https://lct.aweny.link/api/docs), сам
 документ OpenAPI — `/api/docs-json`. Вошедший пользователь может выполнять запросы прямо со
 страницы: они идут через `/api/backend` с его сессией.
 

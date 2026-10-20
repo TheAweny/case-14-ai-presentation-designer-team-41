@@ -59,6 +59,16 @@ const slot = (slotId: string, role: 'title' | 'body', maxChars = 400) => ({
   sample: '',
   font: 'Fixture',
   fontSize: role === 'title' ? 28 : 18,
+  // Text-only step rows: enough horizontal copy space, too short for native data and labels.
+  box: {
+    x: 0,
+    y:
+      slotId === 'title'
+        ? 0
+        : (Number(slotId.slice(1)) * 2 + (slotId.startsWith('h') ? 1 : 2)) * 600_000,
+    cx: 5_000_000,
+    cy: 500_000,
+  },
   capacity: { safeChars: maxChars, basis: 'obstacle-aware' as const },
 });
 const pattern: Composition = {

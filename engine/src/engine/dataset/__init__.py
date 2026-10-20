@@ -67,7 +67,8 @@ def extract_dataset(path: Path) -> Dataset:
         fileName=path.name,
         mediaType=_MEDIA_TYPES.get(suffix, "application/octet-stream"),
         bytes=size,
-        sha256=hashlib.sha256(data if data else path.name.encode()).hexdigest(),
+        # A file too large is not read, so its digest names it; an empty file has a real one.
+        sha256=hashlib.sha256(data if size <= MAX_BYTES else path.name.encode()).hexdigest(),
     )
     diagnostics: list[Diagnostic] = []
     if size > MAX_BYTES:
@@ -105,18 +106,22 @@ def extract_dataset(path: Path) -> Dataset:
         else:
             text = _delimited.decode(data, diagnostics)
             if text is not None:
-                tables = _markdown.read_tables(text) if kind in ("markdown", "text") else []
+                tables = _text_tables(text, diagnostics) if kind in ("markdown", "text") else []
                 if tables:
                     grids = [
                         (f"Table {number}", "visible", grid, [])
                         for number, grid in enumerate(tables, 1)
                     ]
-                elif kind == "markdown":
+                elif kind == "markdown" or (
+                    kind == "text" and not _delimited.is_table(text, suffix)
+                ):
                     diagnostics.append(
                         Diagnostic(
                             code="no-table",
                             severity=Severity.error,
-                            message="The text holds no table with a header and a separator row.",
+                            message="The text holds no table: no pipe table with a separator "
+                            "row, no block pasted from a spreadsheet, and its lines do not "
+                            "split into the same columns.",
                         )
                     )
                 else:
@@ -157,6 +162,33 @@ def extract_dataset(path: Path) -> Dataset:
         sheets=[] if errors and not sheets else sheets,
         diagnostics=diagnostics,
     )
+
+
+def _text_tables(text: str, diagnostics: list[Diagnostic]) -> list[dict[int, dict[int, Raw]]]:
+    """The tables written into a text, in the order they come: pipe tables and pasted blocks."""
+    pieces: list[tuple[int, dict[int, dict[int, Raw]] | str]] = []
+    unwrapped = 0
+    for start, grid, plain in _markdown.find_tables(text):
+        pieces.append((start, grid))
+        unwrapped += plain
+    pieces += _delimited.tab_blocks(text)
+    pieces.sort(key=lambda item: item[0])
+    tables = [
+        piece
+        if isinstance(piece, dict)
+        else _delimited.read_delimited(piece, ".tsv", diagnostics, f"Table {number}")
+        for number, (_, piece) in enumerate(pieces, start=1)
+    ]
+    if unwrapped:
+        diagnostics.append(
+            Diagnostic(
+                code="markup-removed",
+                severity=Severity.info,
+                message=f"{unwrapped} cell(s) were wrapped in Markdown bold, italics or code; "
+                "the wrapping was taken off to read the value.",
+            )
+        )
+    return tables
 
 
 def _json_grids(

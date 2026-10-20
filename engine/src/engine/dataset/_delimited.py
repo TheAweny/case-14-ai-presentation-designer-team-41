@@ -2,6 +2,7 @@
 
 import csv
 import io
+import re
 from collections import Counter
 
 from engine.dataset._build import Raw
@@ -50,18 +51,55 @@ def _consistency(lines: list[str], delimiter: str) -> tuple[float, int]:
     return count / len(widths), width
 
 
+def _score(lines: list[str], delimiter: str) -> float:
+    share, width = _consistency(lines, delimiter)
+    # A delimiter that splits every line in the same way wins; more columns break a tie.
+    return share * 100 + min(width, 50) if width >= 2 else 0.0
+
+
 def detect_delimiter(text: str, suffix: str) -> str:
     if suffix == ".tsv":
         return "\t"
     lines = [line for line in text.splitlines() if line.strip()][:_SAMPLE]
-    best, best_score = ",", 0.0
-    for delimiter in _DELIMITERS:
-        share, width = _consistency(lines, delimiter)
-        # A delimiter that splits every line in the same way wins; more columns break a tie.
-        score = share * 100 + min(width, 50) if width >= 2 else 0.0
-        if score > best_score:
-            best, best_score = delimiter, score
-    return best
+    scores = {delimiter: _score(lines, delimiter) for delimiter in _DELIMITERS}
+    best = max(_DELIMITERS, key=lambda delimiter: scores[delimiter])
+    if best == "," and scores[";"] >= scores[","] - 1 and _DECIMAL_COMMA.search(text):
+        # «31.01.2024;115 600,0;75,4» splits evenly on commas too. Numbers written with a
+        # decimal comma are what a semicolon file exists for, so the comma is not its delimiter.
+        return ";"
+    return best if scores[best] > 0 else ","
+
+
+_DECIMAL_COMMA = re.compile(r"(?<![\d,])\d+,\d{1,2}(?![\d,])")
+#: Lines that hold a tab, one under another, are a block pasted from a spreadsheet.
+_MIN_BLOCK_LINES = 2
+
+
+def tab_blocks(text: str) -> list[tuple[int, str]]:
+    """Runs of lines split by the same number of tabs: what a spreadsheet pastes into a text."""
+    blocks: list[tuple[int, str]] = []
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        width = lines[index].count("\t")
+        if width == 0 or not lines[index].strip():
+            index += 1
+            continue
+        start = index
+        while index < len(lines) and lines[index].count("\t") == width and lines[index].strip():
+            index += 1
+        if index - start >= _MIN_BLOCK_LINES:
+            blocks.append((start, "\n".join(lines[start:index])))
+    return blocks
+
+
+def is_table(text: str, suffix: str) -> bool:
+    """The whole text splits into the same number of fields on nearly every line."""
+    lines = [line for line in text.splitlines() if line.strip()][:_SAMPLE]
+    if len(lines) < 2:
+        return False
+    share, width = _consistency(lines, detect_delimiter(text, suffix))
+    return width >= 2 and share >= 0.9
 
 
 def read_delimited(

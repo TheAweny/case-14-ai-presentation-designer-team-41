@@ -78,3 +78,23 @@ export function leakedSamples(
   }
   return leaked;
 }
+
+/**
+ * Figure slots the writer filled with words: a ring, a badge or a counter drawn for «75%» that
+ * reads «быстр» says nothing and looks broken. Such a slot is emptied like a leaked sample, and
+ * the engine takes the shape off the slide. A title is the writer's.
+ */
+export function wordsInFigureSlots(
+  slides: readonly SampleSlide[],
+): { index: number; slotId: string; text: string }[] {
+  const found: { index: number; slotId: string; text: string }[] = [];
+  for (const { index, composition, slide } of slides) {
+    for (const slot of composition.slots) {
+      if (slot.role === 'title' || !isFigureSample(slot.sample)) continue;
+      const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
+      if (text && !/\d/u.test(text) && !isFigureSample(text))
+        found.push({ index, slotId: slot.slotId, text });
+    }
+  }
+  return found;
+}

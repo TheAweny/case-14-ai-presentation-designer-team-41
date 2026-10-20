@@ -244,6 +244,53 @@ describe('one agent per complete variant', () => {
     expect(sends.filter((send) => send === 'writer:airy')).toHaveLength(2);
   });
 
+  it('keeps a fitting repair when another alternative exceeds the slot limit', async () => {
+    const slot = writerSlots(pattern)[0];
+    if (!slot) throw new Error('Missing fixture slot');
+    let checked = false;
+    const provider: TextProvider = {
+      model: 'offline',
+      async generate(_agent, _instructions, _input, schema) {
+        const answer = (text: string) => ({
+          slides: { '0': { rewrites: { [slot.slotId]: [text, 'Рост', text] } } },
+        });
+        checked = true;
+        return schema.parse(answer('а'.repeat(slot.maxChars + 1)));
+      },
+    };
+    const workflow = createRepairWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      deckRepairInstructions: 'repair-fixture',
+      signal: new AbortController().signal,
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({
+      inputData: [
+        {
+          index: 0,
+          brief,
+          composition: pattern,
+          requiredClaims: [],
+          previous: {
+            patternId: pattern.patternId,
+            speakerNotes: '',
+            texts: pattern.slots.map((s) => ({ slotId: s.slotId, text: 'Рост' })),
+          },
+          corrections: [{ slotId: slot.slotId, message: 'text-overflow' }],
+        },
+      ],
+    });
+    expect(checked).toBe(true);
+    expect(result.status).toBe('success');
+    if (result.status === 'success')
+      expect(result.result[0]?.slide.texts.find((s) => s.slotId === slot.slotId)?.text).toBe(
+        'Рост',
+      );
+  });
+
   it('repairs all affected slides in one request and enforces two rounds per variant', async () => {
     const slot = writerSlots(pattern)[0];
     if (!slot) throw new Error('Missing fixture slot');

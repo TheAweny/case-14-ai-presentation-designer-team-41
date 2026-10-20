@@ -33,7 +33,11 @@ import { type WriterModules, writerPrompt } from './writer-prompt.js';
 import type { AttemptBudget } from './attempt-budget.js';
 import { retainsClaimDetails } from './claim-details.js';
 import { boundedDatasetEvidence } from './dataset-evidence.js';
-import { verifyVisual } from './visual-grounding.js';
+import { figuresOf } from './repeats.js';
+import { plannedSeriesChart, quotesSeries, seriesFacts, verifyVisual } from './visual-grounding.js';
+import { sourceBriefTexts } from './source-brief.js';
+import { ampleComposition } from './composition-feasibility.js';
+import { selectSlideRepair } from './repair-selection.js';
 export { prepareDatasets } from './dataset-evidence.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
@@ -398,6 +402,68 @@ export function targetRange(slot: Parameters<typeof minChars>[0], variant: DeckV
   };
 }
 
+/** Lines of copy a box must hold before code puts a planned chart there. */
+const CHART_MIN_LINES = 8;
+
+/** The body slot tall enough for a chart; a two-line statement box would squash the bars flat. */
+export function chartSlot(pattern: GenerationProfile['compositions'][number]): string | undefined {
+  return visualSlots(pattern).find(
+    (id) => (pattern.slots.find((slot) => slot.slotId === id)?.maxLines ?? 0) >= CHART_MIN_LINES,
+  );
+}
+
+/** Points of a purpose that state a figure: «80% успешных; облачность при неудачах 43,33; …». */
+function figurePoints(purpose: string): number {
+  // The points follow the claim: after its dash, or after its colon when there is no dash.
+  const dash = purpose.indexOf(' — ');
+  const colon = purpose.indexOf(': ');
+  const at = dash >= 0 ? dash + 3 : colon >= 0 ? colon + 2 : -1;
+  if (at < 0) return 0;
+  return purpose
+    .slice(at)
+    .split(/;\s*/u)
+    .filter((point) => /\d/u.test(point)).length;
+}
+
+/**
+ * The layout a data slide needs, whatever the planner picked: a slide of three or more figures
+ * that quotes no series line goes to the composition whose slots are figures, a slide that quotes
+ * a ready series to a composition with room for its chart. The cover and the closing slide stay as planned.
+ */
+export function withDataLayouts<T extends { patternId: string; purpose: string }>(
+  slides: readonly T[],
+  catalog: readonly GenerationProfile['compositions'][number][],
+  brief: string,
+): T[] {
+  const charts = catalog.filter((pattern) => chartSlot(pattern) !== undefined);
+  const figures = catalog.filter(
+    (pattern) => writerSlots(pattern).filter((slot) => isFigureSample(slot.sample)).length >= 3,
+  );
+  return slides.map((slide, index) => {
+    if (index === 0 || index === slides.length - 1) return slide;
+    const current = catalog.find((pattern) => pattern.patternId === slide.patternId);
+    const kpi = figures[0];
+    if (
+      kpi &&
+      !figures.some((pattern) => pattern.patternId === slide.patternId) &&
+      figurePoints(slide.purpose) >= 3 &&
+      !quotesSeries(slide.purpose, brief)
+    )
+      return { ...slide, patternId: kpi.patternId };
+    const chart = charts[0];
+    if (
+      chart &&
+      !(current && chartSlot(current)) &&
+      plannedSeriesChart(slide.purpose, brief, 'chart')
+    )
+      return { ...slide, patternId: chart.patternId };
+    return slide;
+  });
+}
+
+/** Data slides a deck with ready series is planned to show at least. */
+const CHART_SLIDES = 2;
+
 export function visualSlots(pattern: GenerationProfile['compositions'][number]): string[] {
   const mirrored = mirroredSlots(pattern);
   return pattern.slots
@@ -405,6 +471,13 @@ export function visualSlots(pattern: GenerationProfile['compositions'][number]):
       (slot) =>
         slot.role === 'body' && slot.maxChars >= VISUAL_MIN_CHARS && !mirrored.has(slot.slotId),
     )
+    .filter((slot) => {
+      // Native data need room for labels and several rows, measured in this template's font.
+      // Legacy profiles without geometry retain their capacity-based compatibility.
+      if (!slot.box) return true;
+      const em = slot.fontSize * 12700;
+      return slot.box.cx >= em * 12 && slot.box.cy >= em * 7;
+    })
     .map((slot) => slot.slotId);
 }
 
@@ -767,6 +840,7 @@ export function plannerComposition(
     ...(note?.special ? { special: true } : {}),
     ...(note ? { requiredContent: note.requiredContent } : {}),
     imageCount: pattern.imageCount,
+    nativeVisualSlots: visualSlots(pattern),
     /** Places this composition has for a generated picture. */
     imageSlots: (pattern.imageSlots ?? []).filter(
       (s) => !declaredQrSlots(pattern, note).includes(s.slotId),
@@ -869,7 +943,8 @@ export function prepareVariantCatalog<T extends GenerationProfile['compositions'
   const spacious = distinct.filter(
     (pattern) =>
       pattern.slots.some((slot) => slot.role === 'title' && slot.maxChars >= SHORT_CLAIM_CHARS) &&
-      writerSlots(pattern).every((slot) => slot.maxChars >= 12),
+      // A figure slot («42%») is short by design: three of them make a KPI slide, not a cramped one.
+      writerSlots(pattern).every((slot) => slot.maxChars >= 12 || isFigureSample(slot.sample)),
   );
   const framing = distinct.filter((pattern) => {
     const note = notes.get(pattern.patternId);
@@ -929,7 +1004,11 @@ function boundedSlideSchema(
           slot.slotId,
           // Permissive on purpose: an empty or too long slot is sent to the rewriter after
           // parsing, instead of failing the whole request at the provider.
-          z.string(),
+          z
+            .string()
+            .describe(
+              `At most ${fitChars(slot)} characters including spaces; at most ${slot.maxLines} lines.`,
+            ),
         ]),
       ),
     ),
@@ -1185,13 +1264,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     const variant = mode === 'shared' ? 'balanced' : (deps.variant ?? 'balanced');
     const note = deps.notes?.find((entry) => entry.patternId === base.patternId);
     const qr = (note?.qrSlotIds?.length ?? 0) > 0;
-    const allowVisual =
-      !qr &&
-      visualSlots(base).length > 0 &&
-      (!deps.writerModules || /\d|график|таблиц|показател|chart|kpi/iu.test(inputData.purpose));
+    const allowVisual = !qr && visualSlots(base).length > 0;
     const input = {
       ...task,
       deckTitle,
+      originalSourceTexts: sourceBriefTexts(task.brief),
       ...(deps.preparedDatasets?.length
         ? {
             datasetFacts: datasetEvidence.facts,
@@ -1342,6 +1419,68 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           const missing = missingRequiredContent(result, notes, source);
           return missing.length ? { missingRequiredContent: missing } : undefined;
         };
+        // A figure the planner computed or guessed («80%», a threshold) becomes a required claim
+        // the writer must keep, and no rewrite can then take it off the slide.
+        const sourceFigures = figuresOf(source);
+        const figureCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+          const unsourced = result.slides.flatMap((slide, index) => {
+            const claims = (slide as { requiredClaims?: { text: string }[] }).requiredClaims ?? [];
+            const figures = [
+              ...figuresOf([slide.purpose, ...claims.map((claim) => claim.text)].join('\n')),
+            ].filter((figure) => !sourceFigures.has(figure));
+            return figures.length ? [{ slideIndex: index, figures }] : [];
+          });
+          return unsourced.length
+            ? {
+                unsourcedFigures: unsourced,
+                message:
+                  'These figures are not in brief. Replace each with a figure brief states ' +
+                  'verbatim (its counts and series lines for tables) together with what it ' +
+                  'measures. Never compute shares, differences or thresholds.',
+              }
+            : undefined;
+        };
+        // Tables read from a file come with ready series: the deck shows them as charts, and a
+        // chart is drawn only for a slide whose purpose quotes a series on a composition with room.
+        const chartPatterns = full.filter((pattern) => chartSlot(pattern) !== undefined);
+        const chartCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+          if (!chartPatterns.length || !seriesFacts(inputData.brief).length) return undefined;
+          const charted = result.slides.filter((slide) => {
+            const pattern = chartPatterns.find((entry) => entry.patternId === slide.patternId);
+            const slot = pattern && chartSlot(pattern);
+            return slot && plannedSeriesChart(slide.purpose, inputData.brief, slot);
+          }).length;
+          return charted >= Math.min(CHART_SLIDES, result.slides.length - 2)
+            ? undefined
+            : {
+                chartSlides: CHART_SLIDES,
+                chartPatternIds: chartPatterns.map((pattern) => pattern.patternId),
+                message:
+                  'Give chartSlides slides one of chartPatternIds, each built on one ready ' +
+                  'series of brief: quote its line whole in the purpose, the name before the ' +
+                  'colon and every value («cloud_cover, среднее: 0 — 43,33, 1 — 30,83»). ' +
+                  'Choose series whose values clearly differ.',
+              };
+        };
+        const quoteCorrections = (result: z.infer<typeof compositionPlanSchema>) => {
+          const unquoted = result.slides.flatMap((slide, index) =>
+            (
+              (slide as { requiredClaims?: z.infer<typeof requiredSlideClaimSchema>[] })
+                .requiredClaims ?? []
+            )
+              .filter((claim) => claim.source.sourceId === 'brief')
+              .filter((claim) => !inputData.brief.includes(claim.source.quote))
+              .map((claim) => ({ slideIndex: index, id: claim.id, quote: claim.source.quote })),
+          );
+          return unquoted.length
+            ? {
+                unquotedClaims: unquoted,
+                message:
+                  'These quotes do not occur in brief. Copy each quote character for character ' +
+                  'from brief, or drop the claim.',
+              }
+            : undefined;
+        };
         let result: z.infer<typeof compositionPlanSchema>;
         try {
           result = await plan();
@@ -1376,7 +1515,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...countCorrections(result),
           ...coverCorrections(result),
           ...evidenceCorrections(result),
-          ...(!outlineLayoutOnly ? varietyCorrections(result) : {}),
+          // A user's outline fixes what each slide says: only its layouts are planned here.
+          ...(!outlineLayoutOnly
+            ? {
+                ...varietyCorrections(result),
+                ...figureCorrections(result),
+                ...chartCorrections(result),
+              }
+            : {}),
+          ...quoteCorrections(result),
         };
         if (Object.keys(corrections).length) result = await plan(corrections, result);
         if (slideCount !== null && result.slides.length !== slideCount)
@@ -1403,6 +1550,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               'пунктов. Разнообразие ограничено шаблоном.',
           );
         }
+        result = { ...result, slides: withDataLayouts(result.slides, full, inputData.brief) };
         // Still a layout for a speaker, a contact or a screenshot the source does not have: the
         // slide moves to one that needs none, instead of the deck failing.
         result = withoutMissingContent(
@@ -1425,22 +1573,23 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
                   source: { sourceId: 'user-outline' as const, quote: text },
                 }))
               : slide.requiredClaims;
-            for (const claim of requiredClaims) {
+            // A claim whose quote is not in its source stays off the slide: the writer is never
+            // told to assert what nothing supports.
+            const supported = requiredClaims.filter((claim) => {
               const sourceText =
                 claim.source.sourceId === 'brief'
                   ? inputData.brief
                   : userSlide
                     ? [userSlide.title, ...userSlide.points].join('\n')
                     : '';
-              if (!sourceText.includes(claim.source.quote))
-                throw new Error(`Required claim ${claim.id} has no source evidence.`);
-            }
+              return sourceText.includes(claim.source.quote);
+            });
             if (new Set(requiredClaims.map((claim) => claim.id)).size !== requiredClaims.length)
               throw new Error('Planner returned duplicate required claim ids.');
             return {
               ...slide,
               ...(outlineLayoutOnly && userSlide ? { purpose: userSlide.title } : {}),
-              requiredClaims,
+              requiredClaims: supported,
             };
           }),
         };
@@ -1496,6 +1645,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           // A deterministic one-to-one mapping cannot drop a mandatory fact. A poorer template
           // keeps its original composition instead of discarding or inventing content blocks.
           if (
+            (visualSlots(canonicalComposition).length > 0 &&
+              visualSlots(composition).length === 0) ||
             !semanticSlotMap(
               { ...canonicalComposition, slots: writerSlots(canonicalComposition) },
               { ...composition, slots: writerSlots(composition) },
@@ -1504,6 +1655,52 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             )
           )
             composition = canonicalComposition;
+        }
+        // Choose room before bindings exist: an approved content slide cannot be
+        // squeezed into a divider just because both carry a title.
+        if (
+          slide.requiredClaims.length &&
+          !slide.qrRequests?.length &&
+          (deps.variantCopyMode ?? 'independent') === 'independent'
+        ) {
+          const selected = composition;
+          const sourceNote = notes.get(selected.patternId);
+          const available = new Set(sourceNote?.requiredContent ?? []);
+          const selection = {
+            selected,
+            candidates: full,
+            variant,
+            title: outline?.slides[index]?.title ?? slide.purpose,
+            claims: slide.requiredClaims,
+            writableSlots: writerSlots,
+            compatible: (candidate: typeof selected) => {
+              if (candidate.patternId === selected.patternId) return true;
+              const note = notes.get(candidate.patternId);
+              if (sourceNote?.special || note?.special || note?.skip) return false;
+              if ((note?.requiredContent ?? []).some((item) => !available.has(item))) return false;
+              if (index === 0 && !covers.some((cover) => cover.patternId === candidate.patternId))
+                return false;
+              if (index > 0 && FRAMING_KINDS.has(note?.kind ?? 'other')) return false;
+              return visualSlots(selected).length === 0 || visualSlots(candidate).length > 0;
+            },
+          };
+          composition =
+            ampleComposition(selection) ??
+            (index === 0
+              ? ampleComposition({
+                  ...selection,
+                  compatible: (candidate) => {
+                    const note = notes.get(candidate.patternId);
+                    return (
+                      !note?.special &&
+                      !note?.skip &&
+                      !(note?.requiredContent ?? []).some((item) => !available.has(item)) &&
+                      !FRAMING_KINDS.has(note?.kind ?? 'other')
+                    );
+                  },
+                })
+              : undefined) ??
+            selected;
         }
         return {
           ...slide,
@@ -1589,6 +1786,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       } = first.input;
       const input = {
         brief,
+        originalSourceTexts: first.input.originalSourceTexts,
         deckTitle,
         audience,
         goal,
@@ -1679,6 +1877,12 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         await deps.onWarning?.(
           `Slide ${inputData.index + 1}: visual provenance is unknown; keeping text fallback.`,
         );
+      // A slide planned around a ready series shows that series, whatever the writer drew.
+      const seriesSlot = allowVisual ? chartSlot(inputData.composition) : undefined;
+      const planned = seriesSlot
+        ? plannedSeriesChart(inputData.purpose, inputData.brief, seriesSlot)
+        : null;
+      if (planned) visual = planned;
       if (visual?.kind === 'native') visual = { ...visual, variant: deps.variant ?? 'balanced' };
       const texts = raw.textsBySlot as Record<string, string | undefined>;
       const context: CopyContext = {
@@ -1906,6 +2110,7 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
     const compatible = pool.filter(
       (p) =>
         !addsRequirements(p.patternId, id) &&
+        (visualSlots(planned).length === 0 || visualSlots(p).length > 0) &&
         framing(p.patternId) === framing(id) &&
         semanticSlotMap(
           { ...planned, slots: writerSlots(planned) },
@@ -2184,7 +2389,18 @@ export function createRepairWorkflow(deps: GenerationDependencies) {
     inputSchema: repairTaskSchema,
     outputSchema: repairedSlideSchema,
     execute: async ({ inputData }) => {
-      const slide = await rewriteSlide(deps, inputData, accepted.get(inputData.index));
+      let slide: ComposedSlide;
+      try {
+        slide = await rewriteSlide(deps, inputData, accepted.get(inputData.index));
+      } catch (error) {
+        // One slide out of rewrites must not take the other slides' repairs down with it: it
+        // keeps its copy, and the audit reports what is still wrong.
+        deps.signal.throwIfAborted();
+        if (!(error instanceof Error && error.message.startsWith('Semantic attempt limit')))
+          throw error;
+        await deps.onWarning?.(`Repair slide ${inputData.index + 1}: ${error.message}`);
+        slide = inputData.previous;
+      }
       // Same guarantee as the write step: an uncured slide is reported through onWarning, not
       // fatal, so the run keeps all three variants.
       for (const problem of blockingProblems(slide, inputData.composition, {
@@ -2260,14 +2476,27 @@ function rewriteInput(deps: GenerationDependencies, task: z.infer<typeof repairT
     ...datedSlots(task.composition).keys(),
   ]);
   const slots = task.composition.slots.filter(
-    (s) => !owned.has(s.slotId) && task.corrections.some((c) => c.slotId === s.slotId),
+    (s) =>
+      !owned.has(s.slotId) &&
+      s.slotId !== task.previous.visual?.slotId &&
+      !mirroredSlots(task.composition).has(s.slotId) &&
+      (task.corrections.some((c) => c.slotId === s.slotId) ||
+        (deps.deckRepairInstructions !== undefined && task.corrections.length > 0)),
   );
   const schema = slotRewriteChoicesSchema.extend({
     rewrites: z.object(
       Object.fromEntries(
         slots.map((s) => [
           s.slotId,
-          z.array(s.role === 'title' ? z.string().min(1) : z.string()).length(3),
+          z
+            .array(
+              // Evaluate choices independently below: one oversized candidate must not
+              // discard valid alternatives for every slide in the same batch.
+              (s.role === 'title' ? z.string().min(1) : z.string()).describe(
+                `At most ${Math.min(s.maxChars, fitChars(s))} characters, including spaces.`,
+              ),
+            )
+            .length(3),
         ]),
       ),
     ),
@@ -2277,6 +2506,8 @@ function rewriteInput(deps: GenerationDependencies, task: z.infer<typeof repairT
     deps.notes?.find((note) => note.patternId === task.composition.patternId),
   );
   const input = {
+    // The slide's place: the rewrite budget is counted per slide, and slot ids repeat across them.
+    index: task.index,
     brief: task.brief,
     variant: deps.variant ?? 'balanced',
     variantCopyMode: deps.variantCopyMode ?? 'independent',
@@ -2338,6 +2569,20 @@ async function rewriteSlide(
           deps.signal,
         );
   const slide = { ...task.previous, texts: task.previous.texts.map((t) => ({ ...t })) };
+  if (deps.deckRepairInstructions !== undefined) {
+    const revised = selectSlideRepair({
+      previous: slide,
+      slots: slots.map((slot) => ({
+        ...slot,
+        ...semantics.slots.find((entry) => entry.slotId === slot.slotId),
+      })),
+      rewrites: result.rewrites,
+      requiredClaims: task.requiredClaims,
+      bestFittingAlternative: (slot, alternatives) =>
+        bestFittingAlternative(slot, alternatives, deps.variant ?? 'balanced'),
+    });
+    return keepStatedFacts(revised, task.composition, task.brief);
+  }
   for (const slot of slots) {
     const before = slide.texts.map((text) => text.text).join('\n');
     const alternatives = (result.rewrites[slot.slotId] ?? []).filter((candidate) =>
@@ -2347,12 +2592,23 @@ async function rewriteSlide(
         task.requiredClaims,
       ),
     );
-    const text = bestFittingAlternative(
-      { ...slot, ...semantics.slots.find((entry) => entry.slotId === slot.slotId) },
-      alternatives,
-      deps.variant ?? 'balanced',
-    );
+    const policy = { ...slot, ...semantics.slots.find((entry) => entry.slotId === slot.slotId) };
     const binding = slide.texts.find((t) => t.slotId === slot.slotId);
+    let text = bestFittingAlternative(policy, alternatives, deps.variant ?? 'balanced');
+    // Copy that overflows its box fails the whole variant at export. When every shorter wording
+    // loses a detail of a claim, the one that fits is taken and the report says what may be gone.
+    if (text === undefined && (binding?.text.length ?? 0) > slot.maxChars) {
+      text = bestFittingAlternative(
+        policy,
+        result.rewrites[slot.slotId] ?? [],
+        deps.variant ?? 'balanced',
+      );
+      if (text !== undefined)
+        await deps.onWarning?.(
+          `Slide ${task.index + 1}, slot ${slot.slotId}: shortened to fit its box; check that ` +
+            'every figure of the slide is still there.',
+        );
+    }
     // No alternative fits the box. The slot keeps its previous copy (or stays empty when it was
     // an unfillable card): a flagged slide costs one finding, a failed variant would cost the
     // whole deck, and all three variants are mandatory.

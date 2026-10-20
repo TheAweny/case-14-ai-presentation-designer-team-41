@@ -17,6 +17,7 @@ from pptx import Presentation
 from pydantic import BaseModel
 
 from engine import __version__, checks, dataset, export, layout, parser, render, visuals
+from engine.api._brandbook import effective_composition_request
 from engine.api._composition_audit import composition_slides
 from engine.api._profiles import UnknownProfileError, deterministic_profile
 from engine.api._visuals import build_payload, capability_payload, compare_payload
@@ -46,15 +47,21 @@ from engine.contracts import (
     VisualCompareResponse,
 )
 from engine.contracts._generated import (
+    BrandbookParseRequest,
+    BrandbookProfile,
+    BrandbookTemplateRequest,
+    BrandbookTemplateResponse,
     CompositionCheckResponse,
     CompositionExportRequest,
     CompositionExportResponse,
     DatasetExtractRequest,
     GenerationProfile,
 )
+from engine.export.brandbook import apply_brandbook
 from engine.export.compositions import export_compositions
-from engine.layout.text_fit import check_composition_text
+from engine.layout.text_fit import check_composition_text, fitting_scale
 from engine.parser._errors import TemplateParseError
+from engine.parser.brandbook import BrandbookError, parse_brandbook
 from engine.parser.compositions import extract_compositions
 from engine.parser.materials import MaterialError, extract_material
 
@@ -334,9 +341,50 @@ def generation_profile(request: TemplateProfileRequest) -> dict:
     }
 
 
+@app.post("/v1/brandbook-profile", response_model=BrandbookProfile)
+def brandbook_profile(request: BrandbookParseRequest) -> dict:
+    """I inventory and parse saved brand sources without interpreting document instructions."""
+    try:
+        return parse_brandbook(Path(request.path).resolve(), Path(request.outputDir).resolve())
+    except BrandbookError as error:
+        raise HTTPException(status_code=error.status, detail=error.detail) from error
+
+
+@app.post(
+    "/v1/brandbook-template",
+    response_model=BrandbookTemplateResponse,
+    response_model_exclude_unset=True,
+)
+def brandbook_template(request: BrandbookTemplateRequest) -> dict:
+    """I prepare native editable styles before profiling, planning and text measurement."""
+    source = Path(request.templatePath).resolve()
+    target = Path(request.outputPath).resolve()
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="Template not found.")
+    if source == target:
+        raise HTTPException(
+            status_code=422, detail="Use a distinct effective template output path."
+        )
+    try:
+        warnings = apply_brandbook(source, target, request.brandbook.model_dump(mode="json"))
+        profile = generation_profile(TemplateProfileRequest(template_path=str(target)))
+    except (ValueError, OSError, zipfile.BadZipFile) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {
+        "schemaVersion": 1,
+        "templatePath": str(target),
+        "profile": profile,
+        "designSystem": profile["designSystem"],
+        "warnings": warnings,
+    }
+
+
 @app.post("/v1/composition-check", response_model=CompositionCheckResponse)
 def composition_check(request: CompositionExportRequest) -> dict:
     """Check every binding against the source typography before writing a file."""
+    if request.brandbook is not None:
+        with effective_composition_request(request) as effective:
+            return composition_check(effective)
     source = Path(request.templatePath).resolve()
     if not source.is_file():
         raise HTTPException(status_code=404, detail="Template not found.")
@@ -366,10 +414,13 @@ def composition_deck(request: CompositionExportRequest) -> dict:
     A template family that is not installed does not stop the export. The file keeps that
     family name; the preview may draw a substitute, and the response names the gap.
     """
+    if request.brandbook is not None:
+        with effective_composition_request(request) as effective:
+            return composition_deck(effective)
     source = Path(request.templatePath).resolve()
     output = Path(request.outputPath).resolve()
     findings = composition_check(request)["findings"]
-    if findings:
+    if findings and not getattr(request, "allowOverflow", False):
         raise HTTPException(status_code=422, detail=findings)
     missing: list[str] = []
     try:
@@ -384,6 +435,17 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             }
         )
         design_system = parser.design_system_of(source)
+        # Copy the rewriter could not shorten is set smaller until it fits its box: spilling over
+        # the shapes below it would cost the whole slide, a smaller font costs only that slot.
+        by_id = {pattern["patternId"]: pattern for pattern in patterns}
+        font_scales: dict[tuple[int, str], float] = {}
+        for finding in findings if getattr(request, "allowOverflow", False) else []:
+            slide = request.slides[finding["slideIndex"]]
+            slot = next(
+                s for s in by_id[slide.patternId]["slots"] if s["slotId"] == finding["slotId"]
+            )
+            text = next(t.text for t in slide.texts if t.slotId == finding["slotId"])
+            font_scales[(finding["slideIndex"], finding["slotId"])] = fitting_scale(text, slot)
 
         def draw(shapes: Any, element: dict[str, Any]) -> None:
             if element["kind"] == "native":
@@ -407,7 +469,13 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             visuals.draw_visual(shapes, styled[0]["elements"][0], design_system)
 
         export_compositions(
-            source, output, [s.model_dump(mode="json") for s in request.slides], patterns, draw
+            source,
+            output,
+            [s.model_dump(mode="json") for s in request.slides],
+            patterns,
+            draw,
+            allow_overflow=getattr(request, "allowOverflow", False),
+            font_scales=font_scales,
         )
         previews = render.render_to_png(output, output.parent / "previews", dpi=110)
         ir = parser.parse_template(output)
@@ -606,6 +674,20 @@ def _export_media(request: DeckExportRequest) -> dict[str, bytes]:
 )
 def export_deck(request: DeckExportRequest) -> DeckExportResponse:
     """Write one variant's slides as files, tables and charts as native objects."""
+    # Keep every downstream operation (styling, fit, native export, render) on the same
+    # physically branded template. Older generated contracts simply have no brandbook attribute.
+    binding = getattr(request, "brandbook", None)
+    if binding is not None:
+        with tempfile.TemporaryDirectory(prefix="brandbook-export-") as directory:
+            effective = Path(directory) / "template.pptx"
+            apply_brandbook(
+                Path(request.templatePath).resolve(),
+                effective,
+                binding.model_dump(mode="json") if hasattr(binding, "model_dump") else binding,
+            )
+            return export_deck(
+                request.model_copy(update={"templatePath": str(effective), "brandbook": None})
+            )
     template_path = Path(request.templatePath).resolve()
     if not template_path.is_file():
         raise HTTPException(status_code=404, detail="Template PPTX was not found.")
@@ -669,6 +751,9 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
     `composition` profile leaves out what the typographic fit check already covers exactly and
     what would flag the template's own geometry.
     """
+    if request.brandbook is not None:
+        with effective_composition_request(request) as effective:
+            return composition_audit(effective)
     source = Path(request.templatePath).resolve()
     output = Path(request.outputPath).resolve()
     if not source.is_file() or not output.is_file():
@@ -706,11 +791,13 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
         # File-backed checks must inspect the actual exported media, not the requested image
         # or its full-frame average. Internal orchestration data is not a wire contract.
         "pptxPath": str(output),
+        # An empty slot's shape is taken off the slide at export, so only filled ones remain.
         "editableTextShapeIds": [
             [
                 binding.slotId
                 for binding in slide.texts
-                if slide.visual is None or binding.slotId != slide.visual.slotId
+                if binding.text.strip()
+                and (slide.visual is None or binding.slotId != slide.visual.slotId)
             ]
             for slide in request.slides
         ],

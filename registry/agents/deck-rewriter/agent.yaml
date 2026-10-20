@@ -1,5 +1,5 @@
 id: deck-rewriter
-version: 1.0.0
+version: 1.2.0
 description: Repairs all audited defects of one presentation variant in one model task
 modelId: writer-default
 generation:

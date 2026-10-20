@@ -22,15 +22,16 @@ export interface ChatDraft {
   readonly text: string;
   readonly files: readonly File[];
   readonly templateFile: File | null;
+  readonly brandbookFile?: File | null;
   readonly template?: ComposedMessage['template'];
   readonly context?: ComposedMessage['context'];
   readonly attachments?: readonly ChatAttachment[];
 }
-const EMPTY_DRAFT: ChatDraft = { text: '', files: [], templateFile: null };
+const EMPTY_DRAFT: ChatDraft = { text: '', files: [], templateFile: null, brandbookFile: null };
 
 /** Вложение сообщения, пока оно едет на сервер: имя и вид, id ещё нет. */
 export interface LocalAttachment {
-  readonly kind: 'file' | 'template' | 'context';
+  readonly kind: 'file' | 'template' | 'brandbook' | 'context';
   readonly name: string;
   readonly size?: number;
 }
@@ -83,6 +84,7 @@ export interface ComposedMessage {
   readonly files: readonly File[];
   readonly attachments?: readonly ChatAttachment[];
   readonly templateFile?: File | null;
+  readonly brandbookFile?: File | null;
   readonly template?: { readonly templateId: string; readonly name: string } | null;
   /** Сколько слайдов человек обычно хочет — из его настроек; null — сколько нужно материалу. */
   readonly slideCount?: number | null;
@@ -103,6 +105,7 @@ export interface ChatStoreDeps {
   readonly request: (path: string, init?: RequestInit) => Promise<Response>;
   readonly uploadContent: (file: File) => Promise<{ fileId: string; name: string; size: number }>;
   readonly uploadTemplate: (file: File) => Promise<{ templateId: string; name: string }>;
+  readonly uploadBrandbook?: (file: File) => Promise<{ brandbookId: string; name: string }>;
   /** Ход закончился: списки чатов и колод на серверных страницах стоит обновить. */
   readonly onTurnEnd?: (chatId: string) => void;
   /** Replaceable clock for deterministic offline retry tests. */
@@ -457,6 +460,16 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
           }
           sent.push(attachment);
         } else if (message.template) sent.push({ kind: 'template', ...message.template });
+        if (message.brandbookFile) {
+          let attachment = operation.uploaded.get(message.brandbookFile);
+          if (!attachment) {
+            if (!deps.uploadBrandbook) throw new Error('Brandbook upload is not configured.');
+            const uploaded = await deps.uploadBrandbook(message.brandbookFile);
+            attachment = { kind: 'brandbook', ...uploaded };
+            operation.uploaded.set(message.brandbookFile, attachment);
+          }
+          sent.push(attachment);
+        }
         for (const file of message.files) {
           if (operation.stopped) return;
           let attachment = operation.uploaded.get(file);
@@ -534,6 +547,15 @@ export function createChatStore(deps: ChatStoreDeps): ChatStore {
         : message.template
           ? [{ kind: 'template' as const, name: message.template.name, size: 0 }]
           : []),
+      ...(message.brandbookFile
+        ? [
+            {
+              kind: 'brandbook' as const,
+              name: message.brandbookFile.name,
+              size: message.brandbookFile.size,
+            },
+          ]
+        : []),
       ...message.files.map((file) => ({ kind: 'file' as const, name: file.name, size: file.size })),
       ...(message.context ?? []).map((item) => ({ kind: 'context' as const, name: item.name })),
     ];

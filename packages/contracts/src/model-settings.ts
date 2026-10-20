@@ -61,10 +61,17 @@ export function usesWriterModelByDefault(role: PipelineRole): boolean {
 }
 
 /**
- * Where a connection was started from. A preset only fills in the address and the name; after
- * that it is an ordinary OpenAI-compatible server.
+ * Where a connection was started from. Anthropic selects native Messages; other presets use
+ * the OpenAI-compatible protocol and fill in the address and name.
  */
-export const CONNECTION_PRESETS = ['vk-ai-space', 'ollama', 'lm-studio', 'vllm', 'custom'] as const;
+export const CONNECTION_PRESETS = [
+  'vk-ai-space',
+  'ollama',
+  'lm-studio',
+  'vllm',
+  'anthropic',
+  'custom',
+] as const;
 export const connectionPresetSchema = z.enum(CONNECTION_PRESETS);
 export type ConnectionPreset = z.infer<typeof connectionPresetSchema>;
 
@@ -268,6 +275,8 @@ export type ConnectionInput = z.infer<typeof connectionInputSchema>;
 /** A check of a connection not saved yet. With `connectionId` and no key the stored key is used. */
 export const probeInputSchema = z.object({
   connectionId: z.string().min(1).optional(),
+  /** Explicit protocol for an unsaved connection; an edit defaults to its stored preset. */
+  preset: connectionPresetSchema.optional(),
   baseUrl: z.string().max(BASE_URL_MAX_LENGTH * 2),
   apiKey: z
     .string()
@@ -354,6 +363,8 @@ const RESERVED_HEADERS = new Set([
   'connection',
   'transfer-encoding',
   'accept-encoding',
+  'x-api-key',
+  'anthropic-version',
 ]);
 /** RFC 9110 token. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;

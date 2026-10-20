@@ -34,6 +34,12 @@ export const chatAttachmentSchema = z.discriminatedUnion('kind', [
     templateId: z.string().uuid(),
     name: z.string().min(1).max(300),
   }),
+  z.object({
+    kind: z.literal('brandbook'),
+    brandbookId: z.string().uuid(),
+    name: z.string().min(1).max(300),
+    priority: z.enum(['brandbook', 'template']).optional(),
+  }),
   /**
    * Objects of a deck open in the editor, or a whole slide, as the person pointed at them: what
    * they are and what they say at the moment of sending.
@@ -253,6 +259,8 @@ export const chatPartSchema = z.discriminatedUnion('type', [
     planRevision: z.number().int().positive().nullable().default(null),
     templateId: z.string().uuid(),
     templateName: z.string(),
+    brandbookId: z.string().uuid().nullable().optional(),
+    brandbookPriority: z.enum(['brandbook', 'template']).optional(),
     /** The balanced run the progress follows, and all three; empty while the template prepares. */
     runId: z.string().nullable(),
     variantRunIds: z.array(z.string()),

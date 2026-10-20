@@ -49,6 +49,10 @@ import {
   type ChatModel,
   ledgerFetch,
   type ChatUsage,
+  readRuntimeLimits,
+  loadRuntimeAgent,
+  runtimeInstructions,
+  sharedModelLimiter,
 } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
@@ -59,6 +63,7 @@ import {
   type ResolvedModel,
 } from '../models/model-settings.service.js';
 import { ModelCapabilityService } from '../models/model-capabilities.js';
+import { modelTransport } from '../models/model-transport.js';
 import {
   resultOf,
   withFailed,
@@ -884,6 +889,17 @@ export class ChatsService implements OnApplicationShutdown {
         checked.push(attachment);
         continue;
       }
+      if (attachment.kind === 'brandbook') {
+        const result = await this.pool.query<{ name: string }>(
+          `SELECT COALESCE(display_name, file_name) AS name FROM stored_files
+           WHERE id = $1 AND kind = 'brandbook' AND ${visibleFile(2)}`,
+          [attachment.brandbookId, account.id],
+        );
+        if (!result.rows[0])
+          throw new NotFoundException('An attached brandbook is not in the library.');
+        checked.push({ ...attachment, name: result.rows[0].name });
+        continue;
+      }
       const id = attachment.kind === 'file' ? attachment.fileId : attachment.templateId;
       const kind = attachment.kind === 'file' ? 'content' : 'template';
       const result = await this.pool.query<{ name: string; size_bytes: string }>(
@@ -1098,16 +1114,23 @@ export class ChatsService implements OnApplicationShutdown {
       // The chat thinks as its config says; the person's switch is for the decks it builds.
       thinking: agent.agent.config.generation.thinking ?? null,
       reasoning: await this.capabilities.reasoningOf(resolved),
-      fetchImpl: ledgerFetch(
-        new PostgresProviderLedger(this.pool, account.id, null, {
-          requests: 10000,
-          tokens: 100_000_000,
-          cost: null,
-        }),
-        'chat',
-        fetch,
-        undefined,
+      fetchImpl: modelTransport(
         resolved,
+        ledgerFetch(
+          new PostgresProviderLedger(this.pool, account.id, null, {
+            requests: 10000,
+            tokens: 100_000_000,
+            cost: null,
+          }),
+          'chat',
+          fetch,
+          undefined,
+          resolved,
+        ),
+        {
+          thinking: agent.agent.config.generation.thinking ?? false,
+          reasoningEffort: request.reasoningEffort,
+        },
       ),
     });
     return withConnection(model, resolved.connectionId);
@@ -1279,8 +1302,18 @@ export class ChatsService implements OnApplicationShutdown {
       const projectTemplates = state.projectId
         ? await this.generation.projectTemplates(state.projectId, account)
         : [];
+      const runtimeAgent = await loadRuntimeAgent(this.generation.registryDir());
+      const limits = readRuntimeLimits();
       const result = await runChatTurn({
         mode: request.mode,
+        runtimeInstructions: (remainingSteps) =>
+          runtimeInstructions(runtimeAgent, {
+            limits,
+            modelConcurrencyNow: sharedModelLimiter().capacity,
+            toolStepsRemaining: remainingSteps,
+            imagesAvailable,
+            ...tools.runtimeContext(),
+          }),
         model,
         instructions: chatInstructions(agent, request.mode, {
           ...this.facts(state),
