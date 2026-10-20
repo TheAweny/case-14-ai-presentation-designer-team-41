@@ -16,6 +16,8 @@
     "@lct/pipeline": "workspace:^",
     "@lct/registry": "workspace:^",
     "@lct/run-store": "workspace:^",
-    "yaml": "^2.8.0"
+    "fast-string-width": "^3.0.2",
+    "yaml": "^2.8.0",
+    "zod": "^4.6.0"
   }
 }

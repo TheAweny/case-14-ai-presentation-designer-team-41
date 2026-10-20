@@ -5,6 +5,24 @@
   "sourceRoot": "apps/cli/src",
   "tags": ["scope:api", "type:app"],
   "targets": {
+    "docs-check": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "commands": [
+          "yarn prettier --check scripts/docs/*.mjs apps/cli/project.json apps/cli/README.md",
+          "uv run ruff check scripts/docs",
+          "uv run ruff format --check scripts/docs"
+        ],
+        "parallel": false
+      }
+    },
+    "docs-screenshots": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "cache": false,
+      "options": { "command": "node scripts/docs/generate-cli-screenshots.mjs" }
+    },
     "build": {
       "executor": "nx:run-commands",
       "options": { "command": "tsc -p tsconfig.build.json", "cwd": "apps/cli" },
@@ -20,6 +38,7 @@
     },
     "test": {
       "executor": "nx:run-commands",
+      "inputs": ["default", "^production", "{workspaceRoot}/install.sh"],
       "options": { "command": "vitest run --passWithNoTests", "cwd": "apps/cli" }
     },
     "run-config": {

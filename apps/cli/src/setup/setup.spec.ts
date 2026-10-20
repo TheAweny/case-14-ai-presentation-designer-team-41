@@ -23,7 +23,7 @@ describe('EnvFile', () => {
     expect(text).toBe(
       '# Key for the runtime.\nMODEL_API_KEY=secret\n# Port.\nAPI_PORT=3001\nAUTH_SECRET=abc\n',
     );
-    expect(statSync(join(dir, '.env')).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') expect(statSync(join(dir, '.env')).mode & 0o777).toBe(0o600);
     expect(EnvFile.open(join(dir, '.env')).get('API_PORT')).toBe('3001');
   });
 
@@ -42,6 +42,7 @@ describe('installation secrets', () => {
       'AUTH_SECRET',
       'API_SERVICE_TOKEN',
       'MODEL_KEYS_SECRET',
+      'SEARXNG_SECRET',
     ]);
     const first = env.text();
     expect(ensureInstallationSecrets(env, generate)).toEqual([]);
