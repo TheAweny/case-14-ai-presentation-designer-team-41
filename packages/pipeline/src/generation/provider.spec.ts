@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { slotNativeSchema } from '@lct/contracts';
 import { AttemptBudget } from './attempt-budget.js';
 import {
   BUSY_RETRIES,
@@ -35,6 +36,63 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       parseModelJson('<think>{"ok":false} maybe</think>\n**Answer:**\n{"ok":true}\nDone.', schema),
     ).toEqual({ ok: true });
     expect(() => parseModelJson('The request is unclear.', schema)).toThrow(SyntaxError);
+  });
+  it('balances quoted braces and refuses concatenated or truncated JSON answers', () => {
+    const text = z.object({ text: z.string() });
+    expect(parseModelJson('JSON: {"text":"a } and { inside a string"} done.', text)).toEqual({
+      text: 'a } and { inside a string',
+    });
+    expect(() => parseModelJson('{"ok":true} {"ok":false}', schema)).toThrow('multiple JSON');
+    expect(() => parseModelJson('{"ok":true', schema)).toThrow('no complete JSON');
+    expect(parseModelJson('Example {not JSON}. {"ok":true} end {prose}', schema)).toEqual({
+      ok: true,
+    });
+  });
+  it('recovers only an unambiguous validated result from examples or identical repetitions', () => {
+    expect(parseModelJson('{"example":"not a result"} {"ok":true}', schema)).toEqual({ ok: true });
+    expect(parseModelJson('{"ok":true} {"ok":true}', schema)).toEqual({ ok: true });
+    expect(() => parseModelJson('{"ok":true} {"ok":false}', schema)).toThrow('multiple JSON');
+    expect(() => parseModelJson('{"ok":"bad"} {"ok":"also bad"}', schema)).toThrow();
+  });
+  it('sends shared native definitions once for a 15-slide answer without losing validation', async () => {
+    const deckSchema = z.object({
+      slides: z.strictObject(
+        Object.fromEntries(
+          Array.from({ length: 15 }, (_, index) => [
+            String(index),
+            z.object({ visual: slotNativeSchema.nullable() }),
+          ]),
+        ),
+      ),
+    });
+    const result = {
+      slides: Object.fromEntries(
+        Array.from({ length: 15 }, (_, index) => [String(index), { visual: null }]),
+      ),
+    };
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(result) }, finish_reason: 'stop' }],
+        }),
+      ),
+    );
+    const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+    await expect(
+      provider.generate(
+        'writer',
+        '',
+        { slides: Array.from({ length: 15 }, (_, index) => ({ index })) },
+        deckSchema,
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual(result);
+    const sent = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)).response_format.json_schema
+      .schema;
+    const inline = z.toJSONSchema(deckSchema, { target: 'draft-7' });
+    expect(JSON.stringify(sent).length).toBeLessThan(JSON.stringify(inline).length / 5);
+    expect(Object.keys(sent.definitions).length).toBeGreaterThan(0);
+    expect(deckSchema.safeParse({ slides: { '0': { visual: null } } }).success).toBe(false);
   });
   it('retries a request that hit its own time limit, but not a cancelled run', async () => {
     const timeout = () => Promise.reject(new DOMException('slow answer', 'TimeoutError'));
@@ -278,6 +336,46 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       outputTokens: 4,
       provider: 'llm.api.cloud.yandex.net',
     });
+  });
+  it.each(['writer', 'rewriter'])(
+    'keeps the whole-deck %s token ceiling across retries',
+    async (agent) => {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: '{"ok":true}' }, finish_reason: 'length' }],
+            }),
+          ),
+        )
+        .mockResolvedValueOnce(answer());
+      const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+      provider.setAgentGeneration(agent, { temperature: 0.35, topP: 1, maxOutputTokens: 24576 });
+      await expect(
+        provider.generate(agent, '', { slides: [{ index: 0 }] }, schema, AbortSignal.timeout(1000)),
+      ).resolves.toEqual({ ok: true });
+      expect(
+        fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).max_tokens),
+      ).toEqual([24576, 24576]);
+    },
+  );
+  it('allows a complete variant more time than a single slide, within the caller deadline', async () => {
+    const timeouts = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => answer());
+      const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+      const signal = new AbortController().signal;
+      await provider.generate('writer', '', { slides: [{ index: 0 }] }, schema, signal);
+      expect(timeouts).toHaveBeenLastCalledWith(180000);
+      await provider.generate('writer', '', { index: 0 }, schema, signal);
+      expect(timeouts).toHaveBeenLastCalledWith(65000);
+      expect(fetchImpl.mock.calls.every(([, init]) => init?.signal instanceof AbortSignal)).toBe(
+        true,
+      );
+    } finally {
+      timeouts.mockRestore();
+    }
   });
   it('reports counts for a reasoning-only length error and leaks nothing', async () => {
     const secret = 'reasoning-secret-do-not-leak';

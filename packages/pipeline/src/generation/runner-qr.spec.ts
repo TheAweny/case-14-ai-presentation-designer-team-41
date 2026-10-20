@@ -117,21 +117,43 @@ describe('automatic QR generation runner', () => {
               }
               if (role === 'rewriter') {
                 repairs++;
-                const slots = (input as { slots: { slotId: string }[] }).slots;
+                const slides = (
+                  input as { slides: { index: number; slots: { slotId: string }[] }[] }
+                ).slides;
                 return schema.parse({
-                  rewrites: Object.fromEntries(
-                    slots.map((s) => [s.slotId, ['Clear claim', 'Clear point', 'Clear action']]),
+                  slides: Object.fromEntries(
+                    slides.map((slide) => [
+                      String(slide.index),
+                      {
+                        rewrites: Object.fromEntries(
+                          slide.slots.map((s) => [
+                            s.slotId,
+                            ['Clear claim', 'Clear point', 'Clear action'],
+                          ]),
+                        ),
+                      },
+                    ]),
                   ),
                 });
               }
               if (role !== 'writer') throw new Error(`Unexpected model role ${role}`);
-              const index = (input as { index: number }).index;
+              const slides = (input as { slides: { index: number }[] }).slides;
               return schema.parse({
-                patternId: pattern.patternId,
-                textsBySlot: Object.fromEntries(
-                  pattern.slots.map((s) => [s.slotId, `Claim ${String.fromCharCode(65 + index)}`]),
+                slides: Object.fromEntries(
+                  slides.map(({ index }) => [
+                    String(index),
+                    {
+                      patternId: pattern.patternId,
+                      textsBySlot: Object.fromEntries(
+                        pattern.slots.map((s) => [
+                          s.slotId,
+                          `Claim ${String.fromCharCode(65 + index)}`,
+                        ]),
+                      ),
+                      speakerNotes: '',
+                    },
+                  ]),
                 ),
-                speakerNotes: '',
               });
             },
           };

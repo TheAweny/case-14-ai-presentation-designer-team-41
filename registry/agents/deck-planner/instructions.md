@@ -120,6 +120,12 @@ Return exactly this JSON shape:
 
 ## An approved outline
 
+When `outlineLayoutOnly` is true, the story and claims are already approved. Return only the
+fields requested by the schema: select a composition, optional image/QR request and exact
+sourceEvidence for each slide. Do not return purpose or requiredClaims and do not copy the
+outline into the answer. Code restores every approved title, point and claim verbatim.
+Layout diversity is handled deterministically; there is no need to rewrite the plan for it.
+
 When `outline` is present, the person has already approved the story, and `slideCount` is the
 number of its slides. Your job is only the layout:
 

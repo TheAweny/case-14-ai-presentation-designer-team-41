@@ -10,7 +10,7 @@ import { generatePresentation } from './runner.js';
 import { minChars, SharedPlan } from './workflow.js';
 import type { LayoutRemapPolicy } from './workflow.js';
 import type { ModelRequest } from '../models/provider.js';
-import type { TextProvider } from './provider.js';
+import { ModelAnswerValidationError, type TextProvider } from './provider.js';
 
 const fixture = (name: string) =>
   JSON.parse(
@@ -48,6 +48,9 @@ async function exercise(
     | 'recheck-import-down'
     | 'empty-import'
     | 'clean-vision'
+    | 'critic-invalid'
+    | 'critic-storage-failure'
+    | 'critic-many-issues'
     | 'expired'
     | 'reserve-repair',
   layoutRemapPolicy?: LayoutRemapPolicy,
@@ -75,7 +78,11 @@ async function exercise(
   let engineCalls = 0;
   let modelCalls = 0;
   const reviewPasses = new Map<string, number>();
-  const coveredReview = mode === 'reviewed' || mode === 'self-corrected' || mode === 'clean-vision';
+  const coveredReview =
+    mode === 'reviewed' ||
+    mode === 'self-corrected' ||
+    mode === 'clean-vision' ||
+    mode === 'critic-invalid';
   const warnings: { stage: string; code: string; message: string }[] = [];
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
@@ -116,13 +123,36 @@ async function exercise(
           return new Promise<T>(() => undefined);
         }
         return schema.parse({
-          rewrites: Object.fromEntries(
-            pattern.slots.map((s) => [s.slotId, ['Pilot', 'Test', 'Go']]),
+          slides: Object.fromEntries(
+            (input as { slides: { index: number; slots: { slotId: string }[] }[] }).slides.map(
+              (slide) => [
+                String(slide.index),
+                {
+                  rewrites: Object.fromEntries(
+                    slide.slots.map((s) => [s.slotId, ['Pilot', 'Test', 'Go']]),
+                  ),
+                },
+              ],
+            ),
           ),
         });
       }
       if (agent === 'critic') {
         criticInputs.push(structuredClone(input) as (typeof criticInputs)[number]);
+        if (mode === 'critic-invalid')
+          throw new ModelAnswerValidationError(
+            new SyntaxError('Invalid critic JSON after bounded retries'),
+          );
+        if (mode === 'critic-storage-failure') throw new SyntaxError('Checkpoint JSON is corrupt');
+        if (mode === 'critic-many-issues')
+          return schema.parse({
+            issues: Array.from({ length: 15 }, (_, index) => ({
+              slideIndex: index % 10,
+              slotId: firstSlot.slotId,
+              category: 'factual-error',
+              message: `Missing condition ${index}`,
+            })),
+          });
         return schema.parse({
           issues:
             mode === 'factual-error' || mode === 'reserve-repair'
@@ -138,7 +168,7 @@ async function exercise(
         });
       }
       if (typeof input === 'object' && input !== null && 'previous' in input) repairs++;
-      return schema.parse({
+      const copy = (index: number) => ({
         patternId: pattern.patternId,
         // Slides of a real deck differ; the same text on all of them is a repeat the deck-wide
         // check would send to repair.
@@ -148,11 +178,19 @@ async function exercise(
             // A writer that keeps the sample of a figure it has no fact for.
             if (mode === 'leaked-sample' && s.slotId === 'badge') return [s.slotId, s.sample];
             // A letter, not a number: a figure the brief lacks is a defect the runner repairs.
-            const text = `Slide ${String.fromCharCode(65 + (input as { index: number }).index)}`;
+            const text = `Slide ${String.fromCharCode(65 + index)}`;
             return [s.slotId, text.padEnd(minChars(s), ' point').trim()];
           }),
         ),
         speakerNotes: 'Proposal',
+      });
+      return schema.parse({
+        slides: Object.fromEntries(
+          (input as { slides: { index: number }[] }).slides.map((slide) => [
+            String(slide.index),
+            copy(slide.index),
+          ]),
+        ),
       });
     },
   };
@@ -367,6 +405,34 @@ async function exercise(
 }
 
 describe('real generation orchestration with offline dependencies', () => {
+  it('exports accepted copy with explicit unknown review when the critic returns invalid JSON', async () => {
+    const run = await exercise('critic-invalid');
+    await run.result;
+    expect(run.counters().exports).toBe(1);
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.warnings.some((warning) => warning.message.includes('критика не прошёл'))).toBe(
+      true,
+    );
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review.status).toBe('unknown');
+    expect(review.warnings).toBeGreaterThan(0);
+    const history = JSON.parse(await readFile(join(run.outputDir, 'audit.json'), 'utf8'));
+    expect(history.at(-1).criticStatus).toBe('unavailable');
+  });
+  it('retains more than twelve semantic findings across the full deck', async () => {
+    const run = await exercise('critic-many-issues');
+    await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review.issues).toHaveLength(15);
+    expect(review.contextual.errors).toBe(15);
+  });
+  it('keeps checkpoint corruption fatal instead of treating it as an unavailable critic', async () => {
+    const run = await exercise('critic-storage-failure');
+    await expect(run.result).rejects.toThrow('Checkpoint JSON is corrupt');
+    expect(run.counters().exports).toBe(0);
+    expect(run.events.at(-1)).toBe('failed');
+  });
   it('keeps coverage unknown even when every rendered slide passes visual review', async () => {
     const run = await exercise('clean-vision', undefined, undefined, true);
     await run.result;

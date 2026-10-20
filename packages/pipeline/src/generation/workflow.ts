@@ -10,6 +10,8 @@ import {
   slotNativeSchema,
   requiredSlideClaimSchema,
   templateSlotCopySchema,
+  templateDeckCopySchema,
+  templateDeckRepairsSchema,
   type Dataset,
   type ComposedSlide,
   type CompositionNote,
@@ -59,13 +61,17 @@ export interface GenerationDependencies {
   layoutRemapPolicy?: LayoutRemapPolicy;
   /** The one plan the variants of a brief share. Absent: this run plans for itself. */
   sharedPlan?: SharedPlan;
-  /** One canonical writer task per slide; variants adapt its accepted copy. */
+  /** Reuses accepted canonical copy when the caller explicitly selects shared mode. */
   sharedContent?: SharedContent;
   variantCopyMode?: VariantCopyMode;
   writerModules?: WriterModules;
   attemptBudget?: AttemptBudget;
   plannerInstructions: string;
   writerInstructions: string;
+  /** With this registry instruction one writer owns the entire variant. */
+  deckWriterInstructions?: string;
+  /** One targeted repair call for all affected slides of a variant. */
+  deckRepairInstructions?: string;
   repairInstructions?: string;
   signal: AbortSignal;
   concurrency?: number;
@@ -1169,7 +1175,56 @@ function slotCorrections(
 
 export function createGenerationWorkflow(deps: GenerationDependencies) {
   let completed = 0;
+  const deckCopy = new Map<number, z.infer<ReturnType<typeof boundedSlideSchema>>>();
   const datasetEvidence = boundedDatasetEvidence(deps.preparedDatasets ?? []);
+  const writerTask = (inputData: z.infer<typeof taskSchema>) => {
+    const { title: deckTitle, canonicalComposition, ...task } = inputData;
+    const mode = deps.variantCopyMode ?? 'independent';
+    const base =
+      mode === 'shared' ? (canonicalComposition ?? inputData.composition) : inputData.composition;
+    const variant = mode === 'shared' ? 'balanced' : (deps.variant ?? 'balanced');
+    const note = deps.notes?.find((entry) => entry.patternId === base.patternId);
+    const qr = (note?.qrSlotIds?.length ?? 0) > 0;
+    const allowVisual =
+      !qr &&
+      visualSlots(base).length > 0 &&
+      (!deps.writerModules || /\d|график|таблиц|показател|chart|kpi/iu.test(inputData.purpose));
+    const input = {
+      ...task,
+      deckTitle,
+      ...(deps.preparedDatasets?.length
+        ? {
+            datasetFacts: datasetEvidence.facts,
+            datasetTables: datasetEvidence.tables,
+            datasetWithheld: datasetEvidence.withheld,
+          }
+        : {}),
+      variant,
+      variantCopyMode: mode,
+      outlineIsSource: deps.outlineIsSource !== false,
+      composition: writingComposition(base, variant, note),
+      visualSlots: allowVisual ? visualSlots(base) : [],
+    };
+    const instructions = writerPrompt(
+      deps.deckWriterInstructions === undefined ? deps.writerInstructions : '',
+      deps.writerModules,
+      {
+        audience: task.audience,
+        goal: task.goal,
+        variant,
+        output: qr ? 'qr' : allowVisual ? 'native' : 'text',
+      },
+    );
+    return {
+      base,
+      variant,
+      note,
+      allowVisual,
+      input,
+      instructions,
+      output: qr ? 'qr' : allowVisual ? 'native' : 'text',
+    };
+  };
   const plan = createStep({
     id: 'plan-compositions',
     inputSchema,
@@ -1195,9 +1250,22 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ? JSON.stringify({ brief: inputData.brief, approvedOutline: outline })
           : inputData.brief);
       const computePlan = async () => {
+        const outlineLayoutOnly = Boolean(
+          outline && deps.outlineIsSource !== false && deps.deckWriterInstructions !== undefined,
+        );
         // Legacy plans remain readable; newly generated plans must expose their facts in one call.
-        const plannerSchema =
-          deps.writerModules && !(outline && deps.outlineIsSource !== false)
+        const plannerSchema = outlineLayoutOnly
+          ? compositionPlanSchema.extend({
+              slides: z
+                .array(
+                  compositionPlanSchema.shape.slides.element.omit({
+                    purpose: true,
+                    requiredClaims: true,
+                  }),
+                )
+                .length(outline?.slides.length ?? 0),
+            })
+          : deps.writerModules && !(outline && deps.outlineIsSource !== false)
             ? compositionPlanSchema.extend({
                 slides: z
                   .array(
@@ -1209,11 +1277,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
                   .max(60),
               })
             : compositionPlanSchema;
-        const plan = (
+        const plan = async (
           corrections?: Record<string, unknown>,
           previous?: z.infer<typeof compositionPlanSchema>,
-        ) =>
-          deps.provider.generate(
+        ) => {
+          const selected = await deps.provider.generate(
             'planner',
             deps.plannerInstructions,
             {
@@ -1228,6 +1296,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               slideCount,
               ...(outline ? { outline } : {}),
               outlineIsSource: deps.outlineIsSource !== false,
+              ...(outlineLayoutOnly ? { outlineLayoutOnly: true } : {}),
               imagesAvailable: deps.imagesAvailable === true,
               allowedQrUrls: sourceQrUrls(qrSourceBrief),
               catalog: full.map((pattern) =>
@@ -1240,6 +1309,14 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             plannerSchema,
             deps.signal,
           );
+          return compositionPlanSchema.parse({
+            ...selected,
+            slides: selected.slides.map((slide, index) => ({
+              ...slide,
+              ...(outlineLayoutOnly ? { purpose: outline?.slides[index]?.title } : {}),
+            })),
+          });
+        };
         const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
           slideCount === null || result.slides.length === slideCount
             ? undefined
@@ -1299,7 +1376,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...countCorrections(result),
           ...coverCorrections(result),
           ...evidenceCorrections(result),
-          ...varietyCorrections(result),
+          ...(!outlineLayoutOnly ? varietyCorrections(result) : {}),
         };
         if (Object.keys(corrections).length) result = await plan(corrections, result);
         if (slideCount !== null && result.slides.length !== slideCount)
@@ -1360,7 +1437,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             }
             if (new Set(requiredClaims.map((claim) => claim.id)).size !== requiredClaims.length)
               throw new Error('Planner returned duplicate required claim ids.');
-            return { ...slide, requiredClaims };
+            return {
+              ...slide,
+              ...(outlineLayoutOnly && userSlide ? { purpose: userSlide.title } : {}),
+              requiredClaims,
+            };
           }),
         };
       };
@@ -1472,6 +1553,79 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       return tasks;
     },
   });
+  const writeDeck = createStep({
+    id: 'write-deck-variant',
+    inputSchema: z.array(taskSchema),
+    outputSchema: z.array(taskSchema),
+    execute: async ({ inputData }) => {
+      if (deps.deckWriterInstructions === undefined) return inputData;
+      deps.signal.throwIfAborted();
+      deckCopy.clear();
+      const jobs = inputData.map(writerTask);
+      const first = jobs[0];
+      if (!first) throw new Error('The deck has no slides to write.');
+      const schema = templateDeckCopySchema.extend({
+        slides: z.strictObject(
+          Object.fromEntries(
+            jobs.map((job) => [
+              String(job.input.index),
+              boundedSlideSchema(job.base, job.allowVisual),
+            ]),
+          ),
+        ),
+      });
+      // The brief and datasets are shared context, sent once for the whole variant.
+      const {
+        brief,
+        deckTitle,
+        audience,
+        goal,
+        variant,
+        variantCopyMode,
+        outlineIsSource,
+        datasetFacts,
+        datasetTables,
+        datasetWithheld,
+      } = first.input;
+      const input = {
+        brief,
+        deckTitle,
+        audience,
+        goal,
+        variant,
+        variantCopyMode,
+        outlineIsSource,
+        ...(datasetFacts ? { datasetFacts, datasetTables, datasetWithheld } : {}),
+        writingRules: Object.fromEntries(jobs.map((job) => [job.output, job.instructions])),
+        slides: jobs.map(({ input: slide, output }) => ({
+          index: slide.index,
+          purpose: slide.purpose,
+          requiredClaims: slide.requiredClaims,
+          ...(slide.approvedSlide ? { approvedSlide: slide.approvedSlide } : {}),
+          composition: slide.composition,
+          visualSlots: slide.visualSlots,
+          writingRules: output,
+        })),
+      };
+      const instructions = deps.deckWriterInstructions;
+      const compute = () =>
+        deps.provider.generate('writer', instructions, input, schema, deps.signal);
+      const result =
+        variantCopyMode === 'shared' && deps.sharedContent
+          ? await deps.sharedContent.once(
+              { scope: 'deck-variant-v1', instructions, input },
+              compute,
+            )
+          : await compute();
+      deps.signal.throwIfAborted();
+      for (const task of inputData) {
+        const copy = result.slides[String(task.index)];
+        if (!copy) throw new Error(`Missing written slide ${task.index + 1}.`);
+        deckCopy.set(task.index, copy);
+      }
+      return inputData;
+    },
+  });
   const write = createStep({
     id: 'write-template-slide',
     inputSchema: taskSchema,
@@ -1480,39 +1634,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       let slide: ComposedSlide | undefined;
       // The deck title goes under its own name: as `title` the writer took it for the title
       // of the slide and put it on slide after slide.
-      const { title: deckTitle, canonicalComposition, ...task } = inputData;
+      const { base, note, allowVisual, input: writeInput, instructions } = writerTask(inputData);
       const mode = deps.variantCopyMode ?? 'independent';
-      const base =
-        mode === 'shared' ? (canonicalComposition ?? inputData.composition) : inputData.composition;
-      const variant = mode === 'shared' ? 'balanced' : (deps.variant ?? 'balanced');
-      const note = deps.notes?.find((entry) => entry.patternId === base.patternId);
-      const qr = (note?.qrSlotIds?.length ?? 0) > 0;
-      const allowVisual =
-        !qr &&
-        visualSlots(base).length > 0 &&
-        (!deps.writerModules || /\d|график|таблиц|показател|chart|kpi/iu.test(inputData.purpose));
-      const instructions = writerPrompt(deps.writerInstructions, deps.writerModules, {
-        audience: task.audience,
-        goal: task.goal,
-        variant,
-        output: qr ? 'qr' : allowVisual ? 'native' : 'text',
-      });
-      const writeInput = {
-        ...task,
-        deckTitle,
-        ...(deps.preparedDatasets?.length
-          ? {
-              datasetFacts: datasetEvidence.facts,
-              datasetTables: datasetEvidence.tables,
-              datasetWithheld: datasetEvidence.withheld,
-            }
-          : {}),
-        variant,
-        variantCopyMode: mode,
-        outlineIsSource: deps.outlineIsSource !== false,
-        composition: writingComposition(base, variant, note),
-        visualSlots: allowVisual ? visualSlots(base) : [],
-      };
       const compute = () =>
         deps.provider.generate(
           'writer',
@@ -1521,10 +1644,14 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           boundedSlideSchema(base, allowVisual),
           deps.signal,
         );
+      const accepted = deckCopy.get(inputData.index);
+      if (deps.deckWriterInstructions !== undefined && !accepted)
+        throw new Error('The deck writer did not produce this slide.');
       let raw =
-        mode === 'shared' && deps.sharedContent
+        accepted ??
+        (mode === 'shared' && deps.sharedContent
           ? await deps.sharedContent.once({ instructions, input: writeInput }, compute)
-          : await compute();
+          : await compute());
       if (base.patternId !== inputData.composition.patternId) {
         const map = semanticSlotMap(
           { ...base, slots: writerSlots(base) },
@@ -1583,7 +1710,13 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         visual,
       };
       slide = keepStatedFacts(slide, inputData.composition, inputData.brief);
-      for (let attempt = 0; attempt < 2; attempt++) {
+      // Whole-deck writing is followed by one consolidated audit/repair stage, not a
+      // second wave of speculative per-slide agents before that audit.
+      for (
+        let attempt = 0;
+        attempt < (deps.deckWriterInstructions === undefined ? 2 : 0);
+        attempt++
+      ) {
         if (!validateBindings(slide, inputData.composition, context).length) break;
         const current: ComposedSlide = slide;
         slide = await rewriteSlide(deps, {
@@ -1635,6 +1768,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     outputSchema: z.array(writtenSchema),
   })
     .then(plan)
+    .then(writeDeck)
     .foreach(write, { concurrency: Math.max(1, Math.min(6, deps.concurrency ?? 3)) })
     .commit();
 }
@@ -2007,18 +2141,50 @@ export const repairTaskSchema = z.object({
 export const repairedSlideSchema = z.object({ index: z.number(), slide: composedSlideSchema });
 
 export function createRepairWorkflow(deps: GenerationDependencies) {
+  const accepted = new Map<number, unknown>();
   const start = createStep({
     id: 'repair-input',
     inputSchema: z.array(repairTaskSchema),
     outputSchema: z.array(repairTaskSchema),
-    execute: async ({ inputData }) => inputData,
+    execute: async ({ inputData }) => {
+      if (deps.deckRepairInstructions === undefined) return inputData;
+      deps.signal.throwIfAborted();
+      accepted.clear();
+      const jobs = inputData
+        .map((task) => ({ task, ...rewriteInput(deps, task) }))
+        .filter((job) => job.slots.length > 0);
+      if (!jobs.length) return inputData;
+      const schema = templateDeckRepairsSchema.extend({
+        slides: z.strictObject(
+          Object.fromEntries(jobs.map((job) => [String(job.task.index), job.schema])),
+        ),
+      });
+      const result = await deps.provider.generate(
+        'rewriter',
+        deps.deckRepairInstructions,
+        {
+          brief: jobs[0]?.task.brief,
+          variant: deps.variant ?? 'balanced',
+          variantCopyMode: deps.variantCopyMode ?? 'independent',
+          slides: jobs.map(({ task, input }) => {
+            const { brief: _brief, ...slide } = input;
+            return { ...slide, index: task.index };
+          }),
+        },
+        schema,
+        deps.signal,
+      );
+      deps.signal.throwIfAborted();
+      for (const job of jobs) accepted.set(job.task.index, result.slides[String(job.task.index)]);
+      return inputData;
+    },
   });
   const repair = createStep({
     id: 'repair-template-slide',
     inputSchema: repairTaskSchema,
     outputSchema: repairedSlideSchema,
     execute: async ({ inputData }) => {
-      const slide = await rewriteSlide(deps, inputData);
+      const slide = await rewriteSlide(deps, inputData, accepted.get(inputData.index));
       // Same guarantee as the write step: an uncured slide is reported through onWarning, not
       // fatal, so the run keeps all three variants.
       for (const problem of blockingProblems(slide, inputData.composition, {
@@ -2086,10 +2252,7 @@ export function bestFittingAlternative(
   )[0];
 }
 
-async function rewriteSlide(
-  deps: GenerationDependencies,
-  task: z.infer<typeof repairTaskSchema>,
-): Promise<ComposedSlide> {
+function rewriteInput(deps: GenerationDependencies, task: z.infer<typeof repairTaskSchema>) {
   // Numbering and dates are written by code: a critic that asks to change them (a model sure of
   // another year) is not followed, and the slot keeps what code wrote.
   const owned = new Set([
@@ -2099,7 +2262,6 @@ async function rewriteSlide(
   const slots = task.composition.slots.filter(
     (s) => !owned.has(s.slotId) && task.corrections.some((c) => c.slotId === s.slotId),
   );
-  if (!slots.length) return task.previous;
   const schema = slotRewriteChoicesSchema.extend({
     rewrites: z.object(
       Object.fromEntries(
@@ -2149,19 +2311,32 @@ async function rewriteSlide(
       };
     }),
   };
+  return { slots, schema, input, semantics };
+}
+
+async function rewriteSlide(
+  deps: GenerationDependencies,
+  task: z.infer<typeof repairTaskSchema>,
+  accepted?: unknown,
+): Promise<ComposedSlide> {
+  const { slots, schema, input, semantics } = rewriteInput(deps, task);
+  if (!slots.length) return task.previous;
   deps.signal.throwIfAborted();
-  if (deps.attemptBudget && !deps.attemptBudget.tryTake()) {
+  if (accepted === undefined && deps.attemptBudget && !deps.attemptBudget.tryTake()) {
     await deps.onWarning?.(`Repair budget exhausted for slide ${task.index + 1}.`);
     return task.previous;
   }
   // One semantic attempt; transport/schema retries belong to the provider and the same budget.
-  const result = await deps.provider.generate(
-    'rewriter',
-    deps.repairInstructions ?? deps.writerInstructions,
-    input,
-    schema,
-    deps.signal,
-  );
+  const result =
+    accepted !== undefined
+      ? schema.parse(accepted)
+      : await deps.provider.generate(
+          'rewriter',
+          deps.repairInstructions ?? deps.writerInstructions,
+          input,
+          schema,
+          deps.signal,
+        );
   const slide = { ...task.previous, texts: task.previous.texts.map((t) => ({ ...t })) };
   for (const slot of slots) {
     const before = slide.texts.map((text) => text.text).join('\n');

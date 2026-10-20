@@ -42,7 +42,7 @@ import {
 import { deckRepeats, headlineSlot, slideFigureDefects, slideTextRepeats } from './repeats.js';
 import { leakedSamples } from './samples.js';
 import { approvedCoverage } from './final-review.js';
-import type { TextProvider } from './provider.js';
+import { ModelAnswerValidationError, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import { assessLayoutDiversity } from './layout-diversity.js';
 import type { ModelProvider } from '../models/provider.js';
@@ -183,7 +183,7 @@ export function openGenerationStage(parent: AbortSignal, deadlineAt: number) {
   };
 }
 
-/** Semantic calls per slide are bounded independently of HTTP/schema retries and durable keys. */
+/** Semantic calls per task/variant are bounded independently of HTTP retries and durable keys. */
 export function boundedGenerationProvider(provider: TextProvider): TextProvider {
   const attempts = new Map<string, number>();
   return {
@@ -309,14 +309,15 @@ export async function generatePresentation(options: GenerateOptions) {
     const warn = (message: string) =>
       emit({ type: 'warning', stage, code: 'content-review-required', message });
     const planner = await loadAgent(join(options.registryDir, 'deck-planner'));
-    const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
-    const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
+    const writer = await loadAgent(join(options.registryDir, 'deck-writer'));
+    const slideWriter = await loadAgent(join(options.registryDir, 'slide-writer'));
+    const rewriter = await loadAgent(join(options.registryDir, 'deck-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
-    const writerModules = await loadWriterModules(writer.directory);
+    const writerModules = await loadWriterModules(slideWriter.directory);
     // Hash every module with its agent, while each request uses only its selected modules.
     const writerRevision = {
       ...writer,
-      instructions: writer.instructions + JSON.stringify(writerModules),
+      instructions: writer.instructions + slideWriter.instructions + JSON.stringify(writerModules),
     };
     if (options.provider.setAgentGeneration) {
       for (const [role, agent] of [
@@ -376,7 +377,8 @@ export async function generatePresentation(options: GenerateOptions) {
       provider,
       preparedDatasets: options.preparedDatasets,
       plannerInstructions: planner.instructions,
-      writerInstructions: writer.instructions,
+      writerInstructions: slideWriter.instructions,
+      deckWriterInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
       writerModules,
       variantCopyMode: options.variantCopyMode ?? 'independent',
@@ -422,6 +424,7 @@ export async function generatePresentation(options: GenerateOptions) {
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      deckRepairInstructions: rewriter.instructions,
       variantCopyMode: options.variantCopyMode ?? 'independent',
       ...(options.attemptBudget ? { attemptBudget: options.attemptBudget } : {}),
       ...(options.notes ? { notes: options.notes } : {}),
@@ -612,14 +615,29 @@ export async function generatePresentation(options: GenerateOptions) {
         };
       }),
     });
-    const critiqueCurrent = (auditSignal = contentSignal) =>
-      provider.generate(
-        'critic',
-        critic.instructions,
-        critiqueInput(),
-        critiqueSchema,
-        auditSignal,
-      );
+    const semanticStatus = { available: true };
+    const critiqueCurrent = async (auditSignal = contentSignal) => {
+      try {
+        const result = await provider.generate(
+          'critic',
+          critic.instructions,
+          critiqueInput(),
+          critiqueSchema,
+          auditSignal,
+        );
+        semanticStatus.available = true;
+        return result;
+      } catch (error) {
+        auditSignal.throwIfAborted();
+        if (!(error instanceof ModelAnswerValidationError)) throw error;
+        semanticStatus.available = false;
+        const message =
+          'Ответ смыслового критика не прошёл проверку. Сохранённый вариант продолжает аудит и экспорт; смысловая проверка остаётся неизвестной.';
+        reviewWarnings.push(message);
+        await warn(message);
+        return critiqueSchema.parse({ issues: [] });
+      }
+    };
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -631,8 +649,7 @@ export async function generatePresentation(options: GenerateOptions) {
             critiqueCurrent(),
           ]),
         );
-        // Slides are written one by one, so a figure or a title repeated across the deck is seen
-        // only here, over all of them.
+        // Check the whole variant even when its writer already saw the full narrative.
         const deck = written.flatMap((s) => {
           const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
           return composition ? [{ ...s, composition }] : [];
@@ -675,6 +692,7 @@ export async function generatePresentation(options: GenerateOptions) {
           contentHash: contentHash(),
           fit: fit.findings,
           critique: critique.issues,
+          criticStatus: semanticStatus.available ? 'complete' : 'unavailable',
           repeats,
         });
         // A card heading is a short name; a critic asking it for a claim would have the rewriter
@@ -1096,13 +1114,15 @@ export async function generatePresentation(options: GenerateOptions) {
       schemaVersion: 1,
       contentRevision,
       contentHash: contentHash(),
-      status: reviewedDeck(contextual)
-        ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
-          ? 'requires-review'
-          : coverage.status === 'unknown'
-            ? 'unknown'
-            : 'complete'
-        : 'unknown',
+      status: !semanticStatus.available
+        ? 'unknown'
+        : reviewedDeck(contextual)
+          ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
+            ? 'requires-review'
+            : coverage.status === 'unknown'
+              ? 'unknown'
+              : 'complete'
+          : 'unknown',
       deterministic: {
         errors: deterministicErrors,
         warnings: report.findings.length - deterministicErrors,
@@ -1119,7 +1139,8 @@ export async function generatePresentation(options: GenerateOptions) {
         deterministicErrors +
         finalCritique.issues.length -
         semanticErrors.length +
-        pictureWarnings,
+        pictureWarnings +
+        (semanticStatus.available ? 0 : 1),
     });
     if (coverage.status === 'unknown') {
       const message = 'Нет подтверждённого набора требований для проверки полноты содержания.';
@@ -1142,6 +1163,7 @@ export async function generatePresentation(options: GenerateOptions) {
       contentHash: contentHash(),
       fit: [],
       critique: finalCritique.issues,
+      criticStatus: semanticStatus.available ? 'complete' : 'unavailable',
       repeats: [],
     });
     await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
