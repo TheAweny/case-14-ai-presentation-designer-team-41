@@ -340,7 +340,10 @@ def _export_body(tmp_path: Path, text: str) -> tuple[float, set[float], float]:
         allow_overflow=True,
         font_scales={(0, body_id): scale},
     )
-    shape = next(s for s in Presentation(str(out)).slides[0].shapes if str(s.shape_id) == body_id)
+    shape = cast(
+        Shape,
+        next(s for s in Presentation(str(out)).slides[0].shapes if str(s.shape_id) == body_id),
+    )
     sizes = {
         run.font.size.pt
         for paragraph in shape.text_frame.paragraphs
