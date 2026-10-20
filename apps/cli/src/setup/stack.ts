@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The repository the CLI was built in: apps/cli/dist sits three levels below it. */
@@ -8,6 +9,25 @@ export function repoRoot(): string {
   return (
     process.env.LCT_HOME ?? resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..')
   );
+}
+
+type Env = Record<string, string | undefined>;
+
+/**
+ * The environment of a config run: the project's `.env`, then the shell for what `.env` does not
+ * set. `.env` wins: it is what `lct onboard` wrote and what the service runs on, and a variable
+ * left in a shell from another project must not send the run to another model.
+ */
+export function runEnv(envPath: string, shell: Env = process.env): Env {
+  if (!existsSync(envPath)) return { ...shell };
+  const file: Env = {};
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
+    if (!match?.[1]) continue;
+    const value = (match[2] ?? '').replace(/^(['"])(.*)\1$/, '$2');
+    if (value !== '') file[match[1]] = value;
+  }
+  return { ...shell, ...file };
 }
 
 /** How this machine runs Compose: the docker plugin, or the older standalone binary. */
@@ -22,12 +42,16 @@ export function composeCommand(): string[] | null {
 }
 
 /** Runs a command in the repository, streaming its output, and resolves with its exit code. */
-export function run(command: string[], options: { quiet?: boolean } = {}): Promise<number> {
+export function run(
+  command: string[],
+  options: { quiet?: boolean; env?: Env } = {},
+): Promise<number> {
   const [bin, ...args] = command;
   return new Promise((resolveCode) => {
     const child = spawn(bin ?? '', args, {
       cwd: repoRoot(),
       stdio: options.quiet ? 'ignore' : 'inherit',
+      ...(options.env ? { env: options.env as NodeJS.ProcessEnv } : {}),
     });
     child.on('error', () => resolveCode(127));
     child.on('close', (code) => resolveCode(code ?? 1));
@@ -39,7 +63,9 @@ export async function compose(args: string[], options: { quiet?: boolean } = {})
   if (command === null) {
     throw new Error('Нет Docker Compose: https://docs.docker.com/compose/install/');
   }
-  return run([...command, ...args], options);
+  // Compose fills ${VAR} from the shell before .env. A model address left in the shell by another
+  // project would then start the service on another model, so .env goes on top of the shell.
+  return run([...command, ...args], { ...options, env: runEnv(join(repoRoot(), '.env')) });
 }
 
 /** Whether a TCP port on this machine is free to listen on. */

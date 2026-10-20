@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readRunConfig } from './config.js';
-import { generateFromConfig } from './generate.js';
+import { failureText, generateFromConfig } from './generate.js';
 import { runEnv } from './generate-command.js';
 
 let dir: string | null = null;
@@ -36,6 +36,15 @@ describe('runEnv', () => {
 
   it('is the shell alone without a .env', () => {
     expect(runEnv('/nowhere/.env', { A: '1' })).toEqual({ A: '1' });
+  });
+});
+
+describe('failureText', () => {
+  it('says what failed whatever the workflow threw', () => {
+    expect(failureText(new Error('Model API HTTP 400'))).toBe('Model API HTTP 400');
+    expect(failureText({ message: 'step failed', name: 'WorkflowError' })).toBe('step failed');
+    expect(failureText('timeout')).toBe('timeout');
+    expect(failureText({ code: 7 })).toBe('{"code":7}');
   });
 });
 

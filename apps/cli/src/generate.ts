@@ -105,6 +105,15 @@ async function brandbookOf(
   return brandbookBindingSchema.parse({ schemaVersion: 1, profile, priority });
 }
 
+/** What went wrong, in words: a workflow fails with an error object that is not an Error. */
+export function failureText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return typeof error === 'string' ? error : JSON.stringify(error);
+}
+
 /** The model connection of the server, read the way the API reads it. */
 function connectionOf(env: Env) {
   if (env.MODEL_PROVIDER === 'fake') {
@@ -297,7 +306,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           dir,
           files: [],
           audit: null,
-          error: error instanceof Error ? error.message : String(error),
+          error: failureText(error),
         };
       }
     }),

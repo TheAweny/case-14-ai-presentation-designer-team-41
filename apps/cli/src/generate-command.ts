@@ -1,29 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { stringify as toYaml } from 'yaml';
 import { readRunConfig } from './config.js';
 import { generateFromConfig } from './generate.js';
-import { compose, composeCommand, repoRoot } from './setup/stack.js';
+import { compose, composeCommand, repoRoot, runEnv } from './setup/stack.js';
 
-type Env = Record<string, string | undefined>;
-
-/**
- * The environment of a config run: the project's `.env`, then the shell for what `.env` does not
- * set. `.env` wins: it is what `lct onboard` wrote and what the service runs on, and a variable
- * left in a shell from another project must not send the run to another model.
- */
-export function runEnv(envPath: string, shell: Env = process.env): Env {
-  if (!existsSync(envPath)) return { ...shell };
-  const file: Env = {};
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
-    if (!match?.[1]) continue;
-    const value = (match[2] ?? '').replace(/^(['"])(.*)\1$/, '$2');
-    if (value !== '') file[match[1]] = value;
-  }
-  return { ...shell, ...file };
-}
+export { runEnv };
 
 async function reachable(url: string): Promise<boolean> {
   return fetch(url, { signal: AbortSignal.timeout(2_000) })
