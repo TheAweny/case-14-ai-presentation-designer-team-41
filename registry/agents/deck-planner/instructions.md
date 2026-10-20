@@ -111,8 +111,9 @@ Return exactly this JSON shape:
 ## Facts
 
 - Use every fact, figure and name from `brief`. Figures from the brief are the strongest content.
-- You may use widely known general knowledge about the topic: how the process works, typical
-  risks, criteria, steps, trade-offs. This is how a short brief becomes a full deck.
+- Explain only what follows from the supplied evidence. General knowledge does not authorize
+  capabilities, mechanisms or achieved outcomes of a particular product. Recommendations must
+  be explicit proposals, never statements of an existing feature or result.
 - Never invent specific figures, percentages, prices, dates, customer names, quotes or results
   that are not in `brief`. Write the point without the number instead.
 - Do not spend slides saying that data, the topic or pictures are absent.
@@ -132,6 +133,16 @@ number of its slides. Your job is only the layout:
   `closing` on the template's cover and closing.
 
 ## One plan, three layouts
+
+For each slide return `requiredClaims: [{"id":"slide-N-claim-M","text":"mandatory assertion",
+"source":{"sourceId":"brief","quote":"exact source excerpt"}}]`. Keep the assertions shared
+across variants while their wording and detail may differ. Quotes must occur verbatim in brief,
+or in a user-approved outline (`sourceId: "user-outline"`). A model-proposed outline is only
+structure; its facts need brief evidence. The input `outlineIsSource` explicitly distinguishes
+these cases. Preserve user corrections, including negations, units, conditions and dates.
+Include all mandatory assertions of each slide, not only numeric ones. Choose by semantic
+groups: four steps mean four ordered heading/body groups, not four arbitrary text fields.
+An evidence id alone does not prove an assertion; its quotation must support its meaning.
 
 This plan is made once and laid out three ways on the same template: dense, balanced and airy.
 Plan the story itself: the slides, their order and what each one says. Do not tailor the plan to

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -51,6 +52,8 @@ export interface ChatTool {
 /** The chat agent from the registry: its prompts, one per mode, and the descriptions of its tools. */
 export interface ChatAgent {
   readonly agent: LoadedAgent;
+  /** Fingerprint of all selected registry prompt modules, including tool descriptions. */
+  readonly promptsSha256?: string;
   readonly modes: Readonly<Record<ChatMode, string>>;
   readonly tools: Readonly<Record<string, string>>;
   readonly jsonMode: string;
@@ -74,9 +77,9 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
     read('loop-nudge.md'),
     read('finalize.md'),
   ]);
-  const toolFiles = (await readdir(join(directory, 'tools'))).filter((name) =>
-    name.endsWith('.md'),
-  );
+  const toolFiles = (await readdir(join(directory, 'tools')))
+    .filter((name) => name.endsWith('.md'))
+    .sort();
   const tools = Object.fromEntries(
     await Promise.all(
       toolFiles.map(async (file) => [file.slice(0, -3), (await read('tools', file)).trim()]),
@@ -84,6 +87,20 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
   );
   return {
     agent,
+    promptsSha256: createHash('sha256')
+      .update(
+        JSON.stringify({
+          instructions: agent.instructions,
+          chat,
+          plan,
+          auto,
+          jsonMode,
+          loopNudge,
+          finalizeNudge,
+          tools,
+        }),
+      )
+      .digest('hex'),
     modes: { chat, plan, auto },
     tools,
     jsonMode,

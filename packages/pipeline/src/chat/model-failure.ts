@@ -59,6 +59,7 @@ export function modelHttpFailure(
     {
       kind,
       modelId,
+      httpStatus: status,
       ...(kind !== 'quota-exhausted' && Number.isFinite(retryAt)
         ? { retryAt: Math.max(Date.now(), retryAt) }
         : {}),

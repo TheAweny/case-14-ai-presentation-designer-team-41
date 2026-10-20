@@ -11,18 +11,169 @@ from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.oxml.xmlchemy import OxmlElement
 
+_LIST_PREFIX = re.compile(
+    r"^[ \t]*(?:[•◦▪‣⁃●○■□*–—-]|[0-9]+[.)]|\([0-9]+\)|"
+    r"[^\W\d_][.)]|\([^\W\d_]\)|[IVXLCDMivxlcdm]+[.)])[ \t]+"
+)
+
+
+def _suppress_duplicate_marker(paragraph: Any, line: str, frame: Any) -> None:
+    """Keep a literal list prefix as supplied, overriding any native/inherited marker."""
+    properties = paragraph.pPr
+    level = int(properties.get("lvl", "0")) + 1 if properties is not None else 1
+    markers = [
+        properties.find(f"{_A}buChar") if properties is not None else None,
+        frame._txBody.find(f"{_A}lstStyle/{_A}lvl{level}pPr/{_A}buChar"),
+    ]
+    # A template can use an arbitrary glyph rather than a conventional list prefix.
+    first_line = line.split("\v", 1)[0].lstrip(" \t")
+    custom_prefix = any(
+        marker is not None
+        and bool(char := marker.get("char"))
+        and first_line.startswith(char)
+        and first_line[len(char) : len(char) + 1] in (" ", "\t")
+        for marker in markers
+    )
+    if not _LIST_PREFIX.match(line) and not custom_prefix:
+        return
+    properties = paragraph.get_or_add_pPr()
+    for child in list(properties):
+        if child.tag in {f"{_A}{name}" for name in ("buNone", "buChar", "buAutoNum", "buBlip")}:
+            properties.remove(child)
+    # DrawingML requires the bullet choice before tabs and default character properties.
+    index = next(
+        (
+            i
+            for i, child in enumerate(properties)
+            if child.tag in {f"{_A}tabLst", f"{_A}defRPr", f"{_A}extLst"}
+        ),
+        len(properties),
+    )
+    properties.insert(index, OxmlElement("a:buNone"))
+
+
+def _apply_safe_text_area(shape: Any, slot: dict[str, Any]) -> None:
+    """Enforce measured room with insets, retaining shape geometry and paragraph indents."""
+    if not any(slot.get(key, 0) > 0 for key in ("textWidthPt", "textHeightPt")):
+        return
+    frame = shape.text_frame
+    slide = shape.part.slide
+    chain = [shape]
+    if shape.is_placeholder:
+        for parent in (slide.slide_layout, slide.slide_layout.slide_master):
+            match = next(
+                (
+                    p
+                    for p in parent.placeholders
+                    if p.placeholder_format.idx == shape.placeholder_format.idx
+                ),
+                None,
+            )
+            if match is None:
+                match = next(
+                    (
+                        p
+                        for p in parent.placeholders
+                        if p.placeholder_format.type == shape.placeholder_format.type
+                    ),
+                    None,
+                )
+            if match is not None:
+                chain.append(match)
+    bodies = [item.text_frame._txBody.bodyPr for item in chain]
+
+    def inset(attribute: str, fallback: int) -> int:
+        return next(
+            (int(b.get(attribute)) for b in bodies if b.get(attribute) is not None), fallback
+        )
+
+    # Resolve only the two paragraph attributes needed to avoid charging indent twice.
+    # Sources follow DrawingML's default -> master -> placeholder -> local precedence.
+    style_kind = "otherStyle"
+    if shape.is_placeholder:
+        style_kind = (
+            "titleStyle"
+            if shape.placeholder_format.type in (PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE)
+            else "bodyStyle"
+        )
+    p_ns = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+    sources = [
+        slide.part.package.presentation_part._element.find(f"{p_ns}defaultTextStyle"),
+        slide.slide_layout.slide_master._element.find(f"{p_ns}txStyles/{p_ns}{style_kind}"),
+        *(item.text_frame._txBody.find(f"{_A}lstStyle") for item in reversed(chain)),
+    ]
+    indent = 0
+    for paragraph in frame.paragraphs:
+        values: dict[str, int] = {}
+        for source in sources:
+            if source is None:
+                continue
+            for tag in ("defPPr", f"lvl{paragraph.level + 1}pPr"):
+                properties = source.find(f"{_A}{tag}")
+                if properties is not None:
+                    values.update(
+                        {
+                            k: int(properties.get(k))
+                            for k in ("marL", "indent")
+                            if properties.get(k) is not None
+                        }
+                    )
+        if paragraph._p.pPr is not None:
+            values.update(
+                {
+                    k: int(paragraph._p.pPr.get(k))
+                    for k in ("marL", "indent")
+                    if paragraph._p.pPr.get(k) is not None
+                }
+            )
+        indent = max(indent, max(0, values.get("marL", 0)) + max(0, values.get("indent", 0)))
+    box = slot.get("box") or {}
+    # Slot boxes are in slide coordinates; a grouped shape keeps local dimensions.
+    for key, dimension, near, far, charged_indent in (
+        ("textWidthPt", "cx", "margin_left", "margin_right", indent),
+        ("textHeightPt", "cy", "margin_top", "margin_bottom", 0),
+    ):
+        safe = slot.get(key)
+        extent = int(shape.width if dimension == "cx" else shape.height)
+        slide_extent = box.get(dimension, extent)
+        if safe is None or safe <= 0 or extent <= 0 or slide_extent <= 0:
+            continue
+        scale = slide_extent / extent
+        near_attr, far_attr = ("lIns", "rIns") if dimension == "cx" else ("tIns", "bIns")
+        near_inset = inset(near_attr, getattr(frame, near))
+        far_inset = inset(far_attr, getattr(frame, far))
+        required = round(extent - near_inset - charged_indent - safe * 12700 / scale)
+        if required > far_inset:
+            setattr(frame, far, required)
+
 
 def _replace_text(shape: Any, text: str) -> None:
     frame = shape.text_frame
     # Composition fit measures wrapped copy in the original box. A template's
     # no-wrap flag must not make accepted replacement text spill beyond that box.
     frame.word_wrap = True
+    body = frame._txBody.find(f"{_A}bodyPr")
+    if body is not None:
+        shrink = body.find(f"{_A}normAutofit")
+        if shrink is not None:
+            # Fit uses the nominal template font and spacing, not normAutofit's scales.
+            body.replace(shrink, OxmlElement("a:noAutofit"))
+        elif body.find(f"{_A}spAutoFit") is None and body.find(f"{_A}noAutofit") is None:
+            # Also override a layout/master shrink policy when this shape has none locally.
+            body._add_noAutofit()
     originals = list(frame._txBody.p_lst)
     prototypes = [deepcopy(p) for p in originals]
     for paragraph in originals:
         frame._txBody.remove(paragraph)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     for index, line in enumerate(text.split("\n")):
         paragraph = deepcopy(prototypes[min(index, len(prototypes) - 1)])
+        if index >= len(prototypes):
+            number = paragraph.find(f"{_A}pPr/{_A}buAutoNum")
+            if number is not None:
+                # A cloned list item continues the list rather than repeating its restart.
+                number.attrib.pop("startAt", None)
+        _suppress_duplicate_marker(paragraph, line, frame)
         run_props = None
         for child in list(paragraph):
             if child.tag.endswith("}r") and run_props is None:
@@ -42,21 +193,19 @@ def _replace_text(shape: Any, text: str) -> None:
                     run_props.set(key, value)
                 for child in end:
                     run_props.append(deepcopy(child))
-        run = OxmlElement("a:r")
         if run_props is not None:
             # I remove hyperlinks tied to the previous copy while keeping typography.
             for link in list(run_props):
                 if "hlink" in link.tag:
                     run_props.remove(link)
-            run.append(run_props)
-        content = OxmlElement("a:t")
-        content.text = line
-        run.append(content)
-        end = paragraph.find("{http://schemas.openxmlformats.org/drawingml/2006/main}endParaRPr")
-        if end is None:
-            paragraph.append(run)
-        else:
-            paragraph.insert(list(paragraph).index(end), run)
+        # append_text maps vertical tabs to a:br and inserts content before endParaRPr.
+        # Newlines were split above: each is a paragraph, with its own list/spacing rules.
+        paragraph.append_text(line)
+        if not paragraph.r_lst:
+            paragraph.add_r("")
+        if run_props is not None:
+            for run in paragraph.r_lst:
+                run.insert(0, deepcopy(run_props))
         frame._txBody.append(paragraph)
 
 
@@ -337,8 +486,10 @@ def export_compositions(
                     and value in relationship_ids
                 ):
                     element.set(attribute, relationship_ids[value])
+        slots = {slot["slotId"]: slot for slot in pattern["slots"]}
         for shape in _all_shapes(slide.shapes):
             if str(shape.shape_id) in texts:
+                _apply_safe_text_area(shape, slots[str(shape.shape_id)])
                 _replace_text(shape, texts[str(shape.shape_id)])
                 _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:

@@ -113,6 +113,19 @@ export class GenerationController {
     return this.generation.directory(id);
   }
 
+  @Post('preparation/:requestId/cancel')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Остановить подготовку материалов до создания прогонов' })
+  @ApiOkResponse({ standardSchema: okSchema })
+  @ApiErrors(404)
+  cancelPreparation(
+    @Param('requestId') requestId: string,
+    @CurrentAccount() account: Account,
+  ): { ok: true } {
+    this.generation.cancelPreparation(requestId, account);
+    return { ok: true };
+  }
+
   @Post('prepare')
   @ApiOperation({
     summary: 'Подготовить шаблон',

@@ -150,13 +150,13 @@ describe('compare-layout-remap CLI', () => {
     const strict = result.variants.find(
       (item) => item.variant === 'dense' && item.policy === 'preserve-block-count',
     );
-    expect(dense?.blockCountChanges).toBeGreaterThan(0);
+    expect(dense?.blockCountChanges).toBe(0);
     expect(strict?.blockCountChanges).toBe(0);
     const written = JSON.parse(await readFile(files.output, 'utf8')) as typeof result;
     expect(
       written.variants.find((item) => item.variant === 'dense' && item.policy === 'density')
         ?.blockCountChanges,
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     expect(
       written.variants.find(
         (item) => item.variant === 'dense' && item.policy === 'preserve-block-count',

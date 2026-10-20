@@ -47,6 +47,8 @@ export function ModelErrorCard({
   const [remaining, setRemaining] = useState(0);
   const retryAt = part.failure?.retryAt;
   const kind = part.failure?.kind ?? 'unknown';
+  const preparation = part.failure?.stage === 'template-index';
+  const planningRole = preparation && part.failure?.role === 'planner';
   const quota = kind === 'quota-exhausted';
   useEffect(() => {
     if (kind !== 'rate-limit') {
@@ -99,7 +101,18 @@ export function ModelErrorCard({
       <div className="flex min-w-0 items-start gap-2">
         <WarningIcon className="mt-0.5 size-4 shrink-0 text-destructive/80" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{t(`reasons.${kind}`)}</p>
+          <p className="text-sm font-medium">
+            {preparation ? t('preparation.title') : t(`reasons.${kind}`)}
+          </p>
+          {preparation ? (
+            <>
+              <p className="mt-1 text-sm">{t(`reasons.${kind}`)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t(planningRole ? 'preparation.helper' : 'preparation.chatHelper')}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('preparation.saved')}</p>
+            </>
+          ) : null}
           {quota ? (
             <p className="mt-1 text-xs text-muted-foreground">{t('helper.quota-exhausted')}</p>
           ) : null}
@@ -125,13 +138,14 @@ export function ModelErrorCard({
           <AnimatedCollapse open={detailsOpen} id={detailsId}>
             <p className="mt-1 max-w-full cursor-text select-text break-words text-xs text-muted-foreground">
               {part.message}
+              {part.failure?.httpStatus ? ` (HTTP ${part.failure.httpStatus})` : ''}
             </p>
           </AnimatedCollapse>
         </div>
       </div>
       {active ? (
         <div className="flex flex-wrap items-center gap-2">
-          {canRepeat ? (
+          {canRepeat && !preparation ? (
             <Button
               size="sm"
               variant="outline"
@@ -150,25 +164,33 @@ export function ModelErrorCard({
                     : t('retry')}
             </Button>
           ) : null}
-          <ModelMenu
-            compact
-            label={t('changeModel')}
-            value={value}
-            onChange={(model) => {
-              setSelection({ model });
-              if (!retryable) chatStore.setModel(chatId, model);
-            }}
-          />
-          {['unauthorized', 'not-configured'].includes(kind) || quota ? (
+          {!planningRole ? (
+            <ModelMenu
+              compact
+              label={t('changeModel')}
+              value={value}
+              onChange={(model) => {
+                setSelection({ model });
+                if (!retryable) chatStore.setModel(chatId, model);
+              }}
+            />
+          ) : null}
+          {preparation ||
+          ['unauthorized', 'not-configured', 'unsupported'].includes(kind) ||
+          quota ? (
             <Button
               size="sm"
               variant="outline"
               onClick={() => openSettings('models', editableConnection)}
             >
-              {editableConnection ? t('connection') : t('settings')}
+              {planningRole
+                ? t('preparation.settings')
+                : editableConnection
+                  ? t('connection')
+                  : t('settings')}
             </Button>
           ) : null}
-          {retryable && draftEmpty ? (
+          {retryable && draftEmpty && !preparation ? (
             <Button
               size="sm"
               variant="ghost"
@@ -180,7 +202,26 @@ export function ModelErrorCard({
               {t('edit')}
             </Button>
           ) : null}
-          {!retryable ? (
+          {preparation ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={Boolean(chat?.running || chat?.pending || chat?.recovery) || wait}
+              onClick={() => {
+                chatStore.continueAfterFailure(
+                  chatId,
+                  messageId,
+                  t('preparation.continueMessage'),
+                  selection ? selection.model : undefined,
+                );
+                onRefine();
+              }}
+            >
+              <RetryIcon />
+              {wait ? t('retryAfter', { seconds: remaining }) : t('preparation.retry')}
+            </Button>
+          ) : null}
+          {!retryable && !preparation ? (
             <>
               <p className="w-full text-xs text-muted-foreground">{t('partial')}</p>
               <Button

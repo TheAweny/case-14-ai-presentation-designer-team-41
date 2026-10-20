@@ -1,12 +1,14 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunRepository } from '@lct/run-store';
 import type { Account } from '../accounts/account-rules.js';
 import type { ModelCapabilityService } from '../models/model-capabilities.js';
 import type { ModelSettingsService } from '../models/model-settings.service.js';
-import { BuildDeadlineError } from './build-budget.js';
+import { currentTemplateIndexRevision, dependencyKey } from '@lct/pipeline';
+import type { ChatToolActivity } from '@lct/contracts';
 import { GenerationService, PROFILE_REVISION } from './generation.service.js';
 
 const TEMPLATE = '00000000-0000-4000-8000-0000000000a1';
@@ -21,7 +23,7 @@ const owner: Account = {
   createdAt: '2026-10-16T00:00:00.000Z',
 };
 
-describe('generation deadline during material read', () => {
+describe('preparation cancellation before the generation clock', () => {
   let root = '';
   let service: GenerationService | undefined;
 
@@ -32,7 +34,7 @@ describe('generation deadline during material read', () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  it('stops a material read that ignores the signal and does not create runs', async () => {
+  it('keeps slow reads outside 290s, then cancels without creating runs or accepting late results', async () => {
     root = await mkdtemp(join(tmpdir(), 'lct-deadline-'));
     vi.stubEnv('RUNS_DIR', root);
     vi.stubEnv('IMAGE_BASE_URL', '');
@@ -47,6 +49,22 @@ describe('generation deadline during material read', () => {
       ),
     ).valid[0].payload as unknown;
 
+    const revision = await currentTemplateIndexRevision(
+      fileURLToPath(new URL('../../../../registry/agents', import.meta.url)),
+    );
+    const typedProfile = profile as { templateHash: string; compositions: { patternId: string }[] };
+    const index = {
+      templateHash: typedProfile.templateHash,
+      profileHash: dependencyKey(profile),
+      revision,
+      notes: typedProfile.compositions.map((p) => ({
+        patternId: p.patternId,
+        kind: 'other',
+        items: 1,
+        useFor: 'Test',
+        skip: false,
+      })),
+    };
     let created = 0;
     let seenSignal: AbortSignal | undefined;
     let releaseExtract: (value: unknown) => void = () => undefined;
@@ -93,7 +111,7 @@ describe('generation deadline during material read', () => {
                 {
                   storage_path: join(root, 'template.pptx'),
                   file_name: 'template.pptx',
-                  profile: { generation: profile, generationRevision: PROFILE_REVISION },
+                  profile: { generation: profile, generationRevision: PROFILE_REVISION, index },
                 },
               ],
             };
@@ -116,8 +134,10 @@ describe('generation deadline during material read', () => {
       },
     });
 
+    const activities: ChatToolActivity[] = [];
     const pending = service.start(
       {
+        requestId: '00000000-0000-4000-8000-0000000000b1',
         templateId: TEMPLATE,
         brief: 'Итоги пилота чат-бота за квартал.',
         slideCount: null,
@@ -130,13 +150,29 @@ describe('generation deadline during material read', () => {
         reasoningEffort: null,
       },
       owner,
+      undefined,
+      (activity) => activities.push(activity),
     );
     await entered;
+    expect(
+      activities.some(
+        (a) => a.status === 'running' && a.detail?.includes('Подготовка вне бюджета'),
+      ),
+    ).toBe(true);
     expect(seenSignal).toBeDefined();
     expect(seenSignal?.aborted).toBe(false);
-    const rejected = expect(pending).rejects.toBeInstanceOf(BuildDeadlineError);
-    await vi.advanceTimersByTimeAsync(5_000);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(seenSignal?.aborted).toBe(false);
+    expect(() =>
+      service?.cancelPreparation('00000000-0000-4000-8000-0000000000b1', {
+        ...owner,
+        id: 'stranger',
+      }),
+    ).toThrow();
+    service.cancelPreparation('00000000-0000-4000-8000-0000000000b1', owner);
     await rejected;
+    expect(activities.at(-1)?.status).toBe('cancelled');
     expect(created).toBe(0);
     expect(seenSignal?.aborted).toBe(true);
     releaseExtract({

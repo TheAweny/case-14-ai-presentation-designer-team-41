@@ -418,8 +418,8 @@ describe('template generation workflow', () => {
       expect(result.status).toBe('failed');
       return written[0];
     };
-    expect(await run()).toBe('three');
-    expect(await run('density')).toBe('three');
+    expect(await run()).toBe('planned');
+    expect(await run('density')).toBe('planned');
     expect(await run('preserve-block-count')).toBe('planned');
   });
   it('retries auto mode when the planner returns fewer than 10 slides', async () => {
@@ -708,6 +708,7 @@ describe('slot fit and reading order', () => {
         {
           index: 0,
           brief: '',
+          requiredClaims: [],
           composition: pattern,
           previous: {
             patternId: pattern.patternId,
@@ -748,6 +749,7 @@ describe('slot fit and reading order', () => {
         {
           index: 0,
           brief: '',
+          requiredClaims: [],
           composition: pattern,
           previous: {
             patternId: pattern.patternId,
@@ -898,7 +900,7 @@ describe('slot fit and reading order', () => {
     expect(result.status).toBe('success');
   });
 
-  it('asks the rewriter again with feedback when every alternative exceeds the slot limit', async () => {
+  it('keeps the previous copy after one repair when every alternative exceeds the slot limit', async () => {
     const inputs: unknown[] = [];
     let calls = 0;
     const provider: TextProvider = {
@@ -948,16 +950,12 @@ describe('slot fit and reading order', () => {
     };
     const result = await runLabel(provider);
     expect(result.status).toBe('success');
-    expect(calls).toBe(2);
-    const second = inputs[1] as {
-      feedback?: string;
-      slots?: { slotId: string; fitChars: number }[];
-    };
-    expect(second.feedback).toMatch(/8/);
-    expect(second.feedback).toMatch(/не длиннее/);
+    expect(calls).toBe(1);
+    expect(inputs).toHaveLength(1);
     if (result.status !== 'success') return;
-    for (const written of result.result)
-      expect(written.slide.texts.find((t) => t.slotId === '8')?.text).toBe('Speed');
+    expect(result.result[0]?.slide.texts.find((t) => t.slotId === '8')?.text).toBe(
+      'an overlong label text',
+    );
   });
 
   it('keeps the previous copy and still completes when every rewrite attempt overflows the slot limit', async () => {
@@ -1010,7 +1008,7 @@ describe('slot fit and reading order', () => {
     // All three variants are mandatory, so a slot the model cannot shorten costs a warning,
     // not the whole deck.
     expect(result.status).toBe('success');
-    expect(calls).toBe(5);
+    expect(calls).toBe(1);
     // Every draw after the first carries the accumulated feedback.
     for (const input of inputs.slice(1)) {
       expect((input as { feedback?: string }).feedback).toMatch(/не длиннее/);
@@ -1092,6 +1090,12 @@ describe('groundedVisual', () => {
       groundedVisual(
         { ...sensors, series: [{ name: 'Датчики', values: [1800, 10, 12] }] },
         'Установлено 1 800 датчиков за 10 месяцев, 12 домов.',
+      ),
+    ).toBeNull();
+    expect(
+      groundedVisual(
+        { ...sensors, series: [{ name: 'Датчики', values: [1800, 10, 12] }] },
+        'Датчики: Q1 1 800, Q2 10, Q3 12 млн ₽.',
       ),
     ).not.toBeNull();
   });
@@ -1475,11 +1479,129 @@ describe('one plan, three layouts', () => {
     const set = [cover, light, mid, heavy];
     const plan = ['cover', 'light', 'light', 'light'];
 
-    it('lets airy take the nearest roomier layout, so it differs from balanced', () => {
+    it('keeps shared copy on its safe layout when the index cannot identify body relationships', () => {
       const airy = remapPlan(plan, set, set, 'airy', [cover]);
       expect(airy[0]).toBe('cover');
-      // Mid holds 1.5 times what light does: airy, which writes less, fits it; heavy holds 2.6.
-      expect(airy.slice(1).every((id) => id === 'mid')).toBe(true);
+      expect(airy.slice(1)).toEqual(['light', 'light', 'light']);
+    });
+
+    it('preserves the main airy fallback with indexed, unambiguous semantic groups', () => {
+      const notes = new Map(
+        [light, mid, heavy].map((pattern) => [
+          pattern.patternId,
+          {
+            patternId: pattern.patternId,
+            kind: 'cards' as const,
+            items: 3,
+            useFor: '',
+            skip: false,
+            title: '',
+            special: false,
+            requiredContent: [],
+            groups: [0, 1, 2].map((i) => ({
+              id: `card-${i}`,
+              kind: 'card' as const,
+              slotIds: [`b${i}`],
+            })),
+            slotSemantics: [
+              { slotId: 't', role: 'slide-title' as const },
+              ...[0, 1, 2].map((i) => ({
+                slotId: `b${i}`,
+                role: 'body' as const,
+                groupId: `card-${i}`,
+              })),
+            ],
+          },
+        ]),
+      );
+      expect(remapPlan(plan, set, set, 'airy', [cover], notes).slice(1)).toEqual([
+        'mid',
+        'mid',
+        'mid',
+      ]);
+    });
+
+    it('chooses different independent compositions without moving shared body copy', async () => {
+      const provider: TextProvider = {
+        model: 'fake',
+        async generate<T>(
+          agent: string,
+          _instructions: string,
+          input: unknown,
+          schema: z.ZodType<T>,
+        ) {
+          if (agent === 'planner')
+            return schema.parse({
+              title: 'Пилот',
+              slides: Array.from({ length: 5 }, () => ({
+                patternId: 'light',
+                purpose: 'Объяснить порядок пилота',
+              })),
+            });
+          if (agent === 'rewriter') {
+            const repair = input as { slots: { slotId: string; text: string }[] };
+            return schema.parse({
+              rewrites: Object.fromEntries(
+                repair.slots.map((slot) => [slot.slotId, [slot.text, slot.text, slot.text]]),
+              ),
+            });
+          }
+          const task = input as {
+            composition: { patternId: string; slots: { slotId: string }[] };
+            variant: string;
+          };
+          return schema.parse({
+            patternId: task.composition.patternId,
+            speakerNotes: '',
+            textsBySlot: Object.fromEntries(
+              task.composition.slots.map((slot) => [slot.slotId, `Пилот ${task.variant}`]),
+            ),
+          });
+        },
+      };
+      const results = await Promise.all(
+        (['balanced', 'airy', 'dense'] as const).map(async (variant) => {
+          const workflow = createGenerationWorkflow({
+            provider,
+            variant,
+            variantCopyMode: 'independent',
+            notes: [light, mid, heavy].map((pattern) => ({
+              patternId: pattern.patternId,
+              kind: 'cards',
+              items: 3,
+              useFor: '',
+              skip: false,
+              title: '',
+              special: false,
+              requiredContent: [],
+              groups: [0, 1, 2].map((i) => ({ id: `card-${i}`, kind: 'card', slotIds: [`b${i}`] })),
+              slotSemantics: [
+                { slotId: 't', role: 'slide-title' },
+                ...[0, 1, 2].map((i) => ({
+                  slotId: `b${i}`,
+                  role: 'body' as const,
+                  groupId: `card-${i}`,
+                })),
+              ],
+            })),
+            plannerInstructions: '',
+            writerInstructions: '',
+            signal: new AbortController().signal,
+          });
+          return (await workflow.createRun()).start({
+            inputData: {
+              brief: 'Объяснить порядок пилота',
+              slideCount: 5,
+              profile: { ...profile, compositions: [light, mid, heavy] },
+            },
+          });
+        }),
+      );
+      expect(results.every((result) => result.status === 'success')).toBe(true);
+      const layouts = results.map((result) =>
+        result.status === 'success' ? result.result.map((slide) => slide.slide.patternId) : [],
+      );
+      expect(new Set(layouts.map((layout) => layout.slice(1).join(','))).size).toBeGreaterThan(1);
     });
 
     it('does not send dense to a lighter layout, nor airy to one far roomier than planned', () => {
@@ -1626,7 +1748,7 @@ describe('one plan, three layouts', () => {
     expect(layouts).toEqual(['cover', 'one-450']);
   });
 
-  it('borrows one block in density mode and keeps the planned count when asked', () => {
+  it('does not borrow or drop an ambiguous group in any density policy', () => {
     const note = (patternId: string, kind: CompositionNote['kind'] = 'statement') =>
       [
         patternId,
@@ -1649,20 +1771,20 @@ describe('one plan, three layouts', () => {
     const fewerFull = [cover, one, two];
     expect(remapPlan(fewer, fewerFull, [cover, one], 'dense', [cover], notes)).toEqual([
       'cover',
-      'one-450',
+      'two-200',
     ]);
     expect(
       remapPlan(fewer, fewerFull, [cover, one], 'dense', [cover], notes, 'preserve-block-count'),
     ).toEqual(fewer);
     expect(remapPlan(fewer, fewerFull, [cover, one], 'dense', [cover], notes, 'density')).toEqual([
       'cover',
-      'one-450',
+      'two-200',
     ]);
     const more = ['cover', 'two-200'];
     const moreFull = [cover, two, three];
     expect(remapPlan(more, moreFull, [cover, three], 'dense', [cover], notes)).toEqual([
       'cover',
-      'three-300',
+      'two-200',
     ]);
     expect(
       remapPlan(more, moreFull, [cover, three], 'dense', [cover], notes, 'preserve-block-count'),
@@ -1870,7 +1992,13 @@ describe('keepOutline', () => {
         audience: '',
         goal: '',
         slides: [
-          { patternId: 'a', purpose: 'Гарантия действует', imageQuery: '', sourceEvidence: {} },
+          {
+            patternId: 'a',
+            purpose: 'Гарантия действует',
+            imageQuery: '',
+            sourceEvidence: {},
+            requiredClaims: [],
+          },
         ],
       },
       {
@@ -1895,8 +2023,20 @@ describe('keepOutline', () => {
       audience: 'Кто-то',
       goal: '',
       slides: [
-        { patternId: 'a', purpose: 'Рынок растёт — 12% в год', imageQuery: '', sourceEvidence: {} },
-        { patternId: 'b', purpose: 'Что-то общее', imageQuery: '', sourceEvidence: {} },
+        {
+          patternId: 'a',
+          purpose: 'Рынок растёт — 12% в год',
+          imageQuery: '',
+          sourceEvidence: {},
+          requiredClaims: [],
+        },
+        {
+          patternId: 'b',
+          purpose: 'Что-то общее',
+          imageQuery: '',
+          sourceEvidence: {},
+          requiredClaims: [],
+        },
       ],
     };
     const kept = keepOutline(plan, {

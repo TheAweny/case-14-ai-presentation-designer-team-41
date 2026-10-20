@@ -90,6 +90,7 @@ export {
   type LayoutRemapComparison,
 } from './generation/remap-evaluation.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
+export { prepareDatasets } from './generation/dataset-evidence.js';
 export {
   TaskCheckpoints,
   CheckpointTextProvider,

@@ -1,0 +1,41 @@
+
+ NX   Running targets typecheck, lint for 4 projects and 6 tasks they depend on:
+
+- contracts
+- registry
+- api
+- pipeline
+
+
+√  nx run contracts:build  [existing outputs match the cache, left as is]
+√  nx run contracts:lint  [existing outputs match the cache, left as is]
+√  nx run contracts:typecheck  [existing outputs match the cache, left as is]
+√  nx run registry:lint  [existing outputs match the cache, left as is]
+√  nx run api:lint  [existing outputs match the cache, left as is]
+√  nx run run-store:build  [existing outputs match the cache, left as is]
+√  nx run registry:build  [existing outputs match the cache, left as is]
+√  nx run engine-client:build  [existing outputs match the cache, left as is]
+√  nx run input-validation:build  [existing outputs match the cache, left as is]
+√  nx run registry:typecheck  [existing outputs match the cache, left as is]
+√  nx run pipeline:build
+√  nx run pipeline:typecheck
+√  nx run pipeline:lint
+√  nx run api:typecheck
+
+
+
+ NX   Successfully ran targets typecheck, lint for 4 projects and 6 tasks they depend on
+
+Nx read the output from the cache instead of running the command for 10 out of 14 tasks.
+
+Output of 14 successful tasks were not shown. Run with --verbose or --output-style=static to see it.
+
+  Run duration:      38.9s
+  Cache:             10/14 hit (71%)
+  Critical path:     34.9s (4 tasks)
+  Recoverable time:  4.0s (10% of the run)
+
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        api:typecheck     27.3s
+        pipeline:build     7.6s

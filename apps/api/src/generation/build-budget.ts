@@ -1,5 +1,5 @@
 /**
- * Wall-clock bound of one build, measured from the first line of GenerationService.start.
+ * Wall-clock bound of one build, measured after material preparation in GenerationService.start.
  * 290_000 ms is the existing per-run ceiling. It is not a measured five-minute SLA, and it is
  * not the retry cap of 110.
  */
@@ -20,10 +20,22 @@ export class BuildDeadlineError extends Error {
 export interface BuildBudget {
   readonly startedAt: number;
   readonly deadlineAt: number;
-  /** Cancellation and the absolute deadline. Aborted means preparation must stop. */
+  /** Cancellation and the absolute deadline. Aborted means the current phase must stop. */
   readonly signal: AbortSignal;
   /** Clears the deadline timer and both abort listeners. Idempotent. */
   dispose(): void;
+}
+
+/** Preparation is outside the generation ceiling; Stop and shutdown still gate late reads. */
+export function openPreparation(cancel: AbortSignal, now: number): BuildBudget {
+  return {
+    startedAt: now,
+    deadlineAt: Number.POSITIVE_INFINITY,
+    signal: cancel,
+    dispose() {
+      return undefined;
+    },
+  };
 }
 
 function assertEpochMs(value: number, label: string): void {
@@ -56,7 +68,7 @@ export function remainingBuildMs(
 }
 
 /**
- * Opens the build clock. `startedAt` is taken before any material read or model resolution.
+ * Opens the build clock. `startedAt` is taken after material preparation and before model resolution.
  * `cancel` is the build's own cancellation, the same controller later stored on its runs.
  */
 export function openBuildBudget(

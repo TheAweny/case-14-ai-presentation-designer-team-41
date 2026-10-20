@@ -168,6 +168,11 @@ class Timing(BaseModel):
     stage: Stage
 
 
+class VariantCopyMode(StrEnum):
+    independent = "independent"
+    shared = "shared"
+
+
 class ArtifactManifest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -210,6 +215,7 @@ class ArtifactManifest(BaseModel):
     totalMs: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Wall clock, against the five minute budget."
     )
+    variantCopyMode: VariantCopyMode | None = None
 
 
 class Source(BaseModel):
@@ -5994,6 +6000,20 @@ class QrCandidateSlot(BaseModel):
     slotId: constr(min_length=1)
 
 
+class Basis(StrEnum):
+    geometry = "geometry"
+    obstacle_aware = "obstacle-aware"
+    sample_fallback = "sample-fallback"
+
+
+class Capacity(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    basis: Basis
+    safeChars: conint(le=9007199254740991, gt=0)
+
+
 class Role25(StrEnum):
     title = "title"
     body = "body"
@@ -6004,6 +6024,7 @@ class Slot1(BaseModel):
         extra="forbid",
     )
     box: Box26 | None = None
+    capacity: Capacity | None = None
     font: str
     fontSize: PositiveFloat
     lineSpacing: PositiveFloat | None = None

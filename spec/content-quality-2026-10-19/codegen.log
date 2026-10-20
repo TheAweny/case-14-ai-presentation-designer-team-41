@@ -1,0 +1,31 @@
+
+ NX   Running target codegen for project contracts and 1 task it depends on:
+
+
+
+> nx run contracts:schema
+
+> tsx scripts/build-schema.ts
+
+(node:54260) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+contracts:schema wrote 39 files: AgentConfig.schema.json, ArtifactManifest.schema.json, AuditFinding.schema.json, AuditReport.schema.json, AuditRequest.schema.json, CompositionCheckResponse.schema.json, CompositionExportRequest.schema.json, CompositionExportResponse.schema.json, ContentPack.schema.json, CopyEdits.schema.json, DeckExportRequest.schema.json, DeckExportResponse.schema.json, DeckImportRequest.schema.json, DeckImportResponse.schema.json, DeckPlan.schema.json, DesignSystem.schema.json, EditableDeckRequest.schema.json, EditableDeckResponse.schema.json, FixPatch.schema.json, GenerationProfile.schema.json, HealthCheck.schema.json, JobEvent.schema.json, LayoutVariantsRequest.schema.json, LayoutVariantsResponse.schema.json, MaterialExtractRequest.schema.json, MaterialExtractResponse.schema.json, PatternCatalog.schema.json, RunConfig.schema.json, SlideIR.schema.json, SlideReview.schema.json, TemplateIR.schema.json, TemplatePreviewsRequest.schema.json, TemplatePreviewsResponse.schema.json, VisualBuildRequest.schema.json, VisualBuildResponse.schema.json, VisualCapability.schema.json, VisualCompareRequest.schema.json, VisualCompareResponse.schema.json, contracts.schema.json
+
+> nx run contracts:codegen
+
+> uv run datamodel-codegen --input packages/contracts/schema/contracts.schema.json --input-file-type jsonschema --output engine/src/engine/contracts/_generated.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --disable-timestamp --use-double-quotes --use-standard-collections --use-union-operator --use-schema-description --custom-file-header-path scripts/codegen-header.txt --class-name ContractsBundle --formatters black isort
+
+C:\Users\Aweny\Documents\case-14-ai-presentation-designer-team-41\.venv\Lib\site-packages\datamodel_code_generator\format.py:542: FutureWarning: Black/isort will become optional. Declare the corresponding extras; see --help.
+  warn_deprecated("dependency.external-formatters-optional", stacklevel=2)
+
+
+
+ NX   Successfully ran target codegen for project contracts and 1 task it depends on
+
+
+  Run duration:      12.3s
+  Cache:             0/2 hit (0%)
+  Critical path:     12.2s (2 tasks)
+  Recoverable time:  <1ms

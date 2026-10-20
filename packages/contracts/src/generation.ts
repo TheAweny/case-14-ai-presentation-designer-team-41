@@ -24,6 +24,13 @@ export const compositionSlotSchema = z.object({
   lineSpacing: z.number().positive().optional(),
   spaceBeforePt: z.number().nonnegative().optional(),
   spaceAfterPt: z.number().nonnegative().optional(),
+  /** Safe measured room, including obstacles. Absent on legacy profiles. */
+  capacity: z
+    .object({
+      safeChars: z.number().int().positive(),
+      basis: z.enum(['geometry', 'obstacle-aware', 'sample-fallback']),
+    })
+    .optional(),
 });
 /**
  * A place of a composition a picture fills: a picture placeholder, or a large empty card the
@@ -192,7 +199,22 @@ export const deckOutlineSchema = z.object({
 });
 export type DeckOutline = z.infer<typeof deckOutlineSchema>;
 
+export const variantCopyModeSchema = z.enum(['independent', 'shared']);
+export type VariantCopyMode = z.infer<typeof variantCopyModeSchema>;
+
+/** Exact source evidence is checked before a planned claim reaches a writer. */
+export const requiredSlideClaimSchema = z.object({
+  id: z.string().min(1).max(100),
+  text: z.string().min(1).max(1000),
+  source: z.object({
+    sourceId: z.enum(['brief', 'user-outline']),
+    quote: z.string().min(1).max(2000),
+  }),
+});
+export type RequiredSlideClaim = z.infer<typeof requiredSlideClaimSchema>;
+
 export const generationRequestSchema = z.object({
+  variantCopyMode: variantCopyModeSchema.default('independent'),
   /** Reuse this id on transport retries; a new id explicitly regenerates the deck. */
   requestId: z.string().uuid().optional(),
   budget: z
@@ -277,6 +299,7 @@ export const compositionPlanSchema = z.object({
           .optional(),
         /** Exact excerpts proving that a composition's required facts are in the source. */
         sourceEvidence: z.record(z.string(), z.string()).default({}),
+        requiredClaims: z.array(requiredSlideClaimSchema).max(40).default([]),
       }),
     )
     .min(OUTLINE_SLIDES.min)

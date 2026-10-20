@@ -214,6 +214,109 @@ describe('approved plan snapshot regressions', () => {
   });
 });
 
+describe('discovery question acceptance', () => {
+  const questionMessage = (questionId: string): ChatMessage => ({
+    role: 'assistant',
+    id: crypto.randomUUID(),
+    createdAt: 1,
+    status: 'done',
+    parts: [
+      {
+        type: 'question',
+        callId: questionId,
+        questionId,
+        question: 'Какое решение нужно?',
+        options: [{ label: 'Согласовать пилот', description: '' }],
+        multiSelect: false,
+        answer: null,
+      },
+    ],
+  });
+  it('accepts one answer and replays its duplicate without a second build', async () => {
+    const questionId = crypto.randomUUID();
+    const f = fixture([questionMessage(questionId)]);
+    const request: ChatTurnRequest = {
+      ...f.approve(crypto.randomUUID()),
+      input: {
+        type: 'answer',
+        questionId,
+        answer: { optionLabels: ['Согласовать пилот'], text: '' },
+      },
+    };
+    await f.invoke('acceptInput', f.state, request, account, f.turn);
+    expect(await f.invoke('acceptInput', f.state, request, account, f.turn)).toMatchObject({
+      replay: true,
+    });
+    expect(f.state.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(f.build).not.toHaveBeenCalled();
+    await expect(
+      f.invoke(
+        'acceptInput',
+        f.state,
+        {
+          ...request,
+          input: {
+            type: 'answer',
+            questionId,
+            answer: { optionLabels: [], text: 'Другая цель' },
+          },
+        },
+        account,
+        f.turn,
+      ),
+    ).rejects.toThrow('answered already');
+  });
+  it('rejects a stale or foreign question identifier before recording an answer', async () => {
+    const stale = crypto.randomUUID();
+    const f = fixture([questionMessage(stale), questionMessage(crypto.randomUUID())]);
+    const request: ChatTurnRequest = {
+      ...f.approve(crypto.randomUUID()),
+      input: {
+        type: 'answer',
+        questionId: stale,
+        answer: { optionLabels: [], text: 'Пилот' },
+      },
+    };
+    await expect(f.invoke('acceptInput', f.state, request, account, f.turn)).rejects.toThrow(
+      'newer question',
+    );
+    await expect(
+      f.invoke(
+        'acceptInput',
+        f.state,
+        {
+          ...request,
+          input: {
+            type: 'answer',
+            questionId: crypto.randomUUID(),
+            answer: { optionLabels: [], text: 'Пилот' },
+          },
+        },
+        account,
+        f.turn,
+      ),
+    ).rejects.toThrow('nothing to answer');
+    expect(f.state.messages.filter((message) => message.role === 'user')).toHaveLength(0);
+    expect(f.build).not.toHaveBeenCalled();
+  });
+  it('rejects forged options and empty answers', async () => {
+    const questionId = crypto.randomUUID();
+    const f = fixture([questionMessage(questionId)]);
+    for (const answer of [
+      { optionLabels: ['Чужой вариант'], text: '' },
+      { optionLabels: [], text: '' },
+    ]) {
+      const request: ChatTurnRequest = {
+        ...f.approve(crypto.randomUUID()),
+        input: { type: 'answer', questionId, answer },
+      };
+      await expect(f.invoke('acceptInput', f.state, request, account, f.turn)).rejects.toThrow(
+        'offered option',
+      );
+    }
+  });
+});
+
 describe('build tool operation replay', () => {
   it('returns an existing completed operation instead of starting another build', async () => {
     const id = crypto.randomUUID(),

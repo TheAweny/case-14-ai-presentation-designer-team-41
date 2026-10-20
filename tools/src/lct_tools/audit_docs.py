@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from engine.checks import DETERMINISTIC_CHECKS
+from engine.checks import DETERMINISTIC_CHECKS, PPTX_CHECKS
 
 from lct_tools.paths import CONTEXTUAL_CHECKS_FILE, DOCS_DIR, SLIDE_CHECKS_FILE
 
@@ -76,7 +76,7 @@ def render_audit_doc() -> str:
     """Build the full text of `docs/AUDIT.md`."""
     deterministic = [
         _Row(id=check.id, title=check.title, description=check.description, severity=check.severity)
-        for check in DETERMINISTIC_CHECKS
+        for check in (*DETERMINISTIC_CHECKS, *PPTX_CHECKS)
     ]
     sections = [
         _HEADER,

@@ -74,6 +74,7 @@ describe('shared content through actual generation workflows', () => {
             provider,
             sharedPlan,
             sharedContent,
+            variantCopyMode: 'shared',
             variant,
             plannerInstructions: '',
             writerInstructions: '',

@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
-import { ModeMenu, nextChatMode, useLastChatMode } from '@/components/assistant/mode-menu';
+import { ModeMenu, useLastChatMode } from '@/components/assistant/mode-menu';
 import { chatStore } from '@/components/assistant/session';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { openSettings } from '@/components/settings/open-settings';
@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConnectIcon, WarningIcon } from '@/components/ui/icons';
-import { CHAT_MODES } from '@lct/contracts';
+import { CHAT_UI_MODES, nextChatMode, selectChatMode } from '@/lib/chat-modes';
 import {
   COMPOSER_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
@@ -62,7 +62,7 @@ import { useComposerSuggestions } from './composer-suggestions';
  *
  * Стрелка (или Enter) начинает чат с агентом (`chatStore`) и открывает его страницу. Режим у
  * поля решает, что агент сделает с сообщением: «Чат» ответит, «План» покажет план колоды на
- * одобрение, «Авто» соберёт сразу. Шаблон не обязателен: без него агент спросит или обсудит. Поле собрано из частей `prompt-box.tsx` — тех
+ * одобрение; переключатель «Авто» в «Плане» отключает утверждение. Шаблон не обязателен: без него агент спросит или обсудит. Поле собрано из частей `prompt-box.tsx` — тех
  * же, что в чате и в панели редактора, поэтому ведёт себя везде одинаково.
  * Файлы едут вместе с разговором, а не через адрес или хранилище. Презентация появится там, где
  * стоит поле: в проекте страницы или, на главной, вне проектов. «Аврора» светится цветом этого
@@ -120,11 +120,11 @@ export function DeckComposer({
     field,
     onText: setText,
     sources: [],
-    commands: CHAT_MODES.map((mode) => ({
-      key: mode,
-      name: `/${mode}`,
-      description: `${tm(`${mode}.name`)} — ${tm(`${mode}.description`)}`,
-      choose: () => setMode(mode),
+    commands: CHAT_UI_MODES.map((command) => ({
+      key: command,
+      name: `/${command}`,
+      description: `${tm(`${command}.name`)} — ${tm(`${command}.description`)}`,
+      choose: () => setMode(selectChatMode(command, mode)),
     })),
   });
   const glowStyle = {
