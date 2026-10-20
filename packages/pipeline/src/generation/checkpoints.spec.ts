@@ -17,6 +17,32 @@ afterEach(async () => {
 });
 
 describe('accepted task checkpoints', () => {
+  it('reuses accepted tasks when only runtime clock changes while retaining prompt policy identity', async () => {
+    const checkpoints = await store();
+    const send = vi.fn(
+      async (_agent: string, _instructions: string, _input: unknown, output: z.ZodType) =>
+        output.parse({ text: 'accepted' }),
+    );
+    const provider = new CheckpointTextProvider(
+      { model: 'fake', generate: send as never },
+      checkpoints,
+    );
+    const signal = new AbortController().signal;
+    const prompt = (time: number, policy = 'registry policy') =>
+      `${policy}\n\n<runtime-state>\n${JSON.stringify({ remainingMs: time })}\n</runtime-state>`;
+    await provider.generate('writer', prompt(1000), { task: 1 }, schema, signal);
+    await provider.generate('writer', prompt(500), { task: 1 }, schema, signal);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[1]).toContain('"remainingMs":1000');
+    await provider.generate(
+      'writer',
+      prompt(500, 'revised registry policy'),
+      { task: 1 },
+      schema,
+      signal,
+    );
+    expect(send).toHaveBeenCalledTimes(2);
+  });
   it('resumes after slide 7 without repeating the planner or seven accepted slides', async () => {
     const checkpoints = await store();
     const send = vi.fn(async () => ({ text: 'Принятый факт: 18 % за 2026 год' }));

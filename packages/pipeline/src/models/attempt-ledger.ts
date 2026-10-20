@@ -96,7 +96,12 @@ export function ledgerFetch(
             const raw = line.slice(5).trim();
             if (raw === '[DONE]') continue;
             const event = JSON.parse(raw) as Record<string, unknown>;
-            if (event.usage) data.usage = event.usage;
+            const message = event.message as Record<string, unknown> | undefined;
+            const delta = event.delta as Record<string, unknown> | undefined;
+            const usage = event.usage ?? message?.usage;
+            if (usage) data.usage = { ...(data.usage as object), ...(usage as object) };
+            if (event.choices) data.choices = event.choices;
+            if (delta?.stop_reason) data.stop_reason = delta.stop_reason;
           }
         } else {
           const parsed: unknown = JSON.parse(text);
@@ -112,9 +117,14 @@ export function ledgerFetch(
             completion_tokens?: unknown;
             input_tokens?: unknown;
             output_tokens?: unknown;
+            cache_creation_input_tokens?: unknown;
+            cache_read_input_tokens?: unknown;
           }
         | undefined;
-      const inputTokens = count(usage?.prompt_tokens ?? usage?.input_tokens);
+      const baseInput = count(usage?.prompt_tokens ?? usage?.input_tokens);
+      const cacheCreation = count(usage?.cache_creation_input_tokens) ?? 0;
+      const cacheRead = count(usage?.cache_read_input_tokens) ?? 0;
+      const inputTokens = baseInput === null ? null : baseInput + cacheCreation + cacheRead;
       const outputTokens = count(usage?.completion_tokens ?? usage?.output_tokens);
       const choices = data.choices as { finish_reason?: string }[] | undefined;
       await ledger.end(id, {
@@ -124,14 +134,20 @@ export function ledgerFetch(
             ? 'http-error'
             : !valid
               ? 'invalid-response'
-              : choices?.some((choice) => choice.finish_reason === 'length')
+              : choices?.some((choice) => choice.finish_reason === 'length') ||
+                  data.stop_reason === 'max_tokens' ||
+                  data.stop_reason === 'model_context_window_exceeded'
                 ? 'truncated-response'
                 : 'response-received',
         httpStatus: response.status,
         inputTokens,
         outputTokens,
         actualCost:
-          price && inputTokens !== null && outputTokens !== null
+          price &&
+          cacheCreation === 0 &&
+          cacheRead === 0 &&
+          inputTokens !== null &&
+          outputTokens !== null
             ? (inputTokens * price.inputPerMillion + outputTokens * price.outputPerMillion) /
               1_000_000
             : null,

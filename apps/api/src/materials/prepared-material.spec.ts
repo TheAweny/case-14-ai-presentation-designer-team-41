@@ -73,7 +73,7 @@ describe('prepared material cache and failure cases', () => {
       extension: string;
       sourceSha256: string;
     };
-    expect(record.preparationRevision).toBe('2026-10-20.1');
+    expect(record.preparationRevision).toBe('2026-10-20.2');
     expect(record.extension).toBe('.pdf');
     expect(record.sourceSha256).toBe(file.hash);
   });

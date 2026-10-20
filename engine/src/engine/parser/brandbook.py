@@ -25,7 +25,7 @@ from .brandbook_archives import (
 )
 from .brandbook_inference import infer_rules
 
-PARSER_VERSION = "1.1.0"
+PARSER_VERSION = "1.1.1"
 MAX_NODES = 30000
 MAX_SECONDS = 90
 
@@ -418,7 +418,8 @@ class _Parser:
             self.warn(source, "Native Figma contains fields outside supported extraction coverage")
 
     def svg(self, source, data):
-        if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
+        declarations = data.replace(b"\x00", b"").upper()
+        if b"<!DOCTYPE" in declarations or b"<!ENTITY" in declarations:
             raise ValueError("SVG DTD/entities are forbidden")
         root = ET.fromstring(data)
         if root.tag.rsplit("}", 1)[-1] != "svg":

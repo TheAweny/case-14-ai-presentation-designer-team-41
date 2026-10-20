@@ -52,7 +52,13 @@ def measured_height(text: str, slot: dict[str, Any]) -> float:
     paragraphs = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     line_height = slot["fontSize"] * max(1.0, slot.get("lineSpacing", 1.15))
     spacing = slot.get("spaceBeforePt", 0) + slot.get("spaceAfterPt", 0)
-    return measured_lines(text, slot) * line_height + len(paragraphs) * spacing
+    # Line spacing is the distance between baselines, not padding below the final
+    # line. Charging it for a single line rejects the template's own short labels.
+    return (
+        slot["fontSize"]
+        + (measured_lines(text, slot) - 1) * line_height
+        + len(paragraphs) * spacing
+    )
 
 
 def broken_words(text: str, slot: dict[str, Any]) -> list[str]:

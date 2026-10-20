@@ -164,6 +164,8 @@ export const composedSlideSchema = z.object({
 });
 export const compositionExportRequestSchema = z.object({
   brandbook: brandbookBindingSchema.optional(),
+  /** Publish a reviewable file while retaining deterministic overflow findings in the audit. */
+  allowOverflow: z.boolean().optional(),
   schemaVersion: z.literal(1),
   templatePath: z.string().min(1),
   outputPath: z.string().min(1),

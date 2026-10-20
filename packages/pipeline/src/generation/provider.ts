@@ -4,6 +4,7 @@ import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js'
 import { CompatibleRequests, refusedParameter } from '../models/compatibility.js';
 import type { AttemptBudget } from './attempt-budget.js';
 import { modelHttpFailure } from '../chat/model-failure.js';
+import { readRuntimeLimits } from '../runtime-limits.js';
 
 export interface TextProvider {
   readonly model: string;
@@ -29,7 +30,11 @@ export interface TextProvider {
  * a Markdown fence, a sentence before or after. Balance braces outside quoted strings and
  * accept one unambiguous schema-valid result. Distinct valid answers must be repaired.
  */
-export function parseModelJson<T>(text: string, schema: z.ZodType<T>): T {
+export function parseModelJson<T>(
+  text: string,
+  schema: z.ZodType<T>,
+  preferLargestValid = false,
+): T {
   const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
   const objects: unknown[] = [];
   let start = -1;
@@ -67,6 +72,8 @@ export function parseModelJson<T>(text: string, schema: z.ZodType<T>): T {
     if (result.success) valid.set(JSON.stringify(result.data), result.data);
   }
   if (valid.size === 1) return valid.values().next().value as T;
+  if (preferLargestValid && valid.size > 1)
+    return [...valid.entries()].sort((a, b) => b[0].length - a[0].length)[0]?.[1] as T;
   if (objects.length === 1) return schema.parse(objects[0]);
   throw new SyntaxError(
     objects.length > 1
@@ -161,7 +168,7 @@ interface Completion {
  * so three slots made them three times slower; eight stays under the ten parallel requests Yandex
  * AI Studio allows, and MODEL_MAX_CONCURRENCY tunes it for another provider.
  */
-const MAX_CONCURRENT = Math.max(1, Number(process.env.MODEL_MAX_CONCURRENCY) || 8);
+const MAX_CONCURRENT = readRuntimeLimits().modelConcurrency;
 
 /**
  * Request slots, first come first served. A 429 means the provider is over its quota: the pool
@@ -611,7 +618,7 @@ export class OpenAICompatibleProvider implements TextProvider {
             }
             let result: T;
             try {
-              result = parseModelJson(content, schema);
+              result = parseModelJson(content, schema, wholeDeck);
             } catch (error) {
               // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
               // miss is a sampling accident, and a fresh draw follows.

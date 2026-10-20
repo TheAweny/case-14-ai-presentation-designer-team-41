@@ -21,6 +21,7 @@ import {
   generatePresentation,
   indexTemplateWithAgent,
   SharedPlan,
+  anthropicTransport,
 } from '@lct/pipeline';
 import { loadAnswerFormat } from '@lct/registry';
 import { readMaterial } from './material.js';
@@ -231,6 +232,9 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
   const registryDir = resolve(env.REGISTRY_DIR ?? 'registry/agents');
   const provider = new GenerationProvider({
     ...connection,
+    ...(env.MODEL_PROTOCOL === 'anthropic'
+      ? { fetchImpl: anthropicTransport(fetch, { thinking: false }) }
+      : {}),
     seed: config.seed,
     answerFormat: await loadAnswerFormat(registryDir),
   });

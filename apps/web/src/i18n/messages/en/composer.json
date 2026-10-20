@@ -92,7 +92,9 @@
     "notSent": "The recording did not reach the server. Try again or record a shorter one.",
     "transcribing": "Transcribing the recording…",
     "transcribingShort": "Transcribing",
-    "busy": "Wait until the recording turns into text"
+    "busy": "Wait until the recording turns into text",
+    "cancel": "Cancel dictation",
+    "unavailable": "Voice input is not configured. Choose a speech model in settings."
   },
   "prompt": {
     "stop": "Stop",

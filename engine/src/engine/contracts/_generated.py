@@ -4321,6 +4321,7 @@ class CompositionExportRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    allowOverflow: bool | None = None
     brandbook: Brandbook1 | None = None
     briefYears: list[conint(ge=-9007199254740991, le=9007199254740991)] | None = None
     outputPath: constr(min_length=1)

@@ -30,6 +30,15 @@ def test_dtcg_aliases_and_role(tmp_path):
     assert result["status"] == "ready"
 
 
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16", "utf-32"])
+def test_svg_entities_are_refused_in_every_xml_encoding(tmp_path, encoding):
+    xml = '<!DOCTYPE svg [<!ENTITY a "secret">]><svg xmlns="http://www.w3.org/2000/svg"><text>&a;</text></svg>'
+    result = parse(tmp_path, "entities.svg", xml.encode(encoding))
+    assert result["status"] == "partial"
+    assert result["assets"] == []
+    assert any("DTD/entities are forbidden" in warning for warning in result["warnings"])
+
+
 def test_alias_cycles_and_missing_are_partial(tmp_path):
     data = {
         "a": {"type": "color", "value": "{b}"},

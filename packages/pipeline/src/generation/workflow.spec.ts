@@ -34,6 +34,8 @@ import {
   variantCatalog,
   withoutMissingContent,
   prepareVariantCatalog,
+  visualSlots,
+  plannerComposition,
 } from './workflow.js';
 import type { TextProvider } from './provider.js';
 
@@ -46,8 +48,115 @@ const fixture = JSON.parse(
 const profile = generationProfileSchema.parse(fixture.valid[0].payload);
 const composition = profile.compositions[0];
 if (!composition) throw new Error('Fixture has no composition.');
+const fixtureSlot = composition.slots[0];
+if (!fixtureSlot) throw new Error('Fixture has no slot.');
 
 describe('template generation workflow', () => {
+  it('offers native slots to the writer for a generic purpose when modules are enabled', async () => {
+    const native = {
+      ...composition,
+      slots: [
+        ...composition.slots,
+        {
+          ...fixtureSlot,
+          slotId: 'body',
+          role: 'body' as const,
+          maxChars: 1000,
+          fontSize: 16,
+          box: { x: 0, y: 1_000_000, cx: 6_000_000, cy: 4_000_000 },
+        },
+      ],
+    };
+    let offered: string[] = [];
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate(role, _instructions, input, schema) {
+        if (role === 'rewriter')
+          return schema.parse({
+            rewrites: { body: ['Краткий вывод', 'Первый результат', 'Второй результат'] },
+          });
+        offered = (input as { visualSlots: string[] }).visualSlots;
+        return schema.parse({
+          patternId: native.patternId,
+          textsBySlot: Object.fromEntries(
+            native.slots.map((slot) => [
+              slot.slotId,
+              slot.role === 'title'
+                ? 'Точный вывод'
+                : 'Проверенные результаты исследования. '.repeat(12),
+            ]),
+          ),
+          speakerNotes: '',
+          visual: null,
+        });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      writerModules: {
+        audience: { explanation: '', customer: '', decision: '', partner: '', team: '' },
+        density: { dense: '', balanced: '', airy: '' },
+        output: { text: '', native: '', qr: '' },
+      },
+      sharedPlan: new SharedPlan({
+        audience: '',
+        goal: '',
+        title: 'Данные',
+        slides: Array.from({ length: 5 }, () => ({
+          patternId: native.patternId,
+          purpose: 'Структура результата',
+          imageQuery: '',
+          requiredClaims: [],
+          sourceEvidence: {},
+        })),
+      }),
+      signal: new AbortController().signal,
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({
+      inputData: {
+        brief: 'Добавь график.',
+        slideCount: 5,
+        profile: { ...profile, compositions: [native] },
+      },
+    });
+    expect(result.status).toBe('success');
+    expect(offered.length).toBeGreaterThan(0);
+  });
+  it('offers native data only in geometry large enough for labels and rows', () => {
+    const body = composition.slots.find((slot) => slot.role === 'body') ?? fixtureSlot;
+    const spacious = {
+      ...composition,
+      slots: [
+        {
+          ...body,
+          slotId: 'native',
+          role: 'body' as const,
+          maxChars: 1000,
+          fontSize: 16,
+          box: { x: 0, y: 0, cx: 5_000_000, cy: 3_000_000 },
+        },
+      ],
+    };
+    const narrow = {
+      ...spacious,
+      slots: spacious.slots.map((slot) => ({ ...slot, box: { ...slot.box, cy: 300_000 } })),
+    };
+    expect(visualSlots(spacious)).toEqual(['native']);
+    expect(visualSlots(narrow)).toEqual([]);
+    expect(plannerComposition(spacious)).toMatchObject({ nativeVisualSlots: ['native'] });
+    expect(
+      remapPlan(
+        ['cover', spacious.patternId],
+        [spacious, { ...narrow, patternId: 'narrow' }],
+        [{ ...narrow, patternId: 'narrow' }],
+        'airy',
+      ),
+    ).toEqual(['cover', spacious.patternId]);
+  });
   it('offers a QR-only composition without an image provider but excludes QR mixed with a required photo', () => {
     const qrSlot = {
       slotId: 'qr-image',

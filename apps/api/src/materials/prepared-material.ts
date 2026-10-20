@@ -58,7 +58,7 @@ const CACHE_TEXT = 'material-prepared.txt';
  * Bump when the canonical text changes. A cache without this revision is ignored:
  * an older reader copied CSV as it was and gave a workbook as a stream of cells.
  */
-const PREPARATION_REVISION = '2026-10-20.1';
+const PREPARATION_REVISION = '2026-10-20.2';
 
 interface PreparedCache {
   readonly schemaVersion: 1;

@@ -69,7 +69,8 @@ def estimate_room(metrics: dict[str, Any], paragraph_count: int = 1) -> tuple[in
     size = metrics["fontSize"]
     line_height = max(size, size * metrics["lineSpacing"])
     spacing = (metrics.get("spaceBeforePt", 0) + metrics.get("spaceAfterPt", 0)) * paragraph_count
-    lines = max(1, math.floor(max(0, metrics["textHeightPt"] - spacing) / line_height))
+    available = max(0, metrics["textHeightPt"] - spacing - size)
+    lines = max(1, 1 + math.floor(available / line_height))
     chars = max(1, math.floor(metrics["textWidthPt"] / (size * 0.59))) * lines
     return max(1, min(chars, 750)), lines
 

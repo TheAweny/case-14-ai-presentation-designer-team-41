@@ -203,6 +203,7 @@ export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
 const TEXT_FILE = /\.(txt|md|csv|tsv)$/i;
 const MAX_FILE_CHARS = 8000;
 const MAX_SEARCH_CALLS = 8;
+const MATERIAL_RESEARCH_CALL_LIMIT = 2;
 
 function attachedFileIds(scope: ChatToolScope): Set<string> {
   return new Set(
@@ -240,7 +241,13 @@ export function chatTools(
   research?: MaterialResearchDependency,
   web?: ChatWebDependency,
   inspection?: InspectionDependency,
-): ChatTool[] {
+): ChatTool[] & {
+  runtimeContext(): {
+    researchCallsRemaining: number;
+    searchAvailable: boolean;
+    webCallsRemaining: Readonly<Record<string, number>>;
+  };
+} {
   const { pool } = generation;
   const account = scope.account;
   let researchCalls = 0;
@@ -330,7 +337,7 @@ export function chatTools(
     async run(input, context) {
       context.signal.throwIfAborted();
       if (!research) throw new Error('Material research is unavailable.');
-      if (researchCalls >= 2)
+      if (researchCalls >= MATERIAL_RESEARCH_CALL_LIMIT)
         throw new Error('The material research call limit for this turn was reached.');
       researchCalls += 1;
       const request = materialResearchInputSchema.parse(input);
@@ -1168,7 +1175,7 @@ export function chatTools(
     },
   };
 
-  return [
+  const tools = [
     qrTool(scope),
     listTemplates,
     describeTemplate,
@@ -1208,6 +1215,15 @@ export function chatTools(
         }
       },
     }));
+  return Object.assign(tools, {
+    runtimeContext: () => ({
+      researchCallsRemaining: research
+        ? Math.max(0, MATERIAL_RESEARCH_CALL_LIMIT - researchCalls)
+        : 0,
+      searchAvailable: searchClient !== null,
+      webCallsRemaining: webBudget.remaining(researchTopicCalls),
+    }),
+  });
 }
 
 function activityOf(context: ToolContext): ActivityContext['activity'] {

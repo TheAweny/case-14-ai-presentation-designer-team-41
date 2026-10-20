@@ -208,13 +208,41 @@ def test_native_list_and_three_grouped_heading_body_pairs_have_different_evidenc
 def test_paragraph_spacing_is_charged_for_hard_breaks_only(soft: bool) -> None:
     slot = {"fontSize": 20, "textWidthPt": 300, "lineSpacing": 1.2, "spaceAfterPt": 12}
     text = "Первый" + ("\v" if soft else "\n") + "Второй"
-    assert measured_height(text, slot) == 48 + (12 if soft else 24)
+    assert measured_height(text, slot) == 44 + (12 if soft else 24)
 
 
 @pytest.mark.parametrize("separator", ["\r\n", "\r", "\n"])
 def test_fit_normalizes_paragraph_breaks_like_export(separator: str) -> None:
     slot = {"fontSize": 20, "textWidthPt": 300, "lineSpacing": 1.2, "spaceAfterPt": 12}
-    assert measured_height(f"Первый{separator}Второй", slot) == 72
+    assert measured_height(f"Первый{separator}Второй", slot) == 68
+
+
+def test_baseline_spacing_does_not_add_padding_after_last_line() -> None:
+    slot = {
+        "slotId": "label",
+        "font": "DejaVu Sans",
+        "fontSize": 32,
+        "lineSpacing": 1.32,
+        "textWidthPt": 270,
+        "textHeightPt": 39,
+        "maxLines": 1,
+        "maxChars": 30,
+    }
+    assert not check_composition_text({"slots": [slot]}, [{"slotId": "label", "text": "2026"}])
+    assert check_composition_text({"slots": [slot]}, [{"slotId": "label", "text": "2026\n2027"}])
+
+
+def test_first_line_still_requires_room_for_template_font() -> None:
+    slot = {
+        "slotId": "label",
+        "fontSize": 32,
+        "lineSpacing": 1.32,
+        "textWidthPt": 270,
+        "textHeightPt": 20,
+        "maxLines": 1,
+        "maxChars": 30,
+    }
+    assert check_composition_text({"slots": [slot]}, [{"slotId": "label", "text": "2026"}])
 
 
 def test_long_unbreakable_cyrillic_word_is_rejected() -> None:

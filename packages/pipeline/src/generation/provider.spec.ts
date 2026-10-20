@@ -52,6 +52,11 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     expect(parseModelJson('{"example":"not a result"} {"ok":true}', schema)).toEqual({ ok: true });
     expect(parseModelJson('{"ok":true} {"ok":true}', schema)).toEqual({ ok: true });
     expect(() => parseModelJson('{"ok":true} {"ok":false}', schema)).toThrow('multiple JSON');
+    const deckLike = z.object({ ok: z.boolean(), extra: z.number().optional() });
+    expect(parseModelJson('{"ok":true} {"ok":true,"extra":1}', deckLike, true)).toEqual({
+      ok: true,
+      extra: 1,
+    });
     expect(() => parseModelJson('{"ok":"bad"} {"ok":"also bad"}', schema)).toThrow();
   });
   it('sends shared native definitions once for a 15-slide answer without losing validation', async () => {

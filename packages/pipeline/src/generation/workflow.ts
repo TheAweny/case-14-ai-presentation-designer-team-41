@@ -34,6 +34,9 @@ import type { AttemptBudget } from './attempt-budget.js';
 import { retainsClaimDetails } from './claim-details.js';
 import { boundedDatasetEvidence } from './dataset-evidence.js';
 import { verifyVisual } from './visual-grounding.js';
+import { sourceBriefTexts } from './source-brief.js';
+import { ampleComposition } from './composition-feasibility.js';
+import { selectSlideRepair } from './repair-selection.js';
 export { prepareDatasets } from './dataset-evidence.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
@@ -405,6 +408,13 @@ export function visualSlots(pattern: GenerationProfile['compositions'][number]):
       (slot) =>
         slot.role === 'body' && slot.maxChars >= VISUAL_MIN_CHARS && !mirrored.has(slot.slotId),
     )
+    .filter((slot) => {
+      // Native data need room for labels and several rows, measured in this template's font.
+      // Legacy profiles without geometry retain their capacity-based compatibility.
+      if (!slot.box) return true;
+      const em = slot.fontSize * 12700;
+      return slot.box.cx >= em * 12 && slot.box.cy >= em * 7;
+    })
     .map((slot) => slot.slotId);
 }
 
@@ -767,6 +777,7 @@ export function plannerComposition(
     ...(note?.special ? { special: true } : {}),
     ...(note ? { requiredContent: note.requiredContent } : {}),
     imageCount: pattern.imageCount,
+    nativeVisualSlots: visualSlots(pattern),
     /** Places this composition has for a generated picture. */
     imageSlots: (pattern.imageSlots ?? []).filter(
       (s) => !declaredQrSlots(pattern, note).includes(s.slotId),
@@ -929,7 +940,11 @@ function boundedSlideSchema(
           slot.slotId,
           // Permissive on purpose: an empty or too long slot is sent to the rewriter after
           // parsing, instead of failing the whole request at the provider.
-          z.string(),
+          z
+            .string()
+            .describe(
+              `At most ${fitChars(slot)} characters including spaces; at most ${slot.maxLines} lines.`,
+            ),
         ]),
       ),
     ),
@@ -1185,13 +1200,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
     const variant = mode === 'shared' ? 'balanced' : (deps.variant ?? 'balanced');
     const note = deps.notes?.find((entry) => entry.patternId === base.patternId);
     const qr = (note?.qrSlotIds?.length ?? 0) > 0;
-    const allowVisual =
-      !qr &&
-      visualSlots(base).length > 0 &&
-      (!deps.writerModules || /\d|график|таблиц|показател|chart|kpi/iu.test(inputData.purpose));
+    const allowVisual = !qr && visualSlots(base).length > 0;
     const input = {
       ...task,
       deckTitle,
+      originalSourceTexts: sourceBriefTexts(task.brief),
       ...(deps.preparedDatasets?.length
         ? {
             datasetFacts: datasetEvidence.facts,
@@ -1496,6 +1509,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           // A deterministic one-to-one mapping cannot drop a mandatory fact. A poorer template
           // keeps its original composition instead of discarding or inventing content blocks.
           if (
+            (visualSlots(canonicalComposition).length > 0 &&
+              visualSlots(composition).length === 0) ||
             !semanticSlotMap(
               { ...canonicalComposition, slots: writerSlots(canonicalComposition) },
               { ...composition, slots: writerSlots(composition) },
@@ -1504,6 +1519,52 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             )
           )
             composition = canonicalComposition;
+        }
+        // Choose room before bindings exist: an approved content slide cannot be
+        // squeezed into a divider just because both carry a title.
+        if (
+          slide.requiredClaims.length &&
+          !slide.qrRequests?.length &&
+          (deps.variantCopyMode ?? 'independent') === 'independent'
+        ) {
+          const selected = composition;
+          const sourceNote = notes.get(selected.patternId);
+          const available = new Set(sourceNote?.requiredContent ?? []);
+          const selection = {
+            selected,
+            candidates: full,
+            variant,
+            title: outline?.slides[index]?.title ?? slide.purpose,
+            claims: slide.requiredClaims,
+            writableSlots: writerSlots,
+            compatible: (candidate: typeof selected) => {
+              if (candidate.patternId === selected.patternId) return true;
+              const note = notes.get(candidate.patternId);
+              if (sourceNote?.special || note?.special || note?.skip) return false;
+              if ((note?.requiredContent ?? []).some((item) => !available.has(item))) return false;
+              if (index === 0 && !covers.some((cover) => cover.patternId === candidate.patternId))
+                return false;
+              if (index > 0 && FRAMING_KINDS.has(note?.kind ?? 'other')) return false;
+              return visualSlots(selected).length === 0 || visualSlots(candidate).length > 0;
+            },
+          };
+          composition =
+            ampleComposition(selection) ??
+            (index === 0
+              ? ampleComposition({
+                  ...selection,
+                  compatible: (candidate) => {
+                    const note = notes.get(candidate.patternId);
+                    return (
+                      !note?.special &&
+                      !note?.skip &&
+                      !(note?.requiredContent ?? []).some((item) => !available.has(item)) &&
+                      !FRAMING_KINDS.has(note?.kind ?? 'other')
+                    );
+                  },
+                })
+              : undefined) ??
+            selected;
         }
         return {
           ...slide,
@@ -1589,6 +1650,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       } = first.input;
       const input = {
         brief,
+        originalSourceTexts: first.input.originalSourceTexts,
         deckTitle,
         audience,
         goal,
@@ -1906,6 +1968,7 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
     const compatible = pool.filter(
       (p) =>
         !addsRequirements(p.patternId, id) &&
+        (visualSlots(planned).length === 0 || visualSlots(p).length > 0) &&
         framing(p.patternId) === framing(id) &&
         semanticSlotMap(
           { ...planned, slots: writerSlots(planned) },
@@ -2260,14 +2323,27 @@ function rewriteInput(deps: GenerationDependencies, task: z.infer<typeof repairT
     ...datedSlots(task.composition).keys(),
   ]);
   const slots = task.composition.slots.filter(
-    (s) => !owned.has(s.slotId) && task.corrections.some((c) => c.slotId === s.slotId),
+    (s) =>
+      !owned.has(s.slotId) &&
+      s.slotId !== task.previous.visual?.slotId &&
+      !mirroredSlots(task.composition).has(s.slotId) &&
+      (task.corrections.some((c) => c.slotId === s.slotId) ||
+        (deps.deckRepairInstructions !== undefined && task.corrections.length > 0)),
   );
   const schema = slotRewriteChoicesSchema.extend({
     rewrites: z.object(
       Object.fromEntries(
         slots.map((s) => [
           s.slotId,
-          z.array(s.role === 'title' ? z.string().min(1) : z.string()).length(3),
+          z
+            .array(
+              // Evaluate choices independently below: one oversized candidate must not
+              // discard valid alternatives for every slide in the same batch.
+              (s.role === 'title' ? z.string().min(1) : z.string()).describe(
+                `At most ${Math.min(s.maxChars, fitChars(s))} characters, including spaces.`,
+              ),
+            )
+            .length(3),
         ]),
       ),
     ),
@@ -2338,6 +2414,20 @@ async function rewriteSlide(
           deps.signal,
         );
   const slide = { ...task.previous, texts: task.previous.texts.map((t) => ({ ...t })) };
+  if (deps.deckRepairInstructions !== undefined) {
+    const revised = selectSlideRepair({
+      previous: slide,
+      slots: slots.map((slot) => ({
+        ...slot,
+        ...semantics.slots.find((entry) => entry.slotId === slot.slotId),
+      })),
+      rewrites: result.rewrites,
+      requiredClaims: task.requiredClaims,
+      bestFittingAlternative: (slot, alternatives) =>
+        bestFittingAlternative(slot, alternatives, deps.variant ?? 'balanced'),
+    });
+    return keepStatedFacts(revised, task.composition, task.brief);
+  }
   for (const slot of slots) {
     const before = slide.texts.map((text) => text.text).join('\n');
     const alternatives = (result.rewrites[slot.slotId] ?? []).filter((candidate) =>

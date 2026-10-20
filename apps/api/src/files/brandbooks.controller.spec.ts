@@ -140,8 +140,14 @@ describe('BrandbooksController', () => {
   it('rejects asset symlinks escaping extracted directory', async () => {
     const { controller, hidden, root } = await fixture();
     await mkdir(join(root, 'brandbooks/book/assets'), { recursive: true });
-    await writeFile(join(root, 'secret'), 'secret');
-    await symlink(join(root, 'secret'), join(root, 'brandbooks/book/assets/logo.png'));
+    await mkdir(join(root, 'secret'), { recursive: true });
+    await writeFile(join(root, 'secret/logo.png'), 'secret');
+    // Directory junctions exercise realpath escapes without Windows symlink privileges.
+    await symlink(
+      join(root, 'secret'),
+      join(root, 'brandbooks/book/assets/linked'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
     hidden.pool.query.mockResolvedValue({
       rows: [
         {
@@ -154,7 +160,7 @@ describe('BrandbooksController', () => {
               {
                 id: 'logo',
                 sourceId: 'source',
-                path: 'logo.png',
+                path: 'linked/logo.png',
                 name: 'logo',
                 kind: 'logo',
                 mediaType: 'image/png',

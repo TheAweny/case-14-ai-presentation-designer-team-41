@@ -12,6 +12,8 @@ import { menu } from './setup/menu.js';
 import { userCommand, usersMenu } from './setup/user-command.js';
 import { backupCommand, updateCommand } from './setup/maintenance.js';
 import { Cancelled } from './setup/terminal.js';
+import { mediaCommand } from './setup/media.js';
+import { limitsCommand } from './setup/limits.js';
 
 const HELP = `lct — цифровой дизайнер презентаций
 
@@ -19,6 +21,8 @@ const HELP = `lct — цифровой дизайнер презентаций
   lct onboard                 мастер установки: режим, модель, администратор, запуск
   lct configure               домен, порты, документация API, веб-поиск
   lct model                   подключение модели
+  lct speech | image          провайдер и модель речи / изображений
+  lct limits                  параллелизм и бюджет генерации
   lct start | stop | status   сервис в Docker Compose
   lct restart [сервис]        перезапуск, например lct restart web
   lct logs [сервис]           логи
@@ -47,15 +51,34 @@ const HELP = `lct — цифровой дизайнер презентаций
   --web-port 3000, --api-port 3001,
   --docs / --no-docs, --search / --no-search, --no-start.
 Ключи можно передать через LCT_MODEL_API_KEY и LCT_INSTALL_ADMIN_PASSWORD.
+Речь/изображения: lct speech --yes --provider openai --base-url URL --model ID.
+Anthropic: lct model --yes --provider anthropic --base-url https://api.anthropic.com/v1 --model ID.
+  Аналогично lct image; ключи: LCT_SPEECH_API_KEY / LCT_IMAGE_API_KEY.
+Лимиты: lct limits --yes --model-concurrency 8 --deadline-ms 290000 --generation-concurrency 3.
 Для команд пользователей: --login-email и LCT_ADMIN_PASSWORD (актуальный пароль).
 Локальная разработка: --mode local; uv run uvicorn engine.api:app --port 8000,
   yarn nx run api:serve, yarn nx run web:serve.
 `;
 
 export function onboardOptions(f: Record<string, string>): OnboardOptions {
+  const media: NonNullable<OnboardOptions['media']> = {};
+  for (const kind of ['speech', 'image'] as const) {
+    if (
+      ['provider', 'base-url', 'model', 'api-key'].some((key) => f[`${kind}-${key}`] !== undefined)
+    ) {
+      media[kind] = Object.fromEntries(
+        ['provider', 'base-url', 'model', 'api-key'].flatMap((key) => {
+          const value =
+            f[`${kind}-${key}`] ??
+            (key === 'api-key' ? process.env[`LCT_${kind.toUpperCase()}_API_KEY`] : undefined);
+          return value === undefined ? [] : [[key, value]];
+        }),
+      );
+    }
+  }
   if (f.mode && !['docker', 'local'].includes(f.mode)) throw new Error('Режим: docker или local.');
-  if (f.provider && !['vk', 'ai-studio', 'openai', 'offline'].includes(f.provider))
-    throw new Error('Провайдер: vk, ai-studio, openai или offline.');
+  if (f.provider && !['vk', 'ai-studio', 'openai', 'anthropic', 'offline'].includes(f.provider))
+    throw new Error('Провайдер: vk, ai-studio, openai, anthropic или offline.');
   const toggle = (name: string): boolean | undefined => {
     if (f[`no-${name}`] !== undefined && f[name] !== undefined)
       throw new Error(`Выберите один флаг: --${name} или --no-${name}.`);
@@ -65,6 +88,7 @@ export function onboardOptions(f: Record<string, string>): OnboardOptions {
     return f[name] === 'true';
   };
   return {
+    media,
     yes: f.yes === 'true',
     mode: f.mode as OnboardOptions['mode'],
     provider: f.provider as OnboardOptions['provider'],
@@ -91,6 +115,9 @@ const COMMANDS: Record<string, (args: string[], flags: Record<string, string>) =
     onboard: (_args, f) => onboard(onboardOptions(f)),
     configure: (_args, f) => onboard({ ...onboardOptions(f), section: 'settings' }),
     model: (_args, f) => onboard({ ...onboardOptions(f), section: 'model' }),
+    speech: (_args, f) => mediaCommand('speech', f),
+    image: (_args, f) => mediaCommand('image', f),
+    limits: (_args, f) => limitsCommand(f),
     menu: () => menu(),
     backup: () => backupCommand(),
     update: () => updateCommand(),

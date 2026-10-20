@@ -3,6 +3,7 @@ import { resolveModel } from '@lct/registry';
 import { OpenAICompatibleProvider } from './openai-compatible.js';
 import { RecordedProvider } from './recorded.js';
 import type { ModelProvider } from './provider.js';
+import { readRuntimeLimits } from '../runtime-limits.js';
 
 export { OpenAICompatibleProvider, type OpenAICompatibleOptions } from './openai-compatible.js';
 export {
@@ -69,7 +70,7 @@ export function createProvider(
     baseUrl,
     apiKey: env.MODEL_API_KEY ?? '',
     jsonMode: jsonModeOf(env.MODEL_JSON_MODE),
-    ...(env.MODEL_MAX_CONCURRENCY ? { maxConcurrent: Number(env.MODEL_MAX_CONCURRENCY) } : {}),
+    maxConcurrent: readRuntimeLimits(env).modelConcurrency,
     ...(headers.length ? { headers: headerRecord(headers) } : {}),
   });
   if (mode === 'record') {

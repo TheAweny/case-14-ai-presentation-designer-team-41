@@ -76,6 +76,16 @@ export class WebBudget {
   private readonly cache = new Map<string, unknown>();
   private readonly inflight = new Map<string, Promise<unknown>>();
 
+  remaining(researchUsed = 0): Record<string, number> {
+    return {
+      search: Math.max(0, WEB_BUDGET.search - this.used.search),
+      fetch: Math.max(0, WEB_BUDGET.fetch - this.used.fetch),
+      images: Math.max(0, WEB_BUDGET.images - this.used.images),
+      research: Math.max(0, WEB_BUDGET.research - researchUsed),
+      total: Math.max(0, WEB_BUDGET.total - this.totalUsed),
+    };
+  }
+
   async call<T>(
     operation: Exclude<WebBudgetOperation, 'research'>,
     key: string,

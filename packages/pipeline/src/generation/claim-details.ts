@@ -21,7 +21,11 @@ export function retainsClaimDetails(
     for (const match of text.matchAll(
       /(?<![\p{L}\p{N}])[+-]?\d+(?:[.,]\d+)?\s*(?:%|[\p{L}]+)?/gu,
     )) {
-      const literal = match[0].trim();
+      const detail = match[0].trim();
+      // A calendar suffix labels the year, not a measurement unit. The same year may
+      // remain in another slot or use its short form; real units still stay literal.
+      const calendarYear = /^([12]\d{3})\s+(?:год|года|году|годом|г|year|years)$/u.exec(detail);
+      const literal = calendarYear?.[1] ?? detail;
       const occurs = (value: string) =>
         new RegExp(
           `(?<![\\p{L}\\p{N}])${literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`,

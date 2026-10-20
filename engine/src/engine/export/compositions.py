@@ -440,6 +440,7 @@ def export_compositions(
     slides: list[dict[str, Any]],
     patterns: list[dict[str, Any]],
     draw_visual: DrawVisual | None = None,
+    allow_overflow: bool = False,
 ) -> Path:
     """I clone chosen slides inside their original package, preserving masters and relationships.
 
@@ -458,7 +459,7 @@ def export_compositions(
         if set(texts) != expected or len(texts) != len(item["texts"]):
             raise ValueError("Content must bind every template slot exactly once.")
         for slot in pattern["slots"]:
-            if len(texts[slot["slotId"]]) > slot["maxChars"]:
+            if not allow_overflow and len(texts[slot["slotId"]]) > slot["maxChars"]:
                 raise ValueError(f"Text overflow in slot {slot['slotId']}.")
         original = originals[pattern["sourceIndex"]]
         slide = presentation.slides.add_slide(original.slide_layout)

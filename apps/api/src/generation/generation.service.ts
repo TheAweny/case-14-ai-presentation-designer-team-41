@@ -60,14 +60,9 @@ import {
   ModelRequestError,
   type ImageProvider,
   type IndexProgress,
+  readRuntimeLimits,
 } from '@lct/pipeline';
-import {
-  BUILD_DEADLINE_MS,
-  buildStopReason,
-  openBuildBudget,
-  openPreparation,
-  waitForBuild,
-} from './build-budget.js';
+import { buildStopReason, openBuildBudget, openPreparation, waitForBuild } from './build-budget.js';
 import { effectiveModelPlan } from './model-plan.js';
 import { loadAnswerFormat } from '@lct/registry';
 import {
@@ -85,6 +80,7 @@ import {
   type ResolvedModel,
 } from '../models/model-settings.service.js';
 import { ModelCapabilityService } from '../models/model-capabilities.js';
+import { modelTransport } from '../models/model-transport.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -141,7 +137,7 @@ interface BuildRetry {
  * from a template, so templates prepared before are read again: 2 added places for pictures,
  * 3 the sample photos of a slide among them, 4 all picture candidates for explicit QR slots; 6 measured geometry and semantic capacity.
  */
-export const PROFILE_REVISION = 6;
+export const PROFILE_REVISION = 7;
 
 export interface StoredTemplate {
   readonly storage_path: string;
@@ -170,13 +166,14 @@ export function imageProviderOf(
   env: NodeJS.ProcessEnv = process.env,
   fetchImpl?: typeof fetch,
 ): ImageProvider | null {
+  if (env.IMAGE_PROVIDER === 'disabled') return null;
   if (env.IMAGE_PROVIDER === 'fake') return new FakeImageProvider();
   if (assigned)
     return new OpenAICompatibleImageProvider({ ...assigned, ...(fetchImpl ? { fetchImpl } : {}) });
   if (env.IMAGE_BASE_URL && env.IMAGE_MODEL)
     return new OpenAICompatibleImageProvider({
       baseUrl: env.IMAGE_BASE_URL,
-      apiKey: env.MODEL_API_KEY ?? '',
+      apiKey: env.IMAGE_API_KEY ?? env.MODEL_API_KEY ?? '',
       model: env.IMAGE_MODEL,
       ...(fetchImpl ? { fetchImpl } : {}),
     });
@@ -218,7 +215,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * ceiling. Tests replace them so a deadline can pass without waiting out the real cap.
    */
   now: () => number = () => Date.now();
-  deadlineMs = BUILD_DEADLINE_MS;
+  deadlineMs = readRuntimeLimits().generationDeadlineMs;
 
   constructor(
     @Inject(RUN_REPOSITORY) readonly repository: RunRepository,
@@ -374,16 +371,20 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         model: resolved.model,
         headers: resolved.headers,
         answerFormat: await loadAnswerFormat(registryDir),
-        fetchImpl: ledgerFetch(
-          new PostgresProviderLedger(this.pool, account.id, null, {
-            requests: 10000,
-            tokens: 100_000_000,
-            cost: null,
-          }),
-          'template-index',
-          fetch,
-          undefined,
+        fetchImpl: modelTransport(
           resolved,
+          ledgerFetch(
+            new PostgresProviderLedger(this.pool, account.id, null, {
+              requests: 10000,
+              tokens: 100_000_000,
+              cost: null,
+            }),
+            'template-index',
+            fetch,
+            undefined,
+            resolved,
+          ),
+          { thinking: false },
         ),
       });
       const provider = new CheckpointTextProvider(
@@ -953,7 +954,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           answerFormat,
           attemptBudget,
           queueGroup: schedulingGroup,
-          fetchImpl: (...args) => transport(model, ...args),
+          fetchImpl: modelTransport(model, (...args) => transport(model, ...args), {
+            thinking: input.thinking === true,
+            reasoningEffort: input.reasoningEffort,
+          }),
           onActivity: (event) => onActivity?.({ ...event, kind: 'agent' }),
         });
       const fallback = providerOf(writer, writerReasoning);
@@ -1125,7 +1129,11 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
               answerFormat,
               signal,
               attemptBudget,
-              fetchImpl: ledgerFetch(ledger, 'vision', fetch, prices, vision),
+              fetchImpl: modelTransport(
+                vision,
+                ledgerFetch(ledger, 'vision', fetch, prices, vision),
+                { thinking: false },
+              ),
               queueGroup: schedulingGroup,
             }),
           }
@@ -1249,6 +1257,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           if (signal.aborted) throw buildStopReason(signal);
           await this.repository.transition(run.runId, 'running');
           await generatePresentation({
+            allowPartialExport: true,
             planId: buildRecord.id,
             providerUsage: () => this.usage(run.runId, account),
             runId: run.runId,

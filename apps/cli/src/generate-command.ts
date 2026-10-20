@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { stringify as toYaml } from 'yaml';
@@ -67,18 +68,15 @@ export async function generateCommand(configPath: string): Promise<number> {
   }
 
   // Inputs go where the container sees them: data/ here is /app/data there.
-  const stamp = new Date()
-    .toISOString()
-    .replace(/[-:.TZ]/g, '')
-    .slice(0, 14);
+  const stamp = randomUUID();
   const stage = join(root, 'data', 'cli', stamp);
   mkdirSync(stage, { recursive: true });
   const inContainer = (name: string) => `/app/data/cli/${stamp}/${name}`;
   for (const path of [config.templatePath, config.contentPath, config.brandbookPath]) {
     if (path && !existsSync(resolve(path))) throw new Error(`Файл не найден: ${resolve(path)}`);
   }
-  const template = basename(config.templatePath);
-  const content = basename(config.contentPath);
+  const template = `template-${basename(config.templatePath)}`;
+  const content = `content-${basename(config.contentPath)}`;
   copyFileSync(resolve(config.templatePath), join(stage, template));
   copyFileSync(resolve(config.contentPath), join(stage, content));
   // The brandbook goes under its own name: a template and a brandbook may share a file name.

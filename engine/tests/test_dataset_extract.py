@@ -64,6 +64,19 @@ def test_a_byte_order_mark_does_not_end_up_in_the_first_header(tmp_path: Path) -
 # Numbers, locales, dates ----------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("date_1904", [False, True])
+def test_workbook_date_epoch_is_preserved(tmp_path: Path, date_1904: bool) -> None:
+    path = tmp_path / "epoch.xlsx"
+    with xlsxwriter.Workbook(path, {"date_1904": date_1904}) as book:
+        sheet = book.add_worksheet("Dates")
+        sheet.write(0, 0, "Date")
+        sheet.write_datetime(
+            1, 0, datetime(2025, 6, 12), book.add_format({"num_format": "yyyy-mm-dd"})
+        )
+    dataset = extract_dataset(path)
+    assert dataset.sheets[0].rows[0].cells[0].value == "2025-06-12"
+
+
 def test_numbers_are_read_in_the_locale_the_text_shows(tmp_path: Path) -> None:
     text = (
         "Тип;Значение\nрусская;1 234,56\nрусская;22 300\nанглийская;1,234.50\n"
@@ -302,13 +315,28 @@ def test_a_missing_workbook_relationship_part_returns_diagnostics(tmp_path: Path
     assert "unreadable" in _codes(dataset)
 
 
-def test_xml_that_declares_entities_is_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("padding", ["", "<!--" + " " * 5000 + "-->"])
+def test_xml_that_declares_entities_is_refused(tmp_path: Path, padding: str) -> None:
     bomb = '<!DOCTYPE x [<!ENTITY a "aaaa">]><sst xmlns="http://schemas.openxmlformats.org/x"/>'
     path = tmp_path / "e.xlsx"
-    path.write_bytes(_bare_workbook("", {"xl/sharedStrings.xml": bomb}))
+    path.write_bytes(_bare_workbook("", {"xl/sharedStrings.xml": padding + bomb}))
     dataset = extract_dataset(path)
     assert dataset.status == "failed"
     assert "unreadable" in _codes(dataset)
+
+
+def test_utf16_xml_entities_are_refused(tmp_path: Path) -> None:
+    from engine.dataset._xlsx import WorkbookError, _xml
+
+    content = '<!DOCTYPE x [<!ENTITY a "value">]><x>&a;</x>'.encode("utf-16")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("part.xml", content)
+    with (
+        zipfile.ZipFile(io.BytesIO(buffer.getvalue())) as archive,
+        pytest.raises(WorkbookError, match="declares entities"),
+    ):
+        _xml(archive, "part.xml")
 
 
 def test_a_broken_workbook_gives_a_diagnostic_not_an_empty_answer(tmp_path: Path) -> None:

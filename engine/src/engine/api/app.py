@@ -420,7 +420,7 @@ def composition_deck(request: CompositionExportRequest) -> dict:
     source = Path(request.templatePath).resolve()
     output = Path(request.outputPath).resolve()
     findings = composition_check(request)["findings"]
-    if findings:
+    if findings and not getattr(request, "allowOverflow", False):
         raise HTTPException(status_code=422, detail=findings)
     missing: list[str] = []
     try:
@@ -458,7 +458,12 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             visuals.draw_visual(shapes, styled[0]["elements"][0], design_system)
 
         export_compositions(
-            source, output, [s.model_dump(mode="json") for s in request.slides], patterns, draw
+            source,
+            output,
+            [s.model_dump(mode="json") for s in request.slides],
+            patterns,
+            draw,
+            allow_overflow=getattr(request, "allowOverflow", False),
         )
         previews = render.render_to_png(output, output.parent / "previews", dpi=110)
         ir = parser.parse_template(output)
