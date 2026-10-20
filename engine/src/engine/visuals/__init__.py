@@ -242,6 +242,11 @@ def _draw_chart(
         chart.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart.legend.include_in_layout = False
     palette = _palette(design_system)
+    text_colour = _label_colour(style["colorRole"], palette, element.get("groundHex"))
+    if text_colour is not None:
+        chart.font.color.rgb = text_colour
+        if chart.has_legend:
+            chart.legend.font.color.rgb = text_colour
     colours = [RGBColor.from_string(palette[role]) for role in _SERIES_ROLES if role in palette]
     plot = chart.plots[0]
     _label_values(plot, kind, style, palette, element.get("groundHex"))
@@ -261,9 +266,15 @@ def _draw_chart(
         (chart.category_axis, element["xTitle"]),
         (chart.value_axis, element["yTitle"]),
     ):
+        if text_colour is not None:
+            axis.tick_labels.font.color.rgb = text_colour
         if title:
             axis.has_title = True
             axis.axis_title.text_frame.text = title
+            if text_colour is not None:
+                for paragraph in axis.axis_title.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.color.rgb = text_colour
     rule = next((palette[role] for role in _RULE_COLORS if role in palette), None)
     if rule is not None:
         chart.value_axis.has_major_gridlines = True

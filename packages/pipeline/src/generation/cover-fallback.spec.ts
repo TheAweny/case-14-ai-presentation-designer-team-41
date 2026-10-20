@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GenerationProfile } from '@lct/contracts';
-import { geometricCovers, titleCovers } from './workflow.js';
+import { createGenerationWorkflow, geometricCovers, SharedPlan, titleCovers } from './workflow.js';
+import { generationProfileSchema } from '@lct/contracts';
+import { readFileSync } from 'node:fs';
 
 type Composition = GenerationProfile['compositions'][number];
 
@@ -26,6 +28,77 @@ const pattern = (patternId: string, body: number[]) =>
   }) as unknown as Composition;
 
 describe('geometricCovers', () => {
+  it('keeps a short cover when approved claims would have more room on a contents list', async () => {
+    const cover = pattern('cover', [30]);
+    const contents = pattern('contents', [300, 300, 300]);
+    const profile = generationProfileSchema.parse(
+      JSON.parse(
+        readFileSync(
+          new URL('../../../contracts/fixtures/GenerationProfile.json', import.meta.url),
+          'utf8',
+        ),
+      ).valid[0].payload,
+    );
+    let first = '';
+    const workflow = createGenerationWorkflow({
+      provider: {
+        model: 'fake',
+        async generate(_agent, _instructions, input, schema) {
+          const task = input as { composition: Composition; index: number };
+          if (task.index === 0) first = task.composition.patternId;
+          return schema.parse({
+            patternId: task.composition.patternId,
+            speakerNotes: '',
+            textsBySlot: Object.fromEntries(task.composition.slots.map((s) => [s.slotId, 'Пилот'])),
+          });
+        },
+      },
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: new AbortController().signal,
+      sharedPlan: new SharedPlan({
+        title: 'Пилот',
+        audience: '',
+        goal: '',
+        slides: [cover, contents, contents, contents, contents].map((p) => ({
+          patternId: p.patternId,
+          purpose: 'Согласовать пилот для всей команды',
+          imageQuery: '',
+          sourceEvidence: {},
+          requiredClaims: [
+            {
+              id: 'fact',
+              text: 'Пилот рассчитан на три месяца работы и 30 операторов поддержки',
+              source: {
+                sourceId: 'brief',
+                quote: 'Пилот рассчитан на три месяца работы и 30 операторов поддержки',
+              },
+            },
+          ],
+        })),
+      }),
+      notes: [cover, contents].map((p) => ({
+        patternId: p.patternId,
+        kind: p === cover ? 'cover' : 'list',
+        items: 1,
+        title: '',
+        useFor: '',
+        special: false,
+        skip: false,
+        requiredContent: [],
+      })),
+    });
+    await (
+      await workflow.createRun()
+    ).start({
+      inputData: {
+        brief: 'Пилот рассчитан на три месяца работы и 30 операторов поддержки',
+        slideCount: 5,
+        profile: { ...profile, compositions: [cover, contents] },
+      },
+    });
+    expect(first).toBe('cover');
+  });
   it('takes a large-title layout without room for a chart over a content slide', () => {
     const content = pattern('content', [600]);
     const cover = pattern('cover', [60]);

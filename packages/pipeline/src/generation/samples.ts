@@ -55,6 +55,7 @@ export interface SampleSlide {
   readonly index: number;
   readonly composition: { readonly slots: readonly SampleSlot[] };
   readonly slide: { readonly texts: readonly { readonly slotId: string; readonly text: string }[] };
+  readonly numberingSlotIds?: readonly string[];
 }
 
 /**
@@ -67,8 +68,9 @@ export function leakedSamples(
   brief: string,
 ): { index: number; slotId: string; sample: string }[] {
   const leaked: { index: number; slotId: string; sample: string }[] = [];
-  for (const { index, composition, slide } of slides) {
+  for (const { index, composition, slide, numberingSlotIds } of slides) {
     for (const slot of composition.slots) {
+      if (numberingSlotIds?.includes(slot.slotId)) continue;
       if (slot.role === 'title' || !isFigureSample(slot.sample)) continue;
       const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
       if (squash(text) !== squash(slot.sample)) continue;

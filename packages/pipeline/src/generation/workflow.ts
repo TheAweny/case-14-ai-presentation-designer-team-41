@@ -388,10 +388,13 @@ export function minChars(
     prompt?: boolean;
     capacity?: Slot['capacity'];
     semanticRole?: string;
+    contentStructure?: string;
   },
   variant: DeckVariant = 'balanced',
 ): number {
   if (slot.role !== 'body') return 0;
+  // A complete card can be a short heading plus one exact fact; never pad it into a paragraph.
+  if (slot.contentStructure === 'heading-body') return 0;
   if (slot.semanticRole && ['slide-title', 'card-heading', 'caption'].includes(slot.semanticRole))
     return 0;
   // A paragraph break and a line break inside one (a vertical tab in the pptx) both start a line.
@@ -416,7 +419,12 @@ export function thinMessage(length: number, least: number, room: number): string
 export function slotBriefs(
   slots: GenerationProfile['compositions'][number]['slots'],
   variant?: DeckVariant,
-  semantics: readonly { slotId: string; semanticRole: string; groupId?: string }[] = [],
+  semantics: readonly {
+    slotId: string;
+    semanticRole: string;
+    groupId?: string;
+    contentStructure?: string;
+  }[] = [],
 ) {
   const heights = slots
     .map((slot) => slot.box?.cy ?? 0)
@@ -480,6 +488,7 @@ export function targetRange(slot: Parameters<typeof minChars>[0], variant: DeckV
   const room = fitChars(slot);
   const large =
     slot.role === 'body' &&
+    slot.contentStructure !== 'heading-body' &&
     slot.maxLines >= 3 &&
     room >= 80 &&
     !['slide-title', 'card-heading', 'caption'].includes(slot.semanticRole ?? 'unknown');
@@ -1905,7 +1914,12 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         full,
       );
       const dataNeeds = result.slides.map((slide, index) =>
-        dataLayoutNeed(slide.purpose, inputData.brief, index, result.slides.length),
+        dataLayoutNeed(
+          [slide.purpose, ...(outline?.slides[index]?.points ?? [])].join('\n'),
+          inputData.brief,
+          index,
+          result.slides.length,
+        ),
       );
       const remapped = remapPlan(
         result.slides.map((slide) => slide.patternId),
@@ -2023,23 +2037,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               return visualSlots(selected).length === 0 || visualSlots(candidate).length > 0;
             },
           };
-          composition =
-            ampleComposition(selection) ??
-            (index === 0
-              ? ampleComposition({
-                  ...selection,
-                  compatible: (candidate) => {
-                    const note = notes.get(candidate.patternId);
-                    return (
-                      !note?.special &&
-                      !note?.skip &&
-                      !(note?.requiredContent ?? []).some((item) => !available.has(item)) &&
-                      !FRAMING_KINDS.has(note?.kind ?? 'other')
-                    );
-                  },
-                })
-              : undefined) ??
-            selected;
+          // A long approved claim is rewritten within the cover's capacity; moving it to a
+          // contents list discards the cover precisely when concise wording matters most.
+          composition = ampleComposition(selection) ?? selected;
         }
         if (!slide.qrRequests?.length)
           composition = preserveDataLayout(composition, full, dataNeeds[index], variant);
@@ -2289,9 +2289,81 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             inputData.chartedEarlier ?? [],
           )
         : null;
-      if (planned) visual = withDisplayLabels(planned, offeredChart(raw.visual));
-      else if ((inputData.chartedEarlier ?? []).includes(chartedSeries(visual) ?? ''))
+      if (planned) {
+        // A fully verified native chart of this exact series keeps its requested line/bar type.
+        // The deterministic chart is a fallback for a missing or different writer visual.
+        const native =
+          visual?.kind === 'native' && visual.block.kind === 'chart' ? visual.block : null;
+        const sameSeries =
+          planned.kind === 'chart' &&
+          native &&
+          native.categories.length === planned.categories.length &&
+          native.categories.every(
+            (category, index) => category.label === planned.categories[index],
+          ) &&
+          native.series.length === planned.series.length &&
+          native.series.every((series, index) => {
+            const expected = planned.series[index];
+            return (
+              expected &&
+              series.name === expected.name &&
+              series.unit === planned.yTitle &&
+              series.values.length === expected.values.length &&
+              series.values.every(
+                (value, at) => value.state === 'present' && value.value === expected.values[at],
+              )
+            );
+          });
+        if (!sameSeries) visual = withDisplayLabels(planned, offeredChart(raw.visual));
+      } else if ((inputData.chartedEarlier ?? []).includes(chartedSeries(visual) ?? ''))
         visual = null;
+      // A proven complete series uses a single native PowerPoint chart. The richer block
+      // also builds a source table, which overflows ordinary chart slots. Its exact source
+      // stays in notes, while all categories, figures and their unit remain in the chart.
+      if (visual?.kind === 'native' && visual.block.kind === 'chart') {
+        const block = visual.block;
+        const unit = block.series[0]?.unit ?? '';
+        if (
+          block.categories.length >= 2 &&
+          block.categories.length <= 8 &&
+          block.series.length <= 5 &&
+          block.series.every(
+            (series) =>
+              series.unit === unit &&
+              series.values.every(
+                (value) => value.state === 'present' && value.value !== undefined,
+              ),
+          )
+        ) {
+          raw = {
+            ...raw,
+            speakerNotes: [
+              raw.speakerNotes,
+              ...block.sources.map((source) => source.quote),
+              ...(block.caveat ? [block.caveat] : []),
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          };
+          visual = {
+            kind: 'chart',
+            slotId: visual.slotId,
+            chartType:
+              block.intent === 'time-series'
+                ? 'line'
+                : block.requestedType === 'bar'
+                  ? 'bar'
+                  : 'column',
+            categories: block.categories.map((category) => category.label),
+            series: block.series.map((series) => ({
+              name: series.name,
+              values: series.values.map((value) => value.value as number),
+            })),
+            xTitle: block.xTitle,
+            yTitle: unit,
+          };
+        }
+      }
       if (visual?.kind === 'native') visual = { ...visual, variant: deps.variant ?? 'balanced' };
       const texts = raw.textsBySlot as Record<string, string | undefined>;
       const context: CopyContext = {

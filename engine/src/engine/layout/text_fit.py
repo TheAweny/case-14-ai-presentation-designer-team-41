@@ -154,6 +154,38 @@ def growing_scale(text: str, slot: dict[str, Any], steps: list[float]) -> float:
     return best
 
 
+def peer_text_groups(pattern: dict[str, Any]) -> list[list[str]]:
+    """Repeated frames in one row share a type scale, regardless of their copy length."""
+    groups: list[list[dict[str, Any]]] = []
+    for slot in pattern["slots"]:
+        box = slot.get("box")
+        if slot.get("role") == "title" or not box or slot.get("maxLines", 1) < 3:
+            continue
+        match = None
+        for group in groups:
+            first = group[0]
+            other = first["box"]
+
+            def near(a: float, b: float) -> bool:
+                return abs(a - b) <= 0.1 * max(a, b, 1)
+
+            if (
+                slot.get("font") == first.get("font")
+                and abs(slot["fontSize"] - first["fontSize"]) <= 1
+                and near(box["cx"], other["cx"])
+                and near(box["cy"], other["cy"])
+                and abs(box["y"] - other["y"]) <= 0.1 * max(box["cy"], other["cy"])
+                and abs(box["x"] - other["x"]) >= 0.5 * min(box["cx"], other["cx"])
+            ):
+                match = group
+                break
+        if match is None:
+            groups.append([slot])
+        else:
+            match.append(slot)
+    return [[s["slotId"] for s in group] for group in groups if len(group) > 1]
+
+
 def check_composition_text(
     pattern: dict[str, Any], texts: list[dict[str, str]]
 ) -> list[dict[str, Any]]:

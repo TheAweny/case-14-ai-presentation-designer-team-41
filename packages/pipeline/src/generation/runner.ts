@@ -30,6 +30,7 @@ import {
   fitChars,
   type LayoutRemapPolicy,
   minChars,
+  numberedSlots,
   thinMessage,
   type SharedPlan,
   type SharedContent,
@@ -571,7 +572,16 @@ export async function generatePresentation(options: GenerateOptions) {
     const clearLeakedSamples = async () => {
       const slides = written.flatMap((s) => {
         const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
-        return composition ? [{ index: s.index, composition, slide: s.slide }] : [];
+        return composition
+          ? [
+              {
+                index: s.index,
+                composition,
+                slide: s.slide,
+                numberingSlotIds: [...numberedSlots(composition).keys()],
+              },
+            ]
+          : [];
       });
       for (const leak of leakedSamples(slides, sourceBrief)) {
         const current = written.find((s) => s.index === leak.index);

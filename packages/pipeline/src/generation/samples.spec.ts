@@ -52,6 +52,12 @@ const slide = (texts: Record<string, string>) => ({
 });
 
 describe('leakedSamples', () => {
+  it('keeps generated structural numbering while removing unsupported metric samples', () => {
+    const item = slide({ badge: '05', arrow: '2025' });
+    expect(
+      leakedSamples([{ ...item, numberingSlotIds: ['badge'] }], 'Пилот на 30 операторах'),
+    ).toEqual([{ index: 2, slotId: 'arrow', sample: '2025' }]);
+  });
   it('finds the figures and period labels the writer kept from the template', () => {
     const kept = slide({
       title: 'Динамика выручки',

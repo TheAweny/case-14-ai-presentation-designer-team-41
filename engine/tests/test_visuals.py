@@ -202,6 +202,8 @@ def test_export_writes_a_native_table_and_chart(
     # Every value is printed on its mark, not left to be read off the axis.
     assert chart.plots[0].has_data_labels
     assert chart.plots[0].data_labels.show_value
+    assert chart.category_axis.tick_labels.font.color.rgb is not None
+    assert chart.value_axis.tick_labels.font.color.rgb is not None
     assert not any(s.shape_type == 13 for s in shapes)  # MSO_SHAPE_TYPE.PICTURE
 
 

@@ -147,11 +147,17 @@ def _apply_safe_text_area(shape: Any, slot: dict[str, Any]) -> None:
             setattr(frame, far, required)
 
 
-def _set_font_size(shape: Any, size_pt: float) -> None:
-    """Every run of the shape, and the size it gives typed text, at one explicit size."""
+def _set_font_size(shape: Any, size_pt: float, reference_pt: float | None = None) -> None:
+    """Scale the template's heading/body hierarchy together when resizing a frame."""
     size = str(round(size_pt * 100))
     for properties in shape.text_frame._txBody.iter(f"{_A}rPr", f"{_A}endParaRPr"):
-        properties.set("sz", size)
+        original = properties.get("sz")
+        properties.set(
+            "sz",
+            str(round(int(original) * size_pt / reference_pt))
+            if original and reference_pt
+            else size,
+        )
 
 
 def _replace_text(shape: Any, text: str) -> None:
@@ -473,6 +479,7 @@ def export_compositions(
     draw_visual: DrawVisual | None = None,
     allow_overflow: bool = False,
     font_scales: dict[tuple[int, str], float] | None = None,
+    centred_slots: set[tuple[int, str]] | None = None,
 ) -> Path:
     """I clone chosen slides inside their original package, preserving masters and relationships.
 
@@ -527,7 +534,16 @@ def export_compositions(
                 _replace_text(shape, texts[str(shape.shape_id)])
                 scale = (font_scales or {}).get((index, str(shape.shape_id)))
                 if scale is not None and scale != 1:
-                    _set_font_size(shape, slots[str(shape.shape_id)]["fontSize"] * scale)
+                    original_size = slots[str(shape.shape_id)]["fontSize"]
+                    _set_font_size(shape, original_size * scale, original_size)
+                if (index, str(shape.shape_id)) in (centred_slots or set()):
+                    body = shape.text_frame._txBody.bodyPr
+                    for tag in ("spAutoFit", "normAutofit"):
+                        for auto in list(body.findall(f"{_A}{tag}")):
+                            body.remove(auto)
+                    if body.find(f"{_A}noAutofit") is None:
+                        body.append(OxmlElement("a:noAutofit"))
+                    body.set("anchor", "ctr")
                 _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:
             _replace_with_visual(slide, item["visual"], draw_visual)

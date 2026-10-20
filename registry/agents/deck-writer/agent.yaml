@@ -1,5 +1,5 @@
 id: deck-writer
-version: 1.3.0
+version: 1.4.0
 description: Writes an entire template-grounded presentation variant from the shared plan
 modelId: writer-default
 generation:
