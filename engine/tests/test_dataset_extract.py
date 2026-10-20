@@ -64,6 +64,19 @@ def test_a_byte_order_mark_does_not_end_up_in_the_first_header(tmp_path: Path) -
 # Numbers, locales, dates ----------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("date_1904", [False, True])
+def test_workbook_date_epoch_is_preserved(tmp_path: Path, date_1904: bool) -> None:
+    path = tmp_path / "epoch.xlsx"
+    with xlsxwriter.Workbook(path, {"date_1904": date_1904}) as book:
+        sheet = book.add_worksheet("Dates")
+        sheet.write(0, 0, "Date")
+        sheet.write_datetime(
+            1, 0, datetime(2025, 6, 12), book.add_format({"num_format": "yyyy-mm-dd"})
+        )
+    dataset = extract_dataset(path)
+    assert dataset.sheets[0].rows[0].cells[0].value == "2025-06-12"
+
+
 def test_numbers_are_read_in_the_locale_the_text_shows(tmp_path: Path) -> None:
     text = (
         "Тип;Значение\nрусская;1 234,56\nрусская;22 300\nанглийская;1,234.50\n"
@@ -126,10 +139,10 @@ def test_empty_cells_are_not_zero_and_zero_is_kept(tmp_path: Path) -> None:
 
 
 def test_a_text_in_a_numeric_column_keeps_its_text_and_is_reported(tmp_path: Path) -> None:
-    dataset = extract_dataset(_write(tmp_path / "m.csv", "К;V\nа;10\nб;н/д\nв;30\nг;40\n"))
+    dataset = extract_dataset(_write(tmp_path / "m.csv", "К;V\nа;10\nб;уточн.\nв;30\nг;40\n"))
     sheet = dataset.sheets[0]
     assert sheet.columns[1].kind == "number"
-    assert _values(sheet, 1) == [10.0, "н/д", 30.0, 40.0]
+    assert _values(sheet, 1) == [10.0, "уточн.", 30.0, 40.0]
     assert "mixed-column" in _codes(dataset)
 
 
@@ -302,13 +315,28 @@ def test_a_missing_workbook_relationship_part_returns_diagnostics(tmp_path: Path
     assert "unreadable" in _codes(dataset)
 
 
-def test_xml_that_declares_entities_is_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("padding", ["", "<!--" + " " * 5000 + "-->"])
+def test_xml_that_declares_entities_is_refused(tmp_path: Path, padding: str) -> None:
     bomb = '<!DOCTYPE x [<!ENTITY a "aaaa">]><sst xmlns="http://schemas.openxmlformats.org/x"/>'
     path = tmp_path / "e.xlsx"
-    path.write_bytes(_bare_workbook("", {"xl/sharedStrings.xml": bomb}))
+    path.write_bytes(_bare_workbook("", {"xl/sharedStrings.xml": padding + bomb}))
     dataset = extract_dataset(path)
     assert dataset.status == "failed"
     assert "unreadable" in _codes(dataset)
+
+
+def test_utf16_xml_entities_are_refused(tmp_path: Path) -> None:
+    from engine.dataset._xlsx import WorkbookError, _xml
+
+    content = '<!DOCTYPE x [<!ENTITY a "value">]><x>&a;</x>'.encode("utf-16")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("part.xml", content)
+    with (
+        zipfile.ZipFile(io.BytesIO(buffer.getvalue())) as archive,
+        pytest.raises(WorkbookError, match="declares entities"),
+    ):
+        _xml(archive, "part.xml")
 
 
 def test_a_broken_workbook_gives_a_diagnostic_not_an_empty_answer(tmp_path: Path) -> None:
@@ -418,6 +446,129 @@ def test_text_with_no_table_and_binary_data_are_not_tables(tmp_path: Path) -> No
     assert "unreadable" in _codes(extract_dataset(blob))
     nothing = _write(tmp_path / "e.csv", "")
     assert "empty-file" in _codes(extract_dataset(nothing))
+
+
+def test_an_empty_file_carries_the_digest_of_its_bytes(tmp_path: Path) -> None:
+    import hashlib
+
+    empty = extract_dataset(_write(tmp_path / "e.csv", ""))
+    assert empty.source.sha256 == hashlib.sha256(b"").hexdigest()
+    filled = extract_dataset(_write(tmp_path / "f.csv", "a,b\n1,2\n"))
+    assert filled.source.sha256 == hashlib.sha256(b"a,b\n1,2\n").hexdigest()
+
+
+def test_prose_in_a_txt_file_is_not_read_as_a_comma_table(tmp_path: Path) -> None:
+    text = "Квартал закрыт. Выручка, как и ожидали, выросла.\nДальше — план, сроки и риски.\n"
+    dataset = extract_dataset(_write(tmp_path / "note.txt", text))
+    assert dataset.status == "failed"
+    assert "no-table" in _codes(dataset)
+
+
+def test_a_txt_file_that_is_a_whole_csv_is_still_a_table(tmp_path: Path) -> None:
+    sheet = extract_dataset(_write(tmp_path / "data.txt", "a,b\nx,1\ny,2\n")).sheets[0]
+    assert [c.header for c in sheet.columns] == ["a", "b"]
+    assert _values(sheet, 1) == [1.0, 2.0]
+
+
+def test_a_block_pasted_from_a_spreadsheet_is_found_inside_a_text(tmp_path: Path) -> None:
+    text = (
+        "Привет! Вот цифры | черновик\n\n"
+        "Команда | Задачи\n:--- | ---:\nАльфа | 40\nБета | 28\n\n"
+        "А это из Excel:\nМесяц\tВыручка\nИюль\t1 204,5\nАвгуст\t1 156,0\n\n"
+        "Итог: выручка | клиенты растут.\n"
+    )
+    dataset = extract_dataset(_write(tmp_path / "pasted.txt", text))
+    assert [sheet.name for sheet in dataset.sheets] == ["Table 1", "Table 2"]
+    pipes, block = dataset.sheets
+    assert [c.header for c in pipes.columns] == ["Команда", "Задачи"]
+    assert [c.header for c in block.columns] == ["Месяц", "Выручка"]
+    assert _values(block, 1) == [1204.5, 1156.0]
+
+
+def test_a_text_line_with_a_tab_is_not_a_block_on_its_own(tmp_path: Path) -> None:
+    text = "| a | b |\n|---|---|\n| 1 | 2 |\n\nОдна строка\tс табом\n"
+    dataset = extract_dataset(_write(tmp_path / "one.md", text))
+    assert len(dataset.sheets) == 1
+
+
+def test_markdown_markup_and_escaped_pipes_do_not_hide_values(tmp_path: Path) -> None:
+    text = (
+        "| **Дата** | Визиты | Заметка |\n|:---|---:|---|\n"
+        "| 01.03.2025 | **1 219** | акция \\| лендинг |\n| 02.03.2025 | `1202` | |\n"
+    )
+    dataset = extract_dataset(_write(tmp_path / "wiki.md", text))
+    sheet = dataset.sheets[0]
+    assert [c.header for c in sheet.columns] == ["Дата", "Визиты", "Заметка"]
+    assert _values(sheet, 1) == [1219.0, 1202.0]
+    assert sheet.rows[0].cells[2].raw == "акция | лендинг"
+    assert "markup-removed" in _codes(dataset)
+
+
+def test_a_plain_markdown_table_reports_no_markup(tmp_path: Path) -> None:
+    dataset = extract_dataset(_write(tmp_path / "t.md", "| a | b |\n|---|---|\n| x | 1 |\n"))
+    assert "markup-removed" not in _codes(dataset)
+
+
+@pytest.mark.parametrize("marker", ["—", "-", "н/д", "Н/Д", "n/a", "нет данных", "NaN"])
+def test_a_written_gap_is_a_gap_with_its_text_kept(tmp_path: Path, marker: str) -> None:
+    dataset = extract_dataset(_write(tmp_path / "g.csv", f"К;V\nа;10\nб;{marker}\nв;0\n"))
+    cell = dataset.sheets[0].rows[1].cells[1]
+    assert (cell.kind, cell.value, cell.raw) == ("empty", None, marker)
+    assert _values(dataset.sheets[0], 1) == [10.0, None, 0.0]
+    assert "missing-markers" in _codes(dataset)
+    assert "mixed-column" not in _codes(dataset)
+
+
+def test_a_semicolon_file_with_decimal_commas_and_a_comma_in_its_header(tmp_path: Path) -> None:
+    text = "Месяц;Выручка, млн ₽\n2025-01;107,5\n2025-02;115,0\n2025-03;122,5\n"
+    sheet = extract_dataset(_write(tmp_path / "ru.csv", text)).sheets[0]
+    assert [c.header for c in sheet.columns] == ["Месяц", "Выручка, млн ₽"]
+    assert _values(sheet, 1) == [107.5, 115.0, 122.5]
+
+
+def test_a_comma_file_with_a_quoted_decimal_comma_keeps_its_commas(tmp_path: Path) -> None:
+    text = 'Город,Доля,Комментарий\nКазань,"12,5",ок\nСамара,"7,25",ок\n'
+    sheet = extract_dataset(_write(tmp_path / "q.csv", text)).sheets[0]
+    assert [c.header for c in sheet.columns] == ["Город", "Доля", "Комментарий"]
+    assert _values(sheet, 1) == [12.5, 7.25]
+
+
+def test_title_rows_above_a_table_are_not_its_header(tmp_path: Path) -> None:
+    text = "Отчёт по регионам;;\nза 2025 год;;\n\nРегион;План;Факт\nМосква;10;12\nКазань;5;6\n"
+    dataset = extract_dataset(_write(tmp_path / "titled.csv", text))
+    sheet = dataset.sheets[0]
+    assert sheet.headerRow == 4
+    assert [c.header for c in sheet.columns] == ["Регион", "План", "Факт"]
+    assert [row.cells[0].value for row in sheet.rows] == ["Москва", "Казань"]
+    preamble = next(d for d in dataset.diagnostics if d.code == "preamble-rows")
+    assert "Отчёт по регионам" in preamble.message and preamble.ref == "1:3"
+
+
+def test_a_table_that_starts_at_its_header_has_no_preamble(tmp_path: Path) -> None:
+    dataset = extract_dataset(_write(tmp_path / "plain.csv", "Регион;План\nМосква;10\nКазань;5\n"))
+    assert dataset.sheets[0].headerRow == 1
+    assert "preamble-rows" not in _codes(dataset)
+
+
+def test_a_sparse_table_keeps_its_rows(tmp_path: Path) -> None:
+    text = "Раздел;;\nИтоги;;\nРегион;;\nМосква;;\nКазань;;\nСамара;;\nУфа;;\n"
+    dataset = extract_dataset(_write(tmp_path / "sparse.csv", text))
+    assert "preamble-rows" not in _codes(dataset)
+    assert sum(len(sheet.rows) for sheet in dataset.sheets) >= 6
+
+
+def test_a_totals_row_is_named(tmp_path: Path) -> None:
+    text = "Регион;Продажи\nМосква;10\nКазань;5\nСамара;7\nИтого;22\n"
+    dataset = extract_dataset(_write(tmp_path / "total.csv", text))
+    total = next(d for d in dataset.diagnostics if d.code == "total-row")
+    assert total.ref == "A5"
+    assert len(dataset.sheets[0].rows) == 4
+
+
+@pytest.mark.parametrize("last", ["Итоговый регион;9", "Тотальный;9", "Москва-2;9"])
+def test_a_last_row_that_only_looks_like_a_total_is_data(tmp_path: Path, last: str) -> None:
+    text = f"Регион;Продажи\nМосква;10\nКазань;5\nСамара;7\n{last}\n"
+    assert "total-row" not in _codes(extract_dataset(_write(tmp_path / "t.csv", text)))
 
 
 # The API ---------------------------------------------------------------------------------------

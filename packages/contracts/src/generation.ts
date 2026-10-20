@@ -1,3 +1,4 @@
+import { brandbookBindingSchema } from './brandbook.js';
 import { z } from 'zod';
 import { designSystemSchema } from './design-system.js';
 import { boxSchema, templateIrSchema } from './template-ir.js';
@@ -162,6 +163,9 @@ export const composedSlideSchema = z.object({
     ),
 });
 export const compositionExportRequestSchema = z.object({
+  brandbook: brandbookBindingSchema.optional(),
+  /** Publish a reviewable file while retaining deterministic overflow findings in the audit. */
+  allowOverflow: z.boolean().optional(),
   schemaVersion: z.literal(1),
   templatePath: z.string().min(1),
   outputPath: z.string().min(1),
@@ -258,6 +262,8 @@ export const generationRequestSchema = z.object({
   /** A model draft guides the story but cannot independently substantiate its facts. */
   outlineSource: z.enum(['user', 'model']).optional(),
   templateId: z.string().uuid(),
+  brandbookId: z.string().uuid().nullable().optional(),
+  brandbookPriority: z.enum(['brandbook', 'template']).optional(),
   brief: z.string().trim().min(10).max(60000),
   slideCount: z.number().int().min(5).max(15).nullable().default(null),
   /**
@@ -360,7 +366,7 @@ export const compositionCritiqueSchema = z.object({
         message: z.string(),
       }),
     )
-    .max(12),
+    .max(240),
 });
 
 export const templateSlotCopySchema = z.object({
@@ -368,8 +374,16 @@ export const templateSlotCopySchema = z.object({
   textsBySlot: z.record(z.string(), z.string()),
   speakerNotes: z.string(),
 });
+/** Model-only envelope. Runtime binds every slide and slot to the selected template. */
+export const templateDeckCopySchema = z.object({
+  slides: z.record(z.string().regex(/^\d+$/), templateSlotCopySchema),
+});
 export const slotRewriteChoicesSchema = z.object({
   rewrites: z.record(z.string(), z.array(z.string()).length(3)),
+});
+/** Model-only repair response, bound at runtime to the audited slide/slot identities. */
+export const templateDeckRepairsSchema = z.object({
+  slides: z.record(z.string().regex(/^\d+$/), slotRewriteChoicesSchema),
 });
 /**
  * What one template composition is for, as the template indexer read it once when the template

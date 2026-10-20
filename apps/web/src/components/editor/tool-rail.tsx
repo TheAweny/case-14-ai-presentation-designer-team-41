@@ -337,6 +337,8 @@ function VariantMenu({
   current,
   side,
   active,
+  open,
+  onOpenChange,
   onPick,
 }: {
   tool: Tool;
@@ -344,6 +346,8 @@ function VariantMenu({
   side: DockSide;
   /** Инструмент выбран: треугольник стоит на цветной кнопке. */
   active: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onPick: (tool: Tool, variant: Variant) => void;
 }) {
   const t = useTranslations('toolRail');
@@ -351,7 +355,7 @@ function VariantMenu({
   const toward = OPEN_TOWARD[side];
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <RailTooltip label={t('variantsOf', { tool: t(`tools.${tool.id}`) })} side={toward}>
         <DropdownMenuTrigger asChild>
           <ToolbarPrimitive.Button
@@ -470,6 +474,7 @@ export const ToolRail = memo(function ToolRail({
   const actions = ACTIONS.filter((action) => !railHidden.some((id) => id === action.id));
   const showPresent = !railHidden.includes('present');
   const [chosen, setChosen] = useState(DEFAULT_VARIANTS);
+  const [menuTool, setMenuTool] = useState<ToolId | null>(null);
   const onChangeRef = useRef(onChange);
   const onActionRef = useRef(onAction);
 
@@ -570,9 +575,17 @@ export const ToolRail = memo(function ToolRail({
                     aria-label={t(`variants.${variant.id}`)}
                     aria-keyshortcuts={variant.shortcut.key.toLowerCase()}
                     onMouseDown={keepCanvasFocus}
+                    onClick={() => {
+                      // Повторный клик по уже выбранной кнопке с вариантами открывает список.
+                      // Треугольник в углу остаётся, но с самой кнопки группу тоже можно сменить.
+                      if (active && grouped) setMenuTool(tool.id);
+                    }}
                     className={cn(
                       BUTTON,
-                      'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
+                      // Подсказка пишет на ту же кнопку data-state="closed" и затирает
+                      // data-state="on" у Toggle, поэтому выбранность читаем по aria-checked.
+                      'aria-checked:bg-primary aria-checked:text-primary-foreground',
+                      'aria-checked:hover:bg-primary aria-checked:hover:text-primary-foreground',
                     )}
                   >
                     <variant.icon size={18} />
@@ -584,6 +597,8 @@ export const ToolRail = memo(function ToolRail({
                     current={variant}
                     side={side}
                     active={active}
+                    open={menuTool === tool.id}
+                    onOpenChange={(next) => setMenuTool(next ? tool.id : null)}
                     onPick={pick}
                   />
                 ) : null}

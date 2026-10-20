@@ -40,7 +40,8 @@ def _xml(archive: zipfile.ZipFile, name: str) -> ElementTree.Element:
         data = archive.read(name)
     except (KeyError, zipfile.BadZipFile, RuntimeError) as error:
         raise WorkbookError(f"The workbook part {name} cannot be read.") from error
-    if b"<!DOCTYPE" in data[:2048] or b"<!ENTITY" in data[:4096]:
+    declarations = data.replace(b"\x00", b"")
+    if b"<!DOCTYPE" in declarations or b"<!ENTITY" in declarations:
         raise WorkbookError(f"{name} declares entities, which a workbook never does.")
     try:
         return ElementTree.fromstring(data)
@@ -124,12 +125,8 @@ def read_workbook(
     if "xl/workbook.xml" not in names:
         raise WorkbookError("The archive holds no workbook (xl/workbook.xml is missing).")
     workbook = _xml(archive, "xl/workbook.xml")
-    base_1904 = (workbook.find("m:workbookPr", _NS) or ElementTree.Element("x")).get(
-        "date1904"
-    ) in (
-        "1",
-        "true",
-    )
+    properties = workbook.find("m:workbookPr", _NS)
+    base_1904 = properties is not None and properties.get("date1904") in ("1", "true")
     relations = {
         node.get("Id", ""): node.get("Target", "")
         for node in _xml(archive, "xl/_rels/workbook.xml.rels").iterfind("p:Relationship", _NS)

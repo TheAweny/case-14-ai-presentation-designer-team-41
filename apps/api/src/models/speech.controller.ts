@@ -35,8 +35,8 @@ function actorOf(account: Account): SettingsActor {
  * Dictation. The browser sends a recording; the API calls the speech model: the one assigned to
  * `speech`, or a model of the person's connections that a probe showed transcribes. Availability is not probed: a missing model is a
  * settings fact, a failed call is an error of this one recording. Only the provider's HTTP status
- * goes back: its text may quote the key of a connection the person only uses, so it stays in the
- * log.
+ * goes back: its text may quote the key of a connection the person only uses, so it is omitted
+ * from both the response and application log.
  */
 @Controller('speech')
 export class SpeechController {
@@ -77,7 +77,7 @@ export class SpeechController {
       const failure =
         error instanceof TranscriptionError ? error : new TranscriptionError(null, String(error));
       this.logger.warn(
-        `Speech model ${model.model} on ${model.connectionId} failed: ${failure.message}`,
+        `Speech model ${model.model} on ${model.connectionId} failed (HTTP ${failure.status ?? 'unavailable'})`,
       );
       throw new BadGatewayException({ reason: 'transcription-failed', status: failure.status });
     }

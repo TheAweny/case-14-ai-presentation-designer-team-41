@@ -151,7 +151,7 @@ description: "Имена моделей из OpenAPI-документа API."
 
 ## ChatAttachment
 
-Тип: `object или object или object`.
+Тип: `object или object или object или object`.
 
 ## ChatDocument
 
@@ -581,6 +581,8 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `budget` | object | нет |  |
 | `outlineSource` | `user`, `model` | нет |  |
 | `templateId` | string | да |  |
+| `brandbookId` | string | нет |  |
+| `brandbookPriority` | `brandbook`, `template` | нет |  |
 | `brief` | string | да |  |
 | `slideCount` | integer | нет |  |
 | `outline` | — | нет |  |
@@ -1037,7 +1039,9 @@ Six hex digits, no leading hash.
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
 | `templatePath` | string | да | Path to the .pptx used as the style source. |
-| `contentPath` | string | да | Path to the content pack for the deck. |
+| `contentPath` | string | да | Path to the content for the deck: text, Markdown, DOCX, PDF, or a table (CSV, TSV, XLSX, JSON). |
+| `brandbookPath` | string | нет | Brandbook to style the deck: design tokens JSON, PDF guideline, .fig, logos, fonts, slide examples, or a ZIP or RAR of them. Absent: the template alone. |
+| `brandbookPriority` | `brandbook`, `template` | нет | Which wins where the brandbook and the template disagree. Absent: brandbook. |
 | `slideCount` | integer | да | Number of slides to produce. |
 | `layoutVariants` | array&lt;[LayoutVariant](/docs/api/reference/schemas/#layoutvariant)&gt; | да | Layout variants built from the single deck plan. |
 | `auditProfile` | string | да | Name of the audit profile from configs/audit.yaml. |

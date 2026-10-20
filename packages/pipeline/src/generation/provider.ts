@@ -4,6 +4,7 @@ import { reasoningRequestFields, samplingAllowed } from '../models/reasoning.js'
 import { CompatibleRequests, refusedParameter } from '../models/compatibility.js';
 import type { AttemptBudget } from './attempt-budget.js';
 import { modelHttpFailure } from '../chat/model-failure.js';
+import { readRuntimeLimits } from '../runtime-limits.js';
 
 export interface TextProvider {
   readonly model: string;
@@ -26,15 +27,66 @@ export interface TextProvider {
 }
 /**
  * The JSON object of a model answer. Models that ignore the JSON mode wrap it: a reasoning block,
- * a Markdown fence, a sentence before or after. The object is the text from the first `{` to the
- * last `}` once the reasoning is dropped; anything else is not an answer.
+ * a Markdown fence, a sentence before or after. Balance braces outside quoted strings and
+ * accept one unambiguous schema-valid result. Distinct valid answers must be repaired.
  */
-export function parseModelJson<T>(text: string, schema: z.ZodType<T>): T {
+export function parseModelJson<T>(
+  text: string,
+  schema: z.ZodType<T>,
+  preferLargestValid = false,
+): T {
   const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  const start = answer.indexOf('{');
-  const end = answer.lastIndexOf('}');
-  if (start < 0 || end < start) throw new SyntaxError('The model answer holds no JSON object.');
-  return schema.parse(JSON.parse(answer.slice(start, end + 1)));
+  const objects: unknown[] = [];
+  let start = -1;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < answer.length; index++) {
+    const char = answer[index];
+    if (start < 0) {
+      if (char !== '{') continue;
+      start = index;
+      depth = 1;
+      continue;
+    }
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === '{') depth++;
+    else if (char === '}' && --depth === 0) {
+      try {
+        objects.push(JSON.parse(answer.slice(start, index + 1)));
+      } catch {
+        // Invalid prose braces are not a JSON answer.
+      }
+      start = -1;
+    }
+  }
+  const valid = new Map<string, T>();
+  for (const candidate of objects) {
+    const result = schema.safeParse(candidate);
+    if (result.success) valid.set(JSON.stringify(result.data), result.data);
+  }
+  if (valid.size === 1) return valid.values().next().value as T;
+  if (preferLargestValid && valid.size > 1)
+    return [...valid.entries()].sort((a, b) => b[0].length - a[0].length)[0]?.[1] as T;
+  if (objects.length === 1) return schema.parse(objects[0]);
+  throw new SyntaxError(
+    objects.length > 1
+      ? 'The model answer holds multiple JSON objects without one unambiguous schema-valid result.'
+      : 'The model answer holds no complete JSON object.',
+  );
+}
+/** A received model answer remained invalid after the provider's bounded retries. */
+export class ModelAnswerValidationError extends SyntaxError {
+  override readonly name = 'ModelAnswerValidationError';
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : 'Invalid structured model answer.', { cause });
+  }
 }
 interface Options {
   apiKey: string;
@@ -116,7 +168,7 @@ interface Completion {
  * so three slots made them three times slower; eight stays under the ten parallel requests Yandex
  * AI Studio allows, and MODEL_MAX_CONCURRENCY tunes it for another provider.
  */
-const MAX_CONCURRENT = Math.max(1, Number(process.env.MODEL_MAX_CONCURRENCY) || 8);
+const MAX_CONCURRENT = readRuntimeLimits().modelConcurrency;
 
 /**
  * Request slots, first come first served. A 429 means the provider is over its quota: the pool
@@ -395,7 +447,7 @@ export class OpenAICompatibleProvider implements TextProvider {
       startedAt,
     });
     try {
-      const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
+      const outputSchema = z.toJSONSchema(schema, { target: 'draft-7', reused: 'ref' });
       const generation = this.generation.get(agent);
       // The slide budgets are sized for answers, so a model thinks only when asked to, and then
       // gets more room and time for it.
@@ -420,6 +472,14 @@ export class OpenAICompatibleProvider implements TextProvider {
       let attempt = 0;
       let busy = 0;
       const budget = this.options.attemptBudget;
+      const wholeDeck =
+        (agent === 'writer' || agent === 'rewriter' || agent === 'critic') &&
+        typeof input === 'object' &&
+        input !== null &&
+        'slides' in input &&
+        Array.isArray(input.slides);
+      const outputTokens = () =>
+        (generation?.maxOutputTokens ?? 3600) * (wholeDeck ? 1 : attempt + 1) + thinkingTokens;
       // Every repeat — busy HTTP, bad JSON, a truncated answer, a timeout, a dropped connection —
       // spends one shared attempt. The first send does not. Without a budget the local caps stand.
       const allowRetry = (used: number, cap: number): boolean =>
@@ -428,8 +488,7 @@ export class OpenAICompatibleProvider implements TextProvider {
         signal.throwIfAborted();
         const reserve =
           Buffer.byteLength(system + JSON.stringify(input) + JSON.stringify(outputSchema), 'utf8') +
-          (generation?.maxOutputTokens ?? 3600) * (attempt + 1) +
-          thinkingTokens;
+          outputTokens();
         const release = await this.limiter.acquire(
           signal,
           this.options.queueGroup ?? 'generation',
@@ -453,7 +512,9 @@ export class OpenAICompatibleProvider implements TextProvider {
               redirect: 'error',
               signal: AbortSignal.any([
                 signal,
-                AbortSignal.timeout(thinking ? THINKING_TIMEOUT_MS : ANSWER_TIMEOUT_MS),
+                AbortSignal.timeout(
+                  thinking || wholeDeck ? THINKING_TIMEOUT_MS : ANSWER_TIMEOUT_MS,
+                ),
               ]),
             },
             {
@@ -462,7 +523,7 @@ export class OpenAICompatibleProvider implements TextProvider {
               ...(samplingAllowed(this.options.reasoning, reasoningFields)
                 ? { temperature: generation?.temperature ?? 0.35, top_p: generation?.topP ?? 1 }
                 : {}),
-              max_tokens: (generation?.maxOutputTokens ?? 3600) * (attempt + 1) + thinkingTokens,
+              max_tokens: outputTokens(),
               ...reasoningFields,
               response_format: {
                 type: 'json_schema',
@@ -523,8 +584,7 @@ export class OpenAICompatibleProvider implements TextProvider {
                 : '';
             const refusal =
               typeof choice?.message?.refusal === 'string' ? choice.message.refusal : '';
-            const maxTokens =
-              (generation?.maxOutputTokens ?? 3600) * (attempt + 1) + thinkingTokens;
+            const maxTokens = outputTokens();
             if (!content.trim() || refusal.trim() || choice?.finish_reason === 'length') {
               if (allowRetry(attempt, 2)) {
                 attempt += 1;
@@ -558,11 +618,11 @@ export class OpenAICompatibleProvider implements TextProvider {
             }
             let result: T;
             try {
-              result = parseModelJson(content, schema);
+              result = parseModelJson(content, schema, wholeDeck);
             } catch (error) {
               // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
               // miss is a sampling accident, and a fresh draw follows.
-              if (!allowRetry(attempt, 2)) throw error;
+              if (!allowRetry(attempt, 2)) throw new ModelAnswerValidationError(error);
               attempt += 1;
               repair =
                 answerFormat && !repaired

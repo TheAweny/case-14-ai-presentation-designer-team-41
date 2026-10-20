@@ -41,6 +41,7 @@ type CheckState =
       readonly result: ConnectionCheck;
       /** Для каких адреса и ключа проверка: сохранится с подключением, только если они те же. */
       readonly baseUrl: string;
+      readonly preset: ConnectionPreset;
       readonly apiKey: string;
       readonly headers: string;
     };
@@ -144,9 +145,9 @@ export function ConnectionForm({
     const untouched =
       baseUrl.trim() === '' || normalizeBaseUrl(baseUrl) === PRESET_BASE_URLS[preset];
     const nextUrl = untouched ? PRESET_BASE_URLS[next] : baseUrl;
+    forgetCheck();
     if (untouched) {
       setBaseUrl(nextUrl);
-      forgetCheck();
     }
     if (nameDraft !== null && nameDraft === suggestedConnectionName(preset, baseUrl)) {
       setNameDraft(null);
@@ -175,10 +176,11 @@ export function ConnectionForm({
       return;
     }
     const run = ++checkRun.current;
-    const target = { baseUrl: normalizeBaseUrl(baseUrl), apiKey: enteredKey ?? '' };
+    const target = { baseUrl: normalizeBaseUrl(baseUrl), apiKey: enteredKey ?? '', preset };
     setCheck({ state: 'running' });
     probeConnectionAction({
       connectionId: connection?.connectionId,
+      preset,
       baseUrl: target.baseUrl,
       headers,
       apiKey: enteredKey,
@@ -218,6 +220,7 @@ export function ConnectionForm({
     const lastCheck =
       check.state === 'done' &&
       check.baseUrl === normalizeBaseUrl(baseUrl) &&
+      check.preset === preset &&
       check.headers === headersKey &&
       check.apiKey === (enteredKey ?? '')
         ? check.result

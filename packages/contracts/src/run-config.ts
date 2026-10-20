@@ -13,8 +13,32 @@ export const modelBindingSchema = z.object({
 
 /** Schema of configs/run.example.yaml — the reproducible description of one run. */
 export const runConfigSchema = z.object({
-  templatePath: z.string().min(1).describe('Path to the .pptx used as the style source.'),
-  contentPath: z.string().min(1).describe('Path to the content pack for the deck.'),
+  templatePath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Path to the .pptx used as the style source. Absent: the built-in layouts ' +
+        '(examples/layout-template.pptx), styled by the brandbook when there is one.',
+    ),
+  contentPath: z
+    .string()
+    .min(1)
+    .describe(
+      'Path to the content for the deck: text, Markdown, DOCX, PDF, or a table (CSV, TSV, XLSX, JSON).',
+    ),
+  brandbookPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Brandbook to style the deck: design tokens JSON, PDF guideline, .fig, logos, fonts, ' +
+        'slide examples, or a ZIP or RAR of them. Absent: the template alone.',
+    ),
+  brandbookPriority: z
+    .enum(['brandbook', 'template'])
+    .optional()
+    .describe('Which wins where the brandbook and the template disagree. Absent: brandbook.'),
   slideCount: z.number().int().min(5).max(15).describe('Number of slides to produce.'),
   layoutVariants: z
     .array(layoutVariantSchema)

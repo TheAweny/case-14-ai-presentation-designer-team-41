@@ -1,0 +1,10 @@
+id: runtime-context
+version: 1.0.0
+description: Shared policy for actual deployment limits supplied by the runtime
+modelId: writer-default
+generation:
+  temperature: 0
+  topP: 1
+  maxOutputTokens: 1024
+outputSchema: RuntimeContext
+instructionsFile: instructions.md

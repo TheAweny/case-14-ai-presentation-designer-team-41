@@ -7,6 +7,10 @@ import type { MaterialExtractResponse } from '@lct/contracts';
 import { readPreparedMaterial, type MaterialExtractEngine } from './prepared-material.js';
 
 const folders: string[] = [];
+/** Text pages never ask for tables: a call here is a wrong route. */
+const noDataset = vi.fn(async () => {
+  throw new Error('dataset extraction was not expected');
+});
 
 afterEach(async () => {
   await Promise.all(folders.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -56,7 +60,7 @@ describe('prepared material cache and failure cases', () => {
   it('reuses a valid disk cache and does not call the engine again', async () => {
     const file = await source('notes.pdf', Buffer.from('pdf bytes'));
     const extractMaterial = vi.fn(async () => page(file.hash, 'First reading'));
-    const engine: MaterialExtractEngine = { extractMaterial };
+    const engine: MaterialExtractEngine = { extractMaterial, extractDataset: noDataset };
     const first = await readPreparedMaterial(engine, file);
     const second = await readPreparedMaterial(engine, file);
     expect(first.text).toBe('First reading');
@@ -69,7 +73,7 @@ describe('prepared material cache and failure cases', () => {
       extension: string;
       sourceSha256: string;
     };
-    expect(record.preparationRevision).toBe('2026-10-18.1');
+    expect(record.preparationRevision).toBe('2026-10-20.2');
     expect(record.extension).toBe('.pdf');
     expect(record.sourceSha256).toBe(file.hash);
   });
@@ -77,13 +81,16 @@ describe('prepared material cache and failure cases', () => {
   it('extracts again when the cached text hash was forged', async () => {
     const file = await source('notes.pdf', Buffer.from('pdf bytes'));
     const extractMaterial = vi.fn(async () => page(file.hash, 'Trusted text'));
-    await readPreparedMaterial({ extractMaterial }, file);
+    await readPreparedMaterial({ extractMaterial, extractDataset: noDataset }, file);
     const recordPath = join(file.folder, 'material-prepared.json');
     const record = JSON.parse(await readFile(recordPath, 'utf8')) as { textSha256: string };
     record.textSha256 = 'a'.repeat(64);
     await writeFile(recordPath, JSON.stringify(record));
     await writeFile(join(file.folder, 'material-prepared.txt'), 'Forged text');
-    const prepared = await readPreparedMaterial({ extractMaterial }, file);
+    const prepared = await readPreparedMaterial(
+      { extractMaterial, extractDataset: noDataset },
+      file,
+    );
     expect(prepared.text).toBe('Trusted text');
     expect(extractMaterial).toHaveBeenCalledTimes(2);
   });
@@ -91,12 +98,15 @@ describe('prepared material cache and failure cases', () => {
   it('rebuilds when the source bytes change', async () => {
     const file = await source('notes.pdf', Buffer.from('pdf bytes'));
     const extractMaterial = vi.fn(async () => page(file.hash, 'Old bytes'));
-    await readPreparedMaterial({ extractMaterial }, file);
+    await readPreparedMaterial({ extractMaterial, extractDataset: noDataset }, file);
     const nextBytes = Buffer.from('pdf bytes changed');
     await writeFile(file.path, nextBytes);
     const nextHash = createHash('sha256').update(nextBytes).digest('hex');
     extractMaterial.mockImplementation(async () => page(nextHash, 'New bytes'));
-    const prepared = await readPreparedMaterial({ extractMaterial }, file);
+    const prepared = await readPreparedMaterial(
+      { extractMaterial, extractDataset: noDataset },
+      file,
+    );
     expect(prepared.text).toBe('New bytes');
     expect(prepared.sourceSha256).toBe(nextHash);
     expect(extractMaterial).toHaveBeenCalledTimes(2);
@@ -107,12 +117,16 @@ describe('prepared material cache and failure cases', () => {
     const extractMaterial = vi.fn(async () =>
       page(long.hash, 'x'.repeat(60_001), { nextOffset: 1, truncated: true }),
     );
-    await expect(readPreparedMaterial({ extractMaterial }, long)).rejects.toThrow(/60000/);
+    await expect(
+      readPreparedMaterial({ extractMaterial, extractDataset: noDataset }, long),
+    ).rejects.toThrow(/60000/);
     expect(extractMaterial).toHaveBeenCalledTimes(1);
 
     const scan = await source('scan.pdf', Buffer.from('scan'));
     const ocr = vi.fn(async () => page(scan.hash, '', { needsOcr: true }));
-    await expect(readPreparedMaterial({ extractMaterial: ocr }, scan)).rejects.toThrow(/OCR/);
+    await expect(
+      readPreparedMaterial({ extractMaterial: ocr, extractDataset: noDataset }, scan),
+    ).rejects.toThrow(/OCR/);
     expect(ocr).toHaveBeenCalledTimes(1);
   });
 });

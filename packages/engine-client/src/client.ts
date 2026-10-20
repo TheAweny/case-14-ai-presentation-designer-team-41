@@ -1,3 +1,13 @@
+import {
+  brandbookParseRequestSchema,
+  brandbookProfileSchema,
+  brandbookTemplateRequestSchema,
+  brandbookTemplateResponseSchema,
+  type BrandbookParseRequest,
+  type BrandbookProfile,
+  type BrandbookTemplateRequest,
+  type BrandbookTemplateResponse,
+} from '@lct/contracts';
 import { compositionCheckResponseSchema, type CompositionCheckResponse } from '@lct/contracts';
 import {
   generationProfileSchema,
@@ -181,10 +191,24 @@ export class EngineClient {
     );
   }
 
-  /** Deterministic, addressed cells; partial/failed results retain their diagnostics. */
+  /** Every table of a data file, typed and unabridged; a file that holds none says why. */
   async extractDataset(request: DatasetExtractRequest, signal?: AbortSignal): Promise<Dataset> {
     const body = datasetExtractRequestSchema.parse(request);
     return datasetSchema.parse(await this.post('/v1/dataset-extract', body, signal));
+  }
+
+  async parseBrandbook(request: BrandbookParseRequest): Promise<BrandbookProfile> {
+    return brandbookProfileSchema.parse(
+      await this.post('/v1/brandbook-profile', brandbookParseRequestSchema.parse(request)),
+    );
+  }
+
+  async prepareBrandbookTemplate(
+    request: BrandbookTemplateRequest,
+  ): Promise<BrandbookTemplateResponse> {
+    return brandbookTemplateResponseSchema.parse(
+      await this.post('/v1/brandbook-template', brandbookTemplateRequestSchema.parse(request)),
+    );
   }
 
   private async get(path: string): Promise<unknown> {

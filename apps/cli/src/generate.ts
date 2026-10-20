@@ -1,11 +1,14 @@
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import {
+  NO_REASONING_CHOICE,
+  brandbookBindingSchema,
   headerRecord,
   headersProblem,
   parseHeaderEnv,
   storedTemplateIndexSchema,
+  type BrandbookBinding,
   type CompositionNote,
   type GenerationProfile,
   type LayoutVariant,
@@ -13,13 +16,21 @@ import {
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
+  FakeImageProvider,
+  OpenAICompatibleImageProvider,
+  SharedIllustrations,
   currentTemplateIndexRevision,
   GenerationProvider,
+  type ImageProvider,
   generatePresentation,
   indexTemplateWithAgent,
   SharedPlan,
+  anthropicTransport,
 } from '@lct/pipeline';
 import { loadAnswerFormat } from '@lct/registry';
+import { BrandbookPictures, brandPictures } from './brand-pictures.js';
+import { datasetsOf, readMaterial } from './material.js';
+import { repoRoot } from './setup/stack.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -67,8 +78,101 @@ function briefOf(config: RunConfig, content: string): string {
     .join('\n\n');
 }
 
+/**
+ * The brandbook of a run, parsed by the engine the way an upload is. Only declared rules restyle
+ * the deck; colours and fonts merely seen in pictures or font files stay observations, and the
+ * log says so rather than letting a run look styled when it is not.
+ */
+async function brandbookOf(
+  engine: EngineClient,
+  path: string,
+  runDir: string,
+  config: RunConfig,
+  log: (line: string) => void,
+): Promise<BrandbookBinding> {
+  const profile = await engine.parseBrandbook({
+    schemaVersion: 1,
+    path,
+    outputDir: join(runDir, 'brandbook'),
+  });
+  await writeFile(join(runDir, 'brandbook-profile.json'), JSON.stringify(profile, null, 2));
+  const declared = profile.tokens.filter((token) => token.authority === 'explicit').length;
+  const inferred = profile.tokens.filter((token) => token.authority === 'inferred');
+  const observed = profile.tokens.length - declared - inferred.length;
+  const priority = config.brandbookPriority ?? 'brandbook';
+  log(
+    `брендбук ${basename(path)}: файлов ${profile.coverage.filesTotal}, объявленных правил ` +
+      `${declared}, замеченных значений ${observed}, приоритет — ${priority === 'brandbook' ? 'брендбук' : 'шаблон'}`,
+  );
+  if (declared === 0 && inferred.length > 0) {
+    log(
+      '  правил брендбук не объявляет; из логотипов, картинок и шрифтов выведено: ' +
+        inferred.map((token) => `${token.role} ${String(token.value)}`).join(', '),
+    );
+  } else if (declared === 0) {
+    log('  правил брендбук не объявляет, а вывести их не из чего: шаблон не изменится');
+  }
+  for (const warning of profile.warnings) log(`  ${warning}`);
+  return brandbookBindingSchema.parse({
+    schemaVersion: 1,
+    profile,
+    priority,
+    assetRoot: join(runDir, 'brandbook'),
+  });
+}
+
+/**
+ * The image model of a config run, read the way the service reads `IMAGE_*`.
+ * `disabled` calls no model, `fake` draws offline, and a configured model uses its own key
+ * before the text key. Null means there is no model; brandbook photos may still be used.
+ */
+export function imageModelOf(
+  env: Env,
+): { baseUrl: string; apiKey: string; model: string } | 'fake' | null {
+  if (env.IMAGE_PROVIDER === 'disabled') return null;
+  if (env.IMAGE_PROVIDER === 'fake') return 'fake';
+  const baseUrl = env.IMAGE_BASE_URL?.trim() ?? '';
+  const model = env.IMAGE_MODEL?.trim() ?? '';
+  if (!baseUrl || !model) return null;
+  // Compose and `lct image` write IMAGE_API_KEY as an empty string when no separate key was set.
+  // An empty value is not a key: the text model's key is what used to authenticate these calls.
+  const imageKey = env.IMAGE_API_KEY?.trim() ?? '';
+  return { baseUrl, apiKey: imageKey || (env.MODEL_API_KEY?.trim() ?? ''), model };
+}
+
+/**
+ * Where a deck's pictures come from: the image model of the environment when one is set, else
+ * the brandbook's own photos and illustrations, else nowhere and picture frames are dropped.
+ */
+function imagesOf(
+  env: Env,
+  brandbook: BrandbookBinding | undefined,
+  log: (line: string) => void,
+): ImageProvider | null {
+  const model = imageModelOf(env);
+  if (model === 'fake') return new FakeImageProvider();
+  if (model) {
+    log(`картинки рисует ${model.model}`);
+    return new OpenAICompatibleImageProvider(model);
+  }
+  const pictures =
+    brandbook?.assetRoot !== undefined ? brandPictures(brandbook.profile, brandbook.assetRoot) : [];
+  if (pictures.length === 0) return null;
+  log(`картинки берутся из брендбука: ${pictures.length}`);
+  return new BrandbookPictures(pictures);
+}
+
+/** What went wrong, in words: a workflow fails with an error object that is not an Error. */
+export function failureText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return typeof error === 'string' ? error : JSON.stringify(error);
+}
+
 /** The model connection of the server, read the way the API reads it. */
-function connectionOf(env: Env) {
+export function connectionOf(env: Env) {
   if (env.MODEL_PROVIDER === 'fake') {
     throw new Error(
       'lct generate собирает колоды живой моделью, а MODEL_PROVIDER=fake отвечает только ' +
@@ -84,11 +188,20 @@ function connectionOf(env: Env) {
   if (headersProblem(headers)) {
     throw new Error('MODEL_HEADERS — пары Имя=значение через запятую.');
   }
+  const toggle = env.MODEL_REASONING_TOGGLE?.trim() ?? '';
+  if (toggle && toggle !== 'reasoning-effort' && toggle !== 'enable-thinking') {
+    throw new Error('MODEL_REASONING_TOGGLE — reasoning-effort, enable-thinking или пусто.');
+  }
   return {
     baseUrl,
     model,
     apiKey: env.MODEL_API_KEY?.trim() ?? '',
     headers: headerRecord(headers),
+    // A deck build does not think. Told how this model's thinking switches, the request says so;
+    // left unknown, a model that thinks by default thinks through every slide and may time out.
+    reasoning: toggle
+      ? { toggle: toggle as 'reasoning-effort' | 'enable-thinking', levels: false }
+      : NO_REASONING_CHOICE,
   };
 }
 
@@ -157,20 +270,24 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
   const env = options.env ?? process.env;
   const log = options.log ?? ((line: string) => process.stdout.write(`${line}\n`));
   const connection = connectionOf(env);
-  const templatePath = resolve(config.templatePath);
+  const builtIn = join(repoRoot(), 'examples', 'layout-template.pptx');
+  let templatePath = config.templatePath ? resolve(config.templatePath) : builtIn;
   const contentPath = resolve(config.contentPath);
+  const brandbookPath = config.brandbookPath ? resolve(config.brandbookPath) : null;
   for (const [what, path] of [
     ['Шаблон', templatePath],
     ['Материал', contentPath],
+    ['Брендбук', brandbookPath],
   ] as const) {
-    if (!existsSync(path)) throw new Error(`${what} не найден: ${path}`);
+    if (path !== null && !existsSync(path)) throw new Error(`${what} не найден: ${path}`);
   }
-  const brief = briefOf(config, await readFile(contentPath, 'utf8'));
-  if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
 
   const registryDir = resolve(env.REGISTRY_DIR ?? 'registry/agents');
   const provider = new GenerationProvider({
     ...connection,
+    ...(env.MODEL_PROTOCOL === 'anthropic'
+      ? { fetchImpl: anthropicTransport(fetch, { thinking: false }) }
+      : {}),
     seed: config.seed,
     answerFormat: await loadAnswerFormat(registryDir),
   });
@@ -178,6 +295,10 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     baseUrl: env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 180_000,
   });
+  const brief = briefOf(config, await readMaterial(engine, contentPath));
+  // The tables themselves go to the writer too, so a chart is built from cells, not retyped.
+  const preparedDatasets = await datasetsOf(engine, contentPath);
+  if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
   const outputDir = resolve(config.outputDir);
   const runId = `run-${new Date()
     .toISOString()
@@ -185,11 +306,34 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     .slice(0, 14)}`;
   const runDir = join(outputDir, runId);
   await mkdir(runDir, { recursive: true });
+  if (!config.templatePath) {
+    // The engine reads the template from a path it shares with this run, not from the CLI's own
+    // files: in Docker those sit in another container. The run keeps its copy of the layouts.
+    templatePath = join(runDir, 'layout-template.pptx');
+    await copyFile(builtIn, templatePath);
+  }
+  await writeFile(join(runDir, 'brief.md'), brief);
+  const brandbook = brandbookPath
+    ? await brandbookOf(engine, brandbookPath, runDir, config, log)
+    : undefined;
 
   log(
     `${runId}: ${basename(templatePath)}, ${config.slideCount} слайдов, модель ${connection.model}`,
   );
   const profile = await engine.generationProfile(templatePath);
+  const images = imagesOf(env, brandbook, log);
+  const illustrations = images
+    ? await SharedIllustrations.load(
+        {
+          images,
+          text: provider,
+          designSystem: profile.designSystem,
+          seed: config.seed,
+          signal: AbortSignal.timeout(600_000),
+        },
+        registryDir,
+      )
+    : null;
   const notes = await notesFor({
     profile,
     provider,
@@ -211,12 +355,16 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
       let stage = '';
       try {
         await generatePresentation({
+          // As in the service: copy still too long after its rewrites is set smaller, and the
+          // variant is kept with a review warning instead of lost.
+          allowPartialExport: true,
           runId: `${runId}-${variant}`,
           templatePath,
           outputDir: dir,
           brief,
           slideCount: config.slideCount,
           profile,
+          ...(brandbook ? { brandbook } : {}),
           ...(notes ? { notes } : {}),
           registryDir,
           engine,
@@ -224,7 +372,8 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           seed: config.seed,
           variant,
           sharedPlan,
-          illustrations: null,
+          illustrations,
+          ...(preparedDatasets.length > 0 ? { preparedDatasets } : {}),
           onEvent: async (event) => {
             await appendFile(join(dir, 'events.jsonl'), `${JSON.stringify(event)}\n`);
             if (event.type === 'stage-started' && event.stage !== stage) {
@@ -252,7 +401,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           dir,
           files: [],
           audit: null,
-          error: error instanceof Error ? error.message : String(error),
+          error: failureText(error),
         };
       }
     }),

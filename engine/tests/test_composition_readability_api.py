@@ -82,3 +82,36 @@ def test_composition_audit_measures_actual_replacement(tmp_path: Path, protected
         }
         assert not report["passed"]
         assert report["counts"]["major"] >= len(findings)
+
+
+def test_composition_audit_accepts_a_slot_left_empty(tmp_path: Path) -> None:
+    """An empty slot's shape leaves the slide at export; the audit must not look for it."""
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    for top, sample in [(0.5, "Заголовок слайда"), (2, "42%")]:
+        shape = slide.shapes.add_textbox(Inches(1), Inches(top), Inches(7), Inches(1))
+        shape.text_frame.text = sample
+    source, output = tmp_path / "source.pptx", tmp_path / "exported.pptx"
+    deck.save(str(source))
+    patterns = extract_compositions(source)
+    pattern = patterns[0]
+    title, figure = pattern["slots"][0], pattern["slots"][1]
+    composed = {
+        "patternId": pattern["patternId"],
+        "texts": [
+            {"slotId": title["slotId"], "text": "Три цифры, которые решают"},
+            {"slotId": figure["slotId"], "text": ""},
+        ],
+        "speakerNotes": "",
+    }
+    export_compositions(source, output, [composed], patterns)
+    response = TestClient(app).post(
+        "/v1/composition-audit",
+        json={
+            "schemaVersion": 1,
+            "templatePath": str(source),
+            "outputPath": str(output),
+            "slides": [composed],
+        },
+    )
+    assert response.status_code == 200, response.text

@@ -9,6 +9,7 @@ import type { ChatModel, ModelMessage, ToolSpec } from './chat-model.js';
 import { ChatToolDispatcher } from './tool-runtime.js';
 import { parseArguments } from './tool-arguments.js';
 import { ContextBudgetExceededError, fitChatContext } from './context-budget.js';
+import { loadRuntimeAgent } from '../runtime-limits.js';
 export { lenientJson, mendedArguments } from './tool-arguments.js';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -68,6 +69,7 @@ export const CHAT_AGENT_ID = 'chat-assistant';
 export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
   const directory = join(registryDir, CHAT_AGENT_ID);
   const agent = await loadAgent(directory);
+  const runtimeAgent = await loadRuntimeAgent(registryDir);
   const read = (...path: string[]) => readFile(join(directory, ...path), 'utf8');
   const [chat, plan, auto, jsonMode, loopNudge, finalizeNudge] = await Promise.all([
     read('modes', 'chat.md'),
@@ -91,6 +93,10 @@ export async function loadChatAgent(registryDir: string): Promise<ChatAgent> {
       .update(
         JSON.stringify({
           instructions: agent.instructions,
+          runtime: {
+            version: runtimeAgent.config.version,
+            instructions: runtimeAgent.instructions,
+          },
           chat,
           plan,
           auto,
@@ -270,6 +276,8 @@ class LoopCut extends Error {
 export interface ChatTurnOptions {
   readonly model: ChatModel;
   readonly instructions: string;
+  /** Refreshed trusted deployment facts, including remaining tool quota, before each model step. */
+  readonly runtimeInstructions?: (remainingSteps: number) => string;
   /** The conversation before this turn, the new message included. */
   readonly history: readonly ModelMessage[];
   readonly tools: readonly ChatTool[];
@@ -379,6 +387,11 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<ChatTurnRes
   const finalizeNudge = options.finalizeNudge?.trim() ?? '';
   for (let step = 1; step <= maxSteps; step++) {
     signal.throwIfAborted();
+    if (options.runtimeInstructions)
+      messages[0] = {
+        role: 'system',
+        content: `${options.instructions}\n\n${options.runtimeInstructions(maxSteps - step + 1)}`,
+      };
     // The summary reuses the last slot. It is not a step after maxSteps.
     const finalizing = finalizeNudge.length > 0 && step === maxSteps;
     if (finalizing) messages.push({ role: 'system', content: finalizeNudge });

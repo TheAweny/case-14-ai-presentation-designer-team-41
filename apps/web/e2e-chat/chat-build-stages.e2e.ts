@@ -95,6 +95,20 @@ for (const { status, missingDone } of [
     await page.route(`**/api/backend/runs/${RUN}/events?after=-1`, (route) =>
       route.fulfill({ json: events }),
     );
+    await page.route(`**/api/backend/generation/${RUN}/usage`, (route) =>
+      route.fulfill({
+        json: {
+          httpAttempts: 12,
+          logicalTasks: 8,
+          knownInputTokens: 24000,
+          knownOutputTokens: 6000,
+          unknownUsageAttempts: 1,
+          knownCost: 0.125,
+          unknownCostAttempts: 1,
+          currency: 'USD',
+        },
+      }),
+    );
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt) await page.reload();
       else await page.goto(`/chats/${CHAT}`);
@@ -133,6 +147,18 @@ for (const { status, missingDone } of [
       }
       await expect(stages.locator('[data-status="running"]')).toHaveCount(0);
     }
+    const usage = page.locator('[data-build-usage]');
+    await expect(usage).toContainText('12 запросов');
+    await expect(usage).toContainText('30');
+    await expect(usage).toContainText('Стоимость:');
+    await expect(usage).toContainText('неполные данные');
+    await expect(usage).not.toContainText('HTTP:');
+    await page.screenshot({ path: `test-results/chat/build-usage-${status}-desktop.png` });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(usage).toBeVisible();
+    expect(await usage.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
     await page.screenshot({ path: `test-results/chat/build-stages-${status}.png`, fullPage: true });
   });
 }

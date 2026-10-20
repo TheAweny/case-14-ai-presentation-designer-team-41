@@ -7,7 +7,7 @@ export type TranscriptionResult =
   | { readonly ok: true; readonly text: string }
   | {
       readonly ok: false;
-      readonly reason: 'empty' | 'failed';
+      readonly reason: 'empty' | 'failed' | 'unavailable';
       /** The provider's HTTP status, when it refused: shown next to the error. */
       readonly detail?: string;
     };
@@ -32,7 +32,11 @@ export async function transcribeSpeechAction(formData: FormData): Promise<Transc
   const response = await apiFetch('/speech/transcriptions', { method: 'POST', body });
   if (!response.ok) {
     const detail = failureDetail(await response.json().catch(() => null));
-    return { ok: false, reason: 'failed', ...(detail ? { detail } : {}) };
+    return {
+      ok: false,
+      reason: response.status === 503 ? 'unavailable' : 'failed',
+      ...(detail ? { detail } : {}),
+    };
   }
   const payload: unknown = await response.json().catch(() => null);
   const text =

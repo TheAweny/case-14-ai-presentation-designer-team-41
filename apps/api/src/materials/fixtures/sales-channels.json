@@ -1,0 +1,127 @@
+{
+ "datasetId": "dataset-997b86acc9bee13e",
+ "diagnostics": [],
+ "schemaVersion": 1,
+ "sheets": [
+  {
+   "columns": [
+    {
+     "columnId": "sheet-1:A",
+     "decimal": "",
+     "header": "channel",
+     "index": 1,
+     "kind": "text",
+     "ref": "A"
+    },
+    {
+     "columnId": "sheet-1:B",
+     "decimal": "",
+     "header": "share",
+     "index": 2,
+     "kind": "number",
+     "ref": "B"
+    }
+   ],
+   "headerRow": 1,
+   "index": 0,
+   "mergedRanges": [],
+   "name": "sales-channels",
+   "range": "A1:B5",
+   "rows": [
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Онлайн",
+       "ref": "A2",
+       "unit": "",
+       "value": "Онлайн"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "0.46",
+       "ref": "B2",
+       "unit": "",
+       "value": 0.46
+      }
+     ],
+     "row": 2
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Розница",
+       "ref": "A3",
+       "unit": "",
+       "value": "Розница"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "0.31",
+       "ref": "B3",
+       "unit": "",
+       "value": 0.31
+      }
+     ],
+     "row": 3
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Партнёры",
+       "ref": "A4",
+       "unit": "",
+       "value": "Партнёры"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "0.15",
+       "ref": "B4",
+       "unit": "",
+       "value": 0.15
+      }
+     ],
+     "row": 4
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Прочее",
+       "ref": "A5",
+       "unit": "",
+       "value": "Прочее"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "0.08",
+       "ref": "B5",
+       "unit": "",
+       "value": 0.08
+      }
+     ],
+     "row": 5
+    }
+   ],
+   "sheetId": "sheet-1",
+   "state": "visible"
+  }
+ ],
+ "source": {
+  "bytes": 241,
+  "fileName": "sales-channels.json",
+  "mediaType": "application/json",
+  "sha256": "997b86acc9bee13e9480316cf7a7dfbb51150272e6458cbeb47d546292f4bfca"
+ },
+ "status": "ok"
+}

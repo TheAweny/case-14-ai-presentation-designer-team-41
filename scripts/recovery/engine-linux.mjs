@@ -11,12 +11,16 @@ const args = [
   'PYTHONPATH=/app/engine/src',
 ];
 for (const folder of [
+  'pyproject.toml',
+  'uv.lock',
   'engine',
   'tools',
   'packages/contracts',
   'packages/slide-audit',
   'packages/pipeline',
   'configs',
+  'examples/datasets',
+  'apps/api/src/materials/fixtures',
   'scripts/recovery',
   'infra',
   'public',

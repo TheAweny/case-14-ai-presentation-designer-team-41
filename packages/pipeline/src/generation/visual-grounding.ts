@@ -1,4 +1,5 @@
 import type { Dataset, MeasuredValue, SlotVisual } from '@lct/contracts';
+import { sourceBriefTexts } from './source-brief.js';
 import {
   datasetCellQuote,
   datasetFacts,
@@ -24,6 +25,8 @@ const number = (literal: string) =>
       .replace(',', '.'),
   );
 const equal = (left: string, right: string) => norm(left) === norm(right);
+const sourceContains = (brief: string, quote: string) =>
+  sourceBriefTexts(brief).some((text) => text.includes(quote));
 const sameUnit = (left: string, right: string) =>
   equal(left.replace(/\.$/u, ''), right.replace(/\.$/u, ''));
 const safeUnit = (unit: string) =>
@@ -78,6 +81,114 @@ export function textFacts(brief: string): Fact[] {
   return facts;
 }
 
+interface SeriesLine {
+  metric: string;
+  /** The column the rows were grouped by, from the section heading; empty when not quoted. */
+  grouping: string;
+  facts: Fact[];
+}
+
+/**
+ * The ready series of a brief's data section, one per line under its heading:
+ * «Готовые ряды для графиков, точные значения по «result»:» then
+ * «- cloud_cover, среднее: 0 — 43,33, 1 — 30,83.». The pipeline wrote these lines from the
+ * table itself (decimal comma, no digit grouping), so each value is a fact of its metric and
+ * category. Every entry of a line must parse, or the line proves nothing.
+ */
+function seriesLines(text: string): SeriesLine[] {
+  const entry = new RegExp(`^(.+?) — (${NUMBER})$`, 'u');
+  const result: SeriesLine[] = [];
+  let grouping = '';
+  for (const line of text.split(/\r?\n/u)) {
+    const heading = /точные значения по «([^»]+)»:\s*$/u.exec(line);
+    if (heading) {
+      grouping = heading[1] ?? '';
+      continue;
+    }
+    const match = /^\s*(?:-\s+)?([^:]+):\s+(.+?)\.?\s*$/u.exec(line);
+    if (!match) continue;
+    const metric = (match[1] ?? '').trim();
+    const parsed = (match[2] ?? '').split(/, (?=[^,]* — )/u).map((part) => entry.exec(part.trim()));
+    if (!metric || parsed.length < 2 || parsed.some((part) => !part)) continue;
+    result.push({
+      metric,
+      grouping,
+      facts: parsed.map((part) => ({
+        metric,
+        category: (part?.[1] ?? '').trim(),
+        unit: '',
+        state: 'present' as const,
+        value: number(part?.[2] ?? ''),
+        literal: part?.[2] ?? '',
+      })),
+    });
+  }
+  return result;
+}
+
+/** The least difference, as a share of the largest bar, a planned chart has to show. */
+const SPREAD = 0.05;
+
+/** Bars within a few percent of each other show nothing but a cropped axis. */
+function spread(line: SeriesLine): boolean {
+  const values = line.facts.map((fact) => fact.value ?? 0);
+  const least = Math.min(...values);
+  const most = Math.max(...values);
+  return most - least >= SPREAD * Math.max(Math.abs(least), Math.abs(most));
+}
+
+/** Whether a purpose quotes a ready series line by its name («cloud_cover, среднее: …»). */
+export const quotesSeries = (purpose: string, brief: string): boolean =>
+  seriesLines(brief).some((line) => norm(purpose).includes(`${norm(line.metric)}:`));
+
+export const seriesFacts = (text: string): Fact[] =>
+  seriesLines(text).flatMap((line) => line.facts);
+
+/**
+ * The chart a data slide was planned around, built from the ready series its purpose quotes: a
+ * line whose column the purpose names and two of whose values it repeats, or every value of which
+ * it repeats («облачность 43,33 против 30,83»). The figures come from the brief's line, never from
+ * the purpose, so a misquoted value cannot reach the chart.
+ */
+export function plannedSeriesChart(
+  purpose: string,
+  brief: string,
+  slotId: string,
+): SlotVisual | null {
+  const target = norm(purpose);
+  const says = (literal: string) =>
+    new RegExp(`(?<![\\d.,])${literal.replace(/[.+]/gu, '\\$&')}(?![\\d]|[.,]\\d)`, 'u').test(
+      target,
+    );
+  // The most specific quote wins: a named column first, then the longer figures it repeats
+  // («43,33» says more than «6»).
+  let best: { line: SeriesLine; score: number } | null = null;
+  for (const line of seriesLines(brief)) {
+    if (line.facts.length > 8 || !spread(line)) continue;
+    const column = norm(line.metric.split(',')[0] ?? '');
+    const said = line.facts.filter((fact) => says(norm(fact.literal ?? '')));
+    const named = Boolean(column) && target.includes(column);
+    if (!((named && said.length >= 2) || said.length === line.facts.length)) continue;
+    const score =
+      (named ? 1000 : 0) + said.reduce((sum, fact) => sum + (fact.literal ?? '').length, 0);
+    if (!best || score > best.score) best = { line, score };
+  }
+  if (!best) return null;
+  const values = best.line.facts.map((fact) => fact.value ?? 0);
+  return verifyVisual(
+    {
+      kind: 'chart',
+      slotId,
+      chartType: 'column',
+      categories: best.line.facts.map((fact) => fact.category),
+      series: [{ name: best.line.metric, values }],
+      xTitle: best.line.grouping,
+      yTitle: '',
+    },
+    brief,
+  );
+}
+
 function matches(fact: Fact, metric: string, category: string, unit: string, value: MeasuredValue) {
   if (!equal(fact.metric, metric) || !equal(fact.category, category) || !sameUnit(fact.unit, unit))
     return false;
@@ -96,6 +207,26 @@ function matches(fact: Fact, metric: string, category: string, unit: string, val
 }
 
 type Source = { itemId: string; quote: string; status: string };
+/** A unique exact table header anchors the full original table, never arbitrary nearby prose. */
+function expandTableQuote(quote: string, brief: string): string {
+  if (quote.includes('\n') || !quote.includes('|')) return quote;
+  const anchor = quote
+    .trim()
+    .replace(/^\||\|$/gu, '')
+    .trim();
+  const matches = sourceBriefTexts(brief)
+    .flatMap((source) => source.split(/\r?\n\s*\r?\n/u))
+    .filter(
+      (block) =>
+        block
+          .trim()
+          .split(/\r?\n/u)[0]
+          ?.trim()
+          .replace(/^\||\|$/gu, '')
+          .trim() === anchor && textTables(block).length === 1,
+    );
+  return matches.length === 1 ? (matches[0]?.trim() ?? quote) : quote;
+}
 function sourcedFacts(
   sources: readonly Source[],
   brief: string,
@@ -104,10 +235,17 @@ function sourcedFacts(
   if (!sources.length) return null;
   const facts: Fact[] = [];
   for (const source of sources) {
-    if (source.status !== 'grounded') return null;
     if (source.itemId === 'brief') {
-      if (!source.quote.trim() || !brief.includes(source.quote)) return null;
-      facts.push(...textFacts(source.quote));
+      if (
+        !source.quote.trim() ||
+        !sourceBriefTexts(brief).some((text) => text.includes(source.quote))
+      )
+        return null;
+      facts.push(
+        ...textFacts(source.quote),
+        ...tableFacts(source.quote),
+        ...seriesFacts(source.quote),
+      );
     } else {
       const fact = prepared.find((entry) => entry.itemId === source.itemId);
       if (!fact || source.quote !== fact.quote) return null;
@@ -180,7 +318,6 @@ function datasetTable(
             sheet.rows.some((row) =>
               row.cells.some(
                 (cell) =>
-                  entry.status === 'grounded' &&
                   entry.itemId ===
                     `dataset/${encodeURIComponent(dataset.datasetId)}/${encodeURIComponent(sheet.sheetId)}/${encodeURIComponent(cell.ref)}` &&
                   entry.quote === datasetCellQuote(cell),
@@ -240,7 +377,6 @@ function datasetTable(
                   sources &&
                   !sources.some(
                     (entry) =>
-                      entry.status === 'grounded' &&
                       entry.itemId ===
                         `dataset/${encodeURIComponent(dataset.datasetId)}/${encodeURIComponent(sheet.sheetId)}/${encodeURIComponent(source.ref)}` &&
                       entry.quote === datasetCellQuote(source),
@@ -264,30 +400,65 @@ interface TextTable {
   headers: string[];
   rows: string[][];
 }
+
+/** Only columns explicitly naming a metric and unit; no units inferred from nearby prose. */
+function tableFacts(brief: string): Fact[] {
+  return textTables(brief).flatMap((table) => {
+    const first = table.headers[0] ?? '';
+    if (!/^(?:месяц|период|категория|month|period|category)$/iu.test(first)) return [];
+    return table.headers.flatMap((header, index) => {
+      const label = /^(.+?),\s*(.+)$/u.exec(header);
+      if (index === 0 || !label?.[1] || !label[2] || !safeUnit(label[2])) return [];
+      return table.rows.flatMap((row): Fact[] => {
+        const literal = row[index] ?? '';
+        const category = row[0] ?? '';
+        if (!category) return [];
+        if (literal === '' || /^(?:нет данных|н\/д|n\/a)$/iu.test(literal))
+          return [{ metric: label[1] ?? '', unit: label[2] ?? '', category, state: 'missing' }];
+        if (
+          !new RegExp(`^${NUMBER}$`, 'u').test(literal) ||
+          /^[+−-]?\d{1,3}[,.]\d{3}$/u.test(literal)
+        )
+          return [];
+        return [
+          {
+            metric: label[1] ?? '',
+            unit: label[2] ?? '',
+            category,
+            state: 'present',
+            literal,
+            value: number(literal),
+          },
+        ];
+      });
+    });
+  });
+}
 /** Only explicit, rectangular Markdown/TSV tables with a header; no guessed prose columns. */
 export function textTables(brief: string): TextTable[] {
   const result: TextTable[] = [];
-  for (const block of brief.split(/\r?\n\s*\r?\n/u)) {
-    const lines = block.trim().split(/\r?\n/u);
-    if (lines.length < 2 || lines.length > 128) continue;
-    const delimiter = lines[0]?.includes('\t') ? '\t' : '|';
-    const rows = lines.map((line) => {
-      const stripped = delimiter === '|' ? line.trim().replace(/^\||\|$/gu, '') : line;
-      return stripped.split(delimiter).map((cell) => cell.trim());
-    });
-    const headers = rows.shift();
-    if (
-      !headers ||
-      headers.length < 2 ||
-      headers.length > 8 ||
-      headers.some((header) => !header) ||
-      new Set(headers.map(norm)).size !== headers.length
-    )
-      continue;
-    if (rows[0]?.every((cell) => /^:?-{3,}:?$/u.test(cell))) rows.shift();
-    if (!rows.length || rows.some((row) => row.length !== headers.length)) continue;
-    result.push({ headers, rows });
-  }
+  for (const source of sourceBriefTexts(brief))
+    for (const block of source.split(/\r?\n\s*\r?\n/u)) {
+      const lines = block.trim().split(/\r?\n/u);
+      if (lines.length < 2 || lines.length > 128) continue;
+      const delimiter = lines[0]?.includes('\t') ? '\t' : '|';
+      const rows = lines.map((line) => {
+        const stripped = delimiter === '|' ? line.trim().replace(/^\||\|$/gu, '') : line;
+        return stripped.split(delimiter).map((cell) => cell.trim());
+      });
+      const headers = rows.shift();
+      if (
+        !headers ||
+        headers.length < 2 ||
+        headers.length > 8 ||
+        headers.some((header) => !header) ||
+        new Set(headers.map(norm)).size !== headers.length
+      )
+        continue;
+      if (rows[0]?.every((cell) => /^:?-{3,}:?$/u.test(cell))) rows.shift();
+      if (!rows.length || rows.some((row) => row.length !== headers.length)) continue;
+      result.push({ headers, rows });
+    }
   return result;
 }
 
@@ -301,9 +472,8 @@ function textTable(
     sources?.some(
       (source) =>
         source.itemId !== 'brief' ||
-        source.status !== 'grounded' ||
         !source.quote.trim() ||
-        !brief.includes(source.quote),
+        !sourceBriefTexts(brief).some((text) => text.includes(source.quote)),
     )
   )
     return false;
@@ -341,6 +511,18 @@ export function verifyVisual(
   datasets: readonly Dataset[] = [],
 ): SlotVisual | null {
   if (!visual) return null;
+  // A model's status is not evidence. Only the checks below can return this promoted copy.
+  visual = structuredClone(visual);
+  if (visual.kind === 'native') {
+    const refs =
+      visual.block.kind === 'kpi'
+        ? visual.block.items.flatMap((item) => item.sources)
+        : visual.block.sources;
+    for (const source of refs) {
+      if (source.itemId === 'brief') source.quote = expandTableQuote(source.quote, brief);
+      source.status = 'grounded';
+    }
+  }
   const prepared = datasetFacts(datasets);
   if (visual.kind === 'table')
     return datasetTable(
@@ -356,7 +538,14 @@ export function verifyVisual(
       ? visual
       : null;
   if (visual.kind === 'chart') {
-    const facts = [...textFacts(brief), ...prepared];
+    const facts = [
+      ...sourceBriefTexts(brief).flatMap((text) => [
+        ...textFacts(text),
+        ...tableFacts(text),
+        ...seriesFacts(text),
+      ]),
+      ...prepared,
+    ];
     return visual.categories.length >= 2 &&
       visual.series.every(
         (series) =>
@@ -375,11 +564,10 @@ export function verifyVisual(
   const block = visual.block;
   const sources =
     block.kind === 'kpi' ? block.items.flatMap((item) => item.sources) : block.sources;
-  if (sources.some((source) => source.status !== 'grounded')) return null;
   if (block.kind === 'table') {
     if (
-      (block.notes && !brief.includes(block.notes)) ||
-      (block.caveat && !brief.includes(block.caveat))
+      (block.notes && !sourceContains(brief, block.notes)) ||
+      (block.caveat && !sourceContains(brief, block.caveat))
     )
       return null;
     return datasetTable(
@@ -404,7 +592,7 @@ export function verifyVisual(
         !facts ||
         item.unitAmbiguous ||
         (!item.periodKnown && item.period.trim()) ||
-        (item.caveat && !brief.includes(item.caveat))
+        (item.caveat && !sourceContains(brief, item.caveat))
       )
         return false;
       const category = item.periodKnown ? item.period : '';
@@ -425,7 +613,7 @@ export function verifyVisual(
   const facts = sourcedFacts(block.sources, brief, prepared);
   if (
     !facts ||
-    (block.caveat && !brief.includes(block.caveat)) ||
+    (block.caveat && !sourceContains(brief, block.caveat)) ||
     block.categories.some((category) => category.position !== undefined)
   )
     return null;

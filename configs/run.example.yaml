@@ -7,8 +7,13 @@
 # Any .pptx works: the template is read as a set of rules, never matched against a known list.
 templatePath: examples/template.pptx
 
-# Content the deck is built from: text, figures, tables, as Markdown or plain text.
+# Content the deck is built from: text (.txt, .md), a document (.docx, .pdf) or a table
+# (.csv, .tsv, .xlsx, .json), prepared the way the service prepares it.
 contentPath: examples/brief.md
+
+# Optional brandbook: tokens JSON, PDF guideline, .fig, logos, fonts, slide examples, or a ZIP
+# or RAR of them. See configs/run.data-brand.yaml.
+# brandbookPath: examples/brandbooks/northstar-brandbook.zip
 
 # Number of slides in the produced deck. The contract allows 10 to 15.
 slideCount: 10

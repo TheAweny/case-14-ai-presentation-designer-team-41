@@ -10,6 +10,9 @@
 *.ttf binary
 *.otf binary
 
+# Example datasets are byte-exact on purpose: a Windows-1251 export keeps its CRLF.
+examples/datasets/** -text
+
 # Generated files: keep them out of diff noise in reviews.
 packages/contracts/schema/** linguist-generated=true
 engine/src/engine/contracts/_generated.py linguist-generated=true

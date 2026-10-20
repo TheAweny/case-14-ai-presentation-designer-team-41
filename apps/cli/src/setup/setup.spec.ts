@@ -9,6 +9,33 @@ import { ensureInstallationSecrets, isUsableSecret } from './secrets.js';
 import { emailProblem, formatUsers, parseUsers, passwordProblem, upsertUser } from './users.js';
 
 describe('EnvFile', () => {
+  it('checks a native Anthropic connection through Messages API', async () => {
+    const send: typeof fetch = async (url, init) => {
+      expect(String(url)).toBe('https://api.anthropic.com/v1/messages');
+      expect(new Headers(init?.headers).get('x-api-key')).toBe('private-test-key');
+      return Response.json({
+        id: 'msg_check',
+        type: 'message',
+        role: 'assistant',
+        model: 'test',
+        content: [{ type: 'text', text: '{"ok":true}' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    };
+    const checked = await checkModel(
+      {
+        ...offline(),
+        MODEL_PROVIDER: '',
+        MODEL_PROTOCOL: 'anthropic',
+        LLM_BASE_URL: 'https://api.anthropic.com/v1',
+        LLM_MODEL: 'test',
+        MODEL_API_KEY: 'private-test-key',
+      },
+      send,
+    );
+    expect(checked.ok).toBe(true);
+  });
   it('changes values in place and keeps comments, order and the file private', () => {
     const dir = mkdtempSync(join(tmpdir(), 'env-'));
     writeFileSync(

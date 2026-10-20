@@ -11,8 +11,21 @@
       "minLength": 1,
       "type": "string"
     },
+    "brandbookPath": {
+      "description": "Brandbook to style the deck: design tokens JSON, PDF guideline, .fig, logos, fonts, slide examples, or a ZIP or RAR of them. Absent: the template alone.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "brandbookPriority": {
+      "description": "Which wins where the brandbook and the template disagree. Absent: brandbook.",
+      "enum": [
+        "brandbook",
+        "template"
+      ],
+      "type": "string"
+    },
     "contentPath": {
-      "description": "Path to the content pack for the deck.",
+      "description": "Path to the content for the deck: text, Markdown, DOCX, PDF, or a table (CSV, TSV, XLSX, JSON).",
       "minLength": 1,
       "type": "string"
     },
@@ -88,13 +101,12 @@
       "type": "integer"
     },
     "templatePath": {
-      "description": "Path to the .pptx used as the style source.",
+      "description": "Path to the .pptx used as the style source. Absent: the built-in layouts (examples/layout-template.pptx), styled by the brandbook when there is one.",
       "minLength": 1,
       "type": "string"
     }
   },
   "required": [
-    "templatePath",
     "contentPath",
     "slideCount",
     "layoutVariants",

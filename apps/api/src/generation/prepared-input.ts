@@ -113,7 +113,9 @@ export async function prepareGenerationInput(options: {
     brief += `\n\nSource ${id}:\n${material.text}`;
     if (brief.length > 60_000) throw new BadRequestException('Content exceeds 60000 characters.');
     materials.push({ ...material, source });
-    if (['.csv', '.tsv', '.xlsx'].includes(extname(source.name || source.path).toLowerCase())) {
+    if (
+      ['.csv', '.tsv', '.xlsx', '.json'].includes(extname(source.name || source.path).toLowerCase())
+    ) {
       const extractDataset = options.engine.extractDataset;
       if (!extractDataset)
         throw new BadRequestException('Typed dataset extraction is unavailable.');

@@ -32,6 +32,8 @@ WORKDIR /app
 COPY --from=builder /app /app
 COPY registry /app/registry
 COPY configs /app/configs
+# The layouts a deck is built on when no template is given.
+COPY examples/layout-template.pptx /app/examples/layout-template.pptx
 
 RUN mkdir -p /app/runs
 

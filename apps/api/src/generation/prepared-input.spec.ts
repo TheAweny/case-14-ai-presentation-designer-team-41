@@ -10,7 +10,7 @@ afterEach(() => vi.useRealTimers());
 
 function input() {
   return {
-    engine: { extractMaterial: vi.fn() },
+    engine: { extractMaterial: vi.fn(), extractDataset: vi.fn() },
     brief: 'Facts',
     contentIds: ['one', 'two'],
     signal: new AbortController().signal,

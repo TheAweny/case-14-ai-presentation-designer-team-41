@@ -186,6 +186,7 @@ export const CONTENT_FILE_KINDS: Readonly<Record<string, ContentItemKind>> = {
   '.csv': 'table',
   '.tsv': 'table',
   '.xlsx': 'table',
+  '.json': 'table',
 };
 
 /** Значение `accept` для выбора файлов контента. */

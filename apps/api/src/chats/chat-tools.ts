@@ -29,6 +29,7 @@ import {
   type StartedBuild,
   type VariantEnd,
 } from '../generation/generation.service.js';
+import { sameBrandbook } from '../generation/brandbook-snapshot.js';
 import { generationBrief } from './chat-brief.js';
 import { buildPreparation, preparationInputSchema, readPreparation } from './preparation.js';
 import {
@@ -202,6 +203,7 @@ export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
 const TEXT_FILE = /\.(txt|md|csv|tsv)$/i;
 const MAX_FILE_CHARS = 8000;
 const MAX_SEARCH_CALLS = 8;
+const MATERIAL_RESEARCH_CALL_LIMIT = 2;
 
 function attachedFileIds(scope: ChatToolScope): Set<string> {
   return new Set(
@@ -239,7 +241,13 @@ export function chatTools(
   research?: MaterialResearchDependency,
   web?: ChatWebDependency,
   inspection?: InspectionDependency,
-): ChatTool[] {
+): ChatTool[] & {
+  runtimeContext(): {
+    researchCallsRemaining: number;
+    searchAvailable: boolean;
+    webCallsRemaining: Readonly<Record<string, number>>;
+  };
+} {
   const { pool } = generation;
   const account = scope.account;
   let researchCalls = 0;
@@ -329,7 +337,7 @@ export function chatTools(
     async run(input, context) {
       context.signal.throwIfAborted();
       if (!research) throw new Error('Material research is unavailable.');
-      if (researchCalls >= 2)
+      if (researchCalls >= MATERIAL_RESEARCH_CALL_LIMIT)
         throw new Error('The material research call limit for this turn was reached.');
       researchCalls += 1;
       const request = materialResearchInputSchema.parse(input);
@@ -1041,6 +1049,8 @@ export function chatTools(
       fileIds: z.array(z.string().uuid()).max(10).default([]),
       retry: z.boolean().default(false),
       operation: z.enum(['start', 'resume', 'regenerate']).default('start'),
+      brandbookId: z.string().uuid().nullable().optional(),
+      brandbookPriority: z.enum(['brandbook', 'template']).optional(),
     }),
     modes: ['plan', 'auto'],
     async run(input, context) {
@@ -1051,6 +1061,8 @@ export function chatTools(
         fileIds: string[];
         retry: boolean;
         operation: 'start' | 'resume' | 'regenerate';
+        brandbookId?: string | null;
+        brandbookPriority?: 'brandbook' | 'template';
       };
       await chooseTemplate(request.templateId);
       const plan = plansOf(scope.messages()).find((item) => item.part.planId === request.planId);
@@ -1087,7 +1099,23 @@ export function chatTools(
               : [],
           ),
       ]);
+      const attachedBrand = [...scope.messages()]
+        .reverse()
+        .flatMap((message) => (message.role === 'user' ? [...message.attachments].reverse() : []))
+        .find((item) => item.kind === 'brandbook');
+      const brandbookId =
+        request.brandbookId === undefined && attachedBrand?.kind === 'brandbook'
+          ? attachedBrand.brandbookId
+          : (request.brandbookId ?? null);
+      const brandbookPriority =
+        request.brandbookPriority ??
+        (attachedBrand?.kind === 'brandbook' && attachedBrand.brandbookId === brandbookId
+          ? attachedBrand.priority
+          : undefined) ??
+        'brandbook';
       return runBuild(generation, scope, context, {
+        brandbookId,
+        brandbookPriority,
         templateId: request.templateId,
         planId: plan?.part.planId ?? null,
         planRevision: plan?.part.revision ?? (plan ? 1 : null),
@@ -1147,7 +1175,7 @@ export function chatTools(
     },
   };
 
-  return [
+  const tools = [
     qrTool(scope),
     listTemplates,
     describeTemplate,
@@ -1187,6 +1215,15 @@ export function chatTools(
         }
       },
     }));
+  return Object.assign(tools, {
+    runtimeContext: () => ({
+      researchCallsRemaining: research
+        ? Math.max(0, MATERIAL_RESEARCH_CALL_LIMIT - researchCalls)
+        : 0,
+      searchAvailable: searchClient !== null,
+      webCallsRemaining: webBudget.remaining(researchTopicCalls),
+    }),
+  });
 }
 
 function activityOf(context: ToolContext): ActivityContext['activity'] {
@@ -1252,8 +1289,11 @@ export async function runBuild(
     planRevision?: number | null;
     retry?: boolean;
     regenerate?: boolean;
+    brandbookId?: string | null;
+    brandbookPriority?: 'brandbook' | 'template';
   },
 ): Promise<ToolOutcome> {
+  if (request.brandbookId) await generation.brandbook(request.brandbookId, scope.account);
   const messagesNow = scope.messages();
   const preparation = readPreparation(messagesNow);
   await checkPreparationAccess(generation, scope, preparation.entries);
@@ -1279,6 +1319,7 @@ export async function runBuild(
       .find(
         (part): part is BuildPart =>
           part.type === 'build' &&
+          sameBrandbook(part, request) &&
           (part.status === 'preparing'
             ? preparingBuildIsLive(generation, scope, part, messages)
             : part.status === 'running' ||
@@ -1360,6 +1401,8 @@ export async function runBuild(
     planRevision: request.planRevision ?? null,
     templateId: request.templateId,
     templateName: template.file_name,
+    brandbookId: request.brandbookId ?? null,
+    brandbookPriority: request.brandbookPriority ?? 'brandbook',
     runId: null,
     variantRunIds: [],
     startedAt,
@@ -1463,6 +1506,8 @@ export async function runBuild(
       brief,
       slideCount: outline ? null : (scope.preferredSlideCount ?? null),
       requestId: part.buildId,
+      brandbookId: request.brandbookId ?? null,
+      brandbookPriority: request.brandbookPriority ?? 'brandbook',
       outline,
       outlineSource,
       projectId: scope.projectId,

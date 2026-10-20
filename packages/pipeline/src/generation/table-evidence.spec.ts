@@ -71,6 +71,95 @@ const native = (quote: string): Extract<SlotVisual, { kind: 'native' }> => ({
   },
 });
 describe('complete table evidence', () => {
+  it('resolves a unique exact header anchor to a full original table and persists its evidence', () => {
+    const visual = native('Месяц | Выручка');
+    const brief = JSON.stringify({ userRequirements: [{ messageId: 'u', text: markdown }] });
+    expect(groundedVisual(visual, brief)).toEqual(native(markdown));
+    expect(
+      groundedVisual(
+        visual,
+        JSON.stringify({
+          userRequirements: [
+            { messageId: 'u', text: `${markdown}\n\n${markdown.replace('-10', '90')}` },
+          ],
+        }),
+      ),
+    ).toBeNull();
+    expect(groundedVisual(native('Месяц | Затраты'), brief)).toBeNull();
+  });
+  it('grounds original quoted user tables through nested JSON envelopes without trusting model status', () => {
+    const envelope = JSON.stringify({
+      brief: JSON.stringify({
+        userRequirements: [{ messageId: 'user-1', text: markdown }],
+        derivedModelBrief: 'Invented',
+      }),
+      approvedOutline: { title: 'Not a source' },
+    });
+    const visual = native(markdown);
+    if (visual.block.kind !== 'table') throw new Error('table fixture');
+    visual.block.sources[0] = { itemId: 'brief', quote: markdown, status: 'unverified' };
+    const accepted = groundedVisual(visual, envelope);
+    expect(accepted).toEqual(native(markdown));
+    expect(visual.block.sources[0]?.status).toBe('unverified');
+    expect(
+      groundedVisual(
+        visual,
+        JSON.stringify({
+          userRequirements: [{ messageId: 'u', text: 'No table' }],
+          derivedModelBrief: markdown,
+          approvedOutline: { title: markdown },
+        }),
+      ),
+    ).toBeNull();
+    const altered = native(markdown);
+    if (altered.block.kind !== 'table') throw new Error('table fixture');
+    const alteredCell = altered.block.rows[0]?.cells[1];
+    if (!alteredCell) throw new Error('cell fixture');
+    alteredCell.text = '999';
+    expect(groundedVisual(altered, envelope)).toBeNull();
+    const split = JSON.stringify({
+      userRequirements: [
+        { messageId: 'a', text: markdown.slice(0, 30) },
+        { messageId: 'b', text: markdown.slice(30) },
+      ],
+    });
+    expect(groundedVisual(native(markdown), split)).toBeNull();
+  });
+
+  it('grounds exact chart metric/category/unit relationships from an original user table', () => {
+    const source =
+      '| Месяц | Выручка, млн руб. | Расходы, млн руб. |\n| Январь | 0 | 7 |\n| Февраль | -10 | 8 |';
+    const brief = JSON.stringify({ userRequirements: [{ messageId: 'u', text: source }] });
+    const chart: SlotVisual = {
+      kind: 'native',
+      slotId: 'body',
+      block: {
+        kind: 'chart',
+        intent: 'time-series',
+        xTitle: 'Месяц',
+        yTitle: 'млн руб.',
+        categories: [{ label: 'Январь' }, { label: 'Февраль' }],
+        series: [
+          {
+            name: 'Выручка',
+            unit: 'млн руб.',
+            values: [
+              { state: 'present', literal: '0', value: 0 },
+              { state: 'present', literal: '-10', value: -10 },
+            ],
+          },
+        ],
+        sources: [{ itemId: 'brief', quote: source, status: 'unverified' }],
+      },
+    };
+    const accepted = groundedVisual(chart, brief);
+    expect(accepted).not.toBeNull();
+    if (chart.kind !== 'native' || chart.block.kind !== 'chart') throw new Error('chart fixture');
+    const firstSeries = chart.block.series[0];
+    if (!firstSeries) throw new Error('series fixture');
+    firstSeries.name = 'Расходы';
+    expect(groundedVisual(chart, brief)).toBeNull();
+  });
   it('uses nonempty null evidence for blank CSV cells while retaining the original raw', () => {
     const csv = structuredClone(dataset);
     const cell = csv.sheets[0]?.rows[2]?.cells[1];

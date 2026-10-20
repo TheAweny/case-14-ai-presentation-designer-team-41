@@ -68,6 +68,7 @@ export {
 export {
   OpenAICompatibleProvider as GenerationProvider,
   RoutedTextProvider,
+  sharedModelLimiter,
   type TextProvider,
 } from './generation/provider.js';
 export {
@@ -91,6 +92,8 @@ export {
 } from './generation/remap-evaluation.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
 export { prepareDatasets } from './generation/dataset-evidence.js';
+export { sourceBriefTexts } from './generation/source-brief.js';
+export { selectSlideRepair } from './generation/repair-selection.js';
 export {
   TaskCheckpoints,
   CheckpointTextProvider,
@@ -106,6 +109,7 @@ export {
   FakeImageProvider,
   OpenAICompatibleImageProvider,
   sizeFor,
+  type GeneratedImage,
   type ImageProvider,
 } from './generation/images.js';
 export { SharedIllustrations, styleOf, type Illustration } from './generation/illustrations.js';
@@ -132,3 +136,22 @@ export {
 export { ledgerFetch, type AttemptLedger, type TokenPrice } from './models/attempt-ledger.js';
 export { SemanticTextProvider } from './generation/semantic-provider.js';
 export { tokenPriceCatalogSchema, tokenPriceResolver } from './models/pricing.js';
+export {
+  anthropicTransport,
+  type AnthropicTransportOptions,
+} from './models/anthropic-transport.js';
+export {
+  readRuntimeLimits,
+  runtimeInstructions,
+  loadRuntimeAgent,
+  withRuntimeLimits,
+  type RuntimeLimits,
+  type RuntimeContext,
+} from './runtime-limits.js';
+export {
+  FULL_TABLE_CHARS,
+  SAMPLE_ROWS,
+  datasetRefusal,
+  datasetText,
+  embeddedTablesText,
+} from './materials/dataset-text.js';

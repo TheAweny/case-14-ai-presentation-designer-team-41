@@ -555,6 +555,40 @@
           {
             "additionalProperties": false,
             "properties": {
+              "brandbookId": {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "brandbook"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "priority": {
+                "enum": [
+                  "brandbook",
+                  "template"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "brandbookId",
+              "name"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
               "deckId": {
                 "maxLength": 100,
                 "minLength": 1,
@@ -984,6 +1018,19 @@
           {
             "additionalProperties": false,
             "properties": {
+              "brandbookId": {
+                "format": "uuid",
+                "nullable": true,
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              "brandbookPriority": {
+                "enum": [
+                  "brandbook",
+                  "template"
+                ],
+                "type": "string"
+              },
               "buildId": {
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -2891,6 +2938,19 @@
       },
       "GenerationRequest": {
         "properties": {
+          "brandbookId": {
+            "format": "uuid",
+            "nullable": true,
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "brandbookPriority": {
+            "enum": [
+              "brandbook",
+              "template"
+            ],
+            "type": "string"
+          },
           "brief": {
             "maxLength": 60000,
             "minLength": 10,
@@ -4951,8 +5011,21 @@
             "minLength": 1,
             "type": "string"
           },
+          "brandbookPath": {
+            "description": "Brandbook to style the deck: design tokens JSON, PDF guideline, .fig, logos, fonts, slide examples, or a ZIP or RAR of them. Absent: the template alone.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "brandbookPriority": {
+            "description": "Which wins where the brandbook and the template disagree. Absent: brandbook.",
+            "enum": [
+              "brandbook",
+              "template"
+            ],
+            "type": "string"
+          },
           "contentPath": {
-            "description": "Path to the content pack for the deck.",
+            "description": "Path to the content for the deck: text, Markdown, DOCX, PDF, or a table (CSV, TSV, XLSX, JSON).",
             "minLength": 1,
             "type": "string"
           },
@@ -8793,7 +8866,7 @@
     },
     "/files/content": {
       "post": {
-        "description": "Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.pdf`, `.csv`, `.tsv`, `.xlsx`.",
+        "description": "Текст или таблица для колоды: `.txt`, `.md`, `.docx`, `.pdf`, `.csv`, `.tsv`, `.xlsx`, `.json`.",
         "operationId": "files.uploadContent",
         "parameters": [
           {

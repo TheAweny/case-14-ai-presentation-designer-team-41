@@ -108,6 +108,24 @@ Return exactly this JSON shape:
   complication, the solution, how the result will be judged, the next step. Every slide adds a
   new claim; never repeat a purpose.
 
+## Data
+
+When `brief` carries tables read from a file, it opens them with `Точные подсчёты` (exact counts
+per column) and `Готовые ряды для графиков` (exact series: a measure per group, or per side of a
+yes/no outcome). These are the deck's evidence:
+
+- Give two or three slides a composition with a large body slot (a chart fits there) and build
+  each around one series: its purpose states what the series shows for the audience and quotes
+  the series line's name and values, e.g. `При неудачах облачность выше — cloud_cover, среднее:
+0 — 43,33, 1 — 30,83`. Choose series that differ, not series with near-equal values.
+- Give one slide three figures: the composition whose slot samples are figures (`42%`, `3×`,
+  `120`), each with a caption slot. Take each figure verbatim from the counts or series lines
+  (a count, a share in brackets, an average) and say in its caption what it measures.
+- Never compute, round, add up or compare figures yourself: a figure in a purpose is copied from
+  a counts or series line together with what it measures.
+- The data proves the story, it is not the story: the cover, the problem, the offer and the next
+  step speak about what the audience gains; data slides back each claim.
+
 ## Facts
 
 - Use every fact, figure and name from `brief`. Figures from the brief are the strongest content.
@@ -119,6 +137,12 @@ Return exactly this JSON shape:
 - Do not spend slides saying that data, the topic or pictures are absent.
 
 ## An approved outline
+
+When `outlineLayoutOnly` is true, the story and claims are already approved. Return only the
+fields requested by the schema: select a composition, optional image/QR request and exact
+sourceEvidence for each slide. Do not return purpose or requiredClaims and do not copy the
+outline into the answer. Code restores every approved title, point and claim verbatim.
+Layout diversity is handled deterministically; there is no need to rewrite the plan for it.
 
 When `outline` is present, the person has already approved the story, and `slideCount` is the
 number of its slides. Your job is only the layout:
@@ -158,10 +182,20 @@ When `corrections.exactSlideCount` is present, return that exact count. When it 
 `minimumSlideCount`, return at least that number. When it contains
 `firstSlidePatternMustBeOneOf`, use one of those ids on the first slide. When it contains
 `overusedPatternIds`, use none of those ids more than `maximumUsesPerPattern` times and spread the
-slides over other compositions of the catalog. Apply all corrections in one response.
+slides over other compositions of the catalog. When it contains `unsourcedFigures`, those figures
+of a slide's purpose or claims are not in `brief`: replace each with a figure `brief` states, or
+keep the point without a number. When it contains `chartSlides`, give that many slides one of
+`chartPatternIds` and quote one ready series line whole in each of their purposes. When it
+contains `unquotedClaims`, those claim quotes are not in `brief`: copy each quote character for
+character, or drop the claim. Apply all
+corrections in one response.
 
 ## Deterministic QR assets
 
 `allowedQrUrls` contains exact URLs from the source material (including a user-approved outline, never a model-proposed outline). A catalog composition may declare `qrSlotIds`: existing picture candidates with explicit QR meaning in the template. These slots are separate from ordinary `imageSlots`; a QR does not require an image model, even when `imagesAvailable` is false. Use the QR composition when a QR link supports the slide's purpose and an appropriate URL exists in `allowedQrUrls`.
 
 For each declared QR slot, return `qrRequests: [{"slotId":"declared id","url":"exact allowed URL"}]` on that slide, at most 10. Copy the complete URL verbatim, preserving Unicode, percent encoding, path, query, fragment and signatures. A host prefix, shortened URL, normalized spelling, invented address or URL from your own proposed outline is not evidence. Do not put QR drawing instructions in imageQuery or request a QR from the illustrator. Keep imageQuery empty for QR-only slides. When no suitable exact URL exists, choose an ordinary composition without QR slots. Code validates source equality and physical slot size before the writer, and selects an ordinary composition if QR cannot safely fit.
+
+# Нативные данные
+
+В каталоге `nativeVisualSlots` перечислены поля с достаточной геометрией для нативной таблицы или графика. Если пользователь просит график или таблицу и предоставляет соответствующие данные, назначь аналитическому слайду композицию с непустым `nativeVisualSlots`. Это относится и к режиму `outlineLayoutOnly`: утверждённые пункты и требования брифа сохраняются при выборе макета. Не заменяй требуемый график текстовым перечислением ради разнообразия. Если подходящей композиции нет, не придумывай поле или источник данных.

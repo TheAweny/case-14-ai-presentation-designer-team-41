@@ -1,0 +1,2379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "designSystem": {
+      "additionalProperties": false,
+      "properties": {
+        "aspect": {
+          "description": "Aspect ratio in lowest terms, such as 16:9.",
+          "type": "string"
+        },
+        "grid": {
+          "additionalProperties": false,
+          "properties": {
+            "baseline": {
+              "description": "Vertical step layout snaps to, in EMU.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "columns": {
+              "description": "Columns the content area divides into.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "gutter": {
+              "description": "Space between columns in EMU.",
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "marginBottom": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "marginLeft": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "marginRight": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "marginTop": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "meta": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "count": {
+                  "description": "Occurrences that support this value.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "parts": {
+                  "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "share": {
+                  "description": "Share of the relevant population that agrees.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "observed",
+                    "theme",
+                    "fallback"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "count",
+                "share",
+                "confidence",
+                "parts"
+              ],
+              "type": "object"
+            },
+            "slideCx": {
+              "description": "Slide width in EMU.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "slideCy": {
+              "description": "Slide height in EMU.",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "slideCx",
+            "slideCy",
+            "marginLeft",
+            "marginRight",
+            "marginTop",
+            "marginBottom",
+            "columns",
+            "gutter",
+            "baseline",
+            "meta"
+          ],
+          "type": "object"
+        },
+        "palette": {
+          "description": "One entry per role the template supports. Roles it lacks are simply absent.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "hex": {
+                "description": "Six hex digits, no leading hash.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "role": {
+                "enum": [
+                  "background",
+                  "surface",
+                  "text",
+                  "text-muted",
+                  "text-on-accent",
+                  "accent",
+                  "accent-alt",
+                  "line",
+                  "positive",
+                  "negative"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "hex",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "protectedZones": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "additionalProperties": false,
+                "description": "Where it sits, in EMU.",
+                "properties": {
+                  "cx": {
+                    "description": "Width in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "cy": {
+                    "description": "Height in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "x": {
+                    "description": "Left edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "y": {
+                    "description": "Top edge in EMU.",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "cx",
+                  "cy"
+                ],
+                "type": "object"
+              },
+              "mediaPart": {
+                "description": "Image it draws, for a logo. Empty otherwise.",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "role": {
+                "enum": [
+                  "logo",
+                  "footer",
+                  "page-number",
+                  "decoration"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "box",
+              "mediaPart",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "radii": {
+          "description": "Corner radii in use, smallest first.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "name": {
+                "enum": [
+                  "sm",
+                  "md",
+                  "lg"
+                ],
+                "type": "string"
+              },
+              "radiusPt": {
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "name",
+              "radiusPt",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Incremented by any incompatible change.",
+          "type": "number"
+        },
+        "shadows": {
+          "additionalProperties": false,
+          "properties": {
+            "meta": {
+              "additionalProperties": false,
+              "properties": {
+                "confidence": {
+                  "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "count": {
+                  "description": "Occurrences that support this value.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "parts": {
+                  "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "share": {
+                  "description": "Share of the relevant population that agrees.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "observed",
+                    "theme",
+                    "fallback"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "count",
+                "share",
+                "confidence",
+                "parts"
+              ],
+              "type": "object"
+            },
+            "present": {
+              "description": "False when the template draws no shadows. Do not add any.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "present",
+            "meta"
+          ],
+          "type": "object"
+        },
+        "strokes": {
+          "description": "Outline styles in use, most common first.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "colorRole": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "background",
+                      "surface",
+                      "text",
+                      "text-muted",
+                      "text-on-accent",
+                      "accent",
+                      "accent-alt",
+                      "line",
+                      "positive",
+                      "negative"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Palette role this colour matches, if any."
+              },
+              "hex": {
+                "description": "Six hex digits, no leading hash.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "widthPt": {
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "widthPt",
+              "hex",
+              "colorRole",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "surfaces": {
+          "description": "One per tone the template uses.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "accent": {
+                "anyOf": [
+                  {
+                    "description": "Six hex digits, no leading hash.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Accent observed on this surface, if any."
+              },
+              "background": {
+                "description": "Six hex digits, no leading hash.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "text": {
+                "description": "Text colour observed on this surface, or the best contrast.",
+                "pattern": "^[0-9a-fA-F]{6}$",
+                "type": "string"
+              },
+              "tone": {
+                "enum": [
+                  "light",
+                  "dark"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "tone",
+              "background",
+              "text",
+              "accent",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "templateHash": {
+          "description": "Hash of the TemplateIR this was derived from, so the pair can be checked.",
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "typeFamilies": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "declared": {
+                "description": "What the theme names for this role. Differs from font when the slides disagree.",
+                "type": "string"
+              },
+              "font": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "role": {
+                "enum": [
+                  "primary",
+                  "secondary",
+                  "mono"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "font",
+              "declared",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "typeScale": {
+          "description": "One entry per role in use.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "bold": {
+                "type": "boolean"
+              },
+              "colorRole": {
+                "description": "Which palette role this text takes its colour from.",
+                "enum": [
+                  "background",
+                  "surface",
+                  "text",
+                  "text-muted",
+                  "text-on-accent",
+                  "accent",
+                  "accent-alt",
+                  "line",
+                  "positive",
+                  "negative"
+                ],
+                "type": "string"
+              },
+              "font": {
+                "description": "Typeface to set this role in.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "italic": {
+                "type": "boolean"
+              },
+              "lineSpacing": {
+                "description": "Multiple of the line height, 1 for single.",
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "meta": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "count": {
+                    "description": "Occurrences that support this value.",
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "parts": {
+                    "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "share": {
+                    "description": "Share of the relevant population that agrees.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "source": {
+                    "enum": [
+                      "observed",
+                      "theme",
+                      "fallback"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "count",
+                  "share",
+                  "confidence",
+                  "parts"
+                ],
+                "type": "object"
+              },
+              "role": {
+                "enum": [
+                  "title",
+                  "subtitle",
+                  "heading",
+                  "body",
+                  "bullet",
+                  "caption",
+                  "kpi-value",
+                  "kpi-caption",
+                  "quote",
+                  "footer"
+                ],
+                "type": "string"
+              },
+              "sizePt": {
+                "description": "Size in points.",
+                "exclusiveMinimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "role",
+              "font",
+              "sizePt",
+              "bold",
+              "italic",
+              "lineSpacing",
+              "colorRole",
+              "meta"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "warnings": {
+          "description": "Empty only when every token was measured with confidence.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "observed-overrides-theme",
+                  "font-unavailable",
+                  "low-confidence",
+                  "missing-surface",
+                  "unresolved-color",
+                  "theme-missing"
+                ],
+                "type": "string"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "token": {
+                "description": "Which token it concerns, such as palette.accent or type.title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "token",
+              "message"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "templateHash",
+        "aspect",
+        "palette",
+        "surfaces",
+        "typeFamilies",
+        "typeScale",
+        "grid",
+        "strokes",
+        "radii",
+        "shadows",
+        "protectedZones",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "profile": {
+      "additionalProperties": false,
+      "properties": {
+        "compositions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "imageCount": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "imageSlots": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "box": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    "frame": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "crop": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "b": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                "l": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                "r": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                "t": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "l",
+                                "t",
+                                "r",
+                                "b"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "known",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        },
+                        "textColors": {
+                          "items": {
+                            "pattern": "^[0-9A-Fa-f]{6}$",
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "textRegions": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "height": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              },
+                              "protection": {
+                                "enum": [
+                                  "solid",
+                                  "none",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              },
+                              "width": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              },
+                              "x": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              },
+                              "y": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "protection"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "textRegions",
+                        "textColors",
+                        "crop",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "kind": {
+                      "enum": [
+                        "placeholder",
+                        "panel",
+                        "photo"
+                      ],
+                      "type": "string"
+                    },
+                    "slotId": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slotId",
+                    "kind",
+                    "box"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "patternId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "qrCandidateSlots": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "box": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    "frame": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "crop": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "b": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                "l": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                "r": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                },
+                                "t": {
+                                  "exclusiveMaximum": 1,
+                                  "minimum": 0,
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "l",
+                                "t",
+                                "r",
+                                "b"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "known",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        },
+                        "textColors": {
+                          "items": {
+                            "pattern": "^[0-9A-Fa-f]{6}$",
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "textRegions": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "height": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              },
+                              "protection": {
+                                "enum": [
+                                  "solid",
+                                  "none",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              },
+                              "width": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              },
+                              "x": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              },
+                              "y": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "protection"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "textRegions",
+                        "textColors",
+                        "crop",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "kind": {
+                      "enum": [
+                        "placeholder",
+                        "panel",
+                        "photo"
+                      ],
+                      "type": "string"
+                    },
+                    "slotId": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "slotId",
+                    "kind",
+                    "box"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "slots": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "box": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "cx": {
+                          "description": "Width in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "cy": {
+                          "description": "Height in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "x": {
+                          "description": "Left edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "y": {
+                          "description": "Top edge in EMU.",
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "cx",
+                        "cy"
+                      ],
+                      "type": "object"
+                    },
+                    "capacity": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "basis": {
+                          "enum": [
+                            "geometry",
+                            "obstacle-aware",
+                            "sample-fallback"
+                          ],
+                          "type": "string"
+                        },
+                        "safeChars": {
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "safeChars",
+                        "basis"
+                      ],
+                      "type": "object"
+                    },
+                    "font": {
+                      "type": "string"
+                    },
+                    "fontSize": {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    },
+                    "lineSpacing": {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    },
+                    "maxChars": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "maxLines": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "prompt": {
+                      "type": "boolean"
+                    },
+                    "role": {
+                      "enum": [
+                        "title",
+                        "body"
+                      ],
+                      "type": "string"
+                    },
+                    "sample": {
+                      "type": "string"
+                    },
+                    "slotId": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "spaceAfterPt": {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "spaceBeforePt": {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "textHeightPt": {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    },
+                    "textWidthPt": {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "slotId",
+                    "role",
+                    "sample",
+                    "maxChars",
+                    "maxLines",
+                    "font",
+                    "fontSize"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "sourceIndex": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "patternId",
+              "sourceIndex",
+              "name",
+              "slots",
+              "imageCount"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "designSystem": {
+          "additionalProperties": false,
+          "properties": {
+            "aspect": {
+              "description": "Aspect ratio in lowest terms, such as 16:9.",
+              "type": "string"
+            },
+            "grid": {
+              "additionalProperties": false,
+              "properties": {
+                "baseline": {
+                  "description": "Vertical step layout snaps to, in EMU.",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "columns": {
+                  "description": "Columns the content area divides into.",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "gutter": {
+                  "description": "Space between columns in EMU.",
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "marginBottom": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "marginLeft": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "marginRight": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "marginTop": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "meta": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "confidence": {
+                      "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "count": {
+                      "description": "Occurrences that support this value.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "parts": {
+                      "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "share": {
+                      "description": "Share of the relevant population that agrees.",
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "source": {
+                      "enum": [
+                        "observed",
+                        "theme",
+                        "fallback"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "count",
+                    "share",
+                    "confidence",
+                    "parts"
+                  ],
+                  "type": "object"
+                },
+                "slideCx": {
+                  "description": "Slide width in EMU.",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "slideCy": {
+                  "description": "Slide height in EMU.",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "slideCx",
+                "slideCy",
+                "marginLeft",
+                "marginRight",
+                "marginTop",
+                "marginBottom",
+                "columns",
+                "gutter",
+                "baseline",
+                "meta"
+              ],
+              "type": "object"
+            },
+            "palette": {
+              "description": "One entry per role the template supports. Roles it lacks are simply absent.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "hex": {
+                    "description": "Six hex digits, no leading hash.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  },
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "role": {
+                    "enum": [
+                      "background",
+                      "surface",
+                      "text",
+                      "text-muted",
+                      "text-on-accent",
+                      "accent",
+                      "accent-alt",
+                      "line",
+                      "positive",
+                      "negative"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role",
+                  "hex",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "protectedZones": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "box": {
+                    "additionalProperties": false,
+                    "description": "Where it sits, in EMU.",
+                    "properties": {
+                      "cx": {
+                        "description": "Width in EMU.",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "cy": {
+                        "description": "Height in EMU.",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "x": {
+                        "description": "Left edge in EMU.",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      },
+                      "y": {
+                        "description": "Top edge in EMU.",
+                        "maximum": 9007199254740991,
+                        "minimum": -9007199254740991,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y",
+                      "cx",
+                      "cy"
+                    ],
+                    "type": "object"
+                  },
+                  "mediaPart": {
+                    "description": "Image it draws, for a logo. Empty otherwise.",
+                    "type": "string"
+                  },
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "role": {
+                    "enum": [
+                      "logo",
+                      "footer",
+                      "page-number",
+                      "decoration"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role",
+                  "box",
+                  "mediaPart",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "radii": {
+              "description": "Corner radii in use, smallest first.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "name": {
+                    "enum": [
+                      "sm",
+                      "md",
+                      "lg"
+                    ],
+                    "type": "string"
+                  },
+                  "radiusPt": {
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "name",
+                  "radiusPt",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "schemaVersion": {
+              "const": 1,
+              "description": "Incremented by any incompatible change.",
+              "type": "number"
+            },
+            "shadows": {
+              "additionalProperties": false,
+              "properties": {
+                "meta": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "confidence": {
+                      "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "count": {
+                      "description": "Occurrences that support this value.",
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "parts": {
+                      "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "share": {
+                      "description": "Share of the relevant population that agrees.",
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "source": {
+                      "enum": [
+                        "observed",
+                        "theme",
+                        "fallback"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "count",
+                    "share",
+                    "confidence",
+                    "parts"
+                  ],
+                  "type": "object"
+                },
+                "present": {
+                  "description": "False when the template draws no shadows. Do not add any.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "present",
+                "meta"
+              ],
+              "type": "object"
+            },
+            "strokes": {
+              "description": "Outline styles in use, most common first.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "colorRole": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "background",
+                          "surface",
+                          "text",
+                          "text-muted",
+                          "text-on-accent",
+                          "accent",
+                          "accent-alt",
+                          "line",
+                          "positive",
+                          "negative"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Palette role this colour matches, if any."
+                  },
+                  "hex": {
+                    "description": "Six hex digits, no leading hash.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  },
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "widthPt": {
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "widthPt",
+                  "hex",
+                  "colorRole",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "surfaces": {
+              "description": "One per tone the template uses.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "accent": {
+                    "anyOf": [
+                      {
+                        "description": "Six hex digits, no leading hash.",
+                        "pattern": "^[0-9a-fA-F]{6}$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Accent observed on this surface, if any."
+                  },
+                  "background": {
+                    "description": "Six hex digits, no leading hash.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  },
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "text": {
+                    "description": "Text colour observed on this surface, or the best contrast.",
+                    "pattern": "^[0-9a-fA-F]{6}$",
+                    "type": "string"
+                  },
+                  "tone": {
+                    "enum": [
+                      "light",
+                      "dark"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tone",
+                  "background",
+                  "text",
+                  "accent",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "templateHash": {
+              "description": "Hash of the TemplateIR this was derived from, so the pair can be checked.",
+              "maxLength": 64,
+              "minLength": 64,
+              "type": "string"
+            },
+            "typeFamilies": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "declared": {
+                    "description": "What the theme names for this role. Differs from font when the slides disagree.",
+                    "type": "string"
+                  },
+                  "font": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "role": {
+                    "enum": [
+                      "primary",
+                      "secondary",
+                      "mono"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role",
+                  "font",
+                  "declared",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "typeScale": {
+              "description": "One entry per role in use.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "bold": {
+                    "type": "boolean"
+                  },
+                  "colorRole": {
+                    "description": "Which palette role this text takes its colour from.",
+                    "enum": [
+                      "background",
+                      "surface",
+                      "text",
+                      "text-muted",
+                      "text-on-accent",
+                      "accent",
+                      "accent-alt",
+                      "line",
+                      "positive",
+                      "negative"
+                    ],
+                    "type": "string"
+                  },
+                  "font": {
+                    "description": "Typeface to set this role in.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "italic": {
+                    "type": "boolean"
+                  },
+                  "lineSpacing": {
+                    "description": "Multiple of the line height, 1 for single.",
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  },
+                  "meta": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "confidence": {
+                        "description": "How far to trust the value. 1 for a measurement nobody contradicts.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "count": {
+                        "description": "Occurrences that support this value.",
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "parts": {
+                        "description": "A few parts it was observed on, so the value can be traced back to the file.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "share": {
+                        "description": "Share of the relevant population that agrees.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      "source": {
+                        "enum": [
+                          "observed",
+                          "theme",
+                          "fallback"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "count",
+                      "share",
+                      "confidence",
+                      "parts"
+                    ],
+                    "type": "object"
+                  },
+                  "role": {
+                    "enum": [
+                      "title",
+                      "subtitle",
+                      "heading",
+                      "body",
+                      "bullet",
+                      "caption",
+                      "kpi-value",
+                      "kpi-caption",
+                      "quote",
+                      "footer"
+                    ],
+                    "type": "string"
+                  },
+                  "sizePt": {
+                    "description": "Size in points.",
+                    "exclusiveMinimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "role",
+                  "font",
+                  "sizePt",
+                  "bold",
+                  "italic",
+                  "lineSpacing",
+                  "colorRole",
+                  "meta"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "warnings": {
+              "description": "Empty only when every token was measured with confidence.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "observed-overrides-theme",
+                      "font-unavailable",
+                      "low-confidence",
+                      "missing-surface",
+                      "unresolved-color",
+                      "theme-missing"
+                    ],
+                    "type": "string"
+                  },
+                  "message": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "token": {
+                    "description": "Which token it concerns, such as palette.accent or type.title.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "token",
+                  "message"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "templateHash",
+            "aspect",
+            "palette",
+            "surfaces",
+            "typeFamilies",
+            "typeScale",
+            "grid",
+            "strokes",
+            "radii",
+            "shadows",
+            "protectedZones",
+            "warnings"
+          ],
+          "type": "object"
+        },
+        "fontReadiness": {
+          "additionalProperties": false,
+          "properties": {
+            "missing": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "requested": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "state": {
+              "enum": [
+                "ready",
+                "missing",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "requested",
+            "missing"
+          ],
+          "type": "object"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "templateHash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "templateHash",
+        "designSystem",
+        "compositions"
+      ],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "templatePath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "templatePath",
+    "profile",
+    "designSystem",
+    "warnings"
+  ],
+  "title": "BrandbookTemplateResponse",
+  "type": "object"
+}

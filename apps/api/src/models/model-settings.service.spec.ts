@@ -55,6 +55,66 @@ const cloud = (apiKey?: string) => ({
 });
 
 describe('ModelSettingsService', () => {
+  it('exposes and resolves the native protocol of a CLI-configured server connection', async () => {
+    const { service } = setup({ env: { ...SERVER_ENV, MODEL_PROTOCOL: 'anthropic' } });
+    const settings = await service.get(ANN);
+    const server = settings.connections.find((item) => item.managed);
+    expect(server?.preset).toBe('anthropic');
+    await expect(service.resolve(null, ANN)).resolves.toMatchObject({ protocol: 'anthropic' });
+  });
+  it('persists the explicit native protocol and checks it without bearer authentication', async () => {
+    const send = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        data: [{ id: 'claude-test', type: 'model' }],
+        has_more: false,
+        last_id: 'claude-test',
+      }),
+    );
+    const { service } = setup({ fetch: send });
+    const connection = await service.saveConnection(
+      {
+        name: 'Native',
+        preset: 'anthropic',
+        baseUrl: 'https://api.anthropic.com/v1',
+        apiKey: KEY,
+      },
+      ADMIN,
+    );
+    await service.checkConnection(connection.connectionId, ADMIN);
+    const headers = new Headers(send.mock.calls[0]?.[1]?.headers);
+    expect(headers.get('x-api-key')).toBe(KEY);
+    expect(headers.has('authorization')).toBe(false);
+    expect(
+      await service.resolve(
+        { connectionId: connection.connectionId, modelId: 'claude-test' },
+        ADMIN,
+      ),
+    ).toMatchObject({ protocol: 'anthropic' });
+  });
+  it('resolves dedicated speech and image servers with separate credentials and respects disabled roles', async () => {
+    const { service, store } = setup({
+      env: {
+        MODEL_API_KEY: 'text-key',
+        SPEECH_BASE_URL: 'https://voice.example/v1/',
+        SPEECH_MODEL: 'ears',
+        SPEECH_API_KEY: 'voice-key',
+        IMAGE_BASE_URL: 'http://localhost:8082/v1',
+        IMAGE_MODEL: 'pictures',
+        IMAGE_API_KEY: '',
+      },
+    });
+    await expect(service.resolveRole('speech', ANN)).resolves.toMatchObject({
+      model: 'ears',
+      apiKey: 'voice-key',
+      baseUrl: 'https://voice.example/v1',
+    });
+    await expect(service.resolveRole('image', ANN)).resolves.toMatchObject({
+      model: 'pictures',
+      apiKey: '',
+    });
+    await store.setRole({ role: 'speech', kind: 'disabled' }, ANN.userId);
+    await expect(service.resolveRole('speech', ANN)).resolves.toBeNull();
+  });
   it('resolves an undiscovered personal model with its own key and rejects another account and disabled ids', async () => {
     const { service } = setup();
     const shared = await service.saveConnection(cloud(SERVER_KEY), ADMIN);

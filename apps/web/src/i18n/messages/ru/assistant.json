@@ -44,7 +44,6 @@
     "lostAfterReload": "Сборка шла, когда страницу обновили, и следить за ней отсюда уже нельзя. Готовая колода появится в библиотеке; чтобы собрать заново здесь, напишите пожелание."
   },
   "build": {
-    "usage": "HTTP: {requests} · задач: {tasks} · известных токенов: {tokens} · usage неизвестен: {unknown} · известная стоимость: {cost} · без тарифа/usage: {unknownCost}",
     "costUnknown": "неизвестна",
     "elapsed": "{time} из {budget}",
     "stages": "Этапы сборки",
@@ -53,7 +52,16 @@
     "variantNote": "Вариант «{variant}» · {count, plural, one {# слайд} few {# слайда} many {# слайдов} other {# слайда}}",
     "galleryTitle": "Слайды по мере вёрстки",
     "galleryNote": "Вариант «{variant}». Два других собираются из того же плана.",
-    "doneTitle": "Собрал колоду за {time}"
+    "doneTitle": "Собрал колоду за {time}",
+    "usageLabel": "Расход на сборку",
+    "requestsLabel": "Запросы к модели",
+    "requests": "{count, plural, one {# запрос} few {# запроса} many {# запросов} other {# запроса}}",
+    "tokensLabel": "Токены",
+    "tokens": "{count} токенов",
+    "tokenBreakdown": "На входе: {input} · На выходе: {output}",
+    "costLabel": "Стоимость",
+    "partial": "неполные данные",
+    "cost": "Стоимость: {amount}"
   },
   "variants": {
     "dense": {

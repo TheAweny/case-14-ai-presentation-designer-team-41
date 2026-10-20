@@ -31,6 +31,8 @@ function settingsWith(
   };
   return {
     get: async () => settings,
+    resolveRole: async () => null,
+    mediaDisabled: () => false,
     resolve: async (ref: ModelRef | null): Promise<ResolvedModel> => ({
       connectionId: ref?.connectionId ?? 'hub',
       baseUrl,
@@ -54,6 +56,26 @@ function gateway() {
 }
 
 describe('ModelCapabilityService', () => {
+  it('uses the configured speech server and honors its explicit off switch before discovery', async () => {
+    const settings = settingsWith(['ears'], { ears: { kinds: ['speech'] } });
+    const server = {
+      connectionId: 'server-speech',
+      baseUrl,
+      apiKey: 'voice-key',
+      model: 'dictation',
+      headers: {},
+    };
+    settings.resolveRole = async () => server;
+    const service = new ModelCapabilityService(
+      new MemoryModelSettingsStore(),
+      settings,
+      prompts,
+      gateway(),
+    );
+    await expect(service.speechModel(actor)).resolves.toEqual(server);
+    settings.mediaDisabled = () => true;
+    await expect(service.speechModel(actor)).resolves.toBeNull();
+  });
   it('keeps personal manual kinds without discovery and never mixes scopes or enables excluded models', async () => {
     const store = new MemoryModelSettingsStore();
     const connection = (connectionId: string, enabledModels: string[] | null) => ({
@@ -88,7 +110,12 @@ describe('ModelCapabilityService', () => {
     const fetchImpl = gateway();
     const service = new ModelCapabilityService(
       store,
-      { get: async () => settings, resolve } as unknown as ModelSettingsService,
+      {
+        get: async () => settings,
+        resolve,
+        resolveRole: async () => null,
+        mediaDisabled: () => false,
+      } as unknown as ModelSettingsService,
       prompts,
       fetchImpl,
     );

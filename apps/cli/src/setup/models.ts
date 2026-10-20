@@ -5,12 +5,14 @@ import {
   headerRecord,
   parseHeaderEnv,
 } from '@lct/contracts';
+import { anthropicTransport } from '@lct/pipeline';
 
 /**
  * Where the models come from. A preset fills the settings the pipeline reads; the service
  * works with any OpenAI-compatible runtime, the presets only save typing.
  */
 export interface ModelSettings {
+  readonly MODEL_PROTOCOL?: string;
   readonly MODEL_PROVIDER: string;
   readonly LLM_BASE_URL: string;
   readonly VLM_BASE_URL: string;
@@ -111,8 +113,12 @@ export async function checkModel(
 ): Promise<ModelCheck> {
   if (settings.MODEL_PROVIDER === 'fake') return { ok: true, detail: 'офлайн', ms: 0 };
   const started = Date.now();
+  const transport =
+    settings.MODEL_PROTOCOL === 'anthropic'
+      ? anthropicTransport(doFetch, { thinking: false })
+      : doFetch;
   try {
-    const response = await doFetch(`${settings.LLM_BASE_URL}/chat/completions`, {
+    const response = await transport(`${settings.LLM_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         ...headerRecord(parseHeaderEnv(settings.MODEL_HEADERS)),
@@ -122,7 +128,7 @@ export async function checkModel(
       body: JSON.stringify({
         model: settings.LLM_MODEL,
         messages: [{ role: 'user', content: 'Answer with {"ok": true} and nothing else.' }],
-        max_tokens: 20,
+        max_tokens: settings.MODEL_PROTOCOL === 'anthropic' ? 1024 : 20,
         chat_template_kwargs: { enable_thinking: false },
         response_format: { type: 'json_object' },
       }),

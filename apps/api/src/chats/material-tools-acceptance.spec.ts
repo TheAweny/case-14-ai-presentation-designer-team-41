@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -13,12 +14,26 @@ const FILE = '00000000-0000-4000-8000-000000000001';
 afterEach(async () => {
   await Promise.all(folders.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
-async function harness(text: string, extractMaterial = vi.fn()) {
+/** The engine's answer for a text with no table in it: the text is then kept as written. */
+async function noTable(request: { path: string }) {
+  const sha256 = createHash('sha256')
+    .update(await readFile(request.path))
+    .digest('hex');
+  return {
+    schemaVersion: 1,
+    datasetId: 'dataset-none',
+    status: 'failed',
+    source: { fileName: 'text', mediaType: 'text/plain', bytes: 0, sha256 },
+    sheets: [],
+    diagnostics: [{ code: 'no-table', severity: 'error', message: 'No table.' }],
+  };
+}
+async function harness(text: string, extractMaterial = vi.fn(), name = 'source.csv') {
   const folder = await mkdtemp(join(tmpdir(), 'material-live-'));
   folders.push(folder);
-  const path = join(folder, 'source.csv');
+  const path = join(folder, name);
   await writeFile(path, text);
-  const query = vi.fn(async () => ({ rows: [{ file_name: 'source.csv', storage_path: path }] }));
+  const query = vi.fn(async () => ({ rows: [{ file_name: name, storage_path: path }] }));
   const scope: ChatToolScope = {
     account: { id: 'owner', role: 'user' } as Account,
     chatId: 'chat',
@@ -32,14 +47,17 @@ async function harness(text: string, extractMaterial = vi.fn()) {
         createdAt: 1,
         text: 'Read my source',
         mode: 'plan',
-        attachments: [{ kind: 'file', fileId: FILE, name: 'source.csv', size: text.length }],
+        attachments: [{ kind: 'file', fileId: FILE, name, size: text.length }],
       },
     ],
     updatePart: vi.fn(),
     addDecks: vi.fn(),
   };
   const tools = chatTools(
-    { pool: { query }, engine: { extractMaterial } } as unknown as GenerationService,
+    {
+      pool: { query },
+      engine: { extractMaterial, extractDataset: vi.fn(noTable) },
+    } as unknown as GenerationService,
     scope,
     undefined,
     { search: null, fetchSource: vi.fn() },
@@ -65,7 +83,7 @@ async function harness(text: string, extractMaterial = vi.fn()) {
 describe('independent material tools through the live dispatcher', () => {
   it('reads escaped Unicode pages without splitting characters or losing source positions', async () => {
     const original = '😀"\\'.repeat(2000);
-    const { dispatcher, context } = await harness(original);
+    const { dispatcher, context } = await harness(original, vi.fn(), 'source.txt');
     let offset = 0;
     let text = '';
     for (let index = 0; index < 10; index += 1) {

@@ -81,6 +81,83 @@ describe('checkModelConnection', () => {
     expect(init?.headers).not.toHaveProperty('authorization');
   });
 
+  it('uses native Anthropic headers and declared model capabilities', async () => {
+    const fetchMock = respond(200, {
+      data: [
+        {
+          id: 'claude-haiku-5-5',
+          type: 'model',
+          capabilities: {
+            image_input: { supported: true },
+            thinking: {
+              supported: true,
+              types: { adaptive: { supported: true }, disabled: { supported: true } },
+            },
+            effort: {
+              supported: true,
+              low: { supported: true },
+              medium: { supported: true },
+              high: { supported: true },
+            },
+          },
+        },
+      ],
+      has_more: false,
+      last_id: 'claude-haiku-5-5',
+    });
+    const check = await checkModelConnection(
+      { baseUrl: 'https://api.anthropic.com/v1', apiKey: 'secret', protocol: 'anthropic' },
+      { fetch: fetchMock, now, resolve },
+    );
+    expect(check).toMatchObject({
+      ok: true,
+      models: ['claude-haiku-5-5'],
+      details: {
+        'claude-haiku-5-5': {
+          kinds: ['text', 'vision'],
+          reasoning: { toggle: 'reasoning-effort', levels: true },
+        },
+      },
+    });
+    const [url, init] = vi.mocked(fetchMock).mock.calls[0] ?? [];
+    expect(url).toBe('https://api.anthropic.com/v1/models?limit=500');
+    expect(init?.headers).toMatchObject({
+      'x-api-key': 'secret',
+      'anthropic-version': '2023-06-01',
+    });
+    expect(init?.headers).not.toHaveProperty('authorization');
+  });
+
+  it('paginates Anthropic models and rejects a cursor cycle', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      return url.searchParams.has('after_id')
+        ? Response.json({ data: [{ id: 'b' }], has_more: false, last_id: 'b' })
+        : Response.json({ data: [{ id: 'a' }], has_more: true, last_id: 'a' });
+    }) as unknown as typeof fetch;
+    const check = await checkModelConnection(
+      { baseUrl: 'https://api.anthropic.com/v1', apiKey: null, protocol: 'anthropic' },
+      { fetch: fetchMock, now, resolve },
+    );
+    expect(check).toMatchObject({ ok: true, models: ['a', 'b'] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(vi.mocked(fetchMock).mock.calls[1]?.[0])).toContain('after_id=a');
+
+    const cyclic = vi.fn(async (input: string | URL | Request) =>
+      Response.json({
+        data: [{ id: String(input).includes('after_id') ? 'b' : 'a' }],
+        has_more: true,
+        last_id: 'a',
+      }),
+    ) as unknown as typeof fetch;
+    const rejected = await checkModelConnection(
+      { baseUrl: 'https://api.anthropic.com/v1', apiKey: null, protocol: 'anthropic' },
+      { fetch: cyclic, now, resolve },
+    );
+    expect(rejected).toMatchObject({ ok: false, error: { kind: 'invalid-response' } });
+    expect(cyclic).toHaveBeenCalledTimes(2);
+  });
+
   it('tells a wrong key from other HTTP errors', async () => {
     const target = { baseUrl: 'https://llm.example.com/v1', apiKey: 'bad' };
     for (const status of [401, 403]) {

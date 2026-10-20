@@ -1,0 +1,25 @@
+{
+  "contract": "BrandbookParseRequest",
+  "valid": [
+    {
+      "name": "minimal valid",
+      "payload": {
+        "schemaVersion": 1,
+        "path": "x.json",
+        "outputDir": "out"
+      },
+      "path": ["schemaVersion"]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "invalid payload",
+      "why": "missing required field",
+      "payload": {
+        "schemaVersion": 1,
+        "path": ""
+      },
+      "path": ["path"]
+    }
+  ]
+}

@@ -123,7 +123,6 @@ describe('addressed dataset measurements', () => {
     'unit',
     'missing-to-zero',
     'unknown-source',
-    'unverified',
     'literal',
     'position',
   ])('rejects changed %s', (change) => {
@@ -142,10 +141,15 @@ describe('addressed dataset measurements', () => {
     if (change === 'missing-to-zero')
       series.values[2] = { state: 'present', literal: '0', value: 0 };
     if (change === 'unknown-source') required(chart.block.sources[0]).itemId = 'dataset/unknown/B2';
-    if (change === 'unverified') required(chart.block.sources[0]).status = 'unverified';
     if (change === 'literal') required(series.values[1]).literal = '10';
     if (change === 'position') required(chart.block.categories[0]).position = 7;
     expect(groundedVisual(chart, '', [fixture])).toBeNull();
+  });
+  it('proves model-unverified sources itself after checking addressed dataset relationships', () => {
+    const chart = nativeChart();
+    if (chart.block.kind !== 'chart') throw new Error('chart fixture');
+    for (const source of chart.block.sources) source.status = 'unverified';
+    expect(groundedVisual(chart, '', [fixture])).toEqual(nativeChart());
   });
   it('rejects KPI caption substitution and preserves an addressed negative period', () => {
     const fact = required(facts[1]);
