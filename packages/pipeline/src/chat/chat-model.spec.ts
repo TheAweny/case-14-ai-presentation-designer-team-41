@@ -40,6 +40,59 @@ describe('ThinkingFilter', () => {
 
 describe('OpenAICompatibleChatModel', () => {
   it.each([true, false])(
+    'reserves enough completion room for thinking and tool arguments (native=%s)',
+    async (native) => {
+      const fetchImpl = vi.fn<typeof fetch>();
+      if (!native)
+        fetchImpl.mockResolvedValueOnce(new Response('tools are not supported', { status: 400 }));
+      fetchImpl.mockResolvedValue(
+        Response.json({
+          choices: [
+            {
+              message: { content: native ? 'Ответ' : '{"say":"Ответ","tool":"","arguments":""}' },
+              finish_reason: 'stop',
+            },
+          ],
+        }),
+      );
+      const result = await model(fetchImpl, undefined, {
+        toggle: 'enable-thinking',
+        levels: false,
+      }).step({
+        messages: [{ role: 'user', content: 'Подготовь подробный план на 15 слайдов.' }],
+        tools,
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(result.text).toBe('Ответ');
+      for (const [, init] of fetchImpl.mock.calls) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          max_tokens: 32768,
+          chat_template_kwargs: { enable_thinking: true },
+        });
+      }
+      expect(fetchImpl).toHaveBeenCalledTimes(native ? 1 : 2);
+    },
+  );
+
+  it('preserves an explicitly configured completion budget instead of overriding it', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        choices: [{ message: { content: 'Ок' }, finish_reason: 'stop' }],
+      }),
+    );
+    await new OpenAICompatibleChatModel({
+      apiKey: 'key',
+      baseUrl: 'https://models.example/v1',
+      model: `model-${crypto.randomUUID()}`,
+      jsonModeInstructions: 'Answer as JSON.',
+      generation: { temperature: 0.4, topP: 0.95, maxOutputTokens: 16384 },
+      fetchImpl,
+    }).step({ messages: [], tools, signal: AbortSignal.timeout(5000) });
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)).max_tokens).toBe(16384);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])(
     'keeps thinking enabled in native and JSON requests (tools=%s)',
     async (native) => {
       const fetchImpl = vi.fn<typeof fetch>();
@@ -434,7 +487,11 @@ describe('OpenAICompatibleChatModel', () => {
     }
     expect(thrown).toBeInstanceOf(ModelRequestError);
     const requestError = thrown as ModelRequestError;
-    expect(requestError.failure).toEqual({ kind: 'quota-exhausted', modelId: expect.any(String) });
+    expect(requestError.failure).toEqual({
+      kind: 'quota-exhausted',
+      modelId: expect.any(String),
+      httpStatus: 400,
+    });
     expect(requestError.message).not.toContain('secret');
     expect(JSON.stringify(requestError.failure)).not.toContain('secret');
     expect(fetchImpl).toHaveBeenCalledTimes(1);

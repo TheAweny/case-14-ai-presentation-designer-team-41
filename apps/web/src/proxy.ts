@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, authSecret, loginHref } from '@/lib/auth';
 import { docsPortalDestination } from '@/lib/docs-portal';
 import { verifySessionToken } from '@/lib/session-token';
+import { apiDocsEnabled, isApiDocsPath } from '@/lib/api-docs-access';
 
 /**
  * Гостя — на вход. Здесь проверяется только подпись cookie: общих модулей с рендером у proxy
@@ -14,6 +15,12 @@ import { verifySessionToken } from '@/lib/session-token';
 export async function proxy(request: NextRequest) {
   const docs = docsPortalDestination(request.nextUrl.pathname, process.env.DOCS_PUBLIC_URL);
   if (docs) return NextResponse.redirect(docs);
+  // Decide before rendering/streaming so disabled docs always return an HTTP 404.
+  if (isApiDocsPath(request.nextUrl.pathname)) {
+    return apiDocsEnabled()
+      ? NextResponse.next()
+      : new NextResponse(null, { status: 404, headers: { 'cache-control': 'no-store' } });
+  }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (await verifySessionToken(token, authSecret())) return NextResponse.next();
@@ -27,8 +34,10 @@ export const config = {
   // (`app/api/backend`): через proxy Next пропускает только первые 10 МБ тела, а шаблон бывает
   // больше. Вход там проверяет сам маршрут и отвечает 401, а не уводом на страницу входа. Так же
   // отвечает `api/service-status`: гостю — 401, а не страница входа вместо JSON. Описание API
-  // (`api/docs`, `api/docs-json`) открыто всем.
+  // (`api/docs`, `api/docs-json`) открыто всем только при API_DOCS_ENABLED=true.
   matcher: [
-    '/((?!login|api/backend/|api/service-status|api/docs|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpe?g|webp|ico|woff2?|ttf)$).*)',
+    '/api/docs/:path*',
+    '/api/docs-json/:path*',
+    '/((?!login|api/backend/|api/service-status|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpe?g|webp|ico|woff2?|ttf)$).*)',
   ],
 };

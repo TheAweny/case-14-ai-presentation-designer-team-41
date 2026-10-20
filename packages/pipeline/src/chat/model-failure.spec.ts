@@ -12,7 +12,7 @@ describe('model failures', () => {
     [422, 'unsupported'],
   ] as const)('classifies HTTP %i without leaking the provider body', (status, kind) => {
     const error = modelHttpFailure(status, 'model-a', null, 'secret-provider-response');
-    expect(modelFailureOf(error)).toEqual({ kind, modelId: 'model-a' });
+    expect(modelFailureOf(error)).toEqual({ kind, modelId: 'model-a', httpStatus: status });
     expect(error.message).not.toContain('secret-provider-response');
   });
   it('recognizes a structured context error and both Retry-After formats', () => {
@@ -64,7 +64,7 @@ describe('model failures', () => {
       },
     });
     const error = modelHttpFailure(403, 'model-a', '60', body);
-    expect(error.failure).toEqual({ kind: 'quota-exhausted', modelId: 'model-a' });
+    expect(error.failure).toEqual({ kind: 'quota-exhausted', modelId: 'model-a', httpStatus: 403 });
     expect(error.failure.retryAt).toBeUndefined();
     expect(error.message).toBe('Model API HTTP 403 for model-a.');
     expect(error.message).not.toContain('secret');
@@ -78,7 +78,7 @@ describe('model failures', () => {
       '30',
       JSON.stringify({ error: { code: 'insufficient_quota', message: 'secret' } }),
     );
-    expect(error.failure).toEqual({ kind: 'quota-exhausted', modelId: 'model-a' });
+    expect(error.failure).toEqual({ kind: 'quota-exhausted', modelId: 'model-a', httpStatus: 429 });
     expect(error.failure.retryAt).toBeUndefined();
     expect(error.message).not.toContain('secret');
   });

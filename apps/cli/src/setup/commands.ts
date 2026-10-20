@@ -1,6 +1,6 @@
 import { statfsSync } from 'node:fs';
 import { join } from 'node:path';
-import * as p from '@clack/prompts';
+import * as p from './ui.js';
 import { EnvFile } from './env-file.js';
 import { checkModel, type ModelSettings } from './models.js';
 import { INSTALLATION_SECRETS, isUsableSecret } from './secrets.js';
@@ -12,8 +12,12 @@ import {
   composeCommand,
   portFree,
   repoRoot,
+  nodeVersionOk,
+  runningServices,
 } from './stack.js';
 import { emailProblem, nameProblem, normalizeEmail, parseUsers, passwordProblem } from './users.js';
+import { ask } from './terminal.js';
+import { localUrls } from './settings.js';
 
 function env(): EnvFile {
   const root = repoRoot();
@@ -44,24 +48,30 @@ export async function user(
   const email = normalizeEmail(
     target ??
       String(
-        await p.text({
-          message: 'Почта администратора',
-          validate: (v) => emailProblem(v ?? ''),
-        }),
+        await ask(() =>
+          p.text({
+            message: 'Почта администратора',
+            validate: (v) => emailProblem(v ?? ''),
+          }),
+        ),
       ),
   );
   const name =
     flags.name ??
     String(
-      await p.text({
-        message: 'Имя',
-        defaultValue: email.split('@')[0],
-        placeholder: email.split('@')[0],
-      }),
+      await ask(() =>
+        p.text({
+          message: 'Имя',
+          defaultValue: email.split('@')[0],
+          placeholder: email.split('@')[0],
+        }),
+      ),
     );
   const password =
     flags.password ??
-    String(await p.password({ message: 'Пароль', validate: (v) => passwordProblem(v ?? '') }));
+    String(
+      await ask(() => p.password({ message: 'Пароль', validate: (v) => passwordProblem(v ?? '') })),
+    );
   const problem = emailProblem(email) ?? passwordProblem(password) ?? nameProblem(name);
   if (problem) {
     p.log.error(problem);
@@ -75,10 +85,7 @@ export async function user(
     `Администратор ${email} записан в .env. Новый пароль заменит прежний при перезапуске API.`,
   );
   if (composeCommand() !== null) {
-    const running = await compose(['ps', '--status', 'running', '--services'], { quiet: true })
-      .then((code) => code === 0)
-      .catch(() => false);
-    if (running) {
+    if (runningServices().includes('api')) {
       const code = await compose(['up', '-d', 'api'], { quiet: true });
       if (code !== 0) p.log.warn('Не удалось перезапустить API: lct restart api');
     }
@@ -98,15 +105,14 @@ export async function doctor(): Promise<number> {
     }
   };
   const node = commandVersion('node');
-  check(
-    node !== null && Number(node.replace(/^v/, '').split('.')[0]) >= 22,
-    `Node ${node}`,
-    'Нужен Node.js 22.13+',
-  );
-  const docker = commandVersion('docker');
-  check(docker !== null, docker ?? '', 'Нет Docker: https://docs.docker.com/get-docker/');
-  check(composeCommand() !== null, 'Docker Compose есть', 'Нет Docker Compose');
-  check(buildxOk(), 'Docker buildx 0.17+ есть', BUILDX_HINT);
+  check(node !== null && nodeVersionOk(node), `Node ${node}`, 'Нужен Node.js 22.13+');
+  const file = env();
+  if (file.get('LCT_MODE') !== 'local') {
+    const docker = commandVersion('docker');
+    check(docker !== null, docker ?? '', 'Docker не найден. Повторите install.sh.');
+    check(composeCommand() !== null, 'Docker Compose есть', 'Нет Docker Compose');
+    check(buildxOk(), 'Docker buildx 0.17+ есть', BUILDX_HINT);
+  }
   const uv = commandVersion('uv');
   if (uv) p.log.success(uv);
   else p.log.info('uv не найден: нужен только для локального режима');
@@ -118,7 +124,6 @@ export async function doctor(): Promise<number> {
     `Мало места на диске: ${gb.toFixed(1)} ГБ, нужно от 5`,
   );
 
-  const file = env();
   const admin = file.get('ADMIN_EMAIL') ?? '';
   check(admin !== '', `Администратор: ${admin}`, 'Администратор не задан: lct user admin');
   check(
@@ -146,22 +151,23 @@ export async function doctor(): Promise<number> {
   const spinner = p.spinner();
   spinner.start('Проверяю модель');
   const model = await checkModel(settings);
-  spinner.stop(
-    model.ok ? `Модель отвечает: ${model.detail}` : `Модель не отвечает: ${model.detail}`,
-  );
+  if (model.ok) spinner.stop(`Модель отвечает: ${model.detail}`);
+  else spinner.error(`Модель не отвечает: ${model.detail}`);
   if (!model.ok) problems += 1;
 
   for (const [name, url] of [
-    ['API', 'http://localhost:3001/health'],
-    ['веб', 'http://localhost:3000'],
+    ['API', `${localUrls(file).api}/health`],
+    ['веб', `${localUrls(file).web}/login`],
   ] as const) {
     const up = await fetch(url, { signal: AbortSignal.timeout(3000) })
       .then((r) => r.ok)
       .catch(() => false);
-    if (up) p.log.success(`${name} отвечает: ${url}`);
-    else p.log.info(`${name} не запущен (${url}): lct start`);
+    check(up, `${name} отвечает: ${url}`, `${name} не отвечает (${url}): lct start`);
   }
-  for (const port of [3000, 3001]) {
+  for (const port of [
+    Number(file.get('WEB_PORT') || '3000'),
+    Number(file.get('API_HOST_PORT') || '3001'),
+  ]) {
     if (!(await portFree(port)))
       p.log.info(`Порт ${port} занят (это нормально, если сервис запущен)`);
   }
@@ -169,11 +175,37 @@ export async function doctor(): Promise<number> {
   return problems === 0 ? 0 : 1;
 }
 
+function serviceArgs(service?: string): string[] {
+  if (!service) return [];
+  if (!['postgres', 'engine', 'api', 'web', 'search', 'proxy'].includes(service))
+    throw new Error('Сервис: postgres, engine, api, web, search или proxy.');
+  return [service];
+}
+
 export const stack = {
-  start: () => compose(['up', '-d']),
-  stop: () => compose(['down']),
-  restart: (service?: string) => compose(['restart', ...(service ? [service] : [])]),
+  start: () => manageStack('Собираю и запускаю сервисы', ['up', '-d', '--build']),
+  stop: () => manageStack('Останавливаю сервисы', ['down']),
+  restart: (service?: string) =>
+    manageStack('Перезапускаю сервисы', ['restart', ...serviceArgs(service)]),
   status: () => compose(['ps']),
-  logs: (service?: string) =>
-    compose(['logs', '--tail', '200', '-f', ...(service ? [service] : [])]),
+  logs: (service?: string, follow = true) =>
+    compose(['logs', '--tail', '100', ...(follow ? ['-f'] : []), ...serviceArgs(service)]),
 };
+
+async function manageStack(label: string, args: string[]): Promise<number> {
+  const indicator = p.spinner();
+  const logFile = join(repoRoot(), 'data', 'logs', 'service.log');
+  indicator.start(label);
+  try {
+    const code = await compose(args, { logFile });
+    if (code === 0) indicator.stop('Готово');
+    else {
+      indicator.error('Действие не завершено');
+      p.log.error(`Подробности: ${logFile}`);
+    }
+    return code;
+  } catch (error) {
+    indicator.error('Действие не завершено');
+    throw error;
+  }
+}

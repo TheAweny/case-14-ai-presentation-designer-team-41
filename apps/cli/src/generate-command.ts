@@ -5,6 +5,7 @@ import { stringify as toYaml } from 'yaml';
 import { readRunConfig } from './config.js';
 import { generateFromConfig } from './generate.js';
 import { compose, composeCommand, repoRoot } from './setup/stack.js';
+import { EnvFile } from './setup/env-file.js';
 
 type Env = Record<string, string | undefined>;
 
@@ -15,11 +16,12 @@ type Env = Record<string, string | undefined>;
  */
 export function runEnv(envPath: string, shell: Env = process.env): Env {
   if (!existsSync(envPath)) return { ...shell };
+  const parsed = EnvFile.open(envPath);
   const file: Env = {};
   for (const line of readFileSync(envPath, 'utf8').split('\n')) {
     const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
     if (!match?.[1]) continue;
-    const value = (match[2] ?? '').replace(/^(['"])(.*)\1$/, '$2');
+    const value = parsed.get(match[1]) ?? '';
     if (value !== '') file[match[1]] = value;
   }
   return { ...shell, ...file };

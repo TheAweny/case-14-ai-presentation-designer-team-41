@@ -101,6 +101,8 @@ export interface OpenAICompatibleChatOptions {
 
 /** A slow step is a stuck step: the person waits in front of the chat. */
 const STEP_TIMEOUT_MS = 180000;
+/** Shared completion room for reasoning and a full deck outline/tool payload. */
+const DEFAULT_CHAT_OUTPUT_TOKENS = 32768;
 
 /**
  * The OpenAI chat completions API with tools, streamed. A server that refuses tools is asked in
@@ -179,7 +181,7 @@ export class OpenAICompatibleChatModel implements ChatModel {
             model: this.model,
             seed: this.options.seed ?? 42,
             ...sampling,
-            max_tokens: generation?.maxOutputTokens ?? 4096,
+            max_tokens: generation?.maxOutputTokens ?? DEFAULT_CHAT_OUTPUT_TOKENS,
             ...reasoning,
             ...body,
           },

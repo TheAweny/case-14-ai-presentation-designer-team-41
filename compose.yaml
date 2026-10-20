@@ -56,6 +56,7 @@ services:
       API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:-}
       # Encrypts model keys stored from the interface. Only the API holds it.
       MODEL_KEYS_SECRET: ${MODEL_KEYS_SECRET:-}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       MODEL_ALLOW_PRIVATE_HOSTS: ${MODEL_ALLOW_PRIVATE_HOSTS:-false}
       API_PORT: '3001'
       DATABASE_URL: postgresql://${POSTGRES_USER:-lct26}:${POSTGRES_PASSWORD:-lct26-local}@postgres:5432/${POSTGRES_DB:-lct26}
@@ -84,10 +85,11 @@ services:
     # Published on the loopback only, for `next dev` and the installer's health check. Browsers
     # never reach it: they go through the web server, which adds the service token.
     ports:
-      - '127.0.0.1:3001:3001'
+      - '127.0.0.1:${API_HOST_PORT:-3001}:3001'
     restart: unless-stopped
 
   search:
+    profiles: ['search']
     image: searxng/searxng@sha256:8bdd9aa136b2dc3b9332cf24714fa34a375b8a1949a1201ec900c24d7378596e
     environment:
       # Empty or unset: the command below generates a process-local key and does not persist it.
@@ -132,10 +134,30 @@ services:
       # Signs the sessions of the interface; `lct onboard` writes it into .env. Accounts live in
       # the API's database.
       AUTH_SECRET: ${AUTH_SECRET:-}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      APP_ORIGIN: ${APP_ORIGIN:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     ports:
-      - '3000:3000'
+      - '${WEB_BIND:-0.0.0.0}:${WEB_PORT:-3000}:3000'
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    profiles: ['https']
+    environment:
+      LCT_DOMAIN: ${LCT_DOMAIN:-localhost}
+    depends_on:
+      web:
+        condition: service_started
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
     restart: unless-stopped
 
 volumes:
   postgres-data:
   search-data:
+  caddy-data:
+  caddy-config:

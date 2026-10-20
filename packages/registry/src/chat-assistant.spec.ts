@@ -15,20 +15,20 @@ afterEach(async () => {
 });
 
 describe('chat assistant preparation prompts', () => {
-  it('loads the new policy with its own version and unchanged model settings', async () => {
+  it('loads the preparation policy with room for reasoning and a full deck plan', async () => {
     const agent = await loadAgent(directory);
     expect(agent.config).toMatchObject({
       id: 'chat-assistant',
-      version: '1.23.0',
+      version: '1.23.1',
       modelId: 'assistant-default',
       instructionsFile: 'instructions.md',
       outputSchema: 'ChatTurn',
-      generation: { temperature: 0.4, topP: 0.95, maxOutputTokens: 4096, thinking: true },
+      generation: { temperature: 0.4, topP: 0.95, maxOutputTokens: 32768, thinking: true },
     });
     expect(agent.instructions).toBe(await read('instructions.md'));
     expect(agent.instructions).toContain('## Preparation before a plan');
     expect(toManifestEntry(agent)).toMatchObject({
-      agentVersion: '1.23.0',
+      agentVersion: '1.23.1',
       instructionsSha256: createHash('sha256').update(agent.instructions, 'utf8').digest('hex'),
     });
   });

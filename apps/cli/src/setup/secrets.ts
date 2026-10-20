@@ -17,6 +17,7 @@ export const INSTALLATION_SECRETS = [
   'AUTH_SECRET',
   'API_SERVICE_TOKEN',
   'MODEL_KEYS_SECRET',
+  'SEARXNG_SECRET',
 ] as const;
 export type InstallationSecret = (typeof INSTALLATION_SECRETS)[number];
 
@@ -47,4 +48,24 @@ export function ensureInstallationSecrets(
     created.push(name);
   }
   return created;
+}
+
+/** PostgreSQL applies its password only on first initialization; never rotate it on reconfigure. */
+export function ensureDatabaseSettings(env: EnvFile, fresh: boolean): boolean {
+  let generated = false;
+  if (fresh || !env.get('POSTGRES_PASSWORD')) {
+    if (!fresh)
+      throw new Error('Пароль БД отсутствует. Восстановите POSTGRES_PASSWORD из резервной копии.');
+    env.set('POSTGRES_PASSWORD', newSecret());
+    generated = true;
+  }
+  const user = encodeURIComponent(env.get('POSTGRES_USER') || 'lct26');
+  const password = encodeURIComponent(env.get('POSTGRES_PASSWORD') ?? '');
+  const database = encodeURIComponent(env.get('POSTGRES_DB') || 'lct26');
+  if (fresh || !env.get('DATABASE_URL'))
+    env.set(
+      'DATABASE_URL',
+      `postgresql://${user}:${password}@localhost:${env.get('POSTGRES_PORT') || '5433'}/${database}`,
+    );
+  return generated;
 }
