@@ -8,6 +8,11 @@
     "brandbook": {
       "additionalProperties": false,
       "properties": {
+        "assetRoot": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
         "priority": {
           "default": "brandbook",
           "enum": [

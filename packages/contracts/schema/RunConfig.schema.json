@@ -101,13 +101,12 @@
       "type": "integer"
     },
     "templatePath": {
-      "description": "Path to the .pptx used as the style source.",
+      "description": "Path to the .pptx used as the style source. Absent: the built-in layouts (examples/layout-template.pptx), styled by the brandbook when there is one.",
       "minLength": 1,
       "type": "string"
     }
   },
   "required": [
-    "templatePath",
     "contentPath",
     "slideCount",
     "layoutVariants",

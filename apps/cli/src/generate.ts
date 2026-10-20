@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import {
   NO_REASONING_CHOICE,
@@ -16,15 +16,21 @@ import {
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
+  FakeImageProvider,
+  OpenAICompatibleImageProvider,
+  SharedIllustrations,
   currentTemplateIndexRevision,
   GenerationProvider,
+  type ImageProvider,
   generatePresentation,
   indexTemplateWithAgent,
   SharedPlan,
   anthropicTransport,
 } from '@lct/pipeline';
 import { loadAnswerFormat } from '@lct/registry';
-import { readMaterial } from './material.js';
+import { BrandbookPictures, brandPictures } from './brand-pictures.js';
+import { datasetsOf, readMaterial } from './material.js';
+import { repoRoot } from './setup/stack.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -107,7 +113,37 @@ async function brandbookOf(
     log('  правил брендбук не объявляет, а вывести их не из чего: шаблон не изменится');
   }
   for (const warning of profile.warnings) log(`  ${warning}`);
-  return brandbookBindingSchema.parse({ schemaVersion: 1, profile, priority });
+  return brandbookBindingSchema.parse({
+    schemaVersion: 1,
+    profile,
+    priority,
+    assetRoot: join(runDir, 'brandbook'),
+  });
+}
+
+/**
+ * Where a deck's pictures come from: the image model of the environment when one is set, else
+ * the brandbook's own photos and illustrations, else nowhere and picture frames are dropped.
+ */
+function imagesOf(
+  env: Env,
+  brandbook: BrandbookBinding | undefined,
+  log: (line: string) => void,
+): ImageProvider | null {
+  if (env.IMAGE_PROVIDER === 'fake') return new FakeImageProvider();
+  if (env.IMAGE_BASE_URL && env.IMAGE_MODEL) {
+    log(`картинки рисует ${env.IMAGE_MODEL}`);
+    return new OpenAICompatibleImageProvider({
+      baseUrl: env.IMAGE_BASE_URL,
+      apiKey: env.MODEL_API_KEY ?? '',
+      model: env.IMAGE_MODEL,
+    });
+  }
+  const pictures =
+    brandbook?.assetRoot !== undefined ? brandPictures(brandbook.profile, brandbook.assetRoot) : [];
+  if (pictures.length === 0) return null;
+  log(`картинки берутся из брендбука: ${pictures.length}`);
+  return new BrandbookPictures(pictures);
 }
 
 /** What went wrong, in words: a workflow fails with an error object that is not an Error. */
@@ -218,7 +254,8 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
   const env = options.env ?? process.env;
   const log = options.log ?? ((line: string) => process.stdout.write(`${line}\n`));
   const connection = connectionOf(env);
-  const templatePath = resolve(config.templatePath);
+  const builtIn = join(repoRoot(), 'examples', 'layout-template.pptx');
+  let templatePath = config.templatePath ? resolve(config.templatePath) : builtIn;
   const contentPath = resolve(config.contentPath);
   const brandbookPath = config.brandbookPath ? resolve(config.brandbookPath) : null;
   for (const [what, path] of [
@@ -243,6 +280,8 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     timeoutMs: 180_000,
   });
   const brief = briefOf(config, await readMaterial(engine, contentPath));
+  // The tables themselves go to the writer too, so a chart is built from cells, not retyped.
+  const preparedDatasets = await datasetsOf(engine, contentPath);
   if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
   const outputDir = resolve(config.outputDir);
   const runId = `run-${new Date()
@@ -251,6 +290,12 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     .slice(0, 14)}`;
   const runDir = join(outputDir, runId);
   await mkdir(runDir, { recursive: true });
+  if (!config.templatePath) {
+    // The engine reads the template from a path it shares with this run, not from the CLI's own
+    // files: in Docker those sit in another container. The run keeps its copy of the layouts.
+    templatePath = join(runDir, 'layout-template.pptx');
+    await copyFile(builtIn, templatePath);
+  }
   await writeFile(join(runDir, 'brief.md'), brief);
   const brandbook = brandbookPath
     ? await brandbookOf(engine, brandbookPath, runDir, config, log)
@@ -260,6 +305,19 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     `${runId}: ${basename(templatePath)}, ${config.slideCount} слайдов, модель ${connection.model}`,
   );
   const profile = await engine.generationProfile(templatePath);
+  const images = imagesOf(env, brandbook, log);
+  const illustrations = images
+    ? await SharedIllustrations.load(
+        {
+          images,
+          text: provider,
+          designSystem: profile.designSystem,
+          seed: config.seed,
+          signal: AbortSignal.timeout(600_000),
+        },
+        registryDir,
+      )
+    : null;
   const notes = await notesFor({
     profile,
     provider,
@@ -295,7 +353,8 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           seed: config.seed,
           variant,
           sharedPlan,
-          illustrations: null,
+          illustrations,
+          ...(preparedDatasets.length > 0 ? { preparedDatasets } : {}),
           onEvent: async (event) => {
             await appendFile(join(dir, 'events.jsonl'), `${JSON.stringify(event)}\n`);
             if (event.type === 'stage-started' && event.stage !== stage) {

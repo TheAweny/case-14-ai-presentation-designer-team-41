@@ -19,7 +19,8 @@ export type InputValidationCode =
   | 'output-not-directory'
   | 'pptx-archive-limit'
   | 'pptx-invalid'
-  | 'pptx-type';
+  | 'pptx-type'
+  | 'template-missing';
 
 export class LocalInputValidationError extends Error {
   constructor(
@@ -46,6 +47,9 @@ export interface ValidatedLocalInputs {
 export function validateLocalRunInputs(
   config: Pick<RunConfig, 'contentPath' | 'outputDir' | 'templatePath'>,
 ): ValidatedLocalInputs {
+  // This run reads the template it is given; only a config run falls back to the built-in layouts.
+  if (!config.templatePath)
+    throw new LocalInputValidationError('template-missing', 'This command needs a template.');
   const template = validateTemplate(config.templatePath);
   const content = validateContent(config.contentPath);
   const outputDir = validateOutputDirectory(config.outputDir);

@@ -80,3 +80,14 @@ async function readDocument(engine: MaterialEngine, path: string, name: string):
   }
   throw new Error(`«${name}» длиннее, чем читается за один запуск.`);
 }
+
+/**
+ * The typed tables of the content for the writer: a chart or a figure on a slide is then taken
+ * from cells it can cite, never retyped from the brief. A file with no table gives none.
+ */
+export async function datasetsOf(engine: MaterialEngine, path: string): Promise<Dataset[]> {
+  const extension = extname(path).toLowerCase();
+  if (!TABLES.has(extension) && !TEXT.has(extension)) return [];
+  const dataset = await engine.extractDataset({ schemaVersion: 1, path });
+  return dataset.status === 'failed' || dataset.sheets.length === 0 ? [] : [dataset];
+}

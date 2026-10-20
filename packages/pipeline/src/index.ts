@@ -109,6 +109,7 @@ export {
   FakeImageProvider,
   OpenAICompatibleImageProvider,
   sizeFor,
+  type GeneratedImage,
   type ImageProvider,
 } from './generation/images.js';
 export { SharedIllustrations, styleOf, type Illustration } from './generation/illustrations.js';

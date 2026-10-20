@@ -2461,6 +2461,7 @@ class BrandbookBinding(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    assetRoot: constr(min_length=1, max_length=4000) | None = None
     priority: Priority
     profile: Profile
     schemaVersion: Literal[1]
@@ -2707,6 +2708,7 @@ class Brandbook(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    assetRoot: constr(min_length=1, max_length=4000) | None = None
     priority: Priority
     profile: Profile1
     schemaVersion: Literal[1]
@@ -3998,6 +4000,7 @@ class Brandbook1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    assetRoot: constr(min_length=1, max_length=4000) | None = None
     priority: Priority
     profile: Profile3
     schemaVersion: Literal[1]
@@ -5573,6 +5576,7 @@ class Brandbook2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    assetRoot: constr(min_length=1, max_length=4000) | None = None
     priority: Priority
     profile: Profile4
     schemaVersion: Literal[1]
@@ -10383,8 +10387,9 @@ class RunConfig(BaseModel):
     slideCount: conint(ge=5, le=15) = Field(
         ..., description="Number of slides to produce."
     )
-    templatePath: constr(min_length=1) = Field(
-        ..., description="Path to the .pptx used as the style source."
+    templatePath: constr(min_length=1) | None = Field(
+        None,
+        description="Path to the .pptx used as the style source. Absent: the built-in layouts (examples/layout-template.pptx), styled by the brandbook when there is one.",
     )
 
 

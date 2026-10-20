@@ -2,7 +2,8 @@
 # Northstar brandbook from examples/brandbooks. Validated against RunConfig.
 #   lct generate configs/run.data-brand.yaml
 
-templatePath: examples/template.pptx
+# No templatePath: the deck is built on the built-in layouts (examples/layout-template.pptx), and
+# the brandbook gives them its colours, fonts and logo.
 
 # A table is read as typed data: a short one goes into the brief whole, a long one as a summary
 # over all of its rows. CSV, TSV, XLSX, JSON, and tables inside .txt or .md are read this way.

@@ -83,6 +83,8 @@ export const brandbookBindingSchema = z.object({
   schemaVersion: z.literal(1),
   profile: brandbookProfileSchema,
   priority: z.enum(['brandbook', 'template']).default('brandbook'),
+  /** Where the profile's asset paths resolve: without it no logo or picture can be placed. */
+  assetRoot: z.string().min(1).max(4000).optional(),
 });
 
 export type BrandbookProfile = z.infer<typeof brandbookProfileSchema>;

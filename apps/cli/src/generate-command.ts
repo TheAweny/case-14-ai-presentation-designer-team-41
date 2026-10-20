@@ -75,9 +75,11 @@ export async function generateCommand(configPath: string): Promise<number> {
   for (const path of [config.templatePath, config.contentPath, config.brandbookPath]) {
     if (path && !existsSync(resolve(path))) throw new Error(`Файл не найден: ${resolve(path)}`);
   }
-  const template = `template-${basename(config.templatePath)}`;
+  // Without a template the container takes its own copy of the built-in layouts.
+  const template = config.templatePath ? `template-${basename(config.templatePath)}` : null;
   const content = `content-${basename(config.contentPath)}`;
-  copyFileSync(resolve(config.templatePath), join(stage, template));
+  if (config.templatePath && template)
+    copyFileSync(resolve(config.templatePath), join(stage, template));
   copyFileSync(resolve(config.contentPath), join(stage, content));
   // The brandbook goes under its own name: a template and a brandbook may share a file name.
   const brandbook = config.brandbookPath ? `brandbook-${basename(config.brandbookPath)}` : null;
@@ -91,7 +93,7 @@ export async function generateCommand(configPath: string): Promise<number> {
     join(stage, 'run.yaml'),
     toYaml({
       ...config,
-      templatePath: inContainer(template),
+      ...(template ? { templatePath: inContainer(template) } : {}),
       contentPath: inContainer(content),
       ...(brandbook ? { brandbookPath: inContainer(brandbook) } : {}),
       outputDir: '/app/runs',

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import lxml.etree as etree
+from PIL import Image
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -41,6 +42,23 @@ def _solid(parent: Any, color: str) -> None:
     fill = _node("solidFill")
     fill.append(_node("srgbClr", val=color))
     parent.insert(0, fill)
+
+
+def _plain_text_colour(properties: Any, old_text: str | None) -> bool:
+    """Whether a run is in the text colour, so a brand's text colour is its own.
+
+    A run in an accent or another set colour keeps it: the template coloured it on purpose.
+    """
+    fill = properties.find(f"{{{_A}}}solidFill")
+    if fill is None or len(fill) == 0:
+        return True
+    colour = fill[0]
+    kind = etree.QName(colour).localname
+    if kind == "schemeClr":
+        return colour.get("val") in {"tx1", "dk1", "tx2", "dk2"}
+    if kind == "srgbClr":
+        return bool(old_text) and colour.get("val", "").upper() == old_text
+    return False
 
 
 def _role(element: Any) -> str:
@@ -163,7 +181,8 @@ def _apply(root: Any, name: str, rules: list[dict[str, Any]], old_colors: dict[s
                 for properties in root.xpath(
                     ".//a:rPr | .//a:defRPr | .//a:endParaRPr", namespaces=_NS
                 ):
-                    _solid(properties, value)
+                    if _plain_text_colour(properties, old_colors.get("dk1")):
+                        _solid(properties, value)
             if role == "background" and name.startswith("ppt/slides/slide"):
                 common = root.find(f"{{{_P}}}cSld")
                 if common is not None:
@@ -207,9 +226,14 @@ def apply_brandbook(source: Path, target: Path, binding: dict[str, Any]) -> list
     source, target = Path(source), Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     rules, warnings = ([], []) if binding.get("priority") == "template" else _rules(binding)
+    logo = None if binding.get("priority") == "template" else _logo_asset(binding)
     if not rules:
         if source.resolve() != target.resolve():
             shutil.copyfile(source, target)
+        if logo is not None:
+            warnings.append(
+                f"Brand logo {logo.name} placed on {place_logo(target, logo)} slide(s)."
+            )
         return warnings
     with zipfile.ZipFile(source) as archive:
         entries = [(info, archive.read(info)) for info in archive.infolist()]
@@ -232,4 +256,114 @@ def apply_brandbook(source: Path, target: Path, binding: dict[str, Any]) -> list
                     root, xml_declaration=True, encoding="UTF-8", standalone=True
                 )
             output.writestr(info, payload)
+    if logo is not None:
+        warnings.append(f"Brand logo {logo.name} placed on {place_logo(target, logo)} slide(s).")
     return warnings
+
+
+#: The logo's height on a slide and its distance from the slide's edges.
+_LOGO_HEIGHT = 0.5 * 914400
+_LOGO_MARGIN = 0.35 * 914400
+_LOGO_RASTER = {"image/png", "image/jpeg"}
+
+
+def _logo_asset(binding: dict[str, Any]) -> Path | None:
+    """The brand's logo for a light slide: a raster named a logo, drawn in the brand's colour.
+
+    A file named `…white…` is the variant for dark backgrounds and is left out. Of the rest, one
+    whose dominant colour is the brand's main one comes first, then the largest.
+    """
+    root = binding.get("assetRoot")
+    if not root:
+        return None
+    base = Path(root).resolve()
+    profile = binding["profile"]
+    tokens = profile["tokens"]
+    primary = next(
+        (
+            str(token["value"]).upper()
+            for token in tokens
+            if token["kind"] == "color"
+            and (token.get("role") or "") in ("primary", "accent")
+            and token["authority"] in ("explicit", "inferred")
+        ),
+        None,
+    )
+    drawn_in = {
+        evidence["sourceId"]: str(token["value"]).upper()
+        for token in tokens
+        if token["kind"] == "color"
+        for evidence in token["evidence"]
+        if str(evidence.get("locator", "")).startswith("pixels:")
+    }
+
+    def near(colour: str | None) -> bool:
+        if not colour or not primary:
+            return False
+        a = [int(colour[i : i + 2], 16) for i in (1, 3, 5)]
+        b = [int(primary[i : i + 2], 16) for i in (1, 3, 5)]
+        return sum((x - y) ** 2 for x, y in zip(a, b, strict=True)) ** 0.5 <= 70
+
+    candidates = []
+    for asset in profile["assets"]:
+        name = str(asset.get("name", "")).lower()
+        if asset.get("mediaType") not in _LOGO_RASTER or "logo" not in name or "white" in name:
+            continue
+        path = (base / str(asset["path"])).resolve()
+        if base not in path.parents or not path.is_file():
+            continue
+        area = float(asset.get("width") or 0) * float(asset.get("height") or 0)
+        candidates.append((not near(drawn_in.get(asset["sourceId"])), -area, str(path)))
+    return Path(sorted(candidates)[0][2]) if candidates else None
+
+
+def _free(box: tuple[int, int, int, int], taken: list[tuple[int, int, int, int]]) -> bool:
+    left, top, width, height = box
+    return all(
+        left + width <= x or x + w <= left or top + height <= y or y + h <= top
+        for x, y, w, h in taken
+    )
+
+
+def place_logo(path: Path, logo: Path) -> int:
+    """Put the logo in a free corner of every slide of the template; the number of slides it got.
+
+    Top right is tried first, then top left, bottom right and bottom left. A corner where any
+    shape of the slide sits is not free; a slide with no free corner keeps its look.
+    """
+    import pptx
+    from pptx.util import Emu
+
+    presentation = pptx.Presentation(str(path))
+    width, height = presentation.slide_width or 0, presentation.slide_height or 0
+    with Image.open(logo) as picture:
+        ratio = picture.width / max(1, picture.height)
+    logo_height = int(_LOGO_HEIGHT)
+    logo_width = int(_LOGO_HEIGHT * ratio)
+    margin = int(_LOGO_MARGIN)
+    corners = [
+        (width - margin - logo_width, margin),
+        (margin, margin),
+        (width - margin - logo_width, height - margin - logo_height),
+        (margin, height - margin - logo_height),
+    ]
+    placed = 0
+    for slide in presentation.slides:
+        taken = [
+            (int(shape.left), int(shape.top), int(shape.width), int(shape.height))
+            for shape in slide.shapes
+            if shape.width is not None
+            and shape.height is not None
+            and shape.left is not None
+            and shape.top is not None
+            and int(shape.width) * int(shape.height) < 0.9 * width * height
+        ]
+        for left, top in corners:
+            if _free((left, top, logo_width, logo_height), taken):
+                slide.shapes.add_picture(
+                    str(logo), Emu(left), Emu(top), Emu(logo_width), Emu(logo_height)
+                )
+                placed += 1
+                break
+    presentation.save(str(path))
+    return placed

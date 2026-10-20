@@ -18,7 +18,10 @@ describe('readRunConfig', () => {
     const config = readRunConfig(resolve(root, 'configs/run.data-brand.yaml'));
     expect(config.brandbookPath).toBe('examples/brandbooks/northstar-brandbook.zip');
     expect(config.brandbookPriority).toBe('brandbook');
-    for (const path of [config.templatePath, config.contentPath, config.brandbookPath ?? ''])
+    // No template: the run is built on the built-in layouts, styled by the brandbook.
+    expect(config.templatePath).toBeUndefined();
+    expect(existsSync(resolve(root, 'examples/layout-template.pptx'))).toBe(true);
+    for (const path of [config.contentPath, config.brandbookPath ?? ''])
       expect(existsSync(resolve(root, path)), path).toBe(true);
   });
 

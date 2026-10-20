@@ -13,7 +13,14 @@ export const modelBindingSchema = z.object({
 
 /** Schema of configs/run.example.yaml — the reproducible description of one run. */
 export const runConfigSchema = z.object({
-  templatePath: z.string().min(1).describe('Path to the .pptx used as the style source.'),
+  templatePath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Path to the .pptx used as the style source. Absent: the built-in layouts ' +
+        '(examples/layout-template.pptx), styled by the brandbook when there is one.',
+    ),
   contentPath: z
     .string()
     .min(1)
