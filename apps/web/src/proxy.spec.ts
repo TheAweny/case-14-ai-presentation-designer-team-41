@@ -69,15 +69,6 @@ describe('API documentation server gate', () => {
     expect((await proxy(request)).status).toBe(404);
   });
 
-  it('leaves the docs console outside the login redirect', () => {
-    for (const path of [
-      '/api/docs-playground/session',
-      '/api/docs-playground/generation/run-1/cancel',
-    ]) {
-      expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path })).toBe(false);
-    }
-  });
-
   it.each(['/library', '/api/docs-other', '/api/docs-json-other'])(
     'preserves login protection for %s when docs are enabled',
     async (path) => {

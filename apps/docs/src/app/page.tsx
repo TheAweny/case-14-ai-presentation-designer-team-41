@@ -16,7 +16,7 @@ const entries = [
   {
     href: '/docs/developers',
     title: 'Разрабатывать и интегрировать',
-    text: 'Локальное окружение, границы слоёв и API. Консоль запросов лежит рядом.',
+    text: 'Локальное окружение, границы слоёв и API. Справочник маршрутов лежит рядом.',
   },
 ] as const;
 
@@ -27,7 +27,7 @@ const sections = [
   ['CLI', '/docs/cli', 'Команды lct, флаги и конфиг прогона.'],
   ['Как это работает', '/docs/internals', 'Пайплайн, слои и инварианты.'],
   ['Разработчикам', '/docs/developers', 'Окружение, контракты, агенты, тесты.'],
-  ['API', '/docs/api', 'Доступ, консоль запросов и сгенерированный справочник.'],
+  ['API', '/docs/api', 'Доступ, ошибки и сгенерированный справочник.'],
   ['Решение проблем', '/docs/troubleshooting', 'Симптом, проверка, действие.'],
 ] as const;
 
@@ -69,13 +69,6 @@ export default function HomePage() {
             </li>
           ))}
         </ul>
-        <p className="mt-8 text-sm text-fd-muted-foreground">
-          Пишете статью?{' '}
-          <Link href="/docs/authors" className="text-fd-primary">
-            Как устроены страницы и компоненты
-          </Link>
-          .
-        </p>
       </main>
     </HomeLayout>
   );

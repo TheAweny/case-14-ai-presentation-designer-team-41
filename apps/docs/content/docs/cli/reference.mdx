@@ -7,28 +7,31 @@ description: Аргументы lct, которыми установка, пол
 
 Каталог установки, если команда запущена не из него: `LCT_HOME=/opt/lct26`.
 
-<MediaSlot kind="image" title="Терминал с одной командой lct onboard --yes и итоговой сводкой, без пошагового меню." />
+<MediaSlot
+  kind="image"
+  title="Терминал с одной командой lct onboard --yes и итоговой сводкой, без пошагового меню."
+/>
 
 ## Установка и настройка
 
 `lct onboard` создаёт установку. `lct configure` меняет адрес, порты, документацию API и поиск. `lct model` меняет только модель. В неинтерактивном режиме нужен `--yes`.
 
-| Флаг | Значения |
-| --- | --- |
-| `--yes` | не задавать вопросов |
-| `--mode` | `docker` или `local` |
-| `--provider` | `vk`, `ai-studio`, `openai`, `offline` |
-| `--api-key` | ключ провайдера; иначе переменная `LCT_MODEL_API_KEY` |
-| `--project-id` | UUID проекта VK |
-| `--folder-id` | каталог Yandex AI Studio |
-| `--base-url`, `--model` | свой OpenAI-совместимый сервер |
+| Флаг                                                | Значения                                                                   |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `--yes`                                             | не задавать вопросов                                                       |
+| `--mode`                                            | `docker` или `local`                                                       |
+| `--provider`                                        | `vk`, `ai-studio`, `openai`, `offline`                                     |
+| `--api-key`                                         | ключ провайдера; иначе переменная `LCT_MODEL_API_KEY`                      |
+| `--project-id`                                      | UUID проекта VK                                                            |
+| `--folder-id`                                       | каталог Yandex AI Studio                                                   |
+| `--base-url`, `--model`                             | свой OpenAI-совместимый сервер                                             |
 | `--admin-email`, `--admin-name`, `--admin-password` | первый администратор; пароль иначе берётся из `LCT_INSTALL_ADMIN_PASSWORD` |
-| `--domain` | имя для HTTPS, без протокола и порта |
-| `--host` | IP для HTTP |
-| `--web-port`, `--api-port` | порты |
-| `--docs` / `--no-docs` | документация API и консоль на этом сайте |
-| `--search` / `--no-search` | веб-поиск |
-| `--no-start` | записать настройки и не запускать стек |
+| `--domain`                                          | имя для HTTPS, без протокола и порта                                       |
+| `--host`                                            | IP для HTTP                                                                |
+| `--web-port`, `--api-port`                          | порты                                                                      |
+| `--docs` / `--no-docs`                              | Swagger в приложении по адресу `/api/docs`                                 |
+| `--search` / `--no-search`                          | веб-поиск                                                                  |
+| `--no-start`                                        | записать настройки и не запускать стек                                     |
 
 `--docs` и `--no-docs` вместе указывать нельзя. То же для `--search` и `--no-search`.
 
@@ -54,15 +57,15 @@ lct model --yes --provider openai \
 
 ## Сервис
 
-| Команда | Действие |
-| --- | --- |
-| `lct start` | `docker compose up -d --build` |
-| `lct stop` | остановить стек |
+| Команда                | Действие                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `lct start`            | `docker compose up -d --build`                                                             |
+| `lct stop`             | остановить стек                                                                            |
 | `lct restart [сервис]` | перезапуск всего или одного сервиса: `postgres`, `engine`, `api`, `web`, `search`, `proxy` |
-| `lct status` | `docker compose ps` |
-| `lct logs [сервис]` | последние строки журнала |
-| `lct doctor` | Node, Docker, uv, место, модель и ответы `/health` и `/login` |
-| `lct menu` | то же меню, что `lct` без аргументов |
+| `lct status`           | `docker compose ps`                                                                        |
+| `lct logs [сервис]`    | последние строки журнала                                                                   |
+| `lct doctor`           | Node, Docker, uv, место, модель и ответы `/health` и `/login`                              |
+| `lct menu`             | то же меню, что `lct` без аргументов                                                       |
 
 `lct backup` и `lct update` работают на Linux с Docker. В режиме `local` они отказываются. Обновление сначала снимает копию, затем подтягивает git и поднимает те сервисы, которые были запущены.
 
@@ -72,16 +75,16 @@ lct model --yes --provider openai \
 
 Без терминала все ответы надо передать флагами, иначе команда остановится.
 
-| Команда | Флаги |
-| --- | --- |
-| `lct user list` | вход администратора |
-| `lct user add [почта]` | `--email`, `--name`, `--password`, `--role user\|admin` |
-| `lct user role [почта]` | `--role user\|admin`, либо `--id` |
-| `lct user disable [почта]` | `--email` или `--id` |
-| `lct user enable [почта]` | то же |
-| `lct user password [почта]` | `--password` нового пароля, 8–200 символов |
-| `lct user revoke-sessions [почта]` | завершает сессии |
-| `lct user admin [почта]` | записывает администратора в `.env`; `--name`, `--password`. Новый пароль начинает действовать после перезапуска API; если API уже запущен, команда перезапускает его |
+| Команда                            | Флаги                                                                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lct user list`                    | вход администратора                                                                                                                                                  |
+| `lct user add [почта]`             | `--email`, `--name`, `--password`, `--role user\|admin`                                                                                                              |
+| `lct user role [почта]`            | `--role user\|admin`, либо `--id`                                                                                                                                    |
+| `lct user disable [почта]`         | `--email` или `--id`                                                                                                                                                 |
+| `lct user enable [почта]`          | то же                                                                                                                                                                |
+| `lct user password [почта]`        | `--password` нового пароля, 8–200 символов                                                                                                                           |
+| `lct user revoke-sessions [почта]` | завершает сессии                                                                                                                                                     |
+| `lct user admin [почта]`           | записывает администратора в `.env`; `--name`, `--password`. Новый пароль начинает действовать после перезапуска API; если API уже запущен, команда перезапускает его |
 
 ```bash title="terminal.sh"
 lct user add colleague@example.com \

@@ -21,7 +21,7 @@
 3. Поставить внутреннюю ссылку вида `/docs/<раздел>/<имя>/`.
 4. Если приложение должно уметь перенаправить на эту страницу, добавить путь в `apps/web/src/lib/docs-portal.ts`. Путь вне списка не редиректится. `/api/docs` приложения не трогать.
 
-Компоненты статей подключены в `src/components/mdx.tsx` и показаны на `/docs/authors/components/`:
+Компоненты статей подключены в `src/components/mdx.tsx`:
 
 - примечания: `<Info>`, `<Tip>`, `<Warning>`, `<Limitation>`;
 - перенесённая и не перепроверенная статья начинается с `<ReviewNote />`;
@@ -29,7 +29,6 @@
 - вкладки: `<Tabs items={[...]}>` и `<Tab>`;
 - картинка с alt, подписью и увеличением: `<Figure src alt caption />`;
 - рамка под будущую запись: `<MediaSlot kind="video" title="..." />`;
-- консоль API: `<ApiConsole />` на странице `/docs/api/console/`;
 - подробности: `<Accordions>` и `<Accordion title="...">`;
 - код с именем файла: fenced-блок и `title="file.ts"`.
 

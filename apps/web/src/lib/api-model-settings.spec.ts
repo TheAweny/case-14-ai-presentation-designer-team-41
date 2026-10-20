@@ -33,14 +33,6 @@ describe('apiFetch on the server', () => {
     expect(init?.cache).toBe('no-store');
   });
 
-  it('sends an explicit session and skips the cookie when asked', async () => {
-    fetchMock.mockResolvedValue(Response.json({}));
-    await apiFetch('/auth/logout', { method: 'POST' }, { userId: null, sessionToken: 'sess' });
-    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
-    expect(headers.get('x-lct-session')).toBe('sess');
-    expect(headers.get(USER_HEADER)).toBeNull();
-  });
-
   it('gives the browser addresses behind the proxy, never the API itself', () => {
     expect(publicApiUrl('/generation/r1/artifacts/deck.pdf')).toBe(
       '/api/backend/generation/r1/artifacts/deck.pdf',

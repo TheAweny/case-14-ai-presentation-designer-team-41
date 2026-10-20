@@ -35,12 +35,6 @@ export interface ApiFetchOptions {
    * sign-in, which comes before a session.
    */
   readonly userId?: string | null;
-  /**
-   * Revocable session for `x-lct-session`. Left out, the cookie resolver supplies it.
-   * `null` sends none. The docs console passes the session it just checked, because that
-   * request has no `lct_session` cookie.
-   */
-  readonly sessionToken?: string | null;
 }
 
 type ActingUserResolver = () => Promise<string | null>;
@@ -83,12 +77,7 @@ export async function apiFetch(
   const sessionResolver = (globalThis as { [SESSION_RESOLVER]?: ActingUserResolver })[
     SESSION_RESOLVER
   ];
-  const session =
-    options.sessionToken !== undefined
-      ? options.sessionToken
-      : sessionResolver
-        ? await sessionResolver()
-        : null;
+  const session = sessionResolver ? await sessionResolver() : null;
   headers.delete('x-lct-session');
   if (session) headers.set('x-lct-session', session);
   return fetch(`${internalApiUrl()}${path}`, { ...init, headers, cache: 'no-store' });

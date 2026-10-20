@@ -33,13 +33,11 @@ export const config = {
   // Всё, кроме страницы входа, служебных файлов Next и статики из `public/`. И кроме прокси к API
   // (`app/api/backend`): через proxy Next пропускает только первые 10 МБ тела, а шаблон бывает
   // больше. Вход там проверяет сам маршрут и отвечает 401, а не уводом на страницу входа. Так же
-  // отвечает `api/service-status`: гостю — 401, а не страница входа вместо JSON. Консоль
-  // документации (`api/docs-playground`) тоже вне proxy: портал на другом хосте шлёт bearer,
-  // а не cookie, и загружает файлы. Описание API (`api/docs`, `api/docs-json`) открыто всем
-  // только при API_DOCS_ENABLED=true.
+  // отвечает `api/service-status`: гостю — 401, а не страница входа вместо JSON. Описание API
+  // (`api/docs`, `api/docs-json`) открыто всем только при API_DOCS_ENABLED=true.
   matcher: [
     '/api/docs/:path*',
     '/api/docs-json/:path*',
-    '/((?!login|api/backend/|api/docs-playground/|api/service-status|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpe?g|webp|ico|woff2?|ttf)$).*)',
+    '/((?!login|api/backend/|api/service-status|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpe?g|webp|ico|woff2?|ttf)$).*)',
   ],
 };

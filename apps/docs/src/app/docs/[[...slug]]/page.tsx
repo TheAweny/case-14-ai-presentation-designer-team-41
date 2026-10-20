@@ -26,9 +26,8 @@ export default async function Page(props: { params: Promise<{ slug?: string[] }>
   }
 
   const MDX = page.data.body;
-  const wide = page.url.replace(/\/$/, '') === '/docs/api/console';
   return (
-    <DocsPage toc={wide ? [] : page.data.toc} full={wide} tableOfContent={{ enabled: !wide }}>
+    <DocsPage toc={page.data.toc}>
       <div id="content">
         <DocsTitle>{page.data.title}</DocsTitle>
         <DocsDescription>{page.data.description}</DocsDescription>

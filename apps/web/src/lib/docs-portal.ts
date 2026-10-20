@@ -32,7 +32,6 @@ export const DOCS_PORTAL_PATHS = [
   '/docs/developers/contracts',
   '/docs/api',
   '/docs/api/access',
-  '/docs/api/console',
   '/docs/api/reference',
   '/docs/api/reference/generation',
   '/docs/api/reference/editor',
@@ -46,9 +45,6 @@ export const DOCS_PORTAL_PATHS = [
   '/docs/api/reference/health',
   '/docs/api/reference/schemas',
   '/docs/troubleshooting',
-  '/docs/authors',
-  '/docs/authors/markdown',
-  '/docs/authors/components',
 ] as const;
 
 const PAGES = new Set<string>(DOCS_PORTAL_PATHS);

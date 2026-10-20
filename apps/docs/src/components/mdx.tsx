@@ -6,7 +6,6 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { MDXComponents } from 'mdx/types';
 import type { ReactNode } from 'react';
-import { ApiConsole } from '@/components/api-console-frame';
 import { MediaSlot } from '@/components/media-slot';
 
 function Note({
@@ -95,17 +94,11 @@ export function Figure({
   );
 }
 
-/** Keeps the dynamic Swagger import assignable to an MDX component. */
-function ApiConsoleMdx() {
-  return <ApiConsole />;
-}
-
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
     Accordion,
     Accordions,
-    ApiConsole: ApiConsoleMdx,
     Figure,
     Info,
     MediaSlot,
