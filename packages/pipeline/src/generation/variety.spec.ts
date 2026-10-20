@@ -111,16 +111,17 @@ describe('diversifyPlan', () => {
     expect(moved.map((m) => m.to).sort()).toEqual(['B', 'C']);
   });
 
-  it('alternates rather than repeat a layout next to itself when the template is poor', () => {
+  it('reports repeated layouts when the alternative changes the number of content blocks', () => {
     const poor = [pattern('cover', 1), pattern('A', 3), pattern('far', 8)];
-    const { slides } = diversifyPlan(
+    const { slides, repeated } = diversifyPlan(
       plan(['cover', 'A', 'A', 'A', 'A']),
       poor,
       new Map([['cover', note('cover')]]),
       options,
     );
     const ids = slides.map((s) => s.patternId);
-    expect(ids.some((id, i) => i >= 1 && ids[i - 1] === id)).toBe(false);
+    expect(ids).toEqual(['cover', 'A', 'A', 'A', 'A']);
+    expect(repeated.map((entry) => entry.index)).toEqual([2, 3, 4]);
   });
 
   it('says so, and keeps the layout, when the template has nothing else at all', () => {
@@ -148,16 +149,14 @@ describe('diversifyPlan', () => {
     expect(ids[3]).not.toBe('needs-data');
   });
 
-  it('moves a slide off a layout next to itself even when that drops its chart', () => {
-    const { slides, repeated, forced } = diversifyPlan(plan(['cover', 'A', 'A']), catalog, notes, {
+  it('keeps a repeated chart layout when every other layout would drop its visual', () => {
+    const { slides, repeated } = diversifyPlan(plan(['cover', 'A', 'A']), catalog, notes, {
       ...options,
       compatible: () => false,
     });
     const ids = slides.map((s) => s.patternId);
-    expect(ids[2]).not.toBe('A');
-    expect(['needs-data', 'code', 'cover']).not.toContain(ids[2]);
-    expect(forced).toEqual([2]);
-    expect(repeated).toEqual([]);
+    expect(ids).toEqual(['cover', 'A', 'A']);
+    expect(repeated).toEqual([{ index: 2, patternId: 'A' }]);
   });
 
   it('keeps a repeat that is not next to itself when only an incompatible layout is free', () => {

@@ -1,5 +1,5 @@
 /**
- * Copy for a slide whose writer did not answer in time: the plan's own words, cut to each box.
+ * Copy for a slide whose writer did not answer in time: the plan's own words within each box.
  * No model is asked, so it is ready at once. The slide says what the plan says it must say; the
  * audit and the review warning tell the person it was not written by the model.
  */
@@ -81,15 +81,24 @@ export function fallbackTexts(
     ...claims.filter((claim) => claim.length > room),
   ];
   if (lines.length < body.length && source.purpose.trim()) lines.push(source.purpose.trim());
+  const remaining = [...lines];
   body.forEach((slot, index) => {
-    const isLast = index === body.length - 1;
-    // Claims beyond the last box go into it, one a line: a fact is cut short, never dropped.
-    const text = isLast ? lines.slice(index).join('\n') : (lines[index] ?? '');
-    texts[slot.slotId] = text
-      .split('\n')
-      .map((line) => clip(line, slot.fitChars, slot))
-      .filter(Boolean)
-      .join('\n');
+    const chosen: string[] = [];
+    let available = slot.fitChars;
+    // Keep complete claims: clipping a condition or negation can reverse what a fact says.
+    // Overflow facts stay in the slide notes and remain missing-content findings for the audit.
+    for (let at = 0; at < remaining.length;) {
+      const line = remaining[at];
+      if (!line || line.length > available || tearsAWord(line, slot)) {
+        at++;
+        continue;
+      }
+      chosen.push(line);
+      available -= line.length + 1;
+      remaining.splice(at, 1);
+      if (index < body.length - 1) break;
+    }
+    texts[slot.slotId] = chosen.join('\n');
   });
   return texts;
 }

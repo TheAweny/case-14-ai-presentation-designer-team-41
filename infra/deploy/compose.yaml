@@ -95,6 +95,8 @@ services:
       API_INTERNAL_URL: http://api:3001
       API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:?required}
       AUTH_SECRET: ${AUTH_SECRET:?required}
+      # Next sees the Docker service origin behind nginx; mutations trust the public URL.
+      APP_ORIGIN: ${APP_ORIGIN:-https://lct.aweny.link}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
     ports: ['127.0.0.1:3000:3000']
     healthcheck:

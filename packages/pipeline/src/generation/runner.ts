@@ -692,10 +692,12 @@ export async function generatePresentation(options: GenerateOptions) {
         return result;
       } catch (error) {
         auditSignal.throwIfAborted();
-        if (!(error instanceof ModelAnswerValidationError)) throw error;
+        if (!degradable(error)) throw error;
         semanticStatus.available = false;
         const message =
-          'Ответ смыслового критика не прошёл проверку. Сохранённый вариант продолжает аудит и экспорт; смысловая проверка остаётся неизвестной.';
+          error instanceof ModelAnswerValidationError
+            ? 'Ответ смыслового критика не прошёл проверку. Сохранённый вариант продолжает аудит и экспорт; смысловая проверка остаётся неизвестной.'
+            : `Смысловой критик недоступен (${errorText(error)}). Проверка геометрии и исправления продолжаются; смысловая проверка остаётся неизвестной.`;
         reviewWarnings.push(message);
         await warn(message);
         return critiqueSchema.parse({ issues: [] });

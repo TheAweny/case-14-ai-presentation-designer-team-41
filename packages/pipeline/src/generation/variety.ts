@@ -46,8 +46,6 @@ export interface VarietyResult<S extends PlanSlide> {
   readonly moved: { index: number; from: string; to: string }[];
   /** Slides left on a layout used too often: the template holds no other that carries their points. */
   readonly repeated: { index: number; patternId: string }[];
-  /** Slides moved off a layout repeated next to itself onto one that drops their chart. */
-  readonly forced: number[];
 }
 
 /** Kinds that frame a deck rather than carry its points. */
@@ -76,7 +74,6 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
   const result = [...slides];
   const moved: VarietyResult<S>['moved'] = [];
   const repeated: VarietyResult<S>['repeated'] = [];
-  const forced: number[] = [];
   const used = new Map<string, number>();
   const use = (id: string) => used.set(id, (used.get(id) ?? 0) + 1);
 
@@ -128,23 +125,8 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
               : Math.abs(capacity(a) - capacity(planned)) -
                 Math.abs(capacity(b) - capacity(planned))),
       );
-    // Two slides running on one layout is never acceptable: with no layout that keeps the
-    // slide's chart, it moves to any free layout with room for its points, and its takeaway text
-    // carries the point the chart made.
-    const forcedChoice =
-      !choices[0] && adjacent
-        ? free
-            .filter((pattern) => pattern.patternId !== id && pattern.patternId !== before)
-            .filter((pattern) => !beforePattern || structure(pattern) !== structure(beforePattern))
-            .filter((pattern) => blocks(pattern) > 0)
-            .sort(
-              (a, b) =>
-                (used.get(a.patternId) ?? 0) - (used.get(b.patternId) ?? 0) ||
-                Math.abs(blocks(a) - wanted) - Math.abs(blocks(b) - wanted),
-            )[0]
-        : undefined;
-    const choice = choices[0] ?? forcedChoice;
-    if (forcedChoice && choice === forcedChoice) forced.push(index);
+    // A repeated layout is preferable to losing its chart or moving to unrelated content blocks.
+    const choice = choices[0];
     if (!choice) {
       if (mustMove) repeated.push({ index, patternId: id });
       use(id);
@@ -154,5 +136,5 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
     moved.push({ index, from: id, to: choice.patternId });
     use(choice.patternId);
   });
-  return { slides: result, moved, repeated, forced };
+  return { slides: result, moved, repeated };
 }

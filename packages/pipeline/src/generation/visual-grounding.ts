@@ -96,7 +96,7 @@ interface SeriesLine {
  * category. Every entry of a line must parse, or the line proves nothing.
  */
 function seriesLines(text: string): SeriesLine[] {
-  const entry = new RegExp(`^(.+?) — (${NUMBER})$`, 'u');
+  const entry = new RegExp(`^(.+?) — (${NUMBER})(%)?$`, 'u');
   const result: SeriesLine[] = [];
   let grouping = '';
   for (const line of text.split(/\r?\n/u)) {
@@ -116,7 +116,7 @@ function seriesLines(text: string): SeriesLine[] {
       facts: parsed.map((part) => ({
         metric,
         category: (part?.[1] ?? '').trim(),
-        unit: '',
+        unit: part?.[3] ?? '',
         state: 'present' as const,
         value: number(part?.[2] ?? ''),
         literal: part?.[2] ?? '',
@@ -186,7 +186,7 @@ export function plannedSeriesChart(
       categories: best.line.facts.map((fact) => fact.category),
       series: [{ name: best.line.metric, values }],
       xTitle: best.line.grouping,
-      yTitle: '',
+      yTitle: best.line.facts[0]?.unit ?? '',
     },
     brief,
   );

@@ -463,16 +463,22 @@ export type CompositionCritique = z.infer<typeof compositionCritiqueSchema>;
 /**
  * Human labels of a data file's columns, written once when the file is prepared: what a chart
  * and the brief call a column and each value of a coded one. The original column name stays the
- * key, so every label still points at the cells it stands for. Model-only answer.
+ * opaque sheet/column identity stays the key, so labels point at real cells. Model-only answer.
  */
 export const datasetLabelsSchema = z.object({
   columns: z
     .array(
       z.object({
-        column: z.string().min(1).max(200),
+        column: z.string().min(1).max(1000),
         label: z.string().min(1).max(80),
         values: z
-          .array(z.object({ value: z.string().min(1).max(100), label: z.string().min(1).max(60) }))
+          .array(
+            z.object({
+              value: z.string().min(1).max(100),
+              label: z.string().min(1).max(60),
+              evidence: z.string().max(300).optional(),
+            }),
+          )
           .max(20)
           .default([]),
       }),

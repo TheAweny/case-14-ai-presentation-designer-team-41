@@ -1348,6 +1348,10 @@ function slotCorrections(
 /** A timeout on the process clock (setTimeout), so a stage deadline and its tests share one. */
 function timeoutSignal(ms: number): AbortSignal {
   const stop = new AbortController();
+  if (ms <= 0) {
+    stop.abort(new DOMException('Planning or writing deadline exceeded.', 'TimeoutError'));
+    return stop.signal;
+  }
   const timer = setTimeout(
     () => stop.abort(new DOMException('Planning or writing deadline exceeded.', 'TimeoutError')),
     Math.max(0, Math.floor(ms)),
@@ -1701,8 +1705,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           // A replan writes more than the first plan, and a whole-deck writer about as much again:
           // measured on a 27B model, 3.5 first plans is what both need before the writers' end.
           const spare = writerTimeLeft() - 3.5 * firstPlanMs;
-          if (Object.keys(hard).length) result = await plan(corrections, result);
-          else if (spare > 0) {
+          if (Object.keys(hard).length) {
+            try {
+              result = await plan(corrections, result, plannerSignal());
+            } catch (error) {
+              deps.signal.throwIfAborted();
+              if (!(error instanceof z.ZodError) && !degradable(error)) throw error;
+              result = await planWithoutModel(error);
+            }
+          } else if (spare > 0) {
             const replanSignal =
               spare === Number.POSITIVE_INFINITY
                 ? deps.signal
@@ -1725,7 +1736,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           }
         }
         if (slideCount !== null && result.slides.length !== slideCount)
-          throw new Error('Planner returned the wrong slide count.');
+          result = await planWithoutModel(new Error('Planner returned the wrong slide count.'));
         // A plan still without a cover gets one by code: the deck opens on the template's cover
         // rather than failing, or a content layout standing in for it.
         if (coverCorrections(result) && covers[0])
@@ -1843,8 +1854,6 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         },
       );
       const layouts = diversified.slides.map((slide) => slide.patternId);
-      // A slide moved off a layout repeated next to itself stays moved, without its chart.
-      const forcedMoves = new Set(diversified.forced);
       // A validated QR binding remains on its original composition in all three variants.
       result.slides.forEach((slide, index) => {
         if (slide.qrRequests?.length) layouts[index] = slide.patternId;
@@ -1875,7 +1884,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         const canonicalComposition = compositions.find((p) => p.patternId === slide.patternId);
         let composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
-        if (canonicalComposition && !forcedMoves.has(index)) {
+        if (canonicalComposition) {
           // A deterministic one-to-one mapping cannot drop a mandatory fact. A poorer template
           // keeps its original composition instead of discarding or inventing content blocks.
           if (
@@ -2114,7 +2123,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             claims: inputData.requiredClaims.map((claim) => claim.text),
           }),
           visual: null,
-          speakerNotes: inputData.purpose,
+          speakerNotes: [inputData.purpose, ...inputData.requiredClaims.map((claim) => claim.text)]
+            .filter((text, index, all) => all.indexOf(text) === index)
+            .join('\n'),
         };
       };
       /** A per-slide writer needs this much of the writers' time to be worth asking. */

@@ -56,4 +56,22 @@ describe('copy taken from the plan when no writer answered', () => {
     });
     expect(texts.a?.split('\n')[0]).toBe('Короткий вывод');
   });
+
+  it('bounds the total copy in the last box, including separators', () => {
+    const texts = fallbackTexts([{ slotId: 'a', role: 'body', fitChars: 30 }], {
+      purpose: '',
+      claims: ['Pilot saves 12 mln', 'Answer time is 40 s', 'Satisfaction is 82%'],
+    });
+    expect(texts.a).toBe('Pilot saves 12 mln');
+    expect(texts.a?.length).toBeLessThanOrEqual(30);
+  });
+
+  it('does not strip a condition from a claim that cannot fit whole', () => {
+    const texts = fallbackTexts([{ slotId: 'a', role: 'body', fitChars: 30 }], {
+      purpose: '',
+      claims: ['Pilot saves 12 mln only if 8 regions participate', 'Answer time is 40 s'],
+    });
+    expect(texts.a).toBe('Answer time is 40 s');
+    expect(texts.a).not.toContain('Pilot saves 12 mln');
+  });
 });

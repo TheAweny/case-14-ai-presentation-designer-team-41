@@ -30,8 +30,9 @@ import {
   labelDataset,
   SharedPlan,
   anthropicTransport,
+  dependencyKey,
 } from '@lct/pipeline';
-import { loadAnswerFormat } from '@lct/registry';
+import { loadAgent, loadAnswerFormat } from '@lct/registry';
 import { BrandbookPictures, brandPictures } from './brand-pictures.js';
 import { datasetsOf, readMaterial } from './material.js';
 import { repoRoot } from './setup/stack.js';
@@ -286,8 +287,17 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
   // Columns get human names once per file, before the five minutes start; a failure keeps the
   // file's own names. The labels are kept next to the template index, by the file's hash.
   const labelsDir = join(resolve(config.outputDir), '.data-labels');
+  const labelsBrief = [config.goal, config.audience].filter(Boolean).join('\n');
+  const labelsAgent = await loadAgent(join(registryDir, 'data-labeler'));
+  const labelRevision = dependencyKey({
+    agent: labelsAgent.config,
+    instructions: labelsAgent.instructions,
+    brief: labelsBrief,
+    model: connection.model,
+    baseUrl: connection.baseUrl,
+  });
   const label = async (dataset: Dataset): Promise<DatasetLabels | null> => {
-    const path = join(labelsDir, `${dataset.source.sha256}.json`);
+    const path = join(labelsDir, `${dataset.source.sha256}-${labelRevision}.json`);
     const cached = await readFile(path, 'utf8')
       .then((text) => datasetLabelsSchema.parse(JSON.parse(text)))
       .catch(() => null);
@@ -297,11 +307,15 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
       provider,
       registryDir,
       dataset,
-      brief: [config.goal, config.audience].filter(Boolean).join('\n'),
+      brief: labelsBrief,
     });
     if (labels) {
-      await mkdir(labelsDir, { recursive: true });
-      await writeFile(path, JSON.stringify(labels, null, 2));
+      try {
+        await mkdir(labelsDir, { recursive: true });
+        await writeFile(path, JSON.stringify(labels, null, 2));
+      } catch {
+        log('  ! кеш подписей недоступен, использую подписи в текущем запуске');
+      }
     } else log('  ! столбцы не подписаны, остаются имена из файла');
     return labels;
   };

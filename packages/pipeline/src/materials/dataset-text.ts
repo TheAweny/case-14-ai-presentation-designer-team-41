@@ -1,4 +1,5 @@
 import type { Dataset, DatasetLabels } from '@lct/contracts';
+import { datasetColumnKey } from './dataset-labels.js';
 
 type Sheet = Dataset['sheets'][number];
 type Cell = Sheet['rows'][number]['cells'][number];
@@ -72,9 +73,8 @@ export function datasetText(dataset: Dataset, labels?: DatasetLabels | null): st
   const parts = [`Данные из файла «${dataset.source.fileName}».`];
   const general = notes(dataset.diagnostics.filter((item) => !item.sheet));
   if (general) parts.push(`При чтении: ${general}.`);
-  const named = labelsOf(labels);
   for (const sheet of dataset.sheets)
-    parts.push(sheetText(dataset, sheet, tableNumber(dataset), named));
+    parts.push(sheetText(dataset, sheet, tableNumber(dataset), labelsOf(labels, sheet)));
   return parts.join(NEWLINE + NEWLINE);
 }
 
@@ -87,7 +87,7 @@ interface Named {
   legend(headers: readonly string[]): string | null;
 }
 
-function labelsOf(labels?: DatasetLabels | null): Named {
+function labelsOf(labels?: DatasetLabels | null, sheet?: Sheet): Named {
   // A label must not break the lines it sits in: «name: a — 1, b — 2.» is read back by code.
   const safe = (text: string, commas: boolean) =>
     text
@@ -95,7 +95,19 @@ function labelsOf(labels?: DatasetLabels | null): Named {
       .replace(/\s+—\s+/gu, ' - ')
       .replace(/\s+/gu, ' ')
       .trim();
-  const columns = new Map((labels?.columns ?? []).map((entry) => [entry.column, entry]));
+  const columns = new Map(
+    (sheet?.columns ?? []).flatMap((column) => {
+      if (
+        sheet?.columns.filter(
+          (other) => (other.header ?? other.ref) === (column.header ?? column.ref),
+        ).length !== 1
+      )
+        return [];
+      const key = datasetColumnKey(sheet?.sheetId ?? '', column.columnId);
+      const matches = labels?.columns.filter((entry) => entry.column === key) ?? [];
+      return matches.length === 1 ? ([[column.header ?? column.ref, matches[0]]] as const) : [];
+    }),
+  );
   const label = (header: string) => safe(columns.get(header)?.label ?? '', true) || header;
   return {
     column: label,
@@ -296,7 +308,10 @@ function summary(
       const counts = new Map<string, number>();
       for (const cell of cells) {
         if (cell.kind === 'empty') continue;
-        const text = cellText(cell, spreadsheet);
+        const text = named.value(
+          column.header ?? column.ref,
+          cell.raw ?? cellText(cell, spreadsheet),
+        );
         counts.set(text, (counts.get(text) ?? 0) + 1);
       }
       const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru'));
@@ -375,16 +390,38 @@ function chartSeries(
       groupings.push({
         index,
         label: (cell) =>
-          typeof cell.value === 'number' ? named.value(header(index), figure(cell.value)) : null,
+          typeof cell.value === 'number'
+            ? named.value(header(index), cell.raw ?? figure(cell.value))
+            : null,
       });
   });
 
   for (const grouping of groupings.slice(0, 2)) {
+    // Group by source values, never by model captions: identical labels cannot merge source rows.
+    const originals = new Map<string, string>();
+    const captions = new Map<string, string>();
+    for (const row of rows) {
+      const cell = row.cells[grouping.index];
+      if (!cell || cell.kind === 'empty') continue;
+      const raw = cell.raw ?? cellText(cell, spreadsheet);
+      const caption = grouping.label(cell);
+      if (caption === null) continue;
+      originals.set(raw, caption);
+    }
+    for (const [raw, caption] of originals) {
+      captions.set(
+        raw,
+        [...originals.values()].filter((value) => value === caption).length > 1
+          ? `${caption} (${raw})`
+          : caption,
+      );
+    }
     const keys: string[] = [];
     const members = new Map<string, Sheet['rows']>();
     for (const row of rows) {
       const cell = row.cells[grouping.index];
-      const key = cell ? grouping.label(cell) : null;
+      const raw = cell?.raw ?? (cell ? cellText(cell, spreadsheet) : '');
+      const key = cell && grouping.label(cell) !== null ? raw : null;
       if (key === null) continue;
       if (!members.has(key)) {
         keys.push(key);
@@ -393,7 +430,7 @@ function chartSeries(
       members.get(key)?.push(row);
     }
     const lines: string[] = [
-      `- ${named.rows}: ${keys.map((key) => `${key} — ${members.get(key)?.length ?? 0}`).join(', ')}.`,
+      `- ${named.rows}: ${keys.map((key) => `${captions.get(key) ?? key} — ${members.get(key)?.length ?? 0}`).join(', ')}.`,
     ];
     sheet.columns.forEach((column, index) => {
       if (index === grouping.index || column.kind !== 'number' || lines.length >= SERIES_LINES)
@@ -431,8 +468,8 @@ function chartSeries(
           keys
             .map((key, at) =>
               per[at] === null
-                ? `${key} — нет данных`
-                : `${key} — ${figure(per[at] as number)}${unit}`,
+                ? `${captions.get(key) ?? key} — нет данных`
+                : `${captions.get(key) ?? key} — ${figure(per[at] as number)}${unit}`,
             )
             .join(', ') +
           '.',

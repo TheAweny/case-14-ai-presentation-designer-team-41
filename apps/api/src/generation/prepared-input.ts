@@ -42,6 +42,7 @@ export function preparedInputDependency(registry: unknown, input: PreparedGenera
           preparation: {
             version: 1,
             datasets: input.preparedDatasets,
+            brief: input.brief,
             sources: input.materials.map((material) => ({
               sourceId: material.source.sourceId,
               sha256: material.sourceSha256,
@@ -125,13 +126,16 @@ export async function prepareGenerationInput(options: {
         throw new BadRequestException('Typed dataset extraction is unavailable.');
       // A singleton call preserves sequential file processing even when the pipeline helper
       // supports batches. No extra provider requests or parallel engine calls are introduced.
-      const datasets = await prepareDatasets(
-        {
-          extractDataset: (request, signal) => extractDataset.call(options.engine, request, signal),
-        },
-        [source.path],
-        options.signal,
-      );
+      const datasets = material.dataset
+        ? [material.dataset]
+        : await prepareDatasets(
+            {
+              extractDataset: (request, signal) =>
+                extractDataset.call(options.engine, request, signal),
+            },
+            [source.path],
+            options.signal,
+          );
       await check();
       for (const input of datasets) {
         const dataset = datasetSchema.parse(input);

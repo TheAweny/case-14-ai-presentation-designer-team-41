@@ -65,7 +65,7 @@ import {
 } from '@lct/pipeline';
 import { buildStopReason, openBuildBudget, openPreparation, waitForBuild } from './build-budget.js';
 import { effectiveModelPlan } from './model-plan.js';
-import { loadAnswerFormat } from '@lct/registry';
+import { loadAgent, loadAnswerFormat } from '@lct/registry';
 import {
   GenerationBuildStore,
   AccountUsageStore,
@@ -347,12 +347,14 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * keeps the file's own column names.
    */
   private datasetLabeler(model: ModelRef | null, account: Account, brief: string): DatasetLabeler {
-    return async (dataset, signal) => {
+    const registryDir = this.registryDir();
+    const resolvedModel = (async () =>
+      (await this.models.resolveRole('planner', actorOf(account))) ??
+      (await this.models.resolve(model, actorOf(account))))();
+    void resolvedModel.catch(() => undefined);
+    const labeler: DatasetLabeler = async (dataset, signal) => {
       try {
-        const registryDir = this.registryDir();
-        const resolved =
-          (await this.models.resolveRole('planner', actorOf(account))) ??
-          (await this.models.resolve(model, actorOf(account)));
+        const resolved = await resolvedModel;
         const provider = new GenerationProvider({
           apiKey: resolved.apiKey,
           baseUrl: resolved.baseUrl,
@@ -386,6 +388,20 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         return null;
       }
     };
+    return Object.assign(labeler, {
+      cacheKey: Promise.all([loadAgent(join(registryDir, 'data-labeler')), resolvedModel])
+        .then(([agent, resolved]) =>
+          dependencyKey({
+            agent: agent.config,
+            instructions: agent.instructions,
+            brief,
+            model: resolved.model,
+            baseUrl: resolved.baseUrl,
+            account: account.id,
+          }),
+        )
+        .catch(() => dependencyKey({ labeler: 'unavailable', brief, model, account: account.id })),
+    });
   }
 
   /**

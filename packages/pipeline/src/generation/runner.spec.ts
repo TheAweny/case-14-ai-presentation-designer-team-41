@@ -231,7 +231,9 @@ async function exercise(
       if (String(url).endsWith('/composition-check')) {
         checks++;
         const findings =
-          mode === 'unfixable' || mode === 'torn-word' || (mode === 'repair' && checks === 1)
+          mode === 'unfixable' ||
+          mode === 'torn-word' ||
+          ((mode === 'repair' || mode === 'critic-down') && checks === 1)
             ? [
                 {
                   slideIndex: 0,
@@ -542,11 +544,15 @@ describe('real generation orchestration with offline dependencies', () => {
       true,
     );
   });
-  it('finishes the variant when the provider fails the critic', async () => {
+  it('still repairs deterministic overflow when the provider fails the critic', async () => {
     const run = await exercise('critic-down');
     await run.result;
     expect(run.events.at(-1)).toBe('done');
     expect(run.counters().exports).toBeGreaterThan(0);
+    expect(run.counters().repairs).toBeGreaterThan(0);
+    expect(run.warnings.some((warning) => warning.message.includes('критик недоступен'))).toBe(
+      true,
+    );
     const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
     expect(review.status).toBe('unknown');
   });

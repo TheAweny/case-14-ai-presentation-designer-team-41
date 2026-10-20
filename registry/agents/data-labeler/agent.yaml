@@ -1,7 +1,7 @@
 # Names the columns of an uploaded data file for people, once, while the file is prepared. Runs
 # outside the timed generation stage; its labels are cached with the prepared material.
 id: data-labeler
-version: 1.0.0
+version: 1.1.0
 description: Gives each data column and coded value a human Russian label for charts and the brief.
 modelId: planner-default
 generation:
