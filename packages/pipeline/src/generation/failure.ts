@@ -1,12 +1,16 @@
 import { modelFailureSchema, type JobErrorCode } from '@lct/contracts';
 import { ModelRequestError } from '../chat/model-failure.js';
 import { EngineHttpError } from '@lct/engine-client';
+import { ModelAnswerValidationError } from './provider.js';
 
 /** Public failure is separate from the technical diagnostic saved beside the run. */
 export function generationFailure(
   error: unknown,
   signal: AbortSignal,
 ): { code: JobErrorCode; message: string; retryable: boolean } {
+  // The engine answered with an error: that is the cause, even when the deadline passed while
+  // the request was out. Calling it a timeout would send the person to wait instead of to the engine.
+  if (error instanceof EngineHttpError) return engineFailure(error);
   if (signal.aborted) {
     const reason = signal.reason as { name?: string } | undefined;
     if (reason?.name === 'TimeoutError' || reason?.name === 'BuildDeadlineError')
@@ -94,16 +98,6 @@ export function generationFailure(
         'Исчерпан согласованный лимит запросов или токенов. Сохранённые результаты доступны; продолжение сохраняет накопленный расход.',
       retryable: false,
     };
-  if (error instanceof EngineHttpError)
-    return {
-      code:
-        error.path.includes('export') || error.path.includes('composition-decks')
-          ? 'export-failed'
-          : 'engine-failed',
-      message:
-        'Движок не завершил сборку файла. Продолжите с сохранённых задач после проверки движка.',
-      retryable: true,
-    };
   if (named?.requiresReview)
     return {
       code: 'quality-blocked',
@@ -140,4 +134,31 @@ export function generationFailure(
       'Не удалось завершить сборку. Сохранённые результаты можно использовать при продолжении.',
     retryable: true,
   };
+}
+
+function engineFailure(error: EngineHttpError) {
+  return {
+    code: (error.path.includes('export') || error.path.includes('composition-decks')
+      ? 'export-failed'
+      : 'engine-failed') as JobErrorCode,
+    message:
+      'Движок не завершил сборку файла. Продолжите с сохранённых задач после проверки движка.',
+    retryable: true,
+  };
+}
+
+/**
+ * A model call that failed on the provider's side (an HTTP error after its retries, a timeout,
+ * a dropped connection, an answer still unusable after repair). The round it was for is skipped
+ * and the variant goes on; a failure of our own state is not one of these and stays fatal.
+ */
+export function degradable(error: unknown): boolean {
+  if (error instanceof ModelRequestError || error instanceof ModelAnswerValidationError)
+    return true;
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return true;
+  return /^(Model returned empty or truncated JSON|Semantic attempt limit|Model API HTTP)/.test(
+    error.message,
+  );
 }

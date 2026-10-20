@@ -49,7 +49,7 @@ import { type Illustration, saveIllustration, type SharedIllustrations } from '.
 import { assessLayoutDiversity } from './layout-diversity.js';
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
-import { generationFailure } from './failure.js';
+import { degradable, generationFailure } from './failure.js';
 import { compositionSemantics } from './semantics.js';
 import { loadWriterModules } from './writer-prompt.js';
 import { readRuntimeLimits, loadRuntimeAgent, withRuntimeLimits } from '../runtime-limits.js';
@@ -139,6 +139,16 @@ export interface GenerateOptions {
 
 /** Time unavailable to writers and repairs: reserved for export, render and final audit. */
 const EXPORT_RESERVE_MS = 60_000;
+/**
+ * Time between the writers' end and the content deadline: one fit check and one critic round.
+ * A writer still out then is given up and its slides take their copy from the plan.
+ */
+const WRITER_RESERVE_MS = 15_000;
+/**
+ * What the writers keep after the plan: a whole-deck writer of a 27B model wrote three thousand
+ * tokens in about 80 s. A planner still out then is given up for a plan made from the brief.
+ */
+const WRITERS_MIN_MS = 85_000;
 /** The run's own deadline, under the five minutes the three variants share. */
 /** Time left for the manifest and the end of the run once the pictures of the slides are read. */
 const REVIEW_RESERVE_MS = 12_000;
@@ -229,6 +239,10 @@ export function boundedGenerationProvider(provider: TextProvider): TextProvider 
       return provider.generate(agent, instructions, input, schema, signal);
     },
   };
+}
+
+function errorText(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 200);
 }
 
 export class ContentFitError extends Error {
@@ -422,6 +436,8 @@ export async function generatePresentation(options: GenerateOptions) {
         qrImages = assets.images;
       },
       signal: contentSignal,
+      writerDeadlineAt: contentDeadlineAt - WRITER_RESERVE_MS,
+      plannerDeadlineAt: contentDeadlineAt - WRITER_RESERVE_MS - WRITERS_MIN_MS,
       concurrency: limits.generationConcurrency,
       ...(options.notes ? { notes: options.notes } : {}),
       onProgress: async (done, total) =>
@@ -848,9 +864,12 @@ export async function generatePresentation(options: GenerateOptions) {
         }
       } catch (error) {
         signal.throwIfAborted();
-        if (!contentSignal.aborted) throw error;
-        const message =
-          'Время исправлений исчерпано. Сохранённый текст передан на экспорт и итоговую проверку.';
+        // A critic or a rewriter that the provider failed (timeout, 5xx, a dropped connection)
+        // costs this round, not the variant: the written copy goes on to the export.
+        if (!contentSignal.aborted && !degradable(error)) throw error;
+        const message = contentSignal.aborted
+          ? 'Время исправлений исчерпано. Сохранённый текст передан на экспорт и итоговую проверку.'
+          : `Исправления остановлены: модель не ответила (${errorText(error)}). Сохранённый текст передан на экспорт.`;
         reviewWarnings.push(message);
         await warn(message);
         break;
@@ -924,7 +943,29 @@ export async function generatePresentation(options: GenerateOptions) {
     // The written file goes through the deterministic audit. Problems in a slot's copy that a
     // rewrite can fix (filler text, overlong bullets, too many points) go back to the slot
     // rewriter once, then the deck is written and audited again. The report is kept either way.
-    let report = await options.engine.auditCompositions(exportRequest(), signal);
+    // The deck is written: an audit the engine could not run leaves it unaudited, not lost.
+    const auditDeck = async (): Promise<Awaited<ReturnType<EngineClient['auditCompositions']>>> => {
+      try {
+        return await options.engine.auditCompositions(exportRequest(), signal);
+      } catch (error) {
+        signal.throwIfAborted();
+        const message = `Проверка файла не выполнена (${errorText(error)}). Требуется проверка.`;
+        reviewWarnings.push(message);
+        await warn(message);
+        return {
+          schemaVersion: 1,
+          deckId: options.runId,
+          profile: 'composition',
+          passed: false,
+          score: 0,
+          slideCount: written.length,
+          counts: { blocker: 0, major: 0, minor: 0, info: 0 },
+          categories: [],
+          findings: [],
+        };
+      }
+    };
+    let report = await auditDeck();
     // The picture of the slides is asked about as soon as the deck is written, so what it shows can
     // go to the rewriter with what the measuring audit found. A review that fails or does not fit
     // the time left never costs the variant; the user is told.
@@ -1072,7 +1113,7 @@ export async function generatePresentation(options: GenerateOptions) {
             }
             await settleFit();
             output = await options.engine.exportCompositions(exportRequest(), signal);
-            report = await options.engine.auditCompositions(exportRequest(), signal);
+            report = await auditDeck();
             // The slides that were rewritten are asked about again, from the new picture.
             const rewritten = new Set(tasks.map((task) => task.index + 1));
             if (contextual) {
@@ -1094,7 +1135,7 @@ export async function generatePresentation(options: GenerateOptions) {
           }
         } catch (error) {
           signal.throwIfAborted();
-          if (!contentSignal.aborted) throw error;
+          if (!contentSignal.aborted && !degradable(error)) throw error;
           await warn(
             'Дополнительное исправление остановлено для сохранения времени итоговой проверки.',
           );
@@ -1142,10 +1183,12 @@ export async function generatePresentation(options: GenerateOptions) {
       // The deck is written and measured: a semantic check that runs out of time leaves it
       // unreviewed, not lost. Only the run's own deadline or a cancel stops the variant.
       signal.throwIfAborted();
-      if (!finalAudit.signal.aborted) throw error;
+      if (!finalAudit.signal.aborted && !degradable(error)) throw error;
       semanticStatus.available = false;
       finalCritique = { coverage: [], issues: [] };
-      const message = 'Итоговая смысловая проверка не успела до конца сборки. Требуется проверка.';
+      const message = finalAudit.signal.aborted
+        ? 'Итоговая смысловая проверка не успела до конца сборки. Требуется проверка.'
+        : `Итоговая смысловая проверка не выполнена: модель не ответила (${errorText(error)}). Требуется проверка.`;
       reviewWarnings.push(message);
       await warn(message);
     } finally {

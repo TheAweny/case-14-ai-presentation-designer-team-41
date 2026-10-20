@@ -54,3 +54,17 @@ describe('generation failure classification', () => {
     expect(result.message).not.toMatch(/secret-key|private-model/);
   });
 });
+
+describe('an engine error after the deadline passed', () => {
+  it('is reported as the engine failure, not as a timeout', async () => {
+    const { EngineHttpError } = await import('@lct/engine-client');
+    const stop = new AbortController();
+    stop.abort(new DOMException('Stage deadline exceeded.', 'TimeoutError'));
+    expect(
+      generationFailure(
+        new EngineHttpError(500, '/v1/composition-decks', 'Internal Server Error'),
+        stop.signal,
+      ).code,
+    ).toBe('export-failed');
+  });
+});

@@ -368,3 +368,17 @@ def test_copy_that_fits_keeps_its_template_size(tmp_path: Path) -> None:
     scale, sizes, size = _export_body(tmp_path, "Выручка выросла на четверть за год")
     assert scale == 1
     assert sizes == {size}
+
+
+def test_shrinking_stops_at_a_readable_body_size() -> None:
+    from engine.layout.text_fit import least_scale
+
+    body = {"fontSize": 16.0, "maxLines": 6, "textWidthPt": 200, "textHeightPt": 40}
+    text = " ".join(["Выручка выросла на четверть за год"] * 30)
+    assert fitting_scale(text, body) == least_scale(body)
+    assert body["fontSize"] * fitting_scale(text, body) >= 12
+
+
+def test_a_template_slot_already_small_is_never_shrunk() -> None:
+    label = {"fontSize": 9.0, "maxLines": 1, "textWidthPt": 40, "textHeightPt": 12}
+    assert fitting_scale("Очень длинная подпись к карточке", label) == 1.0

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { SlotVisual } from '@lct/contracts';
-import { plannedSeriesChart, seriesFacts } from './visual-grounding.js';
+import {
+  chartedSeries,
+  plannedSeriesChart,
+  seriesFacts,
+  withDisplayLabels,
+} from './visual-grounding.js';
 import { groundedVisual } from './workflow.js';
 
 const brief = [
@@ -84,6 +89,38 @@ describe('ready series in the brief', () => {
       xTitle: 'result',
       yTitle: '',
     });
+  });
+
+  it('draws a series an earlier slide already charts only once', () => {
+    const purpose = 'При неудачах небо облачнее — cloud_cover, среднее: 0 — 43,33, 1 — 30,83';
+    const first = plannedSeriesChart(purpose, brief, 'body');
+    const series = chartedSeries(first);
+    expect(series).toBe('result|cloud_cover, среднее');
+    expect(plannedSeriesChart(purpose, brief, 'body', [series ?? ''])).toBeNull();
+  });
+
+  it('shows the writer labels over the column names when the values are the same', () => {
+    const planned = plannedSeriesChart(
+      'При неудачах небо облачнее — cloud_cover, среднее: 0 — 43,33, 1 — 30,83',
+      brief,
+      'body',
+    );
+    if (!planned) throw new Error('planned chart expected');
+    const offered = {
+      kind: 'chart',
+      categories: ['Неудача', 'Успех'],
+      series: [{ name: 'Средняя облачность, %', values: [43.33, 30.83] }],
+      xTitle: 'Исход наблюдения',
+      yTitle: '',
+    };
+    expect(withDisplayLabels(planned, offered)).toMatchObject({
+      categories: ['Неудача', 'Успех'],
+      series: [{ name: 'Средняя облачность, %', values: [43.33, 30.83] }],
+      xTitle: 'Исход наблюдения',
+    });
+    // Other figures lend no labels: the brief's chart stays as it was planned.
+    const wrong = { ...offered, series: [{ name: 'Облачность', values: [50, 30.83] }] };
+    expect(withDisplayLabels(planned, wrong)).toEqual(planned);
   });
 
   it('recognises a series by all its values when the purpose names no column', () => {

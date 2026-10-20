@@ -163,6 +163,67 @@ interface Completion {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
+interface CompletionChunk {
+  choices?: {
+    delta?: { content?: string | null; reasoning_content?: string | null; refusal?: string | null };
+    finish_reason?: string | null;
+  }[];
+  usage?: Completion['usage'];
+}
+
+/**
+ * The answer as one completion, whether the server streamed it or not. The deck is asked for as a
+ * stream because gateways cut a connection that stays silent for about fifty seconds, and a whole
+ * plan or deck takes longer than that to write; a server that ignores `stream` answers in one
+ * piece and is read as before.
+ */
+export async function readCompletion(response: Response): Promise<Completion> {
+  if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body)
+    return (await response.json()) as Completion;
+  let content = '';
+  let reasoning = '';
+  let refusal = '';
+  let finish: string | undefined;
+  let usage: Completion['usage'];
+  const take = (line: string) => {
+    if (!line.startsWith('data:')) return;
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') return;
+    let chunk: CompletionChunk;
+    try {
+      chunk = JSON.parse(data) as CompletionChunk;
+    } catch {
+      // A keep-alive or a vendor event that is not a completion chunk.
+      return;
+    }
+    const choice = chunk.choices?.[0];
+    content += choice?.delta?.content ?? '';
+    reasoning += choice?.delta?.reasoning_content ?? '';
+    refusal += choice?.delta?.refusal ?? '';
+    if (choice?.finish_reason) finish = choice.finish_reason;
+    if (chunk.usage) usage = chunk.usage;
+  };
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for await (const part of response.body as unknown as AsyncIterable<Uint8Array>) {
+    buffer += decoder.decode(part, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? '';
+    lines.forEach(take);
+  }
+  buffer += decoder.decode();
+  buffer.split(/\r?\n/).forEach(take);
+  return {
+    choices: [
+      {
+        message: { content, reasoning_content: reasoning, ...(refusal ? { refusal } : {}) },
+        ...(finish ? { finish_reason: finish } : {}),
+      },
+    ],
+    ...(usage ? { usage } : {}),
+  };
+}
+
 /**
  * Model requests at once for the whole process. Three variants of a deck are written in parallel,
  * so three slots made them three times slower; eight stays under the ten parallel requests Yandex
@@ -385,6 +446,16 @@ export function backoff(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/**
+ * OpenRouter's own switch for thinking. Its models think by default, and a deck asked of a
+ * thinking 27B model spent the whole five minutes on the plan; `reasoning.enabled: false` turns it
+ * off whatever the model behind the route (checked: 60 reasoning tokens before, 0 after).
+ */
+export function openRouterReasoning(host: string, thinking: boolean): Record<string, unknown> {
+  if (host !== 'openrouter.ai' && !host.endsWith('.openrouter.ai')) return {};
+  return thinking ? {} : { reasoning: { enabled: false } };
+}
+
 export class OpenAICompatibleProvider implements TextProvider {
   private readonly generation = new Map<string, AgentGeneration>();
 
@@ -512,8 +583,11 @@ export class OpenAICompatibleProvider implements TextProvider {
               redirect: 'error',
               signal: AbortSignal.any([
                 signal,
+                // A plan is as long as a whole deck: thousands of tokens at a few dozen a second.
                 AbortSignal.timeout(
-                  thinking || wholeDeck ? THINKING_TIMEOUT_MS : ANSWER_TIMEOUT_MS,
+                  thinking || wholeDeck || agent === 'planner'
+                    ? THINKING_TIMEOUT_MS
+                    : ANSWER_TIMEOUT_MS,
                 ),
               ]),
             },
@@ -524,7 +598,10 @@ export class OpenAICompatibleProvider implements TextProvider {
                 ? { temperature: generation?.temperature ?? 0.35, top_p: generation?.topP ?? 1 }
                 : {}),
               max_tokens: outputTokens(),
+              stream: true,
+              stream_options: { include_usage: true },
               ...reasoningFields,
+              ...openRouterReasoning(this.provider, thinking),
               response_format: {
                 type: 'json_schema',
                 json_schema: {
@@ -574,7 +651,7 @@ export class OpenAICompatibleProvider implements TextProvider {
             // request in the process backs off, not only this one.
             if (response.status !== 502) this.limiter.throttle(wait);
           } else {
-            const data = (await response.json()) as Completion;
+            const data = await readCompletion(response);
             const choice = data.choices?.[0];
             const content =
               typeof choice?.message?.content === 'string' ? choice.message.content : '';

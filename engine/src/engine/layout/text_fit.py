@@ -87,22 +87,40 @@ def broken_words(text: str, slot: dict[str, Any]) -> list[str]:
 #: as part of the same slide.
 _MIN_SCALE = 0.6
 
+#: The smallest type a reader takes in on a projected slide, in points: a paragraph slot (three
+#: lines or more) and a label. Copy is shortened rather than set below these; a template that
+#: itself sets a slot smaller keeps its own size and is never shrunk further.
+_MIN_BODY_PT = 12.0
+_MIN_LABEL_PT = 10.0
+
+
+def least_scale(slot: dict[str, Any]) -> float:
+    """The smallest share of the template font a slot may be set at, by scale and by points."""
+    size = float(slot.get("fontSize") or 0)
+    if size <= 0:
+        return 1.0
+    floor_pt = _MIN_BODY_PT if int(slot.get("maxLines") or 1) >= 3 else _MIN_LABEL_PT
+    return min(1.0, max(_MIN_SCALE, floor_pt / size))
+
 
 def fitting_scale(text: str, slot: dict[str, Any]) -> float:
     """The share of the template font at which copy fits its box, 1.0 when it already fits.
 
     Only for copy the rewriter could not shorten: shrinking it keeps the slide's other shapes
     clear, where overflowing copy would run over them. Tried in steps of 5% down to
-    `_MIN_SCALE`, which is also the answer when nothing fits.
+    `least_scale`, which is also the answer when nothing fits.
     """
     height = slot.get("textHeightPt")
-    for step in range(20, round(_MIN_SCALE * 20) - 1, -1):
+    least = least_scale(slot)
+    for step in range(20, 0, -1):
+        if step / 20 < least - 1e-9:
+            break
         scaled = {**slot, "fontSize": slot["fontSize"] * step / 20}
         if (height is None or measured_height(text, scaled) <= height) and not broken_words(
             text, scaled
         ):
             return step / 20
-    return _MIN_SCALE
+    return least
 
 
 def check_composition_text(

@@ -15,8 +15,11 @@ import { declaredQrSlots } from './qr-assets.js';
 import { dependencyKey } from './checkpoints.js';
 import { ModelRequestError } from '../chat/model-failure.js';
 
-/** Compositions per model call: small enough that one answer never runs out of tokens. */
-const BATCH = 12;
+/**
+ * Compositions per model call: small enough that one answer never runs out of tokens nor out of
+ * the time one request has on a slow model. A round that timed out asks again in halves.
+ */
+const BATCH = 6;
 /** Calls per composition at most: the first, then asking again for what the answers left out. */
 const ROUNDS = 3;
 /** First negotiate one batch; further batches share at most three workers. */
@@ -241,21 +244,20 @@ export async function indexTemplate(options: {
       signal.throwIfAborted();
       // The provider has already negotiated parameters and retried temporary HTTP failures.
       // An outer indexing round must not multiply those failures across the whole template.
-      if (
-        error instanceof ModelRequestError ||
-        error instanceof TypeError ||
-        (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))
-      ) {
+      if (error instanceof ModelRequestError || options.signal.aborted) {
         stop.abort(error);
         throw error;
       }
+      // One request that ran out of time or lost its connection costs only its batch: the
+      // preparation has no 5-minute budget, and the next round asks again in smaller batches.
       lastError = error;
     }
   };
   for (let round = 0; round < ROUNDS && missing.length > 0; round++) {
     const batches: Pattern[][] = [];
-    for (let start = 0; start < missing.length; start += BATCH)
-      batches.push(missing.slice(start, start + BATCH));
+    const size = Math.max(2, Math.ceil(BATCH / 2 ** round));
+    for (let start = 0; start < missing.length; start += size)
+      batches.push(missing.slice(start, start + size));
     // Parameter negotiation on one batch precedes fan-out. Parse failures may be revisited;
     // connection/model refusals stop the preparation and cancel queued/in-flight work.
     const first = batches.shift();

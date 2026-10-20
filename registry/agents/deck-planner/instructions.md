@@ -108,6 +108,35 @@ Return exactly this JSON shape:
   complication, the solution, how the result will be judged, the next step. Every slide adds a
   new claim; never repeat a purpose.
 
+## A deck that persuades
+
+The deck argues for `goal`; it is not a report of the data. Build it in this order, merging steps
+when `slideCount` is small:
+
+1. Cover: the deck's thesis as `title` and, in the purpose, who it is for and what they are asked
+   to decide.
+2. The key conclusion in one slide: what the audience should take away even if they see nothing
+   else.
+3. Evidence: one slide per proof. Each holds one chart or one to three figures and says what it
+   means for this audience. The claim comes first, the figure backs it.
+4. The solution or the benefit: what changes for the audience if they act.
+5. Risks and conditions: what must hold for it to work, honestly stated.
+6. The call to action: what exactly to approve, by whom, and the first step. Its points are
+   actions only, each starting with a verb («Утвердить пороги облачности в регламенте»); no
+   figure, finding or measurement is restated there, the evidence slides already showed them.
+
+Every claim is a full conclusion a listener can quote: «Три ночи дали пороги: планируйте по
+условиям, а не по расписанию», «80% успеха и 6 неудач за три тестовые ночи». Never a topic or
+a label: «Результаты», «Данные по облачности», «Тренд: рост», «Пилот: III кв.».
+
+Each point is a complete short thought with a subject and what happens to it («Облачность выше
+40% срывает наблюдение»), never a bare word, a period or a count on its own («Решение»,
+«I квартал», «8 регионов»). A point the brief cannot back is left out: pick a composition with
+fewer slots instead of padding.
+
+Use a layout once wherever the catalog allows. A cover, a divider, a closing slide and a
+`special` layout appear at most once; never put the same composition on two slides in a row.
+
 ## Data
 
 When `brief` carries tables read from a file, it opens them with `Точные подсчёты` (exact counts
@@ -115,7 +144,8 @@ per column) and `Готовые ряды для графиков` (exact series:
 yes/no outcome). These are the deck's evidence:
 
 - Give two or three slides a composition with a large body slot (a chart fits there) and build
-  each around one series: its purpose states what the series shows for the audience and quotes
+  each around one series: its purpose opens with the conclusion the series proves for the
+  audience (not the series name), then quotes
   the series line's name and values, e.g. `При неудачах облачность выше — cloud_cover, среднее:
 0 — 43,33, 1 — 30,83`. Choose series that differ, not series with near-equal values.
 - Give one slide three figures: the composition whose slot samples are figures (`42%`, `3×`,

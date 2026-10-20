@@ -14,7 +14,7 @@ describe('deployment runtime limits', () => {
     expect(readRuntimeLimits({})).toEqual({
       modelConcurrency: 8,
       generationConcurrency: 3,
-      generationDeadlineMs: 290_000,
+      generationDeadlineMs: 270_000,
     });
     expect(
       readRuntimeLimits({

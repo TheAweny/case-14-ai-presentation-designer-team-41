@@ -332,6 +332,52 @@ def _draw_xy_line(
             axis.axis_title.text_frame.text = title
 
 
+def _luminance(hex_value: str) -> float:
+    channels = []
+    for index in (0, 2, 4):
+        c = int(hex_value[index : index + 2], 16) / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _contrast(a: str, b: str) -> float:
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+#: WCAG AA for normal text: a value printed over the plot must be read, not guessed.
+_LABEL_CONTRAST = 4.5
+
+
+def _label_colour(role: str | None, palette: dict[str, str]) -> RGBColor | None:
+    """The text colour of the profile that reads on the chart's surface.
+
+    A value label sits on the card the chart fills. The body style's own colour comes first; one
+    too faint on that surface (a light caption grey, white text of a dark slide) gives way to the
+    profile's text colour with the most contrast.
+    """
+    ground = palette.get("surface") or palette.get("background") or "FFFFFF"
+    candidates = [
+        palette.get(role or "", role or ""),
+        *(palette.get(r) for r in ("text", "text-muted")),
+    ]
+    valid: list[str] = []
+    for value in candidates:
+        if value and len(value) == 6:
+            try:
+                int(value, 16)
+            except ValueError:
+                continue
+            valid.append(value)
+    if not valid:
+        return None
+    good = [value for value in valid if _contrast(value, ground) >= _LABEL_CONTRAST]
+    chosen = good[0] if good else max(valid, key=lambda value: _contrast(value, ground))
+    if _contrast(chosen, ground) < _LABEL_CONTRAST:
+        chosen = "000000" if _luminance(ground) > 0.18 else "FFFFFF"
+    return RGBColor.from_string(chosen)
+
+
 def _label_values(plot: Any, kind: str, style: dict[str, Any], palette: dict[str, str]) -> None:
     """Print every value on its mark: a chart on a slide is read, not measured against an axis.
 
@@ -343,7 +389,7 @@ def _label_values(plot: Any, kind: str, style: dict[str, Any], palette: dict[str
     labels.number_format = "General"
     labels.number_format_is_linked = False
     labels.font.size = Pt(float(style["sizePt"]))
-    colour = _resolve(style["colorRole"], palette)
+    colour = _label_colour(style["colorRole"], palette)
     if colour is not None and kind != "pie":
         labels.font.color.rgb = colour
     if kind == "pie":

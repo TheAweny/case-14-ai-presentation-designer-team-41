@@ -154,6 +154,8 @@ export function plannedSeriesChart(
   purpose: string,
   brief: string,
   slotId: string,
+  /** Series an earlier slide already charts: the deck shows each series once. */
+  exclude: readonly string[] = [],
 ): SlotVisual | null {
   const target = norm(purpose);
   const says = (literal: string) =>
@@ -165,6 +167,7 @@ export function plannedSeriesChart(
   let best: { line: SeriesLine; score: number } | null = null;
   for (const line of seriesLines(brief)) {
     if (line.facts.length > 8 || !spread(line)) continue;
+    if (exclude.includes(`${line.grouping}|${line.metric}`)) continue;
     const column = norm(line.metric.split(',')[0] ?? '');
     const said = line.facts.filter((fact) => says(norm(fact.literal ?? '')));
     const named = Boolean(column) && target.includes(column);
@@ -628,4 +631,60 @@ export function verifyVisual(
   )
     ? visual
     : null;
+}
+
+/** Longest display label a chart takes: a legend or an axis title, not a sentence. */
+const LABEL_MAX = 48;
+
+/**
+ * The labels a reader sees on a chart code built from a ready series. The figures stay the
+ * brief's, matched by column name; the words around them may be the writer's: «Средняя
+ * облачность, %» for `cloud_cover, среднее`, «Неудача» and «Успех» for the outcome codes 0 and 1.
+ * The writer's chart lends its labels only when it shows the very same values in the same order;
+ * otherwise the column names stay.
+ */
+export function withDisplayLabels(planned: SlotVisual, offered: unknown): SlotVisual {
+  if (planned.kind !== 'chart' || !offered || typeof offered !== 'object') return planned;
+  const chart = offered as {
+    kind?: unknown;
+    categories?: unknown;
+    series?: unknown;
+    xTitle?: unknown;
+    yTitle?: unknown;
+  };
+  if (chart.kind !== 'chart' || !Array.isArray(chart.categories) || !Array.isArray(chart.series))
+    return planned;
+  const label = (value: unknown) =>
+    typeof value === 'string' && value.trim() && value.trim().length <= LABEL_MAX
+      ? value.trim()
+      : null;
+  const categories = chart.categories.map(label);
+  const series = chart.series as { name?: unknown; values?: unknown }[];
+  const same =
+    categories.length === planned.categories.length &&
+    categories.every((c) => c !== null) &&
+    series.length === planned.series.length &&
+    series.every((s, i) => {
+      const values = Array.isArray(s.values) ? s.values : [];
+      const expected = planned.series[i]?.values ?? [];
+      return (
+        label(s.name) !== null &&
+        values.length === expected.length &&
+        values.every((v, j) => typeof v === 'number' && Math.abs(v - (expected[j] ?? NaN)) < 1e-6)
+      );
+    });
+  if (!same) return planned;
+  return {
+    ...planned,
+    categories: categories as string[],
+    series: planned.series.map((s, i) => ({ ...s, name: label(series[i]?.name) ?? s.name })),
+    xTitle: label(chart.xTitle) ?? '',
+    yTitle: label(chart.yTitle) ?? planned.yTitle,
+  };
+}
+
+/** The ready series a planned chart shows, as `grouping|metric`; null for any other visual. */
+export function chartedSeries(visual: SlotVisual | null): string | null {
+  if (visual?.kind !== 'chart') return null;
+  return `${visual.xTitle}|${visual.series[0]?.name ?? ''}`;
 }

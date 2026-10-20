@@ -414,7 +414,8 @@ describe('preparing a template', () => {
     const profileAsked = new Promise<void>((asked) => {
       vi.stubGlobal('fetch', async (url: string | URL | Request) => {
         const path = new URL(String(url)).pathname;
-        if (path !== '/v1/generation-profile') return new Response('not here', { status: 503 });
+        // Not a busy answer: the engine client would ask a 502/503/504 again.
+        if (path !== '/v1/generation-profile') return new Response('not here', { status: 404 });
         asked();
         await new Promise<void>((answer) => (answerProfile = answer));
         return Response.json(generationProfile);

@@ -22,7 +22,8 @@ export function readRuntimeLimits(env: NodeJS.ProcessEnv = process.env): Runtime
   return {
     modelConcurrency: integer(env, 'MODEL_MAX_CONCURRENCY', 8, 1, 64),
     generationConcurrency: integer(env, 'GENERATION_CONCURRENCY', 3, 1, 6),
-    generationDeadlineMs: integer(env, 'GENERATION_DEADLINE_MS', 290_000, 60_000, 290_000),
+    // 270 s by default: thirty seconds stay for the request, the queue and the download.
+    generationDeadlineMs: integer(env, 'GENERATION_DEADLINE_MS', 270_000, 60_000, 290_000),
   };
 }
 
