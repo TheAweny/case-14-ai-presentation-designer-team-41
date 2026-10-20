@@ -1,0 +1,270 @@
+{
+ "datasetId": "dataset-efc28aa824544a19",
+ "diagnostics": [
+  {
+   "code": "missing-markers",
+   "message": "1 cell(s) say there is no value («н/д»); they are gaps, not zeros.",
+   "ref": null,
+   "severity": "info",
+   "sheet": "Table 1"
+  }
+ ],
+ "schemaVersion": 1,
+ "sheets": [
+  {
+   "columns": [
+    {
+     "columnId": "sheet-1:A",
+     "decimal": "",
+     "header": "Команда",
+     "index": 1,
+     "kind": "text",
+     "ref": "A"
+    },
+    {
+     "columnId": "sheet-1:B",
+     "decimal": "",
+     "header": "Задачи",
+     "index": 2,
+     "kind": "number",
+     "ref": "B"
+    },
+    {
+     "columnId": "sheet-1:C",
+     "decimal": "",
+     "header": "Закрыто",
+     "index": 3,
+     "kind": "number",
+     "ref": "C"
+    }
+   ],
+   "headerRow": 1,
+   "index": 0,
+   "mergedRanges": [],
+   "name": "Table 1",
+   "range": "A1:C4",
+   "rows": [
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Альфа",
+       "ref": "A2",
+       "unit": "",
+       "value": "Альфа"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "40",
+       "ref": "B2",
+       "unit": "",
+       "value": 40.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "35",
+       "ref": "C2",
+       "unit": "",
+       "value": 35.0
+      }
+     ],
+     "row": 2
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Бета",
+       "ref": "A3",
+       "unit": "",
+       "value": "Бета"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "28",
+       "ref": "B3",
+       "unit": "",
+       "value": 28.0
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "н/д",
+       "ref": "C3",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 3
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Гамма",
+       "ref": "A4",
+       "unit": "",
+       "value": "Гамма"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "33",
+       "ref": "B4",
+       "unit": "",
+       "value": 33.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "33",
+       "ref": "C4",
+       "unit": "",
+       "value": 33.0
+      }
+     ],
+     "row": 4
+    }
+   ],
+   "sheetId": "sheet-1",
+   "state": "visible"
+  },
+  {
+   "columns": [
+    {
+     "columnId": "sheet-2:A",
+     "decimal": ",",
+     "header": "Месяц",
+     "index": 1,
+     "kind": "text",
+     "ref": "A"
+    },
+    {
+     "columnId": "sheet-2:B",
+     "decimal": ",",
+     "header": "Выручка, млн ₽",
+     "index": 2,
+     "kind": "number",
+     "ref": "B"
+    },
+    {
+     "columnId": "sheet-2:C",
+     "decimal": ",",
+     "header": "Клиенты",
+     "index": 3,
+     "kind": "number",
+     "ref": "C"
+    }
+   ],
+   "headerRow": 1,
+   "index": 1,
+   "mergedRanges": [],
+   "name": "Table 2",
+   "range": "A1:C4",
+   "rows": [
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Июль",
+       "ref": "A2",
+       "unit": "",
+       "value": "Июль"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "1 204,5",
+       "ref": "B2",
+       "unit": "",
+       "value": 1204.5
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "312",
+       "ref": "C2",
+       "unit": "",
+       "value": 312.0
+      }
+     ],
+     "row": 2
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Август",
+       "ref": "A3",
+       "unit": "",
+       "value": "Август"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "1 156,0",
+       "ref": "B3",
+       "unit": "",
+       "value": 1156.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "298",
+       "ref": "C3",
+       "unit": "",
+       "value": 298.0
+      }
+     ],
+     "row": 3
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Сентябрь",
+       "ref": "A4",
+       "unit": "",
+       "value": "Сентябрь"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "1 377,9",
+       "ref": "B4",
+       "unit": "",
+       "value": 1377.9
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "341",
+       "ref": "C4",
+       "unit": "",
+       "value": 341.0
+      }
+     ],
+     "row": 4
+    }
+   ],
+   "sheetId": "sheet-2",
+   "state": "visible"
+  }
+ ],
+ "source": {
+  "bytes": 468,
+  "fileName": "quarter-report-pasted.txt",
+  "mediaType": "text/plain",
+  "sha256": "efc28aa824544a1956c6d60321b81ab660a4daea8305dc0e9358b6ddb017b61c"
+ },
+ "status": "ok"
+}
