@@ -41,7 +41,7 @@ import {
   writtenSchema,
 } from './workflow.js';
 import { deckRepeats, headlineSlot, slideFigureDefects, slideTextRepeats } from './repeats.js';
-import { leakedSamples } from './samples.js';
+import { leakedSamples, wordsInFigureSlots } from './samples.js';
 import { approvedCoverage } from './final-review.js';
 import { missingNativeRequirements } from './native-requirements.js';
 import { ModelAnswerValidationError, type TextProvider } from './provider.js';
@@ -574,6 +574,25 @@ export async function generatePresentation(options: GenerateOptions) {
           stage,
           code: 'template-sample-removed',
           message: `Слайд ${leak.index + 1}: образец шаблона «${leak.sample}» убран, в брифе для него нет факта.`,
+        });
+      }
+      for (const words of wordsInFigureSlots(slides)) {
+        const current = written.find((s) => s.index === words.index);
+        if (!current) continue;
+        current.slide = {
+          ...current.slide,
+          texts: current.slide.texts.map((t) =>
+            t.slotId === words.slotId ? { ...t, text: '' } : t,
+          ),
+        };
+        const key = `${words.index}:${words.slotId}`;
+        if (announced.has(key)) continue;
+        announced.add(key);
+        await emit({
+          type: 'warning',
+          stage,
+          code: 'template-sample-removed',
+          message: `Слайд ${words.index + 1}: «${words.text}» убрано из поля для числа.`,
         });
       }
     };
@@ -1119,6 +1138,16 @@ export async function generatePresentation(options: GenerateOptions) {
     let finalCritique: z.infer<typeof critiqueSchema>;
     try {
       finalCritique = await finalAudit.run(() => critiqueCurrent(finalAudit.signal));
+    } catch (error) {
+      // The deck is written and measured: a semantic check that runs out of time leaves it
+      // unreviewed, not lost. Only the run's own deadline or a cancel stops the variant.
+      signal.throwIfAborted();
+      if (!finalAudit.signal.aborted) throw error;
+      semanticStatus.available = false;
+      finalCritique = { coverage: [], issues: [] };
+      const message = 'Итоговая смысловая проверка не успела до конца сборки. Требуется проверка.';
+      reviewWarnings.push(message);
+      await warn(message);
     } finally {
       finalAudit.dispose();
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { briefStates, isFigureSample, leakedSamples } from './samples.js';
+import { briefStates, isFigureSample, leakedSamples, wordsInFigureSlots } from './samples.js';
 
 // The same examples as engine/tests/test_sample_figures.py: the two layers must agree.
 describe('isFigureSample', () => {
@@ -74,5 +74,20 @@ describe('leakedSamples', () => {
       point: 'Фокус на удержание',
     });
     expect(leakedSamples([written], 'План на 2025 год: выручка 12 млн')).toEqual([]);
+  });
+});
+
+describe('wordsInFigureSlots', () => {
+  it('finds words the writer put where the template expects a figure', () => {
+    const words = slide({ title: 'Скорость', badge: 'быстр', arrow: 'Эфф', point: 'Удержание' });
+    expect(wordsInFigureSlots([words])).toEqual([
+      { index: 2, slotId: 'badge', text: 'быстр' },
+      { index: 2, slotId: 'arrow', text: 'Эфф' },
+    ]);
+  });
+
+  it('keeps figures, period labels and empty slots', () => {
+    const figures = slide({ title: 'Скорость', badge: '40 сек', arrow: '2026', quarter: 'IV кв.' });
+    expect(wordsInFigureSlots([figures])).toEqual([]);
   });
 });
