@@ -2,8 +2,40 @@ import { z } from 'zod';
 import { brandbookProfileSchema, type BrandbookProfile } from '@lct/contracts';
 
 /** Formats that the brandbook parser can inspect. This picker is intentionally separate from materials. */
-export const BRANDBOOK_FILE_ACCEPT =
-  '.fig,.rar,.zip,.pdf,.json,.svg,.png,.jpg,.jpeg,.webp,.ttf,.otf,.woff,.woff2,.pptx,.potx';
+export const BRANDBOOK_EXTENSIONS = [
+  '.fig',
+  '.rar',
+  '.zip',
+  '.pdf',
+  '.json',
+  '.svg',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.ttf',
+  '.otf',
+  '.woff',
+  '.woff2',
+  '.pptx',
+  '.potx',
+] as const;
+export const BRANDBOOK_FILE_ACCEPT = BRANDBOOK_EXTENSIONS.join(',');
+/** Same byte limit as POST /files/brandbook. Browser MIME values are not authoritative. */
+export const BRANDBOOK_MAX_BYTES = 64 * 1024 * 1024;
+
+export function isBrandbookFile(fileName: string): boolean {
+  const extension = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+  return (BRANDBOOK_EXTENSIONS as readonly string[]).includes(extension);
+}
+
+export function brandbookFileProblem(
+  file: Pick<File, 'name' | 'size'>,
+): 'type' | 'empty' | 'too-large' | null {
+  if (!isBrandbookFile(file.name)) return 'type';
+  if (file.size === 0) return 'empty';
+  return file.size > BRANDBOOK_MAX_BYTES ? 'too-large' : null;
+}
 
 /** The upload endpoint must return a parsed profile; a generic material upload is not a brandbook. */
 export const brandbookUploadSchema = z.object({

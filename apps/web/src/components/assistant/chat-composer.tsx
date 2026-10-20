@@ -85,7 +85,6 @@ export function ChatComposer({
   // While dictating nothing is sent, and while the recording turns into text the field waits too.
   const [dictation, setDictation] = useState<DictationPhase>('idle');
   const picker = useRef<HTMLInputElement>(null);
-  const brandbookMode = useRef(false);
   const rejectedId = useId();
   const ownField = useRef<HTMLTextAreaElement>(null);
   const field = fieldRef ?? ownField;
@@ -231,11 +230,10 @@ export function ChatComposer({
     setEmptyTemplates([]);
   };
 
-  const addFiles = (added: readonly File[]) => {
+  const addFiles = (added: readonly File[], mode: 'auto' | 'brandbook' = 'auto') => {
     if (added.length === 0) return;
     const current = chatStore.get(chat.chatId)?.draft ?? chat.draft;
-    const update = addComposerFiles(current, added, brandbookMode.current ? 'brandbook' : 'auto');
-    brandbookMode.current = false;
+    const update = addComposerFiles(current, added, mode);
     patchDraft({
       files: update.files,
       templateFile: update.templateFile,
@@ -447,7 +445,6 @@ export function ChatComposer({
             }}
             onBrandbook={() => {
               if (picker.current) {
-                brandbookMode.current = true;
                 picker.current.accept = BRANDBOOK_FILE_ACCEPT;
                 picker.current.click();
               }
@@ -503,7 +500,10 @@ export function ChatComposer({
             aria-hidden
             className="sr-only"
             onChange={(event) => {
-              addFiles(Array.from(event.currentTarget.files ?? []));
+              addFiles(
+                Array.from(event.currentTarget.files ?? []),
+                event.currentTarget.accept === BRANDBOOK_FILE_ACCEPT ? 'brandbook' : 'auto',
+              );
               event.currentTarget.value = '';
               event.currentTarget.accept = COMPOSER_FILE_ACCEPT;
             }}

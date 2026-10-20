@@ -39,6 +39,7 @@ import { MoreIcon, SpinnerIcon, UploadIcon, WarningIcon } from '@/components/ui/
 import {
   BRANDBOOK_FILE_ACCEPT,
   brandbookAssetUrl,
+  brandbookFileProblem,
   brandbookCoverAsset,
   brandbookOverview,
   parseBrandbookUpload,
@@ -79,12 +80,15 @@ export function BrandbookUpload({ className }: { className?: string }) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-    const problem = !BRANDBOOK_FILE_ACCEPT.split(',').includes(extension)
-      ? t('wrongType')
-      : file.size === 0
-        ? t('emptyFile')
-        : null;
+    const invalid = brandbookFileProblem(file);
+    const problem =
+      invalid === 'type'
+        ? t('wrongType')
+        : invalid === 'empty'
+          ? t('emptyFile')
+          : invalid === 'too-large'
+            ? t('failed.413')
+            : null;
     if (problem) {
       setError(problem);
       notice.alert(problem);

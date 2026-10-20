@@ -4,6 +4,9 @@ import {
   brandbookAssetUrl,
   canPreviewBrandbookAsset,
   BRANDBOOK_FILE_ACCEPT,
+  BRANDBOOK_EXTENSIONS,
+  BRANDBOOK_MAX_BYTES,
+  brandbookFileProblem,
   brandbookCoverAsset,
   brandbookOverview,
   composerBrandbookOf,
@@ -15,6 +18,44 @@ describe('brandbook browser boundary', () => {
   it('accepts native Figma and archive inputs through a dedicated picker', () => {
     for (const extension of ['.fig', '.rar', '.zip', '.pdf', '.json'])
       expect(BRANDBOOK_FILE_ACCEPT.split(',')).toContain(extension);
+  });
+  it('accepts only the API brandbook formats regardless of browser MIME, within its byte limit', () => {
+    expect([...BRANDBOOK_EXTENSIONS].sort()).toEqual(
+      [
+        '.fig',
+        '.rar',
+        '.zip',
+        '.pdf',
+        '.json',
+        '.svg',
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.webp',
+        '.ttf',
+        '.otf',
+        '.woff',
+        '.woff2',
+        '.pptx',
+        '.potx',
+      ].sort(),
+    );
+    for (const extension of BRANDBOOK_EXTENSIONS) {
+      expect(
+        brandbookFileProblem(
+          new File(['data'], `Brand${extension.toUpperCase()}`, {
+            type: 'application/octet-stream',
+          }),
+        ),
+      ).toBeNull();
+    }
+    expect(brandbookFileProblem({ name: 'Brand.fig', size: 0 })).toBe('empty');
+    expect(brandbookFileProblem({ name: 'Brand.fig', size: BRANDBOOK_MAX_BYTES })).toBeNull();
+    expect(brandbookFileProblem({ name: 'Brand.fig', size: BRANDBOOK_MAX_BYTES + 1 })).toBe(
+      'too-large',
+    );
+    expect(brandbookFileProblem({ name: 'Brand.fig.exe', size: 1 })).toBe('type');
+    expect(brandbookFileProblem({ name: 'Brand.html', size: 1 })).toBe('type');
   });
   it('rejects upload metadata without a parsed profile', () => {
     expect(brandbookUploadSchema.safeParse({ fileId: 'b', fileName: 'guide.pdf' }).success).toBe(

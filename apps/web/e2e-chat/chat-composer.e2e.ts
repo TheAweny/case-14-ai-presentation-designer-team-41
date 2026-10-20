@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { sessionCookie } from './session';
 
 const fixture = (name: string) =>
@@ -124,7 +125,7 @@ test('accepts files across the home and chat pages, preserves the draft and reje
     await page.goto(path);
     const textarea = page.locator('textarea');
     await textarea.fill('Мой черновик');
-    const data = await droppedFiles(page, ['notes.md', 'notes.md', 'brand.PPTX', 'photo.png']);
+    const data = await droppedFiles(page, ['notes.md', 'notes.md', 'brand.PPTX', 'photo.exe']);
     await page.dispatchEvent('body', 'dragenter', { dataTransfer: data });
     await expect(page.locator('[data-composer-drop]')).toBeVisible();
     await page.dispatchEvent('body', 'dragleave', {
@@ -138,12 +139,57 @@ test('accepts files across the home and chat pages, preserves the draft and reje
     const attachments = page.getByRole('list', { name: 'Вложения' });
     await expect(attachments.getByText('notes.md', { exact: true })).toHaveCount(1);
     await expect(attachments.getByText('brand.PPTX', { exact: true })).toBeVisible();
-    await expect(page.getByRole('alert').filter({ hasText: 'photo.png' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'photo.exe' })).toBeVisible();
     await expect(textarea).toHaveValue('Мой черновик');
     await page.dispatchEvent('body', 'drop', { dataTransfer: data });
     await expect(attachments.getByText('notes.md', { exact: true })).toHaveCount(1);
     await data.dispose();
   }
+});
+
+test('accepts the native Figma fixture from the home drop and the chat brandbook picker', async ({
+  page,
+}) => {
+  const nativeFig = fileURLToPath(
+    new URL('../../../examples/brandbooks/northstar.fig', import.meta.url),
+  );
+  const bytes = readFileSync(nativeFig);
+  expect(bytes.subarray(0, 8).toString()).toBe('fig-kiwi');
+  let uploads = 0;
+  // This checks browser routing, not the engine parser; the request keeps the real fixture bytes.
+  await page.route('**/api/backend/files/brandbook', (route) => {
+    uploads++;
+    expect(route.request().postDataBuffer()?.includes(bytes)).toBe(true);
+    return route.fulfill({
+      json: { fileId: '00000000-0000-4000-8000-0000000000bb', fileName: 'northstar.fig' },
+    });
+  });
+  await page.goto('/');
+  await expect(page.locator('input[type=file][multiple]')).toHaveAttribute('accept', /\.fig/);
+  const drop = await page.evaluateHandle((data) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File([new Uint8Array(data)], 'northstar.fig', { type: 'application/octet-stream' }),
+    );
+    return transfer;
+  }, Array.from(bytes));
+  await page.dispatchEvent('body', 'drop', { dataTransfer: drop });
+  await expect(
+    page.getByRole('list', { name: 'Вложения' }).getByText('northstar.fig'),
+  ).toBeVisible();
+  expect(uploads).toBe(1);
+  await drop.dispose();
+  await openChat(page);
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('menuitem', { name: /Загрузить брендбук/ }).click();
+  const dialog = await chooser;
+  expect(await dialog.element().getAttribute('accept')).toContain('.fig');
+  await dialog.setFiles(nativeFig);
+  await expect(
+    page.getByRole('list', { name: 'Вложения' }).getByText('northstar.fig'),
+  ).toBeVisible();
+  expect(uploads).toBe(1); // The chat keeps the validated brandbook draft until the message is sent.
 });
 
 test('handles a composer drop once and clears the page highlight on escape and window exit', async ({

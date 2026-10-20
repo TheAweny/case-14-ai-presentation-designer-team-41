@@ -98,7 +98,6 @@ export function DeckComposer({
   const picker = useRef<HTMLInputElement>(null);
   const templatePicker = useRef<HTMLInputElement>(null);
   const brandbookPicker = useRef<HTMLInputElement>(null);
-  const brandbookMode = useRef(false);
   const [text, setText] = useState('');
   const [files, setFiles] = useState<readonly File[]>([]);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
@@ -159,19 +158,15 @@ export function DeckComposer({
     nextRouter.replace(pathname, { scroll: false });
   }, [focusRequested, nextRouter, pathname]);
 
-  const addFiles = (added: readonly File[]) => {
+  const addFiles = (added: readonly File[], mode: 'auto' | 'brandbook' = 'auto') => {
     if (added.length === 0) return;
-    const update = addComposerFiles(
-      { files, templateFile, brandbookFile },
-      added,
-      brandbookMode.current ? 'brandbook' : 'auto',
-    );
-    const selectedBrandbook = brandbookMode.current ? added.at(-1) : null;
-    brandbookMode.current = false;
+    const update = addComposerFiles({ files, templateFile, brandbookFile }, added, mode);
+    const selectedBrandbook = update.brandbookFile !== brandbookFile ? update.brandbookFile : null;
     setFiles(update.files);
     setTemplateFile(update.templateFile);
     setBrandbookFile(update.brandbookFile ?? null);
     if (selectedBrandbook) {
+      setBrandbookAttachment(null);
       setBrandbookStatus('uploading');
       void uploadBrandbook(selectedBrandbook)
         .then((uploaded) => {
@@ -365,7 +360,7 @@ export function DeckComposer({
             aria-hidden
             className="sr-only"
             onChange={(event) => {
-              addFiles(Array.from(event.currentTarget.files ?? []));
+              addFiles(Array.from(event.currentTarget.files ?? []), 'brandbook');
               event.currentTarget.value = '';
             }}
           />
@@ -408,7 +403,6 @@ export function DeckComposer({
             }}
             onUploadTemplate={() => templatePicker.current?.click()}
             onBrandbook={() => {
-              brandbookMode.current = true;
               brandbookPicker.current?.click();
             }}
             brandbooks={brandbooks}
