@@ -10101,6 +10101,15 @@ class PatternCatalog(BaseModel):
     )
 
 
+class BrandbookPriority(StrEnum):
+    """
+    Which wins where the brandbook and the template disagree. Absent: brandbook.
+    """
+
+    brandbook = "brandbook"
+    template = "template"
+
+
 class LayoutVariant(StrEnum):
     dense = "dense"
     balanced = "balanced"
@@ -10139,8 +10148,17 @@ class RunConfig(BaseModel):
     auditProfile: constr(min_length=1) = Field(
         ..., description="Name of the audit profile from configs/audit.yaml."
     )
+    brandbookPath: constr(min_length=1) | None = Field(
+        None,
+        description="Brandbook to style the deck: design tokens JSON, PDF guideline, .fig, logos, fonts, slide examples, or a ZIP or RAR of them. Absent: the template alone.",
+    )
+    brandbookPriority: BrandbookPriority | None = Field(
+        None,
+        description="Which wins where the brandbook and the template disagree. Absent: brandbook.",
+    )
     contentPath: constr(min_length=1) = Field(
-        ..., description="Path to the content pack for the deck."
+        ...,
+        description="Path to the content for the deck: text, Markdown, DOCX, PDF, or a table (CSV, TSV, XLSX, JSON).",
     )
     goal: constr(min_length=1) | None = Field(
         None,

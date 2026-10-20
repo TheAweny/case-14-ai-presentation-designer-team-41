@@ -72,13 +72,18 @@ export async function generateCommand(configPath: string): Promise<number> {
   const stage = join(root, 'data', 'cli', stamp);
   mkdirSync(stage, { recursive: true });
   const inContainer = (name: string) => `/app/data/cli/${stamp}/${name}`;
-  for (const path of [config.templatePath, config.contentPath]) {
-    if (!existsSync(resolve(path))) throw new Error(`Файл не найден: ${resolve(path)}`);
+  for (const path of [config.templatePath, config.contentPath, config.brandbookPath]) {
+    if (path && !existsSync(resolve(path))) throw new Error(`Файл не найден: ${resolve(path)}`);
   }
   const template = basename(config.templatePath);
   const content = basename(config.contentPath);
   copyFileSync(resolve(config.templatePath), join(stage, template));
   copyFileSync(resolve(config.contentPath), join(stage, content));
+  // The brandbook goes under its own name: a template and a brandbook may share a file name.
+  const brandbook = config.brandbookPath ? `brandbook-${basename(config.brandbookPath)}` : null;
+  if (config.brandbookPath && brandbook) {
+    copyFileSync(resolve(config.brandbookPath), join(stage, brandbook));
+  }
   if (relative(join(root, 'runs'), resolve(config.outputDir)) !== '') {
     process.stdout.write(`outputDir в Docker — всегда runs/ проекта: ${join(root, 'runs')}\n`);
   }
@@ -88,6 +93,7 @@ export async function generateCommand(configPath: string): Promise<number> {
       ...config,
       templatePath: inContainer(template),
       contentPath: inContainer(content),
+      ...(brandbook ? { brandbookPath: inContainer(brandbook) } : {}),
       outputDir: '/app/runs',
     }),
   );

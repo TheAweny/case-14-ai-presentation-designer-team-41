@@ -7,7 +7,7 @@ import {
   datasetRefusal,
   datasetText,
   embeddedTablesText,
-} from './dataset-text.js';
+} from '@lct/pipeline';
 
 /** Answers the engine gave for files of examples/datasets; an engine test keeps them current. */
 function recorded(name: string): Dataset {

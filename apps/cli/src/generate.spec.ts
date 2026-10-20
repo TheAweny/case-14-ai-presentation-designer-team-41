@@ -70,6 +70,22 @@ describe('generateFromConfig', () => {
     ).rejects.toThrow(/Шаблон не найден/);
   });
 
+  it('names a brandbook that is not there before calling anything', async () => {
+    await expect(
+      generateFromConfig({
+        config: {
+          ...config,
+          templatePath: join(__dirname, '..', '..', '..', 'examples', 'template.pptx'),
+          contentPath: join(__dirname, '..', '..', '..', 'examples', 'brief.md'),
+          brandbookPath: 'examples/missing-brandbook.zip',
+        },
+        configPath: 'x',
+        env: { LLM_BASE_URL: 'http://127.0.0.1:9/v1', LLM_MODEL: 'm' },
+        log: () => undefined,
+      }),
+    ).rejects.toThrow(/Брендбук не найден/);
+  });
+
   it('refuses MODEL_HEADERS that do not read as headers', async () => {
     await expect(
       generateFromConfig({

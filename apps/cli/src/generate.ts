@@ -2,10 +2,12 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import {
+  brandbookBindingSchema,
   headerRecord,
   headersProblem,
   parseHeaderEnv,
   storedTemplateIndexSchema,
+  type BrandbookBinding,
   type CompositionNote,
   type GenerationProfile,
   type LayoutVariant,
@@ -20,6 +22,7 @@ import {
   SharedPlan,
 } from '@lct/pipeline';
 import { loadAnswerFormat } from '@lct/registry';
+import { readMaterial } from './material.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -65,6 +68,41 @@ function briefOf(config: RunConfig, content: string): string {
   ]
     .filter(Boolean)
     .join('\n\n');
+}
+
+/**
+ * The brandbook of a run, parsed by the engine the way an upload is. Only declared rules restyle
+ * the deck; colours and fonts merely seen in pictures or font files stay observations, and the
+ * log says so rather than letting a run look styled when it is not.
+ */
+async function brandbookOf(
+  engine: EngineClient,
+  path: string,
+  runDir: string,
+  config: RunConfig,
+  log: (line: string) => void,
+): Promise<BrandbookBinding> {
+  const profile = await engine.parseBrandbook({
+    schemaVersion: 1,
+    path,
+    outputDir: join(runDir, 'brandbook'),
+  });
+  await writeFile(join(runDir, 'brandbook-profile.json'), JSON.stringify(profile, null, 2));
+  const declared = profile.tokens.filter((token) => token.authority === 'explicit').length;
+  const observed = profile.tokens.length - declared;
+  const priority = config.brandbookPriority ?? 'brandbook';
+  log(
+    `брендбук ${basename(path)}: файлов ${profile.coverage.filesTotal}, объявленных правил ` +
+      `${declared}, замеченных значений ${observed}, приоритет — ${priority === 'brandbook' ? 'брендбук' : 'шаблон'}`,
+  );
+  if (declared === 0) {
+    log(
+      '  в брендбуке нет объявленных правил стиля (токенов, гайдлайна с цветами и шрифтами): ' +
+        'шаблон не изменится',
+    );
+  }
+  for (const warning of profile.warnings) log(`  ${warning}`);
+  return brandbookBindingSchema.parse({ schemaVersion: 1, profile, priority });
 }
 
 /** The model connection of the server, read the way the API reads it. */
@@ -159,14 +197,14 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
   const connection = connectionOf(env);
   const templatePath = resolve(config.templatePath);
   const contentPath = resolve(config.contentPath);
+  const brandbookPath = config.brandbookPath ? resolve(config.brandbookPath) : null;
   for (const [what, path] of [
     ['Шаблон', templatePath],
     ['Материал', contentPath],
+    ['Брендбук', brandbookPath],
   ] as const) {
-    if (!existsSync(path)) throw new Error(`${what} не найден: ${path}`);
+    if (path !== null && !existsSync(path)) throw new Error(`${what} не найден: ${path}`);
   }
-  const brief = briefOf(config, await readFile(contentPath, 'utf8'));
-  if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
 
   const registryDir = resolve(env.REGISTRY_DIR ?? 'registry/agents');
   const provider = new GenerationProvider({
@@ -178,6 +216,8 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     baseUrl: env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 180_000,
   });
+  const brief = briefOf(config, await readMaterial(engine, contentPath));
+  if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
   const outputDir = resolve(config.outputDir);
   const runId = `run-${new Date()
     .toISOString()
@@ -185,6 +225,10 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     .slice(0, 14)}`;
   const runDir = join(outputDir, runId);
   await mkdir(runDir, { recursive: true });
+  await writeFile(join(runDir, 'brief.md'), brief);
+  const brandbook = brandbookPath
+    ? await brandbookOf(engine, brandbookPath, runDir, config, log)
+    : undefined;
 
   log(
     `${runId}: ${basename(templatePath)}, ${config.slideCount} слайдов, модель ${connection.model}`,
@@ -217,6 +261,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           brief,
           slideCount: config.slideCount,
           profile,
+          ...(brandbook ? { brandbook } : {}),
           ...(notes ? { notes } : {}),
           registryDir,
           engine,

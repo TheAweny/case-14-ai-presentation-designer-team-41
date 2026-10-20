@@ -3,7 +3,7 @@ import { open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { BadRequestException } from '@nestjs/common';
 import type { Dataset, MaterialExtractResponse } from '@lct/contracts';
-import { datasetRefusal, datasetText, embeddedTablesText } from './dataset-text.js';
+import { datasetRefusal, datasetText, embeddedTablesText } from '@lct/pipeline';
 
 /** A stored content file the account is already allowed to use. */
 export interface PreparedMaterialSource {
