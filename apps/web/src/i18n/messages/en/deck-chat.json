@@ -42,6 +42,8 @@
     "send": "Send",
     "stop": "Stop",
     "stopping": "Stopping…",
+    "brandbook": "Brandbook",
+    "brandbookHint": "Figma, PDF, JSON and packages",
     "materials": "Add materials",
     "materialsHint": "TXT, MD, DOCX, PDF, CSV, TSV and XLSX. PPTX and POTX are templates",
     "templateHint": "Design from your PowerPoint file",

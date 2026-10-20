@@ -12,7 +12,7 @@ from engine.contracts._generated import (
     Sheet,
 )
 from engine.contracts._generated import (
-    Kind10 as CellKind,
+    Kind24 as CellKind,
 )
 from engine.contracts._generated import (
     Row1 as Row,
@@ -21,13 +21,13 @@ from engine.contracts._generated import (
     Severity3 as Severity,
 )
 from engine.contracts._generated import (
-    Source14 as Source,
+    Source36 as Source,
 )
 from engine.contracts._generated import (
-    State3 as SheetState,
+    State4 as SheetState,
 )
 from engine.contracts._generated import (
-    Status3 as DatasetStatus,
+    Status11 as DatasetStatus,
 )
 
 __all__ = [

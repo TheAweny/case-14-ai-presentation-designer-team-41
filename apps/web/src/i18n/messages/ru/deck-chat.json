@@ -42,6 +42,8 @@
     "send": "Отправить",
     "stop": "Остановить",
     "stopping": "Останавливаю…",
+    "brandbook": "Брендбук",
+    "brandbookHint": "Figma, PDF, JSON и пакеты",
     "materials": "Добавить материалы",
     "materialsHint": "TXT, MD, DOCX, PDF, CSV, TSV и XLSX. PPTX и POTX — шаблоны",
     "templateHint": "Оформление из вашего файла PowerPoint",

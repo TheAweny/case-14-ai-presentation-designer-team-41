@@ -1,3 +1,4 @@
+import { brandbookBindingSchema } from './brandbook.js';
 import { z } from 'zod';
 import {
   generationProfileSchema,
@@ -9,6 +10,7 @@ import {
 export const generationSpecSchema = z.object({
   schemaVersion: z.literal(1),
   request: generationRequestSchema,
+  brandbook: brandbookBindingSchema.optional(),
   brief: z.string().max(60000),
   profile: generationProfileSchema,
   notes: z.array(compositionNoteSchema).optional(),

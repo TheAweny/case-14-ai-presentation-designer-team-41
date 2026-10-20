@@ -29,6 +29,7 @@ import {
   addComposerFiles,
   COMPOSER_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
+  BRANDBOOK_FILE_ACCEPT,
   templateTitle,
 } from '@/lib/composer-templates';
 import { chatContextOf, contextAttachments, createSlideRef, refKey } from '@/lib/slide-context';
@@ -80,6 +81,7 @@ export function ChatComposer({
   // While dictating nothing is sent, and while the recording turns into text the field waits too.
   const [dictation, setDictation] = useState<DictationPhase>('idle');
   const picker = useRef<HTMLInputElement>(null);
+  const brandbookMode = useRef(false);
   const rejectedId = useId();
   const ownField = useRef<HTMLTextAreaElement>(null);
   const field = fieldRef ?? ownField;
@@ -87,6 +89,7 @@ export function ChatComposer({
     text,
     files,
     templateFile,
+    brandbookFile,
     template,
     context: restoredContext,
     attachments: restoredAttachments,
@@ -214,6 +217,7 @@ export function ChatComposer({
       text: message,
       files,
       templateFile,
+      brandbookFile,
       template,
       attachments: restoredAttachments,
       context: [...(restoredContext ?? []), ...context],
@@ -227,10 +231,12 @@ export function ChatComposer({
   const addFiles = (added: readonly File[]) => {
     if (added.length === 0) return;
     const current = chatStore.get(chat.chatId)?.draft ?? chat.draft;
-    const update = addComposerFiles(current, added);
+    const update = addComposerFiles(current, added, brandbookMode.current ? 'brandbook' : 'auto');
+    brandbookMode.current = false;
     patchDraft({
       files: update.files,
       templateFile: update.templateFile,
+      brandbookFile: update.brandbookFile,
       template: update.templateFile ? null : current.template,
     });
     setRejected(update.rejected);
@@ -285,6 +291,7 @@ export function ChatComposer({
           </PromptChips>
         ) : null}
         {templateFile ||
+        brandbookFile ||
         template ||
         files.length > 0 ||
         restoredContext?.length ||
@@ -294,6 +301,16 @@ export function ChatComposer({
               <AttachmentChip
                 attachment={{ kind: 'template', name: templateFile.name, size: templateFile.size }}
                 onRemove={() => setTemplateFile(null)}
+              />
+            ) : null}
+            {brandbookFile ? (
+              <AttachmentChip
+                attachment={{
+                  kind: 'brandbook',
+                  name: brandbookFile.name,
+                  size: brandbookFile.size,
+                }}
+                onRemove={() => patchDraft({ brandbookFile: null })}
               />
             ) : null}
             {template ? (
@@ -416,6 +433,13 @@ export function ChatComposer({
             onUploadTemplate={() => {
               if (picker.current) {
                 picker.current.accept = TEMPLATE_FILE_ACCEPT;
+                picker.current.click();
+              }
+            }}
+            onBrandbook={() => {
+              if (picker.current) {
+                brandbookMode.current = true;
+                picker.current.accept = BRANDBOOK_FILE_ACCEPT;
                 picker.current.click();
               }
             }}

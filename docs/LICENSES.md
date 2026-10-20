@@ -6,26 +6,29 @@
 копилефт-лицензиями: 0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, CC-BY-4.0, CC0-1.0, ISC, MIT, MIT-0, MIT-CMU, MPL-2.0, PSF-2.0, Python-2.0, Unlicense.
 GPL и AGPL не подходят: заказчик берёт решение в пилот и внедрение.
 
-Всего зависимостей: 1216 (npm: 1158, python: 58).
+Всего зависимостей: 1334 (npm: 1267, python: 67).
 
 ## Сводка по лицензиям
 
 | Лицензия | Пакетов | Статус |
 | --- | --- | --- |
-| MIT | 1020 | разрешена |
-| ISC | 67 | разрешена |
-| Apache-2.0 | 54 | разрешена |
+| MIT | 1129 | разрешена |
+| ISC | 71 | разрешена |
+| Apache-2.0 | 56 | разрешена |
 | BSD-3-Clause | 29 | разрешена |
 | BSD-2-Clause | 21 | разрешена |
 | BlueOak-1.0.0 | 10 | разрешена |
 | MPL-2.0 | 4 | разрешена |
 | 0BSD | 1 | разрешена |
 | AFL-2.1 OR BSD-3-Clause | 1 | требует проверки |
-| Apache-2.0 AND LGPL-3.0-or-later | 1 | требует проверки |
 | Apache-2.0 AND MIT | 1 | требует проверки |
 | Apache-2.0 OR BSD-2-Clause | 1 | требует проверки |
+| Apache-2.0 OR BSD-3-Clause | 1 | требует проверки |
+| BSD-3-Clause, Apache-2.0, dependency licenses | 1 | требует проверки |
 | CC-BY-4.0 | 1 | разрешена |
+| LGPL-3.0-or-later | 1 | требует проверки |
 | MIT and ISC | 1 | требует проверки |
+| MIT-0 | 1 | разрешена |
 | MIT-CMU | 1 | разрешена |
 | PSF-2.0 | 1 | разрешена |
 | Python-2.0 | 1 | разрешена |
@@ -35,7 +38,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 
 | Экосистема | Пакет | Версия | Лицензия |
 | --- | --- | --- | --- |
-| npm | @img/sharp-win32-x64 | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
+| npm | @img/sharp-libvips-darwin-arm64 | 1.3.3 | LGPL-3.0-or-later |
+| python | pypdfium2 | 5.14.0 | BSD-3-Clause, Apache-2.0, dependency licenses |
 
 ## Полный список
 
@@ -182,7 +186,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @emnapi/runtime | 1.4.5 | MIT |
 | npm | @emnapi/wasi-threads | 1.0.4 | MIT |
 | npm | @emnapi/wasi-threads | 1.2.3 | MIT |
-| npm | @esbuild/win32-x64 | 0.28.2 | MIT |
+| npm | @esbuild/darwin-arm64 | 0.28.2 | MIT |
 | npm | @eslint-community/eslint-utils | 4.10.1 | MIT |
 | npm | @eslint-community/regexpp | 4.12.2 | MIT |
 | npm | @eslint/config-array | 0.23.5 | Apache-2.0 |
@@ -201,6 +205,9 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @formatjs/icu-skeleton-parser | 2.1.11 | MIT |
 | npm | @formatjs/icu-skeleton-parser | 2.1.12 | MIT |
 | npm | @formatjs/intl-localematcher | 0.8.14 | MIT |
+| npm | @fuma-translate/react | 1.0.2 | MIT |
+| npm | @fumadocs/tailwind | 0.1.4 | MIT |
+| npm | @fumari/image-size | 0.1.1 | MIT |
 | npm | @hono/node-server | 2.1.1 | MIT |
 | npm | @humanfs/core | 0.19.2 | Apache-2.0 |
 | npm | @humanfs/node | 0.16.8 | Apache-2.0 |
@@ -208,7 +215,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @humanwhocodes/module-importer | 1.0.1 | Apache-2.0 |
 | npm | @humanwhocodes/retry | 0.4.3 | Apache-2.0 |
 | npm | @img/colour | 1.1.0 | MIT |
-| npm | @img/sharp-win32-x64 | 0.35.4 | Apache-2.0 AND LGPL-3.0-or-later |
+| npm | @img/sharp-darwin-arm64 | 0.35.4 | Apache-2.0 |
+| npm | @img/sharp-libvips-darwin-arm64 | 1.3.3 | LGPL-3.0-or-later |
 | npm | @inquirer/ansi | 2.0.8 | MIT |
 | npm | @inquirer/checkbox | 5.2.5 | MIT |
 | npm | @inquirer/confirm | 6.3.2 | MIT |
@@ -238,14 +246,15 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @keyv/serialize | 1.1.1 | MIT |
 | npm | @libsql/client | 0.18.0 | MIT |
 | npm | @libsql/core | 0.18.0 | MIT |
+| npm | @libsql/darwin-arm64 | 0.5.29 | MIT |
 | npm | @libsql/hrana-client | 0.10.0 | MIT |
 | npm | @libsql/isomorphic-ws | 0.1.5 | MIT |
-| npm | @libsql/win32-x64-msvc | 0.5.29 | MIT |
 | npm | @lukeed/csprng | 1.1.0 | MIT |
 | npm | @lukeed/uuid | 2.0.1 | MIT |
 | npm | @mastra/core | 1.66.0 | Apache-2.0 |
 | npm | @mastra/libsql | 1.22.5 | Apache-2.0 |
 | npm | @mastra/schema-compat | 1.3.9 | Apache-2.0 |
+| npm | @mdx-js/mdx | 3.1.1 | MIT |
 | npm | @microsoft/tsdoc | 0.17.0 | MIT |
 | npm | @modelcontextprotocol/core | 2.0.0 | MIT |
 | npm | @modelcontextprotocol/sdk | 1.30.0 | MIT |
@@ -261,41 +270,52 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @nestjs/swagger | 12.0.2 | MIT |
 | npm | @nestjs/testing | 12.0.3 | MIT |
 | npm | @next/env | 16.3.5 | MIT |
-| npm | @next/swc-win32-x64-msvc | 16.3.5 | MIT |
+| npm | @next/swc-darwin-arm64 | 16.3.5 | MIT |
 | npm | @nodelib/fs.scandir | 2.1.5 | MIT |
 | npm | @nodelib/fs.stat | 2.0.5 | MIT |
 | npm | @nodelib/fs.walk | 1.2.8 | MIT |
 | npm | @nx/devkit | 23.2.1 | MIT |
 | npm | @nx/eslint-plugin | 23.2.1 | MIT |
 | npm | @nx/js | 23.2.1 | MIT |
-| npm | @nx/nx-win32-x64-msvc | 23.2.1 | MIT |
+| npm | @nx/nx-darwin-arm64 | 23.2.1 | MIT |
 | npm | @nx/workspace | 23.2.1 | MIT |
 | npm | @parcel/watcher | 2.6.0 | MIT |
-| npm | @parcel/watcher-win32-x64 | 2.6.0 | MIT |
+| npm | @parcel/watcher-darwin-arm64 | 2.6.0 | MIT |
 | npm | @phenomnomnominal/tsquery | 6.2.0 | MIT |
 | npm | @playwright/test | 1.56.1 | Apache-2.0 |
 | npm | @posthog/core | 1.54.3 | MIT |
 | npm | @posthog/types | 1.412.1 | MIT |
 | npm | @radix-ui/number | 1.1.3 | MIT |
 | npm | @radix-ui/primitive | 1.1.7 | MIT |
+| npm | @radix-ui/primitive | 1.2.0 | MIT |
 | npm | @radix-ui/react-accessible-icon | 1.1.15 | MIT |
 | npm | @radix-ui/react-accordion | 1.2.20 | MIT |
+| npm | @radix-ui/react-accordion | 1.3.1 | MIT |
 | npm | @radix-ui/react-alert-dialog | 1.1.23 | MIT |
 | npm | @radix-ui/react-arrow | 1.1.15 | MIT |
+| npm | @radix-ui/react-arrow | 1.1.17 | MIT |
 | npm | @radix-ui/react-aspect-ratio | 1.1.15 | MIT |
 | npm | @radix-ui/react-avatar | 1.2.6 | MIT |
 | npm | @radix-ui/react-checkbox | 1.3.11 | MIT |
 | npm | @radix-ui/react-collapsible | 1.1.20 | MIT |
+| npm | @radix-ui/react-collapsible | 1.2.1 | MIT |
 | npm | @radix-ui/react-collection | 1.1.15 | MIT |
+| npm | @radix-ui/react-collection | 1.2.0 | MIT |
 | npm | @radix-ui/react-compose-refs | 1.1.5 | MIT |
 | npm | @radix-ui/react-context | 1.2.2 | MIT |
+| npm | @radix-ui/react-context | 1.3.0 | MIT |
 | npm | @radix-ui/react-context-menu | 2.3.7 | MIT |
 | npm | @radix-ui/react-dialog | 1.1.23 | MIT |
+| npm | @radix-ui/react-dialog | 1.3.1 | MIT |
 | npm | @radix-ui/react-direction | 1.1.4 | MIT |
+| npm | @radix-ui/react-direction | 1.2.0 | MIT |
 | npm | @radix-ui/react-dismissable-layer | 1.1.19 | MIT |
+| npm | @radix-ui/react-dismissable-layer | 1.2.1 | MIT |
 | npm | @radix-ui/react-dropdown-menu | 2.1.24 | MIT |
 | npm | @radix-ui/react-focus-guards | 1.1.6 | MIT |
+| npm | @radix-ui/react-focus-guards | 1.2.0 | MIT |
 | npm | @radix-ui/react-focus-scope | 1.1.16 | MIT |
+| npm | @radix-ui/react-focus-scope | 1.3.1 | MIT |
 | npm | @radix-ui/react-form | 0.1.16 | MIT |
 | npm | @radix-ui/react-hover-card | 1.1.23 | MIT |
 | npm | @radix-ui/react-id | 1.1.4 | MIT |
@@ -303,30 +323,42 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @radix-ui/react-menu | 2.1.24 | MIT |
 | npm | @radix-ui/react-menubar | 1.1.24 | MIT |
 | npm | @radix-ui/react-navigation-menu | 1.2.22 | MIT |
+| npm | @radix-ui/react-navigation-menu | 1.4.1 | MIT |
 | npm | @radix-ui/react-one-time-password-field | 0.1.16 | MIT |
 | npm | @radix-ui/react-password-toggle-field | 0.1.11 | MIT |
 | npm | @radix-ui/react-popover | 1.1.23 | MIT |
+| npm | @radix-ui/react-popover | 1.3.1 | MIT |
 | npm | @radix-ui/react-popper | 1.3.7 | MIT |
+| npm | @radix-ui/react-popper | 1.4.0 | MIT |
 | npm | @radix-ui/react-portal | 1.1.17 | MIT |
+| npm | @radix-ui/react-portal | 1.2.0 | MIT |
 | npm | @radix-ui/react-presence | 1.1.10 | MIT |
+| npm | @radix-ui/react-presence | 1.1.11 | MIT |
 | npm | @radix-ui/react-primitive | 2.1.10 | MIT |
+| npm | @radix-ui/react-primitive | 2.2.0 | MIT |
 | npm | @radix-ui/react-progress | 1.1.16 | MIT |
 | npm | @radix-ui/react-radio-group | 1.4.7 | MIT |
 | npm | @radix-ui/react-roving-focus | 1.1.19 | MIT |
+| npm | @radix-ui/react-roving-focus | 1.2.1 | MIT |
 | npm | @radix-ui/react-scroll-area | 1.2.18 | MIT |
+| npm | @radix-ui/react-scroll-area | 1.4.0 | MIT |
 | npm | @radix-ui/react-select | 2.3.7 | MIT |
 | npm | @radix-ui/react-separator | 1.1.15 | MIT |
 | npm | @radix-ui/react-slider | 1.4.7 | MIT |
 | npm | @radix-ui/react-slot | 1.3.3 | MIT |
+| npm | @radix-ui/react-slot | 1.5.0 | MIT |
 | npm | @radix-ui/react-switch | 1.3.7 | MIT |
 | npm | @radix-ui/react-tabs | 1.1.21 | MIT |
+| npm | @radix-ui/react-tabs | 1.2.1 | MIT |
 | npm | @radix-ui/react-toast | 1.2.23 | MIT |
 | npm | @radix-ui/react-toggle | 1.1.18 | MIT |
 | npm | @radix-ui/react-toggle-group | 1.1.19 | MIT |
 | npm | @radix-ui/react-toolbar | 1.1.19 | MIT |
 | npm | @radix-ui/react-tooltip | 1.2.16 | MIT |
 | npm | @radix-ui/react-use-callback-ref | 1.1.4 | MIT |
+| npm | @radix-ui/react-use-callback-ref | 1.1.5 | MIT |
 | npm | @radix-ui/react-use-controllable-state | 1.2.6 | MIT |
+| npm | @radix-ui/react-use-controllable-state | 1.3.0 | MIT |
 | npm | @radix-ui/react-use-effect-event | 0.0.5 | MIT |
 | npm | @radix-ui/react-use-escape-keydown | 1.1.5 | MIT |
 | npm | @radix-ui/react-use-is-hydrated | 0.1.3 | MIT |
@@ -334,23 +366,32 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @radix-ui/react-use-previous | 1.1.4 | MIT |
 | npm | @radix-ui/react-use-rect | 1.1.4 | MIT |
 | npm | @radix-ui/react-use-size | 1.1.4 | MIT |
+| npm | @radix-ui/react-use-size | 1.1.5 | MIT |
 | npm | @radix-ui/react-visually-hidden | 1.2.11 | MIT |
+| npm | @radix-ui/react-visually-hidden | 1.2.13 | MIT |
 | npm | @radix-ui/rect | 1.1.3 | MIT |
-| npm | @rollup/rollup-win32-x64-gnu | 4.63.3 | MIT |
-| npm | @rollup/rollup-win32-x64-msvc | 4.63.3 | MIT |
+| npm | @rollup/rollup-darwin-arm64 | 4.63.3 | MIT |
 | npm | @scarf/scarf | 1.4.0 | Apache-2.0 |
 | npm | @scena/dragscroll | 1.4.0 | MIT |
 | npm | @scena/event-emitter | 1.0.5 | MIT |
 | npm | @scena/matrix | 1.1.1 | MIT |
 | npm | @schummar/icu-type-parser | 1.21.5 | MIT |
 | npm | @sec-ant/readable-stream | 0.4.1 | MIT |
+| npm | @shikijs/core | 4.5.0 | MIT |
+| npm | @shikijs/engine-javascript | 4.5.0 | MIT |
+| npm | @shikijs/engine-oniguruma | 4.5.0 | MIT |
+| npm | @shikijs/langs | 4.5.0 | MIT |
+| npm | @shikijs/primitive | 4.5.0 | MIT |
+| npm | @shikijs/themes | 4.5.0 | MIT |
+| npm | @shikijs/types | 4.5.0 | MIT |
+| npm | @shikijs/vscode-textmate | 10.0.2 | MIT |
 | npm | @sindresorhus/is | 4.6.0 | MIT |
 | npm | @sindresorhus/merge-streams | 4.0.0 | MIT |
 | npm | @sindresorhus/slugify | 2.2.1 | MIT |
 | npm | @sindresorhus/transliterate | 1.6.0 | MIT |
 | npm | @standard-schema/spec | 1.1.0 | MIT |
 | npm | @swc/core | 1.16.2 | Apache-2.0 |
-| npm | @swc/core-win32-x64-msvc | 1.16.2 | Apache-2.0 AND MIT |
+| npm | @swc/core-darwin-arm64 | 1.16.2 | Apache-2.0 AND MIT |
 | npm | @swc/counter | 0.1.3 | Apache-2.0 |
 | npm | @swc/helpers | 0.5.23 | Apache-2.0 |
 | npm | @swc/types | 0.1.28 | Apache-2.0 |
@@ -358,7 +399,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @tabler/icons-react | 3.48.0 | MIT |
 | npm | @tailwindcss/node | 4.3.3 | MIT |
 | npm | @tailwindcss/oxide | 4.3.3 | MIT |
-| npm | @tailwindcss/oxide-win32-x64-msvc | 4.3.3 | MIT |
+| npm | @tailwindcss/oxide-darwin-arm64 | 4.3.3 | MIT |
 | npm | @tailwindcss/postcss | 4.3.3 | MIT |
 | npm | @tanstack/react-virtual | 3.14.13 | MIT |
 | npm | @tanstack/virtual-core | 3.17.11 | MIT |
@@ -405,6 +446,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @types/hast | 3.0.5 | MIT |
 | npm | @types/json-schema | 7.0.15 | MIT |
 | npm | @types/mdast | 4.0.4 | MIT |
+| npm | @types/mdx | 2.0.13 | MIT |
+| npm | @types/mdx | 2.0.14 | MIT |
 | npm | @types/ms | 2.1.0 | MIT |
 | npm | @types/node | 24.13.5 | MIT |
 | npm | @types/node | 26.6.1 | MIT |
@@ -440,10 +483,13 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | @workflow/serde | 4.1.0 | Apache-2.0 |
 | npm | @workflow/serde | 4.1.0-beta.2 | Apache-2.0 |
 | npm | @yarnpkg/lockfile | 1.1.0 | BSD-2-Clause |
+| npm | @yuku-core/binding-darwin-arm64 | 0.17.0 | MIT |
+| npm | @yuku-toolchain/types | 0.17.0 | MIT |
 | npm | @zkochan/js-yaml | 0.0.7 | MIT |
 | npm | abbrev | 5.0.0 | ISC |
 | npm | accepts | 2.0.0 | MIT |
 | npm | acorn | 8.18.0 | MIT |
+| npm | acorn | 8.19.0 | MIT |
 | npm | acorn-jsx | 5.3.2 | MIT |
 | npm | address | 2.0.3 | MIT |
 | npm | agent-base | 6.0.2 | MIT |
@@ -463,6 +509,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | array-timsort | 1.0.3 | MIT |
 | npm | assertion-error | 2.0.1 | MIT |
 | npm | ast-types | 0.16.3 | MIT |
+| npm | astring | 1.9.0 | MIT |
 | npm | async-function | 1.0.0 | MIT |
 | npm | async-generator-function | 1.0.0 | MIT |
 | npm | asynckit | 0.4.0 | MIT |
@@ -526,7 +573,9 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | clsx | 2.1.1 | MIT |
 | npm | cn | 0.2.6 | MIT |
 | npm | cn | 0.3.0 | MIT |
+| npm | cn | 0.4.0 | MIT |
 | npm | code-block-writer | 13.0.3 | MIT |
+| npm | collapse-white-space | 2.1.0 | MIT |
 | npm | color-convert | 2.0.1 | MIT |
 | npm | color-name | 1.1.4 | MIT |
 | npm | columnify | 1.6.0 | MIT |
@@ -536,6 +585,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | commander | 14.0.3 | MIT |
 | npm | commander | 15.0.0 | MIT |
 | npm | comment-json | 5.0.0 | MIT |
+| npm | compute-scroll-into-view | 3.1.1 | MIT |
 | npm | conf | 10.2.0 | MIT |
 | npm | confusing-browser-globals | 1.0.11 | MIT |
 | npm | content-disposition | 1.1.0 | MIT |
@@ -617,6 +667,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | es-object-atoms | 1.1.2 | MIT |
 | npm | es-set-tostringtag | 2.1.0 | MIT |
 | npm | es-toolkit | 1.52.0 | MIT |
+| npm | esast-util-from-estree | 2.0.0 | MIT |
+| npm | esast-util-from-js | 2.0.1 | MIT |
 | npm | esbuild | 0.28.2 | MIT |
 | npm | escalade | 3.2.0 | MIT |
 | npm | escape-html | 1.0.3 | MIT |
@@ -634,7 +686,13 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | esquery | 1.7.0 | BSD-3-Clause |
 | npm | esrecurse | 4.3.0 | BSD-2-Clause |
 | npm | estraverse | 5.3.0 | BSD-2-Clause |
+| npm | estree-util-attach-comments | 3.0.0 | MIT |
+| npm | estree-util-build-jsx | 3.0.1 | MIT |
 | npm | estree-util-is-identifier-name | 3.0.0 | MIT |
+| npm | estree-util-scope | 1.0.1 | MIT |
+| npm | estree-util-to-js | 2.0.0 | MIT |
+| npm | estree-util-value-to-estree | 3.5.0 | MIT |
+| npm | estree-util-visit | 2.0.0 | MIT |
 | npm | estree-walker | 3.0.3 | MIT |
 | npm | esutils | 2.0.3 | BSD-2-Clause |
 | npm | etag | 1.8.1 | MIT |
@@ -677,10 +735,16 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | form-data | 4.0.6 | MIT |
 | npm | forwarded | 0.2.0 | MIT |
 | npm | framer-motion | 13.4.1 | MIT |
+| npm | framer-motion | 14.3.0 | MIT |
 | npm | framework-utils | 1.1.0 | MIT |
 | npm | fresh | 2.0.0 | MIT |
 | npm | fs-constants | 1.0.0 | MIT |
 | npm | fs-extra | 11.4.1 | MIT |
+| npm | fsevents | 2.3.2 | MIT |
+| npm | fsevents | 2.3.3 | MIT |
+| npm | fumadocs-core | 16.17.5 | MIT |
+| npm | fumadocs-mdx | 15.4.7 | MIT |
+| npm | fumadocs-ui | 16.17.5 | MIT |
 | npm | function-bind | 1.1.2 | MIT |
 | npm | fuzzysort | 3.1.0 | MIT |
 | npm | generator-function | 2.0.1 | MIT |
@@ -695,6 +759,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | get-proto | 1.0.1 | MIT |
 | npm | get-stream | 6.0.1 | MIT |
 | npm | get-stream | 9.0.1 | MIT |
+| npm | github-slugger | 2.0.0 | ISC |
 | npm | glob-parent | 5.1.2 | ISC |
 | npm | glob-parent | 6.0.2 | ISC |
 | npm | globals | 17.12.0 | MIT |
@@ -706,12 +771,18 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | has-tostringtag | 1.0.2 | MIT |
 | npm | hashery | 1.5.1 | MIT |
 | npm | hasown | 2.0.4 | MIT |
+| npm | hast-util-from-dom | 5.0.1 | ISC |
+| npm | hast-util-parse-selector | 4.0.0 | MIT |
+| npm | hast-util-to-estree | 3.1.3 | MIT |
+| npm | hast-util-to-html | 9.0.5 | MIT |
 | npm | hast-util-to-jsx-runtime | 2.3.6 | MIT |
 | npm | hast-util-whitespace | 3.0.0 | MIT |
+| npm | hastscript | 9.0.1 | MIT |
 | npm | hono | 4.13.8 | MIT |
 | npm | hookified | 1.15.1 | MIT |
 | npm | hookified | 2.2.0 | MIT |
 | npm | html-url-attributes | 3.0.1 | MIT |
+| npm | html-void-elements | 3.0.0 | MIT |
 | npm | http-errors | 2.0.1 | MIT |
 | npm | https-proxy-agent | 5.0.1 | MIT |
 | npm | human-signals | 2.1.0 | Apache-2.0 |
@@ -797,11 +868,11 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | kleur | 4.1.5 | MIT |
 | npm | ldrs | 1.1.9 | MIT |
 | npm | lefthook | 2.1.14 | MIT |
-| npm | lefthook-windows-x64 | 2.1.14 | MIT |
+| npm | lefthook-darwin-arm64 | 2.1.14 | MIT |
 | npm | levn | 0.4.1 | MIT |
 | npm | libsql | 0.5.29 | MIT |
 | npm | lightningcss | 1.32.0 | MPL-2.0 |
-| npm | lightningcss-win32-x64-msvc | 1.32.0 | MPL-2.0 |
+| npm | lightningcss-darwin-arm64 | 1.32.0 | MPL-2.0 |
 | npm | lines-and-columns | 1.2.4 | MIT |
 | npm | lines-and-columns | 2.0.3 | MIT |
 | npm | load-esm | 1.0.3 | MIT |
@@ -815,9 +886,13 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | longest-streak | 3.1.0 | MIT |
 | npm | lru-cache | 11.5.2 | BlueOak-1.0.0 |
 | npm | lru-cache | 5.1.1 | ISC |
+| npm | lucide-react | 1.58.0 | ISC |
+| npm | lucide-react | 1.59.0 | ISC |
 | npm | magic-string | 0.30.21 | MIT |
 | npm | magic-string | 1.0.0 | MIT |
 | npm | magic-string | 1.4.1 | MIT |
+| npm | magic-string | 1.4.3 | MIT |
+| npm | markdown-extensions | 2.0.0 | MIT |
 | npm | markdown-table | 3.0.4 | MIT |
 | npm | math-intrinsics | 1.1.0 | MIT |
 | npm | mdast-util-find-and-replace | 3.0.2 | MIT |
@@ -828,6 +903,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | mdast-util-gfm-strikethrough | 2.0.0 | MIT |
 | npm | mdast-util-gfm-table | 2.0.0 | MIT |
 | npm | mdast-util-gfm-task-list-item | 2.0.0 | MIT |
+| npm | mdast-util-mdx | 3.0.0 | MIT |
 | npm | mdast-util-mdx-expression | 2.0.1 | MIT |
 | npm | mdast-util-mdx-jsx | 3.2.0 | MIT |
 | npm | mdast-util-mdxjs-esm | 2.0.1 | MIT |
@@ -841,6 +917,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | merge-stream | 2.0.0 | MIT |
 | npm | merge2 | 1.4.1 | MIT |
 | npm | micromark | 4.0.2 | MIT |
+| npm | micromark | 4.0.3 | MIT |
 | npm | micromark-core-commonmark | 2.0.3 | MIT |
 | npm | micromark-extension-gfm | 3.0.0 | MIT |
 | npm | micromark-extension-gfm-autolink-literal | 2.1.0 | MIT |
@@ -849,8 +926,14 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | micromark-extension-gfm-table | 2.1.2 | MIT |
 | npm | micromark-extension-gfm-tagfilter | 2.0.0 | MIT |
 | npm | micromark-extension-gfm-task-list-item | 2.1.0 | MIT |
+| npm | micromark-extension-mdx-expression | 3.0.1 | MIT |
+| npm | micromark-extension-mdx-jsx | 3.0.2 | MIT |
+| npm | micromark-extension-mdx-md | 2.0.0 | MIT |
+| npm | micromark-extension-mdxjs | 3.0.0 | MIT |
+| npm | micromark-extension-mdxjs-esm | 3.0.0 | MIT |
 | npm | micromark-factory-destination | 2.0.1 | MIT |
 | npm | micromark-factory-label | 2.0.1 | MIT |
+| npm | micromark-factory-mdx-expression | 2.0.3 | MIT |
 | npm | micromark-factory-space | 2.0.1 | MIT |
 | npm | micromark-factory-title | 2.0.1 | MIT |
 | npm | micromark-factory-whitespace | 2.0.1 | MIT |
@@ -860,7 +943,9 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | micromark-util-combine-extensions | 2.0.1 | MIT |
 | npm | micromark-util-decode-numeric-character-reference | 2.0.2 | MIT |
 | npm | micromark-util-decode-string | 2.0.1 | MIT |
+| npm | micromark-util-edit-map | 1.0.0 | MIT |
 | npm | micromark-util-encode | 2.0.1 | MIT |
+| npm | micromark-util-events-to-acorn | 2.0.3 | MIT |
 | npm | micromark-util-html-tag-name | 2.0.1 | MIT |
 | npm | micromark-util-normalize-identifier | 2.0.1 | MIT |
 | npm | micromark-util-resolve-all | 2.0.1 | MIT |
@@ -882,8 +967,11 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | minipass | 7.1.3 | BlueOak-1.0.0 |
 | npm | minizlib | 3.1.0 | MIT |
 | npm | motion | 13.4.0 | MIT |
+| npm | motion | 14.3.0 | MIT |
 | npm | motion-dom | 13.4.1 | MIT |
+| npm | motion-dom | 14.3.0 | MIT |
 | npm | motion-utils | 13.3.0 | MIT |
+| npm | motion-utils | 14.1.1 | MIT |
 | npm | ms | 2.1.3 | MIT |
 | npm | multer | 2.4.0 | MIT |
 | npm | mute-stream | 3.0.0 | ISC |
@@ -893,6 +981,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | next | 16.3.5 | MIT |
 | npm | next-intl | 4.14.5 | MIT |
 | npm | next-intl-swc-plugin-extractor | 4.14.5 | MIT |
+| npm | next-themes | 0.4.6 | MIT |
 | npm | node-addon-api | 7.1.1 | MIT |
 | npm | node-emoji | 2.2.0 | MIT |
 | npm | node-gyp | 13.0.2 | MIT |
@@ -900,6 +989,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | nopt | 10.0.1 | ISC |
 | npm | npm-run-path | 4.0.1 | MIT |
 | npm | npm-run-path | 6.0.0 | MIT |
+| npm | npm-to-yarn | 3.2.0 | MIT |
 | npm | nx | 23.2.1 | MIT |
 | npm | object-assign | 4.1.1 | MIT |
 | npm | object-inspect | 1.13.4 | MIT |
@@ -909,6 +999,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | once | 1.4.0 | ISC |
 | npm | onetime | 5.1.2 | MIT |
 | npm | onetime | 7.0.0 | MIT |
+| npm | oniguruma-parser | 0.12.2 | MIT |
+| npm | oniguruma-to-es | 4.3.6 | MIT |
 | npm | open | 10.1.0 | MIT |
 | npm | open | 11.0.4 | MIT |
 | npm | open | 8.4.2 | MIT |
@@ -1015,13 +1107,23 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | readable-stream | 3.6.2 | MIT |
 | npm | readdirp | 5.1.1 | MIT |
 | npm | recast | 0.23.21 | MIT |
+| npm | recma-build-jsx | 1.0.0 | MIT |
+| npm | recma-jsx | 1.0.1 | MIT |
+| npm | recma-parse | 1.0.0 | MIT |
+| npm | recma-stringify | 1.0.0 | MIT |
 | npm | reflect-metadata | 0.2.2 | Apache-2.0 |
 | npm | regenerate | 1.4.2 | MIT |
 | npm | regenerate-unicode-properties | 10.2.2 | MIT |
+| npm | regex | 6.1.0 | MIT |
+| npm | regex-recursion | 6.0.2 | MIT |
+| npm | regex-utilities | 2.3.0 | MIT |
 | npm | regexpu-core | 6.4.0 | MIT |
 | npm | regjsgen | 0.8.0 | MIT |
 | npm | regjsparser | 0.13.2 | BSD-2-Clause |
+| npm | rehype-recma | 1.0.0 | MIT |
+| npm | remark | 15.0.1 | MIT |
 | npm | remark-gfm | 4.0.1 | MIT |
+| npm | remark-mdx | 3.1.1 | MIT |
 | npm | remark-parse | 11.0.0 | MIT |
 | npm | remark-rehype | 11.1.2 | MIT |
 | npm | remark-stringify | 11.0.0 | MIT |
@@ -1046,6 +1148,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | safe-buffer | 5.2.1 | MIT |
 | npm | safer-buffer | 2.1.2 | MIT |
 | npm | scheduler | 0.28.0 | MIT |
+| npm | scroll-into-view-if-needed | 3.1.0 | MIT |
 | npm | section-matter | 1.0.0 | MIT |
 | npm | selecto | 1.26.3 | MIT |
 | npm | semver | 6.3.1 | ISC |
@@ -1059,6 +1162,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | sharp | 0.35.4 | Apache-2.0 |
 | npm | shebang-command | 2.0.0 | MIT |
 | npm | shebang-regex | 3.0.0 | MIT |
+| npm | shiki | 4.5.0 | MIT |
 | npm | side-channel | 1.1.1 | MIT |
 | npm | side-channel-list | 1.0.1 | MIT |
 | npm | side-channel-map | 1.0.1 | MIT |
@@ -1111,6 +1215,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | tiny-invariant | 1.3.3 | MIT |
 | npm | tinybench | 6.1.4 | MIT |
 | npm | tinyexec | 1.3.0 | MIT |
+| npm | tinyexec | 1.3.1 | MIT |
 | npm | tinyglobby | 0.2.17 | MIT |
 | npm | tmp | 0.2.7 | MIT |
 | npm | to-regex-range | 5.0.1 | MIT |
@@ -1145,6 +1250,8 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | unified | 11.0.5 | MIT |
 | npm | unist-util-is | 6.0.1 | MIT |
 | npm | unist-util-position | 5.0.0 | MIT |
+| npm | unist-util-position-from-estree | 2.0.0 | MIT |
+| npm | unist-util-remove-position | 5.0.0 | MIT |
 | npm | unist-util-stringify-position | 4.0.0 | MIT |
 | npm | unist-util-visit | 5.1.0 | MIT |
 | npm | unist-util-visit-parents | 6.0.2 | MIT |
@@ -1166,6 +1273,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | vitest | 5.0.1 | MIT |
 | npm | w3c-keyname | 2.2.8 | MIT |
 | npm | wcwidth | 1.0.1 | MIT |
+| npm | web-namespaces | 2.0.1 | MIT |
 | npm | which | 2.0.2 | ISC |
 | npm | which | 3.0.1 | ISC |
 | npm | which | 4.0.0 | ISC |
@@ -1194,8 +1302,13 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | npm | yocto-queue | 0.1.0 | MIT |
 | npm | yocto-spinner | 1.2.2 | MIT |
 | npm | yoctocolors | 2.2.0 | MIT |
+| npm | yuku-analyzer | 0.17.0 | MIT |
+| npm | yuku-ast | 0.17.0 | MIT |
+| npm | yuku-core | 0.17.0 | MIT |
+| npm | zbsearch | 4.0.1 | Apache-2.0 |
 | npm | zod | 3.25.76 | MIT |
 | npm | zod | 4.6.5 | MIT |
+| npm | zod | 4.6.7 | MIT |
 | npm | zod-from-json-schema | 0.5.6 | MIT |
 | npm | zod-to-json-schema | 3.25.2 | ISC |
 | npm | zwitch | 2.0.4 | MIT |
@@ -1208,13 +1321,17 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | python | anyio | 4.15.1 | MIT |
 | python | argcomplete | 3.7.2 | Apache-2.0 |
 | python | black | 26.5.1 | MIT |
+| python | brotli | 1.2.0 | MIT |
 | python | certifi | 2026.7.22 | MPL-2.0 |
+| python | cffi | 2.1.1 | MIT-0 |
+| python | charset-normalizer | 3.5.2 | MIT |
 | python | click | 8.5.0 | BSD-3-Clause |
-| python | colorama | 0.4.6 | BSD-3-Clause |
 | python | coverage | 7.16.1 | Apache-2.0 |
+| python | cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause |
 | python | datamodel-code-generator | 0.82.0 | MIT |
 | python | engine | 0.1.0 | Apache-2.0 |
 | python | fastapi | 0.141.1 | MIT |
+| python | fonttools | 4.67.0 | MIT |
 | python | genson | 1.4.0 | MIT |
 | python | grimp | 3.17 | BSD-2-Clause |
 | python | h11 | 0.16.0 | MIT |
@@ -1235,11 +1352,15 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | python | nodeenv | 1.10.0 | BSD-3-Clause |
 | python | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | python | pathspec | 1.1.1 | MPL-2.0 |
+| python | pdfminer.six | 20260107 | MIT |
+| python | pdfplumber | 0.11.10 | MIT |
 | python | pillow | 12.3.0 | MIT-CMU |
 | python | platformdirs | 4.11.10 | MIT |
 | python | pluggy | 1.6.0 | MIT |
+| python | pycparser | 3.11 | BSD-3-Clause |
 | python | pydantic | 2.13.5 | MIT |
 | python | pydantic_core | 2.46.5 | MIT |
+| python | pypdfium2 | 5.14.0 | BSD-3-Clause, Apache-2.0, dependency licenses |
 | python | pyright | 1.1.414 | MIT |
 | python | pytest | 9.1.1 | MIT |
 | python | pytest-cov | 7.1.0 | MIT |
@@ -1254,6 +1375,7 @@ GPL и AGPL не подходят: заказчик берёт решение в
 | python | typing-inspection | 0.4.4 | MIT |
 | python | typing_extensions | 4.16.0 | PSF-2.0 |
 | python | uvicorn | 0.53.0 | BSD-3-Clause |
+| python | uvloop | 0.22.1 | MIT |
 | python | watchfiles | 1.2.0 | MIT |
 | python | websockets | 17.1 | BSD-3-Clause |
 | python | xlsxwriter | 3.2.9 | BSD-2-Clause |

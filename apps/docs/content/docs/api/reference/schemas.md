@@ -151,7 +151,7 @@ description: "Имена моделей из OpenAPI-документа API."
 
 ## ChatAttachment
 
-Тип: `object или object или object`.
+Тип: `object или object или object или object`.
 
 ## ChatDocument
 
@@ -580,6 +580,8 @@ A palette role, or six hex digits without a hash when a user chose their own.
 | `budget` | object | нет |  |
 | `outlineSource` | `user`, `model` | нет |  |
 | `templateId` | string | да |  |
+| `brandbookId` | string | нет |  |
+| `brandbookPriority` | `brandbook`, `template` | нет |  |
 | `brief` | string | да |  |
 | `slideCount` | integer | нет |  |
 | `outline` | — | нет |  |

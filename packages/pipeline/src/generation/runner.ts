@@ -16,6 +16,7 @@ import {
   type StageTiming,
   type RunArtifact,
   type GenerationUsage,
+  type BrandbookBinding,
 } from '@lct/contracts';
 import { createMastra, closeMastra } from '../mastra.js';
 import {
@@ -81,6 +82,8 @@ export interface GenerateOptions {
   outline?: DeckOutline | null;
   outlineSource?: 'user' | 'model';
   profile: GenerationProfile;
+  /** Effective brand rules captured for this immutable build, if selected. */
+  brandbook?: BrandbookBinding;
   /** The template indexer's notes for this profile, if the template was indexed. */
   notes?: readonly CompositionNote[];
   registryDir: string;
@@ -405,6 +408,7 @@ export async function generatePresentation(options: GenerateOptions) {
         String(today.getDate()).padStart(2, '0'),
       ].join('-'),
       briefYears: briefYears(sourceBrief),
+      ...(options.brandbook ? { brandbook: options.brandbook } : {}),
     });
     // What the template's samples still say on a slide is not a fact of the deck: a figure or a
     // period label (`05`, `III кв.`, a year) kept as the writer found it, with no fact in the

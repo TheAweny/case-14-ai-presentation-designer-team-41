@@ -1,0 +1,55 @@
+{
+  "contract": "BrandbookTemplateRequest",
+  "valid": [
+    {
+      "name": "minimal valid",
+      "payload": {
+        "schemaVersion": 1,
+        "templatePath": "t.pptx",
+        "outputPath": "out.pptx",
+        "brandbook": {
+          "profile": {
+            "schemaVersion": 1,
+            "parserVersion": "test",
+            "sourceSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "status": "ready",
+            "sources": [
+              {
+                "id": "s",
+                "path": "tokens.json",
+                "format": "json",
+                "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                "sizeBytes": 2,
+                "status": "parsed",
+                "warnings": []
+              }
+            ],
+            "tokens": [],
+            "assets": [],
+            "sections": [],
+            "warnings": [],
+            "coverage": {
+              "filesTotal": 1,
+              "filesParsed": 1,
+              "filesUnsupported": 0,
+              "needsOcr": false
+            }
+          },
+          "priority": "brandbook",
+          "schemaVersion": 1
+        }
+      },
+      "path": ["schemaVersion"]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "invalid payload",
+      "why": "missing required field",
+      "payload": {
+        "schemaVersion": 1
+      },
+      "path": ["templatePath"]
+    }
+  ]
+}

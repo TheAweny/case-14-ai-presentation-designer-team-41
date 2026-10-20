@@ -554,3 +554,6 @@ export {
   type Dataset,
   type DatasetExtractRequest,
 } from './dataset.js';
+
+export * from './brandbook.js';
+export * from './brandbook-template.js';

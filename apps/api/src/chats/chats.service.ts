@@ -880,6 +880,17 @@ export class ChatsService implements OnApplicationShutdown {
         checked.push(attachment);
         continue;
       }
+      if (attachment.kind === 'brandbook') {
+        const result = await this.pool.query<{ name: string }>(
+          `SELECT COALESCE(display_name, file_name) AS name FROM stored_files
+           WHERE id = $1 AND kind = 'brandbook' AND ${visibleFile(2)}`,
+          [attachment.brandbookId, account.id],
+        );
+        if (!result.rows[0])
+          throw new NotFoundException('An attached brandbook is not in the library.');
+        checked.push({ ...attachment, name: result.rows[0].name });
+        continue;
+      }
       const id = attachment.kind === 'file' ? attachment.fileId : attachment.templateId;
       const kind = attachment.kind === 'file' ? 'content' : 'template';
       const result = await this.pool.query<{ name: string; size_bytes: string }>(

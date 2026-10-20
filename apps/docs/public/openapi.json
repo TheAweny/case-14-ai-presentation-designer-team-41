@@ -555,6 +555,40 @@
           {
             "additionalProperties": false,
             "properties": {
+              "brandbookId": {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "brandbook"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "priority": {
+                "enum": [
+                  "brandbook",
+                  "template"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "brandbookId",
+              "name"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
               "deckId": {
                 "maxLength": 100,
                 "minLength": 1,
@@ -984,6 +1018,19 @@
           {
             "additionalProperties": false,
             "properties": {
+              "brandbookId": {
+                "format": "uuid",
+                "nullable": true,
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              "brandbookPriority": {
+                "enum": [
+                  "brandbook",
+                  "template"
+                ],
+                "type": "string"
+              },
               "buildId": {
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -2891,6 +2938,19 @@
       },
       "GenerationRequest": {
         "properties": {
+          "brandbookId": {
+            "format": "uuid",
+            "nullable": true,
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "brandbookPriority": {
+            "enum": [
+              "brandbook",
+              "template"
+            ],
+            "type": "string"
+          },
           "brief": {
             "maxLength": 60000,
             "minLength": 10,

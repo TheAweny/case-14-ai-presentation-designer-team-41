@@ -5,7 +5,7 @@ import { usePathname, useRouter as useNextRouter } from 'next/navigation';
 import { useRouter } from '@bprogress/next/app';
 import { useTranslations } from 'next-intl';
 import { ModeMenu, nextChatMode, useLastChatMode } from '@/components/assistant/mode-menu';
-import { chatStore } from '@/components/assistant/session';
+import { chatStore, uploadBrandbook } from '@/components/assistant/session';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { openSettings } from '@/components/settings/open-settings';
 import { useWriterModels } from '@/components/settings/model-settings-store';
@@ -19,9 +19,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConnectIcon, WarningIcon } from '@/components/ui/icons';
-import { CHAT_MODES } from '@lct/contracts';
+import { CHAT_MODES, type ChatAttachment } from '@lct/contracts';
 import {
   COMPOSER_FILE_ACCEPT,
+  BRANDBOOK_FILE_ACCEPT,
   TEMPLATE_FILE_ACCEPT,
   addComposerFiles,
   chosenTemplate,
@@ -91,9 +92,19 @@ export function DeckComposer({
   const field = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const templatePicker = useRef<HTMLInputElement>(null);
+  const brandbookPicker = useRef<HTMLInputElement>(null);
+  const brandbookMode = useRef(false);
   const [text, setText] = useState('');
   const [files, setFiles] = useState<readonly File[]>([]);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [brandbookFile, setBrandbookFile] = useState<File | null>(null);
+  const [brandbookAttachment, setBrandbookAttachment] = useState<Extract<
+    ChatAttachment,
+    { kind: 'brandbook' }
+  > | null>(null);
+  const [brandbookStatus, setBrandbookStatus] = useState<'idle' | 'uploading' | 'ready' | 'error'>(
+    'idle',
+  );
   const [rejected, setRejected] = useState<readonly string[]>([]);
   const [emptyTemplates, setEmptyTemplates] = useState<readonly string[]>([]);
   const [mode, setMode] = useLastChatMode();
@@ -112,7 +123,8 @@ export function DeckComposer({
   const project = projects.find((item) => item.projectId === projectId) ?? null;
   const groups = templateGroups(templates, project);
   const selected = chosenTemplate(templates, project, pickedId);
-  const ready = hasContent(text, files) || templateFile !== null;
+  const ready =
+    (hasContent(text, files) || templateFile !== null) && brandbookStatus !== 'uploading';
   // Пока настройки моделей не загрузились, неизвестно, есть ли чем писать: отправку придерживаем.
   const box = usePromptBox({ ready: ready && models !== null, busy: sending });
   const suggestions = useComposerSuggestions({
@@ -144,9 +156,30 @@ export function DeckComposer({
 
   const addFiles = (added: readonly File[]) => {
     if (added.length === 0) return;
-    const update = addComposerFiles({ files, templateFile }, added);
+    const update = addComposerFiles(
+      { files, templateFile, brandbookFile },
+      added,
+      brandbookMode.current ? 'brandbook' : 'auto',
+    );
+    const selectedBrandbook = brandbookMode.current ? added.at(-1) : null;
+    brandbookMode.current = false;
     setFiles(update.files);
     setTemplateFile(update.templateFile);
+    setBrandbookFile(update.brandbookFile ?? null);
+    if (selectedBrandbook) {
+      setBrandbookStatus('uploading');
+      void uploadBrandbook(selectedBrandbook)
+        .then((uploaded) => {
+          setBrandbookAttachment({
+            kind: 'brandbook',
+            brandbookId: uploaded.brandbookId,
+            name: uploaded.name,
+          });
+          setBrandbookFile(null);
+          setBrandbookStatus('ready');
+        })
+        .catch(() => setBrandbookStatus('error'));
+    }
     setRejected(update.rejected);
     setEmptyTemplates(update.emptyTemplates);
     if (update.templateFile !== templateFile) box.aurora.flash();
@@ -172,6 +205,8 @@ export function DeckComposer({
         slideCount,
         // Новый файл важнее выбора в меню.
         templateFile,
+        brandbookFile,
+        attachments: brandbookAttachment ? [brandbookAttachment] : [],
         template:
           templateFile || !selected
             ? null
@@ -222,7 +257,7 @@ export function DeckComposer({
         dropLabel={t('dropHere')}
         style={glowStyle}
       >
-        {templateFile || selected || files.length > 0 ? (
+        {templateFile || selected || brandbookAttachment || files.length > 0 ? (
           <PromptChips label={t('files')}>
             {templateFile ? (
               <AttachmentChip
@@ -244,6 +279,15 @@ export function DeckComposer({
                 onRemove={() => {
                   setPickedId(null);
                   box.aurora.flash();
+                }}
+              />
+            ) : null}
+            {brandbookAttachment ? (
+              <AttachmentChip
+                attachment={{ kind: 'brandbook', name: brandbookAttachment.name }}
+                onRemove={() => {
+                  setBrandbookAttachment(null);
+                  setBrandbookStatus('idle');
                 }}
               />
             ) : null}
@@ -307,6 +351,18 @@ export function DeckComposer({
           }
         >
           <input
+            ref={brandbookPicker}
+            type="file"
+            accept={BRANDBOOK_FILE_ACCEPT}
+            tabIndex={-1}
+            aria-hidden
+            className="sr-only"
+            onChange={(event) => {
+              addFiles(Array.from(event.currentTarget.files ?? []));
+              event.currentTarget.value = '';
+            }}
+          />
+          <input
             ref={picker}
             type="file"
             multiple
@@ -344,6 +400,10 @@ export function DeckComposer({
               box.aurora.flash();
             }}
             onUploadTemplate={() => templatePicker.current?.click()}
+            onBrandbook={() => {
+              brandbookMode.current = true;
+              brandbookPicker.current?.click();
+            }}
           />
           <ModeMenu value={mode} onChange={setMode} />
         </PromptToolbar>
@@ -358,6 +418,8 @@ export function DeckComposer({
           })}
         </PromptNote>
       ) : null}
+      {brandbookStatus === 'uploading' ? <PromptNote>Разбираю брендбук…</PromptNote> : null}
+      {brandbookStatus === 'error' ? <PromptNote>Не удалось разобрать брендбук.</PromptNote> : null}
       {voiceError ? <PromptNote>{voiceError}</PromptNote> : null}
     </div>
   );
