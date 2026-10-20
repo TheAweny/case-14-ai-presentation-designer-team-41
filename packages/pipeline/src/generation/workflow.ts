@@ -2307,7 +2307,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const seriesSlot = allowVisual ? chartSlot(inputData.composition) : undefined;
       const planned = seriesSlot
         ? plannedSeriesChart(
-            inputData.purpose,
+            [inputData.purpose, ...(inputData.approvedSlide?.points ?? [])].join('\n'),
             inputData.brief,
             seriesSlot,
             inputData.chartedEarlier ?? [],
@@ -2321,6 +2321,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         const sameSeries =
           planned.kind === 'chart' &&
           native &&
+          (planned.chartType !== 'line' ||
+            native.intent === 'time-series' ||
+            native.requestedType === 'line') &&
           native.categories.length === planned.categories.length &&
           native.categories.every(
             (category, index) => category.label === planned.categories[index],

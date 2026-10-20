@@ -46,6 +46,19 @@ const chart: SlotVisual = {
 };
 
 describe('ready series in the brief', () => {
+  it.each(['Линейный график', 'Линейная диаграмма', 'line chart'])(
+    'preserves the explicit %s request in deterministic fallback',
+    (request) => {
+      const purpose = `${request}: cloud_cover, среднее: 0 — 43,33, 1 — 30,83`;
+      expect(plannedSeriesChart(purpose, brief, 'body')).toMatchObject({
+        chartType: 'line',
+        series: [{ values: [43.33, 30.83] }],
+      });
+      expect(
+        plannedSeriesChart('cloud_cover, среднее: 0 — 43,33, 1 — 30,83', brief, 'body'),
+      ).toMatchObject({ chartType: 'column' });
+    },
+  );
   const weekly = (
     metric: string,
     unit: string,

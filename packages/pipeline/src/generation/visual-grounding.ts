@@ -218,7 +218,9 @@ export function plannedSeriesChart(
     {
       kind: 'chart',
       slotId,
-      chartType: 'column',
+      chartType: /(?:линейн(?:ый|ая|ую|ого)\s+(?:график|диаграмм)|line\s+chart)/iu.test(purpose)
+        ? 'line'
+        : 'column',
       categories: best.line.facts.map((fact) => fact.category),
       series: [{ name: best.line.metric, values }],
       xTitle: best.line.grouping,
