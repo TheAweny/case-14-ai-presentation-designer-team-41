@@ -55,6 +55,7 @@ import {
   OpenAICompatibleImageProvider,
   FakeImageProvider,
   AttemptBudget,
+  ModelRequestError,
   type ImageProvider,
   type IndexProgress,
 } from '@lct/pipeline';
@@ -353,15 +354,18 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     onProgress: (progress: IndexProgress) => void,
     cancel?: AbortSignal,
   ): Promise<void> {
+    let indexModel: ResolvedModel | undefined;
+    let assignedPlanner = false;
     try {
       const registryDir = this.registryDir();
       const revision = await currentTemplateIndexRevision(registryDir);
       const previous = storedTemplateIndexSchema.safeParse(stored);
       if (previous.success && templateIndexState(profile, previous.data, revision) === 'ready')
         return;
-      const resolved =
-        (await this.models.resolveRole('planner', actorOf(account))) ??
-        (await this.models.resolve(model, actorOf(account)));
+      const assigned = await this.models.resolveRole('planner', actorOf(account));
+      assignedPlanner = assigned !== null;
+      const resolved = assigned ?? (await this.models.resolve(model, actorOf(account)));
+      indexModel = resolved;
       const rawProvider = new GenerationProvider({
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
@@ -424,7 +428,24 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       throw new ServiceUnavailableException({
         code: 'template-index-failed',
         message:
-          'Не удалось завершить описание макетов шаблона. Повторите подготовку: сохранённый профиль и готовые задачи индексатора будут использованы повторно.',
+          error instanceof ModelRequestError
+            ? 'Не удалось подготовить шаблон: подключённая для этой задачи модель не выполнила запрос. ' +
+              (assignedPlanner
+                ? 'Проверьте подключение и модель «Планировщик» в настройках.'
+                : 'Проверьте подключение выбранной модели чата.')
+            : 'Не удалось завершить описание макетов шаблона. Сохранённый профиль и готовые задачи индексатора будут использованы повторно.',
+        ...(error instanceof ModelRequestError
+          ? {
+              failure: {
+                ...error.failure,
+                stage: 'template-index',
+                ...(assignedPlanner ? { role: 'planner' } : {}),
+                ...(indexModel
+                  ? { modelId: indexModel.model, connectionId: indexModel.connectionId }
+                  : {}),
+              },
+            }
+          : {}),
       });
     }
   }

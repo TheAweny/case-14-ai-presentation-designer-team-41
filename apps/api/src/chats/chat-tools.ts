@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { HttpException } from '@nestjs/common';
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
@@ -9,6 +10,7 @@ import {
   materialResearchInputSchema,
   materialResearchResultSchema,
   generationProfileSchema,
+  modelFailureSchema,
   type MaterialResearchSource,
   type ChatMessage,
   type ChatMode,
@@ -1567,13 +1569,25 @@ export async function runBuild(
       set({ status: 'cancelled', finishedAt: Date.now() });
       throw error;
     }
+    const preparationFailure =
+      error instanceof HttpException
+        ? z
+            .object({
+              code: z.literal('template-index-failed'),
+              failure: modelFailureSchema,
+              message: z.string(),
+            })
+            .safeParse(error.getResponse())
+        : null;
+    const failure = preparationFailure?.success ? preparationFailure.data.failure : undefined;
     const message = error instanceof Error ? error.message : 'The build failed.';
-    set({ status: 'failed', finishedAt: Date.now(), error: buildFailureMessage(message) });
+    const shownMessage = failure ? message : buildFailureMessage(message);
+    set({ status: 'failed', finishedAt: Date.now(), error: shownMessage });
     if (persistenceFailed) {
       if (startedRunId) generation.interrupt(startedRunId);
       throw error;
     }
-    context.show({ type: 'error', message: buildFailureMessage(message) });
+    context.show({ type: 'error', message: shownMessage, ...(failure ? { failure } : {}) });
     return {
       output: {
         status: 'failed',

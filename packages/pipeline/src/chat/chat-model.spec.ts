@@ -487,7 +487,11 @@ describe('OpenAICompatibleChatModel', () => {
     }
     expect(thrown).toBeInstanceOf(ModelRequestError);
     const requestError = thrown as ModelRequestError;
-    expect(requestError.failure).toEqual({ kind: 'quota-exhausted', modelId: expect.any(String) });
+    expect(requestError.failure).toEqual({
+      kind: 'quota-exhausted',
+      modelId: expect.any(String),
+      httpStatus: 400,
+    });
     expect(requestError.message).not.toContain('secret');
     expect(JSON.stringify(requestError.failure)).not.toContain('secret');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
