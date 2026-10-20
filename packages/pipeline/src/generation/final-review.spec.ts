@@ -38,11 +38,11 @@ describe('approved coverage', () => {
       ]).missing,
     ).toHaveLength(1);
   });
-  it('accepts a semantic coverage judgment backed by an actual visible excerpt', () => {
+  it('leaves a paraphrase unknown without a verified entailment check', () => {
     expect(
       approvedCoverage(outline, written('Гарантия действует. Оплатить заранее, до 15 октября'), [
         { slideIndex: 0, claimIndex: 1, quote: 'Оплатить заранее, до 15 октября' },
       ]).missing,
-    ).toEqual([]);
+    ).toEqual([{ slideIndex: 0, claimIndex: 1, text: 'Только при предоплате до 15 октября' }]);
   });
 });

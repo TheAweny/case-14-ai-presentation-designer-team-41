@@ -11,7 +11,7 @@ is judged by the rules the jury reads.
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["CATEGORIES", "DETERMINISTIC_CHECKS", "CheckDefinition", "check_by_id"]
+__all__ = ["CATEGORIES", "DETERMINISTIC_CHECKS", "PPTX_CHECKS", "CheckDefinition", "check_by_id"]
 
 #: Requirement groups, in the order the report lists them.
 CATEGORIES: tuple[str, ...] = ("layout", "template", "density", "integrity")
@@ -336,6 +336,25 @@ DETERMINISTIC_CHECKS: tuple[CheckDefinition, ...] = (
 )
 
 
+# File checks have a separate entry point: a SlideIR request has no media pixels or OOXML.
+# Keep these out of RULES and the legacy SlideIR runner rather than recording a false pass.
+PPTX_CHECKS: tuple[CheckDefinition, ...] = (
+    CheckDefinition(
+        id="image-text-readability",
+        category="template",
+        title="Text remains readable over the exported image",
+        description=(
+            "Reads actual PPTX media, crop and paint order under each text frame. Measures "
+            "local luminance range and worst contrast, respecting existing opaque rectangular "
+            "protection. Unsupported backgrounds produce an explicit major unknown finding. "
+            "Run through audit_image_readability after export, separately from SlideIR checks."
+        ),
+        severity="major",
+        defaults={"minContrastRatio": 4.5, "maxLuminanceRange": 0.35},
+    ),
+)
+
+
 def check_by_id(check_id: str) -> CheckDefinition:
     """Return the definition of a deterministic check.
 
@@ -345,7 +364,7 @@ def check_by_id(check_id: str) -> CheckDefinition:
     Raises:
         KeyError: If no check with that id is registered.
     """
-    for check in DETERMINISTIC_CHECKS:
+    for check in (*DETERMINISTIC_CHECKS, *PPTX_CHECKS):
         if check.id == check_id:
             return check
     raise KeyError(check_id)

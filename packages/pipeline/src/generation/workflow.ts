@@ -10,6 +10,7 @@ import {
   slotNativeSchema,
   requiredSlideClaimSchema,
   templateSlotCopySchema,
+  type Dataset,
   type ComposedSlide,
   type CompositionNote,
   type DeckOutline,
@@ -29,6 +30,9 @@ import { compositionSemantics, semanticSlotMap } from './semantics.js';
 import { type WriterModules, writerPrompt } from './writer-prompt.js';
 import type { AttemptBudget } from './attempt-budget.js';
 import { retainsClaimDetails } from './claim-details.js';
+import { boundedDatasetEvidence } from './dataset-evidence.js';
+import { verifyVisual } from './visual-grounding.js';
+export { prepareDatasets } from './dataset-evidence.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
 /** The three renderings of one brief. They differ in composition and density, not in facts. */
@@ -43,6 +47,8 @@ export type LayoutRemapPolicy = 'density' | 'preserve-block-count' | 'conceptual
 
 export interface GenerationDependencies {
   provider: TextProvider;
+  /** Trusted deterministic extraction prepared by the API, never a model answer. */
+  preparedDatasets?: readonly Dataset[];
   /** Which rendering to lay out and write. Absent: balanced. */
   variant?: DeckVariant;
   /**
@@ -926,110 +932,13 @@ function boundedSlideSchema(
   });
 }
 
-/** A figure as a brief writes it: "1 800" with a (thin, no-break) space between thousands is one number. */
-const FIGURE = /\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/g;
-
-function figuresOf(text: string): number[] {
-  return (text.match(FIGURE) ?? []).map((n) =>
-    Number(n.replace(/[ \u00a0\u202f]/g, '').replace(',', '.')),
-  );
-}
-
-/** Reject unsupported literals, units and source quotations before deterministic placement. */
-function groundedNative(
-  visual: Extract<SlotVisual, { kind: 'native' }>,
-  brief: string,
-): SlotVisual | null {
-  const norm = (text: string) => text.normalize('NFKC').replace(/\s+/g, ' ').trim();
-  const contains = (text: string, value: string) => !value || norm(text).includes(norm(value));
-  const sources =
-    visual.block.kind === 'kpi'
-      ? visual.block.items.flatMap((item) => item.sources)
-      : visual.block.sources;
-  if (sources.some((source) => !contains(brief, source.quote))) return null;
-  const quotes = sources.map((source) => source.quote).join('\n');
-  const measured = (
-    value: { state: string; literal?: string; value?: number },
-    unit: string,
-    evidence: string,
-  ) => {
-    if (value.state === 'missing') return value.literal === undefined && value.value === undefined;
-    if (value.literal === undefined || value.value === undefined) return false;
-    const parsed = Number(value.literal.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'));
-    return (
-      Number.isFinite(parsed) &&
-      parsed === value.value &&
-      contains(evidence, value.literal) &&
-      contains(evidence, unit)
-    );
-  };
-  const block = visual.block;
-  if (block.kind === 'kpi') {
-    if (
-      block.items.some((item) => {
-        const evidence = item.sources.map((source) => source.quote).join('\n');
-        return (
-          !measured(item.value, item.unit, evidence) ||
-          (item.periodKnown && !contains(evidence, item.period)) ||
-          (!!item.caveat && !contains(brief, item.caveat)) ||
-          (!!item.comparison &&
-            (!measured(item.comparison.base, item.comparison.baseUnit, evidence) ||
-              !contains(evidence, item.comparison.basePeriod)))
-        );
-      })
-    )
-      return null;
-  } else if (block.kind === 'chart') {
-    if (
-      block.series.some(
-        (series) =>
-          series.values.length !== block.categories.length ||
-          series.values.some((value) => !measured(value, series.unit, quotes)),
-      ) ||
-      block.categories.some((category) => !contains(quotes, category.label)) ||
-      (!!block.caveat && !contains(brief, block.caveat))
-    )
-      return null;
-  } else if (
-    block.rows.some(
-      (row) =>
-        row.cells.length !== block.columns.length ||
-        row.cells.some((cell) => !cell.missing && !contains(quotes, cell.text)),
-    ) ||
-    !contains(brief, block.notes) ||
-    (!!block.caveat && !contains(brief, block.caveat))
-  )
-    return null;
-  return visual;
-}
-
-/**
- * A visual only when every figure in it is in the brief: a chart is where an invented number
- * would do most harm, so a visual that cannot be traced to the source is dropped and the slot
- * keeps its text. A chart that compares nothing — one category, or the same value everywhere —
- * is a made-up score rather than data, and is dropped too.
- */
+/** Check complete measurement relationships; unsupported provenance keeps the text fallback. */
 export function groundedVisual(
   visual: SlotVisual | null | undefined,
   brief: string,
+  preparedDatasets: readonly Dataset[] = [],
 ): SlotVisual | null {
-  if (!visual) return null;
-  if (visual.kind === 'native') return groundedNative(visual, brief);
-  const known = new Set(figuresOf(brief));
-  const figures =
-    visual.kind === 'chart'
-      ? visual.series.flatMap((series) => series.values)
-      : visual.rows.flat().flatMap(figuresOf);
-  if (
-    visual.kind === 'chart' &&
-    (visual.categories.length < 2 ||
-      visual.series.some((s) => s.values.length !== visual.categories.length) ||
-      new Set(figures).size < 2)
-  )
-    return null;
-  if (visual.kind === 'table' && visual.rows.some((row) => row.length !== visual.headers.length))
-    return null;
-  return figures.length > 0 && figures.every((n) => known.has(n)) ? visual : null;
+  return verifyVisual(visual, brief, preparedDatasets);
 }
 
 function writingComposition(
@@ -1260,11 +1169,16 @@ function slotCorrections(
 
 export function createGenerationWorkflow(deps: GenerationDependencies) {
   let completed = 0;
+  const datasetEvidence = boundedDatasetEvidence(deps.preparedDatasets ?? []);
   const plan = createStep({
     id: 'plan-compositions',
     inputSchema,
     outputSchema: z.array(taskSchema),
     execute: async ({ inputData }) => {
+      for (const source of datasetEvidence.withheld)
+        await deps.onWarning?.(
+          `Dataset ${source.datasetId}/${source.sheetId}: ${source.reason}; visual evidence withheld, keep text fallback.`,
+        );
       const variant = deps.variant ?? 'balanced';
       const prepared = prepareVariantCatalog(inputData.profile, deps.notes ?? [], {
         imagesAvailable: deps.imagesAvailable === true,
@@ -1304,6 +1218,13 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             deps.plannerInstructions,
             {
               brief: inputData.brief,
+              ...(deps.preparedDatasets?.length
+                ? {
+                    datasetFacts: datasetEvidence.facts,
+                    datasetTables: datasetEvidence.tables,
+                    datasetWithheld: datasetEvidence.withheld,
+                  }
+                : {}),
               slideCount,
               ...(outline ? { outline } : {}),
               outlineIsSource: deps.outlineIsSource !== false,
@@ -1579,6 +1500,13 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const writeInput = {
         ...task,
         deckTitle,
+        ...(deps.preparedDatasets?.length
+          ? {
+              datasetFacts: datasetEvidence.facts,
+              datasetTables: datasetEvidence.tables,
+              datasetWithheld: datasetEvidence.withheld,
+            }
+          : {}),
         variant,
         variantCopyMode: mode,
         outlineIsSource: deps.outlineIsSource !== false,
@@ -1615,7 +1543,15 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           visual: visual ? { ...visual, slotId: map.get(visual.slotId) ?? visual.slotId } : null,
         };
       }
-      let visual = groundedVisual(raw.visual as SlotVisual | null, inputData.brief);
+      let visual = groundedVisual(
+        raw.visual as SlotVisual | null,
+        inputData.brief,
+        datasetEvidence.datasets,
+      );
+      if (raw.visual && !visual)
+        await deps.onWarning?.(
+          `Slide ${inputData.index + 1}: visual provenance is unknown; keeping text fallback.`,
+        );
       if (visual?.kind === 'native') visual = { ...visual, variant: deps.variant ?? 'balanced' };
       const texts = raw.textsBySlot as Record<string, string | undefined>;
       const context: CopyContext = {

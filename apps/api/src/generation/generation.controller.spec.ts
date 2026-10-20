@@ -396,7 +396,7 @@ describe('a prepared template', () => {
 
   it('is one read by the current engine, and one read before is read again', () => {
     expect(
-      GenerationService.prepared(
+      GenerationService.profilePrepared(
         stored({ generation: generationProfile, generationRevision: PROFILE_REVISION }),
       ),
     ).toBe(true);
@@ -422,7 +422,7 @@ describe('preparing a template', () => {
     });
     const stored: { profile: Record<string, unknown> } = { profile: {} };
     controller = controllerOf(repository, {
-      // No model is set up: the index is not made, which only leaves the planner without notes.
+      // An index failure must be visible even though the profile has been saved.
       resolveRole: async () => {
         throw new Error('No model.');
       },
@@ -444,7 +444,9 @@ describe('preparing a template', () => {
     });
 
     answerProfile();
-    await prepared;
+    await expect(prepared).rejects.toMatchObject({
+      response: { code: 'template-index-failed' },
+    });
     stored.profile = { previews: ['slide-1.png'] };
     expect(await controller.preparation(TEMPLATE, owner)).toEqual({
       stage: null,

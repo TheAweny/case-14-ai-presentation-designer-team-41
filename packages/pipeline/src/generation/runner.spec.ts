@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs';
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
-import { generationProfileSchema } from '@lct/contracts';
+import { compositionPlanSchema, generationProfileSchema } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import { generatePresentation } from './runner.js';
-import { minChars } from './workflow.js';
+import { minChars, SharedPlan } from './workflow.js';
 import type { LayoutRemapPolicy } from './workflow.js';
 import type { ModelRequest } from '../models/provider.js';
 import type { TextProvider } from './provider.js';
@@ -27,6 +27,7 @@ const badgeProfile = (() => {
 })();
 const directories: string[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(directories.splice(0).map((p) => rm(p, { recursive: true, force: true })));
 });
 
@@ -47,8 +48,11 @@ async function exercise(
     | 'recheck-import-down'
     | 'empty-import'
     | 'clean-vision'
-    | 'expired',
+    | 'expired'
+    | 'reserve-repair',
   layoutRemapPolicy?: LayoutRemapPolicy,
+  onRepair?: () => void,
+  omitClaims = false,
 ) {
   const outputDir = await mkdtemp(join(tmpdir(), 'deck-runner-'));
   directories.push(outputDir);
@@ -107,6 +111,10 @@ async function exercise(
         });
       if (agent === 'rewriter') {
         repairs++;
+        if (mode === 'reserve-repair') {
+          onRepair?.();
+          return new Promise<T>(() => undefined);
+        }
         return schema.parse({
           rewrites: Object.fromEntries(
             pattern.slots.map((s) => [s.slotId, ['Pilot', 'Test', 'Go']]),
@@ -117,7 +125,7 @@ async function exercise(
         criticInputs.push(structuredClone(input) as (typeof criticInputs)[number]);
         return schema.parse({
           issues:
-            mode === 'factual-error'
+            mode === 'factual-error' || mode === 'reserve-repair'
               ? [
                   {
                     slideIndex: 0,
@@ -279,6 +287,21 @@ async function exercise(
     registryDir: resolve('../../registry/agents'),
     engine,
     provider,
+    ...(omitClaims
+      ? {
+          // A persisted legacy plan may predate required claims; its visual pass is insufficient.
+          sharedPlan: new SharedPlan(
+            compositionPlanSchema.parse({
+              title: 'Pilot',
+              slides: Array.from({ length: 10 }, (_, index) => ({
+                patternId: pattern.patternId,
+                purpose: `Pilot ${index + 1}`,
+                imageQuery: '',
+              })),
+            }),
+          ),
+        }
+      : {}),
     ...(layoutRemapPolicy ? { layoutRemapPolicy } : {}),
     ...(mode === 'reviewed' ||
     mode === 'self-corrected' ||
@@ -339,11 +362,41 @@ async function exercise(
     exportedSlides,
     criticInputs,
     seenPictures,
-    counters: () => ({ checks, exports, repairs, engineCalls, modelCalls, imports }),
+    counters: () => ({ checks, exports, repairs, audits, engineCalls, modelCalls, imports }),
   };
 }
 
 describe('real generation orchestration with offline dependencies', () => {
+  it('keeps coverage unknown even when every rendered slide passes visual review', async () => {
+    const run = await exercise('clean-vision', undefined, undefined, true);
+    await run.result;
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review).toMatchObject({ status: 'unknown', coverage: { total: 0, covered: 0 } });
+    expect(run.warnings.some((warning) => warning.message.includes('набора требований'))).toBe(
+      true,
+    );
+  });
+
+  it('aborts a stalled repair before the 60s reserve and still exports and audits accepted text', async () => {
+    vi.useFakeTimers();
+    let entered!: () => void;
+    const repairing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const run = await exercise('reserve-repair', undefined, entered);
+    await repairing;
+    await vi.advanceTimersByTimeAsync(230_000);
+    const result = await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.counters().exports).toBeGreaterThan(0);
+    expect(run.counters().audits).toBeGreaterThan(0);
+    expect(
+      run.warnings.some((warning) => warning.message.includes('Время исправлений исчерпано')),
+    ).toBe(true);
+    expect(result.manifest.totalMs).toBeLessThan(290_000);
+    expect(result.manifest.artifacts.map((artifact) => artifact.kind)).toContain('pptx');
+  });
+
   it('writes manifest, audit and final events only after export', async () => {
     const run = await exercise('clean');
     const result = await run.result;

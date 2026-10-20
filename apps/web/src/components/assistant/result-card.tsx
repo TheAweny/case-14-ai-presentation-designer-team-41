@@ -74,13 +74,20 @@ export function ResultCard({
   if (!chosen) return null;
   const recommendedName = tv(`${result.recommended}.name`);
   const recommendedReview = reviewOf(result, result.recommended);
-  const audited = result.variants.every((item) => result.reviews?.[item.deckId] !== undefined);
+  const allAudited = result.variants.every((item) => {
+    const review = result.reviews?.[item.deckId];
+    return review !== undefined && review.status !== 'unknown';
+  });
+  // Only explain the recommendation as an audit result when every candidate was audited.
+  // Partial records remain useful on each tile, but cannot establish a global winner.
   const reason =
-    !audited || !recommendedReview
-      ? t('reasonUnavailable')
-      : recommendedReview.errors === 0 && recommendedReview.warnings === 0
-        ? t('reasonClean')
-        : t('reasonFewest');
+    allAudited && recommendedReview
+      ? recommendedReview.status === 'unknown'
+        ? null
+        : recommendedReview.errors === 0 && recommendedReview.warnings === 0
+          ? t('reasonClean')
+          : t('reasonFewest')
+      : null;
   const failed = result.failed ?? [];
   // Не собрался вариант — карточка не говорит «все три собраны».
   const lead =
@@ -138,7 +145,7 @@ export function ResultCard({
         <p className={cn('text-muted-foreground', compact ? 'text-xs' : 'text-[0.8125rem]')}>
           {reason ? `${lead} ${reason}` : lead}
         </p>
-        {audited ? <p className="text-xs text-muted-foreground">{t('auditSource')}</p> : null}
+        {allAudited ? <p className="text-xs text-muted-foreground">{t('auditSource')}</p> : null}
       </header>
 
       <div
@@ -431,7 +438,7 @@ function AuditLine({
 }) {
   const t = useTranslations('assistant.result');
   const slides = slideCount === null ? null : t('slides', { count: slideCount });
-  if (!review) {
+  if (!review || review.status === 'unknown') {
     return (
       <span className="text-xs text-muted-foreground">
         {slides ? `${t('auditUnavailable')} · ${slides}` : t('auditUnavailable')}

@@ -128,9 +128,11 @@ test('slash selection moves its highlight without delaying keyboard actions', as
     })
     .toBeLessThan(2);
   await list.getByRole('option').last().hover();
-  await expect(list.getByRole('option', { selected: true })).toContainText('/auto');
+  await expect(list.getByRole('option')).toHaveCount(2);
+  await expect(list.getByRole('option', { selected: true })).toContainText('/plan');
   await commandField.press('Enter');
-  await expect(page.getByRole('button', { name: 'Режим: Авто' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Режим: План' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Авто' })).not.toBeChecked();
   await expect(list).toHaveCount(0);
   await page.mouse.move(0, 0);
   await page.emulateMedia({ reducedMotion: 'reduce' });

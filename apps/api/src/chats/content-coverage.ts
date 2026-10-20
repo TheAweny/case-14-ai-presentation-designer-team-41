@@ -1,4 +1,9 @@
-import { composedSlideSchema, type ComposedSlide } from '@lct/contracts';
+import {
+  composedSlideSchema,
+  slideIrSchema,
+  type ComposedSlide,
+  type SlideIr,
+} from '@lct/contracts';
 
 const REQUIREMENT_MAX = 1000;
 const REQUIREMENT_COUNT_MAX = 20;
@@ -151,6 +156,34 @@ function fragmentsOf(slide: ComposedSlide): Fragment[] {
   return parts.map(collapse).filter((part) => part.folded.length > 0);
 }
 
+/** Read literal content of saved IR, without borrowing text from its original plan or notes. */
+function snapshotFragments(slide: SlideIr): Fragment[] {
+  const parts: string[] = [];
+  for (const element of slide.elements) {
+    if (
+      element.box.cx <= 0 ||
+      element.box.cy <= 0 ||
+      element.box.x >= slide.slideCx ||
+      element.box.y >= slide.slideCy ||
+      element.box.x + element.box.cx <= 0 ||
+      element.box.y + element.box.cy <= 0
+    )
+      continue;
+    if (element.kind === 'text' || element.kind === 'decor') {
+      for (const paragraph of element.paragraphs ?? []) {
+        parts.push(paragraph.runs.map((run) => run.text).join(''));
+      }
+    } else if (element.kind === 'table') {
+      parts.push(...element.headers, ...element.rows.flat());
+    } else if (element.kind === 'chart') {
+      // Values in IR are data, not proof that a numeric label is actually shown.
+      parts.push(...element.categories, ...element.series.map((series) => series.name));
+      parts.push(element.xTitle, element.yTitle);
+    }
+  }
+  return parts.map(collapse).filter((part) => part.folded.length > 0);
+}
+
 function matchIn(parts: readonly Fragment[], needle: string): string | null {
   const foldedNeedle = collapse(needle).folded;
   if (foldedNeedle.length === 0) return null;
@@ -159,6 +192,22 @@ function matchIn(parts: readonly Fragment[], needle: string): string | null {
     if (at === null) continue;
     const quote = evidenceAt(part, at, foldedNeedle);
     if (quote !== null) return quote;
+  }
+  return null;
+}
+
+function claimEvidence(parts: readonly Fragment[], requirement: string): string | null {
+  const folded = collapse(requirement).folded;
+  // Standalone scalar requirements still need numeric boundaries. A sentence or label with
+  // words needs the whole fragment: extra words may negate it or add an unapproved condition.
+  const scalar = /^[+\-\u2212]?\d+(?:[.,]\d+)?(?:\s*(?:млрд|млн|тыс|руб|кг|км|шт|%))?$/iu.test(
+    folded,
+  );
+  if (scalar) return matchIn(parts, requirement);
+  const clause = (value: string) => value.replace(/[.!?;]+$/u, '').trim();
+  for (const part of parts) {
+    if (clause(part.folded) !== clause(folded)) continue;
+    return matchIn([part], requirement) ?? part.raw;
   }
   return null;
 }
@@ -254,16 +303,23 @@ function requirementsOf(required: readonly string[]): string[] {
 }
 
 /**
- * A requirement is covered only when its normalized text sits inside one visible fragment,
- * on word boundaries. Speaker notes, field names and looser paraphrases do not count.
+ * Textual claims need an equal normalized fragment, so an added qualification or negation
+ * cannot be hidden by a substring match. Scalar values also require numeric boundaries.
+ * Speaker notes, field names and looser paraphrases do not count.
  */
 export function checkContentCoverage(required: readonly string[], slide: unknown): ContentCoverage {
   const requirements = requirementsOf(required);
+  const snapshot = slideIrSchema.safeParse(slide);
   const parsed = composedSlideSchema.safeParse(slide);
-  if (!parsed.success) fail('invalid_slide', 'Слайд не прошёл проверку схемы.');
-  const parts = fragmentsOf(parsed.data);
+  if (!snapshot.success && !parsed.success)
+    fail('invalid_slide', 'Слайд не прошёл проверку схемы.');
+  const parts = snapshot.success
+    ? snapshotFragments(snapshot.data)
+    : parsed.success
+      ? fragmentsOf(parsed.data)
+      : [];
   const items: CoverageItem[] = requirements.map((requirement, index) => {
-    const evidence = matchIn(parts, requirement);
+    const evidence = claimEvidence(parts, requirement);
     if (evidence !== null) {
       const reasons: string[] = [];
       return {
@@ -275,6 +331,9 @@ export function checkContentCoverage(required: readonly string[], slide: unknown
       };
     }
     const reasons = reasonsFor(requirement, parts);
+    if (matchIn(parts, requirement) !== null) {
+      reasons.splice(0, reasons.length, 'claim-context-differs');
+    }
     return {
       index,
       text: reportText(requirement, reasons, 'report-text-trimmed'),

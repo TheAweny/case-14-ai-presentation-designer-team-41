@@ -4,6 +4,13 @@ import type {
   FinalReview,
   RequiredSlideClaim,
 } from '@lct/contracts';
+import { claimVisible, visibleVisual } from './claim-evidence.js';
+
+export type CoverageReview = FinalReview['coverage'] & {
+  status: 'verified' | 'requires-review' | 'unknown';
+  /** Includes unsupported paraphrases; missing means unconfirmed, not necessarily absent. */
+  unknown: FinalReview['coverage']['missing'];
+};
 
 /** Every approved claim needs visible copy or a critic judgment with a verifiable excerpt. */
 export function approvedCoverage(
@@ -14,10 +21,9 @@ export function approvedCoverage(
     slide: { texts: readonly { text: string }[]; visual?: unknown };
   }[],
   evidence: CompositionCritique['coverage'],
-): FinalReview['coverage'] {
+): CoverageReview {
   const missing: FinalReview['coverage']['missing'] = [];
   let total = 0;
-  const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').trim();
   const claims =
     outline?.slides.map((slide, index) => ({ index, texts: [slide.title, ...slide.points] })) ??
     written.map((slide) => ({
@@ -26,24 +32,28 @@ export function approvedCoverage(
     }));
   for (const { index: slideIndex, texts } of claims) {
     const actual = written.find((s) => s.index === slideIndex)?.slide;
-    const visible = normalize(
-      [
-        ...(actual?.texts.map((t) => t.text) ?? []),
-        actual?.visual ? JSON.stringify(actual.visual) : '',
-      ].join('\n'),
-    );
+    const visible = [...(actual?.texts.map((t) => t.text) ?? []), ...visibleVisual(actual?.visual)];
     for (const [claimIndex, text] of texts.entries()) {
       total++;
-      const quote = evidence.find(
-        (e) => e.slideIndex === slideIndex && e.claimIndex === claimIndex,
-      )?.quote;
+      const quotes = evidence
+        .filter((e) => e.slideIndex === slideIndex && e.claimIndex === claimIndex)
+        .map((entry) => entry.quote);
       if (
-        !visible.includes(normalize(text)) &&
-        !(quote?.trim() && visible.includes(normalize(quote)))
+        !visible.some((value) => claimVisible(text, value)) &&
+        !quotes.some(
+          (quote) =>
+            claimVisible(text, quote) && visible.some((value) => claimVisible(quote, value)),
+        )
       ) {
         missing.push({ slideIndex, claimIndex, text });
       }
     }
   }
-  return { total, covered: total - missing.length, missing };
+  return {
+    total,
+    covered: total - missing.length,
+    missing,
+    status: total === 0 ? 'unknown' : missing.length ? 'requires-review' : 'verified',
+    unknown: [...missing],
+  };
 }

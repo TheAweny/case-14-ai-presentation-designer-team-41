@@ -22,7 +22,7 @@ import {
   usePromptBox,
 } from '@/components/composer/prompt-box';
 import { promptAction } from '@/components/composer/prompt-keys';
-import { CHAT_MODES } from '@lct/contracts';
+import { CHAT_UI_MODES, nextChatMode, rememberChatMode, selectChatMode } from '@/lib/chat-modes';
 import { pendingQuestion } from '@/lib/chat-records';
 import type { ChatView } from '@/lib/chat-store';
 import {
@@ -35,7 +35,7 @@ import { chatContextOf, contextAttachments, createSlideRef, refKey } from '@/lib
 import type { TemplateSummary } from '@/lib/library-source';
 import { useEditorPrefs } from '@/components/editor/use-editor-prefs';
 import { useAssistantDeck } from './deck-context';
-import { ModeMenu, nextChatMode, useLastChatMode } from './mode-menu';
+import { ModeMenu } from './mode-menu';
 import { chatStore } from './session';
 import { useSlideRefLabels } from './slide-ref-label';
 
@@ -47,8 +47,8 @@ export interface EditRequest {
 
 /**
  * Поле чата. Вопрос агента ждёт ответа — текст уходит ответом. Иначе это сообщение агенту в
- * режиме у поля: «Чат» только разговаривает, «План» показывает план, «Авто» собирает сразу.
- * Shift+Tab меняет режим по кругу. Пока агент отвечает, «Стоп» сохраняет следующий черновик.
+ * режиме у поля: «Чат» разговаривает, «План» готовит колоду; «Авто» отключает утверждение плана.
+ * Shift+Tab переключает «Чат» и «План». Пока агент отвечает, «Стоп» сохраняет следующий черновик.
  */
 export function ChatComposer({
   chat,
@@ -102,7 +102,6 @@ export function ChatComposer({
   const setTemplateFile = (value: File | null) => patchDraft({ templateFile: value });
   const [rejected, setRejected] = useState<readonly string[]>([]);
   const [emptyTemplates, setEmptyTemplates] = useState<readonly string[]>([]);
-  const [, rememberMode] = useLastChatMode();
   const { slideCount } = useEditorPrefs();
   const deck = useAssistantDeck();
   const { label } = useSlideRefLabels();
@@ -151,8 +150,8 @@ export function ChatComposer({
   const box = usePromptBox({ ready: hasInput && !running, busy: running });
 
   const setMode = (mode: ChatView['mode']) => {
+    rememberChatMode(mode, chat.mode);
     chatStore.setMode(chat.chatId, mode);
-    rememberMode(mode);
   };
   const sources =
     deck && deckId
@@ -182,11 +181,11 @@ export function ChatComposer({
     onText: setText,
     disabled: Boolean(question),
     sources,
-    commands: CHAT_MODES.map((mode) => ({
+    commands: CHAT_UI_MODES.map((mode) => ({
       key: mode,
       name: `/${mode}`,
       description: `${tm(`${mode}.name`)} — ${tm(`${mode}.description`)}`,
-      choose: () => setMode(mode),
+      choose: () => setMode(selectChatMode(mode, chat.mode)),
     })),
   });
 

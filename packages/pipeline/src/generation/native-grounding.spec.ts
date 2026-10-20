@@ -3,7 +3,7 @@ import type { SlotVisual } from '@lct/contracts';
 import { groundedVisual } from './workflow.js';
 
 describe('native visual grounding', () => {
-  const quote = 'Revenue 18 % in 2026. Pilot only.';
+  const quote = 'Revenue: 2026 18 %. Pilot only.';
   const visual: SlotVisual = {
     kind: 'native',
     slotId: 'body',

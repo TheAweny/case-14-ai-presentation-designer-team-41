@@ -430,14 +430,14 @@ describe('claim detail and per-variant coverage', () => {
       ]),
     ).toBe(false);
   });
-  it('accepts a critic-backed paraphrase but reports the missing claim on the affected variant', () => {
+  it('keeps a critic-backed paraphrase unconfirmed without independent entailment evidence', () => {
     const visible = 'Если сбой, отправки нет; повтор — через 15 минут.';
     const written = [
       { index: 0, requiredClaims: [limitedClaim], slide: { texts: [{ text: visible }] } },
     ];
     expect(
       approvedCoverage(null, written, [{ slideIndex: 0, claimIndex: 0, quote: visible }]).covered,
-    ).toBe(1);
+    ).toBe(0);
     expect(
       approvedCoverage(
         null,

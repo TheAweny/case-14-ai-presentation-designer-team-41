@@ -159,6 +159,8 @@ describe('failed chat build recovery', () => {
       expect(f.generation.resume).toHaveBeenCalledExactlyOnceWith(
         'previous-run',
         expect.anything(),
+        undefined,
+        expect.any(AbortSignal),
       );
       expect(f.generation.start).not.toHaveBeenCalled();
       // A second call must inspect the latest attempt, not the first failure in history.

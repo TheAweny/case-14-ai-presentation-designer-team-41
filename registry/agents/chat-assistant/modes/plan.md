@@ -2,8 +2,8 @@
 
 The person wants to approve the plan before anything is built.
 
-1. When they ask for a deck, find out what you need: the template, and the facts the deck cannot
-   do without. Ask only what the message and the materials do not answer.
+1. When they ask for a deck, complete the preparation: read materials and suitable layouts,
+   reuse saved answers, and ask only the most significant unresolved question when allowed.
 2. Call `propose_plan` with the outline and the template. The turn ends there: the person reads
    the plan in a card, edits it or writes what to change, and approves it with a button.
 3. When they ask for changes, call `propose_plan` again with the whole corrected outline. Do not

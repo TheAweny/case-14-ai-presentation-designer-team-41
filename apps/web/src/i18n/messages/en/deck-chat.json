@@ -70,7 +70,7 @@
     },
     "auto": {
       "name": "Auto",
-      "description": "The agent decides and builds the deck right away"
+      "description": "After preparation, the agent builds the deck without separate plan approval"
     }
   },
   "empty": {

@@ -1091,6 +1091,12 @@ describe('groundedVisual', () => {
         { ...sensors, series: [{ name: 'Датчики', values: [1800, 10, 12] }] },
         'Установлено 1 800 датчиков за 10 месяцев, 12 домов.',
       ),
+    ).toBeNull();
+    expect(
+      groundedVisual(
+        { ...sensors, series: [{ name: 'Датчики', values: [1800, 10, 12] }] },
+        'Датчики: Q1 1 800, Q2 10, Q3 12 млн ₽.',
+      ),
     ).not.toBeNull();
   });
 
@@ -1473,11 +1479,129 @@ describe('one plan, three layouts', () => {
     const set = [cover, light, mid, heavy];
     const plan = ['cover', 'light', 'light', 'light'];
 
-    it('lets airy take the nearest roomier layout, so it differs from balanced', () => {
+    it('keeps shared copy on its safe layout when the index cannot identify body relationships', () => {
       const airy = remapPlan(plan, set, set, 'airy', [cover]);
       expect(airy[0]).toBe('cover');
-      // Mid holds 1.5 times what light does: airy, which writes less, fits it; heavy holds 2.6.
-      expect(airy.slice(1).every((id) => id === 'mid')).toBe(true);
+      expect(airy.slice(1)).toEqual(['light', 'light', 'light']);
+    });
+
+    it('preserves the main airy fallback with indexed, unambiguous semantic groups', () => {
+      const notes = new Map(
+        [light, mid, heavy].map((pattern) => [
+          pattern.patternId,
+          {
+            patternId: pattern.patternId,
+            kind: 'cards' as const,
+            items: 3,
+            useFor: '',
+            skip: false,
+            title: '',
+            special: false,
+            requiredContent: [],
+            groups: [0, 1, 2].map((i) => ({
+              id: `card-${i}`,
+              kind: 'card' as const,
+              slotIds: [`b${i}`],
+            })),
+            slotSemantics: [
+              { slotId: 't', role: 'slide-title' as const },
+              ...[0, 1, 2].map((i) => ({
+                slotId: `b${i}`,
+                role: 'body' as const,
+                groupId: `card-${i}`,
+              })),
+            ],
+          },
+        ]),
+      );
+      expect(remapPlan(plan, set, set, 'airy', [cover], notes).slice(1)).toEqual([
+        'mid',
+        'mid',
+        'mid',
+      ]);
+    });
+
+    it('chooses different independent compositions without moving shared body copy', async () => {
+      const provider: TextProvider = {
+        model: 'fake',
+        async generate<T>(
+          agent: string,
+          _instructions: string,
+          input: unknown,
+          schema: z.ZodType<T>,
+        ) {
+          if (agent === 'planner')
+            return schema.parse({
+              title: 'Пилот',
+              slides: Array.from({ length: 5 }, () => ({
+                patternId: 'light',
+                purpose: 'Объяснить порядок пилота',
+              })),
+            });
+          if (agent === 'rewriter') {
+            const repair = input as { slots: { slotId: string; text: string }[] };
+            return schema.parse({
+              rewrites: Object.fromEntries(
+                repair.slots.map((slot) => [slot.slotId, [slot.text, slot.text, slot.text]]),
+              ),
+            });
+          }
+          const task = input as {
+            composition: { patternId: string; slots: { slotId: string }[] };
+            variant: string;
+          };
+          return schema.parse({
+            patternId: task.composition.patternId,
+            speakerNotes: '',
+            textsBySlot: Object.fromEntries(
+              task.composition.slots.map((slot) => [slot.slotId, `Пилот ${task.variant}`]),
+            ),
+          });
+        },
+      };
+      const results = await Promise.all(
+        (['balanced', 'airy', 'dense'] as const).map(async (variant) => {
+          const workflow = createGenerationWorkflow({
+            provider,
+            variant,
+            variantCopyMode: 'independent',
+            notes: [light, mid, heavy].map((pattern) => ({
+              patternId: pattern.patternId,
+              kind: 'cards',
+              items: 3,
+              useFor: '',
+              skip: false,
+              title: '',
+              special: false,
+              requiredContent: [],
+              groups: [0, 1, 2].map((i) => ({ id: `card-${i}`, kind: 'card', slotIds: [`b${i}`] })),
+              slotSemantics: [
+                { slotId: 't', role: 'slide-title' },
+                ...[0, 1, 2].map((i) => ({
+                  slotId: `b${i}`,
+                  role: 'body' as const,
+                  groupId: `card-${i}`,
+                })),
+              ],
+            })),
+            plannerInstructions: '',
+            writerInstructions: '',
+            signal: new AbortController().signal,
+          });
+          return (await workflow.createRun()).start({
+            inputData: {
+              brief: 'Объяснить порядок пилота',
+              slideCount: 5,
+              profile: { ...profile, compositions: [light, mid, heavy] },
+            },
+          });
+        }),
+      );
+      expect(results.every((result) => result.status === 'success')).toBe(true);
+      const layouts = results.map((result) =>
+        result.status === 'success' ? result.result.map((slide) => slide.slide.patternId) : [],
+      );
+      expect(new Set(layouts.map((layout) => layout.slice(1).join(','))).size).toBeGreaterThan(1);
     });
 
     it('does not send dense to a lighter layout, nor airy to one far roomier than planned', () => {

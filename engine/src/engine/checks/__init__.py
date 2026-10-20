@@ -9,22 +9,29 @@ profile, and returns an AuditReport as JSON: findings with evidence and, where t
 computed, a patch.
 """
 
+from collections.abc import Sequence
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from engine.checks._geometry import Template
 from engine.checks._rules import RULES, AuditContext
+from engine.checks.image_readability import audit_image_readability
 from engine.checks.registry import (
     CATEGORIES,
     DETERMINISTIC_CHECKS,
+    PPTX_CHECKS,
     CheckDefinition,
     check_by_id,
 )
 
 __all__ = [
     "DETERMINISTIC_CHECKS",
+    "PPTX_CHECKS",
     "CheckDefinition",
     "audit_deck",
+    "audit_exported_deck",
+    "audit_image_readability",
     "check_by_id",
     "run_deterministic_checks",
 ]
@@ -94,6 +101,22 @@ def audit_deck(
     variants against each other: 100 less the weighted findings per slide.
     """
     findings, active = run_deterministic_checks(request, profile)
+    # Internal API-only keys, deliberately not a change to the wire/Zod contract. A SlideIR
+    # audit without the actual saved file does not claim to have inspected media pixels.
+    if request.get("pptxPath") is not None:
+        variants = {slide["variant"] for slide in request["slides"]}
+        if len(variants) > 1:
+            raise ValueError("A saved PPTX must represent one variant")
+        findings.extend(
+            audit_image_readability(
+                request["pptxPath"],
+                variant=next(iter(variants), "balanced"),
+                slide_ids=[slide["slideId"] for slide in request["slides"]],
+                editable_text_shape_ids=request.get("editableTextShapeIds"),
+                profile=profile,
+            )
+        )
+        active.extend(check for check in PPTX_CHECKS if _settings(check, profile)[0])
     counts = dict.fromkeys(_PENALTY, 0)
     for finding in findings:
         counts[finding["severity"]] += 1
@@ -122,3 +145,22 @@ def audit_deck(
         "categories": categories,
         "findings": findings,
     }
+
+
+def audit_exported_deck(
+    pptx_path: str | Path,
+    request: dict[str, Any],
+    profile_name: str,
+    profile: dict[str, dict[str, Any]],
+    *,
+    editable_text_shape_ids: Sequence[Sequence[str]] | None = None,
+) -> dict[str, Any]:
+    """Audit an exported PPTX and SlideIR together, including file findings in all summaries.
+
+    Shape ids are decimal cNvPr/@id strings, per slide in file order. This thin API entry point
+    sets only internal request keys; it requires no changes to generated/wire contracts.
+    """
+    payload = {**request, "pptxPath": pptx_path}
+    if editable_text_shape_ids is not None:
+        payload["editableTextShapeIds"] = editable_text_shape_ids
+    return audit_deck(payload, profile_name, profile)

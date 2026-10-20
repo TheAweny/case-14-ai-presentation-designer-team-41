@@ -35,8 +35,18 @@ describe('recommendVariant', () => {
     expect(recommendVariant(variants, null)).toBe('balanced');
   });
 
-  it('не сравнивает неполный аудит с нулём ошибок', () => {
-    expect(recommendVariant(variants, { d: { errors: 0, warnings: 0 } })).toBe('balanced');
+  it('сравнивает известные аудиты, даже если у остальных вариантов их нет', () => {
+    expect(
+      recommendVariant(variants, {
+        d: { errors: 0, warnings: 0 },
+        b: { errors: 5, warnings: 0 },
+      }),
+    ).toBe('dense');
+  });
+
+  it('считает известный результат лучше неизвестного, не трактуя его как ноль', () => {
+    const candidates = variants.filter(({ variant }) => variant !== 'airy');
+    expect(recommendVariant(candidates, { d: { errors: 5, warnings: 0 } })).toBe('dense');
   });
 
   it('при одинаковом аудите советует сбалансированный', () => {
@@ -102,6 +112,25 @@ describe('resultOfBuild', () => {
     );
     expect(result.reviews).toBeNull();
     expect(result.recommended).toBe('balanced');
+  });
+
+  it('сохраняет проверенные аудиты доступных вариантов, если один аудит неизвестен', () => {
+    const result = resultOfBuild(
+      {
+        ...part,
+        reviews: {
+          d: { ...part.reviews.d, errors: 0, warnings: 0 },
+          b: { ...part.reviews.b, errors: 5, warnings: 0 },
+        },
+      },
+      decks,
+    );
+
+    expect(result.reviews).toEqual({
+      d: { ...part.reviews.d, errors: 0, warnings: 0 },
+      b: { ...part.reviews.b, errors: 5, warnings: 0 },
+    });
+    expect(result.recommended).toBe('dense');
   });
 
   it('показывает сохранённый аудит сборки даже когда аудит импортированных слайдов другой', () => {

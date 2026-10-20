@@ -7,6 +7,10 @@ import {
   type CompositionExportResponse,
 } from '@lct/contracts';
 import {
+  datasetExtractRequestSchema,
+  datasetSchema,
+  type Dataset,
+  type DatasetExtractRequest,
   auditReportSchema,
   deckExportResponseSchema,
   deckImportResponseSchema,
@@ -92,9 +96,9 @@ export class EngineClient {
   }
 
   /** `POST /v1/generation-profile` — exact reusable compositions before a run. */
-  async generationProfile(templatePath: string): Promise<GenerationProfile> {
+  async generationProfile(templatePath: string, signal?: AbortSignal): Promise<GenerationProfile> {
     return generationProfileSchema.parse(
-      await this.post('/v1/generation-profile', { template_path: templatePath }),
+      await this.post('/v1/generation-profile', { template_path: templatePath }, signal),
     );
   }
 
@@ -175,6 +179,12 @@ export class EngineClient {
     return materialExtractResponseSchema.parse(
       await this.post('/v1/material-extract', body, signal),
     );
+  }
+
+  /** Deterministic, addressed cells; partial/failed results retain their diagnostics. */
+  async extractDataset(request: DatasetExtractRequest, signal?: AbortSignal): Promise<Dataset> {
+    const body = datasetExtractRequestSchema.parse(request);
+    return datasetSchema.parse(await this.post('/v1/dataset-extract', body, signal));
   }
 
   private async get(path: string): Promise<unknown> {

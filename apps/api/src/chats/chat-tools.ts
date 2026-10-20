@@ -28,6 +28,12 @@ import {
   type VariantEnd,
 } from '../generation/generation.service.js';
 import { generationBrief } from './chat-brief.js';
+import { buildPreparation, preparationInputSchema, readPreparation } from './preparation.js';
+import {
+  preparationRevisionForBuild,
+  preparedOutline,
+  questionsAllowed,
+} from './discovery-policy.js';
 import { calculate, calculationInputSchema } from './calculation.js';
 import { readFinalReview } from './final-review.js';
 import { readResearchMaterial, type MaterialResearchDependency } from './material-research.js';
@@ -36,7 +42,8 @@ import { inspectTemplateLayout } from './template-layout.js';
 import { createAssetSearch, type AssetSearch } from './asset-search.js';
 import { researchWebTopic } from './web-research.js';
 import { materialTools } from './material-tools.js';
-import { inspectionTools } from './inspection-tools.js';
+import { inspectionTools, type InspectionDependency } from './inspection-tools.js';
+import { recommendVariant } from './variant-recommendation.js';
 import { qrTool } from './qr-tool.js';
 import { inspectChatSources } from './source-provenance.js';
 import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
@@ -64,6 +71,14 @@ export interface ChatToolScope {
   readonly reasoningEffort?: ReasoningEffort | null;
   readonly preferredSlideCount?: number | null;
   readonly currentMessageId?: string;
+  readonly preparationManifest?: {
+    agentId: string;
+    agentVersion: string;
+    instructionsSha256: string;
+    modelId: string;
+    modelRevision: null;
+    seed: number;
+  };
   /** The chat as it is now, the answer of this turn included. */
   messages(): readonly ChatMessage[];
   /** Replace a part of an earlier message: a plan superseded or approved. */
@@ -75,6 +90,29 @@ export interface ChatToolScope {
 }
 
 type BuildPart = Extract<ChatPart, { type: 'build' }>;
+
+/** Recheck material permissions when a saved preparation is reused, not just when it is read. */
+async function checkPreparationAccess(
+  generation: GenerationService,
+  scope: ChatToolScope,
+  entries: readonly { status: string; evidence?: { sourceId?: string } }[],
+): Promise<void> {
+  const attached = attachedFileIds(scope);
+  const sources = new Set(
+    entries.flatMap((entry) =>
+      entry.status === 'source' && entry.evidence?.sourceId && attached.has(entry.evidence.sourceId)
+        ? [entry.evidence.sourceId]
+        : [],
+    ),
+  );
+  for (const sourceId of sources) {
+    const found = await generation.pool.query(
+      `SELECT id FROM stored_files WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
+      [sourceId, scope.account.id],
+    );
+    if (!found.rows[0]) throw new Error('There is no such material available to this account.');
+  }
+}
 
 /** A plan of the chat with where it is, so it can be replaced in place. */
 function plansOf(messages: readonly ChatMessage[]) {
@@ -124,9 +162,6 @@ export function pointedElement(
   return null;
 }
 
-/** Order the agent recommends variants in when their audit is equal. */
-const PREFERENCE: readonly LayoutVariant[] = ['balanced', 'dense', 'airy'];
-
 interface VariantOutcome {
   readonly variant: LayoutVariant;
   readonly deckId: string;
@@ -137,14 +172,7 @@ interface VariantOutcome {
 
 /** Fewer errors first, then fewer warnings, then the balanced one. */
 export function recommend(variants: readonly VariantOutcome[]): LayoutVariant {
-  const audited = variants.every((variant) => variant.errors !== null && variant.warnings !== null);
-  const best = [...variants].sort(
-    (a, b) =>
-      (audited ? (a.errors ?? 0) - (b.errors ?? 0) || (a.warnings ?? 0) - (b.warnings ?? 0) : 0) ||
-      PREFERENCE.indexOf(a.variant) - PREFERENCE.indexOf(b.variant),
-  )[0];
-  if (!best) throw new Error('No variants to recommend.');
-  return best.variant;
+  return recommendVariant(variants).variant;
 }
 
 const TEXT_FILE = /\.(txt|md|csv|tsv)$/i;
@@ -186,6 +214,7 @@ export function chatTools(
   scope: ChatToolScope,
   research?: MaterialResearchDependency,
   web?: ChatWebDependency,
+  inspection?: InspectionDependency,
 ): ChatTool[] {
   const { pool } = generation;
   const account = scope.account;
@@ -454,9 +483,18 @@ export function chatTools(
     name: 'describe_template',
     input: z.object({ templateId: z.string().uuid() }),
     modes: ['chat', 'plan', 'auto'],
-    async run(input) {
+    async run(input, context) {
       const { templateId } = input as { templateId: string };
-      const row = await templateRow(templateId);
+      let row = await templateRow(templateId);
+      if (
+        !generationProfileSchema.safeParse(row.profile?.generation).success ||
+        !storedTemplateIndexSchema.safeParse(row.profile?.index).success
+      ) {
+        context.signal.throwIfAborted();
+        await generation.prepare(templateId, scope.model, account);
+        context.signal.throwIfAborted();
+        row = await templateRow(templateId);
+      }
       const index = storedTemplateIndexSchema.safeParse(row.profile?.index);
       const generationProfile = generationProfileSchema.safeParse(row.profile?.generation);
       const layouts = index.success
@@ -843,12 +881,38 @@ export function chatTools(
     },
   };
 
+  const savePreparation: ChatTool = {
+    name: 'save_preparation',
+    input: preparationInputSchema,
+    modes: ['chat', 'plan', 'auto'],
+    async run(input) {
+      const messages = scope.messages();
+      const previous = readPreparation(messages);
+      const next = buildPreparation(preparationInputSchema.parse(input), messages);
+      await checkPreparationAccess(generation, scope, next.entries);
+      if (previous.revision !== next.revision) {
+        // A changed purpose invalidates structure, while source facts remain in preparation.
+        for (const plan of plansOf(messages)) {
+          if (plan.part.status !== 'superseded')
+            scope.updatePart(plan.messageId, plan.index, { ...plan.part, status: 'superseded' });
+        }
+      }
+      return {
+        output: {
+          ...next,
+          ...(scope.preparationManifest ? { manifest: scope.preparationManifest } : {}),
+        },
+      };
+    },
+  };
+
   const askUser: ChatTool = {
     name: 'ask_user',
     input: z.object({
       question: z.string().trim().min(1).max(500),
       options: z.array(chatQuestionOptionSchema).max(6).default([]),
       multiSelect: z.boolean().default(false),
+      preparationKey: z.string().trim().min(1).max(100).optional(),
     }),
     modes: ['plan', 'auto'],
     async run(input, context) {
@@ -856,7 +920,29 @@ export function chatTools(
         question: string;
         options: { label: string; description: string }[];
         multiSelect: boolean;
+        preparationKey?: string;
       };
+      const messages = scope.messages();
+      const active = messages
+        .flatMap((message) => (message.role === 'assistant' ? message.parts : []))
+        .find(
+          (part) =>
+            part.type === 'build' && (part.status === 'running' || part.status === 'preparing'),
+        );
+      if (active) return { output: { status: 'building' }, stop: true };
+      if (!questionsAllowed(messages))
+        return { output: { status: 'skipped', reason: 'user-opt-out' } };
+      if (question.preparationKey) {
+        const resolved = readPreparation(messages).entries.find(
+          (entry) => entry.key === question.preparationKey && entry.status !== 'assumption',
+        );
+        if (resolved) return { output: { status: 'already-resolved', entry: resolved } };
+      }
+      const pending = messages
+        .flatMap((message) => (message.role === 'assistant' ? message.parts : []))
+        .find((part) => part.type === 'question' && part.answer === null);
+      if (pending?.type === 'question')
+        return { output: { questionId: pending.questionId, status: 'waiting' }, stop: true };
       const questionId = crypto.randomUUID();
       context.show({
         type: 'question',
@@ -868,7 +954,11 @@ export function chatTools(
         answer: null,
       });
       return {
-        output: { questionId, status: 'Asked. The answer comes as the next message.' },
+        output: {
+          questionId,
+          ...(question.preparationKey ? { preparationKey: question.preparationKey } : {}),
+          status: 'Asked. The answer comes as the next message.',
+        },
         stop: true,
       };
     },
@@ -882,7 +972,10 @@ export function chatTools(
     }),
     modes: ['plan', 'auto'],
     async run(input, context) {
-      const { outline } = input as { outline: DeckOutline };
+      const outline = preparedOutline(
+        (input as { outline: DeckOutline }).outline,
+        scope.messages(),
+      );
       const templateId = await chooseTemplate((input as { templateId: string | null }).templateId);
       if (templateId !== null) await templateRow(templateId);
       if (scope.preferredSlideCount != null && outline.slides.length !== scope.preferredSlideCount)
@@ -1047,8 +1140,9 @@ export function chatTools(
     inspectSources,
     readDeck,
     readAudit,
-    ...inspectionTools(generation, scope),
+    ...inspectionTools(generation, scope, inspection),
     askUser,
+    savePreparation,
     proposePlan,
     buildDeck,
     editSlide,
@@ -1136,6 +1230,19 @@ export async function runBuild(
     regenerate?: boolean;
   },
 ): Promise<ToolOutcome> {
+  const messagesNow = scope.messages();
+  const preparation = readPreparation(messagesNow);
+  await checkPreparationAccess(generation, scope, preparation.entries);
+  const pending = messagesNow
+    .flatMap((message) => (message.role === 'assistant' ? message.parts : []))
+    .find((part) => part.type === 'question' && part.answer === null);
+  if (pending?.type === 'question' && questionsAllowed(messagesNow))
+    return { stop: true, output: { status: 'waiting', questionId: pending.questionId } };
+  // Preparation changes start with new generation inputs. Old checkpoint dependencies remain immutable.
+  const outline =
+    request.outline && request.outlineSource !== 'user'
+      ? preparedOutline(request.outline, messagesNow)
+      : request.outline;
   let resumeRunId: string | null = null;
   let previousBuildId: string | null = null;
   if (!request.regenerate) {
@@ -1148,6 +1255,9 @@ export async function runBuild(
       .find(
         (part): part is BuildPart =>
           part.type === 'build' &&
+          (part.status === 'preparing' ||
+            part.status === 'running' ||
+            preparationRevisionForBuild(messages, part) === preparation.revision) &&
           (request.planId
             ? part.planId === request.planId && part.planRevision === request.planRevision
             : part.planId === null && part.templateId === request.templateId),
@@ -1233,7 +1343,36 @@ export async function runBuild(
     error: null,
   };
   const outlineSource = request.outlineSource ?? 'model';
-  const brief = generationBrief(scope.messages(), request.outline, outlineSource, request.fileIds);
+  const brief = generationBrief(scope.messages(), outline, outlineSource, request.fileIds);
+  const currentMessage = [...scope.messages()]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === 'assistant' &&
+        (!scope.currentMessageId || message.id === scope.currentMessageId) &&
+        message.parts.some(
+          (part) =>
+            part.type === 'tool' &&
+            part.name === 'build_deck' &&
+            part.callId === context.callId &&
+            part.status === 'running',
+        ),
+    );
+  if (currentMessage?.role === 'assistant') {
+    const at = currentMessage.parts.findIndex(
+      (part) =>
+        part.type === 'tool' && part.name === 'build_deck' && part.callId === context.callId,
+    );
+    const call = currentMessage.parts[at];
+    if (call?.type === 'tool')
+      scope.updatePart(currentMessage.id, at, {
+        ...call,
+        input: {
+          ...(call.input && typeof call.input === 'object' ? call.input : {}),
+          preparationRevision: preparation.revision,
+        },
+      });
+  }
   const index = context.show(part);
   const set = (patch: Partial<BuildPart>) => {
     part = { ...part, ...patch };
@@ -1253,8 +1392,43 @@ export async function runBuild(
   try {
     context.signal.throwIfAborted();
     await persist();
-    if (!GenerationService.prepared(template)) {
-      await generation.prepare(request.templateId, scope.model, scope.account);
+    const onActivity = activityOf(context);
+    const stopPreparation = () => {
+      try {
+        generation.cancelPreparation(part.buildId, scope.account);
+      } catch {
+        /* No preflight is active yet. */
+      }
+    };
+    context.signal.addEventListener('abort', stopPreparation, { once: true });
+    detachAbort = () => context.signal.removeEventListener('abort', stopPreparation);
+    const templateReady =
+      typeof generation.templateReady === 'function'
+        ? await generation.templateReady(template)
+        : GenerationService.prepared(template);
+    if (!templateReady) {
+      const activity = {
+        id: `template-${part.buildId}`,
+        kind: 'tool' as const,
+        name: 'Подготовка шаблона',
+        startedAt: Date.now(),
+      };
+      onActivity?.({
+        ...activity,
+        status: 'running',
+        detail: 'Проверяем профиль и актуальное описание макетов до запуска бюджета генерации.',
+      });
+      try {
+        await generation.prepare(request.templateId, scope.model, scope.account, context.signal);
+        onActivity?.({ ...activity, status: 'done', finishedAt: Date.now() });
+      } catch (error) {
+        onActivity?.({
+          ...activity,
+          status: context.signal.aborted ? 'cancelled' : 'failed',
+          finishedAt: Date.now(),
+        });
+        throw error;
+      }
       context.signal.throwIfAborted();
     }
     context.signal.throwIfAborted();
@@ -1262,9 +1436,9 @@ export async function runBuild(
     const generationInput = {
       templateId: request.templateId,
       brief,
-      slideCount: request.outline ? null : (scope.preferredSlideCount ?? null),
+      slideCount: outline ? null : (scope.preferredSlideCount ?? null),
       requestId: part.buildId,
-      outline: request.outline,
+      outline,
       outlineSource,
       projectId: scope.projectId,
       contentIds: [...request.fileIds],
@@ -1273,9 +1447,9 @@ export async function runBuild(
       thinking: scope.thinking ?? null,
       reasoningEffort: scope.reasoningEffort ?? null,
     };
-    const onActivity = activityOf(context);
+    context.signal.throwIfAborted();
     const build = resumeRunId
-      ? await generation.resume(resumeRunId, scope.account)
+      ? await generation.resume(resumeRunId, scope.account, onActivity, context.signal)
       : onActivity
         ? await generation.start(generationInput, scope.account, undefined, onActivity)
         : await generation.start(generationInput, scope.account);
@@ -1283,6 +1457,7 @@ export async function runBuild(
     const stop = () => {
       void Promise.resolve(generation.cancel(build.runId)).catch(() => undefined);
     };
+    detachAbort();
     context.signal.addEventListener('abort', stop, { once: true });
     detachAbort = () => context.signal.removeEventListener('abort', stop);
     if (context.signal.aborted) stop();
@@ -1352,20 +1527,24 @@ export async function runBuild(
       buildId: part.buildId,
       ...(failed.length ? { failed } : {}),
       variants: outcomes.map(({ variant, deckId }) => ({ variant, deckId })),
-      reviews: audited
-        ? Object.fromEntries(
-            outcomes.map(({ deckId, errors, warnings, review }) => [
-              deckId,
-              {
-                errors: errors ?? 0,
-                warnings: warnings ?? 0,
-                status: review?.status,
-                contentHash: review?.contentHash,
-                contentRevision: review?.contentRevision,
-              },
-            ]),
-          )
-        : null,
+      reviews: Object.fromEntries(
+        outcomes.flatMap(({ deckId, review }) =>
+          review
+            ? [
+                [
+                  deckId,
+                  {
+                    errors: review.errors,
+                    warnings: review.warnings,
+                    status: review.status,
+                    contentHash: review.contentHash,
+                    contentRevision: review.contentRevision,
+                  },
+                ],
+              ]
+            : [],
+        ),
+      ),
       recommended,
       elapsedMs: finishedAt - part.startedAt,
     });
