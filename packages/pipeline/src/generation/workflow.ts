@@ -1250,9 +1250,22 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ? JSON.stringify({ brief: inputData.brief, approvedOutline: outline })
           : inputData.brief);
       const computePlan = async () => {
+        const outlineLayoutOnly = Boolean(
+          outline && deps.outlineIsSource !== false && deps.deckWriterInstructions !== undefined,
+        );
         // Legacy plans remain readable; newly generated plans must expose their facts in one call.
-        const plannerSchema =
-          deps.writerModules && !(outline && deps.outlineIsSource !== false)
+        const plannerSchema = outlineLayoutOnly
+          ? compositionPlanSchema.extend({
+              slides: z
+                .array(
+                  compositionPlanSchema.shape.slides.element.omit({
+                    purpose: true,
+                    requiredClaims: true,
+                  }),
+                )
+                .length(outline?.slides.length ?? 0),
+            })
+          : deps.writerModules && !(outline && deps.outlineIsSource !== false)
             ? compositionPlanSchema.extend({
                 slides: z
                   .array(
@@ -1264,11 +1277,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
                   .max(60),
               })
             : compositionPlanSchema;
-        const plan = (
+        const plan = async (
           corrections?: Record<string, unknown>,
           previous?: z.infer<typeof compositionPlanSchema>,
-        ) =>
-          deps.provider.generate(
+        ) => {
+          const selected = await deps.provider.generate(
             'planner',
             deps.plannerInstructions,
             {
@@ -1283,6 +1296,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               slideCount,
               ...(outline ? { outline } : {}),
               outlineIsSource: deps.outlineIsSource !== false,
+              ...(outlineLayoutOnly ? { outlineLayoutOnly: true } : {}),
               imagesAvailable: deps.imagesAvailable === true,
               allowedQrUrls: sourceQrUrls(qrSourceBrief),
               catalog: full.map((pattern) =>
@@ -1295,6 +1309,14 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             plannerSchema,
             deps.signal,
           );
+          return compositionPlanSchema.parse({
+            ...selected,
+            slides: selected.slides.map((slide, index) => ({
+              ...slide,
+              ...(outlineLayoutOnly ? { purpose: outline?.slides[index]?.title } : {}),
+            })),
+          });
+        };
         const countCorrections = (result: z.infer<typeof compositionPlanSchema>) =>
           slideCount === null || result.slides.length === slideCount
             ? undefined
@@ -1354,7 +1376,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           ...countCorrections(result),
           ...coverCorrections(result),
           ...evidenceCorrections(result),
-          ...varietyCorrections(result),
+          ...(!outlineLayoutOnly ? varietyCorrections(result) : {}),
         };
         if (Object.keys(corrections).length) result = await plan(corrections, result);
         if (slideCount !== null && result.slides.length !== slideCount)
@@ -1415,7 +1437,11 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             }
             if (new Set(requiredClaims.map((claim) => claim.id)).size !== requiredClaims.length)
               throw new Error('Planner returned duplicate required claim ids.');
-            return { ...slide, requiredClaims };
+            return {
+              ...slide,
+              ...(outlineLayoutOnly && userSlide ? { purpose: userSlide.title } : {}),
+              requiredClaims,
+            };
           }),
         };
       };

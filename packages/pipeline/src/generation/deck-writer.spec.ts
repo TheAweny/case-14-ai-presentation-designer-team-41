@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generationProfileSchema } from '@lct/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { CheckpointTextProvider, TaskCheckpoints } from './checkpoints.js';
 import { boundedGenerationProvider } from './runner.js';
 import type { TextProvider } from './provider.js';
@@ -144,6 +144,54 @@ describe('one agent per complete variant', () => {
     const results = await variants(provider, 'shared');
     expect(results.every((result) => result.status === 'success')).toBe(true);
     expect(sends).toEqual(['planner', 'writer']);
+  });
+
+  it('selects layouts once for an approved plan and restores every claim without model repetition', async () => {
+    const outline = {
+      title: 'Пилот',
+      audience: 'Совет директоров',
+      goal: 'Согласовать пилот',
+      slides: Array.from({ length: 15 }, (_, index) => ({
+        title: `Слайд ${index + 1}`,
+        points: [brief],
+        kind: 'statement' as const,
+      })),
+    };
+    let plans = 0;
+    const provider: TextProvider = {
+      model: 'offline',
+      async generate(agent, _instructions, input, schema) {
+        if (agent === 'planner') {
+          plans++;
+          expect(input).toMatchObject({ outlineLayoutOnly: true });
+          const fields = z.toJSONSchema(schema) as {
+            properties?: { slides?: { items?: { properties?: Record<string, unknown> } } };
+          };
+          expect(fields.properties?.slides?.items?.properties).not.toHaveProperty('purpose');
+          expect(fields.properties?.slides?.items?.properties).not.toHaveProperty('requiredClaims');
+        } else if (agent === 'writer') {
+          const slide = (
+            input as { slides: { requiredClaims: { text: string }[]; purpose: string }[] }
+          ).slides[7];
+          expect(slide?.purpose).toBe('Слайд 8');
+          expect(slide?.requiredClaims.map((claim) => claim.text)).toEqual(['Слайд 8', brief]);
+        }
+        return schema.parse(response(agent, input, schema));
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      variant: 'balanced',
+      plannerInstructions: 'planner',
+      writerInstructions: 'slide',
+      deckWriterInstructions: 'deck',
+      signal: new AbortController().signal,
+    });
+    const result = await (
+      await workflow.createRun()
+    ).start({ inputData: { brief, slideCount: 15, profile, outline } });
+    expect(result.status).toBe('success');
+    expect(plans).toBe(1);
   });
 
   it.each(['missing', 'extra'])(

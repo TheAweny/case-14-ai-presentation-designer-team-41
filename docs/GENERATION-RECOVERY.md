@@ -336,6 +336,11 @@ modules remain part of the deck-writer manifest digest. The low-level workflow r
 explicit compatibility path for callers without deck instructions; the production runner
 always supplies them.
 
+With an approved user outline, deck-planner 2.12.0 selects layouts and asset bindings only.
+It does not repeat purpose or requiredClaims in the model response; code restores the approved
+title and every claim from the outline. Exact slide count is enforced by the response schema.
+Layout diversity is handled deterministically without another planner call just for variety.
+
 Repairs batch all affected slides of one variant and retain three alternatives per defective
 slot. The bounded provider permits at most two batch repair rounds per variant. Transport
 retries remain journalled physical sends, not additional logical agents. Whole-deck requests
