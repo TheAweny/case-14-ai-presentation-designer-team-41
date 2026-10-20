@@ -127,7 +127,7 @@ export async function readInspectionSlide(
   const common = { savedBuild: true, liveEditorDraft: false } as const;
   let read: InspectionRead;
   if (snapshot) {
-    const slide = snapshot.slides[ordinal];
+    const slide = snapshot.slides.find((item) => item.index === ordinal);
     if (!slide) fail('slide_out_of_bounds', 'No slide at this position in the saved snapshot.');
     read = {
       ...common,
