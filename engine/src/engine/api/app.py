@@ -59,7 +59,7 @@ from engine.contracts._generated import (
 )
 from engine.export.brandbook import apply_brandbook
 from engine.export.compositions import export_compositions
-from engine.layout.text_fit import check_composition_text
+from engine.layout.text_fit import check_composition_text, fitting_scale
 from engine.parser._errors import TemplateParseError
 from engine.parser.brandbook import BrandbookError, parse_brandbook
 from engine.parser.compositions import extract_compositions
@@ -435,6 +435,17 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             }
         )
         design_system = parser.design_system_of(source)
+        # Copy the rewriter could not shorten is set smaller until it fits its box: spilling over
+        # the shapes below it would cost the whole slide, a smaller font costs only that slot.
+        by_id = {pattern["patternId"]: pattern for pattern in patterns}
+        font_scales: dict[tuple[int, str], float] = {}
+        for finding in findings if getattr(request, "allowOverflow", False) else []:
+            slide = request.slides[finding["slideIndex"]]
+            slot = next(
+                s for s in by_id[slide.patternId]["slots"] if s["slotId"] == finding["slotId"]
+            )
+            text = next(t.text for t in slide.texts if t.slotId == finding["slotId"])
+            font_scales[(finding["slideIndex"], finding["slotId"])] = fitting_scale(text, slot)
 
         def draw(shapes: Any, element: dict[str, Any]) -> None:
             if element["kind"] == "native":
@@ -464,6 +475,7 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             patterns,
             draw,
             allow_overflow=getattr(request, "allowOverflow", False),
+            font_scales=font_scales,
         )
         previews = render.render_to_png(output, output.parent / "previews", dpi=110)
         ir = parser.parse_template(output)

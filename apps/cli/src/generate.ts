@@ -339,6 +339,9 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
       let stage = '';
       try {
         await generatePresentation({
+          // As in the service: copy still too long after its rewrites is set smaller, and the
+          // variant is kept with a review warning instead of lost.
+          allowPartialExport: true,
           runId: `${runId}-${variant}`,
           templatePath,
           outputDir: dir,

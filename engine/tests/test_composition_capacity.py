@@ -6,7 +6,8 @@ from typing import Any, cast
 
 import pytest
 from engine.api import app
-from engine.layout.text_fit import check_composition_text, measured_height
+from engine.export.compositions import export_compositions
+from engine.layout.text_fit import check_composition_text, fitting_scale, measured_height
 from engine.parser._composition_geometry import composition_evidence
 from engine.parser.compositions import extract_compositions
 from engine.parser.slides import read_deck
@@ -319,3 +320,48 @@ def test_image_constraints_preserve_z_order_and_template_protection(
     else:
         assert frame["state"] == "unknown"
         assert any(region["protection"] == "unknown" for region in frame["textRegions"])
+
+
+def _export_body(tmp_path: Path, text: str) -> tuple[float, set[float], float]:
+    """The scale a body's copy needs, the run sizes it is exported at, and its template size."""
+    path, body_id = _body(tmp_path / "in.pptx")
+    pattern = extract_compositions(path)[0]
+    slot = next(s for s in pattern["slots"] if s["slotId"] == body_id)
+    texts = [
+        {"slotId": s["slotId"], "text": text if s["slotId"] == body_id else "Итоги"}
+        for s in pattern["slots"]
+    ]
+    scale = fitting_scale(text, slot)
+    out = export_compositions(
+        path,
+        tmp_path / "out.pptx",
+        [{"patternId": pattern["patternId"], "texts": texts}],
+        [pattern],
+        allow_overflow=True,
+        font_scales={(0, body_id): scale},
+    )
+    shape = next(s for s in Presentation(str(out)).slides[0].shapes if str(s.shape_id) == body_id)
+    sizes = {
+        run.font.size.pt
+        for paragraph in shape.text_frame.paragraphs
+        for run in paragraph.runs
+        if run.font.size is not None
+    }
+    return scale, sizes, slot["fontSize"]
+
+
+def test_copy_too_long_for_its_box_is_set_smaller_until_it_fits(tmp_path: Path) -> None:
+    text = " ".join(["Выручка выросла на четверть за год"] * 24)
+    scale, sizes, size = _export_body(tmp_path, text)
+    path, body_id = _body(tmp_path / "again.pptx")
+    slot = next(s for s in extract_compositions(path)[0]["slots"] if s["slotId"] == body_id)
+    assert check_composition_text({"slots": [slot]}, [{"slotId": body_id, "text": text}])
+    assert 0.6 <= scale < 1
+    assert measured_height(text, {**slot, "fontSize": size * scale}) <= slot["textHeightPt"]
+    assert sizes == {round(size * scale * 100) / 100}
+
+
+def test_copy_that_fits_keeps_its_template_size(tmp_path: Path) -> None:
+    scale, sizes, size = _export_body(tmp_path, "Выручка выросла на четверть за год")
+    assert scale == 1
+    assert sizes == {size}
