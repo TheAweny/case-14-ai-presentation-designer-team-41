@@ -1,0 +1,10 @@
+id: deck-writer
+version: 1.0.0
+description: Writes an entire template-grounded presentation variant from the shared plan
+modelId: writer-default
+generation:
+  temperature: 0.35
+  topP: 1
+  maxOutputTokens: 24576
+outputSchema: TemplateDeckCopy
+instructionsFile: instructions.md

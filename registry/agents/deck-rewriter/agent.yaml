@@ -1,0 +1,10 @@
+id: deck-rewriter
+version: 1.0.0
+description: Repairs all audited defects of one presentation variant in one model task
+modelId: writer-default
+generation:
+  temperature: 0.35
+  topP: 1
+  maxOutputTokens: 24576
+outputSchema: TemplateDeckRepairs
+instructionsFile: instructions.md

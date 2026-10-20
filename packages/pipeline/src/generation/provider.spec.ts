@@ -36,6 +36,17 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
     ).toEqual({ ok: true });
     expect(() => parseModelJson('The request is unclear.', schema)).toThrow(SyntaxError);
   });
+  it('balances quoted braces and refuses concatenated or truncated JSON answers', () => {
+    const text = z.object({ text: z.string() });
+    expect(parseModelJson('JSON: {"text":"a } and { inside a string"} done.', text)).toEqual({
+      text: 'a } and { inside a string',
+    });
+    expect(() => parseModelJson('{"ok":true} {"ok":false}', schema)).toThrow('multiple JSON');
+    expect(() => parseModelJson('{"ok":true', schema)).toThrow('no complete JSON');
+    expect(parseModelJson('Example {not JSON}. {"ok":true} end {prose}', schema)).toEqual({
+      ok: true,
+    });
+  });
   it('retries a request that hit its own time limit, but not a cancelled run', async () => {
     const timeout = () => Promise.reject(new DOMException('slow answer', 'TimeoutError'));
     const fetchImpl = vi
@@ -279,6 +290,29 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       provider: 'llm.api.cloud.yandex.net',
     });
   });
+  it.each(['writer', 'rewriter'])(
+    'keeps the whole-deck %s token ceiling across retries',
+    async (agent) => {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: '{"ok":true}' }, finish_reason: 'length' }],
+            }),
+          ),
+        )
+        .mockResolvedValueOnce(answer());
+      const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+      provider.setAgentGeneration(agent, { temperature: 0.35, topP: 1, maxOutputTokens: 24576 });
+      await expect(
+        provider.generate(agent, '', { slides: [{ index: 0 }] }, schema, AbortSignal.timeout(1000)),
+      ).resolves.toEqual({ ok: true });
+      expect(
+        fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).max_tokens),
+      ).toEqual([24576, 24576]);
+    },
+  );
   it('reports counts for a reasoning-only length error and leaks nothing', async () => {
     const secret = 'reasoning-secret-do-not-leak';
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(

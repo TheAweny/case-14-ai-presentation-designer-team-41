@@ -368,8 +368,16 @@ export const templateSlotCopySchema = z.object({
   textsBySlot: z.record(z.string(), z.string()),
   speakerNotes: z.string(),
 });
+/** Model-only envelope. Runtime binds every slide and slot to the selected template. */
+export const templateDeckCopySchema = z.object({
+  slides: z.record(z.string().regex(/^\d+$/), templateSlotCopySchema),
+});
 export const slotRewriteChoicesSchema = z.object({
   rewrites: z.record(z.string(), z.array(z.string()).length(3)),
+});
+/** Model-only repair response, bound at runtime to the audited slide/slot identities. */
+export const templateDeckRepairsSchema = z.object({
+  slides: z.record(z.string().regex(/^\d+$/), slotRewriteChoicesSchema),
 });
 /**
  * What one template composition is for, as the template indexer read it once when the template

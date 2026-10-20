@@ -64,8 +64,11 @@ PPTX с нативными PowerPoint text boxes. Внутри endpoint нет �
 - **Основной путь генерации** (`packages/pipeline`): API запускает три прогона
   `generatePresentation` параллельно (`dense`, `balanced`, `airy`) с общим планом
   `SharedPlan` и иллюстрациями `SharedIllustrations`. По умолчанию `variantCopyMode=independent`:
-  отдельная writer-задача на `(slide, variant)`. Явный `shared` включает `SharedContent` и один
-  balanced writer на слайд. Перенос сохраняет смысловые группы heading/body и порядок шагов;
+  три параллельных `deck-writer`, каждый заполняет весь свой вариант за один ответ.
+  Явный `shared` включает `SharedContent` и один balanced writer на всю колоду.
+  Исправления проблемных слайдов объединяются в один запрос `deck-rewriter` на вариант,
+  максимум два раунда. Обработка слайдов внутри `foreach` детерминированная.
+  Перенос сохраняет смысловые группы heading/body и порядок шагов;
   неоднозначный индекс оставляет исходный макет. Модель не генерирует координаты.
   Подтверждённые задачи сохраняются для resume; владение сборкой защищено lease/fencing.
   Спецификация и границы проверенных результатов — в [GENERATION-RECOVERY.md](GENERATION-RECOVERY.md).
@@ -198,7 +201,7 @@ golden-фикстуры — настоящий вывод парсера на с
 Анализ входного контента и нового пользовательского шаблона выполняется до timed generation
 stage. После отправки пользователем запроса генерации все три варианта, их аудит и обязательные
 артефакты должны быть готовы не позднее чем через 5 минут. Этому служат: один plan на все
-варианты, параллельные обращения к моделям по слайдам, кеширование профиля шаблона и
+варианты, три параллельных автора целых колод, объединение исправлений по варианту, кеширование профиля шаблона и
 детерминированная вёрстка без обращений к модели. Измерение и тайминги хранятся в manifest.
 
 Измеренные тайминги по этапам хранятся в манифестах прогонов (`runs/<run-id>/manifest.json`);
@@ -334,12 +337,13 @@ streaming; инструменты из неполного потока не ис
 
 `GenerationController` использует Postgres run store, реальный `generatePresentation` и typed
 `EngineClient`. Каждый `POST /generation` запускает **три прогона** (`dense`, `balanced`,
-`airy`) параллельно: один `deck-planner` строит `SharedPlan`, writer пишет отдельно для каждого
-варианта в `independent`. Только явный `shared` переиспользует balanced-текст через `SharedContent`.
+`airy`) параллельно: один `deck-planner` строит `SharedPlan`, каждый `deck-writer` видит все
+слайды и пишет целый вариант в `independent`. Только явный `shared` переиспользует целый
+balanced-вариант через `SharedContent`.
 `SharedIllustrations` рисует картинки один раз на бриф. Смысловая проверка переиспользуется при
 идентичных текстах и отношениях групп; проверки каждого конечного файла сохраняются.
 Все промпты находятся в registry; planner,
-writer, critic, slot-rewriter, copy-fitter — роли одной модели, template-indexer готовит
+deck-writer, critic, deck-rewriter, copy-fitter — роли одной модели, template-indexer готовит
 шаблон вне timed-бюджета.
 
 `engine.api` связывает независимые `parser.compositions`, `layout.text_fit`,

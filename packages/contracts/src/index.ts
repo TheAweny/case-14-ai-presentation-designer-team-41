@@ -316,6 +316,8 @@ export {
   storedTemplateIndexSchema,
   compositionCritiqueSchema,
   templateSlotCopySchema,
+  templateDeckCopySchema,
+  templateDeckRepairsSchema,
   slotRewriteChoicesSchema,
   type GenerationProfile,
   type Composition,

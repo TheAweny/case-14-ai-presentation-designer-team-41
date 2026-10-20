@@ -309,14 +309,15 @@ export async function generatePresentation(options: GenerateOptions) {
     const warn = (message: string) =>
       emit({ type: 'warning', stage, code: 'content-review-required', message });
     const planner = await loadAgent(join(options.registryDir, 'deck-planner'));
-    const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
-    const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
+    const writer = await loadAgent(join(options.registryDir, 'deck-writer'));
+    const slideWriter = await loadAgent(join(options.registryDir, 'slide-writer'));
+    const rewriter = await loadAgent(join(options.registryDir, 'deck-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
-    const writerModules = await loadWriterModules(writer.directory);
+    const writerModules = await loadWriterModules(slideWriter.directory);
     // Hash every module with its agent, while each request uses only its selected modules.
     const writerRevision = {
       ...writer,
-      instructions: writer.instructions + JSON.stringify(writerModules),
+      instructions: writer.instructions + slideWriter.instructions + JSON.stringify(writerModules),
     };
     if (options.provider.setAgentGeneration) {
       for (const [role, agent] of [
@@ -376,7 +377,8 @@ export async function generatePresentation(options: GenerateOptions) {
       provider,
       preparedDatasets: options.preparedDatasets,
       plannerInstructions: planner.instructions,
-      writerInstructions: writer.instructions,
+      writerInstructions: slideWriter.instructions,
+      deckWriterInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
       writerModules,
       variantCopyMode: options.variantCopyMode ?? 'independent',
@@ -422,6 +424,7 @@ export async function generatePresentation(options: GenerateOptions) {
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      deckRepairInstructions: rewriter.instructions,
       variantCopyMode: options.variantCopyMode ?? 'independent',
       ...(options.attemptBudget ? { attemptBudget: options.attemptBudget } : {}),
       ...(options.notes ? { notes: options.notes } : {}),
@@ -631,8 +634,7 @@ export async function generatePresentation(options: GenerateOptions) {
             critiqueCurrent(),
           ]),
         );
-        // Slides are written one by one, so a figure or a title repeated across the deck is seen
-        // only here, over all of them.
+        // Check the whole variant even when its writer already saw the full narrative.
         const deck = written.flatMap((s) => {
           const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
           return composition ? [{ ...s, composition }] : [];

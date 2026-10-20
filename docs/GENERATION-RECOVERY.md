@@ -21,8 +21,8 @@ The implementation keeps that workflow and adds the following boundaries:
    date and pricing fingerprint. Stable build/variant identifiers survive retries. Validated
    TaskCheckpoints use dependency hashes and atomic fsync/rename; persistence failure fails the
    task rather than silently discarding its checkpoint.
-3. A shared plan feeds three independent writer jobs per slide by default. Explicit
-   `variantCopyMode=shared` retains one balanced writer per slide. Composition remapping
+3. A shared plan feeds three concurrent whole-deck writers by default, one per variant.
+   Explicit `variantCopyMode=shared` retains one balanced writer for the entire deck. Composition remapping
    preserves ordered semantic groups and heading/body pairs; ambiguous legacy groups keep
    their original composition. Semantic reuse includes binding relationships and sources;
    every final file receives its own deterministic/render checks. A poor template reports
@@ -299,8 +299,8 @@ fallback is scheduled. These gaps keep the PR in draft.
 ## Copy-policy integration — 2026-10-19
 
 New POST /generation requests default to variantCopyMode=independent. Set the JSON field
-variantCopyMode to shared for the explicit economical fallback. The former mode creates
-three writer tasks per slide; shared creates one balanced task. Both reuse the same plan,
+variantCopyMode to shared for the explicit economical fallback. Since 2026-10-20 the former mode creates
+three whole-deck writer tasks; shared creates one balanced whole-deck task. Both reuse the same plan,
 source evidence and compatible assets. Changing policy, source or registry requires a new
 requestId/build; immutable retries cannot change them. Legacy specs missing the policy parse
 as shared. Their old dependency hashes are never treated as new independent tasks.
@@ -325,3 +325,35 @@ Executor 3 integration: audience/goal and confirmed facts use existing outline/b
 This executor did not modify chat preparation. Integration contract and offline logs live in
 spec/content-quality-2026-10-19/. No live model calls, runtime stack or production deployment
 were performed for this change. Earlier runtime acceptance above describes earlier code.
+
+## Whole-deck agents — 2026-10-20
+
+The production runner uses `deck-writer` 1.0.0 and `deck-rewriter` 1.0.0. The shared planner
+feeds three parallel requests, each containing all slides, source evidence and per-slide
+template constraints. Strict schemas require every slide index and slot; accepted responses
+are converted to slide IR without more writer calls. Existing slide-writer audience/density/output
+modules remain part of the deck-writer manifest digest. The low-level workflow retains an
+explicit compatibility path for callers without deck instructions; the production runner
+always supplies them.
+
+Repairs batch all affected slides of one variant and retain three alternatives per defective
+slot. The bounded provider permits at most two batch repair rounds per variant. Transport
+retries remain journalled physical sends, not additional logical agents. Whole-deck requests
+keep their configured output ceiling across retries. The JSON parser rejects concatenated
+answers instead of joining the first opening brace to the last closing brace.
+
+Offline acceptance uses the actual Mastra workflow: 15 slides × 3 independent variants take
+one planner and three concurrent writer requests. A failed airy writer resumes without
+repeating the accepted planner, dense or balanced response. Three nonadjacent slides are
+repaired in one request; a third semantic repair round is refused. These checks do not prove
+the five-minute live-provider budget. Earlier per-slide timing and kill-test tables above
+describe the historical implementation.
+
+The local chat `bc8b3a6b-0320-4f14-af3b-45f91fa3f7a4` belongs to build
+`c07ee9cf-a4a1-4526-adbf-5766207c5287`. Its initial attempt recorded 9 writer and 23 rewriter
+activities; a resumed attempt recorded 13 writer, 17 rewriter and one cancelled critic.
+The provider journal recorded 111 responses and one unknown outcome. Preparation had finished;
+the build cards were failed, not stuck preparing. Failures included malformed concatenated
+JSON and a template missing from the local containers' separate runs mount. The missing
+template was restored from the primary checkout into that local mount. These are local
+observations, not server measurements, and the failed attempts do not benchmark the new path.

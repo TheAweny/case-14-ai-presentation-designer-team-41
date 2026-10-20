@@ -116,8 +116,17 @@ async function exercise(
           return new Promise<T>(() => undefined);
         }
         return schema.parse({
-          rewrites: Object.fromEntries(
-            pattern.slots.map((s) => [s.slotId, ['Pilot', 'Test', 'Go']]),
+          slides: Object.fromEntries(
+            (input as { slides: { index: number; slots: { slotId: string }[] }[] }).slides.map(
+              (slide) => [
+                String(slide.index),
+                {
+                  rewrites: Object.fromEntries(
+                    slide.slots.map((s) => [s.slotId, ['Pilot', 'Test', 'Go']]),
+                  ),
+                },
+              ],
+            ),
           ),
         });
       }
@@ -138,7 +147,7 @@ async function exercise(
         });
       }
       if (typeof input === 'object' && input !== null && 'previous' in input) repairs++;
-      return schema.parse({
+      const copy = (index: number) => ({
         patternId: pattern.patternId,
         // Slides of a real deck differ; the same text on all of them is a repeat the deck-wide
         // check would send to repair.
@@ -148,11 +157,19 @@ async function exercise(
             // A writer that keeps the sample of a figure it has no fact for.
             if (mode === 'leaked-sample' && s.slotId === 'badge') return [s.slotId, s.sample];
             // A letter, not a number: a figure the brief lacks is a defect the runner repairs.
-            const text = `Slide ${String.fromCharCode(65 + (input as { index: number }).index)}`;
+            const text = `Slide ${String.fromCharCode(65 + index)}`;
             return [s.slotId, text.padEnd(minChars(s), ' point').trim()];
           }),
         ),
         speakerNotes: 'Proposal',
+      });
+      return schema.parse({
+        slides: Object.fromEntries(
+          (input as { slides: { index: number }[] }).slides.map((slide) => [
+            String(slide.index),
+            copy(slide.index),
+          ]),
+        ),
       });
     },
   };
