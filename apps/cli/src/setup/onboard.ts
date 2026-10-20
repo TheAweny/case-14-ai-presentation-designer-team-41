@@ -575,10 +575,13 @@ export async function onboard(input: OnboardOptions = {}): Promise<number> {
     spinner.start('Проверяю HTTPS домена');
     const https = await waitFor(`${publicUrl(env)}/login`, 60);
     if (https) spinner.stop('HTTPS готов');
-    else spinner.error('HTTPS пока не отвечает');
+    else spinner.stop('Сервис запущен · внешний HTTPS пока не подтверждён');
     if (!https) {
-      p.log.warn('Проверьте DNS и доступность портов 80/443. Подробности: lct logs proxy');
-      return 1;
+      p.log.warn(
+        'Сервис работает локально, но HTTPS не удалось проверить с этого сервера. ' +
+          'Выпуск сертификата может занять больше времени, а внешний адрес может быть недоступен изнутри. ' +
+          'Откройте адрес в браузере, проверьте DNS и порты 80/443. Подробности: lct logs proxy',
+      );
     }
   }
   p.outro(up ? 'Установка готова · управление: lct' : 'lct doctor подскажет, что не так');

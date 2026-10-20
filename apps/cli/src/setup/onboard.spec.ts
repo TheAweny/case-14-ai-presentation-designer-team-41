@@ -25,7 +25,8 @@ vi.mock('./ui.js', () => ({
   spinner: () => ({ start: vi.fn(), stop: vi.fn(), error: vi.fn() }),
 }));
 import { onboard } from './onboard.js';
-import { compose, portFree } from './stack.js';
+import { compose, portFree, waitFor } from './stack.js';
+import * as p from './ui.js';
 
 const options = {
   yes: true,
@@ -46,6 +47,7 @@ beforeEach(() => {
   );
   vi.mocked(portFree).mockResolvedValue(true);
   vi.mocked(compose).mockResolvedValue(0);
+  vi.mocked(waitFor).mockResolvedValue(true);
 });
 afterEach(() => {
   rmSync(state.root, { recursive: true, force: true });
@@ -53,6 +55,34 @@ afterEach(() => {
 });
 
 describe('server onboarding', () => {
+  it('keeps a locally healthy domain installation successful while external HTTPS is unconfirmed', async () => {
+    vi.mocked(waitFor)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    expect(await onboard({ ...options, domain: 'slides.example.com', start: true })).toBe(0);
+    expect(waitFor).toHaveBeenCalledWith('https://slides.example.com/login', 60);
+    expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining('HTTPS не удалось проверить'));
+    expect(p.outro).toHaveBeenCalledWith('Установка готова · управление: lct');
+    expect(EnvFile.open(join(state.root, '.env')).get('LCT_DOMAIN')).toBe('slides.example.com');
+  });
+
+  it('confirms reachable HTTPS without reporting an external availability warning', async () => {
+    expect(await onboard({ ...options, domain: 'slides.example.com', start: true })).toBe(0);
+    expect(waitFor).toHaveBeenCalledWith('https://slides.example.com/login', 60);
+    expect(p.log.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('HTTPS не удалось проверить'),
+    );
+  });
+
+  it.each([0, 1])('still fails when local endpoint %i is unhealthy', async (failed) => {
+    vi.mocked(waitFor)
+      .mockResolvedValueOnce(failed !== 0)
+      .mockResolvedValueOnce(failed !== 1);
+    expect(await onboard({ ...options, domain: 'slides.example.com', start: true })).toBe(1);
+    expect(waitFor).toHaveBeenCalledTimes(2);
+  });
+
   it('installs noninteractively with unique credentials, ports and optional features', async () => {
     await expect(
       onboard({ ...options, docs: false, search: false, webPort: '3080', apiPort: '3081' }),

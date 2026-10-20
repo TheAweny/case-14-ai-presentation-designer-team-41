@@ -341,7 +341,7 @@ main --yes`);
     const result = f.run(f.main, ['--yes'], { FAKE_DOCKER_DENIED: '1' });
     expect(result.status, result.stderr + f.log()).toBe(0);
     const shim = join(f.home, '.local/share/lct26/runtime/docker-bin/docker');
-    expect(readFileSync(shim, 'utf8')).toContain('exec sudo --');
+    expect(readFileSync(shim, 'utf8')).toContain('exec sudo -n --');
     expect(
       f.run('"$HOME/.local/share/lct26/runtime/docker-bin/docker" info', [], {
         FAKE_DOCKER_DENIED: '1',
@@ -349,6 +349,87 @@ main --yes`);
     ).toBe(0);
     expect(f.trace()).not.toContain('usermod');
   });
+
+  it('runs the Docker shim without inherited input when sudo is already authenticated', () => {
+    const f = fixture();
+    const result = f.run(
+      `${f.source}
+STATE="$FIXTURE/runtime"; DOCKER_BIN=$(command -v docker)
+write_docker_shim
+"$STATE/docker-bin/docker" info </dev/null >"$FIXTURE/docker.log" 2>&1`,
+      [],
+      {
+        FAKE_DOCKER_DENIED: '1',
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(f.trace()).toContain('sudo <-n> <-v>');
+    expect(f.trace()).toMatch(/sudo <-n> <--> <[^>]*docker> <info>/);
+    expect(readFileSync(join(f.dir, 'docker.log'), 'utf8')).toBe('');
+  });
+
+  it('fails with an actionable hint and never runs Docker when sudo renewal fails', () => {
+    const f = fixture();
+    const result = f.run(
+      `${f.source}
+STATE="$FIXTURE/runtime"; DOCKER_BIN=$(command -v docker)
+write_docker_shim
+"$STATE/docker-bin/docker" info </dev/null >"$FIXTURE/docker.log" 2>&1`,
+      [],
+      {
+        FAKE_SUDO_FAIL: '1',
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(readFileSync(join(f.dir, 'docker.log'), 'utf8')).toContain('sudo -v');
+    expect(f.trace()).not.toContain('docker <info>');
+    expect(f.trace()).not.toContain('sudo <-n> <--> ');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'renews expired sudo on the controlling terminal while Compose streams are captured',
+    () => {
+      const f = fixture();
+      f.script(
+        'sudo',
+        `
+if [[ \${1:-} == -n && \${2:-} == -v ]]; then
+  if [[ -f "$FIXTURE/sudo-ticket" ]]; then exit 0; else exit 1; fi
+fi
+if [[ \${1:-} == -v ]]; then
+  [[ -t 0 && -t 1 && -t 2 ]] || exit 31
+  printf 'terminal-only authentication\\n'
+  touch "$FIXTURE/sudo-ticket"
+  exit 0
+fi
+[[ \${1:-} == -n && \${2:-} == -- && -f "$FIXTURE/sudo-ticket" ]] || exit 32
+shift 2
+export ELEVATED=1
+exec "$@"`,
+      );
+      f.script(
+        'retry-docker',
+        `
+exec "$FIXTURE/runtime/docker-bin/docker" info </dev/null >"$FIXTURE/docker.log" 2>&1`,
+      );
+      const result = f.run(
+        `${f.source}
+STATE="$FIXTURE/runtime"; DOCKER_BIN=$(command -v docker)
+write_docker_shim
+script -q -e -c retry-docker /dev/null`,
+        [],
+        {
+          FAKE_DOCKER_DENIED: '1',
+          SHELL: '/bin/bash',
+        },
+      );
+      expect(result.status, result.stderr + result.stdout).toBe(0);
+      expect(result.stdout).toContain('terminal-only authentication');
+      expect(readFileSync(join(f.dir, 'docker.log'), 'utf8')).toBe('');
+      expect(f.trace()).toContain('docker <info>');
+      expect(existsSync(join(f.dir, 'sudo-ticket'))).toBe(true);
+    },
+  );
 
   it.each(['22.12.9', '22.13.0', '22.99.0', '24.0.0'])(
     'checks the minor Node version: %s',

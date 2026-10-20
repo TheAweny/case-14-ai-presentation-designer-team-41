@@ -38,9 +38,9 @@ describe('AccountClient', () => {
     ]);
     await expect(client.withAdminSession(login, (api) => api.list())).resolves.toEqual([admin]);
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-      'http://localhost:3141/auth/verify',
-      'http://localhost:3141/users',
-      'http://localhost:3141/auth/logout',
+      'http://127.0.0.1:3141/auth/verify',
+      'http://127.0.0.1:3141/users',
+      'http://127.0.0.1:3141/auth/logout',
     ]);
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',

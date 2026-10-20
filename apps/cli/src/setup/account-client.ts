@@ -101,7 +101,7 @@ export class AccountClient {
       throw new AccountClientError('API_HOST_PORT должен быть числом от 1 до 65535.');
     if (!options.serviceToken.trim() || /[\r\n]/.test(options.serviceToken))
       throw new AccountClientError('Не задан корректный API_SERVICE_TOKEN. Запустите настройку.');
-    this.baseUrl = `http://localhost:${Number(port)}`;
+    this.baseUrl = `http://127.0.0.1:${Number(port)}`;
     this.fetcher = options.fetch ?? globalThis.fetch;
   }
 

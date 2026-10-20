@@ -458,6 +458,24 @@ buildx_ok() {
   (( BASH_REMATCH[1] > 0 || BASH_REMATCH[2] >= 17 ))
 }
 
+write_docker_shim() {
+  mkdir -p "$STATE/docker-bin"
+  {
+    printf '#!/bin/bash\nDOCKER_BIN=%q\n' "$DOCKER_BIN"
+    cat <<'SHIM'
+# Compose may capture stdin/stdout/stderr. Authenticate on the controlling terminal only.
+if ! sudo -n -v >/dev/null 2>&1; then
+  if ! { sudo -v </dev/tty >/dev/tty 2>/dev/tty; } 2>/dev/null; then
+    printf 'Нужна авторизация sudo для Docker. Выполните sudo -v в терминале и повторите команду lct.\n' >&2
+    exit 1
+  fi
+fi
+exec sudo -n -- "$DOCKER_BIN" "$@"
+SHIM
+  } >"$STATE/docker-bin/docker"
+  chmod 0700 "$STATE/docker-bin/docker"
+}
+
 install_docker() {
   local package installed arch
   if ! command -v docker >/dev/null || ! docker compose version || ! buildx_ok; then
@@ -499,9 +517,7 @@ SOURCES
     fi
     if ! docker info; then
       # Only Docker is elevated; checkout and .env remain owned by the caller.
-      mkdir -p "$STATE/docker-bin"
-      printf '#!/bin/bash\nexec sudo -- %q "$@"\n' "$DOCKER_BIN" >"$STATE/docker-bin/docker"
-      chmod 0700 "$STATE/docker-bin/docker"
+      write_docker_shim
       DOCKER_PATH="$STATE/docker-bin:"
     fi
   fi

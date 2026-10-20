@@ -90,7 +90,7 @@ describe('userCommand', () => {
   it('lists real API accounts using current credentials and the configured local port', async () => {
     const fetcher = fakeFetch([verified(), json([user]), empty()]);
     expect(await userCommand(['list'], auth)).toBe(0);
-    expect(fetcher.mock.calls[0]?.[0]).toBe('http://localhost:3107/auth/verify');
+    expect(fetcher.mock.calls[0]?.[0]).toBe('http://127.0.0.1:3107/auth/verify');
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
       email: admin.email,
       password: auth['login-password'],
@@ -191,7 +191,7 @@ describe('userCommand', () => {
     vi.stubEnv('API_SERVICE_TOKEN', 'shell-service-token');
     const fetcher = fakeFetch([verified(), json([]), empty()]);
     expect(await userCommand([], {})).toBe(0);
-    expect(fetcher.mock.calls[0]?.[0]).toBe('http://localhost:4100/auth/verify');
+    expect(fetcher.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4100/auth/verify');
     expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
       'x-lct-service-token': 'shell-service-token',
     });
@@ -291,9 +291,9 @@ describe('usersMenu', () => {
     await usersMenu();
     expect(p.log.info).toHaveBeenCalledWith(expect.stringContaining(user.email));
     expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
-      'http://localhost:3107/auth/verify',
-      'http://localhost:3107/users',
-      'http://localhost:3107/auth/logout',
+      'http://127.0.0.1:3107/auth/verify',
+      'http://127.0.0.1:3107/users',
+      'http://127.0.0.1:3107/auth/logout',
     ]);
   });
 
