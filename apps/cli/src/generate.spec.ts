@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readRunConfig } from './config.js';
-import { generateFromConfig } from './generate.js';
+import { connectionOf, failureText, generateFromConfig } from './generate.js';
 import { runEnv } from './generate-command.js';
 
 let dir: string | null = null;
@@ -39,6 +39,39 @@ describe('runEnv', () => {
   });
 });
 
+describe('connectionOf', () => {
+  const base = { LLM_BASE_URL: 'https://openrouter.ai/api/v1', LLM_MODEL: 'qwen/qwen3.8-27b' };
+
+  it('tells the provider how the model turns its thinking off', () => {
+    expect(connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'reasoning-effort' }).reasoning).toEqual(
+      { toggle: 'reasoning-effort', levels: false },
+    );
+    expect(connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'enable-thinking' }).reasoning).toEqual({
+      toggle: 'enable-thinking',
+      levels: false,
+    });
+  });
+
+  it('sends nothing about thinking when the switch is not known', () => {
+    expect(connectionOf(base).reasoning).toEqual({ toggle: null, levels: false });
+  });
+
+  it('refuses a switch it does not know', () => {
+    expect(() => connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'off' })).toThrow(
+      /MODEL_REASONING_TOGGLE/,
+    );
+  });
+});
+
+describe('failureText', () => {
+  it('says what failed whatever the workflow threw', () => {
+    expect(failureText(new Error('Model API HTTP 400'))).toBe('Model API HTTP 400');
+    expect(failureText({ message: 'step failed', name: 'WorkflowError' })).toBe('step failed');
+    expect(failureText('timeout')).toBe('timeout');
+    expect(failureText({ code: 7 })).toBe('{"code":7}');
+  });
+});
+
 describe('generateFromConfig', () => {
   const config = readRunConfig(join(__dirname, '..', '..', '..', 'configs', 'run.example.yaml'));
 
@@ -68,6 +101,22 @@ describe('generateFromConfig', () => {
         log: () => undefined,
       }),
     ).rejects.toThrow(/Шаблон не найден/);
+  });
+
+  it('names a brandbook that is not there before calling anything', async () => {
+    await expect(
+      generateFromConfig({
+        config: {
+          ...config,
+          templatePath: join(__dirname, '..', '..', '..', 'examples', 'template.pptx'),
+          contentPath: join(__dirname, '..', '..', '..', 'examples', 'brief.md'),
+          brandbookPath: 'examples/missing-brandbook.zip',
+        },
+        configPath: 'x',
+        env: { LLM_BASE_URL: 'http://127.0.0.1:9/v1', LLM_MODEL: 'm' },
+        log: () => undefined,
+      }),
+    ).rejects.toThrow(/Брендбук не найден/);
   });
 
   it('refuses MODEL_HEADERS that do not read as headers', async () => {

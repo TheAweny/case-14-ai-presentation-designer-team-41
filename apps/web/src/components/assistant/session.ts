@@ -98,6 +98,23 @@ async function uploadContent(file: File) {
   return { fileId: uploaded.fileId, name: uploaded.fileName ?? file.name, size: file.size };
 }
 
+export async function uploadBrandbook(file: File) {
+  const body = new FormData();
+  body.set('file', file);
+  const response = await apiFetch('/files/brandbook', { method: 'POST', body });
+  if (!response.ok) throw new Error(`Brandbook upload failed (${response.status}).`);
+  const uploaded = (await response.json()) as {
+    fileId: string;
+    fileName?: string;
+    profile?: unknown;
+  };
+  return {
+    brandbookId: uploaded.fileId,
+    name: uploaded.fileName ?? file.name,
+    profile: uploaded.profile,
+  };
+}
+
 /**
  * Чаты во вкладке. Разговор ведёт агент на сервере; вкладка отправляет ходы и читает ответ
  * событиями. Ход закончился — серверные страницы обновляются: в истории новый чат или колода.
@@ -105,6 +122,7 @@ async function uploadContent(file: File) {
 export const chatStore = createChatStore({
   request: (path, init) => apiFetch(path, init),
   uploadContent,
+  uploadBrandbook,
   async uploadTemplate(file) {
     const template = await registerTemplate(file);
     return { templateId: template.templateId, name: template.fileName };

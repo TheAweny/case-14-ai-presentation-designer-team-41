@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { FileIcon, PlusIcon, SlideIcon } from '@/components/ui/icons';
+import { FileIcon, PlusIcon, SlideIcon, TemplateIcon } from '@/components/ui/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ import { TemplateMenuSection } from './composer-template-menu';
 export function ComposerSourceMenu({
   onFiles,
   onContext,
+  onBrandbook,
   groups,
   inProject,
   selectedId,
@@ -32,6 +33,8 @@ export function ComposerSourceMenu({
   disabled = false,
 }: {
   onFiles: () => void;
+  /** Загрузить отдельный брендбук, который не трактуется как материал. */
+  onBrandbook?: () => void;
   /** В редакторе: вставить `@` и открыть список слайдов и объектов. */
   onContext?: () => void;
   groups: TemplateGroups;
@@ -74,6 +77,15 @@ export function ComposerSourceMenu({
         glow
         className="w-80 max-w-[calc(100vw-2rem)]"
       >
+        {onBrandbook ? (
+          <DropdownMenuItem onSelect={onBrandbook} className="gap-2.5 rounded-lg px-2.5 py-2">
+            <TemplateIcon className="size-4 shrink-0" />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span>{t('brandbook')}</span>
+              <span className="truncate text-xs text-muted-foreground">{t('brandbookHint')}</span>
+            </span>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={onFiles} className="gap-2.5 rounded-lg px-2.5 py-2">
           <FileIcon className="size-4 shrink-0" />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">

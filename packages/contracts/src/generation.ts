@@ -1,3 +1,4 @@
+import { brandbookBindingSchema } from './brandbook.js';
 import { z } from 'zod';
 import { designSystemSchema } from './design-system.js';
 import { boxSchema, templateIrSchema } from './template-ir.js';
@@ -162,6 +163,7 @@ export const composedSlideSchema = z.object({
     ),
 });
 export const compositionExportRequestSchema = z.object({
+  brandbook: brandbookBindingSchema.optional(),
   schemaVersion: z.literal(1),
   templatePath: z.string().min(1),
   outputPath: z.string().min(1),
@@ -258,6 +260,8 @@ export const generationRequestSchema = z.object({
   /** A model draft guides the story but cannot independently substantiate its facts. */
   outlineSource: z.enum(['user', 'model']).optional(),
   templateId: z.string().uuid(),
+  brandbookId: z.string().uuid().nullable().optional(),
+  brandbookPriority: z.enum(['brandbook', 'template']).optional(),
   brief: z.string().trim().min(10).max(60000),
   slideCount: z.number().int().min(5).max(15).nullable().default(null),
   /**

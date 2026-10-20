@@ -1,0 +1,1020 @@
+{
+ "datasetId": "dataset-fcd57f4e8e7478a5",
+ "diagnostics": [
+  {
+   "code": "encoding-guessed",
+   "message": "The file is not UTF-8; it was read as Windows-1251.",
+   "ref": null,
+   "severity": "warning",
+   "sheet": null
+  },
+  {
+   "code": "ragged-rows",
+   "message": "1 row(s) have a different number of fields than the usual 4; missing fields are empty and none was dropped.",
+   "ref": null,
+   "severity": "warning",
+   "sheet": "revenue-monthly-1c-export"
+  },
+  {
+   "code": "preamble-rows",
+   "message": "2 row(s) above the table are its title, not its data: «Выгрузка из 1С: Бухгалтерия, отчёт «Выручка по месяцам»».",
+   "ref": "1:2",
+   "severity": "info",
+   "sheet": "revenue-monthly-1c-export"
+  },
+  {
+   "code": "total-row",
+   "message": "The last row sums the rows above it; a total over the column counts it once, not twice.",
+   "ref": "A28",
+   "severity": "info",
+   "sheet": "revenue-monthly-1c-export"
+  },
+  {
+   "code": "mixed-column",
+   "message": "1 cell(s) of the column are not dates: they keep their text and no value.",
+   "ref": "A",
+   "severity": "warning",
+   "sheet": "revenue-monthly-1c-export"
+  }
+ ],
+ "schemaVersion": 1,
+ "sheets": [
+  {
+   "columns": [
+    {
+     "columnId": "sheet-1:A",
+     "decimal": ",",
+     "header": "Дата",
+     "index": 1,
+     "kind": "date",
+     "ref": "A"
+    },
+    {
+     "columnId": "sheet-1:B",
+     "decimal": ",",
+     "header": "Выручка, тыс. руб.",
+     "index": 2,
+     "kind": "number",
+     "ref": "B"
+    },
+    {
+     "columnId": "sheet-1:C",
+     "decimal": ",",
+     "header": "Расходы, млн руб.",
+     "index": 3,
+     "kind": "number",
+     "ref": "C"
+    },
+    {
+     "columnId": "sheet-1:D",
+     "decimal": ",",
+     "header": "Комментарий",
+     "index": 4,
+     "kind": "text",
+     "ref": "D"
+    }
+   ],
+   "headerRow": 3,
+   "index": 0,
+   "mergedRanges": [],
+   "name": "revenue-monthly-1c-export",
+   "range": "A1:D28",
+   "rows": [
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.01.2024",
+       "ref": "A4",
+       "unit": "",
+       "value": "2024-01-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "115 600,0",
+       "ref": "B4",
+       "unit": "",
+       "value": 115600.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "75,4",
+       "ref": "C4",
+       "unit": "",
+       "value": 75.4
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D4",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 4
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "29.02.2024",
+       "ref": "A5",
+       "unit": "",
+       "value": "2024-02-29"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "121 300,0",
+       "ref": "B5",
+       "unit": "",
+       "value": 121300.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "80,8",
+       "ref": "C5",
+       "unit": "",
+       "value": 80.8
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D5",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 5
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.03.2024",
+       "ref": "A6",
+       "unit": "",
+       "value": "2024-03-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "121 400,0",
+       "ref": "B6",
+       "unit": "",
+       "value": 121400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "75,9",
+       "ref": "C6",
+       "unit": "",
+       "value": 75.9
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D6",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 6
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.04.2024",
+       "ref": "A7",
+       "unit": "",
+       "value": "2024-04-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "126 600,0",
+       "ref": "B7",
+       "unit": "",
+       "value": 126600.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "82,2",
+       "ref": "C7",
+       "unit": "",
+       "value": 82.2
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D7",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 7
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.05.2024",
+       "ref": "A8",
+       "unit": "",
+       "value": "2024-05-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "126 400,0",
+       "ref": "B8",
+       "unit": "",
+       "value": 126400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "82,3",
+       "ref": "C8",
+       "unit": "",
+       "value": 82.3
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D8",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 8
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.06.2024",
+       "ref": "A9",
+       "unit": "",
+       "value": "2024-06-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "129 400,0",
+       "ref": "B9",
+       "unit": "",
+       "value": 129400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "85,0",
+       "ref": "C9",
+       "unit": "",
+       "value": 85.0
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D9",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 9
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.07.2024",
+       "ref": "A10",
+       "unit": "",
+       "value": "2024-07-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "124 100,0",
+       "ref": "B10",
+       "unit": "",
+       "value": 124100.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "77,4",
+       "ref": "C10",
+       "unit": "",
+       "value": 77.4
+      },
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "сезонный спад",
+       "ref": "D10",
+       "unit": "",
+       "value": "сезонный спад"
+      }
+     ],
+     "row": 10
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.08.2024",
+       "ref": "A11",
+       "unit": "",
+       "value": "2024-08-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "131 200,0",
+       "ref": "B11",
+       "unit": "",
+       "value": 131200.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "82,9",
+       "ref": "C11",
+       "unit": "",
+       "value": 82.9
+      },
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "сезонный спад",
+       "ref": "D11",
+       "unit": "",
+       "value": "сезонный спад"
+      }
+     ],
+     "row": 11
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.09.2024",
+       "ref": "A12",
+       "unit": "",
+       "value": "2024-09-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "135 800,0",
+       "ref": "B12",
+       "unit": "",
+       "value": 135800.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "89,4",
+       "ref": "C12",
+       "unit": "",
+       "value": 89.4
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D12",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 12
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.10.2024",
+       "ref": "A13",
+       "unit": "",
+       "value": "2024-10-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "140 400,0",
+       "ref": "B13",
+       "unit": "",
+       "value": 140400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "86,9",
+       "ref": "C13",
+       "unit": "",
+       "value": 86.9
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D13",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 13
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.11.2024",
+       "ref": "A14",
+       "unit": "",
+       "value": "2024-11-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "142 300,0",
+       "ref": "B14",
+       "unit": "",
+       "value": 142300.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "92,5",
+       "ref": "C14",
+       "unit": "",
+       "value": 92.5
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D14",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 14
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.12.2024",
+       "ref": "A15",
+       "unit": "",
+       "value": "2024-12-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "142 400,0",
+       "ref": "B15",
+       "unit": "",
+       "value": 142400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "92,4",
+       "ref": "C15",
+       "unit": "",
+       "value": 92.4
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D15",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 15
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.01.2025",
+       "ref": "A16",
+       "unit": "",
+       "value": "2025-01-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "139 700,0",
+       "ref": "B16",
+       "unit": "",
+       "value": 139700.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "88,0",
+       "ref": "C16",
+       "unit": "",
+       "value": 88.0
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D16",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 16
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "28.02.2025",
+       "ref": "A17",
+       "unit": "",
+       "value": "2025-02-28"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "141 900,0",
+       "ref": "B17",
+       "unit": "",
+       "value": 141900.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "88,3",
+       "ref": "C17",
+       "unit": "",
+       "value": 88.3
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D17",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 17
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.03.2025",
+       "ref": "A18",
+       "unit": "",
+       "value": "2025-03-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "149 700,0",
+       "ref": "B18",
+       "unit": "",
+       "value": 149700.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "94,9",
+       "ref": "C18",
+       "unit": "",
+       "value": 94.9
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D18",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 18
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.04.2025",
+       "ref": "A19",
+       "unit": "",
+       "value": "2025-04-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "152 100,0",
+       "ref": "B19",
+       "unit": "",
+       "value": 152100.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "96,8",
+       "ref": "C19",
+       "unit": "",
+       "value": 96.8
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D19",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 19
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.05.2025",
+       "ref": "A20",
+       "unit": "",
+       "value": "2025-05-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "152 200,0",
+       "ref": "B20",
+       "unit": "",
+       "value": 152200.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "100,8",
+       "ref": "C20",
+       "unit": "",
+       "value": 100.8
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D20",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 20
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.06.2025",
+       "ref": "A21",
+       "unit": "",
+       "value": "2025-06-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "155 100,0",
+       "ref": "B21",
+       "unit": "",
+       "value": 155100.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "95,6",
+       "ref": "C21",
+       "unit": "",
+       "value": 95.6
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D21",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 21
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.07.2025",
+       "ref": "A22",
+       "unit": "",
+       "value": "2025-07-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "150 900,0",
+       "ref": "B22",
+       "unit": "",
+       "value": 150900.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "97,8",
+       "ref": "C22",
+       "unit": "",
+       "value": 97.8
+      },
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "сезонный спад",
+       "ref": "D22",
+       "unit": "",
+       "value": "сезонный спад"
+      }
+     ],
+     "row": 22
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.08.2025",
+       "ref": "A23",
+       "unit": "",
+       "value": "2025-08-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "150 900,0",
+       "ref": "B23",
+       "unit": "",
+       "value": 150900.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "92,9",
+       "ref": "C23",
+       "unit": "",
+       "value": 92.9
+      },
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "сезонный спад",
+       "ref": "D23",
+       "unit": "",
+       "value": "сезонный спад"
+      }
+     ],
+     "row": 23
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.09.2025",
+       "ref": "A24",
+       "unit": "",
+       "value": "2025-09-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "163 400,0",
+       "ref": "B24",
+       "unit": "",
+       "value": 163400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "104,7",
+       "ref": "C24",
+       "unit": "",
+       "value": 104.7
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D24",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 24
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.10.2025",
+       "ref": "A25",
+       "unit": "",
+       "value": "2025-10-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "161 800,0",
+       "ref": "B25",
+       "unit": "",
+       "value": 161800.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "103,1",
+       "ref": "C25",
+       "unit": "",
+       "value": 103.1
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D25",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 25
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "30.11.2025",
+       "ref": "A26",
+       "unit": "",
+       "value": "2025-11-30"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "164 300,0",
+       "ref": "B26",
+       "unit": "",
+       "value": 164300.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "108,1",
+       "ref": "C26",
+       "unit": "",
+       "value": 108.1
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D26",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 26
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "date",
+       "raw": "31.12.2025",
+       "ref": "A27",
+       "unit": "",
+       "value": "2025-12-31"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "168 400,0",
+       "ref": "B27",
+       "unit": "",
+       "value": 168400.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "103,8",
+       "ref": "C27",
+       "unit": "",
+       "value": 103.8
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D27",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 27
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Итого",
+       "ref": "A28",
+       "unit": "",
+       "value": "Итого"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "3407300,0",
+       "ref": "B28",
+       "unit": "",
+       "value": 3407300.0
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "C28",
+       "unit": "",
+       "value": null
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "",
+       "ref": "D28",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 28
+    }
+   ],
+   "sheetId": "sheet-1",
+   "state": "visible"
+  }
+ ],
+ "source": {
+  "bytes": 866,
+  "fileName": "revenue-monthly-1c-export.csv",
+  "mediaType": "text/csv",
+  "sha256": "fcd57f4e8e7478a53094200948d63f8c9d7ddd3585da4da2e1405a95bf7a16f7"
+ },
+ "status": "partial"
+}

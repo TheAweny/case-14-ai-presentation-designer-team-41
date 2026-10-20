@@ -112,6 +112,14 @@ describe('addComposerFiles', () => {
     expect(update.emptyTemplates).toEqual(['Пустой.pptx']);
   });
 
+  it('JSON без пункта «Брендбук» — данные, а не брендбук', () => {
+    const tokens = file('tokens.json', '{"color":{}}');
+    const update = addComposerFiles(none, [tokens]);
+    expect(update.brandbookFile ?? null).toBeNull();
+    expect(addComposerFiles(none, [tokens], 'brandbook').brandbookFile).toBe(tokens);
+    expect(addComposerFiles(none, [file('brand.fig')]).brandbookFile?.name).toBe('brand.fig');
+  });
+
   it('файлы без шаблона чип не трогают', () => {
     const update = addComposerFiles(none, [file('data.csv')]);
     expect(update.templateFile).toBeNull();

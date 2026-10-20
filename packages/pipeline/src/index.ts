@@ -132,3 +132,10 @@ export {
 export { ledgerFetch, type AttemptLedger, type TokenPrice } from './models/attempt-ledger.js';
 export { SemanticTextProvider } from './generation/semantic-provider.js';
 export { tokenPriceCatalogSchema, tokenPriceResolver } from './models/pricing.js';
+export {
+  FULL_TABLE_CHARS,
+  SAMPLE_ROWS,
+  datasetRefusal,
+  datasetText,
+  embeddedTablesText,
+} from './materials/dataset-text.js';

@@ -18,7 +18,9 @@ import {
   compositionPlanSchema,
   generationProfileSchema,
   generationRequestSchema,
+  brandbookBindingSchema,
   generationSpecSchema,
+  type BrandbookBinding,
   generationUsageSchema,
   layoutVariantSchema,
   modelRefSchema,
@@ -471,6 +473,17 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     return row;
   }
 
+  /** Validate the selected brandbook before a chat build starts. */
+  async brandbook(id: string, account: Account): Promise<Record<string, unknown>> {
+    const result = await this.pool.query<{ profile: Record<string, unknown> }>(
+      `SELECT profile FROM stored_files WHERE id=$1 AND kind='brandbook' AND ${visibleFile(2)}`,
+      [id, account.id],
+    );
+    const row = result.rows[0];
+    if (!row?.profile) throw new NotFoundException('Brandbook not found.');
+    return row.profile;
+  }
+
   async requireProject(id: string, account: Account): Promise<void> {
     const found = await this.pool.query(
       'SELECT id FROM library_projects WHERE id = $1 AND owner_id = $2',
@@ -815,6 +828,26 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           }
         }
       }
+      // A retry or resume keeps the brand of its build: the brandbook may since have been deleted
+      // or become invisible, and the immutable spec already holds the profile that was checked.
+      let brandbook: BrandbookBinding | undefined = previous
+        ? generationSpecSchema.parse(previous.spec).brandbook
+        : undefined;
+      if (!previous && input.brandbookId) {
+        const selected = await gate(() =>
+          this.pool.query<{ profile: unknown }>(
+            `SELECT profile FROM stored_files WHERE id=$1 AND kind='brandbook' AND ${visibleFile(2)}`,
+            [input.brandbookId, account.id],
+          ),
+        );
+        const profile = selected.rows[0]?.profile;
+        if (!profile) throw new NotFoundException('Brandbook not found.');
+        brandbook = brandbookBindingSchema.parse({
+          schemaVersion: 1,
+          profile,
+          priority: input.brandbookPriority ?? 'brandbook',
+        });
+      }
       const preparedInput = await gate(() =>
         prepareGenerationInput({
           engine: this.engine,
@@ -963,6 +996,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         request: input,
         brief,
         profile: prepared.data,
+        ...(brandbook ? { brandbook } : {}),
         ...(notes ? { notes } : {}),
         registryHash,
         // Pricing describes each physical attempt; it cannot invalidate accepted content on resume.
@@ -1226,6 +1260,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             outlineSource: input.outlineSource,
             profile: prepared.data,
             preparedDatasets,
+            ...(brandbook ? { brandbook } : {}),
             ...(notes ? { notes } : {}),
             registryDir,
             engine: this.engine,

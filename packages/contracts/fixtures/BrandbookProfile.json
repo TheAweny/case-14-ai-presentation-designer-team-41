@@ -1,0 +1,46 @@
+{
+  "contract": "BrandbookProfile",
+  "valid": [
+    {
+      "name": "minimal valid",
+      "payload": {
+        "schemaVersion": 1,
+        "parserVersion": "test",
+        "sourceSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "ready",
+        "sources": [
+          {
+            "id": "s",
+            "path": "tokens.json",
+            "format": "json",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "sizeBytes": 2,
+            "status": "parsed",
+            "warnings": []
+          }
+        ],
+        "tokens": [],
+        "assets": [],
+        "sections": [],
+        "warnings": [],
+        "coverage": {
+          "filesTotal": 1,
+          "filesParsed": 1,
+          "filesUnsupported": 0,
+          "needsOcr": false
+        }
+      },
+      "path": ["schemaVersion"]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "invalid payload",
+      "why": "schemaVersion must be 1",
+      "payload": {
+        "schemaVersion": 2
+      },
+      "path": ["schemaVersion"]
+    }
+  ]
+}

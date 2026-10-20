@@ -2,10 +2,13 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import {
+  NO_REASONING_CHOICE,
+  brandbookBindingSchema,
   headerRecord,
   headersProblem,
   parseHeaderEnv,
   storedTemplateIndexSchema,
+  type BrandbookBinding,
   type CompositionNote,
   type GenerationProfile,
   type LayoutVariant,
@@ -20,6 +23,7 @@ import {
   SharedPlan,
 } from '@lct/pipeline';
 import { loadAnswerFormat } from '@lct/registry';
+import { readMaterial } from './material.js';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -67,8 +71,55 @@ function briefOf(config: RunConfig, content: string): string {
     .join('\n\n');
 }
 
+/**
+ * The brandbook of a run, parsed by the engine the way an upload is. Only declared rules restyle
+ * the deck; colours and fonts merely seen in pictures or font files stay observations, and the
+ * log says so rather than letting a run look styled when it is not.
+ */
+async function brandbookOf(
+  engine: EngineClient,
+  path: string,
+  runDir: string,
+  config: RunConfig,
+  log: (line: string) => void,
+): Promise<BrandbookBinding> {
+  const profile = await engine.parseBrandbook({
+    schemaVersion: 1,
+    path,
+    outputDir: join(runDir, 'brandbook'),
+  });
+  await writeFile(join(runDir, 'brandbook-profile.json'), JSON.stringify(profile, null, 2));
+  const declared = profile.tokens.filter((token) => token.authority === 'explicit').length;
+  const inferred = profile.tokens.filter((token) => token.authority === 'inferred');
+  const observed = profile.tokens.length - declared - inferred.length;
+  const priority = config.brandbookPriority ?? 'brandbook';
+  log(
+    `брендбук ${basename(path)}: файлов ${profile.coverage.filesTotal}, объявленных правил ` +
+      `${declared}, замеченных значений ${observed}, приоритет — ${priority === 'brandbook' ? 'брендбук' : 'шаблон'}`,
+  );
+  if (declared === 0 && inferred.length > 0) {
+    log(
+      '  правил брендбук не объявляет; из логотипов, картинок и шрифтов выведено: ' +
+        inferred.map((token) => `${token.role} ${String(token.value)}`).join(', '),
+    );
+  } else if (declared === 0) {
+    log('  правил брендбук не объявляет, а вывести их не из чего: шаблон не изменится');
+  }
+  for (const warning of profile.warnings) log(`  ${warning}`);
+  return brandbookBindingSchema.parse({ schemaVersion: 1, profile, priority });
+}
+
+/** What went wrong, in words: a workflow fails with an error object that is not an Error. */
+export function failureText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return typeof error === 'string' ? error : JSON.stringify(error);
+}
+
 /** The model connection of the server, read the way the API reads it. */
-function connectionOf(env: Env) {
+export function connectionOf(env: Env) {
   if (env.MODEL_PROVIDER === 'fake') {
     throw new Error(
       'lct generate собирает колоды живой моделью, а MODEL_PROVIDER=fake отвечает только ' +
@@ -84,11 +135,20 @@ function connectionOf(env: Env) {
   if (headersProblem(headers)) {
     throw new Error('MODEL_HEADERS — пары Имя=значение через запятую.');
   }
+  const toggle = env.MODEL_REASONING_TOGGLE?.trim() ?? '';
+  if (toggle && toggle !== 'reasoning-effort' && toggle !== 'enable-thinking') {
+    throw new Error('MODEL_REASONING_TOGGLE — reasoning-effort, enable-thinking или пусто.');
+  }
   return {
     baseUrl,
     model,
     apiKey: env.MODEL_API_KEY?.trim() ?? '',
     headers: headerRecord(headers),
+    // A deck build does not think. Told how this model's thinking switches, the request says so;
+    // left unknown, a model that thinks by default thinks through every slide and may time out.
+    reasoning: toggle
+      ? { toggle: toggle as 'reasoning-effort' | 'enable-thinking', levels: false }
+      : NO_REASONING_CHOICE,
   };
 }
 
@@ -159,14 +219,14 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
   const connection = connectionOf(env);
   const templatePath = resolve(config.templatePath);
   const contentPath = resolve(config.contentPath);
+  const brandbookPath = config.brandbookPath ? resolve(config.brandbookPath) : null;
   for (const [what, path] of [
     ['Шаблон', templatePath],
     ['Материал', contentPath],
+    ['Брендбук', brandbookPath],
   ] as const) {
-    if (!existsSync(path)) throw new Error(`${what} не найден: ${path}`);
+    if (path !== null && !existsSync(path)) throw new Error(`${what} не найден: ${path}`);
   }
-  const brief = briefOf(config, await readFile(contentPath, 'utf8'));
-  if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
 
   const registryDir = resolve(env.REGISTRY_DIR ?? 'registry/agents');
   const provider = new GenerationProvider({
@@ -178,6 +238,8 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     baseUrl: env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 180_000,
   });
+  const brief = briefOf(config, await readMaterial(engine, contentPath));
+  if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');
   const outputDir = resolve(config.outputDir);
   const runId = `run-${new Date()
     .toISOString()
@@ -185,6 +247,10 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     .slice(0, 14)}`;
   const runDir = join(outputDir, runId);
   await mkdir(runDir, { recursive: true });
+  await writeFile(join(runDir, 'brief.md'), brief);
+  const brandbook = brandbookPath
+    ? await brandbookOf(engine, brandbookPath, runDir, config, log)
+    : undefined;
 
   log(
     `${runId}: ${basename(templatePath)}, ${config.slideCount} слайдов, модель ${connection.model}`,
@@ -217,6 +283,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           brief,
           slideCount: config.slideCount,
           profile,
+          ...(brandbook ? { brandbook } : {}),
           ...(notes ? { notes } : {}),
           registryDir,
           engine,
@@ -252,7 +319,7 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
           dir,
           files: [],
           audit: null,
-          error: error instanceof Error ? error.message : String(error),
+          error: failureText(error),
         };
       }
     }),

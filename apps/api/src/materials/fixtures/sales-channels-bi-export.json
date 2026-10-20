@@ -1,0 +1,222 @@
+{
+ "datasetId": "dataset-f54d52c48eacbd58",
+ "diagnostics": [
+  {
+   "code": "nested-value",
+   "message": "2 value(s) are objects or lists; they are kept as JSON text.",
+   "ref": null,
+   "severity": "warning",
+   "sheet": "sales-channels-bi-export"
+  },
+  {
+   "code": "mixed-decimal-separators",
+   "message": "The column writes decimals with both a point and a comma.",
+   "ref": "B",
+   "severity": "warning",
+   "sheet": "sales-channels-bi-export"
+  }
+ ],
+ "schemaVersion": 1,
+ "sheets": [
+  {
+   "columns": [
+    {
+     "columnId": "sheet-1:A",
+     "decimal": ",",
+     "header": "Канал",
+     "index": 1,
+     "kind": "text",
+     "ref": "A"
+    },
+    {
+     "columnId": "sheet-1:B",
+     "decimal": "",
+     "header": "Доля",
+     "index": 2,
+     "kind": "number",
+     "ref": "B"
+    },
+    {
+     "columnId": "sheet-1:C",
+     "decimal": ",",
+     "header": "Выручка, млн ₽",
+     "index": 3,
+     "kind": "number",
+     "ref": "C"
+    },
+    {
+     "columnId": "sheet-1:D",
+     "decimal": ",",
+     "header": "Детали",
+     "index": 4,
+     "kind": "text",
+     "ref": "D"
+    }
+   ],
+   "headerRow": 1,
+   "index": 0,
+   "mergedRanges": [],
+   "name": "sales-channels-bi-export",
+   "range": "A1:D5",
+   "rows": [
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Онлайн",
+       "ref": "A2",
+       "unit": "",
+       "value": "Онлайн"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "46%",
+       "ref": "B2",
+       "unit": "%",
+       "value": 46.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "1 012,4",
+       "ref": "C2",
+       "unit": "",
+       "value": 1012.4
+      },
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "{\"регионы\":8}",
+       "ref": "D2",
+       "unit": "",
+       "value": "{\"регионы\":8}"
+      }
+     ],
+     "row": 2
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Розница",
+       "ref": "A3",
+       "unit": "",
+       "value": "Розница"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "31 %",
+       "ref": "B3",
+       "unit": "%",
+       "value": 31.0
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "682.0",
+       "ref": "C3",
+       "unit": "",
+       "value": 682.0
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "null",
+       "ref": "D3",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 3
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Партнёры",
+       "ref": "A4",
+       "unit": "",
+       "value": "Партнёры"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "15,5%",
+       "ref": "B4",
+       "unit": "%",
+       "value": 15.5
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "null",
+       "ref": "C4",
+       "unit": "",
+       "value": null
+      },
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "[\"опт\",\"маркетплейсы\"]",
+       "ref": "D4",
+       "unit": "",
+       "value": "[\"опт\",\"маркетплейсы\"]"
+      }
+     ],
+     "row": 4
+    },
+    {
+     "cells": [
+      {
+       "candidates": [],
+       "kind": "text",
+       "raw": "Прочее",
+       "ref": "A5",
+       "unit": "",
+       "value": "Прочее"
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "8.5%",
+       "ref": "B5",
+       "unit": "%",
+       "value": 8.5
+      },
+      {
+       "candidates": [],
+       "kind": "number",
+       "raw": "187",
+       "ref": "C5",
+       "unit": "",
+       "value": 187.0
+      },
+      {
+       "candidates": [],
+       "kind": "empty",
+       "raw": "null",
+       "ref": "D5",
+       "unit": "",
+       "value": null
+      }
+     ],
+     "row": 5
+    }
+   ],
+   "sheetId": "sheet-1",
+   "state": "visible"
+  }
+ ],
+ "source": {
+  "bytes": 528,
+  "fileName": "sales-channels-bi-export.json",
+  "mediaType": "application/json",
+  "sha256": "f54d52c48eacbd58197b846cace33542f6e9bfa81016a0b5d8df4e0ed5e3d51b"
+ },
+ "status": "partial"
+}

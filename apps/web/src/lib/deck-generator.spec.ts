@@ -3,6 +3,7 @@ import type { JobEvent } from '@lct/contracts';
 import {
   LAYOUT_VARIANTS,
   SLIDE_COUNT_RANGE,
+  CONTENT_FILE_ACCEPT,
   applyEvent,
   contentFileKind,
   extensionOf,
@@ -73,6 +74,8 @@ describe('файлы', () => {
     expect(contentFileKind('notes.MD')).toBe('text');
     expect(contentFileKind('выручка.xlsx')).toBe('table');
     expect(contentFileKind('data.csv')).toBe('table');
+    expect(contentFileKind('доли-каналов.JSON')).toBe('table');
+    expect(CONTENT_FILE_ACCEPT.split(',')).toContain('.json');
     expect(contentFileKind('photo.png')).toBeNull();
     expect(contentFileKind('template.pptx')).toBeNull();
   });

@@ -1,0 +1,21 @@
+{
+ "datasetId": "dataset-e0f1c246bf344233",
+ "diagnostics": [
+  {
+   "code": "unreadable",
+   "message": "The JSON is not valid: Unterminated string starting at: line 1 column 41 (char 40)",
+   "ref": null,
+   "severity": "error",
+   "sheet": null
+  }
+ ],
+ "schemaVersion": 1,
+ "sheets": [],
+ "source": {
+  "bytes": 51,
+  "fileName": "truncated.json",
+  "mediaType": "application/json",
+  "sha256": "e0f1c246bf344233c8ba2f65bad412f30e6a8ad7045fc178741a8e16cfc2fc9a"
+ },
+ "status": "failed"
+}

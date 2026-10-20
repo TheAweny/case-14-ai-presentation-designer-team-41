@@ -154,7 +154,7 @@ docker compose up --build
 
 Описание API включается в `lct configure` или через `API_DOCS_ENABLED=true` с пересозданием
 контейнеров API и web. При включении справочник доступен без входа: `/api/docs` (локально
-http://localhost:3000/api/docs, на демостенде https://lct-demo.awenylab.com/api/docs), сам
+http://localhost:3000/api/docs, на стенде https://lct.aweny.link/api/docs), сам
 документ OpenAPI — `/api/docs-json`. Вошедший пользователь может выполнять запросы прямо со
 страницы: они идут через `/api/backend` с его сессией.
 

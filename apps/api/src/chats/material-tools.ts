@@ -61,6 +61,7 @@ interface TableOutput {
 }
 
 type ExtractRequest = Parameters<GenerationService['engine']['extractMaterial']>[0];
+type DatasetRequest = Parameters<GenerationService['engine']['extractDataset']>[0];
 
 /** File ids the person attached in this chat. Nothing else may be read. */
 export function attachedFileIds(scope: ChatToolScope): ReadonlySet<string> {
@@ -83,13 +84,20 @@ export function materialTools(generation: GenerationService, scope: ChatToolScop
   if (attachedFileIds(scope).size === 0) return [];
   const cache = new Map<string, unknown>();
   let engineCalls = 0;
+  const spend = () => {
+    if (engineCalls >= MAX_ENGINE_CALLS) {
+      throw new Error('The material engine call limit for this turn was reached.');
+    }
+    engineCalls += 1;
+  };
   const limitedEngine = {
     async extractMaterial(request: ExtractRequest, signal?: AbortSignal) {
-      if (engineCalls >= MAX_ENGINE_CALLS) {
-        throw new Error('The material engine call limit for this turn was reached.');
-      }
-      engineCalls += 1;
+      spend();
       return generation.engine.extractMaterial(request, signal);
+    },
+    async extractDataset(request: DatasetRequest, signal?: AbortSignal) {
+      spend();
+      return generation.engine.extractDataset(request, signal);
     },
   };
 

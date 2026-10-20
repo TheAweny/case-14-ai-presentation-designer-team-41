@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { BadRequestException } from '@nestjs/common';
-import type { MaterialExtractResponse } from '@lct/contracts';
+import type { Dataset, MaterialExtractResponse } from '@lct/contracts';
+import { datasetRefusal, datasetText, embeddedTablesText } from '@lct/pipeline';
 
 /** A stored content file the account is already allowed to use. */
 export interface PreparedMaterialSource {
@@ -29,10 +30,17 @@ export interface MaterialExtractEngine {
     },
     signal?: AbortSignal,
   ): Promise<MaterialExtractResponse>;
+  extractDataset(
+    request: { schemaVersion: 1; path: string },
+    signal?: AbortSignal,
+  ): Promise<Dataset>;
 }
 
-const RAW_TEXT = new Set(['.txt', '.md', '.csv', '.tsv']);
-const EXTRACTED_TEXT = new Set(['.docx', '.pdf', '.xlsx']);
+/** Text a person wrote: copied exactly, with the tables found inside it described after it. */
+const RAW_TEXT = new Set(['.txt', '.md']);
+/** Files that are tables: read as typed tables, never as a stream of cells. */
+const DATA_FILES = new Set(['.csv', '.tsv', '.xlsx', '.json']);
+const EXTRACTED_TEXT = new Set(['.docx', '.pdf']);
 
 /** The engine page size. The contract refuses a larger limit. */
 const PAGE_LIMIT = 100;
@@ -48,9 +56,9 @@ const CACHE_TEXT = 'material-prepared.txt';
 
 /**
  * Bump when the canonical text changes. A cache without this revision is ignored:
- * an older reader kept only the first spreadsheet sheet.
+ * an older reader copied CSV as it was and gave a workbook as a stream of cells.
  */
-const PREPARATION_REVISION = '2026-10-18.1';
+const PREPARATION_REVISION = '2026-10-20.1';
 
 interface PreparedCache {
   readonly schemaVersion: 1;
@@ -70,9 +78,10 @@ interface BuiltText {
 /**
  * Read a content file for a brief.
  *
- * Plain text, Markdown, CSV and TSV are copied exactly, including a leading BOM.
- * DOCX, PDF and XLSX are read from the engine as text pages. XLSX keeps every sheet:
- * each cell is `{sheet}!{range}: text`. The result is never silently shortened.
+ * Plain text and Markdown are copied exactly, including a leading BOM, and the tables found in
+ * them are described after the text. CSV, TSV, XLSX and JSON are read by the engine as typed
+ * tables: every sheet, a short table whole and a long one summarised over all of its rows.
+ * DOCX and PDF are read from the engine as text pages. The result is never silently shortened.
  */
 export async function readPreparedMaterial(
   engine: MaterialExtractEngine,
@@ -89,13 +98,57 @@ export async function readPreparedMaterial(
   if (cached !== undefined) return { sourceSha256, text: cached };
 
   const text = RAW_TEXT.has(extension)
-    ? decodeRaw(bytes)
-    : await extractCanonical(engine, source.path, extension, sourceSha256, signal);
+    ? await withEmbeddedTables(engine, source, decodeRaw(bytes), sourceSha256, signal)
+    : DATA_FILES.has(extension)
+      ? await extractTables(engine, source, sourceSha256, signal)
+      : await extractCanonical(engine, source.path, extension, sourceSha256, signal);
   signal?.throwIfAborted();
   assertBudget(text);
   const prepared = { sourceSha256, text };
   await writeCache(source.path, extension, prepared);
   return prepared;
+}
+
+async function readDataset(
+  engine: MaterialExtractEngine,
+  source: PreparedMaterialSource,
+  fileSha256: string,
+  signal?: AbortSignal,
+): Promise<Dataset> {
+  const dataset = await engine.extractDataset({ schemaVersion: 1, path: source.path }, signal);
+  signal?.throwIfAborted();
+  if (dataset.source.sha256 !== fileSha256) {
+    throw new BadRequestException('Material source hash does not match the file.');
+  }
+  return dataset;
+}
+
+async function extractTables(
+  engine: MaterialExtractEngine,
+  source: PreparedMaterialSource,
+  fileSha256: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const dataset = await readDataset(engine, source, fileSha256, signal);
+  if (dataset.status === 'failed') {
+    throw new BadRequestException(
+      `Файл «${source.name}» не читается как таблица: ${datasetRefusal(dataset)}.`,
+    );
+  }
+  return datasetText(dataset);
+}
+
+/** A text keeps every word; a table found in it adds what its columns hold and how it was read. */
+async function withEmbeddedTables(
+  engine: MaterialExtractEngine,
+  source: PreparedMaterialSource,
+  text: string,
+  fileSha256: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const dataset = await readDataset(engine, source, fileSha256, signal);
+  if (dataset.status === 'failed' || dataset.sheets.length === 0) return text;
+  return text.replace(/\s+$/, '') + NEWLINE + NEWLINE + embeddedTablesText(dataset);
 }
 
 async function extractCanonical(
@@ -133,7 +186,7 @@ async function extractCanonical(
     if (response.sourceSha256 !== fileSha256) {
       throw new BadRequestException('Material source hash does not match the file.');
     }
-    for (const segment of response.segments) appendSegment(built, extension, segment);
+    for (const segment of response.segments) appendSegment(built, segment);
     if (response.nextOffset === null) {
       if (response.truncated) {
         throw new BadRequestException(
@@ -153,24 +206,20 @@ async function extractCanonical(
 }
 
 /** Pieces of one locator stay together. A new locator starts a new line. */
-function appendSegment(built: BuiltText, extension: string, segment: Segment): void {
+function appendSegment(built: BuiltText, segment: Segment): void {
   const key = JSON.stringify([
     segment.locator.page,
     segment.locator.paragraph,
     segment.locator.sheet,
     segment.locator.range,
   ]);
-  const piece = extension === '.xlsx' && built.previous !== key ? cellLabel(segment) : segment.text;
+  const piece = segment.text;
   const addition = built.previous === undefined || built.previous === key ? piece : NEWLINE + piece;
   if (built.text.length + addition.length > MAX_CHARS) {
     throw new BadRequestException('Content exceeds 60000 characters.');
   }
   built.text += addition;
   built.previous = key;
-}
-
-function cellLabel(segment: Segment): string {
-  return (segment.locator.sheet ?? '') + '!' + (segment.locator.range ?? '') + ': ' + segment.text;
 }
 
 function assertBudget(text: string): void {
