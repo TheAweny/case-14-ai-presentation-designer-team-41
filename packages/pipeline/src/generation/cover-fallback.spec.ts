@@ -64,6 +64,12 @@ describe('geometricCovers', () => {
   });
   it('keeps a short cover when approved claims would have more room on a contents list', async () => {
     const cover = pattern('cover', [30]);
+    const oldQrCover = {
+      ...pattern('cached-qr', [30]),
+      qrCandidateSlots: [
+        { slotId: 'qr', kind: 'photo' as const, box: { x: 0, y: 0, cx: 3_000_000, cy: 3_000_000 } },
+      ],
+    };
     const contents = pattern('contents', [300, 300, 300]);
     const profile = generationProfileSchema.parse(
       JSON.parse(
@@ -94,7 +100,7 @@ describe('geometricCovers', () => {
         title: 'Пилот',
         audience: '',
         goal: '',
-        slides: [cover, contents, contents, contents, contents].map((p) => ({
+        slides: [oldQrCover, contents, contents, contents, contents].map((p) => ({
           patternId: p.patternId,
           purpose: 'Согласовать пилот для всей команды',
           imageQuery: '',
@@ -111,13 +117,14 @@ describe('geometricCovers', () => {
           ],
         })),
       }),
-      notes: [cover, contents].map((p) => ({
+      notes: [cover, contents, oldQrCover].map((p) => ({
         patternId: p.patternId,
-        kind: p === cover ? 'cover' : 'list',
+        kind: p === cover || p === oldQrCover ? 'cover' : 'list',
         items: 1,
         title: '',
         useFor: '',
-        special: false,
+        special: p === oldQrCover,
+        qrSlotIds: p === oldQrCover ? ['qr'] : [],
         skip: false,
         requiredContent: [],
       })),
@@ -128,7 +135,7 @@ describe('geometricCovers', () => {
       inputData: {
         brief: 'Пилот рассчитан на три месяца работы и 30 операторов поддержки',
         slideCount: 5,
-        profile: { ...profile, compositions: [cover, contents] },
+        profile: { ...profile, compositions: [cover, contents, oldQrCover] },
       },
     });
     expect(first).toBe('cover');

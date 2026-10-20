@@ -1914,8 +1914,26 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const sharedResult = deps.sharedPlan
         ? await deps.sharedPlan.once(computePlan)
         : await computePlan();
+      // A saved plan may predate the QR-cover exclusion. Repair only an unbound opening
+      // QR page before validating assets; all claims and the remaining slide plan stay intact.
+      const opening = sharedResult.slides[0];
+      const openingPattern = opening && compositions.find((p) => p.patternId === opening.patternId);
+      const safeOpening = covers.find((p) => !declaredQrSlots(p, notes.get(p.patternId)).length);
+      const qrSafeSharedResult =
+        opening &&
+        openingPattern &&
+        safeOpening &&
+        !opening.qrRequests?.length &&
+        declaredQrSlots(openingPattern, notes.get(openingPattern.patternId)).length
+          ? {
+              ...sharedResult,
+              slides: sharedResult.slides.map((slide, index) =>
+                index === 0 ? { ...slide, patternId: safeOpening.patternId } : slide,
+              ),
+            }
+          : sharedResult;
       const result = await safeQrPlan(
-        sharedResult,
+        qrSafeSharedResult,
         compositions,
         notes,
         qrSourceBrief,
