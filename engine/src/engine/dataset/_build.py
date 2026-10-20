@@ -1,5 +1,6 @@
 """From the cells a reader found to a typed sheet: nothing left out, no value made up."""
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 
@@ -52,11 +53,21 @@ def _decimal_evidence(cells: list[Raw]) -> str:
     return seen.most_common(1)[0][0] if len(seen) == 1 else ""
 
 
+#: How people write «no value» in a cell. Such a cell is a gap, never a zero; its text is kept.
+MISSING_MARKERS = frozenset(
+    {"-", "—", "–", "−", "н/д", "н.д.", "нд", "нет данных", "n/a", "na", "#n/a", "null", "nan"}
+)
+#: A row that sums the rows above it: a chart or a total over the column must not count it twice.
+_TOTAL = re.compile(r"^(итого|всего|итог|total|grand total)\b", re.IGNORECASE)
+#: Rows above a table that may be its title: a report name, a period, a blank line.
+_PREAMBLE_LIMIT = 5
+
+
 def _typed(raw: Raw, ref: str, sheet: str, hint: str, diagnostics: list[Diagnostic]) -> Cell:
     if raw.kind is not None:
         return Cell(ref=ref, raw=raw.text, kind=raw.kind, value=raw.value, unit=raw.unit)
     text = raw.text
-    if text is None or not text.strip():
+    if text is None or not text.strip() or text.strip().lower() in MISSING_MARKERS:
         return Cell(ref=ref, raw=text, kind=CellKind.empty)
     number = parse_number(text, hint)
     if number.value is not None:
@@ -191,8 +202,59 @@ def build_sheet(
             for column in columns
         ]
 
-    header_row = _header_row(typed, rows)
-    data_rows = [row for row in rows if row != header_row]
+    markers = Counter(
+        (cell.raw or "").strip()
+        for row in rows
+        for cell, raw in zip(typed[row], (grid.get(row, {}).get(c) for c in columns), strict=True)
+        if raw is not None
+        and raw.kind is None
+        and cell.kind == "empty"
+        and (cell.raw or "").strip()
+    )
+    if markers:
+        written = ", ".join(f"«{marker}»" for marker in sorted(markers))
+        diagnostics.append(
+            Diagnostic(
+                code="missing-markers",
+                severity=Severity.info,
+                message=f"{sum(markers.values())} cell(s) say there is no value ({written}); "
+                "they are gaps, not zeros.",
+                sheet=name,
+            )
+        )
+
+    preamble = _preamble(typed, rows, len(columns))
+    if preamble:
+        titles = " / ".join(
+            " ".join(cell.raw.strip() for cell in typed[row] if cell.raw and cell.raw.strip())
+            for row in preamble
+            if any(cell.raw and cell.raw.strip() for cell in typed[row])
+        )
+        diagnostics.append(
+            Diagnostic(
+                code="preamble-rows",
+                severity=Severity.info,
+                message=f"{len(preamble)} row(s) above the table are its title, not its data: "
+                f"«{titles}».",
+                sheet=name,
+                ref=f"{preamble[0]}:{preamble[-1]}",
+            )
+        )
+    body = [row for row in rows if row not in preamble]
+    header_row = _header_row(typed, body)
+    data_rows = [row for row in body if row != header_row]
+    total = _total_row(typed, data_rows)
+    if total is not None:
+        diagnostics.append(
+            Diagnostic(
+                code="total-row",
+                severity=Severity.info,
+                message="The last row sums the rows above it; a total over the column counts it "
+                "once, not twice.",
+                sheet=name,
+                ref=total,
+            )
+        )
     headers = (
         [cell.raw.strip() if cell.raw and cell.raw.strip() else None for cell in typed[header_row]]
         if header_row is not None
@@ -261,7 +323,42 @@ def build_sheet(
     )
 
 
-def _header_row(typed: dict[int, list[Cell]], rows: range) -> int | None:
+def _filled(cells: list[Cell]) -> int:
+    return sum(1 for cell in cells if cell.kind != "empty" or (cell.raw or "").strip())
+
+
+def _preamble(typed: dict[int, list[Cell]], rows: range, width: int) -> list[int]:
+    """Rows above the table that fill too few columns to belong to it: a title, a period, a gap.
+
+    They count only when a row wide enough to be the table follows within the first few lines;
+    otherwise every row is the table's own, however sparse.
+    """
+    if width < 2:
+        return []
+    wide = max(2, (width + 1) // 2)
+    seen: list[int] = []
+    for row in rows:
+        if _filled(typed[row]) >= wide:
+            return seen if any(_filled(typed[r]) for r in seen) else []
+        seen.append(row)
+        if sum(1 for r in seen if _filled(typed[r])) > _PREAMBLE_LIMIT:
+            return []
+    return []
+
+
+def _total_row(typed: dict[int, list[Cell]], data_rows: list[int]) -> str | None:
+    """The reference of the label of a last row that says it totals the rows above."""
+    filled = [row for row in data_rows if _filled(typed[row])]
+    if len(filled) < 3:
+        return None
+    last = filled[-1]
+    label = next((cell for cell in typed[last] if cell.kind == "text"), None)
+    if label is not None and label.raw and _TOTAL.match(label.raw.strip()):
+        return label.ref
+    return None
+
+
+def _header_row(typed: dict[int, list[Cell]], rows: range | list[int]) -> int | None:
     """The first non-empty row when it is a row of names: text only, over rows that hold data."""
     first = next((row for row in rows if any(c.kind != "empty" for c in typed[row])), None)
     if first is None:
