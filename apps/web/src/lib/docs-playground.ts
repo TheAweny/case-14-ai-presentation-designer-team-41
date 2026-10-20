@@ -75,6 +75,28 @@ export function playgroundApiPath(segments: readonly string[]): string | null {
   return `/${segments.map((segment) => encodeURIComponent(segment)).join('/')}`;
 }
 
+/**
+ * Address of a docs page this server may send the browser back to.
+ * Only the configured docs origins. Hash is dropped so a token is not echoed into the check.
+ */
+export function docsReturnUrl(
+  value: string | null | undefined,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | null {
+  if (!value || value.length > 2000) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) return null;
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (!docsConsoleOrigins(env).includes(url.origin)) return null;
+  url.hash = '';
+  return url.toString();
+}
+
 function originOf(value: string | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;

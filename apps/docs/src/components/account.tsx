@@ -7,7 +7,6 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
-  type FormEvent,
   type RefObject,
 } from 'react';
 import { appUrl } from '@/lib/site';
@@ -19,13 +18,15 @@ import {
   type DocsAccountProfile,
 } from '@/lib/account-store';
 
+const HANDOFF = 'lct-docs-connect';
+
 /**
- * Sits where the theme switch used to be: the docs stay dark, and this button is the account
- * the API console calls as.
+ * Sits where the theme switch used to be. The click opens the application and takes the
+ * session that is already there. This site never asks for the password itself.
  */
 export function DocsAccountSlot({ className }: { className?: string; mode?: string }) {
   return (
-    <div className={className}>
+    <div className={className} data-docs-account="">
       <DocsAccount />
     </div>
   );
@@ -34,9 +35,25 @@ export function DocsAccountSlot({ className }: { className?: string; mode?: stri
 function DocsAccount() {
   const account = useSyncExternalStore(subscribeDocsAccount, getDocsAccount, () => null);
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
+
+  useEffect(() => {
+    acceptHash();
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== originOf(appUrl())) return;
+      const session = sessionOf(event.data);
+      if (!session) return;
+      saveDocsAccount(session);
+      setError(null);
+      setOpen(false);
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   useEffect(() => {
     const current = getDocsAccount();
@@ -78,117 +95,11 @@ function DocsAccount() {
     };
   }, [open]);
 
-  const label = account ? account.account.name : 'Войти';
-  return (
-    <div className="relative">
-      <button
-        ref={button}
-        type="button"
-        className="max-w-36 truncate rounded-md px-2 py-1 text-sm text-fd-foreground hover:bg-fd-accent"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => setOpen((value) => !value)}
-      >
-        {label}
-      </button>
-      {open ? (
-        <AccountPanel
-          panel={panel}
-          anchor={button.current}
-          titleId={titleId}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function AccountPanel({
-  panel,
-  anchor,
-  titleId,
-  onClose,
-}: {
-  panel: RefObject<HTMLDivElement | null>;
-  anchor: HTMLButtonElement | null;
-  titleId: string;
-  onClose: () => void;
-}) {
-  const place = usePlace(anchor);
-  return (
-    <div
-      ref={panel}
-      role="dialog"
-      aria-labelledby={titleId}
-      className="fixed z-50 w-72 rounded-xl border border-fd-border bg-fd-popover p-3 text-fd-popover-foreground shadow-lg"
-      style={place}
-    >
-      <AccountForm titleId={titleId} onClose={onClose} />
-    </div>
-  );
-}
-
-function usePlace(anchor: HTMLButtonElement | null): CSSProperties {
-  const [place, setPlace] = useState<CSSProperties>({ top: 0, left: 8 });
-  useEffect(() => {
-    function measure() {
-      const rect = anchor?.getBoundingClientRect();
-      const width = 288;
-      if (!rect) return;
-      const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
-      const below = rect.bottom + 8;
-      const up = rect.bottom > window.innerHeight * 0.62;
-      setPlace(
-        up
-          ? { left, bottom: Math.max(8, window.innerHeight - rect.top + 8) }
-          : { left, top: below },
-      );
-    }
-    measure();
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
-    return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
-    };
-  }, [anchor]);
-  return place;
-}
-
-function AccountForm({ titleId, onClose }: { titleId: string; onClose: () => void }) {
-  const session = useSyncExternalStore(subscribeDocsAccount, getDocsAccount, () => null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function signIn(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(`${appUrl()}/api/docs-playground/session`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const body = (await response.json().catch(() => null)) as {
-        token?: string;
-        account?: DocsAccountProfile;
-        message?: string;
-      } | null;
-      if (!response.ok || !body?.token || !body.account) {
-        setError(messageOf(response.status, body?.message));
-        return;
-      }
-      saveDocsAccount({ token: body.token, account: body.account });
-      setPassword('');
-      onClose();
-    } catch {
-      setError('Сервер приложения не ответил.');
-    } finally {
-      setBusy(false);
-    }
+  function connect() {
+    const back = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+    const url = `${appUrl()}/docs-playground/connect?return=${encodeURIComponent(back)}`;
+    const popup = window.open(url, HANDOFF, 'popup,width=440,height=640');
+    if (!popup) window.location.assign(url);
   }
 
   async function signOut() {
@@ -207,7 +118,7 @@ function AccountForm({ titleId, onClose }: { titleId: string; onClose: () => voi
         }
       }
       clearDocsAccount();
-      onClose();
+      setOpen(false);
     } catch {
       setError('Сервер приложения не ответил.');
     } finally {
@@ -215,92 +126,156 @@ function AccountForm({ titleId, onClose }: { titleId: string; onClose: () => voi
     }
   }
 
-  if (session) {
-    const { account } = session;
-    return (
-      <div>
-        <p id={titleId} className="text-sm font-medium">
-          {account.name}
-        </p>
-        <p className="mt-1 truncate text-xs text-fd-muted-foreground">{account.email}</p>
-        <p className="mt-1 text-xs text-fd-muted-foreground">
-          {account.role === 'admin' ? 'Администратор' : 'Пользователь'}
-        </p>
-        <p className="mt-3 text-xs text-fd-muted-foreground">
-          Запросы в консоли API идут от этого аккаунта.
-        </p>
-        {error ? (
-          <p role="alert" className="mt-2 text-xs text-fd-primary">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="button"
-          className="mt-3 w-full rounded-md border border-fd-border px-3 py-1.5 text-sm hover:bg-fd-accent disabled:opacity-60"
-          disabled={busy}
-          onClick={() => void signOut()}
-        >
-          Выйти
-        </button>
-      </div>
-    );
-  }
-
+  const place = usePlace(button, open);
+  const label = account ? account.account.name : 'Войти';
   return (
-    <form onSubmit={(event) => void signIn(event)}>
-      <p id={titleId} className="text-sm font-medium">
-        Аккаунт
-      </p>
-      <p className="mt-1 text-xs text-fd-muted-foreground">
-        Тот же вход, что в приложении. Сессия остаётся в этой вкладке.
-      </p>
-      <label className="mt-3 block text-xs" htmlFor={`${titleId}-email`}>
-        Почта
-        <input
-          id={`${titleId}-email`}
-          type="email"
-          autoComplete="username"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded-md border border-fd-border bg-fd-background px-2 py-1.5 text-sm"
-        />
-      </label>
-      <label className="mt-2 block text-xs" htmlFor={`${titleId}-password`}>
-        Пароль
-        <input
-          id={`${titleId}-password`}
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded-md border border-fd-border bg-fd-background px-2 py-1.5 text-sm"
-        />
-      </label>
-      {error ? (
-        <p role="alert" className="mt-2 text-xs text-fd-primary">
-          {error}
-        </p>
-      ) : null}
+    <div className="relative">
       <button
-        type="submit"
-        className="mt-3 w-full rounded-md bg-fd-primary px-3 py-1.5 text-sm text-fd-primary-foreground disabled:opacity-60"
-        disabled={busy}
+        ref={button}
+        type="button"
+        className="inline-flex h-8 max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/5 pe-3 ps-1 text-sm text-fd-foreground shadow-sm transition hover:border-fd-primary/40 hover:bg-fd-accent"
+        aria-expanded={account ? open : undefined}
+        aria-haspopup={account ? 'dialog' : undefined}
+        onClick={() => {
+          if (account) setOpen((value) => !value);
+          else connect();
+        }}
       >
-        {busy ? 'Вхожу…' : 'Войти'}
+        <span
+          aria-hidden
+          className="grid size-6 shrink-0 place-items-center rounded-full bg-fd-primary text-[11px] font-semibold text-fd-primary-foreground"
+        >
+          {account ? initials(account.account.name) : <EnterMark />}
+        </span>
+        <span className="max-w-28 truncate font-medium">{label}</span>
       </button>
-    </form>
+      {open && account ? (
+        <div
+          ref={panel}
+          role="dialog"
+          aria-labelledby={titleId}
+          className="fixed z-50 w-72 rounded-2xl border border-fd-border bg-fd-popover p-3 text-fd-popover-foreground shadow-xl"
+          style={place}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-fd-primary text-sm font-semibold text-fd-primary-foreground"
+            >
+              {initials(account.account.name)}
+            </span>
+            <span className="min-w-0">
+              <span id={titleId} className="block truncate text-sm font-medium">
+                {account.account.name}
+              </span>
+              <span className="block truncate text-xs text-fd-muted-foreground">
+                {account.account.email}
+              </span>
+            </span>
+          </div>
+          <p className="mt-3 text-xs text-fd-muted-foreground">
+            {account.account.role === 'admin' ? 'Администратор' : 'Пользователь'} приложения. Запросы
+            консоли идут от этого аккаунта.
+          </p>
+          {error ? (
+            <p role="alert" className="mt-2 text-xs text-fd-primary">
+              {error}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="mt-3 w-full rounded-lg border border-fd-border px-3 py-1.5 text-sm hover:bg-fd-accent disabled:opacity-60"
+            disabled={busy}
+            onClick={() => void signOut()}
+          >
+            {busy ? 'Выхожу…' : 'Выйти'}
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-function messageOf(status: number, message: string | undefined): string {
-  if (status === 401) return 'Неверная почта или пароль.';
-  if (status === 404) {
-    return 'Консоль API на этом сервере выключена. Её включает API_DOCS_ENABLED.';
+function usePlace(anchor: RefObject<HTMLButtonElement | null>, active: boolean): CSSProperties {
+  const [place, setPlace] = useState<CSSProperties>({ top: 8, left: 8 });
+  useEffect(() => {
+    if (!active) return;
+    function measure() {
+      const rect = anchor.current?.getBoundingClientRect();
+      const width = 288;
+      if (!rect) return;
+      const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+      const up = rect.bottom > window.innerHeight * 0.62;
+      setPlace(
+        up
+          ? { left, bottom: Math.max(8, window.innerHeight - rect.top + 8) }
+          : { left, top: rect.bottom + 8 },
+      );
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [active, anchor]);
+  return place;
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '');
+  return (letters || name.slice(0, 1) || '?').toUpperCase();
+}
+
+function originOf(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value;
   }
-  if (status === 403) {
-    return 'Сервер не разрешил этот адрес документации. Задайте DOCS_PUBLIC_URL.';
+}
+
+function sessionOf(data: unknown): { token: string; account: DocsAccountProfile } | null {
+  if (!data || typeof data !== 'object') return null;
+  const row = data as { source?: unknown; token?: unknown; account?: Partial<DocsAccountProfile> };
+  if (row.source !== HANDOFF || typeof row.token !== 'string' || !row.token) return null;
+  const account = row.account;
+  if (!account || typeof account.email !== 'string' || typeof account.name !== 'string') return null;
+  return {
+    token: row.token,
+    account: {
+      name: account.name,
+      email: account.email,
+      role: account.role === 'admin' ? 'admin' : 'user',
+    },
+  };
+}
+
+function acceptHash(): void {
+  const marker = '#lct-account=';
+  if (!window.location.hash.startsWith(marker)) return;
+  const encoded = window.location.hash.slice(marker.length);
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  try {
+    const session = sessionOf({ source: HANDOFF, ...JSON.parse(decodeURIComponent(encoded)) });
+    if (session) saveDocsAccount(session);
+  } catch {
+    // A broken hash is ignored. The button can ask the application again.
   }
-  return message || 'Сервер приложения не ответил.';
+}
+
+function EnterMark() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="8" cy="5.5" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M3.5 13.2c.6-2.2 2.2-3.3 4.5-3.3s3.9 1.1 4.5 3.3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }

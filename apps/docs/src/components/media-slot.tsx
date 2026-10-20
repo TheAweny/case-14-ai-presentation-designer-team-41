@@ -7,12 +7,23 @@ import type { ReactNode } from 'react';
 export function MediaSlot({
   kind,
   title,
+  src,
   children,
 }: {
   kind: 'image' | 'video';
   title: string;
+  /** File under `public/`, for example `/images/guide/editor.gif`. */
+  src?: string;
   children?: ReactNode;
 }) {
+  if (src) {
+    return (
+      <figure className="my-6">
+        <img src={src} alt={title} className="w-full rounded-lg border border-fd-border bg-fd-card" />
+        <figcaption className="mt-2 text-center text-sm text-fd-muted-foreground">{title}</figcaption>
+      </figure>
+    );
+  }
   const label = kind === 'video' ? 'Видео' : 'Снимок';
   return (
     <figure className="my-6" data-media-slot={kind}>

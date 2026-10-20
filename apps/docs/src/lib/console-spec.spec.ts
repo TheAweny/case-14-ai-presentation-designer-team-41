@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { consoleDocument } from './console-spec';
+import { consoleDocument, consoleOutline } from './console-spec';
 
 describe('consoleDocument', () => {
   it('points Swagger at the app and drops headers the page adds itself', () => {
@@ -35,5 +35,33 @@ describe('consoleDocument', () => {
     expect(next.components?.schemas).toEqual({ A: {} });
     expect(next.paths?.['/generation']?.post?.parameters).toEqual([{ in: 'query', name: 'limit' }]);
     expect(JSON.stringify(next)).not.toContain('x-lct-service-token');
+  });
+
+  it('lists operations under their first tag', () => {
+    expect(
+      consoleOutline({
+        paths: {
+          '/health': { get: { tags: ['Состояние'], operationId: 'health.get', summary: 'Жив' } },
+          '/generation': {
+            post: { tags: ['Генерация'], operationId: 'generation.run', summary: 'Собрать' },
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        tag: 'Состояние',
+        method: 'GET',
+        path: '/health',
+        operationId: 'health.get',
+        summary: 'Жив',
+      },
+      {
+        tag: 'Генерация',
+        method: 'POST',
+        path: '/generation',
+        operationId: 'generation.run',
+        summary: 'Собрать',
+      },
+    ]);
   });
 });

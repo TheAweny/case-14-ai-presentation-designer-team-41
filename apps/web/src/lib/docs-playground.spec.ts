@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bearerToken,
   docsConsoleOrigins,
+  docsReturnUrl,
   playgroundApiPath,
   playgroundOriginAllowed,
   sessionIdentity,
@@ -34,6 +35,21 @@ describe('docs console origins', () => {
     expect(playgroundOriginAllowed(null, here, env)).toBe(true);
     expect(playgroundOriginAllowed('https://evil.example', here, env)).toBe(false);
     expect(playgroundOriginAllowed('not a url', here, env)).toBe(false);
+  });
+});
+
+describe('docs return address', () => {
+  it('keeps a page on the docs origin and drops the hash', () => {
+    const env = { DOCS_PUBLIC_URL: 'https://docs.example.com' };
+    expect(
+      docsReturnUrl('https://docs.example.com/docs/api/console/?q=1#secret', env),
+    ).toBe('https://docs.example.com/docs/api/console/?q=1');
+    expect(docsReturnUrl('http://localhost:3002/docs/guide/', env)).toBe(
+      'http://localhost:3002/docs/guide/',
+    );
+    expect(docsReturnUrl('https://evil.example/docs/', env)).toBeNull();
+    expect(docsReturnUrl('javascript:alert(1)', env)).toBeNull();
+    expect(docsReturnUrl('http://localhost:3000/docs/', env)).toBeNull();
   });
 });
 
