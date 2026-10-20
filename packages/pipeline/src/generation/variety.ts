@@ -34,6 +34,12 @@ export interface VarietyOptions<T extends Composition> {
   readonly capacity: (pattern: T) => number;
   /** Measured geometry of a composition, independent of its name: equal means the same layout. */
   readonly structure: (pattern: T) => string;
+  /**
+   * When set, a slide moves only if this accepts the destination. A refusal leaves the slide
+   * where it is and reports it as repeated: a chart stays a chart when no other chart layout
+   * can take the repeat.
+   */
+  readonly allowsMove?: (index: number, to: T) => boolean;
 }
 
 export interface VarietyResult<S extends PlanSlide> {
@@ -92,6 +98,7 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
       .filter((pattern) => (used.get(pattern.patternId) ?? 0) < limit)
       .filter((pattern) => pattern.patternId !== before)
       .filter((pattern) => blocks(pattern) > 0 && Math.abs(blocks(pattern) - wanted) <= 1)
+      .filter((pattern) => options.allowsMove?.(index, pattern) !== false)
       // A layout with more room asks the writer for a point it was not planned: one block at
       // most, and the same count first.
       .sort(

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readRunConfig } from './config.js';
-import { connectionOf, failureText, generateFromConfig } from './generate.js';
+import { connectionOf, failureText, generateFromConfig, imageModelOf } from './generate.js';
 import { runEnv } from './generate-command.js';
 
 let dir: string | null = null;
@@ -60,6 +60,32 @@ describe('connectionOf', () => {
     expect(() => connectionOf({ ...base, MODEL_REASONING_TOGGLE: 'off' })).toThrow(
       /MODEL_REASONING_TOGGLE/,
     );
+  });
+});
+
+describe('imageModelOf', () => {
+  const configured = {
+    IMAGE_BASE_URL: 'https://images.example.test/v1',
+    IMAGE_MODEL: 'flux',
+    IMAGE_API_KEY: 'image-key',
+    MODEL_API_KEY: 'text-key',
+  };
+
+  it('uses the image key and skips a disabled model the way the service does', () => {
+    expect(imageModelOf(configured)).toEqual({
+      baseUrl: 'https://images.example.test/v1',
+      apiKey: 'image-key',
+      model: 'flux',
+    });
+    const textKey = imageModelOf({ ...configured, IMAGE_API_KEY: undefined });
+    expect(textKey !== null && textKey !== 'fake' && textKey.apiKey).toBe('text-key');
+    const blankKey = imageModelOf({ ...configured, IMAGE_API_KEY: '' });
+    expect(blankKey !== null && blankKey !== 'fake' && blankKey.apiKey).toBe('text-key');
+    expect(imageModelOf({ ...configured, IMAGE_PROVIDER: 'disabled' })).toBeNull();
+    expect(imageModelOf({ IMAGE_PROVIDER: 'fake', IMAGE_BASE_URL: 'x', IMAGE_MODEL: 'y' })).toBe(
+      'fake',
+    );
+    expect(imageModelOf({ IMAGE_BASE_URL: 'https://images.example.test/v1' })).toBeNull();
   });
 });
 
