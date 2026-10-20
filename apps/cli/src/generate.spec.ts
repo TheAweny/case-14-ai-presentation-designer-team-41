@@ -79,6 +79,8 @@ describe('imageModelOf', () => {
     });
     const textKey = imageModelOf({ ...configured, IMAGE_API_KEY: undefined });
     expect(textKey !== null && textKey !== 'fake' && textKey.apiKey).toBe('text-key');
+    const blankKey = imageModelOf({ ...configured, IMAGE_API_KEY: '' });
+    expect(blankKey !== null && blankKey !== 'fake' && blankKey.apiKey).toBe('text-key');
     expect(imageModelOf({ ...configured, IMAGE_PROVIDER: 'disabled' })).toBeNull();
     expect(imageModelOf({ IMAGE_PROVIDER: 'fake', IMAGE_BASE_URL: 'x', IMAGE_MODEL: 'y' })).toBe(
       'fake',

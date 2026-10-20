@@ -134,7 +134,10 @@ export function imageModelOf(
   const baseUrl = env.IMAGE_BASE_URL?.trim() ?? '';
   const model = env.IMAGE_MODEL?.trim() ?? '';
   if (!baseUrl || !model) return null;
-  return { baseUrl, apiKey: env.IMAGE_API_KEY ?? env.MODEL_API_KEY ?? '', model };
+  // Compose and `lct image` write IMAGE_API_KEY as an empty string when no separate key was set.
+  // An empty value is not a key: the text model's key is what used to authenticate these calls.
+  const imageKey = env.IMAGE_API_KEY?.trim() ?? '';
+  return { baseUrl, apiKey: imageKey || (env.MODEL_API_KEY?.trim() ?? ''), model };
 }
 
 /**
