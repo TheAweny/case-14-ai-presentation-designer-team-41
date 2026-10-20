@@ -155,3 +155,4 @@ export {
   datasetText,
   embeddedTablesText,
 } from './materials/dataset-text.js';
+export { labelDataset, labelerInput } from './materials/dataset-labels.js';

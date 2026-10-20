@@ -8,6 +8,7 @@ import type { EngineClient } from '@lct/engine-client';
 import { dependencyKey, prepareDatasets } from '@lct/pipeline';
 import {
   readPreparedMaterial,
+  type DatasetLabeler,
   type MaterialExtractEngine,
   type PreparedMaterial,
   type PreparedMaterialSource,
@@ -60,6 +61,8 @@ export async function prepareGenerationInput(options: {
   loadContent(id: string): Promise<PreparedMaterialSource>;
   assertOwner(): Promise<void>;
   readMaterial?: typeof readPreparedMaterial;
+  /** Human column labels for a data file, asked while it is prepared. */
+  labelDataset?: DatasetLabeler;
   snapshot?: unknown;
 }): Promise<PreparedGenerationInput> {
   const preparedDatasets: Dataset[] = [];
@@ -108,6 +111,7 @@ export async function prepareGenerationInput(options: {
       options.engine,
       source,
       options.signal,
+      options.labelDataset,
     );
     await check();
     brief += `\n\nSource ${id}:\n${material.text}`;

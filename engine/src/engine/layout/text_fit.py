@@ -123,6 +123,37 @@ def fitting_scale(text: str, slot: dict[str, Any]) -> float:
     return least
 
 
+#: Copy that fills less than this share of a large frame reads as a forgotten line in an empty box.
+_SPARSE_SHARE = 0.35
+#: A grown text still leaves this share of its frame free.
+_GROWN_SHARE = 0.85
+
+
+def growing_scale(text: str, slot: dict[str, Any], steps: list[float]) -> float:
+    """The share of the template font that lets sparse copy fill a large frame, 1.0 if none.
+
+    Only a frame of three lines or more grows, and only to a size the template's own scale has
+    (`steps`: its body sizes up to the subtitle step), the largest at which the copy still fits
+    with room to spare and no word is torn.
+    """
+    height = slot.get("textHeightPt")
+    size = float(slot.get("fontSize") or 0)
+    if not height or size <= 0 or int(slot.get("maxLines") or 1) < 3 or not text.strip():
+        return 1.0
+    if measured_height(text, slot) >= _SPARSE_SHARE * height:
+        return 1.0
+    best = 1.0
+    for step in sorted(set(steps)):
+        if step <= size:
+            continue
+        scaled = {**slot, "fontSize": step}
+        if measured_height(text, scaled) <= _GROWN_SHARE * height and not broken_words(
+            text, scaled
+        ):
+            best = step / size
+    return best
+
+
 def check_composition_text(
     pattern: dict[str, Any], texts: list[dict[str, str]]
 ) -> list[dict[str, Any]]:

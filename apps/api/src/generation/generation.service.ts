@@ -52,6 +52,7 @@ import {
   TaskCheckpoints,
   dependencyKey,
   atomicJson,
+  labelDataset,
   ledgerFetch,
   SharedIllustrations,
   OpenAICompatibleImageProvider,
@@ -81,6 +82,7 @@ import {
 } from '../models/model-settings.service.js';
 import { ModelCapabilityService } from '../models/model-capabilities.js';
 import { modelTransport } from '../models/model-transport.js';
+import type { DatasetLabeler } from '../materials/prepared-material.js';
 import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
@@ -337,6 +339,53 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     } finally {
       this.drawing.delete(templateId);
     }
+  }
+
+  /**
+   * Human labels for the columns of a data file, on the planner's model (the writer's when the role
+   * has none). Asked while the material is prepared, outside the timed generation; any failure
+   * keeps the file's own column names.
+   */
+  private datasetLabeler(model: ModelRef | null, account: Account, brief: string): DatasetLabeler {
+    return async (dataset, signal) => {
+      try {
+        const registryDir = this.registryDir();
+        const resolved =
+          (await this.models.resolveRole('planner', actorOf(account))) ??
+          (await this.models.resolve(model, actorOf(account)));
+        const provider = new GenerationProvider({
+          apiKey: resolved.apiKey,
+          baseUrl: resolved.baseUrl,
+          model: resolved.model,
+          headers: resolved.headers,
+          answerFormat: await loadAnswerFormat(registryDir),
+          fetchImpl: modelTransport(
+            resolved,
+            ledgerFetch(
+              new PostgresProviderLedger(this.pool, account.id, null, {
+                requests: 10000,
+                tokens: 100_000_000,
+                cost: null,
+              }),
+              'data-labels',
+              fetch,
+              undefined,
+              resolved,
+            ),
+            { thinking: false },
+          ),
+        });
+        return await labelDataset({
+          provider,
+          registryDir,
+          dataset,
+          brief,
+          ...(signal ? { signal } : {}),
+        });
+      } catch {
+        return null;
+      }
+    };
   }
 
   /**
@@ -852,6 +901,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const preparedInput = await gate(() =>
         prepareGenerationInput({
           engine: this.engine,
+          labelDataset: this.datasetLabeler(input.model, account, input.brief),
           ...(snapshot !== undefined ? { snapshot } : {}),
           brief: input.brief,
           contentIds: input.contentIds,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GenerationProfile } from '@lct/contracts';
-import { geometricCovers } from './workflow.js';
+import { geometricCovers, titleCovers } from './workflow.js';
 
 type Composition = GenerationProfile['compositions'][number];
 
@@ -36,5 +36,12 @@ describe('geometricCovers', () => {
     const first = pattern('first', [600]);
     const second = pattern('second', [600, 600, 600]);
     expect(geometricCovers([second], [first, second])).toEqual([first]);
+  });
+
+  it('prefers a cover with a title and one line over a list of findings', () => {
+    const list = pattern('list', [80, 80, 80]);
+    const title = pattern('title', [80]);
+    expect(titleCovers([list, title])).toEqual([title]);
+    expect(titleCovers([list])).toEqual([list]);
   });
 });

@@ -4,12 +4,15 @@ import { basename, join, resolve } from 'node:path';
 import {
   NO_REASONING_CHOICE,
   brandbookBindingSchema,
+  datasetLabelsSchema,
   headerRecord,
   headersProblem,
   parseHeaderEnv,
   storedTemplateIndexSchema,
   type BrandbookBinding,
   type CompositionNote,
+  type Dataset,
+  type DatasetLabels,
   type GenerationProfile,
   type LayoutVariant,
   type RunConfig,
@@ -24,6 +27,7 @@ import {
   type ImageProvider,
   generatePresentation,
   indexTemplateWithAgent,
+  labelDataset,
   SharedPlan,
   anthropicTransport,
 } from '@lct/pipeline';
@@ -279,7 +283,29 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     baseUrl: env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 180_000,
   });
-  const brief = briefOf(config, await readMaterial(engine, contentPath));
+  // Columns get human names once per file, before the five minutes start; a failure keeps the
+  // file's own names. The labels are kept next to the template index, by the file's hash.
+  const labelsDir = join(resolve(config.outputDir), '.data-labels');
+  const label = async (dataset: Dataset): Promise<DatasetLabels | null> => {
+    const path = join(labelsDir, `${dataset.source.sha256}.json`);
+    const cached = await readFile(path, 'utf8')
+      .then((text) => datasetLabelsSchema.parse(JSON.parse(text)))
+      .catch(() => null);
+    if (cached) return cached;
+    log('Подписываю столбцы данных (один раз на файл)');
+    const labels = await labelDataset({
+      provider,
+      registryDir,
+      dataset,
+      brief: [config.goal, config.audience].filter(Boolean).join('\n'),
+    });
+    if (labels) {
+      await mkdir(labelsDir, { recursive: true });
+      await writeFile(path, JSON.stringify(labels, null, 2));
+    } else log('  ! столбцы не подписаны, остаются имена из файла');
+    return labels;
+  };
+  const brief = briefOf(config, await readMaterial(engine, contentPath, label));
   // The tables themselves go to the writer too, so a chart is built from cells, not retyped.
   const preparedDatasets = await datasetsOf(engine, contentPath);
   if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');

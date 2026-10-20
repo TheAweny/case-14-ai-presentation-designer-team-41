@@ -113,8 +113,9 @@ Return exactly this JSON shape:
 The deck argues for `goal`; it is not a report of the data. Build it in this order, merging steps
 when `slideCount` is small:
 
-1. Cover: the deck's thesis as `title` and, in the purpose, who it is for and what they are asked
-   to decide.
+1. Cover: the deck's thesis as `title` and one line: who it is for and what they are asked to
+   decide. No findings, figures or list on the cover; pick a cover composition with a title and
+   at most one text block.
 2. The key conclusion in one slide: what the audience should take away even if they see nothing
    else.
 3. Evidence: one slide per proof. Each holds one chart or one to three figures and says what it
@@ -134,7 +135,8 @@ Each point is a complete short thought with a subject and what happens to it («
 «I квартал», «8 регионов»). A point the brief cannot back is left out: pick a composition with
 fewer slots instead of padding.
 
-Use a layout once wherever the catalog allows. A cover, a divider, a closing slide and a
+No slide repeats the claim or the points of another slide: a summary already shown is not shown
+again near the end. Use a layout once wherever the catalog allows. A cover, a divider, a closing slide and a
 `special` layout appear at most once; never put the same composition on two slides in a row.
 
 ## Data

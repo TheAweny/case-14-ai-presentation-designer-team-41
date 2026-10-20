@@ -1,4 +1,4 @@
-import type { Dataset } from '@lct/contracts';
+import type { Dataset, DatasetLabels } from '@lct/contracts';
 
 type Sheet = Dataset['sheets'][number];
 type Cell = Sheet['rows'][number]['cells'][number];
@@ -68,12 +68,50 @@ export function datasetRefusal(dataset: Dataset): string {
  * long one is summarised over every row and shows its first rows, and says so. Values are written
  * as the file wrote them, so a figure on a slide can be found in the brief; a gap stays a gap.
  */
-export function datasetText(dataset: Dataset): string {
+export function datasetText(dataset: Dataset, labels?: DatasetLabels | null): string {
   const parts = [`Данные из файла «${dataset.source.fileName}».`];
   const general = notes(dataset.diagnostics.filter((item) => !item.sheet));
   if (general) parts.push(`При чтении: ${general}.`);
-  for (const sheet of dataset.sheets) parts.push(sheetText(dataset, sheet, tableNumber(dataset)));
+  const named = labelsOf(labels);
+  for (const sheet of dataset.sheets)
+    parts.push(sheetText(dataset, sheet, tableNumber(dataset), named));
   return parts.join(NEWLINE + NEWLINE);
+}
+
+/** How the brief names a column, a code and the row count; the file's own names without labels. */
+interface Named {
+  column(header: string): string;
+  value(header: string, raw: string): string;
+  rows: string;
+  /** «Средняя облачность, % (cloud_cover)»: which column each label stands for. */
+  legend(headers: readonly string[]): string | null;
+}
+
+function labelsOf(labels?: DatasetLabels | null): Named {
+  // A label must not break the lines it sits in: «name: a — 1, b — 2.» is read back by code.
+  const safe = (text: string, commas: boolean) =>
+    text
+      .replace(commas ? /[:«»;]/gu : /[:«»;,]/gu, ' ')
+      .replace(/\s+—\s+/gu, ' - ')
+      .replace(/\s+/gu, ' ')
+      .trim();
+  const columns = new Map((labels?.columns ?? []).map((entry) => [entry.column, entry]));
+  const label = (header: string) => safe(columns.get(header)?.label ?? '', true) || header;
+  return {
+    column: label,
+    value: (header, raw) =>
+      safe(columns.get(header)?.values.find((entry) => entry.value === raw)?.label ?? '', false) ||
+      raw,
+    rows: safe(labels?.rowsLabel ?? '', false) || 'строк',
+    legend: (headers) => {
+      const pairs = headers.filter((header) => label(header) !== header);
+      return pairs.length
+        ? 'Подписи столбцов для слайдов и графиков (в скобках — имя в файле): ' +
+            pairs.map((header) => `${label(header)} (${header})`).join('; ') +
+            '.'
+        : null;
+    },
+  };
 }
 
 /**
@@ -127,7 +165,12 @@ function notes(diagnostics: readonly Diagnostic[]): string {
   return [...said].join('; ');
 }
 
-function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => string): string {
+function sheetText(
+  dataset: Dataset,
+  sheet: Sheet,
+  title: (sheet: Sheet) => string,
+  named: Named = labelsOf(),
+): string {
   const own = sheetDiagnostics(dataset, sheet);
   const head = `${title(sheet)}${sheet.state === 'hidden' ? ' (скрытый лист)' : ''}`;
   if (sheet.rows.length === 0 && sheet.columns.length === 0) return `${head}: лист пуст.`;
@@ -147,6 +190,8 @@ function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => stri
         .join('; ') +
       '.',
   );
+  const legend = named.legend(sheet.columns.map((column) => column.header ?? column.ref));
+  if (legend) lines.push(legend);
   const note = notes(own);
   if (note) lines.push(`При чтении: ${note}.`);
   const totalRow = totalRowOf(own);
@@ -174,8 +219,8 @@ function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => stri
       `Точные подсчёты по ${counted.length} ` +
         `${plural(counted.length, 'строке', 'строкам', 'строкам')} — берите числа отсюда, не считайте заново:`,
     );
-    lines.push(summary(sheet, counted, spreadsheet));
-    const ready = chartSeries(sheet, counted, spreadsheet);
+    lines.push(summary(sheet, counted, spreadsheet, named));
+    const ready = chartSeries(sheet, counted, spreadsheet, named);
     if (ready) lines.push(ready);
     lines.push(full);
     return lines.join(NEWLINE);
@@ -185,8 +230,8 @@ function sheetText(dataset: Dataset, sheet: Sheet, title: (sheet: Sheet) => stri
       `${plural(counted.length, 'строке', 'строкам', 'строкам')} и первые ${SAMPLE_ROWS} строк. ` +
       'Остальные строки в этот текст не вошли, но в сводке посчитаны.',
   );
-  lines.push(summary(sheet, counted, spreadsheet));
-  const ready = chartSeries(sheet, counted, spreadsheet);
+  lines.push(summary(sheet, counted, spreadsheet, named));
+  const ready = chartSeries(sheet, counted, spreadsheet, named);
   if (ready) lines.push(ready);
   lines.push(`Первые ${SAMPLE_ROWS} строк:`);
   lines.push(table(header, body.slice(0, SAMPLE_ROWS)));
@@ -199,10 +244,15 @@ function totalRowOf(diagnostics: readonly Diagnostic[]): number | null {
   return row ? Number(row) : null;
 }
 
-function summary(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): string {
+function summary(
+  sheet: Sheet,
+  rows: Sheet['rows'],
+  spreadsheet: boolean,
+  named: Named = labelsOf(),
+): string {
   return sheet.columns
     .map((column, index) => {
-      const name = column.header ?? column.ref;
+      const name = named.column(column.header ?? column.ref);
       const cells = rows.map((row) => row.cells[index]).filter((cell) => cell !== undefined);
       const gaps = cells.filter((cell) => cell.kind === 'empty').length;
       if (column.kind === 'number') {
@@ -281,11 +331,17 @@ function summary(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): strin
  * over the groups of a short text column, and over the values of a code column such as a 0/1
  * result. The model then cites a series instead of computing one, and a chart is grounded.
  */
-function chartSeries(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): string | null {
+function chartSeries(
+  sheet: Sheet,
+  rows: Sheet['rows'],
+  spreadsheet: boolean,
+  named: Named = labelsOf(),
+): string | null {
   const blocks: string[] = [];
   const valuesOf = (index: number) =>
     rows.map((row) => row.cells[index]).filter((cell): cell is Cell => cell !== undefined);
-  const name = (index: number) => sheet.columns[index]?.header ?? sheet.columns[index]?.ref ?? '';
+  const header = (index: number) => sheet.columns[index]?.header ?? sheet.columns[index]?.ref ?? '';
+  const name = (index: number) => named.column(header(index));
   // A code is a few whole numbers close together: 0/1, 1–3. A measure with few values is not one.
   const isCode = (index: number) => {
     if (sheet.columns[index]?.kind !== 'number') return false;
@@ -311,13 +367,15 @@ function chartSeries(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): s
     )
       groupings.push({
         index,
-        label: (cell) => (cell.kind === 'empty' ? null : cellText(cell, spreadsheet)),
+        label: (cell) =>
+          cell.kind === 'empty' ? null : named.value(header(index), cellText(cell, spreadsheet)),
       });
     // A yes/no outcome splits the rows in two: the conditions of each side can be compared.
     if (column.kind === 'number' && distinct.size === 2 && isCode(index))
       groupings.push({
         index,
-        label: (cell) => (typeof cell.value === 'number' ? figure(cell.value) : null),
+        label: (cell) =>
+          typeof cell.value === 'number' ? named.value(header(index), figure(cell.value)) : null,
       });
   });
 
@@ -335,7 +393,7 @@ function chartSeries(sheet: Sheet, rows: Sheet['rows'], spreadsheet: boolean): s
       members.get(key)?.push(row);
     }
     const lines: string[] = [
-      `- строк: ${keys.map((key) => `${key} — ${members.get(key)?.length ?? 0}`).join(', ')}.`,
+      `- ${named.rows}: ${keys.map((key) => `${key} — ${members.get(key)?.length ?? 0}`).join(', ')}.`,
     ];
     sheet.columns.forEach((column, index) => {
       if (index === grouping.index || column.kind !== 'number' || lines.length >= SERIES_LINES)

@@ -382,3 +382,21 @@ def test_shrinking_stops_at_a_readable_body_size() -> None:
 def test_a_template_slot_already_small_is_never_shrunk() -> None:
     label = {"fontSize": 9.0, "maxLines": 1, "textWidthPt": 40, "textHeightPt": 12}
     assert fitting_scale("Очень длинная подпись к карточке", label) == 1.0
+
+
+def test_sparse_copy_in_a_large_frame_grows_along_the_template_scale() -> None:
+    from engine.layout.text_fit import growing_scale
+
+    frame = {"fontSize": 12.0, "maxLines": 12, "textWidthPt": 600, "textHeightPt": 300}
+    scale = growing_scale("Три коротких строки текста", frame, [12.0, 16.0, 20.0, 24.0])
+    assert frame["fontSize"] * scale == 24.0
+
+
+def test_copy_that_already_fills_its_frame_keeps_its_size() -> None:
+    from engine.layout.text_fit import growing_scale
+
+    frame = {"fontSize": 12.0, "maxLines": 6, "textWidthPt": 200, "textHeightPt": 60}
+    text = " ".join(["Выручка выросла на четверть за год"] * 4)
+    assert growing_scale(text, frame, [16.0, 20.0]) == 1.0
+    label = {"fontSize": 12.0, "maxLines": 1, "textWidthPt": 600, "textHeightPt": 300}
+    assert growing_scale("Итоги", label, [16.0, 20.0]) == 1.0

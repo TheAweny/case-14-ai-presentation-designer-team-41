@@ -59,7 +59,7 @@ from engine.contracts._generated import (
 )
 from engine.export.brandbook import apply_brandbook
 from engine.export.compositions import export_compositions
-from engine.layout.text_fit import check_composition_text, fitting_scale
+from engine.layout.text_fit import check_composition_text, fitting_scale, growing_scale
 from engine.parser._errors import TemplateParseError
 from engine.parser.brandbook import BrandbookError, parse_brandbook
 from engine.parser.compositions import extract_compositions
@@ -446,6 +446,33 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             )
             text = next(t.text for t in slide.texts if t.slotId == finding["slotId"])
             font_scales[(finding["slideIndex"], finding["slotId"])] = fitting_scale(text, slot)
+        # Sparse copy in a large frame grows along the template's own scale, up to the subtitle
+        # step: three short lines at body size in a half-slide box read as an unfinished slide.
+        title_sizes = [
+            float(s["fontSize"]) for p in patterns for s in p["slots"] if s["role"] == "title"
+        ]
+        ceiling = min(title_sizes) if title_sizes else float("inf")
+        steps = sorted(
+            {
+                float(s["fontSize"])
+                for p in patterns
+                for s in p["slots"]
+                if s["role"] != "title" and float(s["fontSize"]) < ceiling
+            }
+        )
+        for index, slide in enumerate(request.slides):
+            for slot in by_id[slide.patternId]["slots"]:
+                if (index, slot["slotId"]) in font_scales or slot["role"] == "title":
+                    continue
+                if (
+                    slide.visual is not None
+                    and getattr(slide.visual, "slotId", None) == slot["slotId"]
+                ):
+                    continue
+                text = next((t.text for t in slide.texts if t.slotId == slot["slotId"]), "")
+                grown = growing_scale(text, slot, steps)
+                if grown > 1:
+                    font_scales[(index, slot["slotId"])] = grown
 
         def draw(shapes: Any, element: dict[str, Any]) -> None:
             if element["kind"] == "native":

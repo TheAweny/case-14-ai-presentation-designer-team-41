@@ -459,6 +459,29 @@ export type TemplateIndex = z.infer<typeof templateIndexSchema>;
 export type StoredTemplateIndex = z.infer<typeof storedTemplateIndexSchema>;
 export type CompositionPlan = z.infer<typeof compositionPlanSchema>;
 export type CompositionCritique = z.infer<typeof compositionCritiqueSchema>;
+
+/**
+ * Human labels of a data file's columns, written once when the file is prepared: what a chart
+ * and the brief call a column and each value of a coded one. The original column name stays the
+ * key, so every label still points at the cells it stands for. Model-only answer.
+ */
+export const datasetLabelsSchema = z.object({
+  columns: z
+    .array(
+      z.object({
+        column: z.string().min(1).max(200),
+        label: z.string().min(1).max(80),
+        values: z
+          .array(z.object({ value: z.string().min(1).max(100), label: z.string().min(1).max(60) }))
+          .max(20)
+          .default([]),
+      }),
+    )
+    .max(200),
+  /** What one row of the table is, counted: «Число наблюдений». */
+  rowsLabel: z.string().min(1).max(60),
+});
+export type DatasetLabels = z.infer<typeof datasetLabelsSchema>;
 export type TemplateSlotCopy = z.infer<typeof templateSlotCopySchema>;
 /** What the illustrator agent answers: one prompt for a text-to-image model, in English. */
 export const illustrationPromptSchema = z.object({

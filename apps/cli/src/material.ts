@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
-import type { Dataset, MaterialExtractResponse } from '@lct/contracts';
+import type { Dataset, DatasetLabels, MaterialExtractResponse } from '@lct/contracts';
 import { datasetRefusal, datasetText, embeddedTablesText } from '@lct/pipeline';
 
 /** The engine calls a config run needs to read its content. */
@@ -28,7 +28,12 @@ const MAX_PAGES = 100;
  * The content of a config run as the service prepares it for a brief: a table is written whole
  * or summarised over all of its rows, a text keeps every word, a document is read page by page.
  */
-export async function readMaterial(engine: MaterialEngine, path: string): Promise<string> {
+export async function readMaterial(
+  engine: MaterialEngine,
+  path: string,
+  /** Human labels of a table's columns; absent or null keeps the file's own names. */
+  label?: (dataset: Dataset) => Promise<DatasetLabels | null>,
+): Promise<string> {
   const extension = extname(path).toLowerCase();
   const name = basename(path);
   if (TABLES.has(extension)) {
@@ -36,7 +41,7 @@ export async function readMaterial(engine: MaterialEngine, path: string): Promis
     if (dataset.status === 'failed') {
       throw new Error(`Файл «${name}» не читается как таблица: ${datasetRefusal(dataset)}.`);
     }
-    return datasetText(dataset);
+    return datasetText(dataset, label ? await label(dataset) : null);
   }
   if (TEXT.has(extension)) {
     const text = await readUtf8(path, name);

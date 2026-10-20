@@ -254,6 +254,18 @@ function offeredChart(visual: unknown): unknown {
  * with a big body box is a content slide, however large its title. When nothing qualifies, the
  * template's first layout with a title opens the deck, as its author did.
  */
+/**
+ * A cover is a title and at most one line under it (who it is for, what is asked): of the covers
+ * found, those with one text block or none come first, and a list of findings is not a cover.
+ */
+export function titleCovers<T extends GenerationProfile['compositions'][number]>(
+  covers: readonly T[],
+): T[] {
+  const blocks = (pattern: T) => writerSlots(pattern).filter((s) => s.role !== 'title').length;
+  const light = covers.filter((pattern) => blocks(pattern) <= 1);
+  return light.length ? light : [...covers];
+}
+
 export function geometricCovers<T extends GenerationProfile['compositions'][number]>(
   candidates: readonly T[],
   all: readonly T[],
@@ -262,7 +274,7 @@ export function geometricCovers<T extends GenerationProfile['compositions'][numb
   const blocks = (pattern: T) => writerSlots(pattern).filter((s) => s.role !== 'title').length;
   const plain = candidates
     .filter((pattern) => visualSlots(pattern).length === 0 && blocks(pattern) <= 2)
-    .sort((a, b) => blocks(a) - blocks(b) || order(a) - order(b));
+    .sort((a, b) => Number(blocks(a) > 1) - Number(blocks(b) > 1) || order(a) - order(b));
   if (plain.length) return plain.slice(0, 3);
   const first = all.find((pattern) => pattern.slots.some((slot) => slot.role === 'title'));
   return first ? [first] : [...candidates];
@@ -1044,11 +1056,13 @@ export function prepareVariantCatalog<T extends GenerationProfile['compositions'
     );
   const indexedCovers = full.filter((pattern) => notes.get(pattern.patternId)?.kind === 'cover');
   const plainCovers = indexedCovers.filter((pattern) => !notes.get(pattern.patternId)?.special);
-  const covers = plainCovers.length
-    ? plainCovers
-    : indexedCovers.length
-      ? indexedCovers
-      : geometricCovers(coversOf(full).length ? coversOf(full) : coversOf(distinct), distinct);
+  const covers = titleCovers(
+    plainCovers.length
+      ? plainCovers
+      : indexedCovers.length
+        ? indexedCovers
+        : geometricCovers(coversOf(full).length ? coversOf(full) : coversOf(distinct), distinct),
+  );
   // A cover found by its geometry among layouts the spacious filter left out still opens the deck.
   const withCovers = [...full, ...covers.filter((pattern) => !full.includes(pattern))];
   return {
@@ -1811,7 +1825,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       );
       // The variant's own layouts repeat as the plan's did, and the same share applies: what the
       // remap sent to one layout over and over goes to the others of this variant's set.
-      const layouts = diversifyPlan(
+      const diversified = diversifyPlan(
         remapped.map((patternId) => ({ patternId })),
         full,
         notes,
@@ -1827,7 +1841,10 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           structure: compositionStructure,
           compatible: keepsVisuals,
         },
-      ).slides.map((slide) => slide.patternId);
+      );
+      const layouts = diversified.slides.map((slide) => slide.patternId);
+      // A slide moved off a layout repeated next to itself stays moved, without its chart.
+      const forcedMoves = new Set(diversified.forced);
       // A validated QR binding remains on its original composition in all three variants.
       result.slides.forEach((slide, index) => {
         if (slide.qrRequests?.length) layouts[index] = slide.patternId;
@@ -1858,7 +1875,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         const canonicalComposition = compositions.find((p) => p.patternId === slide.patternId);
         let composition = compositions.find((p) => p.patternId === layouts[index]);
         if (!composition) throw new Error('Planner selected an unknown template composition.');
-        if (canonicalComposition) {
+        if (canonicalComposition && !forcedMoves.has(index)) {
           // A deterministic one-to-one mapping cannot drop a mandatory fact. A poorer template
           // keeps its original composition instead of discarding or inventing content blocks.
           if (

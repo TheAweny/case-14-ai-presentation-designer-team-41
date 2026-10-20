@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { BadRequestException } from '@nestjs/common';
-import type { Dataset, MaterialExtractResponse } from '@lct/contracts';
+import type { Dataset, DatasetLabels, MaterialExtractResponse } from '@lct/contracts';
 import { datasetRefusal, datasetText, embeddedTablesText } from '@lct/pipeline';
 
 /** A stored content file the account is already allowed to use. */
@@ -54,11 +54,17 @@ const NEWLINE = String.fromCharCode(10);
 const CACHE_JSON = 'material-prepared.json';
 const CACHE_TEXT = 'material-prepared.txt';
 
+/** Asks a model for human column labels; null when it does not answer. */
+export type DatasetLabeler = (
+  dataset: Dataset,
+  signal?: AbortSignal,
+) => Promise<DatasetLabels | null>;
+
 /**
  * Bump when the canonical text changes. A cache without this revision is ignored:
  * an older reader copied CSV as it was and gave a workbook as a stream of cells.
  */
-const PREPARATION_REVISION = '2026-10-20.2';
+const PREPARATION_REVISION = '2026-10-20.3';
 
 interface PreparedCache {
   readonly schemaVersion: 1;
@@ -87,6 +93,8 @@ export async function readPreparedMaterial(
   engine: MaterialExtractEngine,
   source: PreparedMaterialSource,
   signal?: AbortSignal,
+  /** Human labels of a table's columns, asked once here; absent or null keeps the file's names. */
+  label?: DatasetLabeler,
 ): Promise<PreparedMaterial> {
   signal?.throwIfAborted();
   const extension = extname(source.name || source.path).toLowerCase();
@@ -100,7 +108,7 @@ export async function readPreparedMaterial(
   const text = RAW_TEXT.has(extension)
     ? await withEmbeddedTables(engine, source, decodeRaw(bytes), sourceSha256, signal)
     : DATA_FILES.has(extension)
-      ? await extractTables(engine, source, sourceSha256, signal)
+      ? await extractTables(engine, source, sourceSha256, signal, label)
       : await extractCanonical(engine, source.path, extension, sourceSha256, signal);
   signal?.throwIfAborted();
   assertBudget(text);
@@ -128,6 +136,7 @@ async function extractTables(
   source: PreparedMaterialSource,
   fileSha256: string,
   signal?: AbortSignal,
+  label?: DatasetLabeler,
 ): Promise<string> {
   const dataset = await readDataset(engine, source, fileSha256, signal);
   if (dataset.status === 'failed') {
@@ -135,7 +144,7 @@ async function extractTables(
       `Файл «${source.name}» не читается как таблица: ${datasetRefusal(dataset)}.`,
     );
   }
-  return datasetText(dataset);
+  return datasetText(dataset, label ? await label(dataset, signal) : null);
 }
 
 /** A text keeps every word; a table found in it adds what its columns hold and how it was read. */

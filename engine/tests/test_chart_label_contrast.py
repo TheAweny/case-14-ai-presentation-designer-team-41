@@ -12,3 +12,9 @@ def test_a_label_colour_that_reads_is_kept() -> None:
     colour = _label_colour("text-muted", palette)
     assert str(colour) == "555555"
     assert _contrast("555555", "FFFFFF") >= 4.5
+
+
+def test_the_card_under_the_chart_decides_the_label_colour() -> None:
+    # A dark surface role would pass a light grey; the white card the chart sits on does not.
+    palette = {"surface": "3A0E5C", "text": "1A1A1A", "text-muted": "D0D0D0"}
+    assert str(_label_colour("text-muted", palette, "FFFFFF")) == "1A1A1A"

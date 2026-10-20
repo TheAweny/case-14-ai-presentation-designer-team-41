@@ -404,6 +404,28 @@ def _remove_shape(slide: Any, slot_id: str) -> None:
 type DrawVisual = Callable[[Any, dict[str, Any]], None]
 
 
+def _ground_under(slide: Any, slot: Any, box: dict[str, int]) -> str | None:
+    """The solid fill of the card a slot sits on: the topmost shape below it that holds its box."""
+    ground = None
+    for shape in slide.shapes:
+        if shape is slot or shape.shape_id == slot.shape_id:
+            break
+        try:
+            if not (
+                int(shape.left) <= box["x"]
+                and int(shape.top) <= box["y"]
+                and int(shape.left) + int(shape.width) >= box["x"] + box["cx"]
+                and int(shape.top) + int(shape.height) >= box["y"] + box["cy"]
+            ):
+                continue
+            fill = shape.fill
+            if fill.type == 1:  # MSO_FILL.SOLID
+                ground = str(fill.fore_color.rgb)
+        except (AttributeError, TypeError, ValueError, NotImplementedError):
+            continue
+    return ground
+
+
 def _replace_with_visual(slide: Any, visual: dict[str, Any], draw: DrawVisual) -> None:
     """Swap the text shape of a slot for a native table or chart drawn in the same box."""
     shape = next(
@@ -417,6 +439,7 @@ def _replace_with_visual(slide: Any, visual: dict[str, Any], draw: DrawVisual) -
         "cx": int(shape.width),
         "cy": int(shape.height),
     }
+    ground = _ground_under(slide, shape, box)
     shape._element.getparent().remove(shape._element)
     if visual["kind"] == "native":
         draw(slide.shapes, {**visual, "box": box})
@@ -435,6 +458,7 @@ def _replace_with_visual(slide: Any, visual: dict[str, Any], draw: DrawVisual) -
             "chartType": visual["chartType"],
             "categories": visual["categories"],
             "series": visual["series"],
+            **({"groundHex": ground} if ground else {}),
             "xTitle": visual.get("xTitle", ""),
             "yTitle": visual.get("yTitle", ""),
         }
@@ -502,7 +526,7 @@ def export_compositions(
                 _apply_safe_text_area(shape, slots[str(shape.shape_id)])
                 _replace_text(shape, texts[str(shape.shape_id)])
                 scale = (font_scales or {}).get((index, str(shape.shape_id)))
-                if scale is not None and scale < 1:
+                if scale is not None and scale != 1:
                     _set_font_size(shape, slots[str(shape.shape_id)]["fontSize"] * scale)
                 _keep_centred(shape, int(presentation.slide_height or 0))
         if item.get("visual") and draw_visual is not None:
