@@ -2275,10 +2275,6 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         inputData.brief,
         datasetEvidence.datasets,
       );
-      if (raw.visual && !visual)
-        await deps.onWarning?.(
-          `Slide ${inputData.index + 1}: visual provenance is unknown; keeping text fallback.`,
-        );
       // A slide planned around a ready series shows that series, whatever the writer drew.
       const seriesSlot = allowVisual ? chartSlot(inputData.composition) : undefined;
       const planned = seriesSlot
@@ -2317,6 +2313,10 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         if (!sameSeries) visual = withDisplayLabels(planned, offeredChart(raw.visual));
       } else if ((inputData.chartedEarlier ?? []).includes(chartedSeries(visual) ?? ''))
         visual = null;
+      if (raw.visual && !visual)
+        await deps.onWarning?.(
+          `Slide ${inputData.index + 1}: visual provenance is unknown; keeping text fallback.`,
+        );
       // A proven complete series uses a single native PowerPoint chart. The richer block
       // also builds a source table, which overflows ordinary chart slots. Its exact source
       // stays in notes, while all categories, figures and their unit remain in the chart.

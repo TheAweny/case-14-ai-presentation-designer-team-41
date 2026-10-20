@@ -73,6 +73,12 @@ export function leakedSamples(
       if (numberingSlotIds?.includes(slot.slotId)) continue;
       if (slot.role === 'title' || !isFigureSample(slot.sample)) continue;
       const text = slide.texts.find((t) => t.slotId === slot.slotId)?.text ?? '';
+      // Updating a template's year to today's year does not supply a fact for a data label.
+      if (/^(?:19|20)\d{2}$/u.test(slot.sample.trim()) && /^(?:19|20)\d{2}$/u.test(text.trim())) {
+        if (!briefStates(brief, text))
+          leaked.push({ index, slotId: slot.slotId, sample: text.trim() });
+        continue;
+      }
       if (squash(text) !== squash(slot.sample)) continue;
       if (briefStates(brief, slot.sample)) continue;
       leaked.push({ index, slotId: slot.slotId, sample: slot.sample.trim() });

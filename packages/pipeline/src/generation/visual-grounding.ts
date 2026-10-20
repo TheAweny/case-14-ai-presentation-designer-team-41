@@ -656,10 +656,12 @@ export function verifyVisual(
   if (
     !facts ||
     (block.caveat && !sourceContains(brief, block.caveat)) ||
-    block.categories.some((category) => {
+    block.categories.some((category, index) => {
       if (category.position === undefined) return false;
       const ordinal = /^(?:неделя|месяц|квартал|год|день)\s*(\d+)$/iu.exec(category.label);
-      return !ordinal || Number(ordinal[1]) !== category.position;
+      return (
+        !ordinal || Number(ordinal[1]) !== category.position || category.position !== index + 1
+      );
     })
   )
     return null;

@@ -285,6 +285,32 @@ describe('ready series in the brief', () => {
     expect(plannedSeriesChart('12; 11; 9; 8', draftOnly, 'body')).toBeNull();
   });
 
+  it('grounds compact inline weekly records and exact ordinal positions without inventing positions', () => {
+    const quote =
+      'Доля ответов без исправлений,%: Неделя1 —70, Неделя2 —76, Неделя3 —82, Неделя4 —86.';
+    const brief = `Учебный кейс. ${quote} Это наблюдения тестовой группы.`;
+    const visual = weekly('Доля ответов без исправлений', '%', [70, 76, 82, 86], quote);
+    if (visual.block.kind !== 'chart') throw new Error('chart');
+    visual.block.categories = [1, 2, 3, 4].map((position) => ({
+      label: `Неделя${position}`,
+      position,
+    }));
+    expect(groundedVisual(visual, brief)).not.toBeNull();
+    const changed = structuredClone(visual);
+    if (changed.block.kind !== 'chart') throw new Error('chart');
+    changed.block.categories[1] = { label: 'Неделя2', position: 20 };
+    expect(groundedVisual(changed, brief)).toBeNull();
+    expect(
+      groundedVisual(
+        visual,
+        'Учебный кейс. Доля ответов без исправлений,%: Неделя1 —71, Неделя2 —76, Неделя3 —82, Неделя4 —86.',
+      ),
+    ).toBeNull();
+    expect(
+      seriesFacts(JSON.stringify({ userRequirements: [{ messageId: 'user', text: brief }] })),
+    ).toHaveLength(4);
+  });
+
   it('reads every entry of a series line with its decimal comma', () => {
     expect(seriesFacts('- cloud_cover, среднее: 0 — 43,33, 1 — 30,83.')).toEqual([
       expect.objectContaining({ metric: 'cloud_cover, среднее', category: '0', value: 43.33 }),
