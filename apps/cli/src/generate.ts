@@ -122,6 +122,22 @@ async function brandbookOf(
 }
 
 /**
+ * The image model of a config run, read the way the service reads `IMAGE_*`.
+ * `disabled` calls no model, `fake` draws offline, and a configured model uses its own key
+ * before the text key. Null means there is no model; brandbook photos may still be used.
+ */
+export function imageModelOf(
+  env: Env,
+): { baseUrl: string; apiKey: string; model: string } | 'fake' | null {
+  if (env.IMAGE_PROVIDER === 'disabled') return null;
+  if (env.IMAGE_PROVIDER === 'fake') return 'fake';
+  const baseUrl = env.IMAGE_BASE_URL?.trim() ?? '';
+  const model = env.IMAGE_MODEL?.trim() ?? '';
+  if (!baseUrl || !model) return null;
+  return { baseUrl, apiKey: env.IMAGE_API_KEY ?? env.MODEL_API_KEY ?? '', model };
+}
+
+/**
  * Where a deck's pictures come from: the image model of the environment when one is set, else
  * the brandbook's own photos and illustrations, else nowhere and picture frames are dropped.
  */
@@ -130,14 +146,11 @@ function imagesOf(
   brandbook: BrandbookBinding | undefined,
   log: (line: string) => void,
 ): ImageProvider | null {
-  if (env.IMAGE_PROVIDER === 'fake') return new FakeImageProvider();
-  if (env.IMAGE_BASE_URL && env.IMAGE_MODEL) {
-    log(`картинки рисует ${env.IMAGE_MODEL}`);
-    return new OpenAICompatibleImageProvider({
-      baseUrl: env.IMAGE_BASE_URL,
-      apiKey: env.MODEL_API_KEY ?? '',
-      model: env.IMAGE_MODEL,
-    });
+  const model = imageModelOf(env);
+  if (model === 'fake') return new FakeImageProvider();
+  if (model) {
+    log(`картинки рисует ${model.model}`);
+    return new OpenAICompatibleImageProvider(model);
   }
   const pictures =
     brandbook?.assetRoot !== undefined ? brandPictures(brandbook.profile, brandbook.assetRoot) : [];
