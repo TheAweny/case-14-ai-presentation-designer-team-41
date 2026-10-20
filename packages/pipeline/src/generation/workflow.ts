@@ -1140,14 +1140,24 @@ export function prepareVariantCatalog<T extends GenerationProfile['compositions'
         pattern.slots.length <= 3 &&
         pattern.slots.some((slot) => slot.role === 'title' && slot.fontSize > typicalTitle),
     );
-  const indexedCovers = full.filter((pattern) => notes.get(pattern.patternId)?.kind === 'cover');
+  // A QR page is usable only with an explicitly bound source URL. Automatic cover correction
+  // must never select it before QR requests exist, even when the index calls it a cover.
+  const coverCandidates = full.filter(
+    (pattern) => !declaredQrSlots(pattern, notes.get(pattern.patternId)).length,
+  );
+  const indexedCovers = coverCandidates.filter(
+    (pattern) => notes.get(pattern.patternId)?.kind === 'cover',
+  );
   const plainCovers = indexedCovers.filter((pattern) => !notes.get(pattern.patternId)?.special);
   const covers = titleCovers(
     plainCovers.length
       ? plainCovers
       : indexedCovers.length
         ? indexedCovers
-        : geometricCovers(coversOf(full).length ? coversOf(full) : coversOf(distinct), distinct),
+        : geometricCovers(
+            coversOf(coverCandidates).length ? coversOf(coverCandidates) : coverCandidates,
+            coverCandidates,
+          ),
   );
   // A cover found by its geometry among layouts the spacious filter left out still opens the deck.
   const withCovers = [...full, ...covers.filter((pattern) => !full.includes(pattern))];

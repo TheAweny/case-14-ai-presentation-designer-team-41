@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { GenerationProfile } from '@lct/contracts';
-import { createGenerationWorkflow, geometricCovers, SharedPlan, titleCovers } from './workflow.js';
+import {
+  createGenerationWorkflow,
+  geometricCovers,
+  prepareVariantCatalog,
+  SharedPlan,
+  titleCovers,
+} from './workflow.js';
 import { generationProfileSchema } from '@lct/contracts';
 import { readFileSync } from 'node:fs';
 
@@ -28,6 +34,34 @@ const pattern = (patternId: string, body: number[]) =>
   }) as unknown as Composition;
 
 describe('geometricCovers', () => {
+  it('does not automatically choose an indexed QR cover without a bound source URL', () => {
+    const ordinary = pattern('ordinary', [100]);
+    const qr = {
+      ...pattern('qr-cover', [30]),
+      qrCandidateSlots: [
+        { slotId: 'qr', kind: 'photo' as const, box: { x: 0, y: 0, cx: 3_000_000, cy: 3_000_000 } },
+      ],
+    };
+    const result = prepareVariantCatalog(
+      { compositions: [qr, ordinary] },
+      [
+        {
+          patternId: 'qr-cover',
+          kind: 'cover',
+          items: 1,
+          title: 'QR',
+          useFor: '',
+          special: true,
+          skip: false,
+          requiredContent: [],
+          qrSlotIds: ['qr'],
+        },
+      ],
+      { imagesAvailable: false, variant: 'balanced' },
+    );
+    expect(result.covers.map((p) => p.patternId)).toEqual(['ordinary']);
+    expect(result.full.map((p) => p.patternId)).toContain('qr-cover');
+  });
   it('keeps a short cover when approved claims would have more room on a contents list', async () => {
     const cover = pattern('cover', [30]);
     const contents = pattern('contents', [300, 300, 300]);
