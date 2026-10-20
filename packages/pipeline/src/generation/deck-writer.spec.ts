@@ -146,6 +146,59 @@ describe('one agent per complete variant', () => {
     expect(sends).toEqual(['planner', 'writer']);
   });
 
+  it.each(['down', 'wrong-count', 'deadline'] as const)(
+    'continues with an exact fallback plan when the required replan is %s',
+    async (failure) => {
+      let plans = 0;
+      let plannerAbort: AbortSignal | undefined;
+      const warning = vi.fn();
+      const provider: TextProvider = {
+        model: 'offline',
+        async generate(agent, _instructions, input, schema, signal) {
+          if (agent !== 'planner') return schema.parse(response(agent, input, schema));
+          plans++;
+          plannerAbort = signal;
+          if (plans > 1 && failure === 'down') throw new Error('Model API HTTP 503 for offline');
+          if (plans > 1 && failure === 'deadline') {
+            signal.throwIfAborted();
+            await new Promise<never>((_, reject) =>
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+            );
+          }
+          return schema.parse({
+            title: 'Пилот',
+            slides: Array.from({ length: 5 }, () => ({
+              patternId: pattern.patternId,
+              purpose: brief,
+              imageQuery: '',
+              requiredClaims: [],
+            })),
+          });
+        },
+      };
+      const workflow = createGenerationWorkflow({
+        provider,
+        plannerInstructions: 'planner',
+        writerInstructions: 'slide',
+        deckWriterInstructions: 'deck',
+        onWarning: warning,
+        signal: AbortSignal.timeout(5000),
+        plannerDeadlineAt: Date.now() + 200,
+      });
+      const result = await (
+        await workflow.createRun()
+      ).start({ inputData: { brief, slideCount: 15, profile } });
+      expect(result.status).toBe('success');
+      if (result.status !== 'success') throw new Error('Fallback plan failed');
+      expect(result.result).toHaveLength(15);
+      expect(plans).toBe(2);
+      expect(warning.mock.calls.some(([message]) => message.includes('план собран из брифа'))).toBe(
+        true,
+      );
+      if (failure === 'deadline') expect(plannerAbort?.aborted).toBe(true);
+    },
+  );
+
   it('selects layouts once for an approved plan and restores every claim without model repetition', async () => {
     const outline = {
       title: 'Пилот',

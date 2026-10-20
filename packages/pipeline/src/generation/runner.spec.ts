@@ -53,7 +53,11 @@ async function exercise(
     | 'critic-many-issues'
     | 'critic-late'
     | 'expired'
-    | 'reserve-repair',
+    | 'reserve-repair'
+    | 'writer-stalled'
+    | 'planner-stalled'
+    | 'critic-down'
+    | 'audit-down',
   layoutRemapPolicy?: LayoutRemapPolicy,
   onRepair?: () => void,
   omitClaims = false,
@@ -87,7 +91,7 @@ async function exercise(
   const warnings: { stage: string; code: string; message: string }[] = [];
   if (mode === 'critic-late')
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], shouldAdvanceTime: true });
-  const lateDeadline = Date.now() + 290_000;
+  const lateDeadline = Date.now() + 270_000;
   const controller = new AbortController();
   if (mode === 'cancel') controller.abort(new Error('Cancelled test'));
   const provider: TextProvider = {
@@ -101,6 +105,12 @@ async function exercise(
     ) {
       signal.throwIfAborted();
       modelCalls++;
+      if (agent === 'planner' && mode === 'planner-stalled') {
+        onRepair?.();
+        return new Promise<T>((_, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+        );
+      }
       if (agent === 'planner')
         return schema.parse({
           title: 'Pilot',
@@ -141,6 +151,15 @@ async function exercise(
           ),
         });
       }
+      if (agent === 'writer' && mode === 'writer-stalled') {
+        // A provider that never answers the writer: the call ends only when its signal does.
+        onRepair?.();
+        return new Promise<T>((_, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+        );
+      }
+      if (agent === 'critic' && mode === 'critic-down')
+        throw new Error('Model API HTTP 503 for offline-fixture after 5 retries.');
       if (agent === 'critic') {
         criticInputs.push(structuredClone(input) as (typeof criticInputs)[number]);
         if (mode === 'critic-late' && exports > 0) {
@@ -212,7 +231,9 @@ async function exercise(
       if (String(url).endsWith('/composition-check')) {
         checks++;
         const findings =
-          mode === 'unfixable' || mode === 'torn-word' || (mode === 'repair' && checks === 1)
+          mode === 'unfixable' ||
+          mode === 'torn-word' ||
+          ((mode === 'repair' || mode === 'critic-down') && checks === 1)
             ? [
                 {
                   slideIndex: 0,
@@ -230,6 +251,7 @@ async function exercise(
       }
       if (String(url).endsWith('/composition-audit')) {
         audits++;
+        if (mode === 'audit-down') return new Response('Internal Server Error', { status: 500 });
         const findings =
           mode === 'post-export-repair' && audits === 1
             ? [
@@ -481,6 +503,64 @@ describe('real generation orchestration with offline dependencies', () => {
     ).toBe(true);
     expect(result.manifest.totalMs).toBeLessThan(290_000);
     expect(result.manifest.artifacts.map((artifact) => artifact.kind)).toContain('pptx');
+  });
+
+  it('gives up a writer that never answers and still exports every slide within the deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], shouldAdvanceTime: true });
+    let entered!: () => void;
+    const writing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const started = Date.now();
+    const run = await exercise('writer-stalled', undefined, entered);
+    await writing;
+    // The clock jumps to the writers' deadline: 270 s less the 60 s export and 15 s fit reserves.
+    await vi.advanceTimersByTimeAsync(195_000 - (Date.now() - started));
+    const result = await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(result.manifest.totalMs).toBeLessThan(290_000);
+    expect(run.exportedSlides).toHaveLength(10);
+    // Every slide carries copy from the plan, not an empty box.
+    for (const slide of run.exportedSlides as { texts: { text: string }[] }[])
+      expect(slide.texts.some((text) => text.text.trim().length > 0)).toBe(true);
+    expect(run.warnings.some((warning) => warning.message.includes('Автор колоды'))).toBe(true);
+  });
+  it('plans from the brief when the planner never answers and still delivers the deck', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], shouldAdvanceTime: true });
+    let entered!: () => void;
+    const planning = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const started = Date.now();
+    const run = await exercise('planner-stalled', undefined, entered);
+    await planning;
+    // To the planner's deadline: 270 s less the export, fit and writers' reserves.
+    await vi.advanceTimersByTimeAsync(110_000 - (Date.now() - started));
+    const result = await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(result.manifest.totalMs).toBeLessThan(270_000);
+    expect(run.exportedSlides).toHaveLength(10);
+    expect(run.warnings.some((warning) => warning.message.includes('план собран из брифа'))).toBe(
+      true,
+    );
+  });
+  it('still repairs deterministic overflow when the provider fails the critic', async () => {
+    const run = await exercise('critic-down');
+    await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.counters().exports).toBeGreaterThan(0);
+    expect(run.counters().repairs).toBeGreaterThan(0);
+    expect(run.warnings.some((warning) => warning.message.includes('критик недоступен'))).toBe(
+      true,
+    );
+    const review = JSON.parse(await readFile(join(run.outputDir, 'final-review.json'), 'utf8'));
+    expect(review.status).toBe('unknown');
+  });
+  it('keeps the exported deck when the engine cannot audit it', async () => {
+    const run = await exercise('audit-down');
+    await run.result;
+    expect(run.events.at(-1)).toBe('done');
+    expect(run.warnings.some((warning) => warning.message.includes('Проверка файла'))).toBe(true);
   });
 
   it('writes manifest, audit and final events only after export', async () => {

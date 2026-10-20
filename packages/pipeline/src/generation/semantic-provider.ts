@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { compositionCritiqueSchema } from '@lct/contracts';
-import type { TextProvider } from './provider.js';
+import { ModelAnswerValidationError, type TextProvider } from './provider.js';
+
+export class SemanticAuditBindingError extends ModelAnswerValidationError {
+  constructor(readonly partial: z.infer<typeof compositionCritiqueSchema>) {
+    super(new Error('Semantic audit selected unknown content slots; known findings retained.'));
+  }
+}
 
 const inputSchema = z.object({
   brief: z.string(),
@@ -115,13 +121,24 @@ export class SemanticTextProvider implements TextProvider {
       compositionCritiqueSchema,
       signal,
     );
-    return schema.parse({
+    let unknown = false;
+    const mapped = {
       ...audit,
-      issues: audit.issues.map((issue) => {
-        const slotId = bindings.get(`${issue.slideIndex}:${issue.slotId}`);
-        if (!slotId) throw new Error('Semantic audit selected an unknown content slot.');
-        return { ...issue, slotId };
+      issues: audit.issues.flatMap((issue) => {
+        return issue.slotId
+          .split(/[\s,;]+/u)
+          .filter(Boolean)
+          .flatMap((id) => {
+            const slotId = bindings.get(`${issue.slideIndex}:${id}`);
+            if (!slotId) {
+              unknown = true;
+              return [];
+            }
+            return [{ ...issue, slotId }];
+          });
       }),
-    });
+    };
+    if (unknown) throw new SemanticAuditBindingError(mapped);
+    return schema.parse(mapped);
   }
 }

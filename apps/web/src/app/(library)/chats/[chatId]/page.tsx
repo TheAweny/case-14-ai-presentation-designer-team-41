@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { DeckChat } from '@/components/assistant/deck-chat';
+import { listBrandbooks } from '@/lib/brandbook-library';
+import { composerBrandbookOf } from '@/lib/brandbooks';
 import { librarySource } from '@/mocks/sources';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -15,6 +17,16 @@ export async function generateMetadata(): Promise<Metadata> {
  * можно собрать заново.
  */
 export default async function ChatPage({ params }: { params: Promise<{ chatId: string }> }) {
-  const [{ chatId }, templates] = await Promise.all([params, librarySource.listTemplates()]);
-  return <DeckChat chatId={chatId} templates={templates} />;
+  const [{ chatId }, templates, brandbooks] = await Promise.all([
+    params,
+    librarySource.listTemplates(),
+    listBrandbooks(),
+  ]);
+  return (
+    <DeckChat
+      chatId={chatId}
+      templates={templates}
+      brandbooks={brandbooks.map(composerBrandbookOf)}
+    />
+  );
 }

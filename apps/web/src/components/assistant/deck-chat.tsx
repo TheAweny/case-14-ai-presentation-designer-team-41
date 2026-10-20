@@ -1,5 +1,6 @@
 'use client';
 
+import type { ComposerBrandbook } from '@/lib/brandbooks';
 import {
   useEffect,
   useLayoutEffect,
@@ -50,8 +51,11 @@ const SUGGESTIONS = ['shorter', 'numbers', 'simpler'] as const;
 export function DeckChat({
   chatId,
   templates,
+  brandbooks,
 }: {
   chatId: string;
+  /** Брендбуки библиотеки: выбрать один для следующей сборки. */
+  brandbooks?: readonly ComposerBrandbook[];
   /** Шаблоны библиотеки: для плана и чтобы собрать ту же колоду в другом шаблоне. */
   templates: readonly TemplateSummary[];
 }) {
@@ -160,6 +164,7 @@ export function DeckChat({
           <ChatComposer
             chat={chat}
             templates={templates}
+            brandbooks={brandbooks}
             edit={edit}
             fieldRef={field}
             above={away ? <JumpToLatest onJump={() => jump.current()} /> : null}

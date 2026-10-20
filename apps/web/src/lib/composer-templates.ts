@@ -6,6 +6,7 @@ import {
   templateFileProblem,
 } from './deck-generator';
 import type { ProjectSummary, TemplateSummary } from './library-source';
+import { BRANDBOOK_FILE_ACCEPT, brandbookFileProblem, isBrandbookFile } from './brandbooks';
 export { BRANDBOOK_FILE_ACCEPT } from './brandbooks';
 
 /**
@@ -80,8 +81,14 @@ export function isTemplateFile(fileName: string): boolean {
   return (TEMPLATE_EXTENSIONS as readonly string[]).includes(extensionOf(fileName));
 }
 
-/** Значение `accept` скрепки: и материалы, и шаблоны. */
-export const COMPOSER_FILE_ACCEPT = [CONTENT_FILE_ACCEPT, ...TEMPLATE_EXTENSIONS].join(',');
+/** Значение `accept` скрепки: материалы, шаблоны и поддерживаемые файлы брендбука. */
+export const COMPOSER_FILE_ACCEPT = [
+  ...new Set([
+    ...CONTENT_FILE_ACCEPT.split(','),
+    ...TEMPLATE_EXTENSIONS,
+    ...BRANDBOOK_FILE_ACCEPT.split(','),
+  ]),
+].join(',');
 
 /** Значение `accept` пункта «Загрузить шаблон…». */
 export const TEMPLATE_FILE_ACCEPT = TEMPLATE_EXTENSIONS.join(',');
@@ -111,18 +118,24 @@ export function addComposerFiles(
   added: readonly File[],
   mode: 'auto' | 'brandbook' = 'auto',
 ): ComposerAttachmentsUpdate {
-  const templates = added.filter((file) => isTemplateFile(file.name));
+  const templates = mode === 'brandbook' ? [] : added.filter((file) => isTemplateFile(file.name));
   const good = templates.filter((file) => templateFileProblem(file) === null);
   const emptyTemplates = templates.filter((file) => templateFileProblem(file) === 'empty');
-  const brandbooks =
+  const brandbookCandidates =
     mode === 'brandbook'
       ? added
       : // A JSON file is a table of data unless it comes through the brandbook item: design
         // tokens and a dataset share the extension, and a dataset is the far likelier drop.
-        added.filter((file) => /\.(fig|rar|zip|svg|ttf|otf|woff2?)$/i.test(file.name));
+        added.filter(
+          (file) =>
+            isBrandbookFile(file.name) &&
+            !isTemplateFile(file.name) &&
+            !/\.(pdf|json)$/i.test(file.name),
+        );
+  const brandbooks = brandbookCandidates.filter((file) => brandbookFileProblem(file) === null);
   const content = addContentFiles(
     current.files,
-    added.filter((file) => !isTemplateFile(file.name) && !brandbooks.includes(file)),
+    added.filter((file) => !isTemplateFile(file.name) && !brandbookCandidates.includes(file)),
   );
   return {
     files: content.files,
@@ -132,6 +145,7 @@ export function addComposerFiles(
     rejected: [
       ...templates.filter((file) => !good.includes(file)).map((file) => file.name),
       ...content.rejected,
+      ...brandbookCandidates.filter((file) => !brandbooks.includes(file)).map((file) => file.name),
     ],
   };
 }

@@ -66,6 +66,8 @@ services:
       RECORDINGS_DIR: /app/registry/recordings
       MODEL_ALLOW_PRIVATE_HOSTS: 'false'
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      # Zero disables the overall build deadline; per-request timeouts and Stop remain active.
+      GENERATION_DEADLINE_MS: ${GENERATION_DEADLINE_MS:-270000}
       NODE_OPTIONS: --max-old-space-size=896
     volumes: ['/srv/lct/data:/app/data', '/srv/lct/runs:/app/runs']
 
@@ -95,6 +97,8 @@ services:
       API_INTERNAL_URL: http://api:3001
       API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:?required}
       AUTH_SECRET: ${AUTH_SECRET:?required}
+      # Next sees the Docker service origin behind nginx; mutations trust the public URL.
+      APP_ORIGIN: ${APP_ORIGIN:-https://lct.aweny.link}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
     ports: ['127.0.0.1:3000:3000']
     healthcheck:

@@ -242,9 +242,14 @@ def _draw_chart(
         chart.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart.legend.include_in_layout = False
     palette = _palette(design_system)
+    text_colour = _label_colour(style["colorRole"], palette, element.get("groundHex"))
+    if text_colour is not None:
+        chart.font.color.rgb = text_colour
+        if chart.has_legend:
+            chart.legend.font.color.rgb = text_colour
     colours = [RGBColor.from_string(palette[role]) for role in _SERIES_ROLES if role in palette]
     plot = chart.plots[0]
-    _label_values(plot, kind, style, palette)
+    _label_values(plot, kind, style, palette, element.get("groundHex"))
     if kind == "pie":
         for point, colour in zip(plot.series[0].points, cycle(colours), strict=False):
             point.format.fill.solid()
@@ -261,9 +266,15 @@ def _draw_chart(
         (chart.category_axis, element["xTitle"]),
         (chart.value_axis, element["yTitle"]),
     ):
+        if text_colour is not None:
+            axis.tick_labels.font.color.rgb = text_colour
         if title:
             axis.has_title = True
             axis.axis_title.text_frame.text = title
+            if text_colour is not None:
+                for paragraph in axis.axis_title.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.color.rgb = text_colour
     rule = next((palette[role] for role in _RULE_COLORS if role in palette), None)
     if rule is not None:
         chart.value_axis.has_major_gridlines = True
@@ -332,7 +343,56 @@ def _draw_xy_line(
             axis.axis_title.text_frame.text = title
 
 
-def _label_values(plot: Any, kind: str, style: dict[str, Any], palette: dict[str, str]) -> None:
+def _luminance(hex_value: str) -> float:
+    channels = []
+    for index in (0, 2, 4):
+        c = int(hex_value[index : index + 2], 16) / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+#: WCAG AA for normal text: a value printed over the plot must be read, not guessed.
+_LABEL_CONTRAST = 4.5
+
+
+def _label_colour(
+    role: str | None, palette: dict[str, str], ground: str | None = None
+) -> RGBColor | None:
+    """The text colour of the profile that reads on the chart's surface.
+
+    A value label sits on the card the chart fills. The body style's own colour comes first; one
+    too faint on that surface (a light caption grey, white text of a dark slide) gives way to the
+    profile's text colour with the most contrast.
+    """
+    ground = ground or palette.get("surface") or palette.get("background") or "FFFFFF"
+    candidates = [
+        palette.get(role or "", role or ""),
+        *(palette.get(r) for r in ("text", "text-muted")),
+    ]
+    valid: list[str] = []
+    for value in candidates:
+        if value and len(value) == 6:
+            try:
+                int(value, 16)
+            except ValueError:
+                continue
+            valid.append(value)
+    if not valid:
+        return None
+    good = [value for value in valid if _contrast(value, ground) >= _LABEL_CONTRAST]
+    chosen = good[0] if good else max(valid, key=lambda value: _contrast(value, ground))
+    if _contrast(chosen, ground) < _LABEL_CONTRAST:
+        chosen = "000000" if _luminance(ground) > 0.18 else "FFFFFF"
+    return RGBColor.from_string(chosen)
+
+
+def _label_values(
+    plot: Any,
+    kind: str,
+    style: dict[str, Any],
+    palette: dict[str, str],
+    ground: str | None = None,
+) -> None:
     """Print every value on its mark: a chart on a slide is read, not measured against an axis.
 
     A pie shows each slice's value and its share of the whole.
@@ -343,7 +403,7 @@ def _label_values(plot: Any, kind: str, style: dict[str, Any], palette: dict[str
     labels.number_format = "General"
     labels.number_format_is_linked = False
     labels.font.size = Pt(float(style["sizePt"]))
-    colour = _resolve(style["colorRole"], palette)
+    colour = _label_colour(style["colorRole"], palette, ground)
     if colour is not None and kind != "pie":
         labels.font.color.rgb = colour
     if kind == "pie":

@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createDemoLibrarySource } from '../mocks/demo-library';
 import {
   addComposerFiles,
+  COMPOSER_FILE_ACCEPT,
   chosenTemplate,
   defaultTemplate,
   templateGroups,
   templateTitle,
   type ComposerAttachments,
 } from './composer-templates';
+import { BRANDBOOK_EXTENSIONS, BRANDBOOK_MAX_BYTES } from './brandbooks';
 
 async function setup() {
   const source = createDemoLibrarySource();
@@ -77,6 +79,65 @@ describe('chosenTemplate', () => {
 });
 
 describe('addComposerFiles', () => {
+  it('offers every supported brandbook extension in the common attachment picker', () => {
+    for (const extension of BRANDBOOK_EXTENSIONS)
+      expect(COMPOSER_FILE_ACCEPT.split(',')).toContain(extension);
+    expect(COMPOSER_FILE_ACCEPT).not.toContain('.exe');
+  });
+
+  it.each(BRANDBOOK_EXTENSIONS)(
+    'routes an explicitly selected %s exclusively to brandbook',
+    (extension) => {
+      const selected = file(`Brand${extension.toUpperCase()}`);
+      const existingTemplate = file('kept.pptx');
+      const update = addComposerFiles(
+        { ...none, templateFile: existingTemplate },
+        [selected],
+        'brandbook',
+      );
+      expect(update.brandbookFile).toBe(selected);
+      expect(update.templateFile).toBe(existingTemplate);
+      expect(update.files).toEqual([]);
+      expect(update.rejected).toEqual([]);
+    },
+  );
+
+  it('rejects unsupported, empty and oversized brandbooks without replacing the accepted file', () => {
+    const kept = file('kept.fig');
+    const large = new File([new Uint8Array(BRANDBOOK_MAX_BYTES + 1)], 'large.fig');
+    const update = addComposerFiles(
+      { ...none, brandbookFile: kept },
+      [file('unsupported.exe'), file('empty.fig', ''), large],
+      'brandbook',
+    );
+    expect(update.brandbookFile).toBe(kept);
+    expect(update.files).toEqual([]);
+    expect(update.rejected).toEqual(['unsupported.exe', 'empty.fig', 'large.fig']);
+  });
+
+  it('auto routes native Figma, archive, images and font drops to brandbook', () => {
+    for (const extension of [
+      'fig',
+      'rar',
+      'zip',
+      'svg',
+      'png',
+      'jpg',
+      'jpeg',
+      'webp',
+      'ttf',
+      'otf',
+      'woff',
+      'woff2',
+    ]) {
+      const selected = file(`Brand.${extension}`);
+      const update = addComposerFiles(none, [selected]);
+      expect(update.brandbookFile).toBe(selected);
+      expect(update.files).toEqual([]);
+      expect(update.rejected).toEqual([]);
+    }
+    expect(addComposerFiles(none, [file('guide.pdf')]).files[0]?.name).toBe('guide.pdf');
+  });
   it('материалы идут в файлы, .pptx и .potx — в чип шаблона', () => {
     const notes = file('notes.md');
     const brand = file('Бренд.PPTX');
@@ -105,10 +166,10 @@ describe('addComposerFiles', () => {
     const kept = file('Бренд.pptx');
     const update = addComposerFiles({ files: [], templateFile: kept }, [
       file('Пустой.pptx', ''),
-      file('photo.png'),
+      file('photo.exe'),
     ]);
     expect(update.templateFile).toBe(kept);
-    expect(update.rejected).toEqual(['Пустой.pptx', 'photo.png']);
+    expect(update.rejected).toEqual(['Пустой.pptx', 'photo.exe']);
     expect(update.emptyTemplates).toEqual(['Пустой.pptx']);
   });
 

@@ -19,8 +19,14 @@ export function MediaSlot({
   if (src) {
     return (
       <figure className="my-6">
-        <img src={src} alt={title} className="w-full rounded-lg border border-fd-border bg-fd-card" />
-        <figcaption className="mt-2 text-center text-sm text-fd-muted-foreground">{title}</figcaption>
+        <img
+          src={src}
+          alt={title}
+          className="w-full rounded-lg border border-fd-border bg-fd-card"
+        />
+        <figcaption className="mt-2 text-center text-sm text-fd-muted-foreground">
+          {title}
+        </figcaption>
       </figure>
     );
   }
@@ -30,7 +36,9 @@ export function MediaSlot({
       <div className="flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-fd-border bg-fd-card px-6 py-8 text-center">
         <p className="text-xs font-medium tracking-wide text-fd-muted-foreground">{label}</p>
         <p className="max-w-lg text-sm">{title}</p>
-        {children ? <div className="max-w-lg text-sm text-fd-muted-foreground">{children}</div> : null}
+        {children ? (
+          <div className="max-w-lg text-sm text-fd-muted-foreground">{children}</div>
+        ) : null}
       </div>
       <figcaption className="mt-2 text-center text-sm text-fd-muted-foreground">{title}</figcaption>
     </figure>

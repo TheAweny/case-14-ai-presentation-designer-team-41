@@ -3,9 +3,11 @@ import type { CompositionNote } from '@lct/contracts';
 /**
  * Variety of the layouts a plan uses. The planner is asked to vary them, once, and a model that
  * found one layout it likes goes on using it: six slides of ten on the same composition read as one
- * slide shown again. Code finishes what the request began: a layout used more often than its
- * share, or on three slides in a row, goes to the least used composition that holds the same
- * points, and where the template has none, the slide keeps its layout and the report says so.
+ * slide shown again. Code finishes what the request began: a layout already used goes to one the
+ * deck has not shown that holds the same points; one used more often than its share, on two
+ * slides in a row, or a single page of the template (a cover, a divider, a closing, a layout made
+ * for one kind of content) shown twice must move, and where the template has nothing else, the
+ * slide keeps its layout and the report says so.
  */
 
 interface Composition {
@@ -34,6 +36,8 @@ export interface VarietyOptions<T extends Composition> {
   readonly capacity: (pattern: T) => number;
   /** Measured geometry of a composition, independent of its name: equal means the same layout. */
   readonly structure: (pattern: T) => string;
+  /** Whether a slide planned on `from` keeps what it needs on `to`: a chart, a picture. */
+  readonly compatible?: (from: T, to: T) => boolean;
   /**
    * When set, a slide moves only if this accepts the destination. A refusal leaves the slide
    * where it is and reports it as repeated: a chart stays a chart when no other chart layout
@@ -82,31 +86,44 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
   result.forEach((slide, index) => {
     const id = slide.patternId;
     const planned = byId.get(id);
-    const ids = result.map((s) => s.patternId);
-    const threeInARow = index >= 2 && ids[index - 1] === id && ids[index - 2] === id;
-    const overused = (used.get(id) ?? 0) >= limit;
-    // The cover and the framing slides are the planner's, as is a layout made for its content.
-    if (index === 0 || !planned || special(id) || framing(id) || !(overused || threeInARow)) {
+    const before = index > 0 ? result[index - 1]?.patternId : undefined;
+    const beforePattern = before ? byId.get(before) : undefined;
+    const count = used.get(id) ?? 0;
+    // The same layout on two slides running reads as one slide shown twice, and so does another
+    // id with the very same geometry.
+    const adjacent =
+      before !== undefined &&
+      (before === id ||
+        (planned !== undefined &&
+          beforePattern !== undefined &&
+          structure(planned) === structure(beforePattern)));
+    // A cover, a divider, a closing or a layout made for one kind of content is the template's
+    // single page: shown twice, it stops reading as that page.
+    const single = special(id) || framing(id);
+    const overused = count >= limit;
+    if (index === 0 || !planned || (count === 0 && !adjacent)) {
       use(id);
       return;
     }
     const wanted = blocks(planned);
-    const before = index > 0 ? ids[index - 1] : undefined;
-    const beforeStructure = before ? byId.get(before) : undefined;
-    const choices = free
+    const fits = free
       .filter((pattern) => pattern.patternId !== id)
-      .filter((pattern) => (used.get(pattern.patternId) ?? 0) < limit)
       .filter((pattern) => pattern.patternId !== before)
-      .filter((pattern) => blocks(pattern) > 0 && Math.abs(blocks(pattern) - wanted) <= 1)
+      .filter((pattern) => !beforePattern || structure(pattern) !== structure(beforePattern))
+      .filter((pattern) => (used.get(pattern.patternId) ?? 0) < limit)
+      .filter((pattern) => options.compatible?.(planned, pattern) ?? true)
       .filter((pattern) => options.allowsMove?.(index, pattern) !== false)
+      .filter((pattern) => blocks(pattern) > 0 && Math.abs(blocks(pattern) - wanted) <= 1);
+    // A layout used once already, within its share and not next to itself, moves only to one the
+    // deck has not shown yet: every slide on a layout of its own wherever the template allows.
+    const mustMove = adjacent || single || overused;
+    const choices = (mustMove ? fits : fits.filter((p) => !used.has(p.patternId)))
       // A layout with more room asks the writer for a point it was not planned: one block at
       // most, and the same count first.
       .sort(
         (a, b) =>
           Math.abs(blocks(a) - wanted) - Math.abs(blocks(b) - wanted) ||
           (used.get(a.patternId) ?? 0) - (used.get(b.patternId) ?? 0) ||
-          Number(beforeStructure !== undefined && structure(a) === structure(beforeStructure)) -
-            Number(beforeStructure !== undefined && structure(b) === structure(beforeStructure)) ||
           Number(kind(b.patternId) === kind(id)) - Number(kind(a.patternId) === kind(id)) ||
           (options.bias === 'light'
             ? capacity(a) - capacity(b)
@@ -115,9 +132,10 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
               : Math.abs(capacity(a) - capacity(planned)) -
                 Math.abs(capacity(b) - capacity(planned))),
       );
+    // A repeated layout is preferable to losing its chart or moving to unrelated content blocks.
     const choice = choices[0];
     if (!choice) {
-      repeated.push({ index, patternId: id });
+      if (mustMove) repeated.push({ index, patternId: id });
       use(id);
       return;
     }

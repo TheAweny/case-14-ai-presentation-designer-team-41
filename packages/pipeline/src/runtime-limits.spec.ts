@@ -10,11 +10,23 @@ import {
 import type { TextProvider } from './generation/provider.js';
 
 describe('deployment runtime limits', () => {
+  it('disables only the overall deadline with explicit zero and omits infinite model deadlines', async () => {
+    expect(readRuntimeLimits({ GENERATION_DEADLINE_MS: '0' }).generationDeadlineMs).toBe(0);
+    const agent = await loadRuntimeAgent(resolve('..', '..', 'registry', 'agents'));
+    const instructions = runtimeInstructions(agent, {
+      limits: readRuntimeLimits({ GENERATION_DEADLINE_MS: '0' }),
+      deadlineAt: Number.POSITIVE_INFINITY,
+      contentDeadlineAt: Number.POSITIVE_INFINITY,
+    });
+    expect(instructions).not.toContain('"deadlineAt"');
+    expect(instructions).not.toContain('"remainingMs"');
+    expect(instructions).not.toContain('"contentDeadlineAt"');
+  });
   it('uses bounded defaults and explicit administrator values', () => {
     expect(readRuntimeLimits({})).toEqual({
       modelConcurrency: 8,
       generationConcurrency: 3,
-      generationDeadlineMs: 290_000,
+      generationDeadlineMs: 270_000,
     });
     expect(
       readRuntimeLimits({

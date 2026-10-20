@@ -9,6 +9,8 @@ import {
 
 interface Fact {
   metric: string;
+  /** Equivalent literal headings from this same explicit record, never model aliases. */
+  metricAliases?: readonly string[];
   category: string;
   unit: string;
   state: 'present' | 'missing';
@@ -30,7 +32,7 @@ const sourceContains = (brief: string, quote: string) =>
 const sameUnit = (left: string, right: string) =>
   equal(left.replace(/\.$/u, ''), right.replace(/\.$/u, ''));
 const safeUnit = (unit: string) =>
-  /^(?:%|(?:тыс\.?|млн|млрд)\s*(?:₽|руб\.?|долл\.?|\$|€)?|₽|руб\.?|\$|€|шт\.?|чел\.?|кг|км|м|с|сек\.?|мин\.?|час(?:а|ов)?)?$/iu.test(
+  /^(?:%|(?:тыс\.?|млн|млрд)\s*(?:₽|руб\.?|долл\.?|\$|€)?|₽|руб\.?|\$|€|шт\.?|чел\.?|кг|км|м|с|сек\.?|секунд(?:а|ы)?|мин\.?|минут(?:а|ы)?|час(?:а|ов)?)?$/iu.test(
     unit.trim(),
   );
 
@@ -96,10 +98,10 @@ interface SeriesLine {
  * category. Every entry of a line must parse, or the line proves nothing.
  */
 function seriesLines(text: string): SeriesLine[] {
-  const entry = new RegExp(`^(.+?) — (${NUMBER})$`, 'u');
+  const entry = new RegExp(`^(.+?)\\s*—\\s*(${NUMBER})(%)?$`, 'u');
   const result: SeriesLine[] = [];
   let grouping = '';
-  for (const line of text.split(/\r?\n/u)) {
+  for (const line of text.split(/(?:\r?\n|[.!?]\s+(?=[\p{L}]))/u)) {
     const heading = /точные значения по «([^»]+)»:\s*$/u.exec(line);
     if (heading) {
       grouping = heading[1] ?? '';
@@ -107,16 +109,42 @@ function seriesLines(text: string): SeriesLine[] {
     }
     const match = /^\s*(?:-\s+)?([^:]+):\s+(.+?)\.?\s*$/u.exec(line);
     if (!match) continue;
-    const metric = (match[1] ?? '').trim();
-    const parsed = (match[2] ?? '').split(/, (?=[^,]* — )/u).map((part) => entry.exec(part.trim()));
+    let metric = (match[1] ?? '').trim();
+    const parsed = (match[2] ?? '').split(/,\s*(?=[^,]*—)/u).map((part) => entry.exec(part.trim()));
     if (!metric || parsed.length < 2 || parsed.some((part) => !part)) continue;
+    // Explicit units belong to the whole series, not to its metric's name. A descriptive
+    // suffix such as «среднее» remains part of the name because it is not a known unit.
+    const label = /^(.+),\s*([^,]+)$/u.exec(metric);
+    const unit = label?.[2]?.trim();
+    const headerUnit = unit && safeUnit(unit) ? unit : '';
+    if (headerUnit) metric = label?.[1]?.trim() ?? metric;
+    const ungroupedMetric = metric;
+    if (headerUnit && parsed.some((part) => part?.[3] && !sameUnit(part[3], headerUnit))) continue;
+    // A named time grouping is redundant with explicit category labels. Remove it only
+    // when every category confirms that exact grouping; never infer dates or positions.
+    const timeGrouping = /^(.*) по (неделям|месяцам|кварталам|годам|дням)$/iu.exec(metric);
+    const categoryPrefix: Record<string, RegExp> = {
+      неделям: /^неделя\s*\d+$/iu,
+      месяцам: /^месяц\s*\d+$/iu,
+      кварталам: /^квартал\s*\d+$/iu,
+      годам: /^(?:год\s+)?\d{4}$/iu,
+      дням: /^день\s*\d+$/iu,
+    };
+    const categoryPattern = categoryPrefix[timeGrouping?.[2]?.toLowerCase() ?? ''];
+    if (
+      timeGrouping?.[1] &&
+      categoryPattern &&
+      parsed.every((part) => categoryPattern.test(part?.[1]?.trim() ?? ''))
+    )
+      metric = timeGrouping[1].trim();
     result.push({
       metric,
       grouping,
       facts: parsed.map((part) => ({
         metric,
+        ...(ungroupedMetric !== metric ? { metricAliases: [ungroupedMetric] } : {}),
         category: (part?.[1] ?? '').trim(),
-        unit: '',
+        unit: part?.[3] ?? headerUnit,
         state: 'present' as const,
         value: number(part?.[2] ?? ''),
         literal: part?.[2] ?? '',
@@ -139,10 +167,18 @@ function spread(line: SeriesLine): boolean {
 
 /** Whether a purpose quotes a ready series line by its name («cloud_cover, среднее: …»). */
 export const quotesSeries = (purpose: string, brief: string): boolean =>
-  seriesLines(brief).some((line) => norm(purpose).includes(`${norm(line.metric)}:`));
+  sourceBriefTexts(brief)
+    .flatMap(seriesLines)
+    .some((line) =>
+      [`${norm(line.metric)}:`, `${norm(line.metric)},`, `${norm(line.metric)} по `].some((label) =>
+        norm(purpose).includes(label),
+      ),
+    );
 
 export const seriesFacts = (text: string): Fact[] =>
-  seriesLines(text).flatMap((line) => line.facts);
+  sourceBriefTexts(text)
+    .flatMap(seriesLines)
+    .flatMap((line) => line.facts);
 
 /**
  * The chart a data slide was planned around, built from the ready series its purpose quotes: a
@@ -154,6 +190,8 @@ export function plannedSeriesChart(
   purpose: string,
   brief: string,
   slotId: string,
+  /** Series an earlier slide already charts: the deck shows each series once. */
+  exclude: readonly string[] = [],
 ): SlotVisual | null {
   const target = norm(purpose);
   const says = (literal: string) =>
@@ -163,8 +201,9 @@ export function plannedSeriesChart(
   // The most specific quote wins: a named column first, then the longer figures it repeats
   // («43,33» says more than «6»).
   let best: { line: SeriesLine; score: number } | null = null;
-  for (const line of seriesLines(brief)) {
+  for (const line of sourceBriefTexts(brief).flatMap(seriesLines)) {
     if (line.facts.length > 8 || !spread(line)) continue;
+    if (exclude.includes(`${line.grouping}|${line.metric}`)) continue;
     const column = norm(line.metric.split(',')[0] ?? '');
     const said = line.facts.filter((fact) => says(norm(fact.literal ?? '')));
     const named = Boolean(column) && target.includes(column);
@@ -179,18 +218,23 @@ export function plannedSeriesChart(
     {
       kind: 'chart',
       slotId,
-      chartType: 'column',
+      chartType: /(?:линейн(?:ый|ая|ую|ого)\s+(?:график|диаграмм)|line\s+chart)/iu.test(purpose)
+        ? 'line'
+        : 'column',
       categories: best.line.facts.map((fact) => fact.category),
       series: [{ name: best.line.metric, values }],
       xTitle: best.line.grouping,
-      yTitle: '',
+      yTitle: best.line.facts[0]?.unit ?? '',
     },
     brief,
   );
 }
 
+const sameMetric = (fact: Fact, metric: string) =>
+  [fact.metric, ...(fact.metricAliases ?? [])].some((name) => equal(name, metric));
+
 function matches(fact: Fact, metric: string, category: string, unit: string, value: MeasuredValue) {
-  if (!equal(fact.metric, metric) || !equal(fact.category, category) || !sameUnit(fact.unit, unit))
+  if (!sameMetric(fact, metric) || !equal(fact.category, category) || !sameUnit(fact.unit, unit))
     return false;
   if (value.state === 'missing')
     return fact.state === 'missing' && value.value === undefined && value.literal === undefined;
@@ -264,7 +308,7 @@ function proven(
 ) {
   const candidates = facts.filter(
     (fact) =>
-      equal(fact.metric, metric) && equal(fact.category, category) && sameUnit(fact.unit, unit),
+      sameMetric(fact, metric) && equal(fact.category, category) && sameUnit(fact.unit, unit),
   );
   return (
     candidates.length > 0 &&
@@ -614,11 +658,27 @@ export function verifyVisual(
   if (
     !facts ||
     (block.caveat && !sourceContains(brief, block.caveat)) ||
-    block.categories.some((category) => category.position !== undefined)
+    block.categories.some((category, index) => {
+      if (category.position === undefined) return false;
+      const ordinal = /^(?:неделя|месяц|квартал|год|день)\s*(\d+)$/iu.exec(category.label);
+      return (
+        !ordinal || Number(ordinal[1]) !== category.position || category.position !== index + 1
+      );
+    })
   )
     return null;
-  if (block.yTitle && !block.series.every((series) => equal(series.unit, block.yTitle)))
-    return null;
+  if (block.yTitle && !block.series.every((series) => sameUnit(series.unit, block.yTitle))) {
+    // Models often supply «Metric, unit» as an axis title. The verified series already names
+    // its metric, so keep only the explicit shared unit instead of discarding the chart.
+    const axisUnit = /,\s*([^,]+)$/u.exec(block.yTitle)?.[1]?.trim();
+    if (
+      !axisUnit ||
+      !safeUnit(axisUnit) ||
+      !block.series.every((series) => sameUnit(series.unit, axisUnit))
+    )
+      return null;
+    block.yTitle = block.series[0]?.unit ?? '';
+  }
   return block.series.every(
     (series) =>
       series.values.length === block.categories.length &&
@@ -628,4 +688,60 @@ export function verifyVisual(
   )
     ? visual
     : null;
+}
+
+/** Longest display label a chart takes: a legend or an axis title, not a sentence. */
+const LABEL_MAX = 48;
+
+/**
+ * The labels a reader sees on a chart code built from a ready series. The figures stay the
+ * brief's, matched by column name; the words around them may be the writer's: «Средняя
+ * облачность, %» for `cloud_cover, среднее`, «Неудача» and «Успех» for the outcome codes 0 and 1.
+ * The writer's chart lends its labels only when it shows the very same values in the same order;
+ * otherwise the column names stay.
+ */
+export function withDisplayLabels(planned: SlotVisual, offered: unknown): SlotVisual {
+  if (planned.kind !== 'chart' || !offered || typeof offered !== 'object') return planned;
+  const chart = offered as {
+    kind?: unknown;
+    categories?: unknown;
+    series?: unknown;
+    xTitle?: unknown;
+    yTitle?: unknown;
+  };
+  if (chart.kind !== 'chart' || !Array.isArray(chart.categories) || !Array.isArray(chart.series))
+    return planned;
+  const label = (value: unknown) =>
+    typeof value === 'string' && value.trim() && value.trim().length <= LABEL_MAX
+      ? value.trim()
+      : null;
+  const categories = chart.categories.map(label);
+  const series = chart.series as { name?: unknown; values?: unknown }[];
+  const same =
+    categories.length === planned.categories.length &&
+    categories.every((c) => c !== null) &&
+    series.length === planned.series.length &&
+    series.every((s, i) => {
+      const values = Array.isArray(s.values) ? s.values : [];
+      const expected = planned.series[i]?.values ?? [];
+      return (
+        label(s.name) !== null &&
+        values.length === expected.length &&
+        values.every((v, j) => typeof v === 'number' && Math.abs(v - (expected[j] ?? NaN)) < 1e-6)
+      );
+    });
+  if (!same) return planned;
+  return {
+    ...planned,
+    categories: categories as string[],
+    series: planned.series.map((s, i) => ({ ...s, name: label(series[i]?.name) ?? s.name })),
+    xTitle: label(chart.xTitle) ?? '',
+    yTitle: label(chart.yTitle) ?? planned.yTitle,
+  };
+}
+
+/** The ready series a planned chart shows, as `grouping|metric`; null for any other visual. */
+export function chartedSeries(visual: SlotVisual | null): string | null {
+  if (visual?.kind !== 'chart') return null;
+  return `${visual.xTitle}|${visual.series[0]?.name ?? ''}`;
 }

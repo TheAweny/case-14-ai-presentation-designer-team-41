@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MaterialExtractResponse } from '@lct/contracts';
+import type { Dataset, MaterialExtractResponse } from '@lct/contracts';
 import { readPreparedMaterial, type MaterialExtractEngine } from './prepared-material.js';
 
 const folders: string[] = [];
@@ -57,6 +57,86 @@ function page(
 }
 
 describe('prepared material cache and failure cases', () => {
+  it('caches labels and typed cells together, and invalidates on changed brief/model/prompt key', async () => {
+    const file = await source('facts.csv', Buffer.from('group,value\na,10\nb,20'));
+    const dataset: Dataset = {
+      datasetId: 'facts',
+      status: 'ok',
+      diagnostics: [],
+      source: { fileName: file.name, sha256: file.hash, bytes: 28, mediaType: 'text/csv' },
+      sheets: [
+        {
+          sheetId: 's',
+          name: 'Facts',
+          index: 0,
+          range: 'A1:B3',
+          headerRow: 1,
+          columns: [
+            { columnId: 'a', index: 1, ref: 'A', header: 'group', kind: 'text' },
+            { columnId: 'b', index: 2, ref: 'B', header: 'value', kind: 'number' },
+          ],
+          rows: [
+            {
+              row: 2,
+              cells: [
+                { ref: 'A2', raw: 'a', kind: 'text', value: 'a' },
+                { ref: 'B2', raw: '10', kind: 'number', value: 10 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const extractDataset = vi.fn(async () => dataset);
+    const engine = { extractDataset, extractMaterial: vi.fn() };
+    const callback = vi.fn(async () => ({
+      rowsLabel: 'Число строк',
+      columns: [{ column: '["s","b"]', label: 'Значение', values: [] }],
+    }));
+    const labeler = Object.assign(callback, { cacheKey: 'brief-model-prompt-v1' });
+    const first = await readPreparedMaterial(engine, file, undefined, labeler);
+    const second = await readPreparedMaterial(engine, file, undefined, labeler);
+    expect(second).toEqual(first);
+    expect(second.dataset?.sheets[0]?.rows[0]?.cells[1]?.value).toBe(10);
+    expect(first.text).toContain('Значение (value)');
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(extractDataset).toHaveBeenCalledTimes(1);
+    await readPreparedMaterial(
+      engine,
+      file,
+      undefined,
+      Object.assign(callback, { cacheKey: 'brief-model-prompt-v2' }),
+    );
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(extractDataset).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the source columns if a labeler throws, and still honours Stop', async () => {
+    const file = await source('facts.csv');
+    const dataset: Dataset = {
+      datasetId: 'facts',
+      status: 'ok',
+      diagnostics: [],
+      sheets: [],
+      source: { fileName: file.name, sha256: file.hash, bytes: 1, mediaType: 'text/csv' },
+    };
+    const engine = { extractDataset: vi.fn(async () => dataset), extractMaterial: vi.fn() };
+    const labeler = vi.fn(async () => {
+      throw new Error('Provider unavailable');
+    });
+    const material = await readPreparedMaterial(engine, file, undefined, labeler);
+    expect(material.text).toContain('Данные из файла');
+    expect(material.dataset).toMatchObject(dataset);
+    const controller = new AbortController();
+    const stopped = async () => {
+      controller.abort(new DOMException('Stop', 'AbortError'));
+      return null;
+    };
+    await expect(
+      readPreparedMaterial(engine, file, controller.signal, stopped),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('reuses a valid disk cache and does not call the engine again', async () => {
     const file = await source('notes.pdf', Buffer.from('pdf bytes'));
     const extractMaterial = vi.fn(async () => page(file.hash, 'First reading'));
@@ -73,7 +153,7 @@ describe('prepared material cache and failure cases', () => {
       extension: string;
       sourceSha256: string;
     };
-    expect(record.preparationRevision).toBe('2026-10-20.2');
+    expect(record.preparationRevision).toBe('2026-10-20.4');
     expect(record.extension).toBe('.pdf');
     expect(record.sourceSha256).toBe(file.hash);
   });

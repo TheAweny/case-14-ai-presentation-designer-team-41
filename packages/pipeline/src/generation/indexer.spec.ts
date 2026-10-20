@@ -187,6 +187,32 @@ describe('indexTemplate', () => {
     expect(settleNote(noQrAnswer, pattern).qrSlotIds).toEqual([]);
     expect(settleNote({ ...noQrAnswer, qrSlotIds: ['unknown'] }, pattern).qrSlotIds).toEqual([]);
   });
+  it('asks again in smaller batches when one request runs out of time', async () => {
+    let calls = 0;
+    const sizes: number[] = [];
+    const provider: TextProvider = {
+      model: 'm',
+      async generate(_role, _instructions, input) {
+        calls++;
+        const ids = (input as { compositions: { patternId: string }[] }).compositions.map(
+          (c) => c.patternId,
+        );
+        sizes.push(ids.length);
+        if (calls === 1) throw new DOMException('The operation timed out.', 'TimeoutError');
+        return { notes: ids.map((id) => note(id)) } as never;
+      },
+    };
+    const notes = await indexTemplate({
+      provider,
+      instructions: '',
+      profile,
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(notes).toHaveLength(5);
+    expect(sizes[0]).toBe(5);
+    expect(Math.max(...sizes.slice(1))).toBeLessThan(5);
+  });
+
   it('describes every distinct composition once, in batches the model can answer', async () => {
     const batches: string[][] = [];
     const provider: TextProvider = {

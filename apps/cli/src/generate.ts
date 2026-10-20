@@ -4,12 +4,15 @@ import { basename, join, resolve } from 'node:path';
 import {
   NO_REASONING_CHOICE,
   brandbookBindingSchema,
+  datasetLabelsSchema,
   headerRecord,
   headersProblem,
   parseHeaderEnv,
   storedTemplateIndexSchema,
   type BrandbookBinding,
   type CompositionNote,
+  type Dataset,
+  type DatasetLabels,
   type GenerationProfile,
   type LayoutVariant,
   type RunConfig,
@@ -24,10 +27,12 @@ import {
   type ImageProvider,
   generatePresentation,
   indexTemplateWithAgent,
+  labelDataset,
   SharedPlan,
   anthropicTransport,
+  dependencyKey,
 } from '@lct/pipeline';
-import { loadAnswerFormat } from '@lct/registry';
+import { loadAgent, loadAnswerFormat } from '@lct/registry';
 import { BrandbookPictures, brandPictures } from './brand-pictures.js';
 import { datasetsOf, readMaterial } from './material.js';
 import { repoRoot } from './setup/stack.js';
@@ -295,7 +300,42 @@ export async function generateFromConfig(options: GenerateOptions): Promise<Gene
     baseUrl: env.ENGINE_URL ?? 'http://localhost:8000',
     timeoutMs: 180_000,
   });
-  const brief = briefOf(config, await readMaterial(engine, contentPath));
+  // Columns get human names once per file, before the five minutes start; a failure keeps the
+  // file's own names. The labels are kept next to the template index, by the file's hash.
+  const labelsDir = join(resolve(config.outputDir), '.data-labels');
+  const labelsBrief = [config.goal, config.audience].filter(Boolean).join('\n');
+  const labelsAgent = await loadAgent(join(registryDir, 'data-labeler'));
+  const labelRevision = dependencyKey({
+    agent: labelsAgent.config,
+    instructions: labelsAgent.instructions,
+    brief: labelsBrief,
+    model: connection.model,
+    baseUrl: connection.baseUrl,
+  });
+  const label = async (dataset: Dataset): Promise<DatasetLabels | null> => {
+    const path = join(labelsDir, `${dataset.source.sha256}-${labelRevision}.json`);
+    const cached = await readFile(path, 'utf8')
+      .then((text) => datasetLabelsSchema.parse(JSON.parse(text)))
+      .catch(() => null);
+    if (cached) return cached;
+    log('Подписываю столбцы данных (один раз на файл)');
+    const labels = await labelDataset({
+      provider,
+      registryDir,
+      dataset,
+      brief: labelsBrief,
+    });
+    if (labels) {
+      try {
+        await mkdir(labelsDir, { recursive: true });
+        await writeFile(path, JSON.stringify(labels, null, 2));
+      } catch {
+        log('  ! кеш подписей недоступен, использую подписи в текущем запуске');
+      }
+    } else log('  ! столбцы не подписаны, остаются имена из файла');
+    return labels;
+  };
+  const brief = briefOf(config, await readMaterial(engine, contentPath, label));
   // The tables themselves go to the writer too, so a chart is built from cells, not retyped.
   const preparedDatasets = await datasetsOf(engine, contentPath);
   if (brief.length > 60_000) throw new Error('Материал длиннее 60 000 символов.');

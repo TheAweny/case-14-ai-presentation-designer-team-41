@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { BadRequestException } from '@nestjs/common';
-import type { Dataset, MaterialExtractResponse } from '@lct/contracts';
+import {
+  datasetSchema,
+  type Dataset,
+  type DatasetLabels,
+  type MaterialExtractResponse,
+} from '@lct/contracts';
 import { datasetRefusal, datasetText, embeddedTablesText } from '@lct/pipeline';
 
 /** A stored content file the account is already allowed to use. */
@@ -16,6 +21,7 @@ export interface PreparedMaterialSource {
 export interface PreparedMaterial {
   readonly sourceSha256: string;
   readonly text: string;
+  readonly dataset?: Dataset;
 }
 
 /** The engine call this helper needs. Generation passes its EngineClient. */
@@ -54,11 +60,17 @@ const NEWLINE = String.fromCharCode(10);
 const CACHE_JSON = 'material-prepared.json';
 const CACHE_TEXT = 'material-prepared.txt';
 
+/** Asks a model for human column labels; null when it does not answer. */
+export type DatasetLabeler = ((
+  dataset: Dataset,
+  signal?: AbortSignal,
+) => Promise<DatasetLabels | null>) & { readonly cacheKey?: string | Promise<string> };
+
 /**
  * Bump when the canonical text changes. A cache without this revision is ignored:
  * an older reader copied CSV as it was and gave a workbook as a stream of cells.
  */
-const PREPARATION_REVISION = '2026-10-20.2';
+const PREPARATION_REVISION = '2026-10-20.4';
 
 interface PreparedCache {
   readonly schemaVersion: 1;
@@ -66,6 +78,8 @@ interface PreparedCache {
   readonly extension: string;
   readonly sourceSha256: string;
   readonly textSha256: string;
+  readonly labelerKey?: string;
+  readonly dataset?: Dataset;
 }
 
 type Segment = MaterialExtractResponse['segments'][number];
@@ -87,25 +101,38 @@ export async function readPreparedMaterial(
   engine: MaterialExtractEngine,
   source: PreparedMaterialSource,
   signal?: AbortSignal,
+  /** Human labels of a table's columns, asked once here; absent or null keeps the file's names. */
+  label?: DatasetLabeler,
 ): Promise<PreparedMaterial> {
   signal?.throwIfAborted();
   const extension = extname(source.name || source.path).toLowerCase();
   const bytes = await readBounded(source.path, signal);
   signal?.throwIfAborted();
   const sourceSha256 = sha256(bytes);
-  const cached = await readCache(source.path, sourceSha256, extension);
+  const labelerKey =
+    DATA_FILES.has(extension) && label ? ((await label.cacheKey) ?? undefined) : 'unlabelled';
+  const cached =
+    labelerKey === undefined
+      ? undefined
+      : await readCache(source.path, sourceSha256, extension, labelerKey);
   signal?.throwIfAborted();
-  if (cached !== undefined) return { sourceSha256, text: cached };
+  if (cached !== undefined) return { sourceSha256, ...cached };
 
-  const text = RAW_TEXT.has(extension)
-    ? await withEmbeddedTables(engine, source, decodeRaw(bytes), sourceSha256, signal)
+  const extracted = RAW_TEXT.has(extension)
+    ? { text: await withEmbeddedTables(engine, source, decodeRaw(bytes), sourceSha256, signal) }
     : DATA_FILES.has(extension)
-      ? await extractTables(engine, source, sourceSha256, signal)
-      : await extractCanonical(engine, source.path, extension, sourceSha256, signal);
+      ? await extractTables(engine, source, sourceSha256, signal, label)
+      : { text: await extractCanonical(engine, source.path, extension, sourceSha256, signal) };
   signal?.throwIfAborted();
-  assertBudget(text);
-  const prepared = { sourceSha256, text };
-  await writeCache(source.path, extension, prepared);
+  assertBudget(extracted.text);
+  const { text, ...details } = extracted;
+  const prepared = {
+    sourceSha256,
+    text,
+    ...('dataset' in details ? { dataset: details.dataset } : {}),
+  };
+  if (labelerKey !== undefined && !('labelingFailed' in details && details.labelingFailed))
+    await writeCache(source.path, extension, prepared, labelerKey);
   return prepared;
 }
 
@@ -115,7 +142,9 @@ async function readDataset(
   fileSha256: string,
   signal?: AbortSignal,
 ): Promise<Dataset> {
-  const dataset = await engine.extractDataset({ schemaVersion: 1, path: source.path }, signal);
+  const dataset = datasetSchema.parse(
+    await engine.extractDataset({ schemaVersion: 1, path: source.path }, signal),
+  );
   signal?.throwIfAborted();
   if (dataset.source.sha256 !== fileSha256) {
     throw new BadRequestException('Material source hash does not match the file.');
@@ -128,14 +157,25 @@ async function extractTables(
   source: PreparedMaterialSource,
   fileSha256: string,
   signal?: AbortSignal,
-): Promise<string> {
+  label?: DatasetLabeler,
+): Promise<{ text: string; dataset: Dataset; labelingFailed: boolean }> {
   const dataset = await readDataset(engine, source, fileSha256, signal);
   if (dataset.status === 'failed') {
     throw new BadRequestException(
       `Файл «${source.name}» не читается как таблица: ${datasetRefusal(dataset)}.`,
     );
   }
-  return datasetText(dataset);
+  let labels: DatasetLabels | null = null;
+  try {
+    labels = label ? await label(dataset, signal) : null;
+  } catch {
+    signal?.throwIfAborted();
+  }
+  return {
+    text: datasetText(dataset, labels),
+    dataset,
+    labelingFailed: Boolean(label) && labels === null,
+  };
 }
 
 /** A text keeps every word; a table found in it adds what its columns hold and how it was read. */
@@ -274,20 +314,27 @@ async function readCache(
   path: string,
   sourceSha256: string,
   extension: string,
-): Promise<string | undefined> {
+  labelerKey: string,
+): Promise<{ text: string; dataset?: Dataset } | undefined> {
   const directory = dirname(path);
   try {
     const parsed: unknown = JSON.parse(await readFile(join(directory, CACHE_JSON), 'utf8'));
     if (
       !isCache(parsed) ||
       parsed.sourceSha256 !== sourceSha256 ||
-      parsed.extension !== extension
+      parsed.extension !== extension ||
+      parsed.labelerKey !== labelerKey
     ) {
       return undefined;
     }
     const text = await readFile(join(directory, CACHE_TEXT), 'utf8');
     if (sha256(text) !== parsed.textSha256 || text.length > MAX_CHARS) return undefined;
-    return text;
+    if (DATA_FILES.has(extension)) {
+      const dataset = datasetSchema.safeParse(parsed.dataset);
+      if (!dataset.success || dataset.data.source.sha256 !== sourceSha256) return undefined;
+      return { text, dataset: dataset.data };
+    }
+    return { text };
   } catch {
     return undefined;
   }
@@ -297,6 +344,7 @@ async function writeCache(
   path: string,
   extension: string,
   prepared: PreparedMaterial,
+  labelerKey: string,
 ): Promise<void> {
   try {
     const directory = dirname(path);
@@ -306,6 +354,8 @@ async function writeCache(
       extension,
       sourceSha256: prepared.sourceSha256,
       textSha256: sha256(prepared.text),
+      labelerKey,
+      ...(prepared.dataset ? { dataset: prepared.dataset } : {}),
     };
     await atomicWrite(join(directory, CACHE_TEXT), prepared.text);
     await atomicWrite(join(directory, CACHE_JSON), JSON.stringify(record));

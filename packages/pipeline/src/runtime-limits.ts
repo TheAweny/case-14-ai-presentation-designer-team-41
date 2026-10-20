@@ -5,6 +5,7 @@ import type { TextProvider } from './generation/provider.js';
 export interface RuntimeLimits {
   readonly modelConcurrency: number;
   readonly generationConcurrency: number;
+  /** Zero disables the overall generation clock; individual request timeouts remain bounded. */
   readonly generationDeadlineMs: number;
 }
 
@@ -22,7 +23,11 @@ export function readRuntimeLimits(env: NodeJS.ProcessEnv = process.env): Runtime
   return {
     modelConcurrency: integer(env, 'MODEL_MAX_CONCURRENCY', 8, 1, 64),
     generationConcurrency: integer(env, 'GENERATION_CONCURRENCY', 3, 1, 6),
-    generationDeadlineMs: integer(env, 'GENERATION_DEADLINE_MS', 290_000, 60_000, 290_000),
+    // 270 s by default: thirty seconds stay for the request, the queue and the download.
+    generationDeadlineMs:
+      env.GENERATION_DEADLINE_MS === '0'
+        ? 0
+        : integer(env, 'GENERATION_DEADLINE_MS', 270_000, 60_000, 290_000),
   };
 }
 
@@ -41,15 +46,19 @@ export interface RuntimeContext {
 /** Registry text carries the policy; runtime facts are data, never user instructions. */
 export function runtimeInstructions(agent: LoadedAgent, context: RuntimeContext): string {
   const now = Date.now();
+  const { deadlineAt, contentDeadlineAt, ...state } = context;
   return `${agent.instructions.trim()}\n\n<runtime-state>\n${JSON.stringify({
     runtime: {
-      ...context,
-      ...(context.deadlineAt === undefined
+      ...state,
+      ...(!Number.isFinite(deadlineAt)
         ? {}
-        : { remainingMs: Math.max(0, context.deadlineAt - now) }),
-      ...(context.contentDeadlineAt === undefined
+        : { deadlineAt, remainingMs: Math.max(0, (deadlineAt as number) - now) }),
+      ...(!Number.isFinite(contentDeadlineAt)
         ? {}
-        : { contentRemainingMs: Math.max(0, context.contentDeadlineAt - now) }),
+        : {
+            contentDeadlineAt,
+            contentRemainingMs: Math.max(0, (contentDeadlineAt as number) - now),
+          }),
     },
   })}\n</runtime-state>`;
 }

@@ -8,6 +8,7 @@ import type { EngineClient } from '@lct/engine-client';
 import { dependencyKey, prepareDatasets } from '@lct/pipeline';
 import {
   readPreparedMaterial,
+  type DatasetLabeler,
   type MaterialExtractEngine,
   type PreparedMaterial,
   type PreparedMaterialSource,
@@ -41,6 +42,7 @@ export function preparedInputDependency(registry: unknown, input: PreparedGenera
           preparation: {
             version: 1,
             datasets: input.preparedDatasets,
+            brief: input.brief,
             sources: input.materials.map((material) => ({
               sourceId: material.source.sourceId,
               sha256: material.sourceSha256,
@@ -60,6 +62,8 @@ export async function prepareGenerationInput(options: {
   loadContent(id: string): Promise<PreparedMaterialSource>;
   assertOwner(): Promise<void>;
   readMaterial?: typeof readPreparedMaterial;
+  /** Human column labels for a data file, asked while it is prepared. */
+  labelDataset?: DatasetLabeler;
   snapshot?: unknown;
 }): Promise<PreparedGenerationInput> {
   const preparedDatasets: Dataset[] = [];
@@ -108,6 +112,7 @@ export async function prepareGenerationInput(options: {
       options.engine,
       source,
       options.signal,
+      options.labelDataset,
     );
     await check();
     brief += `\n\nSource ${id}:\n${material.text}`;
@@ -121,13 +126,16 @@ export async function prepareGenerationInput(options: {
         throw new BadRequestException('Typed dataset extraction is unavailable.');
       // A singleton call preserves sequential file processing even when the pipeline helper
       // supports batches. No extra provider requests or parallel engine calls are introduced.
-      const datasets = await prepareDatasets(
-        {
-          extractDataset: (request, signal) => extractDataset.call(options.engine, request, signal),
-        },
-        [source.path],
-        options.signal,
-      );
+      const datasets = material.dataset
+        ? [material.dataset]
+        : await prepareDatasets(
+            {
+              extractDataset: (request, signal) =>
+                extractDataset.call(options.engine, request, signal),
+            },
+            [source.path],
+            options.signal,
+          );
       await check();
       for (const input of datasets) {
         const dataset = datasetSchema.parse(input);

@@ -78,40 +78,102 @@ describe('diversifyPlan', () => {
   });
 
   it('leaves a plan that already varies the layouts as it is', () => {
-    const planned = plan(['cover', 'A', 'B', 'A', 'C', 'B', 'D']);
+    const planned = plan(['cover', 'A', 'B', 'D', 'C', 'E']);
     const { slides, moved, repeated } = diversifyPlan(planned, catalog, notes, options);
     expect(slides).toEqual(planned);
     expect(moved).toEqual([]);
     expect(repeated).toEqual([]);
   });
 
-  it('prefers the layout with the same number of blocks, then the one used least', () => {
-    const { moved } = diversifyPlan(plan(['cover', 'A', 'A', 'A']), catalog, notes, options);
-    // B and C hold three blocks like A; D holds four and is only the second choice.
-    expect(moved).toHaveLength(1);
-    expect(['B', 'C']).toContain(moved[0]?.to);
+  it('moves a repeat within the share to a layout the deck has not shown yet', () => {
+    const { slides, moved } = diversifyPlan(
+      plan(['cover', 'A', 'B', 'A', 'C', 'B', 'D']),
+      catalog,
+      notes,
+      options,
+    );
+    const ids = slides.map((s) => s.patternId);
+    expect(ids[3]).not.toBe('A');
+    expect(moved.length).toBeGreaterThan(0);
+    // With every three-block layout shown, a further repeat within the share stays.
+    expect(new Set(ids.slice(1)).size).toBeGreaterThanOrEqual(4);
   });
 
-  it('says so, and keeps the layout, when the template has nothing else that holds the points', () => {
+  it('never puts one layout on two slides in a row', () => {
+    const { slides } = diversifyPlan(plan(['cover', 'A', 'A', 'B', 'B']), catalog, notes, options);
+    const ids = slides.map((s) => s.patternId);
+    expect(ids.some((id, i) => i >= 1 && ids[i - 1] === id)).toBe(false);
+  });
+
+  it('treats two ids with the same geometry next to each other as a repeat', () => {
+    const twins = [pattern('cover', 1), pattern('A', 3), pattern('A2', 3), pattern('B', 3)];
+    const { slides } = diversifyPlan(plan(['cover', 'A', 'A2']), twins, new Map(), {
+      ...options,
+      structure: (p: (typeof twins)[number]) => (p.patternId.startsWith('A') ? 'a' : p.patternId),
+    });
+    expect(slides.map((s) => s.patternId)).toEqual(['cover', 'A', 'B']);
+  });
+
+  it('prefers the layout with the same number of blocks, then the one used least', () => {
+    const { moved } = diversifyPlan(plan(['cover', 'A', 'A', 'A']), catalog, notes, options);
+    // B and C hold three blocks like A; D holds four and is only the next choice.
+    expect(moved).toHaveLength(2);
+    expect(moved.map((m) => m.to).sort()).toEqual(['B', 'C']);
+  });
+
+  it('reports repeated layouts when the alternative changes the number of content blocks', () => {
     const poor = [pattern('cover', 1), pattern('A', 3), pattern('far', 8)];
-    const { slides, moved, repeated } = diversifyPlan(
+    const { slides, repeated } = diversifyPlan(
       plan(['cover', 'A', 'A', 'A', 'A']),
       poor,
       new Map([['cover', note('cover')]]),
       options,
     );
-    expect(moved).toEqual([]);
-    expect(repeated.map((r) => r.index)).toEqual([3, 4]);
-    expect(slides.map((s) => s.patternId)).toEqual(['cover', 'A', 'A', 'A', 'A']);
+    const ids = slides.map((s) => s.patternId);
+    expect(ids).toEqual(['cover', 'A', 'A', 'A', 'A']);
+    expect(repeated.map((entry) => entry.index)).toEqual([2, 3, 4]);
   });
 
-  it('does not touch the cover, a framing slide or a layout made for its content', () => {
+  it('says so, and keeps the layout, when the template has nothing else at all', () => {
+    const poor = [pattern('cover', 1), pattern('A', 3)];
+    const { slides, repeated } = diversifyPlan(
+      plan(['cover', 'A', 'A']),
+      poor,
+      new Map([['cover', note('cover')]]),
+      options,
+    );
+    expect(repeated.map((r) => r.index)).toEqual([2]);
+    expect(slides.map((s) => s.patternId)).toEqual(['cover', 'A', 'A']);
+  });
+
+  it('keeps the cover first and shows a single page of the template once', () => {
     const { slides } = diversifyPlan(
-      plan(['cover', 'code', 'code', 'code', 'code']),
+      plan(['cover', 'code', 'A', 'code', 'B']),
       catalog,
       notes,
       options,
     );
-    expect(slides.map((s) => s.patternId)).toEqual(['cover', 'code', 'code', 'code', 'code']);
+    const ids = slides.map((s) => s.patternId);
+    expect(ids[0]).toBe('cover');
+    expect(ids.filter((id) => id === 'code')).toHaveLength(1);
+    expect(ids[3]).not.toBe('needs-data');
+  });
+
+  it('keeps a repeated chart layout when every other layout would drop its visual', () => {
+    const { slides, repeated } = diversifyPlan(plan(['cover', 'A', 'A']), catalog, notes, {
+      ...options,
+      compatible: () => false,
+    });
+    const ids = slides.map((s) => s.patternId);
+    expect(ids).toEqual(['cover', 'A', 'A']);
+    expect(repeated).toEqual([{ index: 2, patternId: 'A' }]);
+  });
+
+  it('keeps a repeat that is not next to itself when only an incompatible layout is free', () => {
+    const { slides } = diversifyPlan(plan(['cover', 'A', 'B', 'A']), catalog, notes, {
+      ...options,
+      compatible: () => false,
+    });
+    expect(slides.map((s) => s.patternId)).toEqual(['cover', 'A', 'B', 'A']);
   });
 });

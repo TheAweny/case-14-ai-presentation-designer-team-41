@@ -177,4 +177,42 @@ describe('BrandbooksController', () => {
     });
     await expect(controller.asset(account, 'book', 'logo')).rejects.toThrow();
   });
+  it('lets the owner rename and delete a brandbook, but not share it', async () => {
+    const { controller, hidden } = await fixture();
+    const row = {
+      id: 'book',
+      file_name: 'brand.zip',
+      display_name: null,
+      owner_id: 'owner',
+      shared: false,
+      size_bytes: '2',
+      sha256: 'a'.repeat(64),
+      profile,
+      created_at: new Date(0),
+    };
+    hidden.pool.query.mockResolvedValueOnce({ rows: [row] }).mockResolvedValueOnce({
+      rows: [{ ...row, display_name: 'Бренд' }],
+    });
+    await expect(controller.update(account, 'book', { name: '  Бренд ' })).resolves.toMatchObject({
+      name: 'Бренд',
+      fileName: 'brand.zip',
+    });
+    expect(hidden.pool.query.mock.calls[1]?.[1]).toEqual(['book', 'Бренд', null]);
+    hidden.pool.query.mockResolvedValueOnce({ rows: [row] });
+    await expect(controller.update(account, 'book', { shared: true })).rejects.toThrow(
+      'administrator',
+    );
+    hidden.pool.query.mockResolvedValueOnce({ rows: [row] }).mockResolvedValueOnce({ rows: [] });
+    await controller.remove(account, 'book');
+    expect(hidden.pool.query.mock.calls.at(-1)?.[0]).toContain('deleted_at = now()');
+  });
+  it('keeps other accounts from changing or deleting a shared brandbook', async () => {
+    const { controller, hidden } = await fixture();
+    hidden.pool.query.mockResolvedValue({
+      rows: [{ id: 'book', owner_id: 'someone', shared: true, profile }],
+    });
+    await expect(controller.remove(account, 'book')).rejects.toThrow('owner');
+    await expect(controller.update(account, 'book', { name: 'x' })).rejects.toThrow('owner');
+    expect(hidden.pool.query.mock.calls.every(([sql]) => sql.startsWith('SELECT'))).toBe(true);
+  });
 });

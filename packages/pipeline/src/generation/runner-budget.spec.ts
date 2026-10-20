@@ -6,6 +6,19 @@ import type { TextProvider } from './provider.js';
 afterEach(() => vi.useRealTimers());
 
 describe('generation stage deadlines with a fake clock', () => {
+  it('keeps an unlimited stage cancellable without creating an infinite timer', async () => {
+    vi.useFakeTimers();
+    const parent = new AbortController();
+    const stage = openGenerationStage(parent.signal, Number.POSITIVE_INFINITY);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(900_000);
+    expect(stage.signal.aborted).toBe(false);
+    const pending = stage.run(() => new Promise<never>(() => undefined));
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    parent.abort(new DOMException('Stop', 'AbortError'));
+    await rejected;
+    stage.dispose();
+  });
   it('stops a writer at the reserve boundary without aborting export', async () => {
     vi.useFakeTimers();
     const parent = new AbortController();

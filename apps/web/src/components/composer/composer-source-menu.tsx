@@ -13,6 +13,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { TemplateGroups } from '@/lib/composer-templates';
+import type { ComposerBrandbook } from '@/lib/brandbooks';
+import { BrandbookMenuSection } from './composer-brandbook-menu';
 import { TemplateMenuSection } from './composer-template-menu';
 
 /**
@@ -29,6 +31,9 @@ export function ComposerSourceMenu({
   pendingFile,
   onSelectTemplate,
   onUploadTemplate,
+  brandbooks,
+  selectedBrandbookId = null,
+  onSelectBrandbook,
   compact = false,
   disabled = false,
 }: {
@@ -43,6 +48,13 @@ export function ComposerSourceMenu({
   pendingFile: boolean;
   onSelectTemplate: (templateId: string) => void;
   onUploadTemplate: () => void;
+  /**
+   * Брендбуки библиотеки. Переданы — под шаблонами появляется выбор брендбука, а загрузка
+   * нового брендбука переезжает туда же.
+   */
+  brandbooks?: readonly ComposerBrandbook[];
+  selectedBrandbookId?: string | null;
+  onSelectBrandbook?: (brandbookId: string | null) => void;
   compact?: boolean;
   disabled?: boolean;
 }) {
@@ -77,7 +89,7 @@ export function ComposerSourceMenu({
         glow
         className="w-80 max-w-[calc(100vw-2rem)]"
       >
-        {onBrandbook ? (
+        {onBrandbook && !brandbooks ? (
           <DropdownMenuItem onSelect={onBrandbook} className="gap-2.5 rounded-lg px-2.5 py-2">
             <TemplateIcon className="size-4 shrink-0" />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -110,6 +122,14 @@ export function ComposerSourceMenu({
           onSelect={onSelectTemplate}
           onUpload={onUploadTemplate}
         />
+        {brandbooks && onSelectBrandbook && onBrandbook ? (
+          <BrandbookMenuSection
+            brandbooks={brandbooks}
+            selectedId={selectedBrandbookId}
+            onSelect={onSelectBrandbook}
+            onUpload={onBrandbook}
+          />
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

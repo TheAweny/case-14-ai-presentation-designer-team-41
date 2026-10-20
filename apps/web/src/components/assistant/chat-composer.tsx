@@ -1,5 +1,6 @@
 'use client';
 
+import type { ComposerBrandbook } from '@/lib/brandbooks';
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
 import { AttachmentChip } from '@/components/composer/attachment-chip';
@@ -59,6 +60,7 @@ export function ChatComposer({
   compact = false,
   deckId,
   templates = [],
+  brandbooks,
 }: {
   chat: ChatView;
   /**
@@ -67,6 +69,8 @@ export function ChatComposer({
    */
   deckId?: string;
   templates?: readonly TemplateSummary[];
+  /** Брендбуки библиотеки. Переданы — в меню «+» их можно выбрать, как в поле генерации. */
+  brandbooks?: readonly ComposerBrandbook[];
   /** Реплика, которую вернули в поле кнопкой «Изменить». */
   edit?: EditRequest | null;
   /** Что висит над полем: кнопка «К последнему». */
@@ -81,7 +85,6 @@ export function ChatComposer({
   // While dictating nothing is sent, and while the recording turns into text the field waits too.
   const [dictation, setDictation] = useState<DictationPhase>('idle');
   const picker = useRef<HTMLInputElement>(null);
-  const brandbookMode = useRef(false);
   const rejectedId = useId();
   const ownField = useRef<HTMLTextAreaElement>(null);
   const field = fieldRef ?? ownField;
@@ -227,16 +230,21 @@ export function ChatComposer({
     setEmptyTemplates([]);
   };
 
-  const addFiles = (added: readonly File[]) => {
+  const addFiles = (added: readonly File[], mode: 'auto' | 'brandbook' = 'auto') => {
     if (added.length === 0) return;
     const current = chatStore.get(chat.chatId)?.draft ?? chat.draft;
-    const update = addComposerFiles(current, added, brandbookMode.current ? 'brandbook' : 'auto');
-    brandbookMode.current = false;
+    const update = addComposerFiles(current, added, mode);
     patchDraft({
       files: update.files,
       templateFile: update.templateFile,
       brandbookFile: update.brandbookFile,
       template: update.templateFile ? null : current.template,
+      // Новый файл брендбука заменяет выбранный из библиотеки: брендбук у сборки один.
+      ...(update.brandbookFile && update.brandbookFile !== current.brandbookFile
+        ? {
+            attachments: (current.attachments ?? []).filter((item) => item.kind !== 'brandbook'),
+          }
+        : {}),
     });
     setRejected(update.rejected);
     setEmptyTemplates(update.emptyTemplates);
@@ -437,10 +445,32 @@ export function ChatComposer({
             }}
             onBrandbook={() => {
               if (picker.current) {
-                brandbookMode.current = true;
                 picker.current.accept = BRANDBOOK_FILE_ACCEPT;
                 picker.current.click();
               }
+            }}
+            brandbooks={brandbooks}
+            selectedBrandbookId={
+              brandbookFile
+                ? null
+                : (restoredAttachments?.find((item) => item.kind === 'brandbook')?.brandbookId ??
+                  null)
+            }
+            onSelectBrandbook={(brandbookId) => {
+              const chosen = brandbooks?.find((item) => item.brandbookId === brandbookId);
+              const others = (restoredAttachments ?? []).filter(
+                (item) => item.kind !== 'brandbook',
+              );
+              patchDraft({
+                brandbookFile: null,
+                attachments: chosen
+                  ? [
+                      ...others,
+                      { kind: 'brandbook', brandbookId: chosen.brandbookId, name: chosen.name },
+                    ]
+                  : others,
+              });
+              box.aurora.flash();
             }}
             onFiles={() => {
               if (picker.current) {
@@ -470,7 +500,10 @@ export function ChatComposer({
             aria-hidden
             className="sr-only"
             onChange={(event) => {
-              addFiles(Array.from(event.currentTarget.files ?? []));
+              addFiles(
+                Array.from(event.currentTarget.files ?? []),
+                event.currentTarget.accept === BRANDBOOK_FILE_ACCEPT ? 'brandbook' : 'auto',
+              );
               event.currentTarget.value = '';
               event.currentTarget.accept = COMPOSER_FILE_ACCEPT;
             }}

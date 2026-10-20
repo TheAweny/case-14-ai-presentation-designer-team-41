@@ -75,6 +75,23 @@ export class EngineHttpError extends Error {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+const ENGINE_RETRIES = 2;
+const ENGINE_BUSY: ReadonlySet<number> = new Set([502, 503, 504]);
+function enginePause(attempt: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, 500 * 2 ** attempt);
+    function done() {
+      signal?.removeEventListener('abort', stop);
+      resolve();
+    }
+    function stop() {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    }
+    signal?.addEventListener('abort', stop, { once: true });
+  });
+}
+
 export class EngineClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -223,18 +240,37 @@ export class EngineClient {
     return response.json();
   }
 
+  /**
+   * Every engine POST is idempotent: the same request writes the same file. A dropped connection
+   * or a busy gateway (502/503/504) is asked again twice, briefly; an engine error (4xx/500) is
+   * an answer and is not repeated.
+   */
   private async post(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: { accept: 'application/json', 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)])
-        : AbortSignal.timeout(this.timeoutMs),
-    });
-    if (!response.ok) {
+    const payload = JSON.stringify(body);
+    for (let attempt = 0; ; attempt++) {
+      let response: Response;
+      try {
+        response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+          method: 'POST',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: payload,
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)])
+            : AbortSignal.timeout(this.timeoutMs),
+        });
+      } catch (error) {
+        if (!(error instanceof TypeError) || attempt >= ENGINE_RETRIES || signal?.aborted)
+          throw error;
+        await enginePause(attempt, signal);
+        continue;
+      }
+      if (response.ok) return response.json();
+      if (ENGINE_BUSY.has(response.status) && attempt < ENGINE_RETRIES && !signal?.aborted) {
+        await response.body?.cancel().catch(() => undefined);
+        await enginePause(attempt, signal);
+        continue;
+      }
       throw new EngineHttpError(response.status, path, await response.text());
     }
-    return response.json();
   }
 }

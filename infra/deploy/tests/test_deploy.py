@@ -141,6 +141,9 @@ def test_runtime_compose_is_private_and_persistent():
     import yaml
 
     config = yaml.safe_load((MODULE_PATH.parent / "compose.yaml").read_text())
+    assert config["services"]["web"]["environment"]["APP_ORIGIN"] == (
+        "${APP_ORIGIN:-https://lct.aweny.link}"
+    )
     services = config["services"]
     assert services["web"]["ports"] == ["127.0.0.1:3000:3000"]
     assert all("ports" not in services[name] for name in ("api", "engine", "postgres", "search"))

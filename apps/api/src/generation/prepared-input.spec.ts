@@ -21,6 +21,31 @@ function input() {
 }
 
 describe('material preflight', () => {
+  it('reuses the typed dataset returned by prepared material instead of extracting twice', async () => {
+    const options = input();
+    options.contentIds = ['one.csv'];
+    const dataset: Dataset = {
+      datasetId: 'one',
+      status: 'ok',
+      diagnostics: [],
+      sheets: [],
+      source: { fileName: 'one.csv', sha256: 'a'.repeat(64), bytes: 1, mediaType: 'text/csv' },
+    };
+    const result = await prepareGenerationInput({
+      ...options,
+      readMaterial: vi.fn(async () => ({
+        text: 'Prepared facts',
+        sourceSha256: 'a'.repeat(64),
+        dataset,
+      })),
+    });
+    expect(result.preparedDatasets).toMatchObject([dataset]);
+    expect(options.engine.extractDataset).not.toHaveBeenCalled();
+    expect(preparedInputDependency(['registry'], result)).not.toBe(
+      preparedInputDependency(['registry'], { ...result, brief: result.brief + ' Changed labels' }),
+    );
+  });
+
   it('resumes from the accepted dataset snapshot without extraction; changed bytes require a new build', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'prepared-snapshot-'));
     try {

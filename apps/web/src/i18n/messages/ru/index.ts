@@ -3,6 +3,7 @@ import apiDocs from './api-docs.json';
 import qrCode from './qr-code.json';
 import assistant from './assistant.json';
 import auth from './auth.json';
+import brandbooksPage from './brandbooks-page.json';
 import auditPanel from './audit-panel.json';
 import canvasMenu from './canvas-menu.json';
 import composer from './composer.json';
@@ -73,6 +74,7 @@ const messages = {
   home,
   projectPage,
   templatesPage,
+  brandbooksPage,
   projectAppearance,
   composer,
   deckChat,

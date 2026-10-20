@@ -87,22 +87,103 @@ def broken_words(text: str, slot: dict[str, Any]) -> list[str]:
 #: as part of the same slide.
 _MIN_SCALE = 0.6
 
+#: The smallest type a reader takes in on a projected slide, in points: a paragraph slot (three
+#: lines or more) and a label. Copy is shortened rather than set below these; a template that
+#: itself sets a slot smaller keeps its own size and is never shrunk further.
+_MIN_BODY_PT = 12.0
+_MIN_LABEL_PT = 10.0
+
+
+def least_scale(slot: dict[str, Any]) -> float:
+    """The smallest share of the template font a slot may be set at, by scale and by points."""
+    size = float(slot.get("fontSize") or 0)
+    if size <= 0:
+        return 1.0
+    floor_pt = _MIN_BODY_PT if int(slot.get("maxLines") or 1) >= 3 else _MIN_LABEL_PT
+    return min(1.0, max(_MIN_SCALE, floor_pt / size))
+
 
 def fitting_scale(text: str, slot: dict[str, Any]) -> float:
     """The share of the template font at which copy fits its box, 1.0 when it already fits.
 
     Only for copy the rewriter could not shorten: shrinking it keeps the slide's other shapes
     clear, where overflowing copy would run over them. Tried in steps of 5% down to
-    `_MIN_SCALE`, which is also the answer when nothing fits.
+    `least_scale`, which is also the answer when nothing fits.
     """
     height = slot.get("textHeightPt")
-    for step in range(20, round(_MIN_SCALE * 20) - 1, -1):
+    least = least_scale(slot)
+    for step in range(20, 0, -1):
+        if step / 20 < least - 1e-9:
+            break
         scaled = {**slot, "fontSize": slot["fontSize"] * step / 20}
         if (height is None or measured_height(text, scaled) <= height) and not broken_words(
             text, scaled
         ):
             return step / 20
-    return _MIN_SCALE
+    return least
+
+
+#: Copy that fills less than this share of a large frame reads as a forgotten line in an empty box.
+_SPARSE_SHARE = 0.35
+#: A grown text still leaves this share of its frame free.
+_GROWN_SHARE = 0.85
+
+
+def growing_scale(text: str, slot: dict[str, Any], steps: list[float]) -> float:
+    """The share of the template font that lets sparse copy fill a large frame, 1.0 if none.
+
+    Only a frame of three lines or more grows, and only to a size the template's own scale has
+    (`steps`: its body sizes up to the subtitle step), the largest at which the copy still fits
+    with room to spare and no word is torn.
+    """
+    height = slot.get("textHeightPt")
+    size = float(slot.get("fontSize") or 0)
+    if not height or size <= 0 or int(slot.get("maxLines") or 1) < 3 or not text.strip():
+        return 1.0
+    if measured_height(text, slot) >= _SPARSE_SHARE * height:
+        return 1.0
+    best = 1.0
+    for step in sorted(set(steps)):
+        if step <= size:
+            continue
+        scaled = {**slot, "fontSize": step}
+        if measured_height(text, scaled) <= _GROWN_SHARE * height and not broken_words(
+            text, scaled
+        ):
+            best = step / size
+    return best
+
+
+def peer_text_groups(pattern: dict[str, Any]) -> list[list[str]]:
+    """Repeated frames in one row share a type scale, regardless of their copy length."""
+    groups: list[list[dict[str, Any]]] = []
+    for slot in pattern["slots"]:
+        box = slot.get("box")
+        if slot.get("role") == "title" or not box or slot.get("maxLines", 1) < 3:
+            continue
+        match = None
+        for group in groups:
+            first = group[0]
+            other = first["box"]
+
+            def near(a: float, b: float) -> bool:
+                return abs(a - b) <= 0.1 * max(a, b, 1)
+
+            if (
+                slot.get("font") == first.get("font")
+                and abs(slot["fontSize"] - first["fontSize"]) <= 1
+                and near(box["cx"], other["cx"])
+                and near(box["cy"], other["cy"])
+                and abs(box["y"] - other["y"]) <= 0.1 * max(box["cy"], other["cy"])
+                and abs(box["x"] - other["x"]) >= 0.5 * min(box["cx"], other["cx"])
+            ):
+                match = group
+                break
+        if match is None:
+            groups.append([slot])
+        else:
+            match.append(slot)
+    return [[s["slotId"] for s in group] for group in groups if len(group) > 1]
 
 
 def check_composition_text(

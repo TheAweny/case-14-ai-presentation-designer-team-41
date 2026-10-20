@@ -99,7 +99,9 @@ it.each(['independent', 'shared'] as const)(
     ).start({ inputData: { profile, brief: fact, slideCount: 5 } });
     expect(selections).toHaveLength(5);
     expect(selections).toEqual(
-      Array.from({ length: 5 }, () => (variantCopyMode === 'independent' ? 'ample' : 'tight')),
+      Array.from({ length: 5 }, (_, index) =>
+        variantCopyMode === 'independent' && index > 0 ? 'ample' : 'tight',
+      ),
     );
     expect(selections).not.toContain('special');
     expect(selections).not.toContain('reference');

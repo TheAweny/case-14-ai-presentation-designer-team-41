@@ -59,7 +59,12 @@ from engine.contracts._generated import (
 )
 from engine.export.brandbook import apply_brandbook
 from engine.export.compositions import export_compositions
-from engine.layout.text_fit import check_composition_text, fitting_scale
+from engine.layout.text_fit import (
+    check_composition_text,
+    fitting_scale,
+    growing_scale,
+    peer_text_groups,
+)
 from engine.parser._errors import TemplateParseError
 from engine.parser.brandbook import BrandbookError, parse_brandbook
 from engine.parser.compositions import extract_compositions
@@ -446,6 +451,51 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             )
             text = next(t.text for t in slide.texts if t.slotId == finding["slotId"])
             font_scales[(finding["slideIndex"], finding["slotId"])] = fitting_scale(text, slot)
+        # Sparse copy in a large frame grows along the template's own scale, up to the subtitle
+        # step: three short lines at body size in a half-slide box read as an unfinished slide.
+        title_sizes = [
+            float(s["fontSize"]) for p in patterns for s in p["slots"] if s["role"] == "title"
+        ]
+        ceiling = min(title_sizes) if title_sizes else float("inf")
+        steps = sorted(
+            {
+                float(s["fontSize"])
+                for p in patterns
+                for s in p["slots"]
+                if s["role"] != "title" and float(s["fontSize"]) < ceiling
+            }
+        )
+        centred_slots: set[tuple[int, str]] = set()
+        for index, slide in enumerate(request.slides):
+            for slot in by_id[slide.patternId]["slots"]:
+                if (index, slot["slotId"]) in font_scales or slot["role"] == "title":
+                    continue
+                if (
+                    slide.visual is not None
+                    and getattr(slide.visual, "slotId", None) == slot["slotId"]
+                ):
+                    continue
+                text = next((t.text for t in slide.texts if t.slotId == slot["slotId"]), "")
+                grown = growing_scale(text, slot, steps)
+                if grown > 1:
+                    font_scales[(index, slot["slotId"])] = grown
+            pattern = by_id[slide.patternId]
+            bindings = {t.slotId: t.text for t in slide.texts}
+            for peers in peer_text_groups(pattern):
+                active = [
+                    s
+                    for s in peers
+                    if bindings.get(s, "").strip()
+                    and (slide.visual is None or slide.visual.slotId != s)
+                ]
+                if len(active) < 2:
+                    continue
+                common = min(font_scales.get((index, s), 1.0) for s in active)
+                for slot_id in active:
+                    font_scales[(index, slot_id)] = common
+                    slot = next(s for s in pattern["slots"] if s["slotId"] == slot_id)
+                    if len(slot.get("sample", "").splitlines()) > 1:
+                        centred_slots.add((index, slot_id))
 
         def draw(shapes: Any, element: dict[str, Any]) -> None:
             if element["kind"] == "native":
@@ -476,6 +526,7 @@ def composition_deck(request: CompositionExportRequest) -> dict:
             draw,
             allow_overflow=getattr(request, "allowOverflow", False),
             font_scales=font_scales,
+            centred_slots=centred_slots,
         )
         previews = render.render_to_png(output, output.parent / "previews", dpi=110)
         ir = parser.parse_template(output)

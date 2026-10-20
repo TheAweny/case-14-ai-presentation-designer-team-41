@@ -34,10 +34,20 @@ import type { AttemptBudget } from './attempt-budget.js';
 import { retainsClaimDetails } from './claim-details.js';
 import { boundedDatasetEvidence } from './dataset-evidence.js';
 import { figuresOf } from './repeats.js';
-import { plannedSeriesChart, quotesSeries, seriesFacts, verifyVisual } from './visual-grounding.js';
+import {
+  plannedSeriesChart,
+  quotesSeries,
+  seriesFacts,
+  verifyVisual,
+  withDisplayLabels,
+  chartedSeries,
+} from './visual-grounding.js';
 import { sourceBriefTexts } from './source-brief.js';
 import { ampleComposition } from './composition-feasibility.js';
 import { selectSlideRepair } from './repair-selection.js';
+import { fallbackTexts } from './fallback-copy.js';
+import { fallbackPlan } from './fallback-plan.js';
+import { degradable } from './failure.js';
 export { prepareDatasets } from './dataset-evidence.js';
 export { compositionPlanSchema, compositionCritiqueSchema as critiqueSchema } from '@lct/contracts';
 
@@ -78,6 +88,16 @@ export interface GenerationDependencies {
   deckRepairInstructions?: string;
   repairInstructions?: string;
   signal: AbortSignal;
+  /**
+   * Epoch ms by which every slide must have copy. A writer still out then is given up, and its
+   * slides get their copy from the plan, so the variant keeps its time for the fit and export.
+   */
+  writerDeadlineAt?: number;
+  /**
+   * Epoch ms by which the deck must have a plan. A planner still out then, or one whose answer
+   * stays unusable, is given up and the plan is made from the brief without a model.
+   */
+  plannerDeadlineAt?: number;
   concurrency?: number;
   onProgress?: (done: number, total: number) => Promise<void>;
   /** Leftover defects a repair could not cure; reported, never fatal, so every variant finishes. */
@@ -135,6 +155,8 @@ const taskSchema = z.object({
   composition: compositionSchema,
   canonicalComposition: compositionSchema.optional(),
   requiredClaims: z.array(requiredSlideClaimSchema).default([]),
+  /** Ready series earlier slides chart, `grouping|metric`: this slide draws another or none. */
+  chartedEarlier: z.array(z.string()).default([]),
 });
 export const writtenSchema = z.object({
   index: z.number(),
@@ -200,6 +222,73 @@ export function patternUseLimit(patternCount: number, slideCount: number): numbe
  * Compositions a plan leans on: used more than `limit` times, or on three slides in a row. Even
  * within the limit, the same layout three times running reads as one slide shown again.
  */
+/** The writer's chart as plain labels and numbers, native or not: what it offers to show. */
+function offeredChart(visual: unknown): unknown {
+  const native = visual as {
+    kind?: string;
+    block?: {
+      kind?: string;
+      categories?: { label?: string }[];
+      series?: { name?: string; values?: { value?: number }[] }[];
+      xTitle?: string;
+      yTitle?: string;
+    };
+  } | null;
+  if (native?.kind !== 'native' || native.block?.kind !== 'chart') return visual;
+  const block = native.block;
+  return {
+    kind: 'chart',
+    categories: (block.categories ?? []).map((c) => c.label),
+    series: (block.series ?? []).map((s) => ({
+      name: s.name,
+      values: (s.values ?? []).map((v) => v.value),
+    })),
+    xTitle: block.xTitle,
+    yTitle: block.yTitle,
+  };
+}
+
+/**
+ * Covers of a template the indexer did not describe, by geometry alone: a layout with a large
+ * title, no room for a chart and the fewest text blocks, the template's earliest first. A layout
+ * with a big body box is a content slide, however large its title. When nothing qualifies, the
+ * template's first layout with a title opens the deck, as its author did.
+ */
+/**
+ * A cover is a title and at most one line under it (who it is for, what is asked): of the covers
+ * found, those with one text block or none come first, and a list of findings is not a cover.
+ */
+export function titleCovers<T extends GenerationProfile['compositions'][number]>(
+  covers: readonly T[],
+): T[] {
+  const blocks = (pattern: T) => writerSlots(pattern).filter((s) => s.role !== 'title').length;
+  const light = covers.filter((pattern) => blocks(pattern) <= 1);
+  return light.length ? light : [...covers];
+}
+
+export function geometricCovers<T extends GenerationProfile['compositions'][number]>(
+  candidates: readonly T[],
+  all: readonly T[],
+): T[] {
+  const order = (pattern: T) => all.indexOf(pattern);
+  const blocks = (pattern: T) => writerSlots(pattern).filter((s) => s.role !== 'title').length;
+  const plain = candidates
+    .filter((pattern) => visualSlots(pattern).length === 0 && blocks(pattern) <= 2)
+    .sort((a, b) => Number(blocks(a) > 1) - Number(blocks(b) > 1) || order(a) - order(b));
+  if (plain.length) return plain.slice(0, 3);
+  const first = all.find((pattern) => pattern.slots.some((slot) => slot.role === 'title'));
+  return first ? [first] : [...candidates];
+}
+
+/** A slide moved for variety keeps its chart and its picture: a layout without them is no swap. */
+function keepsVisuals(
+  from: GenerationProfile['compositions'][number],
+  to: GenerationProfile['compositions'][number],
+): boolean {
+  if (chartSlot(from) !== undefined && chartSlot(to) === undefined) return false;
+  return visualSlots(from).length === 0 || visualSlots(to).length > 0;
+}
+
 export function overusedPatterns(patternIds: readonly string[], limit: number): string[] {
   const counts = new Map<string, number>();
   for (const id of patternIds) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -299,10 +388,13 @@ export function minChars(
     prompt?: boolean;
     capacity?: Slot['capacity'];
     semanticRole?: string;
+    contentStructure?: string;
   },
   variant: DeckVariant = 'balanced',
 ): number {
   if (slot.role !== 'body') return 0;
+  // A complete card can be a short heading plus one exact fact; never pad it into a paragraph.
+  if (slot.contentStructure === 'heading-body') return 0;
   if (slot.semanticRole && ['slide-title', 'card-heading', 'caption'].includes(slot.semanticRole))
     return 0;
   // A paragraph break and a line break inside one (a vertical tab in the pptx) both start a line.
@@ -327,7 +419,12 @@ export function thinMessage(length: number, least: number, room: number): string
 export function slotBriefs(
   slots: GenerationProfile['compositions'][number]['slots'],
   variant?: DeckVariant,
-  semantics: readonly { slotId: string; semanticRole: string; groupId?: string }[] = [],
+  semantics: readonly {
+    slotId: string;
+    semanticRole: string;
+    groupId?: string;
+    contentStructure?: string;
+  }[] = [],
 ) {
   const heights = slots
     .map((slot) => slot.box?.cy ?? 0)
@@ -391,6 +488,7 @@ export function targetRange(slot: Parameters<typeof minChars>[0], variant: DeckV
   const room = fitChars(slot);
   const large =
     slot.role === 'body' &&
+    slot.contentStructure !== 'heading-body' &&
     slot.maxLines >= 3 &&
     room >= 80 &&
     !['slide-title', 'card-heading', 'caption'].includes(slot.semanticRole ?? 'unknown');
@@ -1042,19 +1140,33 @@ export function prepareVariantCatalog<T extends GenerationProfile['compositions'
         pattern.slots.length <= 3 &&
         pattern.slots.some((slot) => slot.role === 'title' && slot.fontSize > typicalTitle),
     );
-  const indexedCovers = full.filter((pattern) => notes.get(pattern.patternId)?.kind === 'cover');
+  // A QR page is usable only with an explicitly bound source URL. Automatic cover correction
+  // must never select it before QR requests exist, even when the index calls it a cover.
+  const coverCandidates = full.filter(
+    (pattern) => !declaredQrSlots(pattern, notes.get(pattern.patternId)).length,
+  );
+  const indexedCovers = coverCandidates.filter(
+    (pattern) => notes.get(pattern.patternId)?.kind === 'cover',
+  );
   const plainCovers = indexedCovers.filter((pattern) => !notes.get(pattern.patternId)?.special);
-  const covers = plainCovers.length
-    ? plainCovers
-    : indexedCovers.length
-      ? indexedCovers
-      : coversOf(full);
+  const covers = titleCovers(
+    plainCovers.length
+      ? plainCovers
+      : indexedCovers.length
+        ? indexedCovers
+        : geometricCovers(
+            coversOf(coverCandidates).length ? coversOf(coverCandidates) : coverCandidates,
+            coverCandidates,
+          ),
+  );
+  // A cover found by its geometry among layouts the spacious filter left out still opens the deck.
+  const withCovers = [...full, ...covers.filter((pattern) => !full.includes(pattern))];
   return {
     notes,
     compositions,
-    full,
+    full: withCovers,
     covers,
-    catalog: variantCatalog(full, options.variant, covers),
+    catalog: variantCatalog(withCovers, options.variant, covers),
   };
 }
 
@@ -1329,6 +1441,22 @@ function slotCorrections(
     }));
 }
 
+/** A timeout on the process clock (setTimeout), so a stage deadline and its tests share one. */
+function timeoutSignal(ms: number): AbortSignal {
+  const stop = new AbortController();
+  if (!Number.isFinite(ms)) return stop.signal;
+  if (ms <= 0) {
+    stop.abort(new DOMException('Planning or writing deadline exceeded.', 'TimeoutError'));
+    return stop.signal;
+  }
+  const timer = setTimeout(
+    () => stop.abort(new DOMException('Planning or writing deadline exceeded.', 'TimeoutError')),
+    Math.max(0, Math.floor(ms)),
+  );
+  timer.unref?.();
+  return stop.signal;
+}
+
 export function createGenerationWorkflow(deps: GenerationDependencies) {
   let completed = 0;
   const deckCopy = new Map<number, z.infer<ReturnType<typeof boundedSlideSchema>>>();
@@ -1369,6 +1497,14 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         output: qr ? 'qr' : allowVisual ? 'native' : 'text',
       },
     );
+    // The same slide asked of the per-slide writer, when the whole-deck writer gave it nothing.
+    const slideInstructions = () =>
+      writerPrompt(deps.writerInstructions, deps.writerModules, {
+        audience: task.audience,
+        goal: task.goal,
+        variant,
+        output: qr ? 'qr' : allowVisual ? 'native' : 'text',
+      });
     return {
       base,
       variant,
@@ -1376,9 +1512,19 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       allowVisual,
       input,
       instructions,
+      slideInstructions,
       output: qr ? 'qr' : allowVisual ? 'native' : 'text',
     };
   };
+  /** Aborts with the run, or when the writers' share of the time is over. */
+  const writerSignal = () =>
+    deps.writerDeadlineAt === undefined
+      ? deps.signal
+      : AbortSignal.any([deps.signal, timeoutSignal(deps.writerDeadlineAt - Date.now())]);
+  const writerTimeLeft = () =>
+    deps.writerDeadlineAt === undefined
+      ? Number.POSITIVE_INFINITY
+      : deps.writerDeadlineAt - Date.now();
   const plan = createStep({
     id: 'plan-compositions',
     inputSchema,
@@ -1434,6 +1580,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         const plan = async (
           corrections?: Record<string, unknown>,
           previous?: z.infer<typeof compositionPlanSchema>,
+          signal: AbortSignal = deps.signal,
         ) => {
           const selected = await deps.provider.generate(
             'planner',
@@ -1461,7 +1608,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               ...(corrections ? { corrections } : {}),
             },
             plannerSchema,
-            deps.signal,
+            signal,
           );
           return compositionPlanSchema.parse({
             ...selected,
@@ -1559,16 +1706,60 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             : undefined;
         };
         let result: z.infer<typeof compositionPlanSchema>;
+        const planStarted = Date.now();
+        const plannerSignal = () =>
+          deps.plannerDeadlineAt === undefined
+            ? deps.signal
+            : AbortSignal.any([deps.signal, timeoutSignal(deps.plannerDeadlineAt - Date.now())]);
+        // The plan the brief gives without a model: the deck goes on to its writers instead of
+        // failing when the planner is slow, down or keeps answering off-schema.
+        const planWithoutModel = async (error: unknown) => {
+          await deps.onWarning?.(
+            'Планировщик не ответил вовремя: план собран из брифа без модели. Требуется проверка. (' +
+              (error instanceof Error ? error.message.slice(0, 160) : String(error)) +
+              ')',
+          );
+          return compositionPlanSchema.parse(
+            fallbackPlan({
+              brief: inputData.brief,
+              slideCount,
+              outline,
+              catalog: full.map((pattern) => ({
+                patternId: pattern.patternId,
+                blocks: writerSlots(pattern).filter((slot) => slot.role !== 'title').length,
+                kind: notes.get(pattern.patternId)?.kind,
+                special: notes.get(pattern.patternId)?.special,
+              })),
+              coverPatternIds: covers.map((pattern) => pattern.patternId),
+            }),
+          );
+        };
+        let withoutModel = false;
         try {
-          result = await plan();
+          result = await plan(undefined, undefined, plannerSignal());
         } catch (error) {
           deps.signal.throwIfAborted();
-          if (!(error instanceof z.ZodError)) throw error;
-          result = await plan({
-            minimumSlideCount: 5,
-            exactSlideCount: slideCount,
-            message: 'Return 5 to 60 slides in auto mode, or exactly the requested count.',
-          });
+          if (error instanceof z.ZodError) {
+            try {
+              result = await plan(
+                {
+                  minimumSlideCount: 5,
+                  exactSlideCount: slideCount,
+                  message: 'Return 5 to 60 slides in auto mode, or exactly the requested count.',
+                },
+                undefined,
+                plannerSignal(),
+              );
+            } catch (retryError) {
+              deps.signal.throwIfAborted();
+              if (!(retryError instanceof z.ZodError) && !degradable(retryError)) throw retryError;
+              result = await planWithoutModel(retryError);
+              withoutModel = true;
+            }
+          } else if (degradable(error)) {
+            result = await planWithoutModel(error);
+            withoutModel = true;
+          } else throw error;
         }
         // One layout repeated over most of the deck reads as the same slide again and again; the
         // planner gets the overused ids and replans once.
@@ -1602,11 +1793,58 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             : {}),
           ...quoteCorrections(result),
         };
-        if (Object.keys(corrections).length) result = await plan(corrections, result);
+        // The count and the cover are hard: without them there is no deck. The rest improves a
+        // plan that already works, so it is asked again only while the writers keep enough time
+        // after it, and a late or failed replan keeps the first plan.
+        const hard = { ...countCorrections(result), ...coverCorrections(result) };
+        if (Object.keys(corrections).length && !withoutModel) {
+          const firstPlanMs = Date.now() - planStarted;
+          // A replan writes more than the first plan, and a whole-deck writer about as much again:
+          // measured on a 27B model, 3.5 first plans is what both need before the writers' end.
+          const spare = writerTimeLeft() - 3.5 * firstPlanMs;
+          if (Object.keys(hard).length) {
+            try {
+              result = await plan(corrections, result, plannerSignal());
+            } catch (error) {
+              deps.signal.throwIfAborted();
+              if (!(error instanceof z.ZodError) && !degradable(error)) throw error;
+              result = await planWithoutModel(error);
+            }
+          } else if (spare > 0) {
+            const replanSignal =
+              spare === Number.POSITIVE_INFINITY
+                ? deps.signal
+                : AbortSignal.any([deps.signal, timeoutSignal(firstPlanMs + spare / 2)]);
+            try {
+              result = await plan(corrections, result, replanSignal);
+            } catch (error) {
+              deps.signal.throwIfAborted();
+              if (!degradable(error)) throw error;
+              await deps.onWarning?.(
+                `Уточнение плана не успело или не удалось, оставлен первый план. (${
+                  error instanceof Error ? error.message.slice(0, 160) : String(error)
+                })`,
+              );
+            }
+          } else {
+            await deps.onWarning?.(
+              'Уточнение плана пропущено, чтобы авторы слайдов успели в срок. Требуется проверка.',
+            );
+          }
+        }
         if (slideCount !== null && result.slides.length !== slideCount)
-          throw new Error('Planner returned the wrong slide count.');
-        if (coverCorrections(result))
-          throw new Error('Planner did not select a cover composition.');
+          result = await planWithoutModel(new Error('Planner returned the wrong slide count.'));
+        // A plan still without a cover gets one by code: the deck opens on the template's cover
+        // rather than failing, or a content layout standing in for it.
+        if (coverCorrections(result) && covers[0])
+          result = {
+            ...result,
+            slides: result.slides.map((slide, index) =>
+              index === 0
+                ? { ...slide, patternId: covers[0]?.patternId ?? slide.patternId }
+                : slide,
+            ),
+          };
         // The planner was asked once to vary the layouts; what it kept repeating, code spreads over
         // the compositions that hold the same points. Where the template has none, the slide keeps
         // its layout and the report says so.
@@ -1618,6 +1856,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               .filter((s) => s.role !== 'title')
               .reduce((sum, s) => sum + s.maxChars, 0),
           structure: compositionStructure,
+          compatible: keepsVisuals,
           allowsMove: (index, to) =>
             allowsDataMove(result.slides, inputData.brief, full, index, to),
         });
@@ -1676,8 +1915,26 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       const sharedResult = deps.sharedPlan
         ? await deps.sharedPlan.once(computePlan)
         : await computePlan();
+      // A saved plan may predate the QR-cover exclusion. Repair only an unbound opening
+      // QR page before validating assets; all claims and the remaining slide plan stay intact.
+      const opening = sharedResult.slides[0];
+      const openingPattern = opening && compositions.find((p) => p.patternId === opening.patternId);
+      const safeOpening = covers.find((p) => !declaredQrSlots(p, notes.get(p.patternId)).length);
+      const qrSafeSharedResult =
+        opening &&
+        openingPattern &&
+        safeOpening &&
+        !opening.qrRequests?.length &&
+        declaredQrSlots(openingPattern, notes.get(openingPattern.patternId)).length
+          ? {
+              ...sharedResult,
+              slides: sharedResult.slides.map((slide, index) =>
+                index === 0 ? { ...slide, patternId: safeOpening.patternId } : slide,
+              ),
+            }
+          : sharedResult;
       const result = await safeQrPlan(
-        sharedResult,
+        qrSafeSharedResult,
         compositions,
         notes,
         qrSourceBrief,
@@ -1686,7 +1943,12 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         full,
       );
       const dataNeeds = result.slides.map((slide, index) =>
-        dataLayoutNeed(slide.purpose, inputData.brief, index, result.slides.length),
+        dataLayoutNeed(
+          [slide.purpose, ...(outline?.slides[index]?.points ?? [])].join('\n'),
+          inputData.brief,
+          index,
+          result.slides.length,
+        ),
       );
       const remapped = remapPlan(
         result.slides.map((slide) => slide.patternId),
@@ -1700,7 +1962,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       );
       // The variant's own layouts repeat as the plan's did, and the same share applies: what the
       // remap sent to one layout over and over goes to the others of this variant's set.
-      const layouts = diversifyPlan(
+      const diversified = diversifyPlan(
         remapped.map((patternId) => ({ patternId })),
         full,
         notes,
@@ -1714,6 +1976,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               .filter((s) => s.role !== 'title')
               .reduce((sum, s) => sum + s.maxChars, 0),
           structure: compositionStructure,
+          compatible: keepsVisuals,
           allowsMove: (index, to) =>
             allowsDataMove(
               remapped.map((patternId, slideIndex) => ({
@@ -1726,10 +1989,33 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               to,
             ),
         },
-      ).slides.map((slide) => slide.patternId);
+      );
+      const layouts = diversified.slides.map((slide) => slide.patternId);
       // A validated QR binding remains on its original composition in all three variants.
       result.slides.forEach((slide, index) => {
         if (slide.qrRequests?.length) layouts[index] = slide.patternId;
+      });
+      // The first slide opens the deck on a cover in every variant: a remap or a planner that
+      // put it on a grid of cards gets the plan's cover, or the template's own.
+      const first = layouts[0];
+      if (first !== undefined && covers.length && !covers.some((p) => p.patternId === first)) {
+        const planned = result.slides[0]?.patternId;
+        layouts[0] = covers.some((p) => p.patternId === planned)
+          ? (planned ?? first)
+          : (covers[0]?.patternId ?? first);
+      }
+      // Each ready series is charted once: a later slide that quotes the same series keeps its
+      // text, or another series it quotes, instead of the same bars again.
+      const charted: string[] = [];
+      const chartedBefore = result.slides.map((slide, index) => {
+        const composition = compositions.find((p) => p.patternId === layouts[index]);
+        const slot = composition ? chartSlot(composition) : undefined;
+        const before = [...charted];
+        const series = slot
+          ? chartedSeries(plannedSeriesChart(slide.purpose, inputData.brief, slot, before))
+          : null;
+        if (series) charted.push(series);
+        return before;
       });
       const tasks = result.slides.map((slide, index) => {
         const canonicalComposition = compositions.find((p) => p.patternId === slide.patternId);
@@ -1780,23 +2066,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               return visualSlots(selected).length === 0 || visualSlots(candidate).length > 0;
             },
           };
-          composition =
-            ampleComposition(selection) ??
-            (index === 0
-              ? ampleComposition({
-                  ...selection,
-                  compatible: (candidate) => {
-                    const note = notes.get(candidate.patternId);
-                    return (
-                      !note?.special &&
-                      !note?.skip &&
-                      !(note?.requiredContent ?? []).some((item) => !available.has(item)) &&
-                      !FRAMING_KINDS.has(note?.kind ?? 'other')
-                    );
-                  },
-                })
-              : undefined) ??
-            selected;
+          // A long approved claim is rewritten within the cover's capacity; moving it to a
+          // contents list discards the cover precisely when concise wording matters most.
+          composition = ampleComposition(selection) ?? selected;
         }
         if (!slide.qrRequests?.length)
           composition = preserveDataLayout(composition, full, dataNeeds[index], variant);
@@ -1812,6 +2084,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             : {}),
           index,
           total: result.slides.length,
+          chartedEarlier: chartedBefore[index] ?? [],
           audience: result.audience,
           goal: result.goal,
           title: result.title,
@@ -1905,19 +2178,31 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       };
       const instructions = deps.deckWriterInstructions;
       const compute = () =>
-        deps.provider.generate('writer', instructions, input, schema, deps.signal);
-      const result =
-        variantCopyMode === 'shared' && deps.sharedContent
-          ? await deps.sharedContent.once(
-              { scope: 'deck-variant-v1', instructions, input },
-              compute,
-            )
-          : await compute();
+        deps.provider.generate('writer', instructions, input, schema, writerSignal());
+      let result: z.infer<typeof schema>;
+      try {
+        result =
+          variantCopyMode === 'shared' && deps.sharedContent
+            ? await deps.sharedContent.once(
+                { scope: 'deck-variant-v1', instructions, input },
+                compute,
+              )
+            : await compute();
+      } catch (error) {
+        // Only Stop and the run's own deadline end the variant. A writer that timed out, was
+        // refused or answered off-schema leaves its slides to the per-slide writers and the plan.
+        deps.signal.throwIfAborted();
+        if (!degradable(error)) throw error;
+        await deps.onWarning?.(
+          'Автор колоды не ответил вовремя: слайды дописаны по одному или по плану. ' +
+            `Требуется проверка. (${error instanceof Error ? error.message.slice(0, 200) : String(error)})`,
+        );
+        return inputData;
+      }
       deps.signal.throwIfAborted();
       for (const task of inputData) {
         const copy = result.slides[String(task.index)];
-        if (!copy) throw new Error(`Missing written slide ${task.index + 1}.`);
-        deckCopy.set(task.index, copy);
+        if (copy) deckCopy.set(task.index, copy);
       }
       return inputData;
     },
@@ -1930,24 +2215,72 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       let slide: ComposedSlide | undefined;
       // The deck title goes under its own name: as `title` the writer took it for the title
       // of the slide and put it on slide after slide.
-      const { base, note, allowVisual, input: writeInput, instructions } = writerTask(inputData);
+      const {
+        base,
+        note,
+        allowVisual,
+        input: writeInput,
+        instructions,
+        slideInstructions,
+      } = writerTask(inputData);
       const mode = deps.variantCopyMode ?? 'independent';
+      const deckMode = deps.deckWriterInstructions !== undefined;
       const compute = () =>
         deps.provider.generate(
           'writer',
-          instructions,
+          deckMode ? slideInstructions() : instructions,
           writeInput,
           boundedSlideSchema(base, allowVisual),
-          deps.signal,
+          writerSignal(),
         );
+      // Copy from the plan, when no writer answered for this slide in the writers' time.
+      const fromPlan = () => {
+        const slots = writerSlots(base).map((slot) => ({
+          slotId: slot.slotId,
+          role: slot.role,
+          fitChars: fitChars(slot),
+          fontSize: slot.fontSize,
+          ...(slot.textWidthPt !== undefined ? { textWidthPt: slot.textWidthPt } : {}),
+        }));
+        return {
+          patternId: base.patternId,
+          textsBySlot: fallbackTexts(slots, {
+            slideTitle: inputData.approvedSlide?.title ?? inputData.slideTitle,
+            purpose: inputData.purpose,
+            claims: inputData.requiredClaims.map((claim) => claim.text),
+          }),
+          visual: null,
+          speakerNotes: [inputData.purpose, ...inputData.requiredClaims.map((claim) => claim.text)]
+            .filter((text, index, all) => all.indexOf(text) === index)
+            .join('\n'),
+        };
+      };
+      /** A per-slide writer needs this much of the writers' time to be worth asking. */
+      const SLIDE_WRITER_MIN_MS = 20_000;
       const accepted = deckCopy.get(inputData.index);
-      if (deps.deckWriterInstructions !== undefined && !accepted)
-        throw new Error('The deck writer did not produce this slide.');
-      let raw =
-        accepted ??
-        (mode === 'shared' && deps.sharedContent
-          ? await deps.sharedContent.once({ instructions, input: writeInput }, compute)
-          : await compute());
+      let raw: z.infer<ReturnType<typeof boundedSlideSchema>>;
+      if (accepted) raw = accepted;
+      else if (deckMode && writerTimeLeft() < SLIDE_WRITER_MIN_MS) {
+        raw = fromPlan();
+        await deps.onWarning?.(
+          `Slide ${inputData.index + 1}: copy is taken from the plan; the writer had no time left.`,
+        );
+      } else {
+        try {
+          raw =
+            mode === 'shared' && deps.sharedContent
+              ? await deps.sharedContent.once({ instructions, input: writeInput }, compute)
+              : await compute();
+        } catch (error) {
+          deps.signal.throwIfAborted();
+          if (!degradable(error)) throw error;
+          raw = fromPlan();
+          await deps.onWarning?.(
+            `Slide ${inputData.index + 1}: copy is taken from the plan; the writer failed ` +
+              `(${error instanceof Error ? error.message.slice(0, 160) : String(error)}).`,
+          );
+        }
+      }
       if (base.patternId !== inputData.composition.patternId) {
         const map = semanticSlotMap(
           { ...base, slots: writerSlots(base) },
@@ -1971,16 +2304,98 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         inputData.brief,
         datasetEvidence.datasets,
       );
+      // A slide planned around a ready series shows that series, whatever the writer drew.
+      const seriesSlot = allowVisual ? chartSlot(inputData.composition) : undefined;
+      const planned = seriesSlot
+        ? plannedSeriesChart(
+            [inputData.purpose, ...(inputData.approvedSlide?.points ?? [])].join('\n'),
+            inputData.brief,
+            seriesSlot,
+            inputData.chartedEarlier ?? [],
+          )
+        : null;
+      if (planned) {
+        // A fully verified native chart of this exact series keeps its requested line/bar type.
+        // The deterministic chart is a fallback for a missing or different writer visual.
+        const native =
+          visual?.kind === 'native' && visual.block.kind === 'chart' ? visual.block : null;
+        const sameSeries =
+          planned.kind === 'chart' &&
+          native &&
+          (planned.chartType !== 'line' ||
+            native.intent === 'time-series' ||
+            native.requestedType === 'line') &&
+          native.categories.length === planned.categories.length &&
+          native.categories.every(
+            (category, index) => category.label === planned.categories[index],
+          ) &&
+          native.series.length === planned.series.length &&
+          native.series.every((series, index) => {
+            const expected = planned.series[index];
+            return (
+              expected &&
+              series.name === expected.name &&
+              series.unit === planned.yTitle &&
+              series.values.length === expected.values.length &&
+              series.values.every(
+                (value, at) => value.state === 'present' && value.value === expected.values[at],
+              )
+            );
+          });
+        if (!sameSeries) visual = withDisplayLabels(planned, offeredChart(raw.visual));
+      } else if ((inputData.chartedEarlier ?? []).includes(chartedSeries(visual) ?? ''))
+        visual = null;
       if (raw.visual && !visual)
         await deps.onWarning?.(
           `Slide ${inputData.index + 1}: visual provenance is unknown; keeping text fallback.`,
         );
-      // A slide planned around a ready series shows that series, whatever the writer drew.
-      const seriesSlot = allowVisual ? chartSlot(inputData.composition) : undefined;
-      const planned = seriesSlot
-        ? plannedSeriesChart(inputData.purpose, inputData.brief, seriesSlot)
-        : null;
-      if (planned) visual = planned;
+      // A proven complete series uses a single native PowerPoint chart. The richer block
+      // also builds a source table, which overflows ordinary chart slots. Its exact source
+      // stays in notes, while all categories, figures and their unit remain in the chart.
+      if (visual?.kind === 'native' && visual.block.kind === 'chart') {
+        const block = visual.block;
+        const unit = block.series[0]?.unit ?? '';
+        if (
+          block.categories.length >= 2 &&
+          block.categories.length <= 8 &&
+          block.series.length <= 5 &&
+          block.series.every(
+            (series) =>
+              series.unit === unit &&
+              series.values.every(
+                (value) => value.state === 'present' && value.value !== undefined,
+              ),
+          )
+        ) {
+          raw = {
+            ...raw,
+            speakerNotes: [
+              raw.speakerNotes,
+              ...block.sources.map((source) => source.quote),
+              ...(block.caveat ? [block.caveat] : []),
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          };
+          visual = {
+            kind: 'chart',
+            slotId: visual.slotId,
+            chartType:
+              block.intent === 'time-series'
+                ? 'line'
+                : block.requestedType === 'bar'
+                  ? 'bar'
+                  : 'column',
+            categories: block.categories.map((category) => category.label),
+            series: block.series.map((series) => ({
+              name: series.name,
+              values: series.values.map((value) => value.value as number),
+            })),
+            xTitle: block.xTitle,
+            yTitle: unit,
+          };
+        }
+      }
       if (visual?.kind === 'native') visual = { ...visual, variant: deps.variant ?? 'balanced' };
       const texts = raw.textsBySlot as Record<string, string | undefined>;
       const context: CopyContext = {

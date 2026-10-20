@@ -11,6 +11,7 @@ import {
   materialResearchResultSchema,
   generationProfileSchema,
   modelFailureSchema,
+  slotVisualSchema,
   type MaterialResearchSource,
   type ChatMessage,
   type ChatMode,
@@ -867,7 +868,10 @@ export function chatTools(
           z.object({
             index: z.number(),
             title: z.string().optional(),
-            slide: z.object({ texts: z.array(z.object({ text: z.string() })) }),
+            slide: z.object({
+              texts: z.array(z.object({ text: z.string() })),
+              visual: slotVisualSchema.nullable().optional(),
+            }),
           }),
         )
         .parse(JSON.parse(await readFile(join(directory, 'plan.json'), 'utf8')));
@@ -879,6 +883,7 @@ export function chatTools(
             .map((slide) => ({
               slide: slide.index + 1,
               texts: slide.slide.texts.map((text) => text.text).filter(Boolean),
+              visual: slide.slide.visual ?? null,
             })),
         },
       };

@@ -78,6 +78,11 @@ approval rules: preparation adds no build approval in auto.
 - Read before you decide: `list_templates` and `describe_template` tell you which templates exist
   and which kinds of slides a template has; `read_file` reads an attached material; `read_deck`
   and `read_audit` read a deck built in this chat.
+  `read_deck` returns each slide's visible text and its structured `visual`, including native
+  editable charts, their categories, values and chart type. A chart can replace a text slot, so
+  its absence from `texts` does not mean it is absent from the deck. Check `visual` before
+  claiming a required chart is missing or that the tools cannot create native charts. This
+  structure confirms content, not visual quality; use previews and audit for remaining defects.
 - `research_materials` answers one question from up to three attached text materials and returns
   only quotes the server matched exactly. Use it when the person attached materials and the answer
   depends on them. Cite each quote with its file name from `evidence.name` and the exact quote;

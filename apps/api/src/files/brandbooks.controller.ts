@@ -1,12 +1,16 @@
 import {
   BadRequestException,
+  Body,
   Controller,
+  Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Inject,
   NotFoundException,
   Optional,
   Param,
+  Patch,
   Post,
   StreamableFile,
   UploadedFile,
@@ -39,6 +43,7 @@ interface Upload {
 interface BrandbookRow {
   id: string;
   file_name: string;
+  display_name?: string | null;
   storage_path: string;
   size_bytes: number | string;
   sha256: string;
@@ -60,6 +65,7 @@ export interface StoredBrandbook {
   createdAt: string;
 }
 const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
+const BRANDBOOK_NAME_MAX_LENGTH = 200;
 const EXTENSIONS = new Set([
   '.zip',
   '.rar',
@@ -211,6 +217,59 @@ export class BrandbooksController implements OnApplicationShutdown {
     return this.present(await this.find(id, account), account);
   }
 
+  @Patch('brandbooks/:id')
+  @ApiOperation({
+    summary: 'Переименовать брендбук или открыть его всем',
+    description: 'Переименовывает владелец; `shared` меняет только администратор.',
+  })
+  @ApiErrors(400, 403, 404)
+  async update(
+    @CurrentAccount() account: Account,
+    @Param('id') id: string,
+    @Body() body: { name?: unknown; shared?: unknown },
+  ): Promise<StoredBrandbook> {
+    const row = await this.find(id, account);
+    if (row.owner_id !== account.id && account.role !== 'admin')
+      throw new ForbiddenException('Only the owner or an administrator can change a brandbook.');
+    if (body.shared !== undefined) {
+      if (typeof body.shared !== 'boolean')
+        throw new BadRequestException('shared must be a boolean.');
+      if (account.role !== 'admin')
+        throw new ForbiddenException('Only an administrator can share a brandbook.');
+    }
+    let name: string | null = null;
+    if (body.name !== undefined) {
+      if (typeof body.name !== 'string' || body.name.trim() === '')
+        throw new BadRequestException('Brandbook name is required.');
+      name = body.name.trim();
+      if (name.length > BRANDBOOK_NAME_MAX_LENGTH)
+        throw new BadRequestException('Brandbook name is too long.');
+    }
+    const result = await this.pool.query<BrandbookRow>(
+      `UPDATE stored_files SET display_name = COALESCE($2, display_name),
+              shared = COALESCE($3, shared)
+       WHERE id = $1 RETURNING *`,
+      [row.id, name, typeof body.shared === 'boolean' ? body.shared : null],
+    );
+    const updated = result.rows[0];
+    if (!updated) throw new NotFoundException('Brandbook not found.');
+    return this.present(updated, account);
+  }
+
+  @Delete('brandbooks/:id')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Убрать брендбук из библиотеки',
+    description: 'Файлы остаются: сборки, уже сделанные по брендбуку, повторяются как были.',
+  })
+  @ApiErrors(403, 404)
+  async remove(@CurrentAccount() account: Account, @Param('id') id: string): Promise<void> {
+    const row = await this.find(id, account);
+    if (row.owner_id !== account.id && account.role !== 'admin')
+      throw new ForbiddenException('Only the owner or an administrator can delete a brandbook.');
+    await this.pool.query('UPDATE stored_files SET deleted_at = now() WHERE id = $1', [row.id]);
+  }
+
   @Get('brandbooks/:id/assets/:assetId')
   @ApiOperation({ summary: 'Скачать извлечённый ресурс брендбука' })
   async asset(
@@ -260,7 +319,7 @@ export class BrandbooksController implements OnApplicationShutdown {
       size: Number(row.size_bytes),
       sha256: row.sha256,
       profile: brandbookProfileSchema.parse(row.profile),
-      name: row.file_name,
+      name: row.display_name?.trim() || row.file_name,
       mine: row.owner_id === account.id,
       shared: row.shared,
       createdAt: new Date(row.created_at).toISOString(),
