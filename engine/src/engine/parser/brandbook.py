@@ -23,8 +23,9 @@ from .brandbook_archives import (
     rar_members,
     zip_members,
 )
+from .brandbook_inference import infer_rules
 
-PARSER_VERSION = "1.0.0"
+PARSER_VERSION = "1.1.0"
 MAX_NODES = 30000
 MAX_SECONDS = 90
 
@@ -471,6 +472,8 @@ class _Parser:
                 raise ValueError("Raster pixel limit exceeded")
             media = Image.MIME.get(image.format or "", "application/octet-stream")
             self.asset(source, data, source["path"], "image", media, width=width, height=height)
+            for colour, share in _dominant_colours(image):
+                self.token(source, "dominant colour", "color", colour, f"pixels:share={share:.3f}")
 
     def font(self, source, data):
         from fontTools.ttLib import TTCollection, TTFont
@@ -629,6 +632,42 @@ class _Parser:
             temporary.unlink(missing_ok=True)
 
 
+#: Saturated colours a picture shows: each must hold this share of its coloured pixels.
+_DOMINANT_SHARE = 0.15
+_DOMINANT_COUNT = 3
+
+
+def _dominant_colours(image: Image.Image) -> list[tuple[str, float]]:
+    """The few saturated colours a picture is drawn in, with their share of its coloured pixels.
+
+    Grey, white, black and transparent pixels do not count: they say nothing about a brand.
+    Colours are grouped in steps of 32 so that antialiasing does not split one paint into many.
+    """
+    import colorsys
+
+    small = image.convert("RGBA")
+    small.thumbnail((96, 96))
+    groups: dict[tuple[int, int, int], list[tuple[int, int, int]]] = {}
+    for red, green, blue, alpha in cast(Any, small.getdata()):
+        if alpha < 128:
+            continue
+        _, lightness, saturation = colorsys.rgb_to_hls(red / 255, green / 255, blue / 255)
+        if saturation < 0.35 or not 0.15 < lightness < 0.9:
+            continue
+        groups.setdefault((red // 32, green // 32, blue // 32), []).append((red, green, blue))
+    coloured = sum(len(pixels) for pixels in groups.values())
+    if coloured == 0:
+        return []
+    found = []
+    for pixels in sorted(groups.values(), key=len, reverse=True)[:_DOMINANT_COUNT]:
+        share = len(pixels) / coloured
+        if share < _DOMINANT_SHARE:
+            break
+        mean = [round(sum(channel) / len(pixels)) for channel in zip(*pixels, strict=True)]
+        found.append(("#{:02X}{:02X}{:02X}".format(*mean), share))
+    return found
+
+
 def parse_brandbook(path: Path, output_dir: Path) -> dict:
     """Parse one uploaded file and nested sources into the authoritative BrandbookProfile."""
     path, output_dir = Path(path), Path(output_dir)
@@ -641,6 +680,9 @@ def parse_brandbook(path: Path, output_dir: Path) -> dict:
     parser = _Parser(output_dir)
     data = path.read_bytes()
     parser.ingest(path.name, data)
+    if not any(token["authority"] == "explicit" for token in parser.tokens):
+        # Nothing declared: the palette its logos repeat and the font it ships stand in, marked.
+        parser.tokens.extend(infer_rules(parser.tokens, parser.assets, parser.sources))
     meaningful = bool(parser.tokens or parser.sections or parser.assets)
     warnings = [
         f"{source['path']}: {warning}"

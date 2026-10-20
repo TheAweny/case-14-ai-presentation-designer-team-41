@@ -16,7 +16,11 @@ through chat, generation, immutable recovery spec and native export. Absence pre
 existing PPTX path.
 
 Style precedence: explicit applicable user override (including opting for template priority),
-applicable declared brandbook rule, template rule, identified fallback. Observed PDF/SVG colours
+applicable declared brandbook rule, rule inferred from the brandbook when it declares none,
+template rule, identified fallback. An inferred rule is marked `inferred` with the files it came
+from: brand colours are saturated paints that recur in at least two vector logos (pictures break
+a tie), text is the darkest recurring neutral, headings take the main colour, and the font is
+the family the brandbook ships the most files of. Observed PDF/SVG colours
 and font metadata remain observations until their semantic role is established. Ambiguous or
 unsupported inputs have warnings, coverage and a partial status; no fabricated extraction.
 

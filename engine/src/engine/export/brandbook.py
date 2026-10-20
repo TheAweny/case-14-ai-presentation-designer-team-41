@@ -26,6 +26,8 @@ _COLORS = {
     "text-on-accent": "lt1",
 }
 _FONT_ROLES = {"title", "heading", "body", "text", "primary", "secondary", "all", "default"}
+#: Colour roles that paint the runs of titles rather than a theme slot.
+_HEADING_COLORS = {"heading", "title"}
 
 
 def _node(tag: str, **attributes: str) -> Any:
@@ -64,8 +66,23 @@ def _applicable(scope: str, name: str) -> bool:
 def _rules(binding: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     rules: list[dict[str, Any]] = []
     warnings: list[str] = []
-    for token in binding["profile"]["tokens"]:
-        if token["authority"] != "explicit":
+    tokens = binding["profile"]["tokens"]
+    # Declared rules decide; rules inferred from logos and font files stand in only without them.
+    authority = (
+        "explicit" if any(token["authority"] == "explicit" for token in tokens) else "inferred"
+    )
+    if authority == "inferred" and any(token["authority"] == "inferred" for token in tokens):
+        warnings.append(
+            "The brandbook declares no rules; colours and fonts inferred from its logos and "
+            "font files are applied."
+        )
+    declared = {
+        (token.get("role") or "").lower()
+        for token in tokens
+        if token["authority"] == authority and token["kind"] == "color"
+    }
+    for token in tokens:
+        if token["authority"] != authority:
             continue
         role = (token.get("role") or "").lower()
         kind, scope = token["kind"], token["scope"]
@@ -75,8 +92,17 @@ def _rules(binding: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
             warnings.append(f"Brand token {token.get('name', role)}: unsupported scope {scope}.")
             continue
         rule = {**token, "role": role}
-        if kind == "color":
-            role = _COLORS.get(role, role)
+        if kind == "color" and role in _HEADING_COLORS:
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(token["value"])):
+                warnings.append(f"Brand color {token['value']} is not an opaque RGB value.")
+                continue
+            rule.update(themeRole=None, value=str(token["value"])[1:].upper())
+        elif kind == "color":
+            # «primary» and «accent» name one slot only when the other is absent; with both,
+            # the accent is the second colour, so neither paints over the other.
+            role = (
+                "accent2" if role == "accent" and "primary" in declared else _COLORS.get(role, role)
+            )
             if role not in {"dk1", "dk2", "lt1", "lt2", "hlink", "folHlink"} and not re.fullmatch(
                 r"accent[1-6]", role
             ):
@@ -108,13 +134,19 @@ def _rules(binding: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
 
 def _apply(root: Any, name: str, rules: list[dict[str, Any]], old_colors: dict[str, str]) -> None:
     applicable = [rule for rule in rules if _applicable(rule["scope"], name)]
+    # A text colour paints every run; a heading colour must come after it to stay on titles.
+    applicable.sort(key=lambda rule: rule["kind"] == "color" and rule["themeRole"] is None)
     if applicable:
         for run in root.xpath(".//a:r | .//a:fld", namespaces=_NS):
             if run.find(f"{{{_A}}}rPr") is None:
                 run.insert(0, _node("rPr"))
     for rule in applicable:
         kind, role, value = rule["kind"], rule["role"], rule["value"]
-        if kind == "color":
+        if kind == "color" and rule["themeRole"] is None:
+            for props in root.xpath(".//a:rPr | .//a:defRPr | .//a:endParaRPr", namespaces=_NS):
+                if _role(props) == "title":
+                    _solid(props, value)
+        elif kind == "color":
             theme_role = rule["themeRole"]
             for color in root.xpath(f".//a:clrScheme/a:{theme_role}", namespaces=_NS):
                 color[:] = [_node("srgbClr", val=value)]
@@ -158,9 +190,16 @@ def _apply(root: Any, name: str, rules: list[dict[str, Any]], old_colors: dict[s
                             props.append(child)
                         child.set("typeface", str(value))
             if kind == "font-family":
-                family = "majorFont" if wanted == "title" else "minorFont"
-                for child in root.xpath(f".//a:{family}/a:latin", namespaces=_NS):
-                    child.set("typeface", str(value))
+                families = (
+                    ("majorFont", "minorFont")
+                    if universal
+                    else ("majorFont",)
+                    if wanted == "title"
+                    else ("minorFont",)
+                )
+                for family in families:
+                    for child in root.xpath(f".//a:{family}/a:latin", namespaces=_NS):
+                        child.set("typeface", str(value))
 
 
 def apply_brandbook(source: Path, target: Path, binding: dict[str, Any]) -> list[str]:

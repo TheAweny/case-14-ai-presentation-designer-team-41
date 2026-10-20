@@ -1,5 +1,6 @@
 """I verify declared rules in native files without changing slide geometry."""
 
+import re
 import zipfile
 from typing import Any
 
@@ -78,13 +79,89 @@ def test_template_priority_is_byte_identical(deck):
     assert source.read_bytes() == target.read_bytes()
 
 
-@pytest.mark.parametrize("authority", ["observed", "inferred"])
-def test_non_declared_rule_does_not_override(deck, authority):
+def runs(path):
+    slide = read_presentation(path).slides[0]
+    return [
+        shape.text_frame.paragraphs[0].runs[0]
+        for shape in (slide.shapes.title, slide.placeholders[1])
+    ]
+
+
+def _theme(path) -> str:
+    with zipfile.ZipFile(path) as archive:
+        name = next(n for n in archive.namelist() if n.startswith("ppt/theme/theme"))
+        return archive.read(name).decode()
+
+
+def test_a_heading_colour_paints_titles_only_even_after_a_text_colour(deck):
     source, target = deck
     apply_brandbook(
-        source, target, binding(token("font-family", "Brand", "body", authority=authority))
+        source,
+        target,
+        binding(token("color", "#402FFF", "heading"), token("color", "#1B1C21", "text")),
+    )
+    title, body = runs(target)
+    assert str(title.font.color.rgb) == "402FFF"
+    assert str(body.font.color.rgb) == "1B1C21"
+
+
+def test_primary_and_accent_both_declared_take_two_slots(deck):
+    source, target = deck
+    apply_brandbook(
+        source,
+        target,
+        binding(token("color", "#402FFF", "primary"), token("color", "#EC1D35", "accent")),
+    )
+    theme = _theme(target)
+    assert re.search(r"<a:accent1>\s*<a:srgbClr val=\"402FFF\"", theme)
+    assert re.search(r"<a:accent2>\s*<a:srgbClr val=\"EC1D35\"", theme)
+
+
+def test_an_accent_alone_is_the_first_accent(deck):
+    source, target = deck
+    apply_brandbook(source, target, binding(token("color", "#EC1D35", "accent")))
+    assert re.search(r"<a:accent1>\s*<a:srgbClr val=\"EC1D35\"", _theme(target))
+
+
+def test_a_font_for_all_sets_both_theme_fonts(deck):
+    source, target = deck
+    apply_brandbook(source, target, binding(token("font-family", "JetBrains Mono", "all")))
+    theme = _theme(target)
+    assert re.findall(r'<a:(major|minor)Font>\s*<a:latin typeface="([^"]*)"', theme) == [
+        ("major", "JetBrains Mono"),
+        ("minor", "JetBrains Mono"),
+    ]
+
+
+def test_an_observed_value_never_overrides(deck):
+    source, target = deck
+    apply_brandbook(
+        source, target, binding(token("font-family", "Brand", "body", authority="observed"))
     )
     assert source.read_bytes() == target.read_bytes()
+
+
+def test_inferred_rules_apply_when_nothing_is_declared(deck):
+    source, target = deck
+    warnings = apply_brandbook(
+        source, target, binding(token("font-family", "Brand", "all", authority="inferred"))
+    )
+    assert source.read_bytes() != target.read_bytes()
+    assert {run.font.name for run in runs(target)} == {"Brand"}
+    assert any("inferred" in warning for warning in warnings)
+
+
+def test_inferred_rules_yield_to_declared_ones(deck):
+    source, target = deck
+    apply_brandbook(
+        source,
+        target,
+        binding(
+            token("font-family", "Declared", "all"),
+            token("font-family", "Guessed", "all", authority="inferred"),
+        ),
+    )
+    assert {run.font.name for run in runs(target)} == {"Declared"}
 
 
 def test_unknown_roles_and_scopes_are_reported_without_guessing(deck):

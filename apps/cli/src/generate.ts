@@ -90,17 +90,20 @@ async function brandbookOf(
   });
   await writeFile(join(runDir, 'brandbook-profile.json'), JSON.stringify(profile, null, 2));
   const declared = profile.tokens.filter((token) => token.authority === 'explicit').length;
-  const observed = profile.tokens.length - declared;
+  const inferred = profile.tokens.filter((token) => token.authority === 'inferred');
+  const observed = profile.tokens.length - declared - inferred.length;
   const priority = config.brandbookPriority ?? 'brandbook';
   log(
     `брендбук ${basename(path)}: файлов ${profile.coverage.filesTotal}, объявленных правил ` +
       `${declared}, замеченных значений ${observed}, приоритет — ${priority === 'brandbook' ? 'брендбук' : 'шаблон'}`,
   );
-  if (declared === 0) {
+  if (declared === 0 && inferred.length > 0) {
     log(
-      '  в брендбуке нет объявленных правил стиля (токенов, гайдлайна с цветами и шрифтами): ' +
-        'шаблон не изменится',
+      '  правил брендбук не объявляет; из логотипов, картинок и шрифтов выведено: ' +
+        inferred.map((token) => `${token.role} ${String(token.value)}`).join(', '),
     );
+  } else if (declared === 0) {
+    log('  правил брендбук не объявляет, а вывести их не из чего: шаблон не изменится');
   }
   for (const warning of profile.warnings) log(`  ${warning}`);
   return brandbookBindingSchema.parse({ schemaVersion: 1, profile, priority });
