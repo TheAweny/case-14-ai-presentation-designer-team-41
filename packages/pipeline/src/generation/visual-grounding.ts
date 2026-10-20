@@ -81,6 +81,114 @@ export function textFacts(brief: string): Fact[] {
   return facts;
 }
 
+interface SeriesLine {
+  metric: string;
+  /** The column the rows were grouped by, from the section heading; empty when not quoted. */
+  grouping: string;
+  facts: Fact[];
+}
+
+/**
+ * The ready series of a brief's data section, one per line under its heading:
+ * «Готовые ряды для графиков, точные значения по «result»:» then
+ * «- cloud_cover, среднее: 0 — 43,33, 1 — 30,83.». The pipeline wrote these lines from the
+ * table itself (decimal comma, no digit grouping), so each value is a fact of its metric and
+ * category. Every entry of a line must parse, or the line proves nothing.
+ */
+function seriesLines(text: string): SeriesLine[] {
+  const entry = new RegExp(`^(.+?) — (${NUMBER})$`, 'u');
+  const result: SeriesLine[] = [];
+  let grouping = '';
+  for (const line of text.split(/\r?\n/u)) {
+    const heading = /точные значения по «([^»]+)»:\s*$/u.exec(line);
+    if (heading) {
+      grouping = heading[1] ?? '';
+      continue;
+    }
+    const match = /^\s*(?:-\s+)?([^:]+):\s+(.+?)\.?\s*$/u.exec(line);
+    if (!match) continue;
+    const metric = (match[1] ?? '').trim();
+    const parsed = (match[2] ?? '').split(/, (?=[^,]* — )/u).map((part) => entry.exec(part.trim()));
+    if (!metric || parsed.length < 2 || parsed.some((part) => !part)) continue;
+    result.push({
+      metric,
+      grouping,
+      facts: parsed.map((part) => ({
+        metric,
+        category: (part?.[1] ?? '').trim(),
+        unit: '',
+        state: 'present' as const,
+        value: number(part?.[2] ?? ''),
+        literal: part?.[2] ?? '',
+      })),
+    });
+  }
+  return result;
+}
+
+/** The least difference, as a share of the largest bar, a planned chart has to show. */
+const SPREAD = 0.05;
+
+/** Bars within a few percent of each other show nothing but a cropped axis. */
+function spread(line: SeriesLine): boolean {
+  const values = line.facts.map((fact) => fact.value ?? 0);
+  const least = Math.min(...values);
+  const most = Math.max(...values);
+  return most - least >= SPREAD * Math.max(Math.abs(least), Math.abs(most));
+}
+
+/** Whether a purpose quotes a ready series line by its name («cloud_cover, среднее: …»). */
+export const quotesSeries = (purpose: string, brief: string): boolean =>
+  seriesLines(brief).some((line) => norm(purpose).includes(`${norm(line.metric)}:`));
+
+export const seriesFacts = (text: string): Fact[] =>
+  seriesLines(text).flatMap((line) => line.facts);
+
+/**
+ * The chart a data slide was planned around, built from the ready series its purpose quotes: a
+ * line whose column the purpose names and two of whose values it repeats, or every value of which
+ * it repeats («облачность 43,33 против 30,83»). The figures come from the brief's line, never from
+ * the purpose, so a misquoted value cannot reach the chart.
+ */
+export function plannedSeriesChart(
+  purpose: string,
+  brief: string,
+  slotId: string,
+): SlotVisual | null {
+  const target = norm(purpose);
+  const says = (literal: string) =>
+    new RegExp(`(?<![\\d.,])${literal.replace(/[.+]/gu, '\\$&')}(?![\\d]|[.,]\\d)`, 'u').test(
+      target,
+    );
+  // The most specific quote wins: a named column first, then the longer figures it repeats
+  // («43,33» says more than «6»).
+  let best: { line: SeriesLine; score: number } | null = null;
+  for (const line of seriesLines(brief)) {
+    if (line.facts.length > 8 || !spread(line)) continue;
+    const column = norm(line.metric.split(',')[0] ?? '');
+    const said = line.facts.filter((fact) => says(norm(fact.literal ?? '')));
+    const named = Boolean(column) && target.includes(column);
+    if (!((named && said.length >= 2) || said.length === line.facts.length)) continue;
+    const score =
+      (named ? 1000 : 0) + said.reduce((sum, fact) => sum + (fact.literal ?? '').length, 0);
+    if (!best || score > best.score) best = { line, score };
+  }
+  if (!best) return null;
+  const values = best.line.facts.map((fact) => fact.value ?? 0);
+  return verifyVisual(
+    {
+      kind: 'chart',
+      slotId,
+      chartType: 'column',
+      categories: best.line.facts.map((fact) => fact.category),
+      series: [{ name: best.line.metric, values }],
+      xTitle: best.line.grouping,
+      yTitle: '',
+    },
+    brief,
+  );
+}
+
 function matches(fact: Fact, metric: string, category: string, unit: string, value: MeasuredValue) {
   if (!equal(fact.metric, metric) || !equal(fact.category, category) || !sameUnit(fact.unit, unit))
     return false;
@@ -133,7 +241,11 @@ function sourcedFacts(
         !sourceBriefTexts(brief).some((text) => text.includes(source.quote))
       )
         return null;
-      facts.push(...textFacts(source.quote), ...tableFacts(source.quote));
+      facts.push(
+        ...textFacts(source.quote),
+        ...tableFacts(source.quote),
+        ...seriesFacts(source.quote),
+      );
     } else {
       const fact = prepared.find((entry) => entry.itemId === source.itemId);
       if (!fact || source.quote !== fact.quote) return null;
@@ -427,7 +539,11 @@ export function verifyVisual(
       : null;
   if (visual.kind === 'chart') {
     const facts = [
-      ...sourceBriefTexts(brief).flatMap((text) => [...textFacts(text), ...tableFacts(text)]),
+      ...sourceBriefTexts(brief).flatMap((text) => [
+        ...textFacts(text),
+        ...tableFacts(text),
+        ...seriesFacts(text),
+      ]),
       ...prepared,
     ];
     return visual.categories.length >= 2 &&

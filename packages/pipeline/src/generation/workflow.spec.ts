@@ -552,7 +552,8 @@ describe('template generation workflow', () => {
           title: 'Auto',
           slides: Array.from({ length: plannerCalls === 1 ? 2 : 10 }, (_, index) => ({
             patternId: composition.patternId,
-            purpose: `Point ${index + 1}`,
+            // Letters: a number in a purpose that the brief lacks is sent back to the planner.
+            purpose: `Point ${String.fromCharCode(65 + index)}`,
             imageQuery: '',
           })),
         });
@@ -569,6 +570,66 @@ describe('template generation workflow', () => {
     ).start({ inputData: { brief: 'Auto', slideCount: null, profile } });
     expect(result.status).toBe('success');
     expect(plannerCalls).toBe(2);
+  });
+  it('asks the planner for chart slides when the brief has ready series and the plan has none', async () => {
+    const title = composition.slots[0];
+    if (!title) throw new Error('fixture');
+    // A second composition with a tall body box: room for a chart.
+    const chart = {
+      ...composition,
+      patternId: 'chart-slide',
+      slots: [title, { ...title, slotId: '3', role: 'body' as const, maxChars: 750, maxLines: 18 }],
+    };
+    const brief = [
+      'Наблюдения за три ночи.',
+      'Готовые ряды для графиков, точные значения по «result»:',
+      '- cloud_cover, среднее: 0 — 43,33, 1 — 30,83.',
+    ].join('\n');
+    const corrections: unknown[] = [];
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(
+        agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+      ) {
+        if (agent !== 'planner')
+          return schema.parse({ patternId: 'x', textsBySlot: {}, speakerNotes: '' });
+        const asked = (input as { corrections?: { chartSlides?: number } }).corrections;
+        corrections.push(asked);
+        return schema.parse({
+          title: 'Ночи',
+          slides: Array.from({ length: 5 }, (_, index) => ({
+            patternId:
+              asked?.chartSlides && index > 0 && index < 3 ? 'chart-slide' : composition.patternId,
+            purpose:
+              asked?.chartSlides && index > 0 && index < 3
+                ? `Облачность ${'АБ'[index - 1]} — cloud_cover, среднее: 0 — 43,33, 1 — 30,83`
+                : `Пункт ${'АБВГД'[index]}`,
+            imageQuery: '',
+          })),
+        });
+      },
+    };
+    const workflow = createGenerationWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    await (
+      await workflow.createRun()
+    ).start({
+      inputData: {
+        brief,
+        slideCount: 5,
+        profile: { ...profile, compositions: [composition, chart] },
+      },
+    });
+    expect(corrections[0]).toBeUndefined();
+    expect(corrections[1]).toMatchObject({ chartSlides: 2, chartPatternIds: ['chart-slide'] });
+    expect(corrections).toHaveLength(2);
   });
   it('detects over-capacity and missing slot bindings', () => {
     expect(
@@ -870,6 +931,110 @@ describe('slot fit and reading order', () => {
       ],
     });
     expect(result.status).toBe('success');
+  });
+
+  it('takes a rewrite that fits over overflowing copy, even one that drops a claim figure', async () => {
+    const base = composition.slots[0];
+    if (!base) throw new Error('Fixture slot missing');
+    const body = {
+      ...base,
+      slotId: 'b',
+      role: 'body' as const,
+      sample: 'Текст',
+      maxChars: 40,
+      capacity: { safeChars: 40, basis: 'geometry' as const },
+    };
+    const pattern = { ...composition, slots: [{ ...body, maxLines: 2 }] };
+    const fits = 'Облачность решает исход ночи';
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(_a: string, _i: string, _input: unknown, schema: z.ZodType<T>) {
+        return schema.parse({ rewrites: { b: [fits, 'z'.repeat(60), 'w'.repeat(70)] } });
+      },
+    };
+    const warnings: string[] = [];
+    const workflow = createRepairWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+      onWarning: async (message) => {
+        warnings.push(message);
+      },
+    });
+    const run = await workflow.createRun();
+    const previous = 'При неудачах облачность 43,33, при успехах 30,83: облачность решает исход';
+    const result = await run.start({
+      inputData: [
+        {
+          index: 0,
+          brief: '',
+          requiredClaims: [
+            {
+              id: 'c',
+              text: 'Облачность 43,33 при неудачах',
+              source: { sourceId: 'brief', quote: '43,33' },
+            },
+          ],
+          composition: pattern,
+          previous: {
+            patternId: pattern.patternId,
+            texts: [{ slotId: 'b', text: previous }],
+            speakerNotes: '',
+          },
+          corrections: [{ slotId: 'b', message: 'Shorten copy to fit.' }],
+        },
+      ],
+    });
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(result.result[0]?.slide.texts[0]?.text).toBe(fits);
+    expect(warnings.join(' ')).toContain('shortened to fit');
+  });
+
+  it('keeps the other repairs when one slide is out of rewrites', async () => {
+    const base = composition.slots[0];
+    if (!base) throw new Error('Fixture slot missing');
+    const body = {
+      ...base,
+      slotId: 'b',
+      role: 'body' as const,
+      sample: 'Текст',
+      maxChars: 40,
+      capacity: { safeChars: 40, basis: 'geometry' as const },
+    };
+    const pattern = { ...composition, slots: [{ ...body, maxLines: 2 }] };
+    const provider: TextProvider = {
+      model: 'fake',
+      async generate<T>(_a: string, _i: string, input: unknown, schema: z.ZodType<T>) {
+        if ((input as { index: number }).index === 0)
+          throw new Error('Semantic attempt limit reached for rewriter slide 0.');
+        return schema.parse({ rewrites: { b: ['Облачность решает исход ночи', 'x', 'y'] } });
+      },
+    };
+    const workflow = createRepairWorkflow({
+      provider,
+      plannerInstructions: '',
+      writerInstructions: '',
+      signal: AbortSignal.timeout(10000),
+    });
+    const task = (index: number) => ({
+      index,
+      brief: '',
+      requiredClaims: [],
+      composition: pattern,
+      previous: {
+        patternId: pattern.patternId,
+        texts: [{ slotId: 'b', text: 'Слишком длинный текст, который не помещается в блок' }],
+        speakerNotes: '',
+      },
+      corrections: [{ slotId: 'b', message: 'Shorten copy to fit.' }],
+    });
+    const result = await (await workflow.createRun()).start({ inputData: [task(0), task(1)] });
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    const texts = result.result.map((entry) => entry.slide.texts[0]?.text);
+    expect(texts).toEqual([task(0).previous.texts[0]?.text, 'Облачность решает исход ночи']);
   });
 
   it('puts slots that share a vertical band on one row', () => {

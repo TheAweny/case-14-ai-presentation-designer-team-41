@@ -779,11 +779,13 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
         # File-backed checks must inspect the actual exported media, not the requested image
         # or its full-frame average. Internal orchestration data is not a wire contract.
         "pptxPath": str(output),
+        # An empty slot's shape is taken off the slide at export, so only filled ones remain.
         "editableTextShapeIds": [
             [
                 binding.slotId
                 for binding in slide.texts
-                if slide.visual is None or binding.slotId != slide.visual.slotId
+                if binding.text.strip()
+                and (slide.visual is None or binding.slotId != slide.visual.slotId)
             ]
             for slide in request.slides
         ],
