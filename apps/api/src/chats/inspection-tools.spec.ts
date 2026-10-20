@@ -537,7 +537,11 @@ describe('saved editor revision inspection', () => {
     const saved = await savedDeck();
     await approvedRequest(saved.directory);
     const first = snapshot('Fact one').slides[0];
-    const second = { ...snapshot('Different slide').slides[0], slideId: 'imported-2', index: 1 };
+    const second = slideIrSchema.parse({
+      ...snapshot('Different slide').slides[0],
+      slideId: 'imported-2',
+      index: 1,
+    });
     if (!first || !second) throw new Error('Missing snapshot fixture slides.');
     const head = {
       ...snapshot('Fact one'),
