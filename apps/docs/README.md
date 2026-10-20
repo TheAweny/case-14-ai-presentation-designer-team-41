@@ -1,6 +1,6 @@
 # Портал документации
 
-Статический сайт на Next.js и Fumadocs. Читается без API продукта, PostgreSQL, движка и моделей. Правила для авторов — в [AGENTS.md](./AGENTS.md), карта переноса — в [MIGRATION.md](./MIGRATION.md).
+Статический сайт на Next.js и Fumadocs. Читается без API продукта, PostgreSQL, движка и моделей. Правила для следующих правок — в [AGENTS.md](./AGENTS.md), карта переноса — в [MIGRATION.md](./MIGRATION.md).
 
 ## Локально
 
