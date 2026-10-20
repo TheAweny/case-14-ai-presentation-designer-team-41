@@ -126,6 +126,9 @@ export const modelFailureSchema = z.object({
   modelId: z.string().optional(),
   connectionId: z.string().optional(),
   retryAt: z.number().int().optional(),
+  stage: z.literal('template-index').optional(),
+  role: z.literal('planner').optional(),
+  httpStatus: z.number().int().min(100).max(599).optional(),
 });
 export type ModelFailure = z.infer<typeof modelFailureSchema>;
 

@@ -13,11 +13,14 @@ import type { TextProvider } from './provider.js';
 import { distinctCompositions, plannerComposition, slotBriefs, writerSlots } from './workflow.js';
 import { declaredQrSlots } from './qr-assets.js';
 import { dependencyKey } from './checkpoints.js';
+import { ModelRequestError } from '../chat/model-failure.js';
 
 /** Compositions per model call: small enough that one answer never runs out of tokens. */
 const BATCH = 12;
 /** Calls per composition at most: the first, then asking again for what the answers left out. */
 const ROUNDS = 3;
+/** First negotiate one batch; further batches share at most three workers. */
+const INDEX_WORKERS = 3;
 
 type Pattern = GenerationProfile['compositions'][number];
 
@@ -176,6 +179,9 @@ export async function indexTemplate(options: {
 }): Promise<CompositionNote[]> {
   const catalog = distinctCompositions(options.profile.compositions);
   const notes = new Map<string, AnswerNote>();
+  const stop = new AbortController();
+  const signal = AbortSignal.any([options.signal, stop.signal]);
+  let lastError: unknown;
   const report = () => options.onProgress?.({ described: notes.size, total: catalog.length });
   report();
   const ask = async (batch: Pattern[]) => {
@@ -218,31 +224,58 @@ export async function indexTemplate(options: {
         })),
       },
       schema,
-      options.signal,
+      signal,
     );
     return answer.notes.filter((note) => note !== null);
   };
   let missing = catalog;
+  const describe = async (batch: Pattern[]) => {
+    signal.throwIfAborted();
+    try {
+      const answers = await ask(batch);
+      signal.throwIfAborted();
+      for (const answer of answers)
+        if (!notes.has(answer.patternId)) notes.set(answer.patternId, answer);
+      report();
+    } catch (error) {
+      signal.throwIfAborted();
+      // The provider has already negotiated parameters and retried temporary HTTP failures.
+      // An outer indexing round must not multiply those failures across the whole template.
+      if (
+        error instanceof ModelRequestError ||
+        error instanceof TypeError ||
+        (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))
+      ) {
+        stop.abort(error);
+        throw error;
+      }
+      lastError = error;
+    }
+  };
   for (let round = 0; round < ROUNDS && missing.length > 0; round++) {
     const batches: Pattern[][] = [];
     for (let start = 0; start < missing.length; start += BATCH)
       batches.push(missing.slice(start, start + BATCH));
-    // A batch whose answer never parsed is asked again in the next round, not fatal.
+    // Parameter negotiation on one batch precedes fan-out. Parse failures may be revisited;
+    // connection/model refusals stop the preparation and cancel queued/in-flight work.
+    const first = batches.shift();
+    if (first) await describe(first);
+    let cursor = 0;
     await Promise.all(
-      batches.map((batch) =>
-        ask(batch)
-          .catch(() => [])
-          .then((answers) => {
-            for (const answer of answers)
-              if (!notes.has(answer.patternId)) notes.set(answer.patternId, answer);
-            report();
-          }),
-      ),
+      Array.from({ length: Math.min(INDEX_WORKERS, batches.length) }, async () => {
+        for (;;) {
+          signal.throwIfAborted();
+          const batch = batches[cursor++];
+          if (!batch) return;
+          await describe(batch);
+        }
+      }),
     );
-    options.signal.throwIfAborted();
+    signal.throwIfAborted();
     missing = catalog.filter((pattern) => !notes.has(pattern.patternId));
   }
-  if (notes.size === 0) throw new Error('The template indexer described no composition.');
+  if (notes.size === 0)
+    throw lastError ?? new Error('The template indexer described no composition.');
   return settleNotes(catalog, notes);
 }
 

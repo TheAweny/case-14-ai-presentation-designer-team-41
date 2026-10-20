@@ -4,11 +4,20 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generationRequestSchema, type ChatMessage } from '@lct/contracts';
+import {
+  generationRequestSchema,
+  slideIrSchema,
+  type EditorSnapshot,
+  type ChatMessage,
+} from '@lct/contracts';
 import type { ToolContext } from '@lct/pipeline';
 import type { Account } from '../accounts/account-rules.js';
 import { canonicalPlanHash } from './deck-inspection.js';
-import { inspectionTools, type InspectionGeneration } from './inspection-tools.js';
+import {
+  inspectionTools,
+  type InspectionGeneration,
+  type InspectionDependency,
+} from './inspection-tools.js';
 
 const DECK = 'run-00000000-0000-4000-8000-0000000000b1';
 const TEMPLATE = '00000000-0000-4000-8000-000000000011';
@@ -125,7 +134,7 @@ async function savedDeck() {
   await mkdir(join(directory, 'previews'), { recursive: true });
   const slide = {
     patternId: 'layout',
-    texts: [{ slotId: 'body', text: 'Fact one is on the slide' }],
+    texts: [{ slotId: 'body', text: 'Fact one' }],
     speakerNotes: '',
   };
   const plan = [{ index: 0, slide }];
@@ -166,17 +175,27 @@ async function savedDeck() {
   return { root, directory, plan };
 }
 
-function tools(gen: InspectionGeneration, chat: ChatMessage[]) {
-  return inspectionTools(gen, {
-    account: { id: 'owner', role: 'user' } as Account,
-    chatId: 'chat',
-    projectId: null,
-    mode: 'chat',
-    model: null,
-    messages: () => chat,
-    updatePart: () => undefined,
-    addDecks: () => undefined,
-  });
+function tools(
+  gen: InspectionGeneration,
+  chat: ChatMessage[],
+  inspection: InspectionDependency = {
+    loadSnapshot: async () => ({ schemaVersion: 1, snapshot: null }),
+  },
+) {
+  return inspectionTools(
+    gen,
+    {
+      account: { id: 'owner', role: 'user' } as Account,
+      chatId: 'chat',
+      projectId: null,
+      mode: 'chat',
+      model: null,
+      messages: () => chat,
+      updatePart: () => undefined,
+      addDecks: () => undefined,
+    },
+    inspection,
+  );
 }
 
 describe('inspection tools', () => {
@@ -438,5 +457,388 @@ describe('inspection tools', () => {
     expect(gen.library.visible).not.toHaveBeenCalled();
     expect(gen.engine.checkCompositions).not.toHaveBeenCalled();
     expect(gen.start).not.toHaveBeenCalled();
+  });
+});
+
+function snapshot(text: string, revision = 1): EditorSnapshot {
+  const slide = slideIrSchema.parse({
+    schemaVersion: 1,
+    slideId: 'imported-1',
+    variant: 'balanced',
+    index: 0,
+    patternId: 'unfamiliar-layout',
+    slideCx: 12192000,
+    slideCy: 6858000,
+    notes: 'Fact one only in notes does not count',
+    elements: [
+      {
+        kind: 'text',
+        elementId: 'body',
+        role: 'body',
+        box: { x: 1000000, y: 1000000, cx: 5000000, cy: 1000000 },
+        sourceShapeId: null,
+        paragraphs: [
+          {
+            level: 0,
+            lineSpacing: null,
+            runs: [
+              {
+                text,
+                font: '',
+                sizePt: null,
+                bold: null,
+                italic: null,
+                color: '',
+              },
+            ],
+          },
+        ],
+        overflow: { lines: 99, emu: 1000000 },
+      },
+    ],
+  });
+  return {
+    schemaVersion: 1,
+    deckId: DECK,
+    revision,
+    base: 'original-base',
+    savedAt: '2026-10-20T10:00:00.000Z',
+    contentSha256: canonicalPlanHash([slide]),
+    slides: [slide],
+    media: [],
+  };
+}
+
+async function approvedRequest(directory: string) {
+  await writeFile(
+    join(directory, 'request.json'),
+    JSON.stringify(
+      generationRequestSchema.parse({
+        templateId: TEMPLATE,
+        brief: 'Approved brief for inspection.',
+        outlineSource: 'user',
+        outline: {
+          title: 'Story',
+          audience: '',
+          goal: '',
+          slides: Array.from({ length: 10 }, () => ({
+            title: 'Fact one',
+            points: ['Fact one'],
+            kind: 'other',
+          })),
+        },
+      }),
+    ),
+  );
+}
+
+describe('saved editor revision inspection', () => {
+  it('selects a snapshot slide by its stored index after an editor reorder', async () => {
+    const saved = await savedDeck();
+    await approvedRequest(saved.directory);
+    const first = snapshot('Fact one').slides[0];
+    const second = slideIrSchema.parse({
+      ...snapshot('Different slide').slides[0],
+      slideId: 'imported-2',
+      index: 1,
+    });
+    if (!first || !second) throw new Error('Missing snapshot fixture slides.');
+    const head = {
+      ...snapshot('Fact one'),
+      slides: [second, first],
+      contentSha256: canonicalPlanHash([second, first]),
+    };
+    const coverage = tools(generation(), messages(), {
+      loadSnapshot: async () => ({ schemaVersion: 1 as const, snapshot: head }),
+    }).find((tool) => tool.name === 'check_content_coverage');
+    expect((await coverage?.run({ deckId: DECK, slideIndex: 1 }, context()))?.output).toMatchObject(
+      {
+        status: 'covered',
+        source: 'server-snapshot',
+      },
+    );
+  });
+
+  it('reads saved text changes for coverage and audits the current IR without stale overflow', async () => {
+    const saved = await savedDeck();
+    await approvedRequest(saved.directory);
+    let head = snapshot('Fact one');
+    const loadSnapshot = vi.fn(async (_deckId: string, account: Account) => {
+      expect(account.id).toBe('owner');
+      return { schemaVersion: 1 as const, snapshot: head };
+    });
+    const gen = generation();
+    const ready = tools(gen, messages(), { loadSnapshot });
+    const coverage = ready.find((tool) => tool.name === 'check_content_coverage');
+    const fit = ready.find((tool) => tool.name === 'check_slide_fit');
+    const input = { deckId: DECK, slideIndex: 1 };
+    const before = await coverage?.run(input, context());
+    expect(before?.output).toMatchObject({
+      status: 'covered',
+      source: 'server-snapshot',
+      contentRevision: 1,
+    });
+    const clean = await fit?.run(input, context());
+    expect(clean?.output).toMatchObject({ textFit: 'unknown', contentRevision: 1 });
+    expect(
+      (clean?.output as { findings: { checkId: string }[] }).findings.some(
+        (f) => f.checkId === 'text-overflow',
+      ),
+    ).toBe(false);
+    head = snapshot('Different current saved text', 2);
+    const after = await coverage?.run(input, context());
+    expect(after?.output).toMatchObject({
+      status: 'requires-review',
+      coveredCount: 0,
+      contentRevision: 2,
+      contentHash: head.contentSha256,
+    });
+    expect((after?.output as { cacheKey: string }).cacheKey).not.toBe(
+      (before?.output as { cacheKey: string }).cacheKey,
+    );
+    // Blank current copy changes audit findings, even though the original plan is unchanged.
+    head = snapshot(' ', 3);
+    const editedFit = await fit?.run(input, context());
+    expect(editedFit?.output).toMatchObject({
+      textFit: 'unknown',
+      contentRevision: 3,
+      findings: expect.arrayContaining([expect.objectContaining({ checkId: 'placeholder-text' })]),
+    });
+    expect(gen.engine.checkCompositions).not.toHaveBeenCalled();
+    expect(gen.start).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale expected revision/hash and a revision changed while checking', async () => {
+    await savedDeck();
+    const head = snapshot('Saved', 2);
+    const loadSnapshot = vi.fn(async () => ({ schemaVersion: 1 as const, snapshot: head }));
+    const gen = generation();
+    for (const name of ['preview_slide', 'check_slide_fit', 'check_content_coverage']) {
+      const tool = tools(gen, messages(), { loadSnapshot }).find((tool) => tool.name === name);
+      await expect(
+        tool?.run({ deckId: DECK, slideIndex: 1, expectedRevision: 1 }, context()),
+      ).rejects.toMatchObject({ code: 'stale_revision' });
+      await expect(
+        tool?.run({ deckId: DECK, slideIndex: 1, expectedContentHash: '0'.repeat(64) }, context()),
+      ).rejects.toMatchObject({ code: 'stale_revision' });
+      const raced = vi
+        .fn()
+        .mockResolvedValueOnce({ schemaVersion: 1, snapshot: head })
+        .mockResolvedValue({ schemaVersion: 1, snapshot: snapshot('New head', 3) });
+      const racingTool = tools(gen, messages(), { loadSnapshot: raced }).find(
+        (tool) => tool.name === name,
+      );
+      await expect(
+        racingTool?.run({ deckId: DECK, slideIndex: 1 }, context()),
+      ).rejects.toMatchObject({ code: 'stale_revision' });
+    }
+    expect(gen.engine.checkCompositions).not.toHaveBeenCalled();
+  });
+
+  it('does not access snapshot storage for a foreign account, and does not swallow storage denial', async () => {
+    const loadSnapshot = vi.fn(async () => {
+      throw new Error('snapshot forbidden');
+    });
+    for (const name of ['preview_slide', 'check_slide_fit', 'check_content_coverage']) {
+      const gen = generation({ visible: () => false });
+      const tool = tools(gen, messages(), { loadSnapshot }).find((tool) => tool.name === name);
+      await expect(tool?.run({ deckId: DECK, slideIndex: 1 }, context())).rejects.toThrow(/chat/);
+    }
+    expect(loadSnapshot).not.toHaveBeenCalled();
+    await savedDeck();
+    const tool = tools(generation(), messages(), { loadSnapshot }).find(
+      (tool) => tool.name === 'check_content_coverage',
+    );
+    await expect(tool?.run({ deckId: DECK, slideIndex: 1 }, context())).rejects.toThrow(
+      'snapshot forbidden',
+    );
+  });
+
+  it('uses the original only when snapshot is absent or explicitly requested', async () => {
+    await savedDeck();
+    const gen = generation();
+    const absent = vi.fn(async () => ({ schemaVersion: 1 as const, snapshot: null }));
+    const tool = tools(gen, messages(), { loadSnapshot: absent }).find(
+      (tool) => tool.name === 'check_slide_fit',
+    );
+    expect(
+      (await tool?.run({ deckId: DECK, slideIndex: 1, expectedRevision: 0 }, context()))?.output,
+    ).toMatchObject({
+      source: 'original',
+      sourceReason: 'no-saved-snapshot',
+      contentRevision: null,
+    });
+    expect(absent).toHaveBeenCalledTimes(2);
+    const present = vi.fn(async () => ({ schemaVersion: 1 as const, snapshot: snapshot('Saved') }));
+    const original = tools(gen, messages(), { loadSnapshot: present }).find(
+      (tool) => tool.name === 'check_slide_fit',
+    );
+    expect(
+      (await original?.run({ deckId: DECK, slideIndex: 1, source: 'original' }, context()))?.output,
+    ).toMatchObject({ source: 'original', sourceReason: 'explicit-original' });
+    expect(present).not.toHaveBeenCalled();
+    const unwired = inspectionTools(gen, {
+      account: { id: 'owner' } as Account,
+      messages: () => messages(),
+      chatId: 'chat',
+      projectId: null,
+      mode: 'chat',
+      model: null,
+      updatePart: () => undefined,
+      addDecks: () => undefined,
+    });
+    await expect(
+      unwired
+        .find((tool) => tool.name === 'check_slide_fit')
+        ?.run({ deckId: DECK, slideIndex: 1 }, context()),
+    ).rejects.toMatchObject({ code: 'snapshot_unavailable' });
+  });
+
+  it('rejects a snapshot appearing while the original is checked', async () => {
+    await savedDeck();
+    const loadSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce({ schemaVersion: 1, snapshot: null })
+      .mockResolvedValue({ schemaVersion: 1, snapshot: snapshot('Saved') });
+    const fit = tools(generation(), messages(), { loadSnapshot }).find(
+      (tool) => tool.name === 'check_slide_fit',
+    );
+    await expect(fit?.run({ deckId: DECK, slideIndex: 1 }, context())).rejects.toMatchObject({
+      code: 'stale_revision',
+    });
+  });
+
+  it('returns not-rendered instead of the original PNG, or the exact exported revision preview', async () => {
+    const saved = await savedDeck();
+    const head = snapshot('Saved', 3);
+    const dependency = {
+      loadSnapshot: async () => ({ schemaVersion: 1 as const, snapshot: head }),
+    };
+    const preview = tools(generation(), messages(), dependency).find(
+      (tool) => tool.name === 'preview_slide',
+    );
+    const input = { deckId: DECK, slideIndex: 1 };
+    const missing = await preview?.run(input, context());
+    expect(missing?.output).toMatchObject({
+      status: 'not-rendered',
+      source: 'server-snapshot',
+      contentRevision: 3,
+      visionAssessment: false,
+    });
+    expect(missing?.output).not.toHaveProperty('url');
+    const exportId = '00000000-0000-4000-8000-0000000000aa';
+    const directory = join(saved.directory, 'exports', exportId);
+    await mkdir(join(directory, 'previews'), { recursive: true });
+    // A subset export may give this slide a different PNG ordinal.
+    await writeFile(
+      join(directory, 'previews/slide-02.png'),
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+    const manifest = {
+      revision: head.revision,
+      contentSha256: head.contentSha256,
+      slideIds: ['other-slide', head.slides[0]?.slideId],
+    };
+    await writeFile(join(directory, 'manifest.json'), JSON.stringify({ ...manifest, revision: 2 }));
+    expect((await preview?.run(input, context()))?.output).toMatchObject({
+      status: 'not-rendered',
+    });
+    await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest));
+    expect((await preview?.run(input, context()))?.output).toMatchObject({
+      status: 'rendered',
+      contentRevision: 3,
+      fileName: 'slide-02.png',
+      url: `/api/backend/editor/decks/${DECK}/exports/${exportId}/slide-02.png`,
+    });
+    await writeFile(
+      join(directory, 'manifest.json'),
+      JSON.stringify({ ...manifest, contentSha256: '0'.repeat(64) }),
+    );
+    expect((await preview?.run(input, context()))?.output).toMatchObject({
+      status: 'not-rendered',
+    });
+  });
+});
+
+describe('snapshot evidence safeguards', () => {
+  it('rejects malformed, mismatched or ambiguous snapshot provenance without falling back', async () => {
+    await savedDeck();
+    const valid = snapshot('Saved');
+    const invalid = [
+      { ...valid, deckId: 'run-00000000-0000-4000-8000-0000000000ff' },
+      { ...valid, contentSha256: '0'.repeat(64) },
+      { ...valid, slides: [...valid.slides, ...valid.slides] },
+    ];
+    for (const head of invalid) {
+      const tool = tools(generation(), messages(), {
+        loadSnapshot: async () => ({ schemaVersion: 1, snapshot: head }),
+      }).find((tool) => tool.name === 'check_content_coverage');
+      await expect(tool?.run({ deckId: DECK, slideIndex: 1 }, context())).rejects.toMatchObject({
+        code: 'invalid_snapshot',
+      });
+    }
+  });
+
+  it('uses stable identity after reorder and returns unknown for a newly inserted slide', async () => {
+    const saved = await savedDeck();
+    await approvedRequest(saved.directory);
+    const base = JSON.parse(await readFile(join(saved.directory, 'request.json'), 'utf8'));
+    base.outline.slides[0] = { title: 'First original', points: ['First original'], kind: 'other' };
+    base.outline.slides[1] = {
+      title: 'Second original',
+      points: ['Second original'],
+      kind: 'other',
+    };
+    await writeFile(join(saved.directory, 'request.json'), JSON.stringify(base));
+    let head = snapshot('Second original');
+    const first = head.slides[0];
+    if (!first) throw new Error('No slide fixture');
+    first.slideId = 'imported-2';
+    head.contentSha256 = canonicalPlanHash(head.slides);
+    const dependency = {
+      loadSnapshot: async () => ({ schemaVersion: 1 as const, snapshot: head }),
+    };
+    const tool = tools(generation(), messages(), dependency).find(
+      (tool) => tool.name === 'check_content_coverage',
+    );
+    expect((await tool?.run({ deckId: DECK, slideIndex: 1 }, context()))?.output).toMatchObject({
+      status: 'covered',
+      requirementsSlideIndex: 2,
+    });
+    head = snapshot('First original', 2);
+    const inserted = head.slides[0];
+    if (!inserted) throw new Error('No slide fixture');
+    inserted.slideId = 'new-slide-editor-id';
+    head.contentSha256 = canonicalPlanHash(head.slides);
+    expect((await tool?.run({ deckId: DECK, slideIndex: 1 }, context()))?.output).toMatchObject({
+      status: 'unknown',
+      reason: 'unknown original slide identity',
+      requirementsSlideIndex: null,
+    });
+  });
+
+  it('audits changed geometry and ignores an unsaved draft passed alongside the tool input', async () => {
+    const saved = await savedDeck();
+    await approvedRequest(saved.directory);
+    const head = snapshot('Fact one');
+    const first = head.slides[0]?.elements[0];
+    if (!first) throw new Error('No element fixture');
+    first.box.x = 20000000;
+    head.contentSha256 = canonicalPlanHash(head.slides);
+    const gen = generation();
+    const dependency = {
+      loadSnapshot: async () => ({ schemaVersion: 1 as const, snapshot: head }),
+    };
+    const tool = tools(gen, messages(), dependency).find((tool) => tool.name === 'check_slide_fit');
+    expect(
+      (await tool?.run({ deckId: DECK, slideIndex: 1, draft: snapshot('Local only') }, context()))
+        ?.output,
+    ).toMatchObject({
+      source: 'server-snapshot',
+      liveEditorDraft: false,
+      textFit: 'unknown',
+      findings: expect.arrayContaining([expect.objectContaining({ checkId: 'off-slide' })]),
+    });
+    expect(gen.engine.checkCompositions).not.toHaveBeenCalled();
   });
 });

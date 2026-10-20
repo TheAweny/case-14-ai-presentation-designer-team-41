@@ -4,6 +4,7 @@ import type { ToolContext } from '@lct/pipeline';
 import type { GenerationService } from '../generation/generation.service.js';
 import type { Account } from '../accounts/account-rules.js';
 import { runBuild, type ChatToolScope } from './chat-tools.js';
+import { generationBrief } from './chat-brief.js';
 
 const user = (text: string): ChatMessage => ({
   role: 'user',
@@ -55,6 +56,42 @@ function build(
 }
 
 describe('generation brief regressions', () => {
+  it('keeps previously approved claims when a new purpose supersedes the structure', () => {
+    const approved: DeckOutline = {
+      title: 'Пилот',
+      audience: 'Директор',
+      goal: 'Показать результат',
+      slides: [
+        { title: 'Ограничение', points: ['Бюджет не превышает 9 млн рублей'], kind: 'statement' },
+      ],
+    };
+    const messages: ChatMessage[] = [
+      user('Теперь нужно согласовать следующий пилот'),
+      {
+        role: 'assistant',
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        status: 'done',
+        parts: [
+          {
+            type: 'plan',
+            callId: 'approved',
+            planId: crypto.randomUUID(),
+            revision: 1,
+            outline: approved,
+            templateId: null,
+            status: 'superseded',
+            approvalSource: 'user',
+          },
+        ],
+      },
+    ];
+    const brief = JSON.parse(generationBrief(messages, null, 'model', []));
+    expect(brief.approvedOutline).toBeNull();
+    expect(brief.priorApprovedPlans[0].outline.slides[0].points).toContain(
+      'Бюджет не превышает 9 млн рублей',
+    );
+  });
   it('does not treat an automatic model outline as human-approved factual material', async () => {
     const automatic: DeckOutline = {
       title: 'Модель: бюджет 3 млн',

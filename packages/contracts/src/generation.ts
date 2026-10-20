@@ -25,6 +25,39 @@ export const compositionSlotSchema = z.object({
   lineSpacing: z.number().positive().optional(),
   spaceBeforePt: z.number().nonnegative().optional(),
   spaceAfterPt: z.number().nonnegative().optional(),
+  /** Safe measured room, including obstacles. Absent on legacy profiles. */
+  capacity: z
+    .object({
+      safeChars: z.number().int().positive(),
+      basis: z.enum(['geometry', 'obstacle-aware', 'sample-fallback']),
+    })
+    .optional(),
+});
+/** A text area inside a picture frame, as shares of that frame from its top-left. */
+export const imageTextRegionSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  width: z.number().min(0).max(1),
+  height: z.number().min(0).max(1),
+  /** `solid` — the template already plates this share; `none` — the picture is the text background. */
+  protection: z.enum(['solid', 'none', 'unknown']),
+});
+/** Shares of the source picture cut off each side. The same convention as a SlideIR image crop. */
+export const imageFrameCropSchema = z.object({
+  l: z.number().min(0).lt(1),
+  t: z.number().min(0).lt(1),
+  r: z.number().min(0).lt(1),
+  b: z.number().min(0).lt(1),
+});
+/**
+ * What one picture must respect. Regions are relative to the frame, so two variants with the same
+ * overlap, crop and protection can share a drawing. Absent on profiles built before this field.
+ */
+export const imageFrameConstraintSchema = z.object({
+  textRegions: z.array(imageTextRegionSchema),
+  textColors: z.array(z.string().regex(/^[0-9A-Fa-f]{6}$/)),
+  crop: imageFrameCropSchema.nullable(),
+  state: z.enum(['known', 'unknown']),
 });
 /**
  * A place of a composition a picture fills: a picture placeholder, or a large empty card the
@@ -38,6 +71,7 @@ export const imageSlotSchema = z.object({
    */
   kind: z.enum(['placeholder', 'panel', 'photo']),
   box: boxSchema,
+  frame: imageFrameConstraintSchema.optional(),
 });
 export const compositionSchema = z.object({
   patternId: z.string().min(1),
@@ -194,7 +228,22 @@ export const deckOutlineSchema = z.object({
 });
 export type DeckOutline = z.infer<typeof deckOutlineSchema>;
 
+export const variantCopyModeSchema = z.enum(['independent', 'shared']);
+export type VariantCopyMode = z.infer<typeof variantCopyModeSchema>;
+
+/** Exact source evidence is checked before a planned claim reaches a writer. */
+export const requiredSlideClaimSchema = z.object({
+  id: z.string().min(1).max(100),
+  text: z.string().min(1).max(1000),
+  source: z.object({
+    sourceId: z.enum(['brief', 'user-outline']),
+    quote: z.string().min(1).max(2000),
+  }),
+});
+export type RequiredSlideClaim = z.infer<typeof requiredSlideClaimSchema>;
+
 export const generationRequestSchema = z.object({
+  variantCopyMode: variantCopyModeSchema.default('independent'),
   /** Reuse this id on transport retries; a new id explicitly regenerates the deck. */
   requestId: z.string().uuid().optional(),
   budget: z
@@ -281,6 +330,7 @@ export const compositionPlanSchema = z.object({
           .optional(),
         /** Exact excerpts proving that a composition's required facts are in the source. */
         sourceEvidence: z.record(z.string(), z.string()).default({}),
+        requiredClaims: z.array(requiredSlideClaimSchema).max(40).default([]),
       }),
     )
     .min(OUTLINE_SLIDES.min)
@@ -406,4 +456,5 @@ export const illustrationPromptSchema = z.object({
 });
 export type IllustrationPrompt = z.infer<typeof illustrationPromptSchema>;
 export type ImageSlot = z.infer<typeof imageSlotSchema>;
+export type ImageFrameConstraint = z.infer<typeof imageFrameConstraintSchema>;
 export type SlotRewriteChoices = z.infer<typeof slotRewriteChoicesSchema>;

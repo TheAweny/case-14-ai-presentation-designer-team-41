@@ -398,7 +398,10 @@ test('chooses modes with the keyboard and limits the input to five lines', async
   await openChat(page);
   await field(page).fill('/');
   const combo = page.getByRole('combobox', { name: 'Сообщение агенту' });
-  await expect(page.getByRole('listbox', { name: 'Режимы работы' })).toBeVisible();
+  const modes = page.getByRole('listbox', { name: 'Режимы работы' });
+  await expect(modes).toBeVisible();
+  await expect(modes.getByRole('option')).toHaveCount(2);
+  await expect(modes.getByRole('option', { name: /\/auto/ })).toHaveCount(0);
   await combo.press('Enter');
   await expect(page.getByRole('button', { name: 'Режим: Чат' })).toBeVisible();
   await expect(field(page)).toHaveValue('');

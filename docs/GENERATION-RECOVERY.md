@@ -21,10 +21,12 @@ The implementation keeps that workflow and adds the following boundaries:
    date and pricing fingerprint. Stable build/variant identifiers survive retries. Validated
    TaskCheckpoints use dependency hashes and atomic fsync/rename; persistence failure fails the
    task rather than silently discarding its checkpoint.
-3. One canonical writer result per slide feeds all three design plans. Composition remapping
-   uses compatible slot roles, geometry and measured capacity. Deterministic adaptation precedes
-   targeted rewrites. Semantic review of unchanged text is shared; each final file still receives
-   its own deterministic/render checks. A poor template reports limited diversity.
+3. A shared plan feeds three independent writer jobs per slide by default. Explicit
+   `variantCopyMode=shared` retains one balanced writer per slide. Composition remapping
+   preserves ordered semantic groups and heading/body pairs; ambiguous legacy groups keep
+   their original composition. Semantic reuse includes binding relationships and sources;
+   every final file receives its own deterministic/render checks. A poor template reports
+   limited diversity. The copy-policy change below supersedes earlier shared-copy evidence.
 4. PostgreSQL claims a build with a 30-second lease, 10-second heartbeat and monotonic fence.
    Publication, final event and run state require current ownership. Concurrent start/resume
    observes the same identifiers; successful variants are retained. Stop persists a fence and
@@ -37,8 +39,9 @@ The implementation keeps that workflow and adds the following boundaries:
    errors, quota/budget, invalid response, export, persistence and quality failures. Usage cards
    expose cumulative known values and counts of unknown attempts.
 
-Registry versions: deck-planner **2.9.0**, slide-writer **2.9.0**, deck-critic **1.10.0**,
-chat-assistant **1.21.0**. Other agent versions are recorded unchanged in each manifest.
+Registry versions for this copy-policy change: deck-planner **2.10.0**, slide-writer **3.0.0**,
+deck-critic **1.11.0**, slot-rewriter **1.9.0**. Chat instructions belong to executor 3;
+this change does not update them. All actual versions are recorded in each manifest.
 Manifest `planId` identifies the shared build. `modelCallsScope=build` prevents counting shared
 successful calls three times. `providerUsage` is a journal snapshot at publication;
 `GET /generation/:id/usage` reads the current cumulative journal, including failed attempts.
@@ -292,3 +295,33 @@ scope and distributed scheduling remain open. The recorded local results do not 
 requirements. Exhaustive crash-window and browser Stop/disconnect coverage also remain partial.
 AI-dependent measurements must wait for a new user instruction; no background model retry or
 fallback is scheduled. These gaps keep the PR in draft.
+
+## Copy-policy integration — 2026-10-19
+
+New POST /generation requests default to variantCopyMode=independent. Set the JSON field
+variantCopyMode to shared for the explicit economical fallback. The former mode creates
+three writer tasks per slide; shared creates one balanced task. Both reuse the same plan,
+source evidence and compatible assets. Changing policy, source or registry requires a new
+requestId/build; immutable retries cannot change them. Legacy specs missing the policy parse
+as shared. Their old dependency hashes are never treated as new independent tasks.
+
+Writer instructions consist of the common file, exactly one audience module selected using
+both audience and goal, one density module and one output branch. The full module set is
+included in the writer manifest hash; the selected instruction enters each task key. API's
+registryHash includes the new files. No Mastra dependency, global thinking or sampling change
+is part of this integration. Missing requiredClaims in a newly generated plan fails validation;
+legacy saved plans remain readable. User-approved outline claims replace model-selected ones.
+
+The critic receives actual final text, ordered groups, semantic roles, required claims and
+sources. Its checkpoint canonicalization preserves pair relationships and includes the output
+schema. Repairs retain three alternatives, select toward variant targets and run one semantic
+attempt per invocation using the build attempt budget. HTTP retries still belong to the
+provider and the same limiter/budget; 429 does not start a second repair loop.
+
+Executor 2 integration: optional CompositionSlot.capacity={safeChars,basis} is generated into
+Pydantic and accepted by TS. Geometry/text metrics reach writer. Python capacity calculation
+has not been changed by this executor; absent metrics retain the legacy sample guard.
+Executor 3 integration: audience/goal and confirmed facts use existing outline/brief fields.
+This executor did not modify chat preparation. Integration contract and offline logs live in
+spec/content-quality-2026-10-19/. No live model calls, runtime stack or production deployment
+were performed for this change. Earlier runtime acceptance above describes earlier code.

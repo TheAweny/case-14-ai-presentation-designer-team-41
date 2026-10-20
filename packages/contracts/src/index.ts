@@ -333,9 +333,11 @@ export {
   type TemplateSlotCopy,
   type SlotRewriteChoices,
   imageSlotSchema,
+  imageFrameConstraintSchema,
   illustrationPromptSchema,
   type IllustrationPrompt,
   type ImageSlot,
+  type ImageFrameConstraint,
 } from './generation.js';
 export {
   PIPELINE_ROLES,
@@ -535,6 +537,12 @@ export {
   type ClaimStatus,
 } from './claims.js';
 export { generationSpecSchema, type GenerationSpec } from './generation-state.js';
+export {
+  variantCopyModeSchema,
+  requiredSlideClaimSchema,
+  type VariantCopyMode,
+  type RequiredSlideClaim,
+} from './generation.js';
 export {
   accountPolicySchema,
   accountLimitSchema,

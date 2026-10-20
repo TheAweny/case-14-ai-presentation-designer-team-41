@@ -168,6 +168,11 @@ class Timing(BaseModel):
     stage: Stage
 
 
+class VariantCopyMode(StrEnum):
+    independent = "independent"
+    shared = "shared"
+
+
 class ArtifactManifest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -210,6 +215,7 @@ class ArtifactManifest(BaseModel):
     totalMs: conint(ge=0, le=9007199254740991) = Field(
         ..., description="Wall clock, against the five minute budget."
     )
+    variantCopyMode: VariantCopyMode | None = None
 
 
 class Source(BaseModel):
@@ -3204,6 +3210,48 @@ class Box12(BaseModel):
     )
 
 
+class Crop1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    b: confloat(ge=0.0, lt=1.0)
+    l: confloat(ge=0.0, lt=1.0)
+    r: confloat(ge=0.0, lt=1.0)
+    t: confloat(ge=0.0, lt=1.0)
+
+
+class State(StrEnum):
+    known = "known"
+    unknown = "unknown"
+
+
+class Protection(StrEnum):
+    solid = "solid"
+    none = "none"
+    unknown = "unknown"
+
+
+class TextRegion(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0, le=1.0)
+    protection: Protection
+    width: confloat(ge=0.0, le=1.0)
+    x: confloat(ge=0.0, le=1.0)
+    y: confloat(ge=0.0, le=1.0)
+
+
+class Frame(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    crop: Crop1 | None
+    state: State
+    textColors: list[constr(pattern=r"^[0-9A-Fa-f]{6}$")]
+    textRegions: list[TextRegion]
+
+
 class Kind11(StrEnum):
     placeholder = "placeholder"
     panel = "panel"
@@ -3215,8 +3263,30 @@ class ImageSlot(BaseModel):
         extra="forbid",
     )
     box: Box12
+    frame: Frame | None = None
     kind: Kind11
     slotId: constr(min_length=1)
+
+
+class TextRegion1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0, le=1.0)
+    protection: Protection
+    width: confloat(ge=0.0, le=1.0)
+    x: confloat(ge=0.0, le=1.0)
+    y: confloat(ge=0.0, le=1.0)
+
+
+class Frame1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    crop: Crop1 | None
+    state: State
+    textColors: list[constr(pattern=r"^[0-9A-Fa-f]{6}$")]
+    textRegions: list[TextRegion1]
 
 
 class QrCandidateSlot(BaseModel):
@@ -3224,8 +3294,23 @@ class QrCandidateSlot(BaseModel):
         extra="forbid",
     )
     box: Box12
+    frame: Frame1 | None = None
     kind: Kind11
     slotId: constr(min_length=1)
+
+
+class Basis(StrEnum):
+    geometry = "geometry"
+    obstacle_aware = "obstacle-aware"
+    sample_fallback = "sample-fallback"
+
+
+class Capacity(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    basis: Basis
+    safeChars: conint(le=9007199254740991, gt=0)
 
 
 class Role14(StrEnum):
@@ -3238,6 +3323,7 @@ class Slot1(BaseModel):
         extra="forbid",
     )
     box: Box12 | None = None
+    capacity: Capacity | None = None
     font: str
     fontSize: PositiveFloat
     lineSpacing: PositiveFloat | None = None
@@ -3730,7 +3816,7 @@ class DesignSystem3(BaseModel):
     )
 
 
-class State(StrEnum):
+class State2(StrEnum):
     ready = "ready"
     missing = "missing"
     unknown = "unknown"
@@ -3742,7 +3828,7 @@ class FontReadiness(BaseModel):
     )
     missing: list[str]
     requested: list[str]
-    state: State
+    state: State2
 
 
 class Profile2(BaseModel):
@@ -4007,7 +4093,7 @@ class Visual1(BaseModel):
     yTitle: str = Field(..., description="The value axis title with its unit.")
 
 
-class State1(StrEnum):
+class State3(StrEnum):
     present = "present"
     missing = "missing"
 
@@ -4017,7 +4103,7 @@ class Base(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State1
+    state: State3
     value: float | None = None
 
 
@@ -4055,7 +4141,7 @@ class Value(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State1
+    state: State3
     value: float | None = None
 
 
@@ -4109,7 +4195,7 @@ class Value1(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State1
+    state: State3
     value: float | None = None
 
 
@@ -5312,7 +5398,7 @@ class Row1(BaseModel):
     row: conint(ge=-9007199254740991, le=9007199254740991)
 
 
-class State4(StrEnum):
+class State6(StrEnum):
     visible = "visible"
     hidden = "hidden"
 
@@ -5329,7 +5415,7 @@ class Sheet(BaseModel):
     range: str
     rows: list[Row1]
     sheetId: str
-    state: State4 | None = Field("visible", title="DatasetSheetState")
+    state: State6 | None = Field("visible", title="DatasetSheetState")
 
 
 class Source36(BaseModel):
@@ -5660,6 +5746,28 @@ class Elements5(BaseModel):
     )
 
 
+class Crop3(BaseModel):
+    """
+    The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    b: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the height cut off at the bottom."
+    )
+    l: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the width cut off on the left."
+    )
+    r: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the width cut off on the right."
+    )
+    t: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the height cut off at the top."
+    )
+
+
 class Fit2(StrEnum):
     """
     Never stretch: the audit looks for distortion.
@@ -5674,7 +5782,7 @@ class Elements6(BaseModel):
         extra="forbid",
     )
     box: Box19
-    crop: Crop | None = Field(
+    crop: Crop3 | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
@@ -6361,7 +6469,7 @@ class Elements11(BaseModel):
         extra="forbid",
     )
     box: Box19
-    crop: Crop | None = Field(
+    crop: Crop3 | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
@@ -7702,6 +7810,42 @@ class Box31(BaseModel):
     )
 
 
+class Crop5(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    b: confloat(ge=0.0, lt=1.0)
+    l: confloat(ge=0.0, lt=1.0)
+    r: confloat(ge=0.0, lt=1.0)
+    t: confloat(ge=0.0, lt=1.0)
+
+
+class State7(StrEnum):
+    known = "known"
+    unknown = "unknown"
+
+
+class TextRegion2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0, le=1.0)
+    protection: Protection
+    width: confloat(ge=0.0, le=1.0)
+    x: confloat(ge=0.0, le=1.0)
+    y: confloat(ge=0.0, le=1.0)
+
+
+class Frame2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    crop: Crop5 | None
+    state: State7
+    textColors: list[constr(pattern=r"^[0-9A-Fa-f]{6}$")]
+    textRegions: list[TextRegion2]
+
+
 class Kind29(StrEnum):
     placeholder = "placeholder"
     panel = "panel"
@@ -7713,8 +7857,30 @@ class ImageSlot1(BaseModel):
         extra="forbid",
     )
     box: Box31
+    frame: Frame2 | None = None
     kind: Kind29
     slotId: constr(min_length=1)
+
+
+class TextRegion3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0, le=1.0)
+    protection: Protection
+    width: confloat(ge=0.0, le=1.0)
+    x: confloat(ge=0.0, le=1.0)
+    y: confloat(ge=0.0, le=1.0)
+
+
+class Frame3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    crop: Crop5 | None
+    state: State7
+    textColors: list[constr(pattern=r"^[0-9A-Fa-f]{6}$")]
+    textRegions: list[TextRegion3]
 
 
 class QrCandidateSlot1(BaseModel):
@@ -7722,8 +7888,17 @@ class QrCandidateSlot1(BaseModel):
         extra="forbid",
     )
     box: Box31
+    frame: Frame3 | None = None
     kind: Kind29
     slotId: constr(min_length=1)
+
+
+class Capacity1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    basis: Basis
+    safeChars: conint(le=9007199254740991, gt=0)
 
 
 class Role34(StrEnum):
@@ -7736,6 +7911,7 @@ class Slot2(BaseModel):
         extra="forbid",
     )
     box: Box31 | None = None
+    capacity: Capacity1 | None = None
     font: str
     fontSize: PositiveFloat
     lineSpacing: PositiveFloat | None = None
@@ -8228,7 +8404,7 @@ class DesignSystem4(BaseModel):
     )
 
 
-class State5(StrEnum):
+class State9(StrEnum):
     ready = "ready"
     missing = "missing"
     unknown = "unknown"
@@ -8240,7 +8416,7 @@ class FontReadiness1(BaseModel):
     )
     missing: list[str]
     requested: list[str]
-    state: State5
+    state: State9
 
 
 class GenerationProfile(BaseModel):
@@ -9386,12 +9562,34 @@ class Elements15(BaseModel):
     )
 
 
+class Crop7(BaseModel):
+    """
+    The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    b: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the height cut off at the bottom."
+    )
+    l: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the width cut off on the left."
+    )
+    r: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the width cut off on the right."
+    )
+    t: confloat(ge=0.0, lt=1.0) = Field(
+        ..., description="Share of the height cut off at the top."
+    )
+
+
 class Elements16(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     box: Box37
-    crop: Crop | None = Field(
+    crop: Crop7 | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
@@ -10343,7 +10541,7 @@ class Elements21(BaseModel):
         extra="forbid",
     )
     box: Box43
-    crop: Crop | None = Field(
+    crop: Crop7 | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
@@ -11746,7 +11944,7 @@ class TemplatePreviewsResponse(BaseModel):
     schemaVersion: Literal[1]
 
 
-class State6(StrEnum):
+class State10(StrEnum):
     present = "present"
     missing = "missing"
 
@@ -11756,7 +11954,7 @@ class Base1(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State6
+    state: State10
     value: float | None = None
 
 
@@ -11794,7 +11992,7 @@ class Value2(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State6
+    state: State10
     value: float | None = None
 
 
@@ -11832,7 +12030,7 @@ class Value3(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State6
+    state: State10
     value: float | None = None
 
 
@@ -12611,7 +12809,7 @@ class Elements26(BaseModel):
         extra="forbid",
     )
     box: Box53
-    crop: Crop | None = Field(
+    crop: Crop7 | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )
@@ -13394,7 +13592,7 @@ class Elements31(BaseModel):
         extra="forbid",
     )
     box: Box53
-    crop: Crop | None = Field(
+    crop: Crop7 | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
     )

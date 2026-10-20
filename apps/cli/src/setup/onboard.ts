@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import * as p from '@clack/prompts';
+import { existsSync, mkdirSync } from 'node:fs';
+import * as p from './ui.js';
 import { EnvFile } from './env-file.js';
 import {
   aiStudio,
@@ -15,13 +16,27 @@ import {
   buildxOk,
   compose,
   composeCommand,
+  databaseVolumeExists,
   portFree,
   repoRoot,
   run,
+  runningServices,
   waitFor,
 } from './stack.js';
 import { emailProblem, formatUsers, nameProblem, parseUsers, passwordProblem } from './users.js';
-import { ensureInstallationSecrets } from './secrets.js';
+import { ensureDatabaseSettings, ensureInstallationSecrets } from './secrets.js';
+import { ask } from './terminal.js';
+import {
+  domainProblem,
+  hostProblem,
+  httpOrigin,
+  installationLog,
+  localUrls,
+  portProblem,
+  publicUrl,
+  serverAddress,
+  setFeatures,
+} from './settings.js';
 
 /** Answers that can come from flags, so the same setup runs without a terminal. */
 export interface OnboardOptions {
@@ -38,22 +53,46 @@ export interface OnboardOptions {
   readonly adminName?: string;
   readonly adminPassword?: string;
   readonly start?: boolean;
+  readonly docs?: boolean;
+  readonly search?: boolean;
+  readonly domain?: string;
+  readonly host?: string;
+  readonly webPort?: string;
+  readonly apiPort?: string;
+  readonly section?: 'model' | 'settings';
 }
 
-function cancelled(value: unknown): never | void {
-  if (p.isCancel(value)) {
-    p.cancel('Установка прервана. Можно продолжить позже: lct onboard');
-    process.exit(1);
-  }
-}
-
-async function ask<T>(prompt: () => Promise<T | symbol>): Promise<T> {
-  const value = await prompt();
-  cancelled(value);
-  return value as T;
+export function modelSettings(env: EnvFile): ModelSettings {
+  return {
+    MODEL_PROVIDER: env.get('MODEL_PROVIDER') ?? '',
+    LLM_BASE_URL: env.get('LLM_BASE_URL') ?? '',
+    VLM_BASE_URL: env.get('VLM_BASE_URL') ?? '',
+    MODEL_API_KEY: env.get('MODEL_API_KEY') ?? '',
+    LLM_MODEL: env.get('LLM_MODEL') ?? '',
+    VLM_MODEL: env.get('VLM_MODEL') ?? '',
+    MODEL_HEADERS: env.get('MODEL_HEADERS') ?? '',
+  };
 }
 
 async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<ModelSettings> {
+  if (options.yes && !options.provider) {
+    if (env.get('LLM_MODEL') || env.get('MODEL_PROVIDER') === 'fake') return modelSettings(env);
+    throw new Error(
+      'Укажите --provider vk, ai-studio, openai или offline (только тестовые ответы).',
+    );
+  }
+  if (options.yes) {
+    if (
+      (options.provider === 'vk' || options.provider === 'ai-studio') &&
+      !(options.apiKey ?? process.env.LCT_MODEL_API_KEY)
+    )
+      throw new Error('Нужен API-ключ: LCT_MODEL_API_KEY или --api-key.');
+    if (options.provider === 'vk' && !options.projectId) throw new Error('Нужен --project-id.');
+    if (options.provider === 'ai-studio' && !options.folderId)
+      throw new Error('Нужен --folder-id.');
+    if (options.provider === 'openai' && (!options.baseUrl || !options.model))
+      throw new Error('Нужны --base-url и --model.');
+  }
   const provider =
     options.provider ??
     (options.yes
@@ -77,7 +116,11 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
                 label: 'OpenAI-совместимый API',
                 hint: 'vLLM, llama.cpp, OpenRouter…',
               },
-              { value: 'offline', label: 'Офлайн', hint: 'записанные ответы, без сети и ключа' },
+              {
+                value: 'offline',
+                label: 'Тестовые ответы',
+                hint: 'без модели; сборка новых колод недоступна',
+              },
             ],
           }),
         ));
@@ -85,6 +128,7 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
   if (provider === 'vk') {
     const apiKey =
       options.apiKey ??
+      process.env.LCT_MODEL_API_KEY ??
       (await ask(() =>
         p.password({
           message: 'API-ключ VK AI Space',
@@ -109,6 +153,7 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
   if (provider === 'ai-studio') {
     const apiKey =
       options.apiKey ??
+      process.env.LCT_MODEL_API_KEY ??
       (await ask(() =>
         p.password({
           message: 'API-ключ AI Studio',
@@ -139,7 +184,11 @@ async function chooseModel(options: OnboardOptions, env: EnvFile): Promise<Model
       }),
     ));
   const apiKey =
-    options.apiKey ?? (await ask(() => p.password({ message: 'Ключ API (пусто, если не нужен)' })));
+    options.apiKey ??
+    process.env.LCT_MODEL_API_KEY ??
+    (options.yes
+      ? ''
+      : await ask(() => p.password({ message: 'Ключ API (пусто, если не нужен)' })));
   const model =
     options.model ??
     (await ask(() =>
@@ -165,6 +214,10 @@ async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<strin
   );
   env.set('AUTH_USERS', formatUsers(users));
   const configured = env.get('ADMIN_EMAIL') ?? '';
+  if (configured && options.adminEmail === undefined && options.adminPassword === undefined) {
+    p.log.info(`Администратор: ${configured}. Восстановление доступа: lct user admin`);
+    return configured;
+  }
   if (options.yes && options.adminEmail === undefined) {
     if (configured !== '') return configured;
     throw new Error('Для установки без вопросов укажите --admin-email и --admin-password.');
@@ -192,6 +245,10 @@ async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<strin
           }),
         ));
   let password = options.adminPassword;
+  if (options.yes && password === undefined)
+    throw new Error(
+      'Для установки без вопросов нужен --admin-password или LCT_INSTALL_ADMIN_PASSWORD.',
+    );
   if (password === undefined) {
     password = await ask(() =>
       p.password({ message: 'Пароль', validate: (v) => passwordProblem(v ?? '') }),
@@ -215,32 +272,142 @@ async function createAdmin(options: OnboardOptions, env: EnvFile): Promise<strin
  * started and awaited. Every answer can come from a flag, and `--yes` takes the defaults, so the
  * same path runs in CI and in a terminal.
  */
-export async function onboard(options: OnboardOptions = {}): Promise<number> {
-  const root = repoRoot();
-  const env = EnvFile.open(join(root, '.env'), join(root, '.env.example'));
-  p.intro('Цифровой дизайнер презентаций · установка');
-
-  const mode =
-    options.mode ??
-    (options.yes
-      ? 'docker'
+async function configureAccess(options: OnboardOptions, env: EnvFile): Promise<void> {
+  const access =
+    options.domain !== undefined
+      ? options.domain
+        ? 'domain'
+        : 'ip'
+      : options.host !== undefined
+        ? 'ip'
+        : options.yes
+          ? env.get('LCT_DOMAIN')
+            ? 'domain'
+            : 'ip'
+          : await ask(() =>
+              p.select({
+                message: 'Как открывать приложение?',
+                initialValue: env.get('LCT_DOMAIN') ? 'domain' : 'ip',
+                options: [
+                  {
+                    value: 'ip',
+                    label: 'По IP сервера',
+                    hint: 'HTTP; домен можно подключить позже',
+                  },
+                  {
+                    value: 'domain',
+                    label: 'По домену',
+                    hint: 'HTTPS и автоматическое продление сертификата',
+                  },
+                ],
+              }),
+            );
+  const domain =
+    access === 'domain'
+      ? (options.domain ??
+        (options.yes
+          ? (env.get('LCT_DOMAIN') ?? '')
+          : await ask(() =>
+              p.text({
+                message: 'Домен приложения',
+                initialValue: env.get('LCT_DOMAIN') ?? '',
+                placeholder: 'slides.example.com',
+                validate: (v) => domainProblem(v ?? ''),
+              }),
+            )))
+      : '';
+  if (domain && domainProblem(domain)) throw new Error(domainProblem(domain));
+  const webPort =
+    options.webPort ??
+    (options.yes || domain
+      ? env.get('WEB_PORT') || '3000'
       : await ask(() =>
-          p.select({
-            message: 'Как запускать сервис?',
-            options: [
-              {
-                value: 'docker',
-                label: 'Docker Compose',
-                hint: 'рекомендуется: всё в контейнерах',
-              },
-              {
-                value: 'local',
-                label: 'Локально',
-                hint: 'для разработки: yarn, uv, Node 22, Python 3.12',
-              },
-            ],
+          p.text({
+            message: 'Порт приложения',
+            defaultValue: env.get('WEB_PORT') || '3000',
+            placeholder: '3000',
+            validate: (v) => portProblem(v ?? ''),
           }),
         ));
+  const apiPort = options.apiPort ?? env.get('API_HOST_PORT') ?? '3001';
+  for (const port of [webPort, apiPort]) if (portProblem(port)) throw new Error(portProblem(port));
+  if (
+    webPort === apiPort ||
+    (domain && [webPort, apiPort].some((port) => ['80', '443'].includes(port)))
+  )
+    throw new Error(
+      'Порты приложения и API должны различаться; для HTTPS порты 80 и 443 занимает прокси.',
+    );
+  env.set('WEB_PORT', webPort);
+  env.set('API_HOST_PORT', apiPort);
+  env.set('WEB_BIND', domain ? '127.0.0.1' : '0.0.0.0');
+  env.set('LCT_DOMAIN', domain.toLowerCase());
+  const host = domain
+    ? ''
+    : (options.host ??
+      (options.yes
+        ? env.get('LCT_PUBLIC_HOST') ||
+          (env.get('LCT_MODE') === 'local' ? 'localhost' : serverAddress())
+        : await ask(() =>
+            p.text({
+              message: 'IP сервера, по которому вы откроете приложение',
+              defaultValue:
+                env.get('LCT_PUBLIC_HOST') ||
+                (env.get('LCT_MODE') === 'local' ? 'localhost' : serverAddress()),
+              validate: (value) => hostProblem(value ?? ''),
+            }),
+          )));
+  if (host && hostProblem(host)) throw new Error(hostProblem(host));
+  env.set('LCT_PUBLIC_HOST', host);
+  env.set('APP_ORIGIN', domain ? `https://${domain.toLowerCase()}` : httpOrigin(host, webPort));
+  env.set('SESSION_COOKIE_SECURE', String(Boolean(domain)));
+  const profiles = new Set((env.get('COMPOSE_PROFILES') ?? '').split(',').filter(Boolean));
+  if (domain) profiles.add('https');
+  else profiles.delete('https');
+  env.set('COMPOSE_PROFILES', [...profiles].join(','));
+  if (domain)
+    p.log.info(
+      'DNS домена должен указывать на сервер. Для сертификата нужны открытые порты 80 и 443.',
+    );
+  const docs =
+    options.docs ??
+    (options.yes
+      ? env.get('API_DOCS_ENABLED') === 'true'
+      : await ask(() =>
+          p.confirm({
+            message: 'Включить документацию API?',
+            initialValue: env.get('API_DOCS_ENABLED') === 'true',
+            active: 'Да',
+            inactive: 'Нет',
+          }),
+        ));
+  const search =
+    options.search ??
+    (options.yes
+      ? env.get('WEB_SEARCH_URL') !== ''
+      : await ask(() =>
+          p.confirm({
+            message: 'Включить поиск в интернете?',
+            initialValue: env.get('WEB_SEARCH_URL') !== '',
+            active: 'Да',
+            inactive: 'Нет',
+          }),
+        ));
+  setFeatures(env, docs, search);
+}
+
+export async function onboard(input: OnboardOptions = {}): Promise<number> {
+  const options = {
+    ...input,
+    adminPassword: input.adminPassword ?? process.env.LCT_INSTALL_ADMIN_PASSWORD,
+  };
+  const root = repoRoot();
+  const fresh = !existsSync(join(root, '.env'));
+  const env = EnvFile.open(join(root, '.env'), join(root, '.env.example'));
+  p.intro(`LCT · ${fresh ? 'установка' : 'настройка'}`);
+  const mode = options.mode ?? env.get('LCT_MODE') ?? 'docker';
+  if (!['docker', 'local'].includes(mode)) throw new Error('Режим: --mode docker или local.');
+  env.set('LCT_MODE', mode);
   if (mode === 'docker' && composeCommand() === null) {
     p.log.error('Нужен Docker с Compose: https://docs.docker.com/get-docker/');
     return 1;
@@ -250,43 +417,113 @@ export async function onboard(options: OnboardOptions = {}): Promise<number> {
     return 1;
   }
 
-  const settings = await chooseModel(options, env);
-  const spinner = p.spinner();
-  spinner.start('Проверяю модель');
-  const check = await checkModel(settings);
-  spinner.stop(
-    check.ok ? `Модель отвечает: ${check.detail}` : `Модель не ответила: ${check.detail}`,
-  );
-  if (!check.ok && !options.yes) {
-    const keep = await ask(() =>
-      p.confirm({ message: 'Сохранить настройки всё равно?', initialValue: false }),
+  if (mode === 'docker' && options.start !== false) {
+    const ready = await run(['docker', 'info'], { quiet: true });
+    if (ready !== 0)
+      throw new Error('Docker не отвечает. Проверьте службу Docker и права доступа.');
+  }
+  const running = mode === 'docker' ? runningServices() : [];
+  const existingDatabase =
+    mode === 'docker' && (running.includes('postgres') || databaseVolumeExists());
+  if (fresh && existingDatabase)
+    throw new Error(
+      'Обнаружена работающая БД без .env. Восстановите файл настроек из резервной копии.',
     );
-    if (!keep) return chooseModelAgain(options);
+  p.log.step('1 / 4 · Подключение модели');
+  const keepModel =
+    !fresh &&
+    !options.provider &&
+    options.section !== 'model' &&
+    Boolean(env.get('LLM_MODEL') || env.get('MODEL_PROVIDER'));
+  let settings = keepModel ? modelSettings(env) : await chooseModel(options, env);
+  const spinner = p.spinner();
+  while (options.section !== 'settings' || !keepModel) {
+    spinner.start('Проверяю подключение');
+    const check = await checkModel(settings);
+    if (check.ok) spinner.stop(`Подключение: ${check.detail}`);
+    else spinner.error('Модель не ответила');
+    if (check.ok) break;
+    p.log.warn(check.detail);
+    if (options.yes)
+      throw new Error('Подключение к модели не прошло проверку. Настройки не сохранены.');
+    const action = await ask(() =>
+      p.select({
+        message: 'Что сделать?',
+        options: [
+          { value: 'retry', label: 'Изменить подключение' },
+          { value: 'save', label: 'Сохранить и подключить позже' },
+          { value: 'cancel', label: 'Завершить настройку' },
+        ],
+      }),
+    );
+    if (action === 'save') break;
+    if (action === 'cancel') return 1;
+    settings = await chooseModel({}, env);
   }
   for (const [key, value] of Object.entries(settings)) env.set(key, value);
-
+  if (settings.MODEL_PROVIDER === 'fake')
+    p.log.warn('Тестовые ответы: для генерации новых презентаций подключите модель через lct.');
+  p.log.step('2 / 4 · Администратор');
   const admin = await createAdmin(options, env);
-
-  for (const [key, port] of [
-    ['web', 3000],
-    ['API', 3001],
-  ] as const) {
-    if (!(await portFree(port)))
-      p.log.warn(`Порт ${port} (${key}) занят: освободите его перед запуском`);
-  }
+  p.log.step('3 / 4 · Доступ и возможности');
+  if (options.section !== 'model') await configureAccess(options, env);
+  const ports = [
+    { service: 'web', port: Number(env.get('WEB_PORT') || '3000') },
+    { service: 'api', port: Number(env.get('API_HOST_PORT') || '3001') },
+    { service: 'postgres', port: Number(env.get('POSTGRES_PORT') || '5433') },
+    ...(env.get('LCT_DOMAIN')
+      ? [
+          { service: 'proxy', port: 80 },
+          { service: 'proxy', port: 443 },
+        ]
+      : []),
+  ];
+  if (mode === 'docker')
+    for (const { service, port } of ports) {
+      if (!(await portFree(port)) && !running.includes(service))
+        throw new Error(`Порт ${port} занят. Освободите его или выберите другой в мастере.`);
+    }
   const created = ensureInstallationSecrets(env);
-  if (created.length > 0) p.log.success(`Созданы секреты этой установки: ${created.join(', ')}`);
+  const databaseCreated = ensureDatabaseSettings(
+    env,
+    fresh ||
+      (mode === 'docker' &&
+        !existingDatabase &&
+        (!env.get('POSTGRES_PASSWORD') || env.get('POSTGRES_PASSWORD') === 'lct26-local')),
+  );
+  if (created.length || databaseCreated) p.log.success('Созданы индивидуальные секреты установки');
+  p.note(
+    `Адрес: ${publicUrl(env)}\nАдминистратор: ${admin}\nДокументация API: ${env.get('API_DOCS_ENABLED') === 'true' ? 'включена' : 'выключена'}\nВеб-поиск: ${env.get('WEB_SEARCH_URL') ? 'включён' : 'выключен'}\nКаталог: ${root}`,
+    'Параметры установки',
+  );
+  if (
+    !options.yes &&
+    !(await ask(() =>
+      p.confirm({ message: 'Сохранить настройки?', active: 'Сохранить', inactive: 'Отмена' }),
+    ))
+  )
+    return 0;
   env.save();
-  p.log.success('Настройки записаны в .env (доступен только вам)');
+  for (const directory of ['data', 'runs', 'data/fonts'])
+    mkdirSync(join(root, directory), { recursive: true });
+  p.log.success('Настройки сохранены в .env');
 
   const start =
     options.start ??
-    (options.yes ? true : await ask(() => p.confirm({ message: 'Запустить сервис сейчас?' })));
+    (options.yes
+      ? true
+      : await ask(() =>
+          p.confirm({
+            message: 'Применить настройки и запустить сервис?',
+            active: 'Запустить',
+            inactive: 'Позже',
+          }),
+        ));
   if (!start) {
     p.outro(
       mode === 'docker'
         ? 'Готово. Запуск: lct start'
-        : 'Готово. Запуск: см. README, раздел «Локальный запуск»',
+        : 'Настроено для разработки. Команды запуска: lct help',
     );
     return 0;
   }
@@ -295,36 +532,58 @@ export async function onboard(options: OnboardOptions = {}): Promise<number> {
     const code =
       (await run(['corepack', 'yarn', 'install', '--immutable'], { quiet: true })) ||
       (await run(['uv', 'sync'], { quiet: true }));
-    spinner.stop(code === 0 ? 'Зависимости на месте' : 'Не удалось поставить зависимости');
+    if (code === 0) spinner.stop('Зависимости на месте');
+    else spinner.error('Не удалось поставить зависимости');
     p.outro(
       'Запуск: uv run uvicorn engine.api:app --port 8000, yarn nx run api:serve, yarn nx run web:serve',
     );
     return code;
   }
-  p.log.step('Собираю и запускаю контейнеры, первая сборка занимает несколько минут');
-  const code = await compose(['up', '-d', '--build']);
+  p.log.step('4 / 4 · Запуск');
+  const logFile = installationLog(root);
+  spinner.start('Собираю и запускаю сервисы · первая сборка занимает несколько минут');
+  const disabled = running.filter(
+    (name) =>
+      (name === 'search' && !env.get('WEB_SEARCH_URL')) ||
+      (name === 'proxy' && !env.get('LCT_DOMAIN')),
+  );
+  if (disabled.length) {
+    const stopped = await compose(['stop', ...disabled], { logFile });
+    if (stopped !== 0) {
+      spinner.error('Не удалось остановить отключённые сервисы');
+      return stopped;
+    }
+  }
+  const code = await compose(['up', '-d', '--build'], { logFile });
+  if (code === 0) spinner.stop('Контейнеры запущены');
+  else spinner.error('Запуск не завершён');
   if (code !== 0) {
-    p.log.error('docker compose не поднялся: lct logs покажет почему');
+    p.log.error(`Подробности: ${logFile}\nПовторить: lct start. Диагностика: lct doctor`);
     return code;
   }
   spinner.start('Жду, пока сервис ответит');
-  const up =
-    (await waitFor('http://localhost:3001/health')) && (await waitFor('http://localhost:3000'));
-  spinner.stop(up ? 'Сервис запущен' : 'Сервис не ответил за 3 минуты');
+  const urls = localUrls(env);
+  const checks = await Promise.all([waitFor(`${urls.api}/health`), waitFor(`${urls.web}/login`)]);
+  const up = checks.every(Boolean);
+  if (up) spinner.stop('Сервис запущен');
+  else spinner.error('Сервис не ответил за 3 минуты');
   p.note(
-    `Интерфейс:  http://localhost:3000\nВход:       ${admin}\nAPI:        http://localhost:3001\n\nlct status · lct logs · lct stop\nПользователи: Настройки → Пользователи в интерфейсе`,
+    `Приложение: ${publicUrl(env)}\nВход: ${admin}\n\nУправление: lct\nДиагностика: lct doctor\nЛоги установки: ${logFile}`,
     up ? 'Готово' : 'Проверьте',
   );
-  p.outro(up ? 'Хорошей работы' : 'lct doctor подскажет, что не так');
+  if (up && env.get('LCT_DOMAIN')) {
+    spinner.start('Проверяю HTTPS домена');
+    const https = await waitFor(`${publicUrl(env)}/login`, 60);
+    if (https) spinner.stop('HTTPS готов');
+    else spinner.stop('Сервис запущен · внешний HTTPS пока не подтверждён');
+    if (!https) {
+      p.log.warn(
+        'Сервис работает локально, но HTTPS не удалось проверить с этого сервера. ' +
+          'Выпуск сертификата может занять больше времени, а внешний адрес может быть недоступен изнутри. ' +
+          'Откройте адрес в браузере, проверьте DNS и порты 80/443. Подробности: lct logs proxy',
+      );
+    }
+  }
+  p.outro(up ? 'Установка готова · управление: lct' : 'lct doctor подскажет, что не так');
   return up ? 0 : 1;
-}
-
-function chooseModelAgain(options: OnboardOptions): Promise<number> {
-  return onboard({
-    ...options,
-    provider: undefined,
-    apiKey: undefined,
-    folderId: undefined,
-    projectId: undefined,
-  });
 }

@@ -45,6 +45,7 @@ const plan = {
     purpose: `Слайд ${index + 1}`,
     imageQuery: '',
     sourceEvidence: {},
+    requiredClaims: [],
   })),
 };
 

@@ -84,6 +84,7 @@ function fixture(status?: 'failed' | 'cancelled' | 'running' | 'preparing') {
       variants: [{ variant: 'balanced', runId: 'previous-run' }],
       each: [Promise.resolve({ variant: 'balanced', runId: 'previous-run', state: 'failed' })],
     })),
+    isPreparing: vi.fn(() => status === 'preparing'),
     directory: () => 'missing-fixture-directory',
     cancel: vi.fn(),
   };
@@ -151,6 +152,15 @@ describe('failed chat build recovery', () => {
     },
   );
 
+  it('does not reuse a stale preparing card after the worker lost its preparation', async () => {
+    const f = fixture('preparing');
+    f.generation.isPreparing.mockReturnValue(false);
+    expect(await f.invoke(true)).not.toMatchObject({
+      output: { status: 'preparing', active: true, reused: true },
+    });
+    expect(f.generation.start).toHaveBeenCalled();
+  });
+
   it.each(['failed', 'cancelled'] as const)(
     'retries a %s operation only explicitly, preserving the approved outline',
     async (status) => {
@@ -159,6 +169,8 @@ describe('failed chat build recovery', () => {
       expect(f.generation.resume).toHaveBeenCalledExactlyOnceWith(
         'previous-run',
         expect.anything(),
+        undefined,
+        expect.any(AbortSignal),
       );
       expect(f.generation.start).not.toHaveBeenCalled();
       // A second call must inspect the latest attempt, not the first failure in history.

@@ -10,10 +10,27 @@ const inputSchema = z.object({
     z.object({
       slideIndex: z.number(),
       approvedSlide: z.unknown(),
+      requiredClaims: z.array(z.unknown()).default([]),
+      groups: z
+        .array(
+          z.object({
+            id: z.string(),
+            kind: z.string(),
+            slotIds: z.array(z.string()),
+            order: z.number().optional(),
+          }),
+        )
+        .default([]),
       speakerNotes: z.string(),
       visual: z.unknown(),
       texts: z.array(
-        z.object({ slotId: z.string(), text: z.string(), role: z.string().optional() }),
+        z.object({
+          slotId: z.string(),
+          text: z.string(),
+          role: z.string().optional(),
+          semanticRole: z.string().optional(),
+          groupId: z.string().optional(),
+        }),
       ),
     }),
   ),
@@ -43,19 +60,44 @@ export class SemanticTextProvider implements TextProvider {
     if (!parsed.success) return this.inner.generate(agent, instructions, input, schema, signal);
     const bindings = new Map<string, string>();
     const slides = parsed.data.slides.map((slide) => {
+      const groupIds = new Map(slide.groups.map((group, index) => [group.id, `group-${index}`]));
+      const order = (id?: string) => (id ? slide.groups.findIndex((group) => group.id === id) : -1);
+      const ambiguous =
+        slide.texts.length > 1 &&
+        slide.texts.some((text) => !text.semanticRole || text.semanticRole === 'unknown');
       const texts = [...slide.texts].sort(
-        (a, b) => (a.role ?? '').localeCompare(b.role ?? '') || a.text.localeCompare(b.text),
+        (a, b) =>
+          order(a.groupId) - order(b.groupId) ||
+          (a.semanticRole ?? a.role ?? '').localeCompare(b.semanticRole ?? b.role ?? '') ||
+          (ambiguous ? a.slotId.localeCompare(b.slotId) : a.text.localeCompare(b.text)),
       );
       const visual = slide.visual as { kind?: string; slotId?: string; block?: unknown } | null;
+      const canonicalIds = new Map(texts.map((text, index) => [text.slotId, `semantic-${index}`]));
       return {
         slideIndex: slide.slideIndex,
         approvedSlide: slide.approvedSlide,
+        requiredClaims: slide.requiredClaims,
+        groups: slide.groups.map((group, index) => ({
+          id: `group-${index}`,
+          kind: group.kind,
+          order: index,
+          slotIds: group.slotIds.map((id) => canonicalIds.get(id) ?? id).sort(),
+        })),
         speakerNotes: slide.speakerNotes,
-        visual: visual?.kind === 'native' ? visual.block : slide.visual,
+        visual: visual
+          ? { ...visual, slotId: canonicalIds.get(visual.slotId ?? '') ?? visual.slotId }
+          : null,
         texts: texts.map((text, i) => {
           const slotId = `semantic-${i}`;
           bindings.set(`${slide.slideIndex}:${slotId}`, text.slotId);
-          return { slotId, text: text.text, role: text.role ?? 'body' };
+          return {
+            slotId,
+            text: text.text,
+            role: text.role ?? 'body',
+            semanticRole: text.semanticRole ?? 'unknown',
+            groupId: groupIds.get(text.groupId ?? '') ?? null,
+            ...(ambiguous ? { bindingKey: text.slotId } : {}),
+          };
         }),
       };
     });
@@ -63,7 +105,8 @@ export class SemanticTextProvider implements TextProvider {
       agent,
       instructions,
       {
-        scope: 'shared-semantics',
+        scope: 'group-semantics-v2',
+        auditSchema: z.toJSONSchema(schema),
         brief: parsed.data.brief,
         approvedOutline: parsed.data.approvedOutline,
         proposedOutline: parsed.data.proposedOutline,

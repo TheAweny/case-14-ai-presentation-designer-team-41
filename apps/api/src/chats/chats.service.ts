@@ -80,6 +80,9 @@ import { createAssetSearch, type AssetSearch } from './asset-search.js';
 import { createWebSearch, webSearchBaseUrl, type WebSearch } from './web-search.js';
 import { fetchWebSource } from './web-source.js';
 import { AccountUsageService } from '../accounts/account-usage.service.js';
+import { EditorService } from '../editor/editor.service.js';
+import { readPreparation } from './preparation.js';
+import { questionsAllowed } from './discovery-policy.js';
 
 export const CHAT_ID = /^[0-9a-f-]{36}$/i;
 const TITLE_MAX_LENGTH = 200;
@@ -249,6 +252,7 @@ export class ChatsService implements OnApplicationShutdown {
     @Inject(ModelSettingsService) private readonly models: ModelSettingsService,
     @Inject(ModelCapabilityService) private readonly capabilities: ModelCapabilityService,
     @Optional() @Inject(AccountUsageService) private readonly usage?: AccountUsageService,
+    @Optional() @Inject(EditorService) private readonly editor?: EditorService,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
@@ -971,6 +975,24 @@ export class ChatsService implements OnApplicationShutdown {
         return { approved: null, replay: true };
       if (found.part.type !== 'question' || found.part.answer !== null)
         throw new ConflictException('The question is answered already.');
+      const question = found.part;
+      const latestQuestion = state.messages
+        .flatMap((message) =>
+          message.role === 'assistant'
+            ? message.parts.filter((part) => part.type === 'question')
+            : [],
+        )
+        .at(-1);
+      if (latestQuestion?.type !== 'question' || latestQuestion.questionId !== input.questionId)
+        throw new ConflictException('This question was replaced by a newer question.');
+      if (
+        (!input.answer.text && input.answer.optionLabels.length === 0) ||
+        (!question.multiSelect && input.answer.optionLabels.length > 1) ||
+        input.answer.optionLabels.some(
+          (label) => !question.options.some((option) => option.label === label),
+        )
+      )
+        throw new BadRequestException('Choose an offered option or enter an answer.');
       this.putPart(state, turn, found.messageId, found.index, {
         ...found.part,
         answer: input.answer,
@@ -1205,7 +1227,22 @@ export class ChatsService implements OnApplicationShutdown {
       const agent = await this.loadAgent();
       const resolved = await this.resolvedChatModel(request, account);
       const effectiveRef = { connectionId: resolved.connectionId, modelId: resolved.model };
-      scope = { ...scope, model: effectiveRef };
+      scope = {
+        ...scope,
+        model: effectiveRef,
+        ...(agent.promptsSha256
+          ? {
+              preparationManifest: {
+                agentId: agent.agent.config.id,
+                agentVersion: agent.agent.config.version,
+                instructionsSha256: agent.promptsSha256,
+                modelId: resolved.model,
+                modelRevision: null,
+                seed: 42,
+              },
+            }
+          : {}),
+      };
       let model: ChatModel | null = null;
       try {
         model = await this.chatModel(request, account, agent, resolved);
@@ -1222,6 +1259,7 @@ export class ChatsService implements OnApplicationShutdown {
       }
       if (!model) return;
       sync();
+      const editor = this.editor;
       const tools = chatTools(
         this.generation,
         scope,
@@ -1244,6 +1282,7 @@ export class ChatsService implements OnApplicationShutdown {
           },
         },
         this.webDependency(request, account, agent),
+        editor ? { loadSnapshot: (deckId, actor) => editor.load(deckId, actor) } : undefined,
       );
       // The agent tells the person whether the deck gets pictures, and does not promise them
       // when no image model is assigned.
@@ -1256,6 +1295,7 @@ export class ChatsService implements OnApplicationShutdown {
         model,
         instructions: chatInstructions(agent, request.mode, {
           ...this.facts(state),
+          currentAssistantMessageId: message.id,
           imagesAvailable,
           preferredSlideCount: request.slideCount,
           projectTemplates,
@@ -1389,7 +1429,11 @@ export class ChatsService implements OnApplicationShutdown {
         closeToolPart(
           {
             ...current,
-            input: { ...input, fileIds },
+            input: {
+              ...input,
+              ...(current.input && typeof current.input === 'object' ? current.input : {}),
+              fileIds,
+            },
             phase: 'executing',
             startedAt: current.startedAt ?? startedAt,
           },
@@ -1431,6 +1475,19 @@ export class ChatsService implements OnApplicationShutdown {
       mode: state.mode,
       projectId: state.projectId,
       plans,
+      preparation: readPreparation(state.messages),
+      questionsAllowed: questionsAllowed(state.messages),
+      evidenceMessages: state.messages.slice(-40).map((message) =>
+        message.role === 'user'
+          ? { messageId: message.id, role: message.role, preview: message.text.slice(0, 200) }
+          : {
+              messageId: message.id,
+              role: message.role,
+              callIds: message.parts.flatMap((part) =>
+                part.type === 'tool' && part.status === 'done' ? [part.callId] : [],
+              ),
+            },
+      ),
       builds: state.messages
         .flatMap((message) =>
           message.role === 'assistant'

@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import type { ChatMessage, DeckOutline } from '@lct/contracts';
 import { chatSourceFacts } from './source-provenance.js';
+import { readPreparation } from './preparation.js';
+import { questionsAllowed } from './discovery-policy.js';
 
 interface ExternalSourceEvidence {
   readonly kind: 'fetch_source' | 'research_topic';
@@ -26,6 +28,23 @@ export function generationBrief(
       : [],
   );
   const approvedOutline = outlineSource === 'user' ? outline : null;
+  // A changed goal supersedes the draft, not the person's previously approved claims.
+  const priorApprovedPlans = messages.flatMap((message) =>
+    message.role === 'assistant'
+      ? message.parts.flatMap((part) =>
+          part.type === 'plan' && part.approvalSource === 'user'
+            ? [
+                {
+                  planId: part.planId,
+                  revision: part.revision,
+                  status: part.status,
+                  outline: part.outline,
+                },
+              ]
+            : [],
+        )
+      : [],
+  );
   const externalSources = chatSourceFacts(messages).flatMap((fact): ExternalSourceEvidence[] =>
     fact.kind === 'fetch_source'
       ? [
@@ -66,9 +85,12 @@ export function generationBrief(
     );
   const brief = JSON.stringify({
     approvedOutline,
+    priorApprovedPlans,
     userRequirements,
     sourceFileIds,
     externalSources,
+    preparation: readPreparation(messages),
+    questionsAllowed: questionsAllowed(messages),
     assumptions: 'not-assessed',
     conflicts: 'not-assessed',
   });

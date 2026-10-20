@@ -3,14 +3,16 @@
 # json-mode.md, loop-nudge.md and finalize.md are part of the agent and share its version.
 
 id: chat-assistant
-version: 1.21.0
+version: 1.23.1
 description: 'Chat assistant of the deck designer: conversation, deck outline, build.'
 modelId: assistant-default
 
 generation:
   temperature: 0.4
   topP: 0.95
-  maxOutputTokens: 4096
+  # Completion tokens may include hidden reasoning as well as a 15-slide tool payload.
+  # A small per-slide writing budget is insufficient for this orchestration step.
+  maxOutputTokens: 32768
   # The chat chooses tools and reads their results step by step: it thinks wherever the model
   # can switch thinking on. The person's switch in the composer is only for deck builds.
   thinking: true

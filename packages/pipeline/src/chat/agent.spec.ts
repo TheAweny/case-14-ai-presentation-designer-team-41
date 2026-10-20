@@ -1,4 +1,6 @@
 import { join } from 'node:path';
+import { mkdtemp, cp, appendFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { ChatMessage } from '@lct/contracts';
@@ -839,6 +841,22 @@ describe('modelHistory', () => {
 });
 
 describe('the chat agent in the registry', () => {
+  it('fingerprints changes in mode and tool modules reproducibly', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'chat-prompts-'));
+    try {
+      await cp(join(REGISTRY, 'chat-assistant'), join(root, 'chat-assistant'), { recursive: true });
+      const original = await loadChatAgent(root);
+      expect(original.promptsSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect((await loadChatAgent(root)).promptsSha256).toBe(original.promptsSha256);
+      await appendFile(join(root, 'chat-assistant/modes/auto.md'), '\nAdditional mode rule.\n');
+      const changedMode = await loadChatAgent(root);
+      expect(changedMode.promptsSha256).not.toBe(original.promptsSha256);
+      await appendFile(join(root, 'chat-assistant/tools/ask_user.md'), '\nAdditional tool rule.\n');
+      expect((await loadChatAgent(root)).promptsSha256).not.toBe(changedMode.promptsSha256);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it('has a prompt for every mode and a description for every tool it is given', async () => {
     const agent = await loadChatAgent(REGISTRY);
     expect(agent.agent.config.id).toBe('chat-assistant');

@@ -10,12 +10,6 @@ import {
 } from '@lct/contracts';
 import { compositionCheckResponseSchema, type CompositionCheckResponse } from '@lct/contracts';
 import {
-  datasetExtractRequestSchema,
-  datasetSchema,
-  type Dataset,
-  type DatasetExtractRequest,
-} from '@lct/contracts';
-import {
   generationProfileSchema,
   compositionExportResponseSchema,
   type GenerationProfile,
@@ -23,6 +17,10 @@ import {
   type CompositionExportResponse,
 } from '@lct/contracts';
 import {
+  datasetExtractRequestSchema,
+  datasetSchema,
+  type Dataset,
+  type DatasetExtractRequest,
   auditReportSchema,
   deckExportResponseSchema,
   deckImportResponseSchema,
@@ -108,9 +106,9 @@ export class EngineClient {
   }
 
   /** `POST /v1/generation-profile` — exact reusable compositions before a run. */
-  async generationProfile(templatePath: string): Promise<GenerationProfile> {
+  async generationProfile(templatePath: string, signal?: AbortSignal): Promise<GenerationProfile> {
     return generationProfileSchema.parse(
-      await this.post('/v1/generation-profile', { template_path: templatePath }),
+      await this.post('/v1/generation-profile', { template_path: templatePath }, signal),
     );
   }
 

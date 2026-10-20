@@ -72,7 +72,7 @@
     },
     "auto": {
       "name": "Auto",
-      "description": "The agent decides and builds the deck right away"
+      "description": "After preparation, the agent builds the deck without separate plan approval"
     }
   },
   "empty": {
@@ -279,7 +279,16 @@
       "quota-exhausted": "Increase the limit or replace the API key in the connection settings, then retry. You can choose another available connection. Another model on the same connection uses the same quota."
     },
     "retryQuota": "Retry after changing the quota",
-    "continueQuota": "Continue after changing the quota"
+    "continueQuota": "Continue after changing the quota",
+    "preparation": {
+      "title": "Could not prepare the template",
+      "chatHelper": "The selected chat model was used to describe the layouts. Check its connection or select another model.",
+      "helper": "The planning model shown below describes template layouts. Check its connection or assign another model in settings. The chat model picker does not change this assignment.",
+      "saved": "Your request and existing results remain in the chat. Retry preparation after updating the settings.",
+      "settings": "Configure planning model",
+      "retry": "Retry after updating settings",
+      "continueMessage": "Retry template preparation and generation using the saved inputs, latest plan and current model settings."
+    }
   },
   "usage": {
     "tokens": "{count, plural, one {token} other {tokens}}",

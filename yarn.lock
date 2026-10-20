@@ -7369,6 +7369,7 @@ __metadata:
     "@lct/pipeline": "workspace:^"
     "@lct/registry": "workspace:^"
     "@lct/run-store": "workspace:^"
+    "@lct/slide-audit": "workspace:^"
     "@nestjs/cli": "npm:^12.0.0"
     "@nestjs/common": "npm:^12.0.0"
     "@nestjs/core": "npm:^12.0.0"
@@ -7973,7 +7974,9 @@ __metadata:
     "@lct/pipeline": "workspace:^"
     "@lct/registry": "workspace:^"
     "@lct/run-store": "workspace:^"
+    fast-string-width: "npm:^3.0.2"
     yaml: "npm:^2.8.0"
+    zod: "npm:^4.6.0"
   bin:
     lct: dist/main.js
   languageName: unknown

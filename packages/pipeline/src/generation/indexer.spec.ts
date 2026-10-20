@@ -10,6 +10,7 @@ import {
   type IndexProgress,
 } from './indexer.js';
 import type { TextProvider } from './provider.js';
+import { ModelRequestError } from '../chat/model-failure.js';
 import { createGenerationWorkflow } from './workflow.js';
 
 const fixture = JSON.parse(
@@ -47,6 +48,96 @@ const note = (patternId: string, extra: Partial<CompositionNote> = {}): Composit
 });
 
 describe('indexTemplate', () => {
+  it('limits subsequent batches to three workers and cancels them on a provider refusal', async () => {
+    const failure = new ModelRequestError('Rejected', { kind: 'unsupported', modelId: 'planner' });
+    let calls = 0;
+    let active = 0;
+    let peak = 0;
+    let workerSignal: AbortSignal | undefined;
+    const provider: TextProvider = {
+      model: 'planner',
+      async generate<T>(
+        _agent: string,
+        _instructions: string,
+        input: unknown,
+        schema: z.ZodType<T>,
+        signal: AbortSignal,
+      ) {
+        const ids = (input as { compositions: { patternId: string }[] }).compositions.map(
+          (c) => c.patternId,
+        );
+        calls++;
+        if (calls === 1) return schema.parse({ notes: ids.map((id) => note(id)) });
+        workerSignal = signal;
+        active++;
+        peak = Math.max(peak, active);
+        try {
+          await Promise.resolve();
+          throw failure;
+        } finally {
+          active--;
+        }
+      },
+    };
+    const large = {
+      ...base,
+      compositions: Array.from({ length: 80 }, (_, index) => ({
+        ...first,
+        patternId: `large-${index}`,
+        sourceIndex: index,
+        slots: first.slots.map((s) => ({ ...s, sample: `${s.sample} ${index}` })),
+      })),
+    };
+    await expect(
+      indexTemplate({
+        provider,
+        instructions: '',
+        profile: large,
+        signal: AbortSignal.timeout(1000),
+      }),
+    ).rejects.toBe(failure);
+    expect(calls).toBeLessThanOrEqual(4);
+    expect(peak).toBe(3);
+    expect(workerSignal?.aborted).toBe(true);
+  });
+
+  it.each(['unsupported', 'unauthorized', 'rate-limit', 'quota-exhausted'] as const)(
+    'stops after the first refused batch instead of multiplying %s failures',
+    async (kind) => {
+      const failure = new ModelRequestError('Rejected', {
+        kind,
+        modelId: 'planner-model',
+        httpStatus: kind === 'rate-limit' ? 429 : 400,
+      });
+      let calls = 0;
+      const provider: TextProvider = {
+        model: 'planner-model',
+        async generate() {
+          calls++;
+          throw failure;
+        },
+      };
+      const large = {
+        ...base,
+        compositions: Array.from({ length: 80 }, (_, index) => ({
+          ...first,
+          patternId: `large-${index}`,
+          sourceIndex: index,
+          slots: first.slots.map((s) => ({ ...s, sample: `${s.sample} ${index}` })),
+        })),
+      };
+      await expect(
+        indexTemplate({
+          provider,
+          instructions: '',
+          profile: large,
+          signal: AbortSignal.timeout(1000),
+        }),
+      ).rejects.toBe(failure);
+      expect(calls).toBe(1);
+    },
+  );
+
   it('passes compact picture candidates including tiny ones and validates declared QR ids', async () => {
     const candidate = {
       slotId: 'tiny',

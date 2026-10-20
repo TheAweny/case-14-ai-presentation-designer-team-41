@@ -61,6 +61,7 @@ export const artifactManifestSchema = z.object({
   planId: z.string().min(1).describe('The plan all three variants were laid out from.'),
   contentRevision: z.number().int().positive().optional(),
   contentHash: z.string().length(64).optional(),
+  variantCopyMode: z.enum(['independent', 'shared']).optional(),
   seed: z
     .number()
     .int()

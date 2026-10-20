@@ -165,6 +165,7 @@ describe('chat tools by mode', () => {
       'check_slide_fit',
       'check_content_coverage',
       'read_build_status',
+      'save_preparation',
       'edit_slide',
     ]);
     expect(chat('plan').tools.map((tool) => tool.name)).toContain('build_deck');
@@ -272,14 +273,24 @@ describe('recommend', () => {
     ).toBe('airy');
   });
 
-  it('uses the default preference when an audit is unavailable, rather than treating it as clean', () => {
+  it('prefers known audit counts when another variant audit is unavailable', () => {
     expect(
       recommend([
         { variant: 'dense', deckId: 'd', errors: null, warnings: null },
         { variant: 'balanced', deckId: 'b', errors: 2, warnings: 5 },
         { variant: 'airy', deckId: 'a', errors: 0, warnings: 0 },
       ]),
-    ).toBe('balanced');
+    ).toBe('airy');
+  });
+
+  it('prefers dense with no errors over balanced with five when airy is unknown', () => {
+    expect(
+      recommend([
+        { variant: 'dense', deckId: 'd', errors: 0, warnings: 0 },
+        { variant: 'balanced', deckId: 'b', errors: 5, warnings: 0 },
+        { variant: 'airy', deckId: 'a', errors: null, warnings: null },
+      ]),
+    ).toBe('dense');
   });
 });
 

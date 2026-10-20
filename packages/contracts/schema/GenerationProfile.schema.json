@@ -51,6 +51,115 @@
                   ],
                   "type": "object"
                 },
+                "frame": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "crop": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "b": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "l": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "r": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "t": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "l",
+                            "t",
+                            "r",
+                            "b"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "known",
+                        "unknown"
+                      ],
+                      "type": "string"
+                    },
+                    "textColors": {
+                      "items": {
+                        "pattern": "^[0-9A-Fa-f]{6}$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "textRegions": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "height": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "protection": {
+                            "enum": [
+                              "solid",
+                              "none",
+                              "unknown"
+                            ],
+                            "type": "string"
+                          },
+                          "width": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "x": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "y": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                          "protection"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "textRegions",
+                    "textColors",
+                    "crop",
+                    "state"
+                  ],
+                  "type": "object"
+                },
                 "kind": {
                   "enum": [
                     "placeholder",
@@ -120,6 +229,115 @@
                   ],
                   "type": "object"
                 },
+                "frame": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "crop": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "b": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "l": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "r": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            },
+                            "t": {
+                              "exclusiveMaximum": 1,
+                              "minimum": 0,
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "l",
+                            "t",
+                            "r",
+                            "b"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "known",
+                        "unknown"
+                      ],
+                      "type": "string"
+                    },
+                    "textColors": {
+                      "items": {
+                        "pattern": "^[0-9A-Fa-f]{6}$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "textRegions": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "height": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "protection": {
+                            "enum": [
+                              "solid",
+                              "none",
+                              "unknown"
+                            ],
+                            "type": "string"
+                          },
+                          "width": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "x": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          "y": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                          "protection"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "textRegions",
+                    "textColors",
+                    "crop",
+                    "state"
+                  ],
+                  "type": "object"
+                },
                 "kind": {
                   "enum": [
                     "placeholder",
@@ -179,6 +397,29 @@
                     "y",
                     "cx",
                     "cy"
+                  ],
+                  "type": "object"
+                },
+                "capacity": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "basis": {
+                      "enum": [
+                        "geometry",
+                        "obstacle-aware",
+                        "sample-fallback"
+                      ],
+                      "type": "string"
+                    },
+                    "safeChars": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "safeChars",
+                    "basis"
                   ],
                   "type": "object"
                 },

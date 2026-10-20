@@ -1,5 +1,6 @@
 """I measure composed copy with installed font metrics without rewriting or resizing it."""
 
+import math
 import subprocess
 from functools import lru_cache
 from typing import Any
@@ -30,7 +31,7 @@ def measured_lines(text: str, slot: dict[str, Any]) -> int:
         return font.getlength(value) / 4 if font else len(value) * slot["fontSize"] * 0.58
 
     total = 0
-    for paragraph in text.replace("\v", "\n").split("\n"):
+    for paragraph in text.replace("\r\n", "\n").replace("\r", "\n").replace("\v", "\n").split("\n"):
         line = ""
         total += 1
         for word in paragraph.split():
@@ -42,8 +43,16 @@ def measured_lines(text: str, slot: dict[str, Any]) -> int:
                     total += 1
                 line = word
                 if length(word) > width:
-                    total += max(0, int(length(word) / max(1, width)))
+                    total += max(0, math.ceil(length(word) / max(1, width)) - 1)
     return total
+
+
+def measured_height(text: str, slot: dict[str, Any]) -> float:
+    """Hard paragraphs carry spacing; a soft break only starts another line."""
+    paragraphs = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    line_height = slot["fontSize"] * max(1.0, slot.get("lineSpacing", 1.15))
+    spacing = slot.get("spaceBeforePt", 0) + slot.get("spaceAfterPt", 0)
+    return measured_lines(text, slot) * line_height + len(paragraphs) * spacing
 
 
 def broken_words(text: str, slot: dict[str, Any]) -> list[str]:
@@ -94,7 +103,10 @@ def check_composition_text(
                     "in the middle. Replace it with a shorter word; do not hyphenate it.",
                 }
             )
-        if lines > slot["maxLines"] or len(text) > slot["maxChars"]:
+        height = measured_height(text, slot)
+        allowed_height = slot.get("textHeightPt")
+        height_overflow = allowed_height is not None and height > allowed_height
+        if lines > slot["maxLines"] or len(text) > slot["maxChars"] or height_overflow:
             findings.append(
                 {
                     "code": "text-overflow",

@@ -60,22 +60,16 @@ export function resultOfBuild(
         ]
       : [];
   });
-  const reviews = variants.every(({ deckId }) => {
-    const review = part.reviews?.[deckId];
-    return (
-      review &&
-      review.status !== undefined &&
-      review.status !== 'unknown' &&
-      review.contentRevision !== undefined &&
-      review.contentHash?.length === 64
-    );
-  })
-    ? part.reviews
-    : null;
+  const reviews = Object.fromEntries(
+    variants.flatMap(({ deckId }) => {
+      const review = part.reviews?.[deckId];
+      return review && isVerifiedReview(review) ? [[deckId, review] as const] : [];
+    }),
+  );
   return {
     runId: part.buildId,
     variants,
-    reviews,
+    reviews: Object.keys(reviews).length > 0 ? reviews : null,
     // Проверяем и старые сохранённые советы по тем же числам, которые показывает карточка.
     recommended: variants.length ? recommendVariant(variants, reviews) : part.recommended,
     templateSubstituted: false,
@@ -106,7 +100,8 @@ const PREFERENCE: readonly LayoutVariant[] = ['balanced', 'dense', 'airy'];
 
 /**
  * Какой вариант советовать: меньше ошибок, затем меньше замечаний, затем сбалансированный.
- * Без полного аудита — сбалансированный, если он есть: неизвестные числа не равны нулю.
+ * Сравнивает доступные числа; неизвестные значения уступают известным и не равны нулю.
+ * Если все значения неизвестны, порядок предпочтения выбирает сбалансированный вариант.
  */
 export function recommendVariant(
   variants: readonly Pick<GeneratedVariant, 'variant' | 'deckId'>[],
@@ -116,17 +111,39 @@ export function recommendVariant(
     const at = PREFERENCE.indexOf(variant);
     return at < 0 ? PREFERENCE.length : at;
   };
-  const audited = variants.every((item) => reviews?.[item.deckId] !== undefined);
   const sorted = [...variants].sort((a, b) => {
-    const ra = reviews?.[a.deckId];
-    const rb = reviews?.[b.deckId];
-    if (audited && ra && rb) {
-      if (ra.errors !== rb.errors) return ra.errors - rb.errors;
-      if (ra.warnings !== rb.warnings) return ra.warnings - rb.warnings;
-    }
+    const ra = usableCounts(reviews?.[a.deckId]);
+    const rb = usableCounts(reviews?.[b.deckId]);
+    const errors = compareKnown(ra?.errors ?? null, rb?.errors ?? null);
+    if (errors !== 0) return errors;
+    const warnings = compareKnown(ra?.warnings ?? null, rb?.warnings ?? null);
+    if (warnings !== 0) return warnings;
     return rank(a.variant) - rank(b.variant);
   });
   const best = sorted[0];
   if (!best) throw new Error('No variants to recommend');
   return best.variant;
+}
+
+function isVerifiedReview(review: VariantReview): review is VariantReview & {
+  readonly status: 'complete' | 'requires-review';
+  readonly contentRevision: number;
+  readonly contentHash: string;
+} {
+  return (
+    (review.status === 'complete' || review.status === 'requires-review') &&
+    review.contentRevision !== undefined &&
+    review.contentHash?.length === 64
+  );
+}
+
+function usableCounts(review: VariantReview | undefined): VariantReview | undefined {
+  return review && review.status !== 'unknown' ? review : undefined;
+}
+
+/** A missing count sorts after a known count; unknown is never converted to zero. */
+function compareKnown(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : 1;
+  if (b === null) return -1;
+  return a - b;
 }

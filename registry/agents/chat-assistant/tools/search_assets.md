@@ -6,3 +6,7 @@ from 8 text searches and 24 page reads, with 36 web operations overall. Successf
 query and limit are cached for free; a failed call consumes one image search. On
 web_budget_exhausted, stop repeating the exhausted operation and use the remaining tools.
 Only a later message from the person starts a new turn and resets budgets.
+
+This tool only discovers links. build_deck does not accept a selected imageUrl, and this tool
+does not insert or save pictures. Do not claim a found image was added to a slide or promise
+automatic insertion. Explain this limitation when the person asks to use a search result.

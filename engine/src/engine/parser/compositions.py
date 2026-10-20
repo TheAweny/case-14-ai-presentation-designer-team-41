@@ -1,6 +1,5 @@
 """I recover reusable text compositions from actual slides without changing their geometry."""
 
-import math
 import re
 from pathlib import Path
 from typing import Any
@@ -8,7 +7,14 @@ from typing import Any
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
 
+from engine.parser._composition_geometry import (
+    attach_image_frames,
+    estimate_room,
+    resolved_metrics,
+    safe_room,
+)
 from engine.parser._text_style import inherited_shapes, text_metrics
+from engine.parser.slides import read_deck
 
 _Transform = tuple[float, float, float, float]
 _IDENTITY: _Transform = (0.0, 0.0, 1.0, 1.0)
@@ -250,9 +256,40 @@ def _assign_single_title(slots: list[dict[str, Any]], slide_height: int) -> None
         slot["role"] = "title" if slot is keep else "body"
 
 
+def _autofit(shape: Any, slide: Any) -> tuple[float, float]:
+    """Export disables template shrink-to-fit; measure nominal fonts before accepting copy."""
+    for item in inherited_shapes(shape, slide):
+        body = item.text_frame._txBody.find(f"{_NS_A}bodyPr")
+        if body is None:
+            continue
+        auto = next(
+            (
+                c
+                for c in body
+                if c.tag
+                in {
+                    f"{_NS_A}normAutofit",
+                    f"{_NS_A}noAutofit",
+                    f"{_NS_A}spAutoFit",
+                }
+            ),
+            None,
+        )
+        if auto is None:
+            continue
+        if auto.tag == f"{_NS_A}normAutofit":
+            return max(0.01, int(auto.get("fontScale", "100000")) / 100000), int(
+                auto.get("lnSpcReduction", "0")
+            ) / 100000
+        break
+    return 1.0, 0.0
+
+
 def extract_compositions(path: Path) -> list[dict[str, Any]]:
     """I expose every editable text slot and its inherited typography to the writer."""
     presentation = Presentation(str(path))
+    # Reuse the existing reader for inherited paragraph/list styles and grouped geometry.
+    resolved_slides = read_deck(path, [])
     slide_height = presentation.slide_height
     if slide_height is None:
         raise ValueError("Template has no slide height.")
@@ -273,6 +310,9 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
             continue
         slide_area = (presentation.slide_width or 1) * slide_height
         backdrops = _backdrops(slide)
+        resolved = resolved_slides[index]["elements"]
+        image_slots = _image_slots(placed, slide_area)
+        image_ids = {s["slotId"] for s in image_slots}
         for shape, transform in placed:
             if not shape.has_text_frame:
                 continue
@@ -291,33 +331,71 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
             if box["y"] > slide_height * 0.88 and text.isdigit():
                 continue
             metrics = text_metrics(shape, slide)
+            element = next(
+                (
+                    e
+                    for e in resolved
+                    if e.get("paragraphs")
+                    and e.get("sourceShapeId") == shape.shape_id
+                    and e["elementId"].startswith("slide-")
+                ),
+                None,
+            )
+            if element is not None:
+                box = element["box"]
+                font_scale, spacing_reduction = _autofit(shape, slide)
+                metrics = resolved_metrics(
+                    element, metrics, font_scale=font_scale, spacing_reduction=spacing_reduction
+                )
+            elif prompt is not None:
+                # Empty placeholders have no visible copy in SlideIR. Their inherited metrics
+                # still describe real room, rather than the length of the layout prompt.
+                element = {
+                    "elementId": f"slide-{shape.shape_id}",
+                    "sourceShapeId": shape.shape_id,
+                    "kind": "text",
+                    "box": box,
+                    "rotation": shape.rotation,
+                }
+            physical_chars, _ = estimate_room(metrics)
             reach = _backdrop_width(box, backdrops)
             if reach is not None:
                 frame = shape.text_frame
                 inner = (reach - (frame.margin_left or 0) - (frame.margin_right or 0)) / 12700
                 metrics["textWidthPt"] = max(1.0, min(metrics["textWidthPt"], inner))
-            size = metrics["fontSize"]
-            line_height = max(size, size * metrics["lineSpacing"])
-            lines = max(1, int((metrics["textHeightPt"] + size * 0.15) / line_height))
-            chars_per_line = max(1, int(metrics["textWidthPt"] / (size * 0.59)))
-            capacity = chars_per_line * lines
+            obstacles: list[str] = []
+            unknown = element is None
+            if element is not None:
+                metrics, obstacles, unknown = safe_room(element, metrics, resolved, image_ids)
+            transforms = shape._element.xpath("ancestor-or-self::p:grpSp/p:grpSpPr/a:xfrm")
+            unknown = unknown or any(
+                t.get("rot", "0") != "0" or t.get("flipH", "0") == "1" or t.get("flipV", "0") == "1"
+                for t in transforms
+            )
+            body = shape.text_frame._txBody.find(f"{_NS_A}bodyPr")
+            unknown = unknown or (body is not None and body.get("vert", "horz") != "horz")
+            paragraph_count = max(1, len(shape.text_frame.paragraphs))
+            capacity, lines = estimate_room(metrics, paragraph_count)
             is_placeholder_title = shape.is_placeholder and shape.placeholder_format.type in (
                 PP_PLACEHOLDER.TITLE,
                 PP_PLACEHOLDER.CENTER_TITLE,
             )
-            headline = is_placeholder_title or (size >= 24 and box["y"] < slide_height * 0.3)
-            # I keep text away from decorative art drawn inside oversized source text boxes. An
-            # empty placeholder has no art in it, and its prompt is short by nature.
-            if prompt is None and not headline and size >= 14 and lines > 4 and len(text) < 90:
-                capacity = min(capacity, max(24, math.ceil(len(text) * 1.15)))
+            # An unsupported transform/overlap cannot certify expanded copy. Short samples
+            # alone never restrict a geometrically understood frame.
+            basis = "obstacle-aware" if obstacles or reach is not None else "geometry"
+            if unknown:
+                basis = "sample-fallback"
+                capacity = min(capacity, max(4, len(text or prompt or "")))
+            assert capacity <= physical_chars
             slots.append(
                 {
                     "slotId": str(shape.shape_id),
                     "role": "title" if is_placeholder_title else "body",
                     "sample": (text or prompt or "")[:220],
                     **({"prompt": True} if prompt is not None else {}),
-                    "maxChars": max(4, min(capacity, 750)),
+                    "maxChars": capacity,
                     "maxLines": lines,
+                    "capacity": {"safeChars": capacity, "basis": basis},
                     **metrics,
                     "box": box,
                 }
@@ -329,36 +407,18 @@ def extract_compositions(path: Path) -> list[dict[str, Any]]:
         if len(slots) == 1 and slots[0]["fontSize"] < 32 and image_count:
             continue
         if slots and len(slots) <= 14:
-            for slot in slots:
-                box = slot["box"]
-                for other in slots:
-                    target = other["box"]
-                    overlap_x = min(box["x"] + box["cx"], target["x"] + target["cx"]) - max(
-                        box["x"], target["x"]
-                    )
-                    if target["y"] > box["y"] and overlap_x > min(box["cx"], target["cx"]) * 0.5:
-                        gap = (target["y"] - box["y"]) / 12700 - 4
-                        if gap < slot["textHeightPt"]:
-                            slot["textHeightPt"] = max(1.0, gap)
-                            old_lines = slot["maxLines"]
-                            slot["maxLines"] = max(
-                                1, int(gap / (slot["fontSize"] * max(1, slot["lineSpacing"])))
-                            )
-                            slot["maxChars"] = max(
-                                4, int(slot["maxChars"] * slot["maxLines"] / old_lines)
-                            )
             slots.sort(key=lambda s: (s["role"] != "title", s["box"]["y"], s["box"]["x"]))
-            patterns.append(
-                {
-                    "patternId": f"source-slide-{index}",
-                    "sourceIndex": index,
-                    "name": slide.slide_layout.name,
-                    "slots": slots,
-                    "imageCount": image_count,
-                    "imageSlots": _image_slots(placed, slide_area),
-                    "qrCandidateSlots": _qr_candidates(placed),
-                }
-            )
+            pattern = {
+                "patternId": f"source-slide-{index}",
+                "sourceIndex": index,
+                "name": slide.slide_layout.name,
+                "slots": slots,
+                "imageCount": image_count,
+                "imageSlots": image_slots,
+                "qrCandidateSlots": _qr_candidates(placed),
+            }
+            attach_image_frames(pattern, resolved_slides[index])
+            patterns.append(pattern)
     if not patterns:
         raise ValueError("Template contains no usable editable text compositions.")
     return patterns

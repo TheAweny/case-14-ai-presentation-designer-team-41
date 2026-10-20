@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { compositionPlanSchema, generationRequestSchema } from '@lct/contracts';
-import { generatePresentation } from '@lct/pipeline';
+import { currentTemplateIndexRevision, dependencyKey, generatePresentation } from '@lct/pipeline';
+import { fileURLToPath } from 'node:url';
 import type * as Pipeline from '@lct/pipeline';
 import { GenerationBuildStore, PostgresRunRepository } from '@lct/run-store';
 import type { Account } from '../accounts/account-rules.js';
@@ -33,6 +34,20 @@ const profile = JSON.parse(
     'utf8',
   ),
 ).valid[0].payload;
+const index = {
+  templateHash: profile.templateHash,
+  profileHash: dependencyKey(profile),
+  revision: await currentTemplateIndexRevision(
+    fileURLToPath(new URL('../../../../registry/agents', import.meta.url)),
+  ),
+  notes: profile.compositions.map((p: { patternId: string }) => ({
+    patternId: p.patternId,
+    kind: 'other',
+    items: 1,
+    useFor: 'Recovery fixture',
+    skip: false,
+  })),
+};
 const plan = compositionPlanSchema.parse({
   title: 'Accepted story',
   audience: '',
@@ -165,7 +180,7 @@ describe.skipIf(!databaseUrl)(
       vi.spyOn(service, 'template').mockResolvedValue({
         storage_path: join(root, 'fixture.pptx'),
         file_name: 'fixture.pptx',
-        profile: { generation: profile, generationRevision: PROFILE_REVISION },
+        profile: { generation: profile, generationRevision: PROFILE_REVISION, index },
       });
       services.push(service);
       return service;

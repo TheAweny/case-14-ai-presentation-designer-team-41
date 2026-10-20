@@ -9,6 +9,7 @@ import {
   finalReviewSchema,
   type CompositionNote,
   type DeckOutline,
+  type Dataset,
   type GenerationProfile,
   type ImageSlot,
   type JobEvent,
@@ -17,6 +18,7 @@ import {
   type RunArtifact,
   type GenerationUsage,
   type BrandbookBinding,
+  type VariantCopyMode,
 } from '@lct/contracts';
 import { createMastra, closeMastra } from '../mastra.js';
 import {
@@ -43,9 +45,13 @@ import { leakedSamples } from './samples.js';
 import { approvedCoverage } from './final-review.js';
 import type { TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
+import { assessLayoutDiversity } from './layout-diversity.js';
 import type { ModelProvider } from '../models/provider.js';
 import { saveQrAssets } from './qr-assets.js';
 import { generationFailure } from './failure.js';
+import { compositionSemantics } from './semantics.js';
+import { loadWriterModules } from './writer-prompt.js';
+import type { AttemptBudget } from './attempt-budget.js';
 import { reviewVariantVisually, type VisualReview } from './visual-review.js';
 import {
   contextualCorrections,
@@ -84,6 +90,7 @@ export interface GenerateOptions {
   profile: GenerationProfile;
   /** Effective brand rules captured for this immutable build, if selected. */
   brandbook?: BrandbookBinding;
+  preparedDatasets?: readonly Dataset[];
   /** The template indexer's notes for this profile, if the template was indexed. */
   notes?: readonly CompositionNote[];
   registryDir: string;
@@ -100,6 +107,8 @@ export interface GenerateOptions {
   /** The plan shared by the variants of one brief, so it is made once. */
   sharedPlan?: SharedPlan;
   sharedContent?: SharedContent;
+  variantCopyMode?: VariantCopyMode;
+  attemptBudget?: AttemptBudget;
   /** The day the deck is dated by. Absent: today. */
   today?: Date;
   /**
@@ -123,7 +132,7 @@ export interface GenerateOptions {
   eventSequence?: number;
 }
 
-/** Time kept for export, audit and render after the pictures are awaited, in ms. */
+/** Time unavailable to writers and repairs: reserved for export, render and final audit. */
 const EXPORT_RESERVE_MS = 60_000;
 /** The run's own deadline, under the five minutes the three variants share. */
 const RUN_DEADLINE_MS = 290_000;
@@ -131,6 +140,92 @@ const RUN_DEADLINE_MS = 290_000;
 const REVIEW_RESERVE_MS = 12_000;
 /** Under this the slides are not asked about: a review that cannot finish would only be thrown away. */
 const REVIEW_MIN_MS = 8_000;
+
+/** An abortable stage inside the absolute build deadline, with no late result acceptance. */
+export function openGenerationStage(parent: AbortSignal, deadlineAt: number) {
+  const stop = new AbortController();
+  const signal = AbortSignal.any([parent, stop.signal]);
+  const timeout = () => stop.abort(new DOMException('Stage deadline exceeded.', 'TimeoutError'));
+  const remaining = deadlineAt - Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  if (remaining <= 0) timeout();
+  else if (!parent.aborted) {
+    timer = setTimeout(timeout, remaining);
+    timer.unref?.();
+  }
+  const dispose = () => {
+    clearTimeout(timer);
+    parent.removeEventListener('abort', dispose);
+  };
+  parent.addEventListener('abort', dispose, { once: true });
+  return {
+    signal,
+    dispose,
+    async run<T>(work: () => Promise<T>): Promise<T> {
+      signal.throwIfAborted();
+      let onAbort: () => void = () => undefined;
+      const aborted = new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      });
+      try {
+        const result = await Promise.race([
+          Promise.resolve().then(() => {
+            signal.throwIfAborted();
+            return work();
+          }),
+          aborted,
+        ]);
+        signal.throwIfAborted();
+        return result;
+      } finally {
+        signal.removeEventListener('abort', onAbort);
+      }
+    },
+  };
+}
+
+/** Semantic calls per slide are bounded independently of HTTP/schema retries and durable keys. */
+export function boundedGenerationProvider(provider: TextProvider): TextProvider {
+  const attempts = new Map<string, number>();
+  return {
+    model: provider.model,
+    get calls() {
+      return provider.calls;
+    },
+    setAgentGeneration: (agent, generation) => provider.setAgentGeneration?.(agent, generation),
+    async generate<T>(
+      agent: string,
+      instructions: string,
+      input: unknown,
+      schema: z.ZodType<T>,
+      signal: AbortSignal,
+    ) {
+      signal.throwIfAborted();
+      if (agent === 'writer' || agent === 'rewriter') {
+        const task = input as {
+          index?: number;
+          variant?: string;
+          purpose?: string;
+          slots?: { slotId: string }[];
+        };
+        const key = JSON.stringify([
+          agent,
+          task.index ?? task.purpose,
+          task.variant,
+          agent === 'rewriter' ? task.slots?.map((slot) => slot.slotId).sort() : undefined,
+        ]);
+        const count = attempts.get(key) ?? 0;
+        const limit = agent === 'writer' ? 3 : 2;
+        if (count >= limit)
+          throw new Error(`Semantic attempt limit reached for ${agent} slide ${task.index}.`);
+        attempts.set(key, count + 1);
+      }
+      return provider.generate(agent, instructions, input, schema, signal);
+    },
+  };
+}
 
 export class ContentFitError extends Error {
   readonly code = 'content-overflow';
@@ -164,18 +259,12 @@ export async function generatePresentation(options: GenerateOptions) {
     options.deadlineAt ?? started + RUN_DEADLINE_MS,
     started + RUN_DEADLINE_MS,
   );
-  const remaining = deadlineAt - Date.now();
-  const deadlineController = new AbortController();
-  if (remaining <= 0) {
-    deadlineController.abort(
-      new DOMException('The operation was aborted due to timeout', 'TimeoutError'),
-    );
-  }
-  const signal = AbortSignal.any([
-    deadlineController.signal,
-    AbortSignal.timeout(Math.max(0, remaining)),
-    ...(options.signal ? [options.signal] : []),
-  ]);
+  const runBudget = openGenerationStage(options.signal ?? new AbortController().signal, deadlineAt);
+  const signal = runBudget.signal;
+  const contentDeadlineAt = deadlineAt - EXPORT_RESERVE_MS;
+  const contentBudget = openGenerationStage(signal, contentDeadlineAt);
+  const contentSignal = contentBudget.signal;
+  const provider = boundedGenerationProvider(options.provider);
   let seq = options.eventSequence ?? 0;
   let events = Promise.resolve();
   let terminal = false;
@@ -197,7 +286,18 @@ export async function generatePresentation(options: GenerateOptions) {
   await mkdir(options.outputDir, { recursive: true });
   // A card heading the template placed highest reads as a heading everywhere: in the plan, the
   // writer, the critic and the repair.
-  const profile = withCardHeadingProfile(options.profile);
+  const profile = withCardHeadingProfile(options.profile, options.notes);
+  // Before the planner, the writer and any picture: a template with one composition cannot
+  // become three designs, and dropping facts would not make it so.
+  const layoutDiversity = assessLayoutDiversity(profile);
+  if (layoutDiversity.limitation) {
+    await emit({
+      type: 'warning',
+      stage,
+      code: 'layout-diversity-limited',
+      message: layoutDiversity.limitation,
+    });
+  }
   // One date for the whole run: the writer and the audit judge years by the same day.
   const today = options.today ?? new Date();
   const sourceBrief =
@@ -215,6 +315,12 @@ export async function generatePresentation(options: GenerateOptions) {
     const writer = await loadAgent(join(options.registryDir, 'slide-writer'));
     const rewriter = await loadAgent(join(options.registryDir, 'slot-rewriter'));
     const critic = await loadAgent(join(options.registryDir, 'deck-critic'));
+    const writerModules = await loadWriterModules(writer.directory);
+    // Hash every module with its agent, while each request uses only its selected modules.
+    const writerRevision = {
+      ...writer,
+      instructions: writer.instructions + JSON.stringify(writerModules),
+    };
     if (options.provider.setAgentGeneration) {
       for (const [role, agent] of [
         ['planner', planner],
@@ -248,6 +354,7 @@ export async function generatePresentation(options: GenerateOptions) {
               purpose: slide.purpose,
               deck: { title: slide.title, audience: slide.audience, goal: slide.goal },
               box: frame.box,
+              frame: frame.frame ?? null,
             }),
           });
         });
@@ -269,10 +376,14 @@ export async function generatePresentation(options: GenerateOptions) {
     };
     let qrImages = new Map<number, NonNullable<z.infer<typeof writtenSchema>['slide']['images']>>();
     const workflow = createGenerationWorkflow({
-      provider: options.provider,
+      provider,
+      preparedDatasets: options.preparedDatasets,
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      writerModules,
+      variantCopyMode: options.variantCopyMode ?? 'independent',
+      ...(options.attemptBudget ? { attemptBudget: options.attemptBudget } : {}),
       variant: options.variant ?? 'balanced',
       ...(options.layoutRemapPolicy ? { layoutRemapPolicy: options.layoutRemapPolicy } : {}),
       ...(options.sharedPlan ? { sharedPlan: options.sharedPlan } : {}),
@@ -288,11 +399,11 @@ export async function generatePresentation(options: GenerateOptions) {
           slides,
           new Map((options.notes ?? []).map((note) => [note.patternId, note])),
           sourceBrief,
-          signal,
+          contentSignal,
         );
         qrImages = assets.images;
       },
-      signal,
+      signal: contentSignal,
       concurrency: 3,
       ...(options.notes ? { notes: options.notes } : {}),
       onProgress: async (done, total) =>
@@ -309,13 +420,17 @@ export async function generatePresentation(options: GenerateOptions) {
       },
     });
     const repairWorkflow = createRepairWorkflow({
-      provider: options.provider,
+      provider,
+      preparedDatasets: options.preparedDatasets,
       plannerInstructions: planner.instructions,
       writerInstructions: writer.instructions,
       repairInstructions: rewriter.instructions,
+      variantCopyMode: options.variantCopyMode ?? 'independent',
+      ...(options.attemptBudget ? { attemptBudget: options.attemptBudget } : {}),
+      ...(options.notes ? { notes: options.notes } : {}),
       variant: options.variant ?? 'balanced',
       today,
-      signal,
+      signal: contentSignal,
       concurrency: 3,
       onWarning: async (message) => {
         reviewWarnings.push(message);
@@ -329,14 +444,16 @@ export async function generatePresentation(options: GenerateOptions) {
     });
     ownedMastra = mastra;
     const run = await mastra.getWorkflow('generation').createRun();
-    const result = await run.start({
-      inputData: {
-        brief: sourceBrief,
-        slideCount: options.slideCount,
-        profile,
-        outline: options.outline ?? null,
-      },
-    });
+    const result = await contentBudget.run(() =>
+      run.start({
+        inputData: {
+          brief: sourceBrief,
+          slideCount: options.slideCount,
+          profile,
+          outline: options.outline ?? null,
+        },
+      }),
+    );
     if (result.status !== 'success')
       throw result.status === 'failed' ? result.error : new Error(`Workflow ${result.status}`);
     signal.throwIfAborted();
@@ -466,6 +583,12 @@ export async function generatePresentation(options: GenerateOptions) {
       slides: written.map((s) => {
         const pattern = profile.compositions.find((p) => p.patternId === s.slide.patternId);
         const headline = pattern ? headlineSlot(pattern) : undefined;
+        const semantics = pattern
+          ? compositionSemantics(
+              pattern,
+              options.notes?.find((note) => note.patternId === pattern.patternId),
+            )
+          : undefined;
         return {
           slideIndex: s.index,
           approvedSlide:
@@ -473,6 +596,8 @@ export async function generatePresentation(options: GenerateOptions) {
               ? null
               : (s.approvedSlide ?? options.outline?.slides[s.index] ?? null),
           patternId: s.slide.patternId,
+          requiredClaims: s.requiredClaims,
+          groups: semantics?.groups ?? [],
           speakerNotes: s.slide.speakerNotes,
           visual: s.slide.visual ?? null,
           texts: s.slide.texts
@@ -481,6 +606,7 @@ export async function generatePresentation(options: GenerateOptions) {
               const slot = pattern?.slots.find((item) => item.slotId === t.slotId);
               return {
                 ...t,
+                ...semantics?.slots.find((slot) => slot.slotId === t.slotId),
                 role: slot?.role === 'title' && slot.slotId !== headline ? 'heading' : slot?.role,
                 sample: slot?.sample,
                 maxChars: slot?.maxChars,
@@ -490,159 +616,183 @@ export async function generatePresentation(options: GenerateOptions) {
         };
       }),
     });
-    const critiqueCurrent = () =>
-      options.provider.generate(
+    const critiqueCurrent = (auditSignal = contentSignal) =>
+      provider.generate(
         'critic',
         critic.instructions,
         critiqueInput(),
         critiqueSchema,
-        signal,
+        auditSignal,
       );
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
-      await clearLeakedSamples();
-      const [fit, critique] = await Promise.all([
-        options.engine.checkCompositions(exportRequest(), signal),
-        critiqueCurrent(),
-      ]);
-      // Slides are written one by one, so a figure or a title repeated across the deck is seen
-      // only here, over all of them.
-      const deck = written.flatMap((s) => {
-        const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
-        return composition ? [{ ...s, composition }] : [];
-      });
-      // Defects code sees for certain, whatever the critic said: a figure or a title repeated
-      // across the deck, a figure said twice on one slide or missing from the source, and a text
-      // block too thin for its box, which leaves the slide looking empty.
-      const variant = options.variant ?? 'balanced';
-      const repeats = [
-        ...deckRepeats(written[0]?.title ?? '', deck, sourceBrief),
-        ...slideFigureDefects(deck, sourceBrief),
-        ...slideTextRepeats(deck),
-        ...deck.flatMap((s) =>
-          s.composition.slots.flatMap((slot) => {
-            const least = minChars(slot, variant);
-            const text = s.slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
-            return least && text && text.length < least && slot.slotId !== s.slide.visual?.slotId
-              ? [
-                  {
-                    slideIndex: s.index,
-                    slotId: slot.slotId,
-                    category: 'incomplete-text' as const,
-                    message: thinMessage(text.length, least, fitChars(slot)),
-                  },
-                ]
-              : [];
-          }),
-        ),
-      ];
-      auditHistory.push({
-        attempt,
-        contentRevision,
-        contentHash: contentHash(),
-        fit: fit.findings,
-        critique: critique.issues,
-        repeats,
-      });
-      // A card heading is a short name; a critic asking it for a claim would have the rewriter
-      // turn every card into a sentence.
-      const namesAHeading = (issue: (typeof critique.issues)[number]) => {
-        if (issue.category !== 'label-title') return false;
-        const slide = written.find((s) => s.index === issue.slideIndex);
-        const pattern = profile.compositions.find((p) => p.patternId === slide?.slide.patternId);
-        return pattern !== undefined && headlineSlot(pattern) !== issue.slotId;
-      };
-      await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
-      await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
-      const issues = [
-        ...fit.findings.map((f) => ({
-          ...f,
-          message: `${f.message} Maximum ${f.maxChars} characters, ${f.maxLines} lines.`,
-        })),
-        // A critic that names several slots in one issue ("6,8") gets one issue per slot:
-        // the repair addresses slots by id, and a joined id would silently match none.
-        ...critique.issues
-          .filter((i) => i.category !== 'style' && !namesAHeading(i))
-          .flatMap((issue) =>
-            issue.slotId
-              .split(/[\s,;]+/)
-              .filter(Boolean)
-              .map((slotId) => ({ ...issue, slotId })),
-          ),
-        ...repeats,
-      ];
-      if (!issues.length) break;
-      if (attempt === 2) {
-        // The bounded repair could not cure every defect, yet the deck is still produced: the
-        // remaining findings become warnings. Three variants are mandatory, so a stuck quality
-        // gate must not drop one of them.
-        for (const finding of fit.findings) {
-          const message =
-            `Слайд ${finding.slideIndex + 1}, ${finding.slotId}: ${finding.message} ` +
-            `Maximum ${finding.maxChars} characters, ${finding.maxLines} lines.`;
-          reviewWarnings.push(message);
-          await emit({ type: 'warning', stage, code: 'content-review-required', message });
-        }
-        for (const issue of [...critique.issues.filter((i) => !namesAHeading(i)), ...repeats]) {
-          const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
-          reviewWarnings.push(message);
-          await emit({ type: 'warning', stage, code: 'content-review-required', message });
-        }
-        break;
-      }
-      const tasks: z.infer<typeof repairTaskSchema>[] = [];
-      for (const current of written) {
-        const corrections = issues.filter((i) => i.slideIndex === current.index);
-        if (!corrections.length) continue;
-        const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
-        if (!pattern) throw new Error('Missing composition during repair.');
-        const composition = {
-          ...pattern,
-          slots: pattern.slots.map((slot) => {
-            const finding = fit.findings.find(
-              (f) => f.slideIndex === current.index && f.slotId === slot.slotId,
-            );
-            return finding
-              ? { ...slot, maxChars: Math.min(slot.maxChars, finding.maxChars) }
-              : slot;
-          }),
-        };
-        tasks.push({
-          index: current.index,
-          brief: sourceBrief,
-          ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
-          purpose: current.purpose,
-          composition,
-          previous: current.slide,
-          corrections,
+      try {
+        contentSignal.throwIfAborted();
+        await clearLeakedSamples();
+        const [fit, critique] = await contentBudget.run(() =>
+          Promise.all([
+            options.engine.checkCompositions(exportRequest(), contentSignal),
+            critiqueCurrent(),
+          ]),
+        );
+        // Slides are written one by one, so a figure or a title repeated across the deck is seen
+        // only here, over all of them.
+        const deck = written.flatMap((s) => {
+          const composition = profile.compositions.find((p) => p.patternId === s.slide.patternId);
+          return composition ? [{ ...s, composition }] : [];
         });
-      }
-      if (!tasks.length) {
-        // The critic named slides the deck does not have: report the issues and finish instead
-        // of failing the variant, which would leave the user with fewer than three decks.
-        for (const issue of issues) {
-          const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
+        // Defects code sees for certain, whatever the critic said: a figure or a title repeated
+        // across the deck, a figure said twice on one slide or missing from the source, and a text
+        // block too thin for its box, which leaves the slide looking empty.
+        const variant = options.variant ?? 'balanced';
+        const repeats = [
+          ...deckRepeats(written[0]?.title ?? '', deck, sourceBrief),
+          ...slideFigureDefects(deck, sourceBrief),
+          ...slideTextRepeats(deck),
+          ...deck.flatMap((s) =>
+            s.composition.slots.flatMap((slot) => {
+              const semantics = compositionSemantics(
+                s.composition,
+                options.notes?.find((note) => note.patternId === s.composition.patternId),
+              );
+              const least = minChars(
+                { ...slot, ...semantics.slots.find((entry) => entry.slotId === slot.slotId) },
+                variant,
+              );
+              const text = s.slide.texts.find((t) => t.slotId === slot.slotId)?.text.trim() ?? '';
+              return least && text && text.length < least && slot.slotId !== s.slide.visual?.slotId
+                ? [
+                    {
+                      slideIndex: s.index,
+                      slotId: slot.slotId,
+                      category: 'incomplete-text' as const,
+                      message: thinMessage(text.length, least, fitChars(slot)),
+                    },
+                  ]
+                : [];
+            }),
+          ),
+        ];
+        auditHistory.push({
+          attempt,
+          contentRevision,
+          contentHash: contentHash(),
+          fit: fit.findings,
+          critique: critique.issues,
+          repeats,
+        });
+        // A card heading is a short name; a critic asking it for a claim would have the rewriter
+        // turn every card into a sentence.
+        const namesAHeading = (issue: (typeof critique.issues)[number]) => {
+          if (issue.category !== 'label-title') return false;
+          const slide = written.find((s) => s.index === issue.slideIndex);
+          const pattern = profile.compositions.find((p) => p.patternId === slide?.slide.patternId);
+          return pattern !== undefined && headlineSlot(pattern) !== issue.slotId;
+        };
+        await writeFile(
+          join(options.outputDir, 'audit.json'),
+          JSON.stringify(auditHistory, null, 2),
+        );
+        await writeFile(join(options.outputDir, 'plan.json'), JSON.stringify(written, null, 2));
+        const issues = [
+          ...fit.findings.map((f) => ({
+            ...f,
+            message: `${f.message} Maximum ${f.maxChars} characters, ${f.maxLines} lines.`,
+          })),
+          // A critic that names several slots in one issue ("6,8") gets one issue per slot:
+          // the repair addresses slots by id, and a joined id would silently match none.
+          ...critique.issues
+            .filter((i) => i.category !== 'style' && !namesAHeading(i))
+            .flatMap((issue) =>
+              issue.slotId
+                .split(/[\s,;]+/)
+                .filter(Boolean)
+                .map((slotId) => ({ ...issue, slotId })),
+            ),
+          ...repeats,
+        ];
+        if (!issues.length) break;
+        if (attempt === 2) {
+          // The bounded repair could not cure every defect, yet the deck is still produced: the
+          // remaining findings become warnings. Three variants are mandatory, so a stuck quality
+          // gate must not drop one of them.
+          for (const finding of fit.findings) {
+            const message =
+              `Слайд ${finding.slideIndex + 1}, ${finding.slotId}: ${finding.message} ` +
+              `Maximum ${finding.maxChars} characters, ${finding.maxLines} lines.`;
+            reviewWarnings.push(message);
+            await emit({ type: 'warning', stage, code: 'content-review-required', message });
+          }
+          for (const issue of [...critique.issues.filter((i) => !namesAHeading(i)), ...repeats]) {
+            const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
+            reviewWarnings.push(message);
+            await emit({ type: 'warning', stage, code: 'content-review-required', message });
+          }
+          break;
+        }
+        const tasks: z.infer<typeof repairTaskSchema>[] = [];
+        for (const current of written) {
+          const corrections = issues.filter((i) => i.slideIndex === current.index);
+          if (!corrections.length) continue;
+          const pattern = profile.compositions.find((p) => p.patternId === current.slide.patternId);
+          if (!pattern) throw new Error('Missing composition during repair.');
+          const composition = {
+            ...pattern,
+            slots: pattern.slots.map((slot) => {
+              const finding = fit.findings.find(
+                (f) => f.slideIndex === current.index && f.slotId === slot.slotId,
+              );
+              return finding
+                ? { ...slot, maxChars: Math.min(slot.maxChars, finding.maxChars) }
+                : slot;
+            }),
+          };
+          tasks.push({
+            index: current.index,
+            brief: sourceBrief,
+            ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
+            purpose: current.purpose,
+            requiredClaims: current.requiredClaims,
+            composition,
+            previous: current.slide,
+            corrections,
+          });
+        }
+        if (!tasks.length) {
+          // The critic named slides the deck does not have: report the issues and finish instead
+          // of failing the variant, which would leave the user with fewer than three decks.
+          for (const issue of issues) {
+            const message = `Слайд ${issue.slideIndex + 1}, поле ${issue.slotId}: ${issue.message}`;
+            reviewWarnings.push(message);
+            await emit({ type: 'warning', stage, code: 'content-review-required', message });
+          }
+          break;
+        }
+        const repairRun = await mastra.getWorkflow('repair').createRun();
+        const repaired = await contentBudget.run(() => repairRun.start({ inputData: tasks }));
+        if (repaired.status !== 'success') {
+          // A failed repair keeps the previous copy: the run goes on with a warning instead of
+          // failing, so the variant still reaches the export with the other two.
+          const message =
+            repaired.status === 'failed'
+              ? repaired.error.message
+              : `Repair workflow ${repaired.status}`;
           reviewWarnings.push(message);
           await emit({ type: 'warning', stage, code: 'content-review-required', message });
+          continue;
         }
-        break;
-      }
-      const repairRun = await mastra.getWorkflow('repair').createRun();
-      const repaired = await repairRun.start({ inputData: tasks });
-      if (repaired.status !== 'success') {
-        // A failed repair keeps the previous copy: the run goes on with a warning instead of
-        // failing, so the variant still reaches the export with the other two.
+        for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
+          const current = written.find((s) => s.index === update.index);
+          if (current) current.slide = { ...update.slide, images: current.slide.images };
+        }
+      } catch (error) {
+        signal.throwIfAborted();
+        if (!contentSignal.aborted) throw error;
         const message =
-          repaired.status === 'failed'
-            ? repaired.error.message
-            : `Repair workflow ${repaired.status}`;
+          'Время исправлений исчерпано. Сохранённый текст передан на экспорт и итоговую проверку.';
         reviewWarnings.push(message);
-        await emit({ type: 'warning', stage, code: 'content-review-required', message });
-        continue;
-      }
-      for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
-        const current = written.find((s) => s.index === update.index);
-        if (current) current.slide = { ...update.slide, images: current.slide.images };
+        await warn(message);
+        break;
       }
     }
     await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
@@ -794,7 +944,7 @@ export async function generatePresentation(options: GenerateOptions) {
         stop.abort();
       }
     };
-    contextual = await reviewPictures();
+    contextual = await reviewPictures(undefined, undefined, REVIEW_RESERVE_MS);
     const foundBefore = {
       deterministic: needsAttention(report.findings).length,
       contextual: contextual ? needsAttention(contextual.findings).length : 0,
@@ -830,7 +980,7 @@ export async function generatePresentation(options: GenerateOptions) {
           }))
         : []),
     ];
-    if (requested.length > 0) {
+    if (requested.length > 0 && !contentSignal.aborted) {
       const tasks: z.infer<typeof repairTaskSchema>[] = [];
       for (const current of written) {
         const corrections = requested
@@ -843,6 +993,7 @@ export async function generatePresentation(options: GenerateOptions) {
             brief: sourceBrief,
             ...(current.approvedSlide ? { approvedSlide: current.approvedSlide } : {}),
             purpose: current.purpose,
+            requiredClaims: current.requiredClaims,
             composition: pattern,
             previous: current.slide,
             corrections,
@@ -850,34 +1001,42 @@ export async function generatePresentation(options: GenerateOptions) {
         }
       }
       if (tasks.length) {
-        const repairRun = await mastra.getWorkflow('repair').createRun();
-        const repaired = await repairRun.start({ inputData: tasks });
-        if (repaired.status === 'success') {
-          for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
-            const current = written.find((s) => s.index === update.index);
-            if (current) current.slide = { ...update.slide, images: current.slide.images };
+        try {
+          const repairRun = await mastra.getWorkflow('repair').createRun();
+          const repaired = await contentBudget.run(() => repairRun.start({ inputData: tasks }));
+          if (repaired.status === 'success') {
+            for (const update of z.array(repairedSlideSchema).parse(repaired.result)) {
+              const current = written.find((s) => s.index === update.index);
+              if (current) current.slide = { ...update.slide, images: current.slide.images };
+            }
+            await settleFit();
+            output = await options.engine.exportCompositions(exportRequest(), signal);
+            report = await options.engine.auditCompositions(exportRequest(), signal);
+            // The slides that were rewritten are asked about again, from the new picture.
+            const rewritten = new Set(tasks.map((task) => task.index + 1));
+            if (contextual) {
+              contextual = await reviewPictures(rewritten, contextual, REVIEW_RESERVE_MS);
+            }
+            selfCheck.push({
+              round: 1,
+              found: foundBefore,
+              corrected: requested
+                .filter((r) => rewritten.has(r.index + 1))
+                .map((r) => ({ slide: r.index + 1, slotId: r.slotId, source: r.source })),
+              after: reviewedDeck(contextual)
+                ? {
+                    deterministic: needsAttention(report.findings).length,
+                    contextual: needsAttention(contextual.findings).length,
+                  }
+                : null,
+            });
           }
-          await settleFit();
-          output = await options.engine.exportCompositions(exportRequest(), signal);
-          report = await options.engine.auditCompositions(exportRequest(), signal);
-          // The slides that were rewritten are asked about again, from the new picture.
-          const rewritten = new Set(tasks.map((task) => task.index + 1));
-          if (contextual) {
-            contextual = await reviewPictures(rewritten, contextual, REVIEW_RESERVE_MS);
-          }
-          selfCheck.push({
-            round: 1,
-            found: foundBefore,
-            corrected: requested
-              .filter((r) => rewritten.has(r.index + 1))
-              .map((r) => ({ slide: r.index + 1, slotId: r.slotId, source: r.source })),
-            after: reviewedDeck(contextual)
-              ? {
-                  deterministic: needsAttention(report.findings).length,
-                  contextual: needsAttention(contextual.findings).length,
-                }
-              : null,
-          });
+        } catch (error) {
+          signal.throwIfAborted();
+          if (!contentSignal.aborted) throw error;
+          await warn(
+            'Дополнительное исправление остановлено для сохранения времени итоговой проверки.',
+          );
         }
       }
     }
@@ -914,8 +1073,18 @@ export async function generatePresentation(options: GenerateOptions) {
       );
     }
     // The final semantic check runs after every possible copy mutation and describes the export.
-    const finalCritique = await critiqueCurrent();
-    const coverage = approvedCoverage(options.outline, written, finalCritique.coverage);
+    const finalAudit = openGenerationStage(signal, deadlineAt - 3_000);
+    let finalCritique: z.infer<typeof critiqueSchema>;
+    try {
+      finalCritique = await finalAudit.run(() => critiqueCurrent(finalAudit.signal));
+    } finally {
+      finalAudit.dispose();
+    }
+    const coverage = approvedCoverage(
+      options.outlineSource === 'model' ? null : options.outline,
+      written,
+      finalCritique.coverage,
+    );
     const semanticErrors = finalCritique.issues.filter((i) => i.category !== 'style');
     const deterministicErrors = report.findings.filter(
       (f) => f.severity === 'blocker' || f.severity === 'major',
@@ -934,7 +1103,9 @@ export async function generatePresentation(options: GenerateOptions) {
       status: reviewedDeck(contextual)
         ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
           ? 'requires-review'
-          : 'complete'
+          : coverage.status === 'unknown'
+            ? 'unknown'
+            : 'complete'
         : 'unknown',
       deterministic: {
         errors: deterministicErrors,
@@ -954,6 +1125,11 @@ export async function generatePresentation(options: GenerateOptions) {
         semanticErrors.length +
         pictureWarnings,
     });
+    if (coverage.status === 'unknown') {
+      const message = 'Нет подтверждённого набора требований для проверки полноты содержания.';
+      reviewWarnings.push(message);
+      await warn(message);
+    }
     for (const missing of coverage.missing) {
       const message = `Слайд ${missing.slideIndex + 1}: не подтверждено сохранение утверждения «${missing.text}».`;
       reviewWarnings.push(message);
@@ -1040,8 +1216,13 @@ export async function generatePresentation(options: GenerateOptions) {
       title: written[0]?.title ?? 'Презентация',
       designSystem: options.profile.designSystem,
       templateIr: output.templateIr,
-      warnings: [...output.warnings, ...reviewWarnings],
+      warnings: [
+        ...output.warnings,
+        ...reviewWarnings,
+        ...(layoutDiversity.limitation ? [layoutDiversity.limitation] : []),
+      ],
       imagesMocked: illustrations === null,
+      layoutDiversity,
     };
     await writeFile(join(options.outputDir, 'deck.json'), JSON.stringify(deck));
     const artifacts: RunArtifact[] = [];
@@ -1077,9 +1258,10 @@ export async function generatePresentation(options: GenerateOptions) {
       contentRevision,
       contentHash: contentHash(),
       seed: options.seed ?? 42,
+      variantCopyMode: options.variantCopyMode ?? 'independent',
       revisions: [
         planner,
-        writer,
+        writerRevision,
         critic,
         rewriter,
         ...(illustrations ? [illustrations.agent] : []),
@@ -1170,7 +1352,10 @@ export async function generatePresentation(options: GenerateOptions) {
     const diagnostic = error as { message?: unknown } | null;
     const message =
       typeof diagnostic?.message === 'string' ? diagnostic.message : 'Generation failed.';
-    const failure = generationFailure(error, signal);
+    const failure = generationFailure(
+      error,
+      contentSignal.aborted && !signal.aborted ? contentSignal : signal,
+    );
     await writeFile(
       join(options.outputDir, 'failure.json'),
       JSON.stringify({
@@ -1189,6 +1374,8 @@ export async function generatePresentation(options: GenerateOptions) {
     });
     throw error;
   } finally {
+    contentBudget.dispose();
+    runBudget.dispose();
     if (ownedMastra) await closeMastra(ownedMastra);
   }
 }

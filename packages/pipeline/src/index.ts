@@ -90,6 +90,7 @@ export {
   type LayoutRemapComparison,
 } from './generation/remap-evaluation.js';
 export { generatePresentation, type GenerateOptions } from './generation/runner.js';
+export { prepareDatasets } from './generation/dataset-evidence.js';
 export {
   TaskCheckpoints,
   CheckpointTextProvider,
@@ -108,6 +109,11 @@ export {
   type ImageProvider,
 } from './generation/images.js';
 export { SharedIllustrations, styleOf, type Illustration } from './generation/illustrations.js';
+export {
+  acceptVariantLayouts,
+  assessLayoutDiversity,
+  type LayoutDiversity,
+} from './generation/layout-diversity.js';
 export {
   currentTemplateIndexRevision,
   templateIndexState,

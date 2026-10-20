@@ -771,6 +771,17 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
         "schemaVersion": 1,
         "deckId": output.parent.name,
         "slides": slides,
+        # File-backed checks must inspect the actual exported media, not the requested image
+        # or its full-frame average. Internal orchestration data is not a wire contract.
+        "pptxPath": str(output),
+        "editableTextShapeIds": [
+            [
+                binding.slotId
+                for binding in slide.texts
+                if slide.visual is None or binding.slotId != slide.visual.slotId
+            ]
+            for slide in request.slides
+        ],
         "designSystem": parser.design_system_of(source),
         "patternCatalog": None,
         # What each slot showed in the template, so copy left from the sample is told apart.
@@ -790,4 +801,12 @@ def composition_audit(request: CompositionExportRequest) -> AuditReport:
         profile = deterministic_profile("composition")
     except UnknownProfileError:
         profile = {}
-    return AuditReport.model_validate(checks.audit_deck(payload, "composition", profile))
+    report = checks.audit_deck(payload, "composition", profile)
+    # The file check names OOXML shapes; composition SlideIR names those same editable
+    # shapes slot-<id>. Preserve an actionable target for clients consuming this endpoint.
+    for finding in report["findings"]:
+        if finding["checkId"] == "image-text-readability":
+            element_id = finding["target"].get("elementId")
+            if element_id:
+                finding["target"]["elementId"] = f"slot-{element_id.rsplit('-', 1)[-1]}"
+    return AuditReport.model_validate(report)

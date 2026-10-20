@@ -576,6 +576,7 @@ A palette role, or six hex digits without a hash when a user chose their own.
 
 | Поле | Тип | Обязательно | Описание |
 | --- | --- | --- | --- |
+| `variantCopyMode` | — | нет |  |
 | `requestId` | string | нет |  |
 | `budget` | object | нет |  |
 | `outlineSource` | `user`, `model` | нет |  |
@@ -787,6 +788,9 @@ Six hex digits, no leading hash.
 | `modelId` | string | нет |  |
 | `connectionId` | string | нет |  |
 | `retryAt` | integer | нет |  |
+| `stage` | `template-index` | нет |  |
+| `role` | `planner` | нет |  |
+| `httpStatus` | integer | нет |  |
 
 ## ModelId
 
@@ -1423,6 +1427,10 @@ Six hex digits, no leading hash.
 | `template` | object | да |  |
 | `content` | object | да |  |
 | `outputDir` | string | да |  |
+
+## VariantCopyMode
+
+Тип: ``independent`, `shared``.
 
 ## VariantReview
 

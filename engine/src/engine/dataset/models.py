@@ -24,7 +24,7 @@ from engine.contracts._generated import (
     Source36 as Source,
 )
 from engine.contracts._generated import (
-    State4 as SheetState,
+    State6 as SheetState,
 )
 from engine.contracts._generated import (
     Status11 as DatasetStatus,

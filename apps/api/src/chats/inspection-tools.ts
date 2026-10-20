@@ -3,8 +3,10 @@ import {
   compositionCheckResponseSchema,
   generationProfileSchema,
   type CompositionExportRequest,
+  type EditorSnapshotLoad,
 } from '@lct/contracts';
 import type { ChatTool, ToolContext } from '@lct/pipeline';
+import { auditSlide } from '@lct/slide-audit';
 import { RUN_STATES } from '@lct/run-store';
 import { z } from 'zod';
 import type { Account } from '../accounts/account-rules.js';
@@ -12,10 +14,14 @@ import { checkContentCoverage } from './content-coverage.js';
 import { chatDecks, type ChatToolScope } from './chat-tools.js';
 import {
   readSavedOutlineFacts,
-  readSavedPlan,
+  readInspectionSlide,
+  inspectionProvenance,
+  readInspectionDesignSystem,
+  readSnapshotPreview,
+  DeckInspectionError,
   readSavedPreview,
   readSavedRequest,
-  readSavedSlide,
+  canonicalPlanHash,
 } from './deck-inspection.js';
 
 const MAX_RESULT_CHARS = 10_000;
@@ -39,9 +45,19 @@ export interface InspectionGeneration {
   };
 }
 
+export interface InspectionDependency {
+  loadSnapshot(deckId: string, account: Account): Promise<EditorSnapshotLoad>;
+}
+
 const deckInput = z.object({
   deckId: z.string().min(1),
   slideIndex: z.number().int().positive(),
+  source: z.enum(['saved', 'original']).default('saved'),
+  expectedRevision: z.number().int().nonnegative().optional(),
+  expectedContentHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 
 const fitInput = deckInput.extend({
@@ -73,6 +89,7 @@ function boundedError(error: string | null): string | null {
 export function inspectionTools(
   generation: InspectionGeneration,
   scope: ChatToolScope,
+  inspection?: InspectionDependency,
 ): ChatTool[] {
   const account = scope.account;
 
@@ -107,13 +124,40 @@ export function inspectionTools(
       const request = deckInput.parse(input);
       const root = await ownFinishedDeck(request.deckId, context.signal);
       context.signal.throwIfAborted();
-      const preview = await readSavedPreview({
-        root,
-        deckId: request.deckId,
-        slideIndex: request.slideIndex,
-      });
+      const ref = { root, deckId: request.deckId, slideIndex: request.slideIndex };
+      const { read, assertCurrent } = await readInspectionSlide(
+        ref,
+        request,
+        inspection ? () => inspection.loadSnapshot(request.deckId, account) : undefined,
+      );
       context.signal.throwIfAborted();
-      return { output: bounded(preview) };
+      let preview: unknown;
+      if (read.source === 'server-snapshot') {
+        preview = await readSnapshotPreview(ref, read);
+      } else {
+        try {
+          const original = await readSavedPreview(ref);
+          if (original.contentHash !== read.contentHash)
+            throw new DeckInspectionError(
+              'stale_revision',
+              'Original plan changed during preview.',
+            );
+          preview = { ...original, status: 'rendered' };
+        } catch (error) {
+          if (!(error instanceof DeckInspectionError) || error.code === 'stale_revision')
+            throw error;
+          preview = { status: 'not-rendered', reason: error.code, visionAssessment: false };
+        }
+      }
+      await assertCurrent();
+      context.signal.throwIfAborted();
+      return {
+        output: bounded({
+          ...(preview as object),
+          ...inspectionProvenance(read),
+          cacheKey: `preview:${account.id}:${read.cacheKey}:${canonicalPlanHash(preview)}`,
+        }),
+      };
     },
   };
 
@@ -127,8 +171,55 @@ export function inspectionTools(
       const root = await ownFinishedDeck(request.deckId, context.signal);
       const ref = { root, deckId: request.deckId, slideIndex: request.slideIndex };
       context.signal.throwIfAborted();
-      const slide = await readSavedSlide(ref);
+      const { read, assertCurrent } = await readInspectionSlide(
+        ref,
+        request,
+        inspection ? () => inspection.loadSnapshot(request.deckId, account) : undefined,
+      );
       context.signal.throwIfAborted();
+      if (read.source === 'server-snapshot') {
+        let designSystem = await readInspectionDesignSystem(ref);
+        if (!designSystem) {
+          const saved = await readSavedRequest(ref);
+          const template = await generation.template(saved.templateId, account);
+          const profile = generationProfileSchema.safeParse(template.profile.generation);
+          designSystem = profile.success ? profile.data.designSystem : null;
+        }
+        context.signal.throwIfAborted();
+        // The layout's recorded overflow predates editor text changes. It is not a fresh measurement.
+        const slide = {
+          ...read.slide,
+          elements: read.slide.elements.map((element) =>
+            element.kind === 'text' ? { ...element, overflow: null } : element,
+          ),
+        };
+        const issues = designSystem ? auditSlide(slide, { designSystem }) : [];
+        const findings = issues
+          .slice(request.offset, request.offset + request.limit)
+          .map((issue) => ({ ...issue, slideIndex: request.slideIndex - 1 }));
+        const next = request.offset + findings.length;
+        await assertCurrent();
+        context.signal.throwIfAborted();
+        return {
+          output: bounded({
+            ...inspectionProvenance(read),
+            slideIndex: request.slideIndex,
+            slideId: read.slide.slideId,
+            cacheKey: `fit:${account.id}:${read.cacheKey}:${canonicalPlanHash(designSystem)}:${request.offset}:${request.limit}`,
+            status: 'unknown',
+            textFit: 'unknown',
+            reason: designSystem
+              ? 'No fresh font measurements for saved text; recorded overflow is excluded.'
+              : 'No design system for snapshot audit.',
+            auditScope: 'SlideIR without text measurement or render',
+            offset: request.offset,
+            nextOffset: next < issues.length ? next : null,
+            totalFindings: issues.length,
+            findings,
+          }),
+        };
+      }
+      const slide = read.slide;
       const saved = await readSavedRequest(ref);
       context.signal.throwIfAborted();
       const template = await generation.template(saved.templateId, account);
@@ -136,8 +227,6 @@ export function inspectionTools(
       if (!generationProfileSchema.safeParse(template.profile.generation).success) {
         fail('The template has no generation profile.');
       }
-      const savedPlan = await readSavedPlan(ref);
-      context.signal.throwIfAborted();
       const check = compositionCheckResponseSchema.parse(
         await generation.engine.checkCompositions(
           {
@@ -157,13 +246,14 @@ export function inspectionTools(
         ...finding,
         slideIndex: request.slideIndex - 1,
       }));
+      await assertCurrent();
+      context.signal.throwIfAborted();
       const findings = measured.slice(request.offset, request.offset + request.limit);
       const next = request.offset + findings.length;
       return {
         output: bounded({
-          contentHash: savedPlan.planHash,
-          savedBuild: true,
-          liveEditorDraft: false,
+          ...inspectionProvenance(read),
+          cacheKey: `fit:${account.id}:${read.cacheKey}:${canonicalPlanHash(template.profile.generation)}:${request.offset}:${request.limit}`,
           slideIndex: request.slideIndex,
           offset: request.offset,
           nextOffset: next < measured.length ? next : null,
@@ -184,33 +274,44 @@ export function inspectionTools(
       const root = await ownFinishedDeck(request.deckId, context.signal);
       const ref = { root, deckId: request.deckId, slideIndex: request.slideIndex };
       context.signal.throwIfAborted();
-      const savedPlan = await readSavedPlan(ref);
+      const { read, assertCurrent } = await readInspectionSlide(
+        ref,
+        request,
+        inspection ? () => inspection.loadSnapshot(request.deckId, account) : undefined,
+      );
       context.signal.throwIfAborted();
-      const facts = await readSavedOutlineFacts(ref);
+      // Snapshot position is not lineage after reordering. Only the generated/imported stable
+      // identities have a known original ordinal; new editor slide identities do not.
+      const originalNumber =
+        read.source === 'original'
+          ? request.slideIndex
+          : Number(/^(?:imported-|s)([1-9]\d*)$/.exec(read.slide.slideId)?.[1] ?? 0);
+      const facts =
+        originalNumber > 0
+          ? await readSavedOutlineFacts({ ...ref, slideIndex: originalNumber })
+          : [];
       context.signal.throwIfAborted();
-      if (facts.length === 0) {
-        return {
-          output: bounded({
-            status: 'unknown',
-            reason: 'no approved requirements',
-            sourceFactChecking: false,
-            contentHash: savedPlan.planHash,
-            contentRevision: null,
-            savedBuild: true,
-            liveEditorDraft: false,
-          }),
-        };
-      }
-      const slide = await readSavedSlide(ref);
+      const report =
+        facts.length === 0
+          ? {
+              status: 'unknown',
+              reason:
+                originalNumber > 0 ? 'no approved requirements' : 'unknown original slide identity',
+              sourceFactChecking: false,
+            }
+          : checkContentCoverage(facts, read.slide);
+      await assertCurrent();
       context.signal.throwIfAborted();
-      const report = checkContentCoverage(facts, slide);
       return {
         output: bounded({
           ...report,
-          contentHash: savedPlan.planHash,
-          contentRevision: null,
-          savedBuild: true,
-          liveEditorDraft: false,
+          ...inspectionProvenance(read),
+          slideIndex: request.slideIndex,
+          cacheKey: `coverage:${account.id}:${read.cacheKey}:${canonicalPlanHash(facts)}`,
+          requirementsSlideIndex: originalNumber || null,
+          evidenceScope:
+            'literal text in saved content; no semantic, source or rendered visibility assessment',
+          ...(read.source === 'server-snapshot' ? { slideId: read.slide.slideId } : {}),
         }),
       };
     },

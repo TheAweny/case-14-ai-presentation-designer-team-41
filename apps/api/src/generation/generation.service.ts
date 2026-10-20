@@ -16,10 +16,11 @@ import { dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import {
   compositionPlanSchema,
-  brandbookBindingSchema,
   generationProfileSchema,
   generationRequestSchema,
+  brandbookBindingSchema,
   generationSpecSchema,
+  type BrandbookBinding,
   generationUsageSchema,
   layoutVariantSchema,
   modelRefSchema,
@@ -33,7 +34,6 @@ import {
   type ChatToolActivity,
   type ReasoningCapability,
   type JobEvent,
-  type BrandbookBinding,
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
@@ -57,6 +57,7 @@ import {
   OpenAICompatibleImageProvider,
   FakeImageProvider,
   AttemptBudget,
+  ModelRequestError,
   type ImageProvider,
   type IndexProgress,
 } from '@lct/pipeline';
@@ -64,6 +65,7 @@ import {
   BUILD_DEADLINE_MS,
   buildStopReason,
   openBuildBudget,
+  openPreparation,
   waitForBuild,
 } from './build-budget.js';
 import { effectiveModelPlan } from './model-plan.js';
@@ -87,7 +89,7 @@ import { RUN_REPOSITORY } from '../runs/runs.tokens.js';
 import { LibraryMetadata } from './library-metadata.js';
 import type { Account } from '../accounts/account-rules.js';
 import { visibleFile } from '../files/template-visibility.js';
-import { readPreparedMaterial } from '../materials/prepared-material.js';
+import { prepareGenerationInput, preparedInputDependency } from './prepared-input.js';
 import { AccountUsageService, directoryBytes } from '../accounts/account-usage.service.js';
 
 /** The account as model settings see it: whose connections and role choices apply. */
@@ -137,9 +139,9 @@ interface BuildRetry {
 /**
  * The revision of the engine's generation profile. Raise it when the engine reads something new
  * from a template, so templates prepared before are read again: 2 added places for pictures,
- * 3 the sample photos of a slide among them, 4 all picture candidates for explicit QR slots.
+ * 3 the sample photos of a slide among them, 4 all picture candidates for explicit QR slots; 6 measured geometry and semantic capacity.
  */
-export const PROFILE_REVISION = 5;
+export const PROFILE_REVISION = 6;
 
 export interface StoredTemplate {
   readonly storage_path: string;
@@ -195,6 +197,10 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     timeoutMs: 900000,
   });
   private readonly active = new Map<string, AbortController>();
+  private readonly preparingBuilds = new Map<
+    string,
+    { ownerId: string; requestId: string; controller: AbortController }
+  >();
   private readonly executions = new Map<string, StartedBuild>();
   private readonly leases = new Map<string, BuildLease>();
   private readonly shutdown = new AbortController();
@@ -237,10 +243,21 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * The template has a generation profile of the current reading: a deck can be built in it now.
    * A profile read before the engine learned something new (places for pictures) is read again.
    */
-  static prepared(template: StoredTemplate): boolean {
+  static profilePrepared(template: StoredTemplate): boolean {
     return (
       template.profile?.generationRevision === PROFILE_REVISION &&
       generationProfileSchema.safeParse(template.profile.generation).success
+    );
+  }
+
+  /** Synchronous callers check stored completeness; start additionally loads the current revision. */
+  static prepared(template: StoredTemplate, revision?: string): boolean {
+    if (!GenerationService.profilePrepared(template)) return false;
+    const profile = generationProfileSchema.parse(template.profile.generation);
+    const index = storedTemplateIndexSchema.safeParse(template.profile.index);
+    return (
+      index.success &&
+      templateIndexState(profile, index.data, revision ?? index.data.revision) === 'ready'
     );
   }
 
@@ -248,22 +265,49 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * Read the template's generation profile and have its compositions described. The pictures of
    * its sample slides are for the library, not the deck: they are drawn but never waited for.
    */
-  async prepare(templateId: string, model: ModelRef | null, account: Account): Promise<void> {
+  async templateReady(template: StoredTemplate): Promise<boolean> {
+    return GenerationService.prepared(
+      template,
+      await currentTemplateIndexRevision(this.registryDir()),
+    );
+  }
+
+  async prepare(
+    templateId: string,
+    model: ModelRef | null,
+    account: Account,
+    cancel?: AbortSignal,
+  ): Promise<void> {
+    cancel?.throwIfAborted();
     const row = await this.template(templateId, account);
+    cancel?.throwIfAborted();
+    if (this.preparing.has(templateId))
+      throw new ConflictException('Подготовка шаблона уже выполняется. Дождитесь её результата.');
     void this.drawPreviews(templateId, row);
     const progress: PrepareProgress = { stage: 'profile', described: 0, total: 0 };
     this.preparing.set(templateId, progress);
     try {
-      const profile = await this.engine.generationProfile(row.storage_path);
+      const profile = GenerationService.profilePrepared(row)
+        ? generationProfileSchema.parse(row.profile.generation)
+        : await this.engine.generationProfile(row.storage_path, cancel);
+      cancel?.throwIfAborted();
       await this.pool.query(
         "UPDATE stored_files SET profile = profile || jsonb_build_object('generation', $2::jsonb, 'generationRevision', $3::int) WHERE id = $1",
         [templateId, JSON.stringify(profile), PROFILE_REVISION],
       );
       progress.stage = 'index';
-      await this.indexTemplate(templateId, profile, row.profile?.index, model, account, (step) => {
-        progress.described = step.described;
-        progress.total = step.total;
-      });
+      await this.indexTemplate(
+        templateId,
+        profile,
+        row.profile?.index,
+        model,
+        account,
+        (step) => {
+          progress.described = step.described;
+          progress.total = step.total;
+        },
+        cancel,
+      );
     } finally {
       // A later request for the same template reports on its own.
       if (this.preparing.get(templateId) === progress) this.preparing.delete(templateId);
@@ -300,8 +344,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
 
   /**
    * Describe the template's compositions once per template and indexer revision. Preparation is
-   * outside the timed generation stage; a failure only leaves the planner without the notes, so
-   * it is logged and never blocks the deck.
+   * outside the timed generation stage. Failures are actionable and preserve the saved profile
+   * and successful indexer checkpoints, so preparation can be retried without parsing again.
    */
   private async indexTemplate(
     templateId: string,
@@ -310,16 +354,20 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     model: ModelRef | null,
     account: Account,
     onProgress: (progress: IndexProgress) => void,
+    cancel?: AbortSignal,
   ): Promise<void> {
+    let indexModel: ResolvedModel | undefined;
+    let assignedPlanner = false;
     try {
       const registryDir = this.registryDir();
       const revision = await currentTemplateIndexRevision(registryDir);
       const previous = storedTemplateIndexSchema.safeParse(stored);
       if (previous.success && templateIndexState(profile, previous.data, revision) === 'ready')
         return;
-      const resolved =
-        (await this.models.resolveRole('planner', actorOf(account))) ??
-        (await this.models.resolve(model, actorOf(account)));
+      const assigned = await this.models.resolveRole('planner', actorOf(account));
+      assignedPlanner = assigned !== null;
+      const resolved = assigned ?? (await this.models.resolve(model, actorOf(account)));
+      indexModel = resolved;
       const rawProvider = new GenerationProvider({
         apiKey: resolved.apiKey,
         baseUrl: resolved.baseUrl,
@@ -358,16 +406,49 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         onProgress,
         // Outside the generation budget, and a large template on a slow model takes minutes:
         // the indexer asks again about what an answer left out.
-        signal: AbortSignal.timeout(600000),
+        signal: AbortSignal.any([
+          this.shutdown.signal,
+          ...(cancel ? [cancel] : []),
+          AbortSignal.timeout(600000),
+        ]),
       });
-      await this.pool.query(
-        "UPDATE stored_files SET profile = profile || jsonb_build_object('index', $2::jsonb) WHERE id = $1",
-        [templateId, JSON.stringify(index)],
+      cancel?.throwIfAborted();
+      if (templateIndexState(profile, index, revision) !== 'ready')
+        throw new Error('Индексатор вернул неполное или устаревшее описание макетов.');
+      this.shutdown.signal.throwIfAborted();
+      const saved = await this.pool.query(
+        "UPDATE stored_files SET profile = profile || jsonb_build_object('index', $2::jsonb) WHERE id = $1 AND profile->'generation' = $3::jsonb AND (profile->>'generationRevision')::int = $4",
+        [templateId, JSON.stringify(index), JSON.stringify(profile), PROFILE_REVISION],
       );
+      if (saved.rowCount === 0)
+        throw new Error('Профиль изменился во время индексации. Повторите подготовку шаблона.');
     } catch (error) {
+      cancel?.throwIfAborted();
       this.logger.warn(
         `Template ${templateId} was not indexed: ${error instanceof Error ? error.message : error}`,
       );
+      throw new ServiceUnavailableException({
+        code: 'template-index-failed',
+        message:
+          error instanceof ModelRequestError
+            ? 'Не удалось подготовить шаблон: подключённая для этой задачи модель не выполнила запрос. ' +
+              (assignedPlanner
+                ? 'Проверьте подключение и модель «Планировщик» в настройках.'
+                : 'Проверьте подключение выбранной модели чата.')
+            : 'Не удалось завершить описание макетов шаблона. Сохранённый профиль и готовые задачи индексатора будут использованы повторно.',
+        ...(error instanceof ModelRequestError
+          ? {
+              failure: {
+                ...error.failure,
+                stage: 'template-index',
+                ...(assignedPlanner ? { role: 'planner' } : {}),
+                ...(indexModel
+                  ? { modelId: indexModel.model, connectionId: indexModel.connectionId }
+                  : {}),
+              },
+            }
+          : {}),
+      });
     }
   }
 
@@ -430,6 +511,16 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     this.active.get(runId)?.abort(new Error('Build interrupted by a persistence failure.'));
   }
 
+  /** Cancel a preflight before run ids exist; only its owner may stop it. */
+  cancelPreparation(requestId: string, account: Account): void {
+    const owned = [...this.preparingBuilds.values()].filter(
+      (preparation) => preparation.requestId === requestId && preparation.ownerId === account.id,
+    );
+    if (!owned.length) throw new NotFoundException('Подготовка не найдена.');
+    for (const preparation of owned)
+      preparation.controller.abort(new DOMException('Подготовка остановлена.', 'AbortError'));
+  }
+
   /** Stop a build: its variants share one cancellation, so any of their runs stops all three. */
   async cancel(runId: string): Promise<void> {
     this.active.get(runId)?.abort(new DOMException('Сборка остановлена.', 'AbortError'));
@@ -442,6 +533,13 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   /** Whether a build of this person gets pictures: an image model is assigned or configured. */
   async imagesAvailable(account: Account): Promise<boolean> {
     return imageProviderOf(await this.models.resolveRole('image', actorOf(account))) !== null;
+  }
+
+  /** Whether this request still owns an in-process preparation before run ids exist. */
+  isPreparing(requestId: string, account: Account): boolean {
+    return [...this.preparingBuilds.values()].some(
+      (preparation) => preparation.requestId === requestId && preparation.ownerId === account.id,
+    );
   }
 
   async usage(runId: string, account: Account) {
@@ -513,7 +611,12 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
   }
 
   /** Explicit resume keeps the build and run ids and leaves successful variants untouched. */
-  async resume(runId: string, account: Account): Promise<StartedBuild> {
+  async resume(
+    runId: string,
+    account: Account,
+    onActivity?: (activity: ChatToolActivity) => void,
+    preparationSignal?: AbortSignal,
+  ): Promise<StartedBuild> {
     const metadata = JSON.parse(
       await readFile(join(this.directory(runId), 'metadata.json'), 'utf8').catch(() => '{}'),
     ) as { ownerId?: string; buildId?: string };
@@ -532,11 +635,17 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         ),
       ),
     );
-    return this.start(spec.request, account, {
-      buildId: build.id,
-      build,
-      ...(plan.success ? { plan: plan.data } : {}),
-    });
+    return this.start(
+      spec.request,
+      account,
+      {
+        buildId: build.id,
+        build,
+        ...(plan.success ? { plan: plan.data } : {}),
+      },
+      onActivity,
+      preparationSignal,
+    );
   }
 
   /** The run is still being built in this process. */
@@ -626,43 +735,103 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
    * A failed variant can be started again on the plan this build kept.
    */
   async start(
-    input: GenerationRequest,
+    request: Omit<GenerationRequest, 'variantCopyMode'> &
+      Pick<Partial<GenerationRequest>, 'variantCopyMode'>,
     account: Account,
     retry?: BuildRetry,
     onActivity?: (activity: ChatToolActivity) => void,
+    preparationSignal?: AbortSignal,
   ): Promise<StartedBuild> {
-    const startedAt = retry?.startedAt ?? this.now();
+    const input: GenerationRequest = {
+      ...request,
+      variantCopyMode: request.variantCopyMode ?? 'independent',
+    };
     const schedulingGroup = input.requestId ?? randomUUID();
     const controller = new AbortController();
-    const budget = openBuildBudget(
-      startedAt,
-      AbortSignal.any([controller.signal, this.shutdown.signal]),
-      this.deadlineMs,
-      this.now(),
-    );
+    const cancellation = AbortSignal.any([
+      controller.signal,
+      this.shutdown.signal,
+      ...(preparationSignal ? [preparationSignal] : []),
+    ]);
+    // Material extraction belongs to preparation, with ownership and cancellation. The
+    // generation clock is opened only after all sources have been read and validated.
+    let budget = openPreparation(cancellation, this.now());
+    const preparation = { ownerId: account.id, requestId: schedulingGroup, controller };
+    const preparationKey = randomUUID();
+    const preparationActivity = {
+      id: `prepare-${schedulingGroup}`,
+      kind: 'tool' as const,
+      name: 'Подготовка материалов',
+      startedAt: this.now(),
+    };
+    let preparationFinished = false;
+    const preparationProgress = (detail: string) =>
+      onActivity?.({
+        ...preparationActivity,
+        status: 'running',
+        detail,
+      });
+    this.preparingBuilds.set(preparationKey, preparation);
     let handedOff = false;
     let lease: BuildLease | null = null;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
-      const signal = budget.signal;
+      preparationProgress('Проверяем шаблон и читаем источники. Бюджет генерации ещё не запущен.');
+      let signal = budget.signal;
       const gate = <T>(pending: () => Promise<T>): Promise<T> => waitForBuild(pending, budget);
       const projectId = input.projectId;
       if (projectId !== null) await gate(() => this.requireProject(projectId, account));
-      const requestKey = schedulingGroup;
-      // A retry/resume must use the immutable snapshot kept with the build. In particular,
-      // the brandbook may have been deleted or become invisible after the original ACL check.
-      const previous =
-        retry?.build ??
-        (input.requestId ? await gate(() => this.builds.byRequest(account.id, requestKey)) : null);
-      const previousSpec = previous ? generationSpecSchema.safeParse(previous.spec) : null;
-      if (previous && (!previousSpec || !previousSpec.success))
-        throw new ConflictException('Сборка содержит несовместимую спецификацию.');
       const template = await gate(() => this.template(input.templateId, account));
       const prepared = generationProfileSchema.safeParse(template.profile?.generation);
       if (!prepared.success)
         throw new BadRequestException('Prepare the template before generation.');
-      let brandbook: BrandbookBinding | undefined = previousSpec?.success
-        ? previousSpec.data.brandbook
+      if (!GenerationService.profilePrepared(template))
+        throw new BadRequestException('Профиль шаблона устарел. Повторите подготовку шаблона.');
+      const registryDir = this.registryDir();
+      const revision = await gate(() => currentTemplateIndexRevision(registryDir));
+      const readiness = templateIndexState(prepared.data, template.profile.index, revision);
+      if (readiness !== 'ready')
+        throw new ConflictException({
+          code: 'template-index-not-ready',
+          readiness,
+          message:
+            'Описание макетов шаблона отсутствует, неполно или устарело. Повторите подготовку шаблона: актуальный профиль будет использован повторно.',
+        });
+      const notes = storedTemplateIndexSchema.parse(template.profile.index).notes;
+      const previous =
+        retry?.build ??
+        (input.requestId
+          ? await gate(() => this.builds.byRequest(account.id, schedulingGroup))
+          : null);
+      let snapshot: unknown;
+      if (previous) {
+        for (const entry of previous.variants) {
+          try {
+            const raw = await gate(() =>
+              readFile(join(this.directory(entry.runId), 'prepared-input.json'), 'utf8'),
+            );
+            const metadata = JSON.parse(
+              await gate(() =>
+                readFile(join(this.directory(entry.runId), 'metadata.json'), 'utf8'),
+              ),
+            ) as { ownerId?: string; buildId?: string };
+            if (metadata.ownerId !== account.id || metadata.buildId !== previous.id)
+              throw new ConflictException('Снимок подготовки не принадлежит этой сборке.');
+            try {
+              snapshot = JSON.parse(raw);
+            } catch {
+              throw new ConflictException('Снимок подготовки повреждён. Создайте новую генерацию.');
+            }
+            break;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          }
+        }
+      }
+      // A retry or resume keeps the brand of its build: the brandbook may since have been deleted
+      // or become invisible, and the immutable spec already holds the profile that was checked.
+      let brandbook: BrandbookBinding | undefined = previous
+        ? generationSpecSchema.parse(previous.spec).brandbook
         : undefined;
       if (!previous && input.brandbookId) {
         const selected = await gate(() =>
@@ -679,31 +848,48 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           priority: input.brandbookPriority ?? 'brandbook',
         });
       }
-      let brief = previousSpec?.success ? previousSpec.data.brief : input.brief;
-      for (const id of previous ? [] : input.contentIds) {
-        const files = await gate(() =>
-          this.pool.query<{ storage_path: string; file_name: string }>(
-            `SELECT storage_path, file_name FROM stored_files
-         WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
-            [id, account.id],
-          ),
-        );
-        const stored = files.rows[0];
-        if (!stored) throw new BadRequestException('There is no such content file.');
-        const material = await gate(() =>
-          readPreparedMaterial(
-            this.engine,
-            {
-              sourceId: id,
-              name: stored.file_name,
-              path: stored.storage_path,
-            },
-            signal,
-          ),
-        );
-        brief += `\n\nSource ${id}:\n${material.text}`;
-      }
-      if (brief.length > 60000) throw new BadRequestException('Content exceeds 60000 characters.');
+      const preparedInput = await gate(() =>
+        prepareGenerationInput({
+          engine: this.engine,
+          ...(snapshot !== undefined ? { snapshot } : {}),
+          brief: input.brief,
+          contentIds: input.contentIds,
+          signal,
+          loadContent: async (id) => {
+            preparationProgress(
+              `Читаем материал ${input.contentIds.indexOf(id) + 1} из ${input.contentIds.length}. Подготовка вне бюджета генерации.`,
+            );
+            const files = await gate(() =>
+              this.pool.query<{ storage_path: string; file_name: string }>(
+                `SELECT storage_path, file_name FROM stored_files
+             WHERE id = $1 AND kind = 'content' AND ${visibleFile(2)}`,
+                [id, account.id],
+              ),
+            );
+            const stored = files.rows[0];
+            if (!stored) throw new BadRequestException('There is no such content file.');
+            return { sourceId: id, name: stored.file_name, path: stored.storage_path };
+          },
+          assertOwner: async () => {
+            signal.throwIfAborted();
+            if (this.preparingBuilds.get(preparationKey) !== preparation)
+              throw new ConflictException('Владение подготовкой потеряно. Повторите запрос.');
+          },
+        }),
+      );
+      const { brief, preparedDatasets } = preparedInput;
+      onActivity?.({
+        ...preparationActivity,
+        status: 'done',
+        finishedAt: this.now(),
+        detail: 'Источники подготовлены. Запускаем бюджет генерации 290 секунд.',
+      });
+      preparationFinished = true;
+      signal.throwIfAborted();
+      budget.dispose();
+      const startedAt = retry?.startedAt ?? this.now();
+      budget = openBuildBudget(startedAt, cancellation, this.deadlineMs, this.now());
+      signal = budget.signal;
       // The models are settled before a run exists: without one there is nothing to start, and the
       // person gets the reason in the answer rather than a run that fails without one.
       const settle = <T>(pending: Promise<T>): Promise<T> =>
@@ -780,19 +966,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
           ...(critic ? [['critic', providerOf(critic, criticReasoning)] as const] : []),
         ]),
       );
-      const registryDir = this.registryDir();
-      const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
-      // Notes describe the profile they were made from; a re-parsed template drops stale ones.
-      const notes = previousSpec?.success
-        ? previousSpec.data.notes
-        : index.success &&
-            templateIndexState(
-              prepared.data,
-              index.data,
-              await currentTemplateIndexRevision(registryDir),
-            ) === 'ready'
-          ? index.data.notes
-          : undefined;
+      const requestKey = schedulingGroup;
       let prices: ReturnType<typeof tokenPriceResolver> | undefined;
       try {
         const pricingBytes = process.env.MODEL_PRICING_FILE
@@ -810,30 +984,27 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
         .filter((entry) => entry.isFile())
         .map((entry) => join(entry.parentPath, entry.name))
         .sort();
-      const registryHash = dependencyKey(
-        await Promise.all(
-          registryFiles.map(async (path) => [
-            path.slice(registryDir.length),
-            await readFile(path, 'utf8'),
-          ]),
-        ),
+      const registryEntries = await Promise.all(
+        registryFiles.map(async (path) => [
+          path.slice(registryDir.length),
+          await readFile(path, 'utf8'),
+        ]),
       );
+      const registryHash = preparedInputDependency(registryEntries, preparedInput);
       const spec = generationSpecSchema.parse({
         schemaVersion: 1,
-        request: previousSpec?.success ? previousSpec.data.request : input,
+        request: input,
         brief,
-        profile: previousSpec?.success ? previousSpec.data.profile : prepared.data,
+        profile: prepared.data,
         ...(brandbook ? { brandbook } : {}),
         ...(notes ? { notes } : {}),
         registryHash,
         // Pricing describes each physical attempt; it cannot invalidate accepted content on resume.
-        ...(previousSpec?.success && previousSpec.data.pricingHash
-          ? { pricingHash: previousSpec.data.pricingHash }
+        ...(previous && generationSpecSchema.parse(previous.spec).pricingHash
+          ? { pricingHash: generationSpecSchema.parse(previous.spec).pricingHash }
           : {}),
         today: previous
-          ? previousSpec?.success
-            ? previousSpec.data.today
-            : new Date().toISOString()
+          ? generationSpecSchema.parse(previous.spec).today
           : `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
         modelPolicy: [
           ['writer', writer, writerReasoning],
@@ -1032,6 +1203,30 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
               await writeFile(join(this.directory(run.runId), name), contents);
             }
           }
+          const snapshotPath = join(this.directory(run.runId), 'prepared-input.json');
+          const previousSnapshot = await readFile(snapshotPath, 'utf8').catch(
+            (error: NodeJS.ErrnoException) => {
+              if (error.code === 'ENOENT') return null;
+              throw error;
+            },
+          );
+          const snapshotValue = { version: 1, ...preparedInput };
+          const publishSnapshot = async () => {
+            await assertOwner();
+            await atomicJson(snapshotPath, snapshotValue);
+            await assertOwner();
+          };
+          if (this.accountUsage)
+            await this.accountUsage.write(
+              account.id,
+              Buffer.byteLength(JSON.stringify(snapshotValue)),
+              publishSnapshot,
+              async () => {
+                if (previousSnapshot === null) await rm(snapshotPath, { force: true });
+                else await atomicJson(snapshotPath, JSON.parse(previousSnapshot));
+              },
+            );
+          else await publishSnapshot();
           if (signal.aborted) throw buildStopReason(signal);
         }
       } catch (error) {
@@ -1063,7 +1258,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             slideCount: input.outline ? null : input.slideCount,
             outline: input.outline,
             outlineSource: input.outlineSource,
-            profile: previousSpec?.success ? previousSpec.data.profile : prepared.data,
+            profile: prepared.data,
+            preparedDatasets,
             ...(brandbook ? { brandbook } : {}),
             ...(notes ? { notes } : {}),
             registryDir,
@@ -1073,6 +1269,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             variant,
             sharedPlan,
             sharedContent,
+            variantCopyMode: input.variantCopyMode,
+            attemptBudget,
             layoutRemapPolicy: 'conceptual',
             today: new Date(spec.today),
             illustrations,
@@ -1181,6 +1379,15 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       if (error instanceof BuildConflictError) throw new ConflictException(error.message);
       throw error;
     } finally {
+      if (!preparationFinished)
+        onActivity?.({
+          ...preparationActivity,
+          status: cancellation.aborted ? 'cancelled' : 'failed',
+          finishedAt: this.now(),
+          detail: 'Подготовка прервана; бюджет генерации не запускался.',
+        });
+      if (this.preparingBuilds.get(preparationKey) === preparation)
+        this.preparingBuilds.delete(preparationKey);
       if (!handedOff) {
         if (heartbeat) clearInterval(heartbeat);
         if (lease) await this.builds.finish(lease, 'interrupted').catch(() => undefined);
@@ -1231,6 +1438,7 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     if (this.shutdown.signal.aborted) return;
     const reason = new Error('Generation worker is shutting down.');
     this.shutdown.abort(reason);
+    for (const preparation of this.preparingBuilds.values()) preparation.controller.abort(reason);
     for (const controller of this.active.values()) controller.abort(reason);
     await Promise.allSettled(
       [...this.leases.values()].map((lease) => this.builds.finish(lease, 'interrupted')),

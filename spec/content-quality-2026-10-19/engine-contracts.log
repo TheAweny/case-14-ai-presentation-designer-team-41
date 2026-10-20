@@ -1,0 +1,26 @@
+
+ NX   Running target test for project engine and 1 task it depends on:
+
+
+√  nx run contracts:build  [existing outputs match the cache, left as is]
+
+> nx run engine:test --args=engine/tests/test_generated_contracts.py engine/tests/test_contract_fixtures.py engine/tests/test_contracts.py
+
+> uv run pytest engine/tests/test_generated_contracts.py engine/tests/test_contract_fixtures.py engine/tests/test_contracts.py
+
+........................................................................ [ 50%]
+.......................................................................  [100%]
+143 passed in 3.79s
+
+
+
+ NX   Successfully ran target test for project engine and 1 task it depends on
+
+Nx read the output from the cache instead of running the command for 1 out of 2 tasks.
+
+Output of 1 successful task was not shown. Run with --verbose or --output-style=static to see it.
+
+  Run duration:      4.8s
+  Cache:             1/2 hit (50%)
+  Critical path:     4.8s (2 tasks)
+  Recoverable time:  <1ms

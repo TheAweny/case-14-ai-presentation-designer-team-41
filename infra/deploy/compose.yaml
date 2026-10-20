@@ -65,6 +65,7 @@ services:
       WEB_SEARCH_URL: http://search:8080
       RECORDINGS_DIR: /app/registry/recordings
       MODEL_ALLOW_PRIVATE_HOSTS: 'false'
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       NODE_OPTIONS: --max-old-space-size=896
     volumes: ['/srv/lct/data:/app/data', '/srv/lct/runs:/app/runs']
 
@@ -94,6 +95,7 @@ services:
       API_INTERNAL_URL: http://api:3001
       API_SERVICE_TOKEN: ${API_SERVICE_TOKEN:?required}
       AUTH_SECRET: ${AUTH_SECRET:?required}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
     ports: ['127.0.0.1:3000:3000']
     healthcheck:
       test:
