@@ -493,7 +493,9 @@ export class OpenAICompatibleProvider implements TextProvider {
               redirect: 'error',
               signal: AbortSignal.any([
                 signal,
-                AbortSignal.timeout(thinking ? THINKING_TIMEOUT_MS : ANSWER_TIMEOUT_MS),
+                AbortSignal.timeout(
+                  thinking || wholeDeck ? THINKING_TIMEOUT_MS : ANSWER_TIMEOUT_MS,
+                ),
               ]),
             },
             {

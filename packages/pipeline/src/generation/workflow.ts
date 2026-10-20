@@ -61,7 +61,7 @@ export interface GenerationDependencies {
   layoutRemapPolicy?: LayoutRemapPolicy;
   /** The one plan the variants of a brief share. Absent: this run plans for itself. */
   sharedPlan?: SharedPlan;
-  /** One canonical writer task per slide; variants adapt its accepted copy. */
+  /** Reuses accepted canonical copy when the caller explicitly selects shared mode. */
   sharedContent?: SharedContent;
   variantCopyMode?: VariantCopyMode;
   writerModules?: WriterModules;

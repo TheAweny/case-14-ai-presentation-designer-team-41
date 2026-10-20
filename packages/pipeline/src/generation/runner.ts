@@ -183,7 +183,7 @@ export function openGenerationStage(parent: AbortSignal, deadlineAt: number) {
   };
 }
 
-/** Semantic calls per slide are bounded independently of HTTP/schema retries and durable keys. */
+/** Semantic calls per task/variant are bounded independently of HTTP retries and durable keys. */
 export function boundedGenerationProvider(provider: TextProvider): TextProvider {
   const attempts = new Map<string, number>();
   return {

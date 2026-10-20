@@ -11,6 +11,7 @@ import type { TextProvider } from './provider.js';
 import {
   createGenerationWorkflow,
   createRepairWorkflow,
+  SharedContent,
   SharedPlan,
   writerSlots,
 } from './workflow.js';
@@ -70,13 +71,19 @@ function response(agent: string, input: unknown, schema: z.ZodType) {
     ),
   });
 }
-async function variants(provider: TextProvider) {
+async function variants(
+  provider: TextProvider,
+  variantCopyMode: 'independent' | 'shared' = 'independent',
+) {
   const sharedPlan = new SharedPlan();
+  const sharedContent = new SharedContent();
   return Promise.all(
     (['dense', 'balanced', 'airy'] as const).map(async (variant) => {
       const workflow = createGenerationWorkflow({
         provider,
         sharedPlan,
+        sharedContent,
+        variantCopyMode,
         variant,
         plannerInstructions: 'planner-fixture',
         writerInstructions: 'slot-fixture',
@@ -122,6 +129,21 @@ describe('one agent per complete variant', () => {
       for (const slide of result.result)
         expect(slide.slide.texts.map((text) => text.text).join(' ')).toContain('18 % за 2026 год');
     }
+  });
+
+  it('shares one complete balanced variant only when shared copy is requested', async () => {
+    const sends: string[] = [];
+    const provider: TextProvider = {
+      model: 'offline',
+      async generate(agent, _instructions, input, schema) {
+        sends.push(agent);
+        if (agent === 'writer') expect((input as DeckInput).variant).toBe('balanced');
+        return schema.parse(response(agent, input, schema));
+      },
+    };
+    const results = await variants(provider, 'shared');
+    expect(results.every((result) => result.status === 'success')).toBe(true);
+    expect(sends).toEqual(['planner', 'writer']);
   });
 
   it.each(['missing', 'extra'])(

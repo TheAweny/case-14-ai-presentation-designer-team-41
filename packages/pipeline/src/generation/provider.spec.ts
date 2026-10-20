@@ -313,6 +313,23 @@ describe('Yandex OpenAI-compatible provider boundary', () => {
       ).toEqual([24576, 24576]);
     },
   );
+  it('allows a complete variant more time than a single slide, within the caller deadline', async () => {
+    const timeouts = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => answer());
+      const provider = new OpenAICompatibleProvider({ ...settings, fetchImpl });
+      const signal = new AbortController().signal;
+      await provider.generate('writer', '', { slides: [{ index: 0 }] }, schema, signal);
+      expect(timeouts).toHaveBeenLastCalledWith(180000);
+      await provider.generate('writer', '', { index: 0 }, schema, signal);
+      expect(timeouts).toHaveBeenLastCalledWith(65000);
+      expect(fetchImpl.mock.calls.every(([, init]) => init?.signal instanceof AbortSignal)).toBe(
+        true,
+      );
+    } finally {
+      timeouts.mockRestore();
+    }
+  });
   it('reports counts for a reasoning-only length error and leaks nothing', async () => {
     const secret = 'reasoning-secret-do-not-leak';
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(
