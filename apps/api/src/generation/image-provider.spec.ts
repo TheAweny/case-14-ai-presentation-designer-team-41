@@ -26,4 +26,14 @@ describe('imageProviderOf', () => {
   it('draws offline pictures when asked to fake them', () => {
     expect(imageProviderOf(null, { IMAGE_PROVIDER: 'fake' })).toBeInstanceOf(FakeImageProvider);
   });
+
+  it('draws nothing when pictures are disabled, even with a model configured', () => {
+    expect(
+      imageProviderOf(null, {
+        IMAGE_PROVIDER: 'disabled',
+        IMAGE_BASE_URL: 'https://images.example.test/v1',
+        IMAGE_MODEL: 'flux',
+      }),
+    ).toBeNull();
+  });
 });

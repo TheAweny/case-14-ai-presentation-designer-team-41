@@ -1,0 +1,108 @@
+---
+title: Команды одной строкой
+description: Аргументы lct, которыми установка, пользователи и генерация запускаются без меню.
+---
+
+`lct` без аргументов в терминале открывает меню. Та же команда с аргументами делает шаг сразу. Флаг без значения считается включённым. Значение пишется через пробел или через `=`. `--help` печатает краткую справку.
+
+Каталог установки, если команда запущена не из него: `LCT_HOME=/opt/lct26`.
+
+<MediaSlot
+  kind="image"
+  title="Терминал с одной командой lct onboard --yes и итоговой сводкой, без пошагового меню."
+/>
+
+## Установка и настройка
+
+`lct onboard` создаёт установку. `lct configure` меняет адрес, порты, документацию API и поиск. `lct model` меняет только модель. В неинтерактивном режиме нужен `--yes`.
+
+| Флаг                                                | Значения                                                                   |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `--yes`                                             | не задавать вопросов                                                       |
+| `--mode`                                            | `docker` или `local`                                                       |
+| `--provider`                                        | `vk`, `ai-studio`, `openai`, `offline`                                     |
+| `--api-key`                                         | ключ провайдера; иначе переменная `LCT_MODEL_API_KEY`                      |
+| `--project-id`                                      | UUID проекта VK                                                            |
+| `--folder-id`                                       | каталог Yandex AI Studio                                                   |
+| `--base-url`, `--model`                             | свой OpenAI-совместимый сервер                                             |
+| `--admin-email`, `--admin-name`, `--admin-password` | первый администратор; пароль иначе берётся из `LCT_INSTALL_ADMIN_PASSWORD` |
+| `--domain`                                          | имя для HTTPS, без протокола и порта                                       |
+| `--host`                                            | IP для HTTP                                                                |
+| `--web-port`, `--api-port`                          | порты                                                                      |
+| `--docs` / `--no-docs`                              | Swagger в приложении по адресу `/api/docs`                                 |
+| `--search` / `--no-search`                          | веб-поиск                                                                  |
+| `--no-start`                                        | записать настройки и не запускать стек                                     |
+
+`--docs` и `--no-docs` вместе указывать нельзя. То же для `--search` и `--no-search`.
+
+```bash title="terminal.sh"
+lct onboard --yes --provider vk \
+  --api-key "$LCT_MODEL_API_KEY" --project-id "$VK_PROJECT_ID" \
+  --admin-email admin@example.com --admin-password "$LCT_INSTALL_ADMIN_PASSWORD" \
+  --domain slides.example.com --docs --search
+```
+
+```bash title="terminal.sh"
+lct configure --yes --host 203.0.113.10 --web-port 3000 --api-port 3001 --no-docs
+```
+
+```bash title="terminal.sh"
+lct model --yes --provider openai \
+  --base-url http://127.0.0.1:8001/v1 --model my-served-model
+```
+
+`offline` — тестовые ответы. `lct generate` с ним колоду не соберёт.
+
+Для локальной разработки: `--mode local`, затем движок, API и веб, как в справке `lct --help`.
+
+## Сервис
+
+| Команда                | Действие                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `lct start`            | `docker compose up -d --build`                                                             |
+| `lct stop`             | остановить стек                                                                            |
+| `lct restart [сервис]` | перезапуск всего или одного сервиса: `postgres`, `engine`, `api`, `web`, `search`, `proxy` |
+| `lct status`           | `docker compose ps`                                                                        |
+| `lct logs [сервис]`    | последние строки журнала                                                                   |
+| `lct doctor`           | Node, Docker, uv, место, модель и ответы `/health` и `/login`                              |
+| `lct menu`             | то же меню, что `lct` без аргументов                                                       |
+
+`lct backup` и `lct update` работают на Linux с Docker. В режиме `local` они отказываются. Обновление сначала снимает копию, затем подтягивает git и поднимает те сервисы, которые были запущены.
+
+## Пользователи
+
+Нужен запущенный API. Пароль администратора команда берёт из `--login-password` или из `LCT_ADMIN_PASSWORD` в окружении shell, не из файла `.env`. Почта — из `--login-email`, `LCT_ADMIN_EMAIL` или `ADMIN_EMAIL`.
+
+Без терминала все ответы надо передать флагами, иначе команда остановится.
+
+| Команда                            | Флаги                                                                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lct user list`                    | вход администратора                                                                                                                                                  |
+| `lct user add [почта]`             | `--email`, `--name`, `--password`, `--role user\|admin`                                                                                                              |
+| `lct user role [почта]`            | `--role user\|admin`, либо `--id`                                                                                                                                    |
+| `lct user disable [почта]`         | `--email` или `--id`                                                                                                                                                 |
+| `lct user enable [почта]`          | то же                                                                                                                                                                |
+| `lct user password [почта]`        | `--password` нового пароля, 8–200 символов                                                                                                                           |
+| `lct user revoke-sessions [почта]` | завершает сессии                                                                                                                                                     |
+| `lct user admin [почта]`           | записывает администратора в `.env`; `--name`, `--password`. Новый пароль начинает действовать после перезапуска API; если API уже запущен, команда перезапускает его |
+
+```bash title="terminal.sh"
+lct user add colleague@example.com \
+  --name 'Анна' --password "$NEW_PASSWORD" --role user \
+  --login-email admin@example.com --login-password "$LCT_ADMIN_PASSWORD"
+```
+
+```bash title="terminal.sh"
+lct user role colleague@example.com --role admin \
+  --login-email admin@example.com --login-password "$LCT_ADMIN_PASSWORD"
+```
+
+`lct user` без подкоманды в терминале открывает меню людей.
+
+## Генерация
+
+Колоду без браузера собирает только `lct generate <config.yaml>`. Поля файла и то, какие из них команда реально читает, — в [генерации по конфигу](/docs/cli/generation/).
+
+Модель для этой команды берётся из `.env` установки: `LLM_BASE_URL`, `LLM_MODEL`, `MODEL_API_KEY`, `MODEL_HEADERS`. `MODEL_PROVIDER=fake` команда отвергает. `ENGINE_URL` по умолчанию `http://localhost:8000`. `REGISTRY_DIR` по умолчанию `registry/agents`.
+
+`lct <config.yaml>` без слова `generate` колоду не собирает: при заданном `DATABASE_URL` команда создаёт запись прогона в PostgreSQL и печатает её JSON.

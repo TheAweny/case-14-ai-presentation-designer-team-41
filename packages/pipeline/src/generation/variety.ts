@@ -38,6 +38,12 @@ export interface VarietyOptions<T extends Composition> {
   readonly structure: (pattern: T) => string;
   /** Whether a slide planned on `from` keeps what it needs on `to`: a chart, a picture. */
   readonly compatible?: (from: T, to: T) => boolean;
+  /**
+   * When set, a slide moves only if this accepts the destination. A refusal leaves the slide
+   * where it is and reports it as repeated: a chart stays a chart when no other chart layout
+   * can take the repeat.
+   */
+  readonly allowsMove?: (index: number, to: T) => boolean;
 }
 
 export interface VarietyResult<S extends PlanSlide> {
@@ -106,6 +112,7 @@ export function diversifyPlan<S extends PlanSlide, T extends Composition>(
       .filter((pattern) => !beforePattern || structure(pattern) !== structure(beforePattern))
       .filter((pattern) => (used.get(pattern.patternId) ?? 0) < limit)
       .filter((pattern) => options.compatible?.(planned, pattern) ?? true)
+      .filter((pattern) => options.allowsMove?.(index, pattern) !== false)
       .filter((pattern) => blocks(pattern) > 0 && Math.abs(blocks(pattern) - wanted) <= 1);
     // A layout used once already, within its share and not next to itself, moves only to one the
     // deck has not shown yet: every slide on a layout of its own wherever the template allows.

@@ -10,6 +10,11 @@ export const DOCS_PORTAL_PATHS = [
   '/docs/guide/assistant',
   '/docs/guide/variants',
   '/docs/guide/editing',
+  '/docs/guide/generation',
+  '/docs/guide/tools',
+  '/docs/guide/agents',
+  '/docs/guide/settings',
+  '/docs/guide/admin',
   '/docs/operations',
   '/docs/cli',
   '/docs/cli/installation',
@@ -18,6 +23,7 @@ export const DOCS_PORTAL_PATHS = [
   '/docs/cli/users',
   '/docs/cli/maintenance',
   '/docs/cli/generation',
+  '/docs/cli/reference',
   '/docs/internals',
   '/docs/internals/pipeline',
   '/docs/internals/layers',
@@ -39,9 +45,6 @@ export const DOCS_PORTAL_PATHS = [
   '/docs/api/reference/health',
   '/docs/api/reference/schemas',
   '/docs/troubleshooting',
-  '/docs/authors',
-  '/docs/authors/markdown',
-  '/docs/authors/components',
 ] as const;
 
 const PAGES = new Set<string>(DOCS_PORTAL_PATHS);

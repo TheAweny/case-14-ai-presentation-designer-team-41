@@ -550,6 +550,83 @@ export function withDataLayouts<T extends { patternId: string; purpose: string }
   });
 }
 
+/** What a content slide must keep through every later layout pass. */
+export type DataLayoutNeed = 'chart' | 'figures';
+
+/**
+ * The data layout a slide was given, read from its purpose. The cover and the closing slide
+ * stay framing layouts. A slide of three figures that quotes no series needs figure slots; a
+ * slide that quotes a ready series needs a chart slot. Later passes (variant remap, a second
+ * spread, a roomier layout) may change the composition, but only for one that still has that.
+ */
+export function dataLayoutNeed(
+  purpose: string,
+  brief: string,
+  index: number,
+  total: number,
+): DataLayoutNeed | undefined {
+  if (total > 0 && (index === 0 || index === total - 1)) return undefined;
+  if (figurePoints(purpose) >= 3 && !quotesSeries(purpose, brief)) return 'figures';
+  if (plannedSeriesChart(purpose, brief, 'chart')) return 'chart';
+  return undefined;
+}
+
+/** Whether a composition can still show what `withDataLayouts` asked this slide to show. */
+export function fitsDataLayout(
+  pattern: GenerationProfile['compositions'][number],
+  need: DataLayoutNeed,
+): boolean {
+  if (need === 'chart') return chartSlot(pattern) !== undefined;
+  return writerSlots(pattern).filter((slot) => isFigureSample(slot.sample)).length >= 3;
+}
+
+/**
+ * The composition a data slide keeps. One that already fits stays, so a variant may use its
+ * own chart or figure layout. One that no longer fits returns to a layout that does: the
+ * roomiest for dense, the lightest for airy, the first in the catalog for balanced. A template
+ * with no such layout keeps the composition it has.
+ */
+export function preserveDataLayout<T extends GenerationProfile['compositions'][number]>(
+  selected: T,
+  catalog: readonly T[],
+  need: DataLayoutNeed | undefined,
+  variant: DeckVariant,
+): T {
+  if (!need || fitsDataLayout(selected, need)) return selected;
+  const fitting = catalog.filter((pattern) => fitsDataLayout(pattern, need));
+  const first = fitting[0];
+  if (!first) return selected;
+  if (variant === 'balanced') return first;
+  const capacity = (pattern: T) =>
+    writerSlots(pattern)
+      .filter((slot) => slot.role !== 'title')
+      .reduce((sum, slot) => sum + slot.maxChars, 0);
+  return (
+    [...fitting].sort((a, b) =>
+      variant === 'dense' ? capacity(b) - capacity(a) : capacity(a) - capacity(b),
+    )[0] ?? first
+  );
+}
+
+/**
+ * A slide already on the layout its data needs may move only to another such layout. A slide
+ * not yet on one stays free: `withDataLayouts` places it afterwards.
+ */
+function allowsDataMove<T extends GenerationProfile['compositions'][number]>(
+  slides: readonly { patternId: string; purpose: string }[],
+  brief: string,
+  catalog: readonly T[],
+  index: number,
+  to: T,
+): boolean {
+  const slide = slides[index];
+  if (!slide) return true;
+  const need = dataLayoutNeed(slide.purpose, brief, index, slides.length);
+  if (!need) return true;
+  const current = catalog.find((pattern) => pattern.patternId === slide.patternId);
+  return !current || !fitsDataLayout(current, need) || fitsDataLayout(to, need);
+}
+
 /** Data slides a deck with ready series is planned to show at least. */
 const CHART_SLIDES = 2;
 
@@ -1760,6 +1837,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               .reduce((sum, s) => sum + s.maxChars, 0),
           structure: compositionStructure,
           compatible: keepsVisuals,
+          allowsMove: (index, to) =>
+            allowsDataMove(result.slides, inputData.brief, full, index, to),
         });
         result = { ...result, slides: varied.slides };
         if (varied.repeated.length) {
@@ -1825,6 +1904,9 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         deps.signal,
         full,
       );
+      const dataNeeds = result.slides.map((slide, index) =>
+        dataLayoutNeed(slide.purpose, inputData.brief, index, result.slides.length),
+      );
       const remapped = remapPlan(
         result.slides.map((slide) => slide.patternId),
         full,
@@ -1833,6 +1915,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
         covers,
         notes,
         deps.layoutRemapPolicy ?? 'density',
+        dataNeeds,
       );
       // The variant's own layouts repeat as the plan's did, and the same share applies: what the
       // remap sent to one layout over and over goes to the others of this variant's set.
@@ -1851,6 +1934,17 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               .reduce((sum, s) => sum + s.maxChars, 0),
           structure: compositionStructure,
           compatible: keepsVisuals,
+          allowsMove: (index, to) =>
+            allowsDataMove(
+              remapped.map((patternId, slideIndex) => ({
+                patternId,
+                purpose: result.slides[slideIndex]?.purpose ?? '',
+              })),
+              inputData.brief,
+              full,
+              index,
+              to,
+            ),
         },
       );
       const layouts = diversified.slides.map((slide) => slide.patternId);
@@ -1909,6 +2003,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
           const selected = composition;
           const sourceNote = notes.get(selected.patternId);
           const available = new Set(sourceNote?.requiredContent ?? []);
+          const need = dataNeeds[index];
           const selection = {
             selected,
             candidates: full,
@@ -1917,6 +2012,7 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
             claims: slide.requiredClaims,
             writableSlots: writerSlots,
             compatible: (candidate: typeof selected) => {
+              if (need && !fitsDataLayout(candidate, need)) return false;
               if (candidate.patternId === selected.patternId) return true;
               const note = notes.get(candidate.patternId);
               if (sourceNote?.special || note?.special || note?.skip) return false;
@@ -1945,6 +2041,8 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
               : undefined) ??
             selected;
         }
+        if (!slide.qrRequests?.length)
+          composition = preserveDataLayout(composition, full, dataNeeds[index], variant);
         return {
           ...slide,
           patternId: composition.patternId,
@@ -2388,8 +2486,10 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
   covers: readonly T[] = [],
   notes: ReadonlyMap<string, CompositionNote> = new Map(),
   policy: LayoutRemapPolicy = 'density',
+  needs: readonly (DataLayoutNeed | undefined)[] = [],
 ): string[] {
-  if (policy === 'conceptual') return conceptualLayouts(patternIds, full, variant, covers, notes);
+  if (policy === 'conceptual')
+    return conceptualLayouts(patternIds, full, variant, covers, notes, needs);
   if (variant === 'balanced') return [...patternIds];
   // Blocks as the planner counted them: numbering and mirrored copies are not points.
   const content = (p: T) => writerSlots(p).filter((s) => s.role !== 'title');
@@ -2418,8 +2518,10 @@ export function remapPlan<T extends GenerationProfile['compositions'][number]>(
       pool.length === 0
     )
       return id;
+    const need = needs[index];
     const compatible = pool.filter(
       (p) =>
+        (!need || fitsDataLayout(p, need)) &&
         !addsRequirements(p.patternId, id) &&
         (visualSlots(planned).length === 0 || visualSlots(p).length > 0) &&
         framing(p.patternId) === framing(id) &&
@@ -2500,6 +2602,7 @@ export function conceptualLayouts<T extends GenerationProfile['compositions'][nu
   variant: DeckVariant,
   covers: readonly T[],
   notes: ReadonlyMap<string, CompositionNote>,
+  needs: readonly (DataLayoutNeed | undefined)[] = [],
 ): string[] {
   if (variant === 'balanced') return [...patternIds];
   const coverIds = new Set(covers.map((pattern) => pattern.patternId));
@@ -2553,6 +2656,8 @@ export function conceptualLayouts<T extends GenerationProfile['compositions'][nu
         )
       )
         return false;
+      const need = needs[index];
+      if (need && !fitsDataLayout(candidate, need)) return false;
       return body(candidate).every(
         (slot, position) =>
           slot.maxChars >= (body(base)[position]?.maxChars ?? 0) * MIN_CAPACITY_SHARE,

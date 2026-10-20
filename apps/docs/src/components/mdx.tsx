@@ -6,6 +6,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { MDXComponents } from 'mdx/types';
 import type { ReactNode } from 'react';
+import { MediaSlot } from '@/components/media-slot';
 
 function Note({
   type,
@@ -100,6 +101,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Accordions,
     Figure,
     Info,
+    MediaSlot,
     Limitation,
     ReviewNote,
     Step,

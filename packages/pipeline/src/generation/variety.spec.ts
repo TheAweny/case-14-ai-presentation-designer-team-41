@@ -67,6 +67,16 @@ describe('diversifyPlan', () => {
     expect(slides.map((s) => s.purpose)).toEqual(['cover', 'A', 'A', 'A', 'A', 'A', 'A']);
   });
 
+  it('stays on a layout when every other one is refused', () => {
+    const { slides, repeated } = diversifyPlan(plan(['cover', 'A', 'A', 'A']), catalog, notes, {
+      ...options,
+      limit: 1,
+      allowsMove: (_index, to) => to.patternId === 'A',
+    });
+    expect(slides.map((slide) => slide.patternId)).toEqual(['cover', 'A', 'A', 'A']);
+    expect(repeated.map((slide) => slide.index)).toEqual([2, 3]);
+  });
+
   it('leaves a plan that already varies the layouts as it is', () => {
     const planned = plan(['cover', 'A', 'B', 'D', 'C', 'E']);
     const { slides, moved, repeated } = diversifyPlan(planned, catalog, notes, options);
