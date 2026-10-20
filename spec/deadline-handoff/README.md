@@ -27,14 +27,15 @@
 - `yarn nx run pipeline:test --skip-nx-cache` — 663 теста прошли; после дополнительной защиты
   unknown coverage повторены runner и runner-budget: 26 тестов прошли, включая новый регрессионный.
 - `yarn nx run web:test --skip-nx-cache` — 110 файлов, 1108 тестов прошли.
-- Полный `api:test` выявил устаревшее ожидание resume в двух сценариях. После исправления
-  повторены все 6 тестов chat-build-recovery, успешно. Итог полного повторного прогона — в PR.
+- Полный `api:test` после исправления ожиданий resume — 620 тестов прошли, 38 пропущены
+  (интеграционные проверки, требующие внешнего окружения).
 - `registry:test` — 16 тестов прошли; `engine-client:test` — 12 тестов прошли.
 - `api`, `pipeline`, `engine-client`, `web`: проверки типов и линта прошли.
 - Engine: целевые тесты вместимости, структуры текста, читаемости, registry, composition/layout/
   patterns/fonts прошли; lint, typecheck и import boundaries прошли.
 - `contracts:codegen` выполнен, расхождений с сгенерированными контрактами нет.
 - `yarn docs:audit` повторно сгенерировал AUDIT из реестра.
+- `uv run write-golden-ir --check` — все 9 golden fixtures совпадают с парсером.
 
 Не выполнены: браузерный E2E (Windows: node_modules вынесен на D:, Next не поддержал этот путь
 ни с Turbopack, ни с проверенным webpack fallback); PostgreSQL integration без БД; живой SLA;
