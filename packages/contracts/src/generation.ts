@@ -360,7 +360,7 @@ export const compositionCritiqueSchema = z.object({
         message: z.string(),
       }),
     )
-    .max(12),
+    .max(240),
 });
 
 export const templateSlotCopySchema = z.object({

@@ -27,7 +27,7 @@ export interface TextProvider {
 /**
  * The JSON object of a model answer. Models that ignore the JSON mode wrap it: a reasoning block,
  * a Markdown fence, a sentence before or after. Balance braces outside quoted strings and
- * require one complete JSON object; concatenated answers are ambiguous and must be repaired.
+ * accept one unambiguous schema-valid result. Distinct valid answers must be repaired.
  */
 export function parseModelJson<T>(text: string, schema: z.ZodType<T>): T {
   const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
@@ -61,13 +61,25 @@ export function parseModelJson<T>(text: string, schema: z.ZodType<T>): T {
       start = -1;
     }
   }
-  if (objects.length !== 1)
-    throw new SyntaxError(
-      objects.length > 1
-        ? 'The model answer holds multiple JSON objects; return one complete response.'
-        : 'The model answer holds no complete JSON object.',
-    );
-  return schema.parse(objects[0]);
+  const valid = new Map<string, T>();
+  for (const candidate of objects) {
+    const result = schema.safeParse(candidate);
+    if (result.success) valid.set(JSON.stringify(result.data), result.data);
+  }
+  if (valid.size === 1) return valid.values().next().value as T;
+  if (objects.length === 1) return schema.parse(objects[0]);
+  throw new SyntaxError(
+    objects.length > 1
+      ? 'The model answer holds multiple JSON objects without one unambiguous schema-valid result.'
+      : 'The model answer holds no complete JSON object.',
+  );
+}
+/** A received model answer remained invalid after the provider's bounded retries. */
+export class ModelAnswerValidationError extends SyntaxError {
+  override readonly name = 'ModelAnswerValidationError';
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : 'Invalid structured model answer.', { cause });
+  }
 }
 interface Options {
   apiKey: string;
@@ -428,7 +440,7 @@ export class OpenAICompatibleProvider implements TextProvider {
       startedAt,
     });
     try {
-      const outputSchema = z.toJSONSchema(schema, { target: 'draft-7' });
+      const outputSchema = z.toJSONSchema(schema, { target: 'draft-7', reused: 'ref' });
       const generation = this.generation.get(agent);
       // The slide budgets are sized for answers, so a model thinks only when asked to, and then
       // gets more room and time for it.
@@ -454,7 +466,7 @@ export class OpenAICompatibleProvider implements TextProvider {
       let busy = 0;
       const budget = this.options.attemptBudget;
       const wholeDeck =
-        (agent === 'writer' || agent === 'rewriter') &&
+        (agent === 'writer' || agent === 'rewriter' || agent === 'critic') &&
         typeof input === 'object' &&
         input !== null &&
         'slides' in input &&
@@ -603,7 +615,7 @@ export class OpenAICompatibleProvider implements TextProvider {
             } catch (error) {
               // Malformed or off-schema JSON: told what is wrong, a model usually fixes it; a second
               // miss is a sampling accident, and a fresh draw follows.
-              if (!allowRetry(attempt, 2)) throw error;
+              if (!allowRetry(attempt, 2)) throw new ModelAnswerValidationError(error);
               attempt += 1;
               repair =
                 answerFormat && !repaired

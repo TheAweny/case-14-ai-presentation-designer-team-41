@@ -328,7 +328,7 @@ were performed for this change. Earlier runtime acceptance above describes earli
 
 ## Whole-deck agents — 2026-10-20
 
-The production runner uses `deck-writer` 1.0.0 and `deck-rewriter` 1.0.0. The shared planner
+The production runner uses `deck-writer` 1.1.0 and `deck-rewriter` 1.0.0. The shared planner
 feeds three parallel requests, each containing all slides, source evidence and per-slide
 template constraints. Strict schemas require every slide index and slot; accepted responses
 are converted to slide IR without more writer calls. Existing slide-writer audience/density/output
@@ -339,8 +339,17 @@ always supplies them.
 Repairs batch all affected slides of one variant and retain three alternatives per defective
 slot. The bounded provider permits at most two batch repair rounds per variant. Transport
 retries remain journalled physical sends, not additional logical agents. Whole-deck requests
-keep their configured output ceiling across retries. The JSON parser rejects concatenated
-answers instead of joining the first opening brace to the last closing brace.
+keep their configured output ceiling across retries. Shared native schema definitions are
+sent once as references rather than repeated for every slide. The JSON parser accepts only
+one distinct schema-valid result: invalid examples and identical repetitions do not introduce
+ambiguity, while different valid answers are rejected. Single-slide author instructions do
+not override the whole-deck response envelope.
+
+Deck-critic 1.13.0 supports up to 240 findings across the full deck rather than twelve total.
+A critic response that remains invalid JSON or fails its schema after provider retries no
+longer discards accepted copy. Deterministic audit and export continue, audit history records
+criticStatus=unavailable, and final review remains unknown. Cancellation, persistence, HTTP
+and budget failures retain their failure semantics.
 
 Offline acceptance uses the actual Mastra workflow: 15 slides × 3 independent variants take
 one planner and three concurrent writer requests. A failed airy writer resumes without

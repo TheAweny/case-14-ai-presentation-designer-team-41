@@ -1205,12 +1205,16 @@ export function createGenerationWorkflow(deps: GenerationDependencies) {
       composition: writingComposition(base, variant, note),
       visualSlots: allowVisual ? visualSlots(base) : [],
     };
-    const instructions = writerPrompt(deps.writerInstructions, deps.writerModules, {
-      audience: task.audience,
-      goal: task.goal,
-      variant,
-      output: qr ? 'qr' : allowVisual ? 'native' : 'text',
-    });
+    const instructions = writerPrompt(
+      deps.deckWriterInstructions === undefined ? deps.writerInstructions : '',
+      deps.writerModules,
+      {
+        audience: task.audience,
+        goal: task.goal,
+        variant,
+        output: qr ? 'qr' : allowVisual ? 'native' : 'text',
+      },
+    );
     return {
       base,
       variant,

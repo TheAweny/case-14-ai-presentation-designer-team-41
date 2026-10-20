@@ -42,7 +42,7 @@ import {
 import { deckRepeats, headlineSlot, slideFigureDefects, slideTextRepeats } from './repeats.js';
 import { leakedSamples } from './samples.js';
 import { approvedCoverage } from './final-review.js';
-import type { TextProvider } from './provider.js';
+import { ModelAnswerValidationError, type TextProvider } from './provider.js';
 import { type Illustration, saveIllustration, type SharedIllustrations } from './illustrations.js';
 import { assessLayoutDiversity } from './layout-diversity.js';
 import type { ModelProvider } from '../models/provider.js';
@@ -615,14 +615,29 @@ export async function generatePresentation(options: GenerateOptions) {
         };
       }),
     });
-    const critiqueCurrent = (auditSignal = contentSignal) =>
-      provider.generate(
-        'critic',
-        critic.instructions,
-        critiqueInput(),
-        critiqueSchema,
-        auditSignal,
-      );
+    const semanticStatus = { available: true };
+    const critiqueCurrent = async (auditSignal = contentSignal) => {
+      try {
+        const result = await provider.generate(
+          'critic',
+          critic.instructions,
+          critiqueInput(),
+          critiqueSchema,
+          auditSignal,
+        );
+        semanticStatus.available = true;
+        return result;
+      } catch (error) {
+        auditSignal.throwIfAborted();
+        if (!(error instanceof ModelAnswerValidationError)) throw error;
+        semanticStatus.available = false;
+        const message =
+          'Ответ смыслового критика не прошёл проверку. Сохранённый вариант продолжает аудит и экспорт; смысловая проверка остаётся неизвестной.';
+        reviewWarnings.push(message);
+        await warn(message);
+        return critiqueSchema.parse({ issues: [] });
+      }
+    };
     const auditHistory = [];
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -677,6 +692,7 @@ export async function generatePresentation(options: GenerateOptions) {
           contentHash: contentHash(),
           fit: fit.findings,
           critique: critique.issues,
+          criticStatus: semanticStatus.available ? 'complete' : 'unavailable',
           repeats,
         });
         // A card heading is a short name; a critic asking it for a claim would have the rewriter
@@ -1098,13 +1114,15 @@ export async function generatePresentation(options: GenerateOptions) {
       schemaVersion: 1,
       contentRevision,
       contentHash: contentHash(),
-      status: reviewedDeck(contextual)
-        ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
-          ? 'requires-review'
-          : coverage.status === 'unknown'
-            ? 'unknown'
-            : 'complete'
-        : 'unknown',
+      status: !semanticStatus.available
+        ? 'unknown'
+        : reviewedDeck(contextual)
+          ? semanticErrors.length || deterministicErrors || pictureErrors || coverage.missing.length
+            ? 'requires-review'
+            : coverage.status === 'unknown'
+              ? 'unknown'
+              : 'complete'
+          : 'unknown',
       deterministic: {
         errors: deterministicErrors,
         warnings: report.findings.length - deterministicErrors,
@@ -1121,7 +1139,8 @@ export async function generatePresentation(options: GenerateOptions) {
         deterministicErrors +
         finalCritique.issues.length -
         semanticErrors.length +
-        pictureWarnings,
+        pictureWarnings +
+        (semanticStatus.available ? 0 : 1),
     });
     if (coverage.status === 'unknown') {
       const message = 'Нет подтверждённого набора требований для проверки полноты содержания.';
@@ -1144,6 +1163,7 @@ export async function generatePresentation(options: GenerateOptions) {
       contentHash: contentHash(),
       fit: [],
       critique: finalCritique.issues,
+      criticStatus: semanticStatus.available ? 'complete' : 'unavailable',
       repeats: [],
     });
     await writeFile(join(options.outputDir, 'audit.json'), JSON.stringify(auditHistory, null, 2));
