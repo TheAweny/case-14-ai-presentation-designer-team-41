@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
       libreoffice-impress \
       libreoffice-core \
       poppler-utils \
+      libarchive13 \
       fontconfig \
       fonts-dejavu-core \
       fonts-liberation2 \

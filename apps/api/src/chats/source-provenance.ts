@@ -142,7 +142,8 @@ export interface InspectedAttachment {
   readonly kind: 'user-attachment';
   readonly messageId: string;
   readonly createdAt: number;
-  readonly attachmentKind: 'file' | 'template' | 'slides';
+  readonly attachmentKind: 'file' | 'template' | 'brandbook' | 'slides';
+  readonly brandbookId?: string;
   readonly fileId?: string;
   readonly templateId?: string;
   readonly name: string;
@@ -306,6 +307,16 @@ function compactFact(fact: ChatSourceFact): InspectedSource {
         createdAt: fact.createdAt,
         attachmentKind: 'template',
         templateId: attachment.templateId,
+        name: attachment.name,
+      };
+    }
+    if (attachment.kind === 'brandbook') {
+      return {
+        kind: 'user-attachment',
+        messageId: fact.messageId,
+        createdAt: fact.createdAt,
+        attachmentKind: 'brandbook',
+        brandbookId: attachment.brandbookId,
         name: attachment.name,
       };
     }

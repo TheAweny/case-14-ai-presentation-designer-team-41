@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { layoutVariantNameSchema, slideIrSchema } from './slide-ir.js';
+import { brandbookBindingSchema } from './brandbook.js';
 
 /**
  * DeckExportRequest and DeckExportResponse — slides written out as files on the template.
@@ -14,6 +15,8 @@ export const exportFormatSchema = z.enum(['pptx', 'pdf']);
 export const deckExportRequestSchema = z.object({
   schemaVersion: z.literal(1).describe('Incremented by any incompatible change.'),
   templatePath: z.string().min(1).describe('Local path of the template the slides follow.'),
+  /** Optional immutable brand rules applied to native export; template remains the default. */
+  brandbook: brandbookBindingSchema.optional(),
   variant: layoutVariantNameSchema,
   slides: z.array(slideIrSchema).min(1),
   outputDir: z.string().min(1).describe('Local directory the files are written to.'),

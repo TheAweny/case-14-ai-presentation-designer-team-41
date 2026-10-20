@@ -548,3 +548,6 @@ export {
   type OperationMetric,
 } from './account-policy.js';
 export { generationUsageSchema, type GenerationUsage } from './generation-usage.js';
+
+export * from './brandbook.js';
+export * from './brandbook-template.js';

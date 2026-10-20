@@ -1,4 +1,13 @@
 import {
+  brandbookProfileSchema,
+  brandbookParseRequestSchema,
+  brandbookBindingSchema,
+} from './brandbook.js';
+import {
+  brandbookTemplateRequestSchema,
+  brandbookTemplateResponseSchema,
+} from './brandbook-template.js';
+import {
   compositionCheckResponseSchema,
   generationProfileSchema,
   compositionExportRequestSchema,
@@ -50,6 +59,11 @@ import {
  * slides, findings and a manifest.
  */
 export const contractRegistry = {
+  BrandbookProfile: brandbookProfileSchema,
+  BrandbookParseRequest: brandbookParseRequestSchema,
+  BrandbookBinding: brandbookBindingSchema,
+  BrandbookTemplateRequest: brandbookTemplateRequestSchema,
+  BrandbookTemplateResponse: brandbookTemplateResponseSchema,
   CompositionCheckResponse: compositionCheckResponseSchema,
   GenerationProfile: generationProfileSchema,
   CompositionExportRequest: compositionExportRequestSchema,

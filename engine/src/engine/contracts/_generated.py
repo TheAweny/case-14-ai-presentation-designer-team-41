@@ -2300,6 +2300,1473 @@ class AuditRequest(BaseModel):
     )
 
 
+class Priority(StrEnum):
+    brandbook = "brandbook"
+    template = "template"
+
+
+class Kind2(StrEnum):
+    logo = "logo"
+    image = "image"
+    font = "font"
+    example = "example"
+    vector = "vector"
+
+
+class Asset(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    fontFamily: str | None
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind2
+    mediaType: constr(min_length=1)
+    name: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    sourceId: constr(min_length=1)
+    width: confloat(ge=0.0) | None
+
+
+class Coverage(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    filesParsed: conint(ge=0, le=9007199254740991)
+    filesTotal: conint(ge=0, le=9007199254740991)
+    filesUnsupported: conint(ge=0, le=9007199254740991)
+    needsOcr: bool
+
+
+class Kind3(StrEnum):
+    page = "page"
+    frame = "frame"
+    group = "group"
+    text = "text"
+    rule = "rule"
+
+
+class Section(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind3
+    locator: constr(min_length=1)
+    name: str
+    parentId: str | None
+    sourceId: constr(min_length=1)
+    text: constr(max_length=50000)
+    width: confloat(ge=0.0) | None
+
+
+class Status(StrEnum):
+    parsed = "parsed"
+    partial = "partial"
+    unsupported = "unsupported"
+
+
+class Source11(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: constr(min_length=1)
+    id: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    status: Status
+    warnings: list[str]
+
+
+class Status1(StrEnum):
+    ready = "ready"
+    partial = "partial"
+
+
+class Authority(StrEnum):
+    explicit = "explicit"
+    observed = "observed"
+    inferred = "inferred"
+
+
+class EvidenceItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    excerpt: constr(max_length=4000)
+    locator: constr(min_length=1)
+    sourceId: constr(min_length=1)
+
+
+class Kind4(StrEnum):
+    color = "color"
+    font_family = "font-family"
+    font_size = "font-size"
+    spacing = "spacing"
+    radius = "radius"
+    grid = "grid"
+    rule = "rule"
+
+
+class Unit(StrEnum):
+    px = "px"
+    pt = "pt"
+    emu = "emu"
+    percent = "percent"
+
+
+class Token(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    authority: Authority
+    confidence: confloat(ge=0.0, le=1.0)
+    evidence: list[EvidenceItem] = Field(..., min_length=1)
+    id: constr(min_length=1)
+    kind: Kind4
+    name: constr(min_length=1)
+    role: str | None
+    scope: constr(min_length=1)
+    unit: Unit | None
+    value: constr(max_length=12000) | float
+
+
+class Profile(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assets: list[Asset]
+    coverage: Coverage
+    parserVersion: constr(min_length=1)
+    schemaVersion: Literal[1]
+    sections: list[Section]
+    sourceSha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sources: list[Source11] = Field(..., min_length=1)
+    status: Status1
+    tokens: list[Token]
+    warnings: list[str]
+
+
+class BrandbookBinding(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    priority: Priority
+    profile: Profile
+    schemaVersion: Literal[1]
+
+
+class BrandbookParseRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    outputDir: constr(min_length=1, max_length=4000)
+    path: constr(min_length=1, max_length=4000)
+    schemaVersion: Literal[1]
+
+
+class Kind5(StrEnum):
+    logo = "logo"
+    image = "image"
+    font = "font"
+    example = "example"
+    vector = "vector"
+
+
+class Asset1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    fontFamily: str | None
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind5
+    mediaType: constr(min_length=1)
+    name: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    sourceId: constr(min_length=1)
+    width: confloat(ge=0.0) | None
+
+
+class Kind6(StrEnum):
+    page = "page"
+    frame = "frame"
+    group = "group"
+    text = "text"
+    rule = "rule"
+
+
+class Section1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind6
+    locator: constr(min_length=1)
+    name: str
+    parentId: str | None
+    sourceId: constr(min_length=1)
+    text: constr(max_length=50000)
+    width: confloat(ge=0.0) | None
+
+
+class Status2(StrEnum):
+    parsed = "parsed"
+    partial = "partial"
+    unsupported = "unsupported"
+
+
+class Source12(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: constr(min_length=1)
+    id: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    status: Status2
+    warnings: list[str]
+
+
+class Status3(StrEnum):
+    ready = "ready"
+    partial = "partial"
+
+
+class Kind7(StrEnum):
+    color = "color"
+    font_family = "font-family"
+    font_size = "font-size"
+    spacing = "spacing"
+    radius = "radius"
+    grid = "grid"
+    rule = "rule"
+
+
+class Token1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    authority: Authority
+    confidence: confloat(ge=0.0, le=1.0)
+    evidence: list[EvidenceItem] = Field(..., min_length=1)
+    id: constr(min_length=1)
+    kind: Kind7
+    name: constr(min_length=1)
+    role: str | None
+    scope: constr(min_length=1)
+    unit: Unit | None
+    value: constr(max_length=12000) | float
+
+
+class BrandbookProfile(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assets: list[Asset1]
+    coverage: Coverage
+    parserVersion: constr(min_length=1)
+    schemaVersion: Literal[1]
+    sections: list[Section1]
+    sourceSha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sources: list[Source12] = Field(..., min_length=1)
+    status: Status3
+    tokens: list[Token1]
+    warnings: list[str]
+
+
+class Kind8(StrEnum):
+    logo = "logo"
+    image = "image"
+    font = "font"
+    example = "example"
+    vector = "vector"
+
+
+class Asset2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    fontFamily: str | None
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind8
+    mediaType: constr(min_length=1)
+    name: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    sourceId: constr(min_length=1)
+    width: confloat(ge=0.0) | None
+
+
+class Kind9(StrEnum):
+    page = "page"
+    frame = "frame"
+    group = "group"
+    text = "text"
+    rule = "rule"
+
+
+class Section2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind9
+    locator: constr(min_length=1)
+    name: str
+    parentId: str | None
+    sourceId: constr(min_length=1)
+    text: constr(max_length=50000)
+    width: confloat(ge=0.0) | None
+
+
+class Status4(StrEnum):
+    parsed = "parsed"
+    partial = "partial"
+    unsupported = "unsupported"
+
+
+class Source13(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: constr(min_length=1)
+    id: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    status: Status4
+    warnings: list[str]
+
+
+class Status5(StrEnum):
+    ready = "ready"
+    partial = "partial"
+
+
+class Kind10(StrEnum):
+    color = "color"
+    font_family = "font-family"
+    font_size = "font-size"
+    spacing = "spacing"
+    radius = "radius"
+    grid = "grid"
+    rule = "rule"
+
+
+class Token2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    authority: Authority
+    confidence: confloat(ge=0.0, le=1.0)
+    evidence: list[EvidenceItem] = Field(..., min_length=1)
+    id: constr(min_length=1)
+    kind: Kind10
+    name: constr(min_length=1)
+    role: str | None
+    scope: constr(min_length=1)
+    unit: Unit | None
+    value: constr(max_length=12000) | float
+
+
+class Profile1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assets: list[Asset2]
+    coverage: Coverage
+    parserVersion: constr(min_length=1)
+    schemaVersion: Literal[1]
+    sections: list[Section2]
+    sourceSha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sources: list[Source13] = Field(..., min_length=1)
+    status: Status5
+    tokens: list[Token2]
+    warnings: list[str]
+
+
+class Brandbook(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    priority: Priority
+    profile: Profile1
+    schemaVersion: Literal[1]
+
+
+class BrandbookTemplateRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    brandbook: Brandbook
+    outputPath: constr(min_length=1)
+    schemaVersion: Literal[1]
+    templatePath: constr(min_length=1)
+
+
+class Source14(StrEnum):
+    observed = "observed"
+    theme = "theme"
+    fallback = "fallback"
+
+
+class Meta9(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Grid1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    baseline: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Vertical step layout snaps to, in EMU."
+    )
+    columns: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Columns the content area divides into."
+    )
+    gutter: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Space between columns in EMU."
+    )
+    marginBottom: conint(ge=0, le=9007199254740991)
+    marginLeft: conint(ge=0, le=9007199254740991)
+    marginRight: conint(ge=0, le=9007199254740991)
+    marginTop: conint(ge=0, le=9007199254740991)
+    meta: Meta9
+    slideCx: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Slide width in EMU."
+    )
+    slideCy: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Slide height in EMU."
+    )
+
+
+class Meta10(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role10(StrEnum):
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class PaletteItem1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Six hex digits, no leading hash."
+    )
+    meta: Meta10
+    role: Role10
+
+
+class Box11(BaseModel):
+    """
+    Where it sits, in EMU.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cx: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Width in EMU."
+    )
+    cy: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Height in EMU."
+    )
+    x: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Left edge in EMU."
+    )
+    y: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Top edge in EMU."
+    )
+
+
+class Meta11(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role11(StrEnum):
+    logo = "logo"
+    footer = "footer"
+    page_number = "page-number"
+    decoration = "decoration"
+
+
+class ProtectedZone1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box11 = Field(..., description="Where it sits, in EMU.")
+    mediaPart: str = Field(
+        ..., description="Image it draws, for a logo. Empty otherwise."
+    )
+    meta: Meta11
+    role: Role11
+
+
+class Meta12(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class RadiiItem1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    meta: Meta12
+    name: Name
+    radiusPt: confloat(ge=0.0)
+
+
+class Meta13(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Shadows1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    meta: Meta13
+    present: bool = Field(
+        ..., description="False when the template draws no shadows. Do not add any."
+    )
+
+
+class ColorRole4(StrEnum):
+    """
+    Palette role this colour matches, if any.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Meta14(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Stroke2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    colorRole: ColorRole4 | None = Field(
+        ..., description="Palette role this colour matches, if any."
+    )
+    hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Six hex digits, no leading hash."
+    )
+    meta: Meta14
+    widthPt: confloat(ge=0.0)
+
+
+class Meta15(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Surface1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    accent: constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+        ..., description="Accent observed on this surface, if any."
+    )
+    background: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Six hex digits, no leading hash."
+    )
+    meta: Meta15
+    text: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Text colour observed on this surface, or the best contrast."
+    )
+    tone: Tone
+
+
+class Meta16(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role12(StrEnum):
+    primary = "primary"
+    secondary = "secondary"
+    mono = "mono"
+
+
+class TypeFamily1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    declared: str = Field(
+        ...,
+        description="What the theme names for this role. Differs from font when the slides disagree.",
+    )
+    font: constr(min_length=1)
+    meta: Meta16
+    role: Role12
+
+
+class ColorRole5(StrEnum):
+    """
+    Which palette role this text takes its colour from.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Meta17(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role13(StrEnum):
+    title = "title"
+    subtitle = "subtitle"
+    heading = "heading"
+    body = "body"
+    bullet = "bullet"
+    caption = "caption"
+    kpi_value = "kpi-value"
+    kpi_caption = "kpi-caption"
+    quote = "quote"
+    footer = "footer"
+
+
+class TypeScaleItem1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bold: bool
+    colorRole: ColorRole5 = Field(
+        ..., description="Which palette role this text takes its colour from."
+    )
+    font: constr(min_length=1) = Field(..., description="Typeface to set this role in.")
+    italic: bool
+    lineSpacing: PositiveFloat = Field(
+        ..., description="Multiple of the line height, 1 for single."
+    )
+    meta: Meta17
+    role: Role13
+    sizePt: PositiveFloat = Field(..., description="Size in points.")
+
+
+class Warning1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: Code
+    message: constr(min_length=1)
+    token: str = Field(
+        ...,
+        description="Which token it concerns, such as palette.accent or type.title.",
+    )
+
+
+class DesignSystem2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    aspect: str = Field(..., description="Aspect ratio in lowest terms, such as 16:9.")
+    grid: Grid1
+    palette: list[PaletteItem1] = Field(
+        ...,
+        description="One entry per role the template supports. Roles it lacks are simply absent.",
+        min_length=1,
+    )
+    protectedZones: list[ProtectedZone1]
+    radii: list[RadiiItem1] = Field(
+        ..., description="Corner radii in use, smallest first."
+    )
+    schemaVersion: Literal[1] = Field(
+        ..., description="Incremented by any incompatible change."
+    )
+    shadows: Shadows1
+    strokes: list[Stroke2] = Field(
+        ..., description="Outline styles in use, most common first."
+    )
+    surfaces: list[Surface1] = Field(
+        ..., description="One per tone the template uses.", min_length=1
+    )
+    templateHash: constr(min_length=64, max_length=64) = Field(
+        ...,
+        description="Hash of the TemplateIR this was derived from, so the pair can be checked.",
+    )
+    typeFamilies: list[TypeFamily1] = Field(..., min_length=1)
+    typeScale: list[TypeScaleItem1] = Field(
+        ..., description="One entry per role in use.", min_length=1
+    )
+    warnings: list[Warning1] = Field(
+        ..., description="Empty only when every token was measured with confidence."
+    )
+
+
+class Box12(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cx: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Width in EMU."
+    )
+    cy: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Height in EMU."
+    )
+    x: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Left edge in EMU."
+    )
+    y: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Top edge in EMU."
+    )
+
+
+class Kind11(StrEnum):
+    placeholder = "placeholder"
+    panel = "panel"
+    photo = "photo"
+
+
+class ImageSlot(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box12
+    kind: Kind11
+    slotId: constr(min_length=1)
+
+
+class QrCandidateSlot(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box12
+    kind: Kind11
+    slotId: constr(min_length=1)
+
+
+class Role14(StrEnum):
+    title = "title"
+    body = "body"
+
+
+class Slot1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box12 | None = None
+    font: str
+    fontSize: PositiveFloat
+    lineSpacing: PositiveFloat | None = None
+    maxChars: conint(le=9007199254740991, gt=0)
+    maxLines: conint(le=9007199254740991, gt=0)
+    prompt: bool | None = None
+    role: Role14
+    sample: str
+    slotId: constr(min_length=1)
+    spaceAfterPt: confloat(ge=0.0) | None = None
+    spaceBeforePt: confloat(ge=0.0) | None = None
+    textHeightPt: PositiveFloat | None = None
+    textWidthPt: PositiveFloat | None = None
+
+
+class Composition(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    imageCount: conint(ge=0, le=9007199254740991)
+    imageSlots: list[ImageSlot] | None = None
+    name: str
+    patternId: constr(min_length=1)
+    qrCandidateSlots: list[QrCandidateSlot] | None = None
+    slots: list[Slot1] = Field(..., min_length=1)
+    sourceIndex: conint(ge=0, le=9007199254740991)
+
+
+class Meta18(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Grid2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    baseline: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Vertical step layout snaps to, in EMU."
+    )
+    columns: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Columns the content area divides into."
+    )
+    gutter: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Space between columns in EMU."
+    )
+    marginBottom: conint(ge=0, le=9007199254740991)
+    marginLeft: conint(ge=0, le=9007199254740991)
+    marginRight: conint(ge=0, le=9007199254740991)
+    marginTop: conint(ge=0, le=9007199254740991)
+    meta: Meta18
+    slideCx: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Slide width in EMU."
+    )
+    slideCy: conint(le=9007199254740991, gt=0) = Field(
+        ..., description="Slide height in EMU."
+    )
+
+
+class Meta19(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role15(StrEnum):
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class PaletteItem2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Six hex digits, no leading hash."
+    )
+    meta: Meta19
+    role: Role15
+
+
+class Box15(BaseModel):
+    """
+    Where it sits, in EMU.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cx: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Width in EMU."
+    )
+    cy: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Height in EMU."
+    )
+    x: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Left edge in EMU."
+    )
+    y: conint(ge=-9007199254740991, le=9007199254740991) = Field(
+        ..., description="Top edge in EMU."
+    )
+
+
+class Meta20(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role16(StrEnum):
+    logo = "logo"
+    footer = "footer"
+    page_number = "page-number"
+    decoration = "decoration"
+
+
+class ProtectedZone2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    box: Box15 = Field(..., description="Where it sits, in EMU.")
+    mediaPart: str = Field(
+        ..., description="Image it draws, for a logo. Empty otherwise."
+    )
+    meta: Meta20
+    role: Role16
+
+
+class Meta21(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class RadiiItem2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    meta: Meta21
+    name: Name
+    radiusPt: confloat(ge=0.0)
+
+
+class Meta22(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Shadows2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    meta: Meta22
+    present: bool = Field(
+        ..., description="False when the template draws no shadows. Do not add any."
+    )
+
+
+class ColorRole6(StrEnum):
+    """
+    Palette role this colour matches, if any.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Meta23(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Stroke3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    colorRole: ColorRole6 | None = Field(
+        ..., description="Palette role this colour matches, if any."
+    )
+    hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Six hex digits, no leading hash."
+    )
+    meta: Meta23
+    widthPt: confloat(ge=0.0)
+
+
+class Meta24(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Surface2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    accent: constr(pattern=r"^[0-9a-fA-F]{6}$") | None = Field(
+        ..., description="Accent observed on this surface, if any."
+    )
+    background: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Six hex digits, no leading hash."
+    )
+    meta: Meta24
+    text: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
+        ..., description="Text colour observed on this surface, or the best contrast."
+    )
+    tone: Tone
+
+
+class Meta25(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role17(StrEnum):
+    primary = "primary"
+    secondary = "secondary"
+    mono = "mono"
+
+
+class TypeFamily2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    declared: str = Field(
+        ...,
+        description="What the theme names for this role. Differs from font when the slides disagree.",
+    )
+    font: constr(min_length=1)
+    meta: Meta25
+    role: Role17
+
+
+class ColorRole7(StrEnum):
+    """
+    Which palette role this text takes its colour from.
+    """
+
+    background = "background"
+    surface = "surface"
+    text = "text"
+    text_muted = "text-muted"
+    text_on_accent = "text-on-accent"
+    accent = "accent"
+    accent_alt = "accent-alt"
+    line = "line"
+    positive = "positive"
+    negative = "negative"
+
+
+class Meta26(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    confidence: confloat(ge=0.0, le=1.0) = Field(
+        ...,
+        description="How far to trust the value. 1 for a measurement nobody contradicts.",
+    )
+    count: conint(ge=0, le=9007199254740991) = Field(
+        ..., description="Occurrences that support this value."
+    )
+    parts: list[str] = Field(
+        ...,
+        description="A few parts it was observed on, so the value can be traced back to the file.",
+    )
+    share: confloat(ge=0.0, le=1.0) = Field(
+        ..., description="Share of the relevant population that agrees."
+    )
+    source: Source14
+
+
+class Role18(StrEnum):
+    title = "title"
+    subtitle = "subtitle"
+    heading = "heading"
+    body = "body"
+    bullet = "bullet"
+    caption = "caption"
+    kpi_value = "kpi-value"
+    kpi_caption = "kpi-caption"
+    quote = "quote"
+    footer = "footer"
+
+
+class TypeScaleItem2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    bold: bool
+    colorRole: ColorRole7 = Field(
+        ..., description="Which palette role this text takes its colour from."
+    )
+    font: constr(min_length=1) = Field(..., description="Typeface to set this role in.")
+    italic: bool
+    lineSpacing: PositiveFloat = Field(
+        ..., description="Multiple of the line height, 1 for single."
+    )
+    meta: Meta26
+    role: Role18
+    sizePt: PositiveFloat = Field(..., description="Size in points.")
+
+
+class Warning2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: Code
+    message: constr(min_length=1)
+    token: str = Field(
+        ...,
+        description="Which token it concerns, such as palette.accent or type.title.",
+    )
+
+
+class DesignSystem3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    aspect: str = Field(..., description="Aspect ratio in lowest terms, such as 16:9.")
+    grid: Grid2
+    palette: list[PaletteItem2] = Field(
+        ...,
+        description="One entry per role the template supports. Roles it lacks are simply absent.",
+        min_length=1,
+    )
+    protectedZones: list[ProtectedZone2]
+    radii: list[RadiiItem2] = Field(
+        ..., description="Corner radii in use, smallest first."
+    )
+    schemaVersion: Literal[1] = Field(
+        ..., description="Incremented by any incompatible change."
+    )
+    shadows: Shadows2
+    strokes: list[Stroke3] = Field(
+        ..., description="Outline styles in use, most common first."
+    )
+    surfaces: list[Surface2] = Field(
+        ..., description="One per tone the template uses.", min_length=1
+    )
+    templateHash: constr(min_length=64, max_length=64) = Field(
+        ...,
+        description="Hash of the TemplateIR this was derived from, so the pair can be checked.",
+    )
+    typeFamilies: list[TypeFamily2] = Field(..., min_length=1)
+    typeScale: list[TypeScaleItem2] = Field(
+        ..., description="One entry per role in use.", min_length=1
+    )
+    warnings: list[Warning2] = Field(
+        ..., description="Empty only when every token was measured with confidence."
+    )
+
+
+class State(StrEnum):
+    ready = "ready"
+    missing = "missing"
+    unknown = "unknown"
+
+
+class FontReadiness(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    missing: list[str]
+    requested: list[str]
+    state: State
+
+
+class Profile2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    compositions: list[Composition] = Field(..., min_length=1)
+    designSystem: DesignSystem3
+    fontReadiness: FontReadiness | None = None
+    schemaVersion: Literal[1]
+    templateHash: constr(min_length=64, max_length=64)
+
+
+class BrandbookTemplateResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    designSystem: DesignSystem2
+    profile: Profile2
+    schemaVersion: Literal[1]
+    templatePath: constr(min_length=1)
+    warnings: list[str]
+
+
 class Severity2(StrEnum):
     error = "error"
     warning = "warning"
@@ -2324,6 +3791,129 @@ class CompositionCheckResponse(BaseModel):
         extra="forbid",
     )
     findings: list[Finding1]
+    schemaVersion: Literal[1]
+
+
+class Kind13(StrEnum):
+    logo = "logo"
+    image = "image"
+    font = "font"
+    example = "example"
+    vector = "vector"
+
+
+class Asset3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    fontFamily: str | None
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind13
+    mediaType: constr(min_length=1)
+    name: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    sourceId: constr(min_length=1)
+    width: confloat(ge=0.0) | None
+
+
+class Kind14(StrEnum):
+    page = "page"
+    frame = "frame"
+    group = "group"
+    text = "text"
+    rule = "rule"
+
+
+class Section3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind14
+    locator: constr(min_length=1)
+    name: str
+    parentId: str | None
+    sourceId: constr(min_length=1)
+    text: constr(max_length=50000)
+    width: confloat(ge=0.0) | None
+
+
+class Status6(StrEnum):
+    parsed = "parsed"
+    partial = "partial"
+    unsupported = "unsupported"
+
+
+class Source32(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: constr(min_length=1)
+    id: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    status: Status6
+    warnings: list[str]
+
+
+class Status7(StrEnum):
+    ready = "ready"
+    partial = "partial"
+
+
+class Kind15(StrEnum):
+    color = "color"
+    font_family = "font-family"
+    font_size = "font-size"
+    spacing = "spacing"
+    radius = "radius"
+    grid = "grid"
+    rule = "rule"
+
+
+class Token3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    authority: Authority
+    confidence: confloat(ge=0.0, le=1.0)
+    evidence: list[EvidenceItem] = Field(..., min_length=1)
+    id: constr(min_length=1)
+    kind: Kind15
+    name: constr(min_length=1)
+    role: str | None
+    scope: constr(min_length=1)
+    unit: Unit | None
+    value: constr(max_length=12000) | float
+
+
+class Profile3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assets: list[Asset3]
+    coverage: Coverage
+    parserVersion: constr(min_length=1)
+    schemaVersion: Literal[1]
+    sections: list[Section3]
+    sourceSha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sources: list[Source32] = Field(..., min_length=1)
+    status: Status7
+    tokens: list[Token3]
+    warnings: list[str]
+
+
+class Brandbook1(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    priority: Priority
+    profile: Profile3
     schemaVersion: Literal[1]
 
 
@@ -2417,7 +4007,7 @@ class Visual1(BaseModel):
     yTitle: str = Field(..., description="The value axis title with its unit.")
 
 
-class State(StrEnum):
+class State1(StrEnum):
     present = "present"
     missing = "missing"
 
@@ -2427,7 +4017,7 @@ class Base(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State
+    state: State1
     value: float | None = None
 
 
@@ -2440,7 +4030,7 @@ class Comparison(BaseModel):
     baseUnit: str
 
 
-class Status(StrEnum):
+class Status8(StrEnum):
     """
     Copied onto the slide. Display does not change it.
     """
@@ -2449,13 +4039,13 @@ class Status(StrEnum):
     unverified = "unverified"
 
 
-class Source11(BaseModel):
+class Source33(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status = Field(
+    status: Status8 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -2465,7 +4055,7 @@ class Value(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State
+    state: State1
     value: float | None = None
 
 
@@ -2478,7 +4068,7 @@ class Item(BaseModel):
     comparison: Comparison | None = None
     period: str
     periodKnown: bool
-    sources: list[Source11] = Field(..., min_length=1)
+    sources: list[Source33] = Field(..., min_length=1)
     unit: str
     unitAmbiguous: bool
     value: Value
@@ -2519,7 +4109,7 @@ class Value1(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State
+    state: State1
     value: float | None = None
 
 
@@ -2532,13 +4122,13 @@ class Series2(BaseModel):
     values: list[Value1] = Field(..., min_length=1)
 
 
-class Source12(BaseModel):
+class Source34(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status = Field(
+    status: Status8 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -2553,12 +4143,12 @@ class Block1(BaseModel):
     kind: Literal["chart"]
     requestedType: RequestedType | None = None
     series: list[Series2] = Field(..., min_length=1)
-    sources: list[Source12] = Field(..., min_length=1)
+    sources: list[Source34] = Field(..., min_length=1)
     xTitle: str
     yTitle: str
 
 
-class Kind2(StrEnum):
+class Kind16(StrEnum):
     text = "text"
     number = "number"
     unit = "unit"
@@ -2569,7 +4159,7 @@ class Column(BaseModel):
         extra="forbid",
     )
     header: constr(min_length=1)
-    kind: Kind2
+    kind: Kind16
 
 
 class Cell(BaseModel):
@@ -2587,13 +4177,13 @@ class Row(BaseModel):
     cells: list[Cell] = Field(..., min_length=1)
 
 
-class Source13(BaseModel):
+class Source35(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status = Field(
+    status: Status8 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -2607,7 +4197,7 @@ class Block2(BaseModel):
     kind: Literal["table"]
     notes: str
     rows: list[Row] = Field(..., min_length=1)
-    sources: list[Source13] = Field(..., min_length=1)
+    sources: list[Source35] = Field(..., min_length=1)
 
 
 class Visual2(BaseModel):
@@ -2645,6 +4235,7 @@ class CompositionExportRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    brandbook: Brandbook1 | None = None
     briefYears: list[conint(ge=-9007199254740991, le=9007199254740991)] | None = None
     outputPath: constr(min_length=1)
     schemaVersion: Literal[1]
@@ -2678,7 +4269,7 @@ class Color3(BaseModel):
     )
 
 
-class Kind3(StrEnum):
+class Kind17(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -2712,13 +4303,13 @@ class Background1(BaseModel):
         extra="forbid",
     )
     color: Color3 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind3
+    kind: Kind17
     stops: list[Stop] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
-class Box11(BaseModel):
+class Box16(BaseModel):
     """
     Null when the shape inherits its position from a layout.
     """
@@ -2787,7 +4378,7 @@ class Fill2(BaseModel):
         extra="forbid",
     )
     color: Color4 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind3
+    kind: Kind17
     stops: list[Stop1] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -2856,7 +4447,7 @@ class Color5(BaseModel):
     )
 
 
-class Stroke2(BaseModel):
+class Stroke4(BaseModel):
     """
     Null when the shape inherits its outline.
     """
@@ -2879,7 +4470,7 @@ class Shape1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box11 | None = Field(
+    box: Box16 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -2919,7 +4510,7 @@ class Shape1(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
-    stroke: Stroke2 | None = Field(
+    stroke: Stroke4 | None = Field(
         ..., description="Null when the shape inherits its outline."
     )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
@@ -3006,7 +4597,7 @@ class Background2(BaseModel):
         extra="forbid",
     )
     color: Color6 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind3
+    kind: Kind17
     stops: list[Stop2] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -3059,7 +4650,7 @@ class Fill3(BaseModel):
         extra="forbid",
     )
     color: Color7 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind3
+    kind: Kind17
     stops: list[Stop3] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -3118,7 +4709,7 @@ class Color8(BaseModel):
     )
 
 
-class Stroke3(BaseModel):
+class Stroke5(BaseModel):
     """
     Null when the shape inherits its outline.
     """
@@ -3137,7 +4728,7 @@ class Shape2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box11 | None = Field(
+    box: Box16 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -3177,7 +4768,7 @@ class Shape2(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
-    stroke: Stroke3 | None = Field(
+    stroke: Stroke5 | None = Field(
         ..., description="Null when the shape inherits its outline."
     )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
@@ -3281,7 +4872,7 @@ class Background3(BaseModel):
         extra="forbid",
     )
     color: Color9 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind3
+    kind: Kind17
     stops: list[Stop4] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -3334,7 +4925,7 @@ class Fill4(BaseModel):
         extra="forbid",
     )
     color: Color10 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind3
+    kind: Kind17
     stops: list[Stop5] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -3393,7 +4984,7 @@ class Color11(BaseModel):
     )
 
 
-class Stroke4(BaseModel):
+class Stroke6(BaseModel):
     """
     Null when the shape inherits its outline.
     """
@@ -3412,7 +5003,7 @@ class Shape3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box11 | None = Field(
+    box: Box16 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -3452,7 +5043,7 @@ class Shape3(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
-    stroke: Stroke4 | None = Field(
+    stroke: Stroke6 | None = Field(
         ..., description="Null when the shape inherits its outline."
     )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
@@ -3518,7 +5109,7 @@ class ThemeFonts(BaseModel):
     )
 
 
-class Code1(StrEnum):
+class Code3(StrEnum):
     unsupported_shape = "unsupported-shape"
     unresolved_color = "unresolved-color"
     missing_font_scheme = "missing-font-scheme"
@@ -3528,11 +5119,11 @@ class Code1(StrEnum):
     no_slide_layout = "no-slide-layout"
 
 
-class Warning1(BaseModel):
+class Warning3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code1
+    code: Code3
     location: str = Field(..., description="Part name, or a part and shape id.")
     message: constr(min_length=1) = Field(
         ..., description="What happened, in a sentence."
@@ -3568,7 +5159,7 @@ class TemplateIr(BaseModel):
     )
     themeColors: list[ThemeColor] = Field(..., description="One entry per theme part.")
     themeFonts: ThemeFonts
-    warnings: list[Warning1] = Field(..., description="Empty when nothing was lost.")
+    warnings: list[Warning3] = Field(..., description="Empty when nothing was lost.")
 
 
 class CompositionExportResponse(BaseModel):
@@ -3584,7 +5175,7 @@ class CompositionExportResponse(BaseModel):
     warnings: list[str]
 
 
-class Kind9(StrEnum):
+class Kind23(StrEnum):
     brief = "brief"
     text = "text"
     table = "table"
@@ -3600,7 +5191,7 @@ class Item1(BaseModel):
         ...,
         description="What a sourceRef points at. Unique within the pack and stable across a run.",
     )
-    kind: Kind9
+    kind: Kind23
     origin: str = Field(
         ...,
         description="File name or URL it came from. Empty when the user typed it in.",
@@ -3664,6 +5255,129 @@ class CopyEdits(BaseModel):
     )
 
 
+class Kind24(StrEnum):
+    logo = "logo"
+    image = "image"
+    font = "font"
+    example = "example"
+    vector = "vector"
+
+
+class Asset4(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    fontFamily: str | None
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind24
+    mediaType: constr(min_length=1)
+    name: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    sourceId: constr(min_length=1)
+    width: confloat(ge=0.0) | None
+
+
+class Kind25(StrEnum):
+    page = "page"
+    frame = "frame"
+    group = "group"
+    text = "text"
+    rule = "rule"
+
+
+class Section4(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    height: confloat(ge=0.0) | None
+    id: constr(min_length=1)
+    kind: Kind25
+    locator: constr(min_length=1)
+    name: str
+    parentId: str | None
+    sourceId: constr(min_length=1)
+    text: constr(max_length=50000)
+    width: confloat(ge=0.0) | None
+
+
+class Status11(StrEnum):
+    parsed = "parsed"
+    partial = "partial"
+    unsupported = "unsupported"
+
+
+class Source36(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: constr(min_length=1)
+    id: constr(min_length=1)
+    path: constr(min_length=1)
+    sha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sizeBytes: conint(ge=0, le=9007199254740991)
+    status: Status11
+    warnings: list[str]
+
+
+class Status12(StrEnum):
+    ready = "ready"
+    partial = "partial"
+
+
+class Kind26(StrEnum):
+    color = "color"
+    font_family = "font-family"
+    font_size = "font-size"
+    spacing = "spacing"
+    radius = "radius"
+    grid = "grid"
+    rule = "rule"
+
+
+class Token4(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    authority: Authority
+    confidence: confloat(ge=0.0, le=1.0)
+    evidence: list[EvidenceItem] = Field(..., min_length=1)
+    id: constr(min_length=1)
+    kind: Kind26
+    name: constr(min_length=1)
+    role: str | None
+    scope: constr(min_length=1)
+    unit: Unit | None
+    value: constr(max_length=12000) | float
+
+
+class Profile4(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    assets: list[Asset4]
+    coverage: Coverage
+    parserVersion: constr(min_length=1)
+    schemaVersion: Literal[1]
+    sections: list[Section4]
+    sourceSha256: constr(pattern=r"^[0-9a-f]{64}$")
+    sources: list[Source36] = Field(..., min_length=1)
+    status: Status12
+    tokens: list[Token4]
+    warnings: list[str]
+
+
+class Brandbook2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    priority: Priority
+    profile: Profile4
+    schemaVersion: Literal[1]
+
+
 class Format(StrEnum):
     pptx = "pptx"
     pdf = "pdf"
@@ -3694,7 +5408,7 @@ class Background4(StrEnum):
     negative = "negative"
 
 
-class Box14(BaseModel):
+class Box19(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -3748,6 +5462,23 @@ class Paragraph7(BaseModel):
     )
 
 
+class Role19(StrEnum):
+    title = "title"
+    subtitle = "subtitle"
+    body = "body"
+    bullet_list = "bullet-list"
+    kpi_value = "kpi-value"
+    kpi_caption = "kpi-caption"
+    quote = "quote"
+    table = "table"
+    chart = "chart"
+    image = "image"
+    logo = "logo"
+    footer = "footer"
+    page_number = "page-number"
+    decoration = "decoration"
+
+
 class TextInsets2(BaseModel):
     """
     Space between the box and its text (`a:bodyPr` insets). Absent: none.
@@ -3776,7 +5507,7 @@ class Elements5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -3795,7 +5526,7 @@ class Elements5(BaseModel):
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph7] = Field(..., min_length=1)
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -3829,7 +5560,7 @@ class Elements6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -3853,7 +5584,7 @@ class Elements6(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -3995,7 +5726,7 @@ class Elements7(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box14
+    box: Box19
     cellStyles: list[list[CellStyles1 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -4024,7 +5755,7 @@ class Elements7(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4063,7 +5794,7 @@ class Elements8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -4085,7 +5816,7 @@ class Elements8(BaseModel):
         description="Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
         min_length=1,
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4194,7 +5925,7 @@ class Color14(StrEnum):
     negative = "negative"
 
 
-class Stroke5(BaseModel):
+class Stroke7(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -4241,7 +5972,7 @@ class Elements9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -4278,7 +6009,7 @@ class Elements9(BaseModel):
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4295,7 +6026,7 @@ class Elements9(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke5 | None = Field(
+    stroke: Stroke7 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -4353,6 +6084,7 @@ class DeckExportRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    brandbook: Brandbook2 | None = None
     formats: list[Format] | None = Field(
         None, description="Absent: pptx and pdf.", min_length=1
     )
@@ -4471,7 +6203,7 @@ class Elements10(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -4490,7 +6222,7 @@ class Elements10(BaseModel):
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph9] = Field(..., min_length=1)
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4515,7 +6247,7 @@ class Elements11(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -4539,7 +6271,7 @@ class Elements11(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4647,7 +6379,7 @@ class Elements12(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box14
+    box: Box19
     cellStyles: list[list[CellStyles2 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -4676,7 +6408,7 @@ class Elements12(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4698,7 +6430,7 @@ class Elements13(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -4720,7 +6452,7 @@ class Elements13(BaseModel):
         description="Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
         min_length=1,
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4816,7 +6548,7 @@ class Color17(StrEnum):
     negative = "negative"
 
 
-class Stroke6(BaseModel):
+class Stroke8(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -4863,7 +6595,7 @@ class Elements14(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box14
+    box: Box19
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -4900,7 +6632,7 @@ class Elements14(BaseModel):
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
     )
-    role: Role5
+    role: Role19
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -4917,7 +6649,7 @@ class Elements14(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke6 | None = Field(
+    stroke: Stroke8 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -5015,7 +6747,7 @@ class Blocks2(BaseModel):
     text: constr(min_length=1)
 
 
-class Source14(BaseModel):
+class Source37(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5037,7 +6769,7 @@ class Blocks3(BaseModel):
     rows: list[list[str]] = Field(
         ..., description="Every row as wide as the header.", min_length=1
     )
-    sources: list[Source14] = Field(
+    sources: list[Source37] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
 
@@ -5060,7 +6792,7 @@ class Blocks4(BaseModel):
     chartType: ChartType2
     kind: Literal["chart"]
     series: list[Series5] = Field(..., min_length=1)
-    sources: list[Source14] = Field(
+    sources: list[Source37] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
     xTitle: str = Field(
@@ -5075,7 +6807,7 @@ class Item3(BaseModel):
         extra="forbid",
     )
     caption: constr(min_length=1) = Field(..., description="What the figure measures.")
-    sources: list[Source14] = Field(
+    sources: list[Source37] = Field(
         ..., description="Where the figure comes from.", min_length=1
     )
     value: constr(min_length=1) = Field(
@@ -5091,7 +6823,7 @@ class Blocks5(BaseModel):
     kind: Literal["kpi"]
 
 
-class Role20(StrEnum):
+class Role29(StrEnum):
     photo = "photo"
     icon = "icon"
     mockup = "mockup"
@@ -5106,7 +6838,7 @@ class Blocks6(BaseModel):
     query: constr(min_length=1) = Field(
         ..., description="What the picture should show, in words."
     )
-    role: Role20
+    role: Role29
 
 
 class Intent2(StrEnum):
@@ -5139,7 +6871,7 @@ class Slide5(BaseModel):
         ...,
         description="Stable across layout variants, so three renderings of a slide can be compared.",
     )
-    sources: list[Source14] = Field(
+    sources: list[Source37] = Field(
         ...,
         description="What the slide as a whole rests on, beyond any block-level references.",
     )
@@ -5167,13 +6899,13 @@ class DeckPlan(BaseModel):
     title: constr(min_length=1)
 
 
-class Source18(StrEnum):
+class Source41(StrEnum):
     observed = "observed"
     theme = "theme"
     fallback = "fallback"
 
 
-class Meta9(BaseModel):
+class Meta27(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5191,10 +6923,10 @@ class Meta9(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Grid1(BaseModel):
+class Grid3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5211,7 +6943,7 @@ class Grid1(BaseModel):
     marginLeft: conint(ge=0, le=9007199254740991)
     marginRight: conint(ge=0, le=9007199254740991)
     marginTop: conint(ge=0, le=9007199254740991)
-    meta: Meta9
+    meta: Meta27
     slideCx: conint(le=9007199254740991, gt=0) = Field(
         ..., description="Slide width in EMU."
     )
@@ -5220,7 +6952,7 @@ class Grid1(BaseModel):
     )
 
 
-class Meta10(BaseModel):
+class Meta28(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5238,10 +6970,10 @@ class Meta10(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role21(StrEnum):
+class Role30(StrEnum):
     background = "background"
     surface = "surface"
     text = "text"
@@ -5254,18 +6986,18 @@ class Role21(StrEnum):
     negative = "negative"
 
 
-class PaletteItem1(BaseModel):
+class PaletteItem3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta10
-    role: Role21
+    meta: Meta28
+    role: Role30
 
 
-class Box24(BaseModel):
+class Box29(BaseModel):
     """
     Where it sits, in EMU.
     """
@@ -5287,7 +7019,7 @@ class Box24(BaseModel):
     )
 
 
-class Meta11(BaseModel):
+class Meta29(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5305,29 +7037,29 @@ class Meta11(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role22(StrEnum):
+class Role31(StrEnum):
     logo = "logo"
     footer = "footer"
     page_number = "page-number"
     decoration = "decoration"
 
 
-class ProtectedZone1(BaseModel):
+class ProtectedZone3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box24 = Field(..., description="Where it sits, in EMU.")
+    box: Box29 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
-    meta: Meta11
-    role: Role22
+    meta: Meta29
+    role: Role31
 
 
-class Meta12(BaseModel):
+class Meta30(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5345,19 +7077,19 @@ class Meta12(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class RadiiItem1(BaseModel):
+class RadiiItem3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta12
+    meta: Meta30
     name: Name
     radiusPt: confloat(ge=0.0)
 
 
-class Meta13(BaseModel):
+class Meta31(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5375,20 +7107,20 @@ class Meta13(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Shadows1(BaseModel):
+class Shadows3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta13
+    meta: Meta31
     present: bool = Field(
         ..., description="False when the template draws no shadows. Do not add any."
     )
 
 
-class ColorRole4(StrEnum):
+class ColorRole8(StrEnum):
     """
     Palette role this colour matches, if any.
     """
@@ -5405,7 +7137,7 @@ class ColorRole4(StrEnum):
     negative = "negative"
 
 
-class Meta14(BaseModel):
+class Meta32(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5423,24 +7155,24 @@ class Meta14(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Stroke7(BaseModel):
+class Stroke9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    colorRole: ColorRole4 | None = Field(
+    colorRole: ColorRole8 | None = Field(
         ..., description="Palette role this colour matches, if any."
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta14
+    meta: Meta32
     widthPt: confloat(ge=0.0)
 
 
-class Meta15(BaseModel):
+class Meta33(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5458,10 +7190,10 @@ class Meta15(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Surface1(BaseModel):
+class Surface3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5471,14 +7203,14 @@ class Surface1(BaseModel):
     background: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta15
+    meta: Meta33
     text: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Text colour observed on this surface, or the best contrast."
     )
     tone: Tone
 
 
-class Meta16(BaseModel):
+class Meta34(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5496,16 +7228,16 @@ class Meta16(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role23(StrEnum):
+class Role32(StrEnum):
     primary = "primary"
     secondary = "secondary"
     mono = "mono"
 
 
-class TypeFamily1(BaseModel):
+class TypeFamily3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5514,11 +7246,11 @@ class TypeFamily1(BaseModel):
         description="What the theme names for this role. Differs from font when the slides disagree.",
     )
     font: constr(min_length=1)
-    meta: Meta16
-    role: Role23
+    meta: Meta34
+    role: Role32
 
 
-class ColorRole5(StrEnum):
+class ColorRole9(StrEnum):
     """
     Which palette role this text takes its colour from.
     """
@@ -5535,7 +7267,7 @@ class ColorRole5(StrEnum):
     negative = "negative"
 
 
-class Meta17(BaseModel):
+class Meta35(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5553,10 +7285,10 @@ class Meta17(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role24(StrEnum):
+class Role33(StrEnum):
     title = "title"
     subtitle = "subtitle"
     heading = "heading"
@@ -5569,12 +7301,12 @@ class Role24(StrEnum):
     footer = "footer"
 
 
-class TypeScaleItem1(BaseModel):
+class TypeScaleItem3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     bold: bool
-    colorRole: ColorRole5 = Field(
+    colorRole: ColorRole9 = Field(
         ..., description="Which palette role this text takes its colour from."
     )
     font: constr(min_length=1) = Field(..., description="Typeface to set this role in.")
@@ -5582,12 +7314,12 @@ class TypeScaleItem1(BaseModel):
     lineSpacing: PositiveFloat = Field(
         ..., description="Multiple of the line height, 1 for single."
     )
-    meta: Meta17
-    role: Role24
+    meta: Meta35
+    role: Role33
     sizePt: PositiveFloat = Field(..., description="Size in points.")
 
 
-class Code2(StrEnum):
+class Code4(StrEnum):
     observed_overrides_theme = "observed-overrides-theme"
     font_unavailable = "font-unavailable"
     low_confidence = "low-confidence"
@@ -5596,11 +7328,11 @@ class Code2(StrEnum):
     theme_missing = "theme-missing"
 
 
-class Warning2(BaseModel):
+class Warning4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code2
+    code: Code4
     message: constr(min_length=1)
     token: str = Field(
         ...,
@@ -5613,35 +7345,35 @@ class DesignSystem(BaseModel):
         extra="forbid",
     )
     aspect: str = Field(..., description="Aspect ratio in lowest terms, such as 16:9.")
-    grid: Grid1
-    palette: list[PaletteItem1] = Field(
+    grid: Grid3
+    palette: list[PaletteItem3] = Field(
         ...,
         description="One entry per role the template supports. Roles it lacks are simply absent.",
         min_length=1,
     )
-    protectedZones: list[ProtectedZone1]
-    radii: list[RadiiItem1] = Field(
+    protectedZones: list[ProtectedZone3]
+    radii: list[RadiiItem3] = Field(
         ..., description="Corner radii in use, smallest first."
     )
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
     )
-    shadows: Shadows1
-    strokes: list[Stroke7] = Field(
+    shadows: Shadows3
+    strokes: list[Stroke9] = Field(
         ..., description="Outline styles in use, most common first."
     )
-    surfaces: list[Surface1] = Field(
+    surfaces: list[Surface3] = Field(
         ..., description="One per tone the template uses.", min_length=1
     )
     templateHash: constr(min_length=64, max_length=64) = Field(
         ...,
         description="Hash of the TemplateIR this was derived from, so the pair can be checked.",
     )
-    typeFamilies: list[TypeFamily1] = Field(..., min_length=1)
-    typeScale: list[TypeScaleItem1] = Field(
+    typeFamilies: list[TypeFamily3] = Field(..., min_length=1)
+    typeScale: list[TypeScaleItem3] = Field(
         ..., description="One entry per role in use.", min_length=1
     )
-    warnings: list[Warning2] = Field(
+    warnings: list[Warning4] = Field(
         ..., description="Empty only when every token was measured with confidence."
     )
 
@@ -5734,7 +7466,7 @@ class Ops13(BaseModel):
     )
 
 
-class Box25(BaseModel):
+class Box30(BaseModel):
     """
     New geometry in EMU, snapped to the template grid.
     """
@@ -5760,14 +7492,14 @@ class Ops14(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box25 = Field(
+    box: Box30 = Field(
         ..., description="New geometry in EMU, snapped to the template grid."
     )
     elementId: constr(min_length=1)
     op: Literal["move"]
 
 
-class ColorRole6(StrEnum):
+class ColorRole10(StrEnum):
     """
     A role, never a literal colour: the template supplies it.
     """
@@ -5788,7 +7520,7 @@ class Ops15(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    colorRole: ColorRole6 = Field(
+    colorRole: ColorRole10 = Field(
         ..., description="A role, never a literal colour: the template supplies it."
     )
     elementId: constr(min_length=1)
@@ -5839,7 +7571,7 @@ class FixPatch(BaseModel):
     variant: Variant
 
 
-class Box26(BaseModel):
+class Box31(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5857,47 +7589,47 @@ class Box26(BaseModel):
     )
 
 
-class Kind10(StrEnum):
+class Kind27(StrEnum):
     placeholder = "placeholder"
     panel = "panel"
     photo = "photo"
 
 
-class ImageSlot(BaseModel):
+class ImageSlot1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box26
-    kind: Kind10
+    box: Box31
+    kind: Kind27
     slotId: constr(min_length=1)
 
 
-class QrCandidateSlot(BaseModel):
+class QrCandidateSlot1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box26
-    kind: Kind10
+    box: Box31
+    kind: Kind27
     slotId: constr(min_length=1)
 
 
-class Role25(StrEnum):
+class Role34(StrEnum):
     title = "title"
     body = "body"
 
 
-class Slot1(BaseModel):
+class Slot2(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box26 | None = None
+    box: Box31 | None = None
     font: str
     fontSize: PositiveFloat
     lineSpacing: PositiveFloat | None = None
     maxChars: conint(le=9007199254740991, gt=0)
     maxLines: conint(le=9007199254740991, gt=0)
     prompt: bool | None = None
-    role: Role25
+    role: Role34
     sample: str
     slotId: constr(min_length=1)
     spaceAfterPt: confloat(ge=0.0) | None = None
@@ -5906,20 +7638,20 @@ class Slot1(BaseModel):
     textWidthPt: PositiveFloat | None = None
 
 
-class Composition(BaseModel):
+class Composition1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     imageCount: conint(ge=0, le=9007199254740991)
-    imageSlots: list[ImageSlot] | None = None
+    imageSlots: list[ImageSlot1] | None = None
     name: str
     patternId: constr(min_length=1)
-    qrCandidateSlots: list[QrCandidateSlot] | None = None
-    slots: list[Slot1] = Field(..., min_length=1)
+    qrCandidateSlots: list[QrCandidateSlot1] | None = None
+    slots: list[Slot2] = Field(..., min_length=1)
     sourceIndex: conint(ge=0, le=9007199254740991)
 
 
-class Meta18(BaseModel):
+class Meta36(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5937,10 +7669,10 @@ class Meta18(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Grid2(BaseModel):
+class Grid4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5957,7 +7689,7 @@ class Grid2(BaseModel):
     marginLeft: conint(ge=0, le=9007199254740991)
     marginRight: conint(ge=0, le=9007199254740991)
     marginTop: conint(ge=0, le=9007199254740991)
-    meta: Meta18
+    meta: Meta36
     slideCx: conint(le=9007199254740991, gt=0) = Field(
         ..., description="Slide width in EMU."
     )
@@ -5966,7 +7698,7 @@ class Grid2(BaseModel):
     )
 
 
-class Meta19(BaseModel):
+class Meta37(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5984,10 +7716,10 @@ class Meta19(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role26(StrEnum):
+class Role35(StrEnum):
     background = "background"
     surface = "surface"
     text = "text"
@@ -6000,18 +7732,18 @@ class Role26(StrEnum):
     negative = "negative"
 
 
-class PaletteItem2(BaseModel):
+class PaletteItem4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta19
-    role: Role26
+    meta: Meta37
+    role: Role35
 
 
-class Box29(BaseModel):
+class Box34(BaseModel):
     """
     Where it sits, in EMU.
     """
@@ -6033,7 +7765,7 @@ class Box29(BaseModel):
     )
 
 
-class Meta20(BaseModel):
+class Meta38(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6051,29 +7783,29 @@ class Meta20(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role27(StrEnum):
+class Role36(StrEnum):
     logo = "logo"
     footer = "footer"
     page_number = "page-number"
     decoration = "decoration"
 
 
-class ProtectedZone2(BaseModel):
+class ProtectedZone4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box29 = Field(..., description="Where it sits, in EMU.")
+    box: Box34 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
-    meta: Meta20
-    role: Role27
+    meta: Meta38
+    role: Role36
 
 
-class Meta21(BaseModel):
+class Meta39(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6091,19 +7823,19 @@ class Meta21(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class RadiiItem2(BaseModel):
+class RadiiItem4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta21
+    meta: Meta39
     name: Name
     radiusPt: confloat(ge=0.0)
 
 
-class Meta22(BaseModel):
+class Meta40(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6121,20 +7853,20 @@ class Meta22(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Shadows2(BaseModel):
+class Shadows4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta22
+    meta: Meta40
     present: bool = Field(
         ..., description="False when the template draws no shadows. Do not add any."
     )
 
 
-class ColorRole7(StrEnum):
+class ColorRole11(StrEnum):
     """
     Palette role this colour matches, if any.
     """
@@ -6151,7 +7883,7 @@ class ColorRole7(StrEnum):
     negative = "negative"
 
 
-class Meta23(BaseModel):
+class Meta41(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6169,24 +7901,24 @@ class Meta23(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Stroke8(BaseModel):
+class Stroke10(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    colorRole: ColorRole7 | None = Field(
+    colorRole: ColorRole11 | None = Field(
         ..., description="Palette role this colour matches, if any."
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta23
+    meta: Meta41
     widthPt: confloat(ge=0.0)
 
 
-class Meta24(BaseModel):
+class Meta42(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6204,10 +7936,10 @@ class Meta24(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Surface2(BaseModel):
+class Surface4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6217,14 +7949,14 @@ class Surface2(BaseModel):
     background: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta24
+    meta: Meta42
     text: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Text colour observed on this surface, or the best contrast."
     )
     tone: Tone
 
 
-class Meta25(BaseModel):
+class Meta43(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6242,16 +7974,16 @@ class Meta25(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role28(StrEnum):
+class Role37(StrEnum):
     primary = "primary"
     secondary = "secondary"
     mono = "mono"
 
 
-class TypeFamily2(BaseModel):
+class TypeFamily4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6260,11 +7992,11 @@ class TypeFamily2(BaseModel):
         description="What the theme names for this role. Differs from font when the slides disagree.",
     )
     font: constr(min_length=1)
-    meta: Meta25
-    role: Role28
+    meta: Meta43
+    role: Role37
 
 
-class ColorRole8(StrEnum):
+class ColorRole12(StrEnum):
     """
     Which palette role this text takes its colour from.
     """
@@ -6281,7 +8013,7 @@ class ColorRole8(StrEnum):
     negative = "negative"
 
 
-class Meta26(BaseModel):
+class Meta44(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6299,10 +8031,10 @@ class Meta26(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source18
+    source: Source41
 
 
-class Role29(StrEnum):
+class Role38(StrEnum):
     title = "title"
     subtitle = "subtitle"
     heading = "heading"
@@ -6315,12 +8047,12 @@ class Role29(StrEnum):
     footer = "footer"
 
 
-class TypeScaleItem2(BaseModel):
+class TypeScaleItem4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     bold: bool
-    colorRole: ColorRole8 = Field(
+    colorRole: ColorRole12 = Field(
         ..., description="Which palette role this text takes its colour from."
     )
     font: constr(min_length=1) = Field(..., description="Typeface to set this role in.")
@@ -6328,16 +8060,16 @@ class TypeScaleItem2(BaseModel):
     lineSpacing: PositiveFloat = Field(
         ..., description="Multiple of the line height, 1 for single."
     )
-    meta: Meta26
-    role: Role29
+    meta: Meta44
+    role: Role38
     sizePt: PositiveFloat = Field(..., description="Size in points.")
 
 
-class Warning3(BaseModel):
+class Warning5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code2
+    code: Code4
     message: constr(min_length=1)
     token: str = Field(
         ...,
@@ -6345,71 +8077,71 @@ class Warning3(BaseModel):
     )
 
 
-class DesignSystem2(BaseModel):
+class DesignSystem4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     aspect: str = Field(..., description="Aspect ratio in lowest terms, such as 16:9.")
-    grid: Grid2
-    palette: list[PaletteItem2] = Field(
+    grid: Grid4
+    palette: list[PaletteItem4] = Field(
         ...,
         description="One entry per role the template supports. Roles it lacks are simply absent.",
         min_length=1,
     )
-    protectedZones: list[ProtectedZone2]
-    radii: list[RadiiItem2] = Field(
+    protectedZones: list[ProtectedZone4]
+    radii: list[RadiiItem4] = Field(
         ..., description="Corner radii in use, smallest first."
     )
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
     )
-    shadows: Shadows2
-    strokes: list[Stroke8] = Field(
+    shadows: Shadows4
+    strokes: list[Stroke10] = Field(
         ..., description="Outline styles in use, most common first."
     )
-    surfaces: list[Surface2] = Field(
+    surfaces: list[Surface4] = Field(
         ..., description="One per tone the template uses.", min_length=1
     )
     templateHash: constr(min_length=64, max_length=64) = Field(
         ...,
         description="Hash of the TemplateIR this was derived from, so the pair can be checked.",
     )
-    typeFamilies: list[TypeFamily2] = Field(..., min_length=1)
-    typeScale: list[TypeScaleItem2] = Field(
+    typeFamilies: list[TypeFamily4] = Field(..., min_length=1)
+    typeScale: list[TypeScaleItem4] = Field(
         ..., description="One entry per role in use.", min_length=1
     )
-    warnings: list[Warning3] = Field(
+    warnings: list[Warning5] = Field(
         ..., description="Empty only when every token was measured with confidence."
     )
 
 
-class State3(StrEnum):
+class State4(StrEnum):
     ready = "ready"
     missing = "missing"
     unknown = "unknown"
 
 
-class FontReadiness(BaseModel):
+class FontReadiness1(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     missing: list[str]
     requested: list[str]
-    state: State3
+    state: State4
 
 
 class GenerationProfile(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    compositions: list[Composition] = Field(..., min_length=1)
-    designSystem: DesignSystem2
-    fontReadiness: FontReadiness | None = None
+    compositions: list[Composition1] = Field(..., min_length=1)
+    designSystem: DesignSystem4
+    fontReadiness: FontReadiness1 | None = None
     schemaVersion: Literal[1]
     templateHash: constr(min_length=64, max_length=64)
 
 
-class Status3(StrEnum):
+class Status13(StrEnum):
     """
     Current state of the component.
     """
@@ -6426,7 +8158,7 @@ class HealthCheck(BaseModel):
     service: constr(min_length=1) = Field(
         ..., description="Name of the component that answered."
     )
-    status: Status3 = Field(..., description="Current state of the component.")
+    status: Status13 = Field(..., description="Current state of the component.")
     uptimeSeconds: confloat(ge=0.0) = Field(
         ..., description="Seconds since the component started."
     )
@@ -6493,7 +8225,7 @@ class JobEvent3(BaseModel):
     type: Literal["stage-finished"]
 
 
-class Kind12(StrEnum):
+class Kind29(StrEnum):
     deck_plan = "deck-plan"
     slide_ir = "slide-ir"
     preview = "preview"
@@ -6519,7 +8251,7 @@ class JobEvent4(BaseModel):
         extra="forbid",
     )
     at: constr(min_length=1) = Field(..., description="ISO 8601 timestamp, UTC.")
-    kind: Kind12
+    kind: Kind29
     path: constr(min_length=1) = Field(
         ..., description="Relative to the run directory."
     )
@@ -6552,7 +8284,7 @@ class JobEvent5(BaseModel):
     type: Literal["warning"]
 
 
-class Code4(StrEnum):
+class Code6(StrEnum):
     template_unreadable = "template-unreadable"
     template_unsupported = "template-unsupported"
     content_empty = "content-empty"
@@ -6582,7 +8314,7 @@ class JobEvent6(BaseModel):
         extra="forbid",
     )
     at: constr(min_length=1) = Field(..., description="ISO 8601 timestamp, UTC.")
-    code: Code4
+    code: Code6
     message: constr(min_length=1) = Field(
         ..., description="Written for the user, not copied from an exception."
     )
@@ -6672,7 +8404,7 @@ class Blocks9(BaseModel):
     text: constr(min_length=1)
 
 
-class Source36(BaseModel):
+class Source59(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6694,7 +8426,7 @@ class Blocks10(BaseModel):
     rows: list[list[str]] = Field(
         ..., description="Every row as wide as the header.", min_length=1
     )
-    sources: list[Source36] = Field(
+    sources: list[Source59] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
 
@@ -6707,7 +8439,7 @@ class Blocks11(BaseModel):
     chartType: ChartType2
     kind: Literal["chart"]
     series: list[Series5] = Field(..., min_length=1)
-    sources: list[Source36] = Field(
+    sources: list[Source59] = Field(
         ..., description="Where the figures come from.", min_length=1
     )
     xTitle: str = Field(
@@ -6722,7 +8454,7 @@ class Item5(BaseModel):
         extra="forbid",
     )
     caption: constr(min_length=1) = Field(..., description="What the figure measures.")
-    sources: list[Source36] = Field(
+    sources: list[Source59] = Field(
         ..., description="Where the figure comes from.", min_length=1
     )
     value: constr(min_length=1) = Field(
@@ -6738,7 +8470,7 @@ class Blocks12(BaseModel):
     kind: Literal["kpi"]
 
 
-class Role30(StrEnum):
+class Role39(StrEnum):
     photo = "photo"
     icon = "icon"
     mockup = "mockup"
@@ -6753,7 +8485,7 @@ class Blocks13(BaseModel):
     query: constr(min_length=1) = Field(
         ..., description="What the picture should show, in words."
     )
-    role: Role30
+    role: Role39
 
 
 class Slide7(BaseModel):
@@ -6771,7 +8503,7 @@ class Slide7(BaseModel):
         ...,
         description="Stable across layout variants, so three renderings of a slide can be compared.",
     )
-    sources: list[Source36] = Field(
+    sources: list[Source59] = Field(
         ...,
         description="What the slide as a whole rests on, beyond any block-level references.",
     )
@@ -6824,13 +8556,13 @@ class LayoutVariantsRequest(BaseModel):
     )
 
 
-class Source40(StrEnum):
+class Source63(StrEnum):
     observed = "observed"
     theme = "theme"
     fallback = "fallback"
 
 
-class Meta27(BaseModel):
+class Meta45(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6848,10 +8580,10 @@ class Meta27(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Grid3(BaseModel):
+class Grid5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6868,7 +8600,7 @@ class Grid3(BaseModel):
     marginLeft: conint(ge=0, le=9007199254740991)
     marginRight: conint(ge=0, le=9007199254740991)
     marginTop: conint(ge=0, le=9007199254740991)
-    meta: Meta27
+    meta: Meta45
     slideCx: conint(le=9007199254740991, gt=0) = Field(
         ..., description="Slide width in EMU."
     )
@@ -6877,7 +8609,7 @@ class Grid3(BaseModel):
     )
 
 
-class Meta28(BaseModel):
+class Meta46(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6895,10 +8627,10 @@ class Meta28(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Role31(StrEnum):
+class Role40(StrEnum):
     background = "background"
     surface = "surface"
     text = "text"
@@ -6911,18 +8643,18 @@ class Role31(StrEnum):
     negative = "negative"
 
 
-class PaletteItem3(BaseModel):
+class PaletteItem5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta28
-    role: Role31
+    meta: Meta46
+    role: Role40
 
 
-class Meta29(BaseModel):
+class Meta47(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6940,29 +8672,29 @@ class Meta29(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Role32(StrEnum):
+class Role41(StrEnum):
     logo = "logo"
     footer = "footer"
     page_number = "page-number"
     decoration = "decoration"
 
 
-class ProtectedZone3(BaseModel):
+class ProtectedZone5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box29 = Field(..., description="Where it sits, in EMU.")
+    box: Box34 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
-    meta: Meta29
-    role: Role32
+    meta: Meta47
+    role: Role41
 
 
-class Meta30(BaseModel):
+class Meta48(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6980,19 +8712,19 @@ class Meta30(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class RadiiItem3(BaseModel):
+class RadiiItem5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta30
+    meta: Meta48
     name: Name
     radiusPt: confloat(ge=0.0)
 
 
-class Meta31(BaseModel):
+class Meta49(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7010,20 +8742,20 @@ class Meta31(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Shadows3(BaseModel):
+class Shadows5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta31
+    meta: Meta49
     present: bool = Field(
         ..., description="False when the template draws no shadows. Do not add any."
     )
 
 
-class ColorRole9(StrEnum):
+class ColorRole13(StrEnum):
     """
     Palette role this colour matches, if any.
     """
@@ -7040,7 +8772,7 @@ class ColorRole9(StrEnum):
     negative = "negative"
 
 
-class Meta32(BaseModel):
+class Meta50(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7058,24 +8790,24 @@ class Meta32(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Stroke9(BaseModel):
+class Stroke11(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    colorRole: ColorRole9 | None = Field(
+    colorRole: ColorRole13 | None = Field(
         ..., description="Palette role this colour matches, if any."
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta32
+    meta: Meta50
     widthPt: confloat(ge=0.0)
 
 
-class Meta33(BaseModel):
+class Meta51(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7093,10 +8825,10 @@ class Meta33(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Surface3(BaseModel):
+class Surface5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7106,14 +8838,14 @@ class Surface3(BaseModel):
     background: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta33
+    meta: Meta51
     text: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Text colour observed on this surface, or the best contrast."
     )
     tone: Tone
 
 
-class Meta34(BaseModel):
+class Meta52(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7131,16 +8863,16 @@ class Meta34(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Role33(StrEnum):
+class Role42(StrEnum):
     primary = "primary"
     secondary = "secondary"
     mono = "mono"
 
 
-class TypeFamily3(BaseModel):
+class TypeFamily5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7149,11 +8881,11 @@ class TypeFamily3(BaseModel):
         description="What the theme names for this role. Differs from font when the slides disagree.",
     )
     font: constr(min_length=1)
-    meta: Meta34
-    role: Role33
+    meta: Meta52
+    role: Role42
 
 
-class ColorRole10(StrEnum):
+class ColorRole14(StrEnum):
     """
     Which palette role this text takes its colour from.
     """
@@ -7170,7 +8902,7 @@ class ColorRole10(StrEnum):
     negative = "negative"
 
 
-class Meta35(BaseModel):
+class Meta53(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7188,10 +8920,10 @@ class Meta35(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source40
+    source: Source63
 
 
-class Role34(StrEnum):
+class Role43(StrEnum):
     title = "title"
     subtitle = "subtitle"
     heading = "heading"
@@ -7204,12 +8936,12 @@ class Role34(StrEnum):
     footer = "footer"
 
 
-class TypeScaleItem3(BaseModel):
+class TypeScaleItem5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     bold: bool
-    colorRole: ColorRole10 = Field(
+    colorRole: ColorRole14 = Field(
         ..., description="Which palette role this text takes its colour from."
     )
     font: constr(min_length=1) = Field(..., description="Typeface to set this role in.")
@@ -7217,12 +8949,12 @@ class TypeScaleItem3(BaseModel):
     lineSpacing: PositiveFloat = Field(
         ..., description="Multiple of the line height, 1 for single."
     )
-    meta: Meta35
-    role: Role34
+    meta: Meta53
+    role: Role43
     sizePt: PositiveFloat = Field(..., description="Size in points.")
 
 
-class Code5(StrEnum):
+class Code7(StrEnum):
     observed_overrides_theme = "observed-overrides-theme"
     font_unavailable = "font-unavailable"
     low_confidence = "low-confidence"
@@ -7231,11 +8963,11 @@ class Code5(StrEnum):
     theme_missing = "theme-missing"
 
 
-class Warning4(BaseModel):
+class Warning6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code5
+    code: Code7
     message: constr(min_length=1)
     token: str = Field(
         ...,
@@ -7243,45 +8975,45 @@ class Warning4(BaseModel):
     )
 
 
-class DesignSystem3(BaseModel):
+class DesignSystem5(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     aspect: str = Field(..., description="Aspect ratio in lowest terms, such as 16:9.")
-    grid: Grid3
-    palette: list[PaletteItem3] = Field(
+    grid: Grid5
+    palette: list[PaletteItem5] = Field(
         ...,
         description="One entry per role the template supports. Roles it lacks are simply absent.",
         min_length=1,
     )
-    protectedZones: list[ProtectedZone3]
-    radii: list[RadiiItem3] = Field(
+    protectedZones: list[ProtectedZone5]
+    radii: list[RadiiItem5] = Field(
         ..., description="Corner radii in use, smallest first."
     )
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
     )
-    shadows: Shadows3
-    strokes: list[Stroke9] = Field(
+    shadows: Shadows5
+    strokes: list[Stroke11] = Field(
         ..., description="Outline styles in use, most common first."
     )
-    surfaces: list[Surface3] = Field(
+    surfaces: list[Surface5] = Field(
         ..., description="One per tone the template uses.", min_length=1
     )
     templateHash: constr(min_length=64, max_length=64) = Field(
         ...,
         description="Hash of the TemplateIR this was derived from, so the pair can be checked.",
     )
-    typeFamilies: list[TypeFamily3] = Field(..., min_length=1)
-    typeScale: list[TypeScaleItem3] = Field(
+    typeFamilies: list[TypeFamily5] = Field(..., min_length=1)
+    typeScale: list[TypeScaleItem5] = Field(
         ..., description="One entry per role in use.", min_length=1
     )
-    warnings: list[Warning4] = Field(
+    warnings: list[Warning6] = Field(
         ..., description="Empty only when every token was measured with confidence."
     )
 
 
-class Box31(BaseModel):
+class Box36(BaseModel):
     """
     Where the template puts it, in EMU.
     """
@@ -7303,7 +9035,7 @@ class Box31(BaseModel):
     )
 
 
-class Role35(StrEnum):
+class Role44(StrEnum):
     """
     What belongs here, which decides what may be placed in it.
     """
@@ -7324,11 +9056,11 @@ class Role35(StrEnum):
     decoration = "decoration"
 
 
-class Slot2(BaseModel):
+class Slot3(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box31 = Field(..., description="Where the template puts it, in EMU.")
+    box: Box36 = Field(..., description="Where the template puts it, in EMU.")
     maxChars: conint(le=9007199254740991, gt=0) | None = Field(
         ...,
         description="Rough capacity at the template size. Null when the slot is not textual.",
@@ -7336,7 +9068,7 @@ class Slot2(BaseModel):
     optional: bool = Field(
         ..., description="True when a slide built on this pattern may leave it empty."
     )
-    role: Role35 = Field(
+    role: Role44 = Field(
         ..., description="What belongs here, which decides what may be placed in it."
     )
     slotId: constr(min_length=1) = Field(
@@ -7367,7 +9099,7 @@ class Pattern1(BaseModel):
     patternId: constr(min_length=1) = Field(
         ..., description="Referred to by every SlideIR built on this pattern."
     )
-    slots: list[Slot2] = Field(..., description="In reading order.", min_length=1)
+    slots: list[Slot3] = Field(..., description="In reading order.", min_length=1)
     sourceParts: list[SourcePart16] = Field(
         ...,
         description="Layout or slide parts this arrangement was observed on.",
@@ -7392,7 +9124,7 @@ class PatternCatalog2(BaseModel):
     )
 
 
-class Box32(BaseModel):
+class Box37(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -7446,7 +9178,7 @@ class Paragraph12(BaseModel):
     )
 
 
-class Role36(StrEnum):
+class Role45(StrEnum):
     title = "title"
     subtitle = "subtitle"
     body = "body"
@@ -7501,7 +9233,7 @@ class Elements15(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box32
+    box: Box37
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -7520,7 +9252,7 @@ class Elements15(BaseModel):
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph12] = Field(..., min_length=1)
-    role: Role36
+    role: Role45
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -7545,7 +9277,7 @@ class Elements16(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box32
+    box: Box37
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -7569,7 +9301,7 @@ class Elements16(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role36
+    role: Role45
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -7677,7 +9409,7 @@ class Elements17(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box32
+    box: Box37
     cellStyles: list[list[CellStyles3 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -7706,7 +9438,7 @@ class Elements17(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role36
+    role: Role45
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -7737,7 +9469,7 @@ class Elements18(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box32
+    box: Box37
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -7759,7 +9491,7 @@ class Elements18(BaseModel):
         description="Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
         min_length=1,
     )
-    role: Role36
+    role: Role45
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -7855,7 +9587,7 @@ class Color20(StrEnum):
     negative = "negative"
 
 
-class Stroke10(BaseModel):
+class Stroke12(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -7902,7 +9634,7 @@ class Elements19(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box32
+    box: Box37
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -7939,7 +9671,7 @@ class Elements19(BaseModel):
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
     )
-    role: Role36
+    role: Role45
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -7956,7 +9688,7 @@ class Elements19(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke10 | None = Field(
+    stroke: Stroke12 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -8022,7 +9754,7 @@ class LayoutVariantsResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    designSystem: DesignSystem3
+    designSystem: DesignSystem5
     patternCatalog: PatternCatalog2
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
@@ -8056,7 +9788,7 @@ class MaterialExtractRequest(BaseModel):
     sheet: constr(min_length=1, max_length=200) | None = None
 
 
-class Kind13(StrEnum):
+class Kind30(StrEnum):
     text = "text"
     table = "table"
 
@@ -8125,7 +9857,7 @@ class Table(BaseModel):
     sheet: constr(min_length=1, max_length=200)
 
 
-class Warning5(RootModel[constr(max_length=4000)]):
+class Warning7(RootModel[constr(max_length=4000)]):
     root: constr(max_length=4000)
 
 
@@ -8133,7 +9865,7 @@ class MaterialExtractResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    kind: Kind13
+    kind: Kind30
     needsOcr: bool
     nextOffset: conint(ge=0, le=9007199254740991) | None
     offset: conint(ge=0, le=9007199254740991)
@@ -8142,10 +9874,10 @@ class MaterialExtractResponse(BaseModel):
     sourceSha256: constr(pattern=r"^[0-9a-fA-F]{64}$")
     table: Table | None
     truncated: bool
-    warnings: list[Warning5] = Field(..., max_length=20)
+    warnings: list[Warning7] = Field(..., max_length=20)
 
 
-class Box37(BaseModel):
+class Box42(BaseModel):
     """
     Where the template puts it, in EMU.
     """
@@ -8167,7 +9899,7 @@ class Box37(BaseModel):
     )
 
 
-class Role41(StrEnum):
+class Role50(StrEnum):
     """
     What belongs here, which decides what may be placed in it.
     """
@@ -8188,11 +9920,11 @@ class Role41(StrEnum):
     decoration = "decoration"
 
 
-class Slot3(BaseModel):
+class Slot4(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box37 = Field(..., description="Where the template puts it, in EMU.")
+    box: Box42 = Field(..., description="Where the template puts it, in EMU.")
     maxChars: conint(le=9007199254740991, gt=0) | None = Field(
         ...,
         description="Rough capacity at the template size. Null when the slot is not textual.",
@@ -8200,7 +9932,7 @@ class Slot3(BaseModel):
     optional: bool = Field(
         ..., description="True when a slide built on this pattern may leave it empty."
     )
-    role: Role41 = Field(
+    role: Role50 = Field(
         ..., description="What belongs here, which decides what may be placed in it."
     )
     slotId: constr(min_length=1) = Field(
@@ -8231,7 +9963,7 @@ class Pattern2(BaseModel):
     patternId: constr(min_length=1) = Field(
         ..., description="Referred to by every SlideIR built on this pattern."
     )
-    slots: list[Slot3] = Field(..., description="In reading order.", min_length=1)
+    slots: list[Slot4] = Field(..., description="In reading order.", min_length=1)
     sourceParts: list[SourcePart22] = Field(
         ...,
         description="Layout or slide parts this arrangement was observed on.",
@@ -8262,7 +9994,7 @@ class LayoutVariant(StrEnum):
     airy = "airy"
 
 
-class Role42(StrEnum):
+class Role51(StrEnum):
     """
     Role in the pipeline.
     """
@@ -8281,7 +10013,7 @@ class Model(BaseModel):
     modelId: constr(min_length=1) = Field(
         ..., description="Identifier from configs/models.yaml."
     )
-    role: Role42 = Field(..., description="Role in the pipeline.")
+    role: Role51 = Field(..., description="Role in the pipeline.")
 
 
 class RunConfig(BaseModel):
@@ -8326,7 +10058,7 @@ class RunConfig(BaseModel):
     )
 
 
-class Box38(BaseModel):
+class Box43(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -8380,7 +10112,7 @@ class Paragraph14(BaseModel):
     )
 
 
-class Role43(StrEnum):
+class Role52(StrEnum):
     title = "title"
     subtitle = "subtitle"
     body = "body"
@@ -8435,7 +10167,7 @@ class Elements20(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box38
+    box: Box43
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -8454,7 +10186,7 @@ class Elements20(BaseModel):
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph14] = Field(..., min_length=1)
-    role: Role43
+    role: Role52
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -8479,7 +10211,7 @@ class Elements21(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box38
+    box: Box43
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -8503,7 +10235,7 @@ class Elements21(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role43
+    role: Role52
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -8611,7 +10343,7 @@ class Elements22(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box38
+    box: Box43
     cellStyles: list[list[CellStyles4 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -8640,7 +10372,7 @@ class Elements22(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role43
+    role: Role52
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -8662,7 +10394,7 @@ class Elements23(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box38
+    box: Box43
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -8684,7 +10416,7 @@ class Elements23(BaseModel):
         description="Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
         min_length=1,
     )
-    role: Role43
+    role: Role52
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -8780,7 +10512,7 @@ class Color23(StrEnum):
     negative = "negative"
 
 
-class Stroke11(BaseModel):
+class Stroke13(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -8827,7 +10559,7 @@ class Elements24(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box38
+    box: Box43
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -8864,7 +10596,7 @@ class Elements24(BaseModel):
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
     )
-    role: Role43
+    role: Role52
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -8881,7 +10613,7 @@ class Elements24(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke11 | None = Field(
+    stroke: Stroke13 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -9002,7 +10734,7 @@ class Color24(BaseModel):
     )
 
 
-class Kind14(StrEnum):
+class Kind31(StrEnum):
     solid = "solid"
     gradient = "gradient"
     image = "image"
@@ -9036,13 +10768,13 @@ class Background8(BaseModel):
         extra="forbid",
     )
     color: Color24 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind31
     stops: list[Stop6] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
 
 
-class Box43(BaseModel):
+class Box48(BaseModel):
     """
     Null when the shape inherits its position from a layout.
     """
@@ -9111,7 +10843,7 @@ class Fill13(BaseModel):
         extra="forbid",
     )
     color: Color25 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind31
     stops: list[Stop7] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9170,7 +10902,7 @@ class Color26(BaseModel):
     )
 
 
-class Stroke12(BaseModel):
+class Stroke14(BaseModel):
     """
     Null when the shape inherits its outline.
     """
@@ -9189,7 +10921,7 @@ class Shape8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box43 | None = Field(
+    box: Box48 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -9229,7 +10961,7 @@ class Shape8(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
-    stroke: Stroke12 | None = Field(
+    stroke: Stroke14 | None = Field(
         ..., description="Null when the shape inherits its outline."
     )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
@@ -9316,7 +11048,7 @@ class Background9(BaseModel):
         extra="forbid",
     )
     color: Color27 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind31
     stops: list[Stop8] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9369,7 +11101,7 @@ class Fill14(BaseModel):
         extra="forbid",
     )
     color: Color28 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind31
     stops: list[Stop9] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9428,7 +11160,7 @@ class Color29(BaseModel):
     )
 
 
-class Stroke13(BaseModel):
+class Stroke15(BaseModel):
     """
     Null when the shape inherits its outline.
     """
@@ -9447,7 +11179,7 @@ class Shape9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box43 | None = Field(
+    box: Box48 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -9487,7 +11219,7 @@ class Shape9(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
-    stroke: Stroke13 | None = Field(
+    stroke: Stroke15 | None = Field(
         ..., description="Null when the shape inherits its outline."
     )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
@@ -9591,7 +11323,7 @@ class Background10(BaseModel):
         extra="forbid",
     )
     color: Color30 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind31
     stops: list[Stop10] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9644,7 +11376,7 @@ class Fill15(BaseModel):
         extra="forbid",
     )
     color: Color31 | None = Field(..., description="Set for a solid fill.")
-    kind: Kind14
+    kind: Kind31
     stops: list[Stop11] = Field(
         ..., description="Gradient stops in order, for a gradient fill."
     )
@@ -9703,7 +11435,7 @@ class Color32(BaseModel):
     )
 
 
-class Stroke14(BaseModel):
+class Stroke16(BaseModel):
     """
     Null when the shape inherits its outline.
     """
@@ -9722,7 +11454,7 @@ class Shape10(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box43 | None = Field(
+    box: Box48 | None = Field(
         ..., description="Null when the shape inherits its position from a layout."
     )
     chartPart: str = Field(..., description="Part name of the chart, for charts.")
@@ -9762,7 +11494,7 @@ class Shape10(BaseModel):
     shapeId: conint(ge=-9007199254740991, le=9007199254740991) = Field(
         ..., description="OOXML shape id, unique within its part."
     )
-    stroke: Stroke14 | None = Field(
+    stroke: Stroke16 | None = Field(
         ..., description="Null when the shape inherits its outline."
     )
     tableSize: tuple[TableSizeItem, TableSizeItem] | None = Field(
@@ -9802,7 +11534,7 @@ class Slide9(BaseModel):
     )
 
 
-class Code6(StrEnum):
+class Code8(StrEnum):
     unsupported_shape = "unsupported-shape"
     unresolved_color = "unresolved-color"
     missing_font_scheme = "missing-font-scheme"
@@ -9812,11 +11544,11 @@ class Code6(StrEnum):
     no_slide_layout = "no-slide-layout"
 
 
-class Warning6(BaseModel):
+class Warning8(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code6
+    code: Code8
     location: str = Field(..., description="Part name, or a part and shape id.")
     message: constr(min_length=1) = Field(
         ..., description="What happened, in a sentence."
@@ -9852,7 +11584,7 @@ class TemplateIR(BaseModel):
     )
     themeColors: list[ThemeColor] = Field(..., description="One entry per theme part.")
     themeFonts: ThemeFonts
-    warnings: list[Warning6] = Field(..., description="Empty when nothing was lost.")
+    warnings: list[Warning8] = Field(..., description="Empty when nothing was lost.")
 
 
 class TemplatePreviewsRequest(BaseModel):
@@ -9883,7 +11615,7 @@ class TemplatePreviewsResponse(BaseModel):
     schemaVersion: Literal[1]
 
 
-class State4(StrEnum):
+class State5(StrEnum):
     present = "present"
     missing = "missing"
 
@@ -9893,7 +11625,7 @@ class Base1(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State4
+    state: State5
     value: float | None = None
 
 
@@ -9906,7 +11638,7 @@ class Comparison1(BaseModel):
     baseUnit: str
 
 
-class Status4(StrEnum):
+class Status14(StrEnum):
     """
     Copied onto the slide. Display does not change it.
     """
@@ -9915,13 +11647,13 @@ class Status4(StrEnum):
     unverified = "unverified"
 
 
-class Source49(BaseModel):
+class Source72(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status4 = Field(
+    status: Status14 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -9931,7 +11663,7 @@ class Value2(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State4
+    state: State5
     value: float | None = None
 
 
@@ -9944,7 +11676,7 @@ class Item6(BaseModel):
     comparison: Comparison1 | None = None
     period: str
     periodKnown: bool
-    sources: list[Source49] = Field(..., min_length=1)
+    sources: list[Source72] = Field(..., min_length=1)
     unit: str
     unitAmbiguous: bool
     value: Value2
@@ -9969,7 +11701,7 @@ class Value3(BaseModel):
         extra="forbid",
     )
     literal: constr(min_length=1) | None = None
-    state: State4
+    state: State5
     value: float | None = None
 
 
@@ -9982,13 +11714,13 @@ class Series9(BaseModel):
     values: list[Value3] = Field(..., min_length=1)
 
 
-class Source50(BaseModel):
+class Source73(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status4 = Field(
+    status: Status14 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -10003,12 +11735,12 @@ class Block4(BaseModel):
     kind: Literal["chart"]
     requestedType: RequestedType | None = None
     series: list[Series9] = Field(..., min_length=1)
-    sources: list[Source50] = Field(..., min_length=1)
+    sources: list[Source73] = Field(..., min_length=1)
     xTitle: str
     yTitle: str
 
 
-class Kind20(StrEnum):
+class Kind37(StrEnum):
     text = "text"
     number = "number"
     unit = "unit"
@@ -10019,7 +11751,7 @@ class Column1(BaseModel):
         extra="forbid",
     )
     header: constr(min_length=1)
-    kind: Kind20
+    kind: Kind37
 
 
 class Cell2(BaseModel):
@@ -10037,13 +11769,13 @@ class Row1(BaseModel):
     cells: list[Cell2] = Field(..., min_length=1)
 
 
-class Source51(BaseModel):
+class Source74(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     itemId: constr(min_length=1)
     quote: constr(min_length=1)
-    status: Status4 = Field(
+    status: Status14 = Field(
         ..., description="Copied onto the slide. Display does not change it."
     )
 
@@ -10057,10 +11789,10 @@ class Block5(BaseModel):
     kind: Literal["table"]
     notes: str
     rows: list[Row1] = Field(..., min_length=1)
-    sources: list[Source51] = Field(..., min_length=1)
+    sources: list[Source74] = Field(..., min_length=1)
 
 
-class Box46(BaseModel):
+class Box51(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10078,13 +11810,13 @@ class Box46(BaseModel):
     )
 
 
-class Source52(StrEnum):
+class Source75(StrEnum):
     observed = "observed"
     theme = "theme"
     fallback = "fallback"
 
 
-class Meta36(BaseModel):
+class Meta54(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10102,10 +11834,10 @@ class Meta36(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Grid4(BaseModel):
+class Grid6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10122,7 +11854,7 @@ class Grid4(BaseModel):
     marginLeft: conint(ge=0, le=9007199254740991)
     marginRight: conint(ge=0, le=9007199254740991)
     marginTop: conint(ge=0, le=9007199254740991)
-    meta: Meta36
+    meta: Meta54
     slideCx: conint(le=9007199254740991, gt=0) = Field(
         ..., description="Slide width in EMU."
     )
@@ -10131,7 +11863,7 @@ class Grid4(BaseModel):
     )
 
 
-class Meta37(BaseModel):
+class Meta55(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10149,10 +11881,10 @@ class Meta37(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Role48(StrEnum):
+class Role57(StrEnum):
     background = "background"
     surface = "surface"
     text = "text"
@@ -10165,18 +11897,18 @@ class Role48(StrEnum):
     negative = "negative"
 
 
-class PaletteItem4(BaseModel):
+class PaletteItem6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta37
-    role: Role48
+    meta: Meta55
+    role: Role57
 
 
-class Box47(BaseModel):
+class Box52(BaseModel):
     """
     Where it sits, in EMU.
     """
@@ -10198,7 +11930,7 @@ class Box47(BaseModel):
     )
 
 
-class Meta38(BaseModel):
+class Meta56(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10216,29 +11948,29 @@ class Meta38(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Role49(StrEnum):
+class Role58(StrEnum):
     logo = "logo"
     footer = "footer"
     page_number = "page-number"
     decoration = "decoration"
 
 
-class ProtectedZone4(BaseModel):
+class ProtectedZone6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box47 = Field(..., description="Where it sits, in EMU.")
+    box: Box52 = Field(..., description="Where it sits, in EMU.")
     mediaPart: str = Field(
         ..., description="Image it draws, for a logo. Empty otherwise."
     )
-    meta: Meta38
-    role: Role49
+    meta: Meta56
+    role: Role58
 
 
-class Meta39(BaseModel):
+class Meta57(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10256,19 +11988,19 @@ class Meta39(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class RadiiItem4(BaseModel):
+class RadiiItem6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta39
+    meta: Meta57
     name: Name
     radiusPt: confloat(ge=0.0)
 
 
-class Meta40(BaseModel):
+class Meta58(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10286,20 +12018,20 @@ class Meta40(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Shadows4(BaseModel):
+class Shadows6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    meta: Meta40
+    meta: Meta58
     present: bool = Field(
         ..., description="False when the template draws no shadows. Do not add any."
     )
 
 
-class ColorRole11(StrEnum):
+class ColorRole15(StrEnum):
     """
     Palette role this colour matches, if any.
     """
@@ -10316,7 +12048,7 @@ class ColorRole11(StrEnum):
     negative = "negative"
 
 
-class Meta41(BaseModel):
+class Meta59(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10334,24 +12066,24 @@ class Meta41(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Stroke15(BaseModel):
+class Stroke17(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    colorRole: ColorRole11 | None = Field(
+    colorRole: ColorRole15 | None = Field(
         ..., description="Palette role this colour matches, if any."
     )
     hex: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta41
+    meta: Meta59
     widthPt: confloat(ge=0.0)
 
 
-class Meta42(BaseModel):
+class Meta60(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10369,10 +12101,10 @@ class Meta42(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Surface4(BaseModel):
+class Surface6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10382,14 +12114,14 @@ class Surface4(BaseModel):
     background: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Six hex digits, no leading hash."
     )
-    meta: Meta42
+    meta: Meta60
     text: constr(pattern=r"^[0-9a-fA-F]{6}$") = Field(
         ..., description="Text colour observed on this surface, or the best contrast."
     )
     tone: Tone
 
 
-class Meta43(BaseModel):
+class Meta61(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10407,16 +12139,16 @@ class Meta43(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Role50(StrEnum):
+class Role59(StrEnum):
     primary = "primary"
     secondary = "secondary"
     mono = "mono"
 
 
-class TypeFamily4(BaseModel):
+class TypeFamily6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10425,11 +12157,11 @@ class TypeFamily4(BaseModel):
         description="What the theme names for this role. Differs from font when the slides disagree.",
     )
     font: constr(min_length=1)
-    meta: Meta43
-    role: Role50
+    meta: Meta61
+    role: Role59
 
 
-class ColorRole12(StrEnum):
+class ColorRole16(StrEnum):
     """
     Which palette role this text takes its colour from.
     """
@@ -10446,7 +12178,7 @@ class ColorRole12(StrEnum):
     negative = "negative"
 
 
-class Meta44(BaseModel):
+class Meta62(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10464,10 +12196,10 @@ class Meta44(BaseModel):
     share: confloat(ge=0.0, le=1.0) = Field(
         ..., description="Share of the relevant population that agrees."
     )
-    source: Source52
+    source: Source75
 
 
-class Role51(StrEnum):
+class Role60(StrEnum):
     title = "title"
     subtitle = "subtitle"
     heading = "heading"
@@ -10480,12 +12212,12 @@ class Role51(StrEnum):
     footer = "footer"
 
 
-class TypeScaleItem4(BaseModel):
+class TypeScaleItem6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     bold: bool
-    colorRole: ColorRole12 = Field(
+    colorRole: ColorRole16 = Field(
         ..., description="Which palette role this text takes its colour from."
     )
     font: constr(min_length=1) = Field(..., description="Typeface to set this role in.")
@@ -10493,12 +12225,12 @@ class TypeScaleItem4(BaseModel):
     lineSpacing: PositiveFloat = Field(
         ..., description="Multiple of the line height, 1 for single."
     )
-    meta: Meta44
-    role: Role51
+    meta: Meta62
+    role: Role60
     sizePt: PositiveFloat = Field(..., description="Size in points.")
 
 
-class Code7(StrEnum):
+class Code9(StrEnum):
     observed_overrides_theme = "observed-overrides-theme"
     font_unavailable = "font-unavailable"
     low_confidence = "low-confidence"
@@ -10507,11 +12239,11 @@ class Code7(StrEnum):
     theme_missing = "theme-missing"
 
 
-class Warning7(BaseModel):
+class Warning9(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code7
+    code: Code9
     message: constr(min_length=1)
     token: str = Field(
         ...,
@@ -10519,40 +12251,40 @@ class Warning7(BaseModel):
     )
 
 
-class DesignSystem4(BaseModel):
+class DesignSystem6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     aspect: str = Field(..., description="Aspect ratio in lowest terms, such as 16:9.")
-    grid: Grid4
-    palette: list[PaletteItem4] = Field(
+    grid: Grid6
+    palette: list[PaletteItem6] = Field(
         ...,
         description="One entry per role the template supports. Roles it lacks are simply absent.",
         min_length=1,
     )
-    protectedZones: list[ProtectedZone4]
-    radii: list[RadiiItem4] = Field(
+    protectedZones: list[ProtectedZone6]
+    radii: list[RadiiItem6] = Field(
         ..., description="Corner radii in use, smallest first."
     )
     schemaVersion: Literal[1] = Field(
         ..., description="Incremented by any incompatible change."
     )
-    shadows: Shadows4
-    strokes: list[Stroke15] = Field(
+    shadows: Shadows6
+    strokes: list[Stroke17] = Field(
         ..., description="Outline styles in use, most common first."
     )
-    surfaces: list[Surface4] = Field(
+    surfaces: list[Surface6] = Field(
         ..., description="One per tone the template uses.", min_length=1
     )
     templateHash: constr(min_length=64, max_length=64) = Field(
         ...,
         description="Hash of the TemplateIR this was derived from, so the pair can be checked.",
     )
-    typeFamilies: list[TypeFamily4] = Field(..., min_length=1)
-    typeScale: list[TypeScaleItem4] = Field(
+    typeFamilies: list[TypeFamily6] = Field(..., min_length=1)
+    typeScale: list[TypeScaleItem6] = Field(
         ..., description="One entry per role in use.", min_length=1
     )
-    warnings: list[Warning7] = Field(
+    warnings: list[Warning9] = Field(
         ..., description="Empty only when every token was measured with confidence."
     )
 
@@ -10562,8 +12294,8 @@ class VisualBuildRequest(BaseModel):
         extra="forbid",
     )
     block: Block3 | Block4 | Block5
-    box: Box46
-    designSystem: DesignSystem4
+    box: Box51
+    designSystem: DesignSystem6
     elementId: constr(min_length=1)
     language: constr(min_length=2)
     schemaVersion: Literal[1]
@@ -10604,7 +12336,7 @@ class Chart(BaseModel):
     used: list[UsedEnum]
 
 
-class Box48(BaseModel):
+class Box53(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -10658,7 +12390,7 @@ class Paragraph19(BaseModel):
     )
 
 
-class Role52(StrEnum):
+class Role61(StrEnum):
     title = "title"
     subtitle = "subtitle"
     body = "body"
@@ -10703,7 +12435,7 @@ class Elements25(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -10722,7 +12454,7 @@ class Elements25(BaseModel):
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph19] = Field(..., min_length=1)
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -10747,7 +12479,7 @@ class Elements26(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -10771,7 +12503,7 @@ class Elements26(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -10913,7 +12645,7 @@ class Elements27(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box48
+    box: Box53
     cellStyles: list[list[CellStyles5 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -10942,7 +12674,7 @@ class Elements27(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -10973,7 +12705,7 @@ class Elements28(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -10995,7 +12727,7 @@ class Elements28(BaseModel):
         description="Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
         min_length=1,
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11104,7 +12836,7 @@ class Color35(StrEnum):
     negative = "negative"
 
 
-class Stroke16(BaseModel):
+class Stroke18(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -11151,7 +12883,7 @@ class Elements29(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -11188,7 +12920,7 @@ class Elements29(BaseModel):
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11205,7 +12937,7 @@ class Elements29(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke16 | None = Field(
+    stroke: Stroke18 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -11238,7 +12970,7 @@ class Adaptation(BaseModel):
     keepsFacts: Literal[True]
 
 
-class Code8(StrEnum):
+class Code10(StrEnum):
     text_overflow = "text-overflow"
     table_overflow = "table-overflow"
     cell_overflow = "cell-overflow"
@@ -11248,7 +12980,7 @@ class Overflow6(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code8
+    code: Code10
     detail: constr(min_length=1)
     emu: conint(ge=0, le=9007199254740991)
     lines: conint(ge=0, le=9007199254740991)
@@ -11272,7 +13004,7 @@ class FontWarning(BaseModel):
     role: constr(min_length=1)
 
 
-class Code9(StrEnum):
+class Code11(StrEnum):
     pie_unsuitable = "pie-unsuitable"
     missing_rendered_as_zero = "missing-rendered-as-zero"
     table_row_loss = "table-row-loss"
@@ -11285,11 +13017,11 @@ class Issue(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: Code9
+    code: Code11
     message: constr(min_length=1)
 
 
-class Kind21(StrEnum):
+class Kind38(StrEnum):
     value = "value"
     missing = "missing"
     delta = "delta"
@@ -11308,7 +13040,7 @@ class Fact(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    kind: Kind21
+    kind: Kind38
     period: str | None = None
     sourceStatus: SourceStatus | None = None
     text: str
@@ -11322,7 +13054,7 @@ class Reading(BaseModel):
     facts: list[Fact] = Field(..., min_length=1)
 
 
-class Token(RootModel[constr(min_length=1)]):
+class Token5(RootModel[constr(min_length=1)]):
     root: constr(min_length=1)
 
 
@@ -11331,7 +13063,7 @@ class Signature(BaseModel):
         extra="forbid",
     )
     digest: constr(pattern=r"^[0-9a-f]{64}$")
-    tokens: list[Token] = Field(..., min_length=1)
+    tokens: list[Token5] = Field(..., min_length=1)
 
 
 class VisualBuildResponse(BaseModel):
@@ -11352,7 +13084,7 @@ class VisualBuildResponse(BaseModel):
     signature: Signature
 
 
-class Kind22(StrEnum):
+class Kind39(StrEnum):
     kpi = "kpi"
     chart = "chart"
     table = "table"
@@ -11388,7 +13120,7 @@ class VisualCapability(BaseModel):
     chartTypes: list[ChartType2] = Field(..., min_length=1)
     deferred: list[constr(min_length=1)]
     endpoint: constr(min_length=1)
-    kinds: list[Kind22] = Field(..., min_length=1)
+    kinds: list[Kind39] = Field(..., min_length=1)
     limitations: list[Limitation] = Field(..., min_length=1)
     native: Native
     preserves: list[Preserve] = Field(..., min_length=1)
@@ -11477,7 +13209,7 @@ class Elements30(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     elementId: constr(min_length=1)
     groupIds: list[GroupId] | None = Field(
         None,
@@ -11496,7 +13228,7 @@ class Elements30(BaseModel):
         ..., description="Null when the text fits. Set instead of truncating it."
     )
     paragraphs: list[Paragraph21] = Field(..., min_length=1)
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11530,7 +13262,7 @@ class Elements31(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     crop: Crop | None = Field(
         None,
         description="The part of the picture that shows, filling the box. Absent: the whole picture, placed by `fit`.",
@@ -11554,7 +13286,7 @@ class Elements31(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11662,7 +13394,7 @@ class Elements32(BaseModel):
         None,
         description="Null for no lines. Absent: a hairline in the line role under every row.",
     )
-    box: Box48
+    box: Box53
     cellStyles: list[list[CellStyles6 | None]] | None = Field(
         None,
         description="Look of each cell, header row first, then by column. A missing or null entry inherits.",
@@ -11691,7 +13423,7 @@ class Elements32(BaseModel):
     opacity: confloat(ge=0.0, le=1.0) | None = Field(
         None, description="From 0 to 1. Absent means opaque."
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11713,7 +13445,7 @@ class Elements33(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     categories: list[str] = Field(..., min_length=1)
     chartType: ChartType2
     elementId: constr(min_length=1)
@@ -11735,7 +13467,7 @@ class Elements33(BaseModel):
         description="Numeric position of each category, in category order. Present when the steps are not equal, so a line uses this axis instead of equal slots.",
         min_length=1,
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11831,7 +13563,7 @@ class Color38(StrEnum):
     negative = "negative"
 
 
-class Stroke17(BaseModel):
+class Stroke19(BaseModel):
     """
     Null for no outline. Absent when the template did not state one.
     """
@@ -11878,7 +13610,7 @@ class Elements34(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    box: Box48
+    box: Box53
     cornerRadius: confloat(ge=0.0, le=0.5) | None = Field(
         None,
         description="Corner radius of a round-rect as a share of the shorter side. Absent means 1/6.",
@@ -11915,7 +13647,7 @@ class Elements34(BaseModel):
         description="Text inside the shape. Absent when it has none.",
         min_length=1,
     )
-    role: Role52
+    role: Role61
     rotation: confloat(ge=0.0, lt=360.0) | None = Field(
         None,
         description="Clockwise, in degrees, about the centre of the box. Absent means 0.",
@@ -11932,7 +13664,7 @@ class Elements34(BaseModel):
         ...,
         description="Template shape this was placed from. Null when it was drawn in the editor.",
     )
-    stroke: Stroke17 | None = Field(
+    stroke: Stroke19 | None = Field(
         None,
         description="Null for no outline. Absent when the template did not state one.",
     )
@@ -11946,7 +13678,7 @@ class Elements34(BaseModel):
     )
 
 
-class Role62(StrEnum):
+class Role71(StrEnum):
     variant = "variant"
     control = "control"
 
@@ -11960,7 +13692,7 @@ class Subject(BaseModel):
     )
     id: constr(min_length=1)
     like: constr(min_length=1) | None = None
-    role: Role62
+    role: Role71
 
 
 class VisualCompareRequest(BaseModel):
@@ -12012,6 +13744,17 @@ class ContractsBundle(BaseModel):
     AuditFinding_1: AuditFinding | None = Field(None, alias="AuditFinding")
     AuditReport_1: AuditReport | None = Field(None, alias="AuditReport")
     AuditRequest_1: AuditRequest | None = Field(None, alias="AuditRequest")
+    BrandbookBinding_1: BrandbookBinding | None = Field(None, alias="BrandbookBinding")
+    BrandbookParseRequest_1: BrandbookParseRequest | None = Field(
+        None, alias="BrandbookParseRequest"
+    )
+    BrandbookProfile_1: BrandbookProfile | None = Field(None, alias="BrandbookProfile")
+    BrandbookTemplateRequest_1: BrandbookTemplateRequest | None = Field(
+        None, alias="BrandbookTemplateRequest"
+    )
+    BrandbookTemplateResponse_1: BrandbookTemplateResponse | None = Field(
+        None, alias="BrandbookTemplateResponse"
+    )
     CompositionCheckResponse_1: CompositionCheckResponse | None = Field(
         None, alias="CompositionCheckResponse"
     )

@@ -1,3 +1,13 @@
+import {
+  brandbookParseRequestSchema,
+  brandbookProfileSchema,
+  brandbookTemplateRequestSchema,
+  brandbookTemplateResponseSchema,
+  type BrandbookParseRequest,
+  type BrandbookProfile,
+  type BrandbookTemplateRequest,
+  type BrandbookTemplateResponse,
+} from '@lct/contracts';
 import { compositionCheckResponseSchema, type CompositionCheckResponse } from '@lct/contracts';
 import {
   generationProfileSchema,
@@ -174,6 +184,20 @@ export class EngineClient {
     const body = materialExtractRequestSchema.parse(request);
     return materialExtractResponseSchema.parse(
       await this.post('/v1/material-extract', body, signal),
+    );
+  }
+
+  async parseBrandbook(request: BrandbookParseRequest): Promise<BrandbookProfile> {
+    return brandbookProfileSchema.parse(
+      await this.post('/v1/brandbook-profile', brandbookParseRequestSchema.parse(request)),
+    );
+  }
+
+  async prepareBrandbookTemplate(
+    request: BrandbookTemplateRequest,
+  ): Promise<BrandbookTemplateResponse> {
+    return brandbookTemplateResponseSchema.parse(
+      await this.post('/v1/brandbook-template', brandbookTemplateRequestSchema.parse(request)),
     );
   }
 

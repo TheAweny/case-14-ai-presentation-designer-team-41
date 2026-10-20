@@ -11,6 +11,11 @@ from engine.contracts._generated import (
     AuditFinding,
     AuditReport,
     AuditRequest,
+    BrandbookBinding,
+    BrandbookParseRequest,
+    BrandbookProfile,
+    BrandbookTemplateRequest,
+    BrandbookTemplateResponse,
     CompositionCheckResponse,
     CompositionExportRequest,
     CompositionExportResponse,
@@ -51,7 +56,7 @@ from engine.contracts._generated import (
     VisualCompareResponse,
 )
 from engine.contracts._generated import (
-    Status3 as Status,
+    Status13 as Status,
 )
 from engine.contracts.provisional import (
     ChartSpec,
@@ -67,6 +72,11 @@ __all__ = [
     "AuditFinding",
     "AuditReport",
     "AuditRequest",
+    "BrandbookBinding",
+    "BrandbookParseRequest",
+    "BrandbookProfile",
+    "BrandbookTemplateRequest",
+    "BrandbookTemplateResponse",
     "ChartSpec",
     "CompositionCheckResponse",
     "CompositionExportRequest",

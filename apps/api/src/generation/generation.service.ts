@@ -16,6 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import {
   compositionPlanSchema,
+  brandbookBindingSchema,
   generationProfileSchema,
   generationRequestSchema,
   generationSpecSchema,
@@ -32,6 +33,7 @@ import {
   type ChatToolActivity,
   type ReasoningCapability,
   type JobEvent,
+  type BrandbookBinding,
 } from '@lct/contracts';
 import { EngineClient } from '@lct/engine-client';
 import {
@@ -390,6 +392,17 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
     return row;
   }
 
+  /** Validate the selected brandbook before a chat build starts. */
+  async brandbook(id: string, account: Account): Promise<Record<string, unknown>> {
+    const result = await this.pool.query<{ profile: Record<string, unknown> }>(
+      `SELECT profile FROM stored_files WHERE id=$1 AND kind='brandbook' AND ${visibleFile(2)}`,
+      [id, account.id],
+    );
+    const row = result.rows[0];
+    if (!row?.profile) throw new NotFoundException('Brandbook not found.');
+    return row.profile;
+  }
+
   async requireProject(id: string, account: Account): Promise<void> {
     const found = await this.pool.query(
       'SELECT id FROM library_projects WHERE id = $1 AND owner_id = $2',
@@ -635,12 +648,39 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const gate = <T>(pending: () => Promise<T>): Promise<T> => waitForBuild(pending, budget);
       const projectId = input.projectId;
       if (projectId !== null) await gate(() => this.requireProject(projectId, account));
+      const requestKey = schedulingGroup;
+      // A retry/resume must use the immutable snapshot kept with the build. In particular,
+      // the brandbook may have been deleted or become invisible after the original ACL check.
+      const previous =
+        retry?.build ??
+        (input.requestId ? await gate(() => this.builds.byRequest(account.id, requestKey)) : null);
+      const previousSpec = previous ? generationSpecSchema.safeParse(previous.spec) : null;
+      if (previous && (!previousSpec || !previousSpec.success))
+        throw new ConflictException('Сборка содержит несовместимую спецификацию.');
       const template = await gate(() => this.template(input.templateId, account));
       const prepared = generationProfileSchema.safeParse(template.profile?.generation);
       if (!prepared.success)
         throw new BadRequestException('Prepare the template before generation.');
-      let brief = input.brief;
-      for (const id of input.contentIds) {
+      let brandbook: BrandbookBinding | undefined = previousSpec?.success
+        ? previousSpec.data.brandbook
+        : undefined;
+      if (!previous && input.brandbookId) {
+        const selected = await gate(() =>
+          this.pool.query<{ profile: unknown }>(
+            `SELECT profile FROM stored_files WHERE id=$1 AND kind='brandbook' AND ${visibleFile(2)}`,
+            [input.brandbookId, account.id],
+          ),
+        );
+        const profile = selected.rows[0]?.profile;
+        if (!profile) throw new NotFoundException('Brandbook not found.');
+        brandbook = brandbookBindingSchema.parse({
+          schemaVersion: 1,
+          profile,
+          priority: input.brandbookPriority ?? 'brandbook',
+        });
+      }
+      let brief = previousSpec?.success ? previousSpec.data.brief : input.brief;
+      for (const id of previous ? [] : input.contentIds) {
         const files = await gate(() =>
           this.pool.query<{ storage_path: string; file_name: string }>(
             `SELECT storage_path, file_name FROM stored_files
@@ -743,16 +783,16 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       const registryDir = this.registryDir();
       const index = storedTemplateIndexSchema.safeParse(template.profile?.index);
       // Notes describe the profile they were made from; a re-parsed template drops stale ones.
-      const notes =
-        index.success &&
-        templateIndexState(
-          prepared.data,
-          index.data,
-          await currentTemplateIndexRevision(registryDir),
-        ) === 'ready'
+      const notes = previousSpec?.success
+        ? previousSpec.data.notes
+        : index.success &&
+            templateIndexState(
+              prepared.data,
+              index.data,
+              await currentTemplateIndexRevision(registryDir),
+            ) === 'ready'
           ? index.data.notes
           : undefined;
-      const requestKey = schedulingGroup;
       let prices: ReturnType<typeof tokenPriceResolver> | undefined;
       try {
         const pricingBytes = process.env.MODEL_PRICING_FILE
@@ -762,9 +802,6 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       } catch {
         this.logger.warn('Tariff catalog is invalid; usage cost remains unknown.');
       }
-      const previous =
-        retry?.build ??
-        (input.requestId ? await this.builds.byRequest(account.id, requestKey) : null);
       // Observing an existing build consumes no execution slot. Reject genuinely new work
       // before creating its durable records when both local build slots are occupied.
       if (!previous && this.active.size >= 2 * VARIANTS.length)
@@ -783,17 +820,20 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
       );
       const spec = generationSpecSchema.parse({
         schemaVersion: 1,
-        request: input,
+        request: previousSpec?.success ? previousSpec.data.request : input,
         brief,
-        profile: prepared.data,
+        profile: previousSpec?.success ? previousSpec.data.profile : prepared.data,
+        ...(brandbook ? { brandbook } : {}),
         ...(notes ? { notes } : {}),
         registryHash,
         // Pricing describes each physical attempt; it cannot invalidate accepted content on resume.
-        ...(previous && generationSpecSchema.parse(previous.spec).pricingHash
-          ? { pricingHash: generationSpecSchema.parse(previous.spec).pricingHash }
+        ...(previousSpec?.success && previousSpec.data.pricingHash
+          ? { pricingHash: previousSpec.data.pricingHash }
           : {}),
         today: previous
-          ? generationSpecSchema.parse(previous.spec).today
+          ? previousSpec?.success
+            ? previousSpec.data.today
+            : new Date().toISOString()
           : `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
         modelPolicy: [
           ['writer', writer, writerReasoning],
@@ -1023,7 +1063,8 @@ export class GenerationService implements OnApplicationBootstrap, OnApplicationS
             slideCount: input.outline ? null : input.slideCount,
             outline: input.outline,
             outlineSource: input.outlineSource,
-            profile: prepared.data,
+            profile: previousSpec?.success ? previousSpec.data.profile : prepared.data,
+            ...(brandbook ? { brandbook } : {}),
             ...(notes ? { notes } : {}),
             registryDir,
             engine: this.engine,

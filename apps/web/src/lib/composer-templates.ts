@@ -6,6 +6,7 @@ import {
   templateFileProblem,
 } from './deck-generator';
 import type { ProjectSummary, TemplateSummary } from './library-source';
+export { BRANDBOOK_FILE_ACCEPT } from './brandbooks';
 
 /**
  * Чем собирать презентацию из поля генерации: шаблон библиотеки или новый файл шаблона. Модуль
@@ -88,6 +89,7 @@ export const TEMPLATE_FILE_ACCEPT = TEMPLATE_EXTENSIONS.join(',');
 /** Вложения поля: материалы контент-пака и, может быть, новый файл шаблона. */
 export interface ComposerAttachments {
   readonly files: readonly File[];
+  readonly brandbookFile?: File | null;
   /** Новый шаблон: пока он есть, он заменяет шаблон, выбранный в меню. */
   readonly templateFile: File | null;
 }
@@ -105,15 +107,23 @@ export interface ComposerAttachmentsUpdate extends ComposerAttachments {
 export function addComposerFiles(
   current: ComposerAttachments,
   added: readonly File[],
+  mode: 'auto' | 'brandbook' = 'auto',
 ): ComposerAttachmentsUpdate {
   const templates = added.filter((file) => isTemplateFile(file.name));
   const good = templates.filter((file) => templateFileProblem(file) === null);
+  const brandbooks =
+    mode === 'brandbook'
+      ? added
+      : // A JSON file is a table of data unless it comes through the brandbook item: design
+        // tokens and a dataset share the extension, and a dataset is the far likelier drop.
+        added.filter((file) => /\.(fig|rar|zip|svg|ttf|otf|woff2?)$/i.test(file.name));
   const content = addContentFiles(
     current.files,
-    added.filter((file) => !isTemplateFile(file.name)),
+    added.filter((file) => !isTemplateFile(file.name) && !brandbooks.includes(file)),
   );
   return {
     files: content.files,
+    brandbookFile: brandbooks.at(-1) ?? current.brandbookFile,
     templateFile: good.at(-1) ?? current.templateFile,
     rejected: [
       ...templates.filter((file) => !good.includes(file)).map((file) => file.name),
